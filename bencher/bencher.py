@@ -215,7 +215,7 @@ class Bench(BenchPlotServer):
         bench_cfg.param.update(run_cfg.param.values())
         bench_cfg.plot_lib = plot_lib if plot_lib is not None else self.plot_lib
 
-        print("plot_lib", bench_cfg.plot_lib)
+        logging.info(f"plot_lib: {bench_cfg.plot_lib}")
 
         bench_cfg_hash = bench_cfg.hash_persistent(True)
         bench_cfg.hash_value = bench_cfg_hash
