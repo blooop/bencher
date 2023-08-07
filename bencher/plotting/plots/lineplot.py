@@ -31,6 +31,7 @@ class Lineplot(PlotBase):
         Returns:
             Optional[pn.panel]: a line plot of the data
         """
+        # exit()
         if self.plot_filter.matches(pl_in.plt_cnt_cfg):
             df = pl_in.bench_cfg.ds[pl_in.rv.name].to_dataframe().reset_index()
             sns_cfg = PltCfgBase()
@@ -56,6 +57,29 @@ class Lineplot(PlotBase):
                     tick.set_rotation(45)
 
             return Catplot.plot_postprocess(fg, sns_cfg, PlotTypes.lineplot)
+        return None
+
+    def lineplot_hv(self, pl_in: PlotInput) -> Optional[pn.panel]:
+        """generate a line plot
+
+        Args:
+            pl_in (PlotInput): data to plot
+
+        Returns:
+            Optional[pn.panel]: a line plot of the data
+        """
+        if PlotFilter(
+            float_range=VarRange(1, 1),
+            cat_range=VarRange(0, 1),
+            vector_len=VarRange(1, 1),
+            result_vars=VarRange(1, 1),
+        ).matches(pl_in.plt_cnt_cfg):
+            print("sldkfjaslkfjaskfjasldkfj")
+            return pn.Column(pl_in.bench_cfg.to_curve(), name=PlotTypes.lineplot_hv)
+            # return pn.Column(
+            #     da.hvplot.line(subplots=True),  # noqa: F821
+            #     name=PlotTypes.lineplot_hv_subplot,
+            # )
         return None
 
     # def lineplot_hv(self, pl_in: PlotInput) -> Optional[pn.panel]:

@@ -93,6 +93,7 @@ class PlotCollection:
         """
 
         tabs = pn.Accordion()
+        # logging.info(self.plotters.values())
         for plt_fn in self.plotters.values():
             plots = plt_fn(PlotInput(bench_cfg, rv, plt_cnt_cfg))
             if plots is not None:
