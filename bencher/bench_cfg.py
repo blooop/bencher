@@ -532,12 +532,14 @@ class BenchCfg(BenchRunCfg):
         ds = convert_dataset_bool_dims_to_str(self.ds)
 
         if reduce == ReduceType.AUTO:
-            reduce = ReduceType.REDUCE if self.repeats > 1 else ReduceType.SQUEEZE
+            reduce = ReduceType.REDUCE if self.repeats > 1  else ReduceType.SQUEEZE
+            
 
         result_vars_str = [r.name for r in self.result_vars]
         hvds = hv.Dataset(ds, vdims=result_vars_str)
         if reduce == ReduceType.REDUCE:
-            return hvds.reduce(["repeat"], np.mean, np.std)
+            if "repeat" in hvds.kdims:
+                return hvds.reduce(["repeat"], np.mean, np.std)
         if reduce == ReduceType.SQUEEZE:
             return hv.Dataset(ds.squeeze("repeat", drop=True), vdims=result_vars_str)
         return hvds

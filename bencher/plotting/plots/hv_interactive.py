@@ -25,8 +25,8 @@ class HvInteractive(PlotBase):
     )
 
     lineplot_filter = PlotFilter(
-        float_range=VarRange(1, None),
-        cat_range=VarRange(0, 0),
+        float_range=VarRange(1, 1),
+        cat_range=VarRange(0, None),
         vector_len=VarRange(1, 1),
         result_vars=VarRange(1, 1),
     )
@@ -81,7 +81,9 @@ class HvInteractive(PlotBase):
 
     def lineplot_hv(self, pl_in: PlotInput) -> Optional[pn.panel]:
         if self.lineplot_filter.matches(pl_in.plt_cnt_cfg):
-            tit = self.title(pl_in.bench_cfg.input_vars[0], pl_in.rv)
+            # print(pl_in.bench_cfg.input_vars)
+            # print(pl_in.plt_cnt_cfg.float_vars[0])
+            tit = self.title(pl_in.plt_cnt_cfg.float_vars[0], pl_in.rv)
             return pn.Column(
                 pl_in.bench_cfg.to_curve().opts(title=tit, width=600, height=600),
                 name=PlotTypes.lineplot_hv,
