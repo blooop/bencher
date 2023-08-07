@@ -140,8 +140,10 @@ class SurfacePlot:
 
             try:
                 surface = ds.to(hv.Surface, vdims=[pl_in.rv.name])
-            except Exception:
-                return plot_surface_plotly(bench_cfg, rv, xr_cfg)
+            except Exception as e:
+                logging.warning(e)
+                return None
+                # return plot_surface_plotly(bench_cfg, rv, xr_cfg)
 
             try:
                 surface = surface.opts(colorbar=True)
@@ -169,8 +171,8 @@ class SurfacePlot:
                 backend="plotly",
             )
 
-            if bench_cfg.render_plotly:
-                hv.extension("plotly")
+            if bench_cfg.render_plotly and False:
+                # hv.extension("plotly", "bokeh")
                 out = surface
             else:
                 # using render disabled the holoviews sliders :(
