@@ -171,8 +171,9 @@ class SurfacePlot:
                 backend="plotly",
             )
 
-            if bench_cfg.render_plotly and False:
-                # hv.extension("plotly", "bokeh")
+            if bench_cfg.render_plotly:
+                # make plotly the first renderer (this breaks bokeh plots)
+                hv.extension("plotly", "bokeh")
                 out = surface
             else:
                 # using render disabled the holoviews sliders :(

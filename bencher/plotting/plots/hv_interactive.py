@@ -5,9 +5,10 @@ import holoviews as hv  # noqa pylint: disable=unused-import
 
 from bencher.plotting.plot_filter import PlotFilter, PlotInput, VarRange
 from bencher.plotting.plot_types import PlotTypes  # noqa pylint: disable=unused-import
+from bencher.plotting.plots.plot_base import PlotBase
 
 
-class HvInteractive:
+class HvInteractive(PlotBase):
     float_0_cat_at_least1_vec_1_res_1 = PlotFilter(
         float_range=VarRange(0, 0),
         cat_range=VarRange(1, None),
@@ -79,12 +80,12 @@ class HvInteractive:
         # return None
 
     def lineplot_hv(self, pl_in: PlotInput) -> Optional[pn.panel]:
-        if False & self.lineplot_filter.matches(pl_in.plt_cnt_cfg):
-            # print(pl_in.bench_cfg.get_hv_dataset())
-            # print(pl_in.bench_cfg.get_dataframe(False))
-            # return pn.Column(pl_in.bench_cfg.get_hv_dataset().to(hv.Table))
-            print(pl_in.bench_cfg.get_hv_dataset())
-            return pn.Column(pl_in.bench_cfg.to_curve(), name=PlotTypes.lineplot_hv)
+        if self.lineplot_filter.matches(pl_in.plt_cnt_cfg):
+            tit = self.title(pl_in.bench_cfg.input_vars[0], pl_in.rv)
+            return pn.Column(
+                pl_in.bench_cfg.to_curve().opts(title=tit, width=600, height=600),
+                name=PlotTypes.lineplot_hv,
+            )
         return None
 
     def lineplot_hv_overlay(self, pl_in: PlotInput) -> Optional[pn.panel]:
