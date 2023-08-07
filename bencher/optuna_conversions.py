@@ -45,6 +45,9 @@ def optuna_grid_search(bench_cfg: BenchCfg) -> optuna.Study:
     return study
 
 
+# def bench_results_to_optuna(bench_cfg: BenchCfg):
+
+
 def to_optuna(worker, bench_cfg: BenchCfg, n_trials=100, sampler=optuna.samplers.TPESampler()):
     directions = []
     for rv in bench_cfg.result_vars:
@@ -53,9 +56,9 @@ def to_optuna(worker, bench_cfg: BenchCfg, n_trials=100, sampler=optuna.samplers
 
     study = optuna.create_study(sampler=sampler, directions=directions, study_name=bench_cfg.title)
 
-    study.add_trials(
-        bench_results_to_optuna_trials(bench_cfg, True)
-    )  # add already calculated results
+    # add already calculated results
+    if len(bench_cfg.ds.sizes) > 0:
+        study.add_trials(bench_results_to_optuna_trials(bench_cfg, True))
 
     def wrapped(trial):
         kwargs = {}

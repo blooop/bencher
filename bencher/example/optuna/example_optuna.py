@@ -2,7 +2,6 @@ import bencher as bch
 import numpy as np
 import optuna
 from optuna.samplers import TPESampler
-from bencher.optuna_conversions import to_optuna, summarise_study
 
 
 def objective(trial):
@@ -50,8 +49,17 @@ def optuna_rastrigin(run_cfg=bch.BenchRunCfg()):
     explorer = ToyOptimisationProblem()
 
     bench = bch.Bench("Rastrigin", explorer.rastrigin)
-    run_cfg.use_optuna = True
 
+    bench.to_optuna(
+        input_vars=[explorer.param.input1, explorer.param.input2],
+        result_vars=[explorer.param.output],
+    )
+
+    bench.get_panel(False).append(
+        f"The optimal value should be input1:{-optimal_value},input2:{-optimal_value} with a value of 0"
+    )
+
+    run_cfg.use_optuna = True
     res = bench.plot_sweep(
         "Rastrigin",
         input_vars=[explorer.param.input1, explorer.param.input2],
@@ -59,13 +67,7 @@ def optuna_rastrigin(run_cfg=bch.BenchRunCfg()):
         run_cfg=run_cfg,
     )
 
-    optu = to_optuna(explorer.rastrigin, res, n_trials=10)
-
-    bench.append(summarise_study(optu))
-
-    bench.get_panel(False).append(
-        f"The optimal value should be input1:{-optimal_value},input2:{-optimal_value} with a value of 0"
-    )
+    bench.to_optuna_from_sweep(res, 10)
 
     return bench
 
