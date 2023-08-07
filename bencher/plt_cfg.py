@@ -135,9 +135,9 @@ class BenchPlotter:
                 plt_cnt_cfg.vector_len = 1
 
             if bench_cfg.plot_lib is not None:
-                print(f"float {plt_cnt_cfg.float_cnt}")
-                print(f"cat {plt_cnt_cfg.cat_cnt}")
-                print(f"vec {plt_cnt_cfg.vector_len}")
+                logging.info(f"float: {plt_cnt_cfg.float_cnt}")
+                logging.info(f"cat: {plt_cnt_cfg.cat_cnt}")
+                logging.info(f"vec: {plt_cnt_cfg.vector_len}")
                 plot_rows.append(bench_cfg.plot_lib.gather_plots(bench_cfg, rv, plt_cnt_cfg))
             # todo enable this check in future pr
             # if len(plot_rows) == 0:  # use the old plotting method as a backup
