@@ -20,11 +20,11 @@ dependencies = [
   "plotly>=5.15,<=5.15",
   "sortedcontainers>=2.4,<=2.4",
   "pandas>=2.0,<=2.0.3",
-  "strenum>=0.4,<=0.4",
-  "seaborn>=0.1.2,<=0.1.2.0",
+  "strenum>=0.4.0,<=0.4.0",
+  "seaborn>=0.12.1,<=0.12.2",
   "scikit-learn>=1.3,<=1.3.0",
   "str2bool>=1.1,<=1.1",
-  "mortgage<=1.0.5>=1.0.5",
+  "mortgage<=1.0.5,>=1.0.5",
 ]
 
 [project.optional-dependencies]
