@@ -57,8 +57,8 @@ def example_floats2D_scatter(run_cfg: bch.BenchRunCfg) -> bch.Bench:
     bench.plot_sweep(
         result_vars=[
             Example2DGaussianResult.param.point2D,
-            Example2DGaussianResult.param.gauss_x,
-            Example2DGaussianResult.param.gauss_y,
+            # Example2DGaussianResult.param.gauss_x,
+            # Example2DGaussianResult.param.gauss_y,
         ],
         title="Float 2D Scatter Example",
         run_cfg=run_cfg,
@@ -68,8 +68,8 @@ def example_floats2D_scatter(run_cfg: bch.BenchRunCfg) -> bch.Bench:
         input_vars=[GaussianDist.param.mean],
         result_vars=[
             Example2DGaussianResult.param.point2D,
-            Example2DGaussianResult.param.gauss_x,
-            Example2DGaussianResult.param.gauss_y,
+            # Example2DGaussianResult.param.gauss_x,
+            # Example2DGaussianResult.param.gauss_y,
         ],
         title="Float 2D Scatter With Changing Mean",
         run_cfg=run_cfg,
@@ -79,8 +79,8 @@ def example_floats2D_scatter(run_cfg: bch.BenchRunCfg) -> bch.Bench:
         input_vars=[GaussianDist.param.sigma],
         result_vars=[
             Example2DGaussianResult.param.point2D,
-            Example2DGaussianResult.param.gauss_x,
-            Example2DGaussianResult.param.gauss_y,
+            # Example2DGaussianResult.param.gauss_x,
+            # Example2DGaussianResult.param.gauss_y,
         ],
         title="Float 2D Scatter With Changing Sigma",
         run_cfg=run_cfg,
