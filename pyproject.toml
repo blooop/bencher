@@ -31,16 +31,16 @@ dependencies = [
 [project.optional-dependencies]
 test = [
   "black>=23,<=23.3",
-  "check-manifest>=0.49",
-  "pre-commit>=3.3.3",
-  "pylint>=2.17",
-  "pytest-cov>=4.1",
+  "check-manifest>=0.49,<=0.49",
+  "pre-commit>=3.3.3,<=3.3.3",
+  "pylint>=2.16,<=2.17",
+  "pytest-cov>=4.1,<=4.1",
   "pytest-mock>=3.10,<=3.11.1",
-  "pytest-runner>=6.0",
-  "pytest>=7.4",
-  "hypothesis>6",
-  "ruff>=0.0.28",
-  "mypy>=1.4,<1.4.2",
+  "pytest-runner<=6.0,>=6.0",
+  "pytest>=7.4,<=7.4",
+  "hypothesis>=6.82,<=6.82.2",
+  "ruff>=0.0.28,<=0.0.28",
+  "mypy>=1.4,<=1.4.2",
   "coverage<=7.2.7,>=7.2.7",
 ]
 
@@ -85,7 +85,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
-"path/to/file.py" = ["E402"]
 
 
 [tool.coverage.run]
