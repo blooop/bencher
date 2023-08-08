@@ -3,7 +3,9 @@ import time
 
 import optuna
 import optuna_distributed
-from dask.distributed import Client
+
+# from dask.distributed import Client
+from dask.distributed import Client, SSHCluster
 
 
 def objective(trial):
@@ -16,7 +18,15 @@ def objective(trial):
 
 if __name__ == "__main__":
     # client = Client("tcp://172.17.0.3:8786")  # Enables distributed optimization.
-    client = None  # Enables local asynchronous optimization.
+
+    cluster = SSHCluster(
+        ["localhost", "localhost"],
+        # connect_options={"known_hosts": None},
+        worker_options={"nthreads": 2, "n_workers": 2},
+        scheduler_options={"port": 0, "dashboard_address": ":8797"},
+    )
+    client = Client(cluster)
+    # client = None  # Enables local asynchronous optimization.
     study = optuna_distributed.from_study(optuna.create_study(), client=client)
     study.optimize(objective, n_trials=1000)
     print(study.best_value)
