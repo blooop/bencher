@@ -16,6 +16,7 @@ dependencies = [
   "hvplot>=0.8,<=0.8.4",
   "diskcache>=5.6,>=5.6.1",
   "optuna>=3.2,<=3.3.0",
+  "optuna-distributed>=0.6,<=0.6.1",
   "xarray>=2023.7,<=2023.7",
   "plotly>=5.15,<=5.15",
   "sortedcontainers>=2.4,<=2.4",
