@@ -154,14 +154,14 @@ class HoloviewResult(PanelResult):
             tap_var = [tap_var]
 
         if len(tap_var) == 0 or self.plt_cnt_cfg.inputs_cnt > 1 or not use_tap:
-            heatmap_cb = self.to_line_ds
+            line_cb = self.to_line_ds
         else:
-            heatmap_cb = partial(
+            line_cb = partial(
                 self.to_line_tap_ds, result_var_plots=tap_var, container=tap_container
             )
 
         return self.filter(
-            heatmap_cb,
+            line_cb,
             float_range=VarRange(1, 1),
             cat_range=VarRange(0, None),
             repeats_range=VarRange(1, 1),
@@ -202,17 +202,26 @@ class HoloviewResult(PanelResult):
     ) -> Optional[hv.Curve]:
         hvds = hv.Dataset(dataset)
         title = self.title_from_ds(dataset, result_var, **kwargs)
-
-        # print(result_var.name, dataset)
+        # print(result_var.name)
+        # print( dataset)
         pt = hv.Overlay()
         # find pairs of {var_name} {var_name}_std to plot the line and their spreads.
-        for var in dataset.data_vars:
-            if not var.endswith("_std"):
-                std_var = f"{var}_std"
-                pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
-                # Only create a Spread if the matching _std variable exists
-                if std_var in dataset.data_vars:
-                    pt *= hvds.to(hv.Spread, vdims=[var, std_var])
+        var = result_var.name
+        std_var = f"{var}_std"
+
+        pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
+        # Only create a Spread if the matching _std variable exists
+        if std_var in dataset.data_vars:
+            pt *= hvds.to(hv.Spread, vdims=[var, std_var])
+
+        # for var in dataset.data_vars:
+        #     print(var)
+        #     if not var.endswith("_std"):
+        #         std_var = f"{var}_std"
+        #         pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
+        #         #Only create a Spread if the matching _std variable exists
+        #         if std_var in dataset.data_vars:
+        #             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
 
         return pt.opts(legend_position="right")
 
