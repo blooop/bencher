@@ -1095,7 +1095,7 @@ packages:
 - pypi: .
   name: holobench
   version: 1.41.0
-  sha256: a5a8eea64ea10ab30460f40e2b83d491e01c336c0edd4e5d1f39268dad8552fc
+  sha256: 00d2ac397ad3b73a91c641ef2bf0e888415063d8e52ced0a651cdb96a72d6782
   requires_dist:
   - holoviews>=1.15,<=1.20.0
   - numpy>=1.0,<=2.2.3
@@ -1110,13 +1110,13 @@ packages:
   - strenum>=0.4.0,<=0.4.15
   - scikit-learn>=1.2,<=1.6.1
   - moviepy>=2.1.2,<=2.1.2
-  - pylint>=3.2.5,<=3.3.4 ; extra == 'test'
-  - pytest-cov>=4.1,<=6.0.0 ; extra == 'test'
-  - pytest>=7.4,<=8.3.4 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.127.3 ; extra == 'test'
-  - ruff>=0.5.0,<=0.9.9 ; extra == 'test'
-  - coverage>=7.5.4,<=7.6.12 ; extra == 'test'
-  - pre-commit<=4.1.0 ; extra == 'test'
+  - pylint>=3.2.5,<=3.3.6 ; extra == 'test'
+  - pytest-cov>=4.1,<=6.1.0 ; extra == 'test'
+  - pytest>=7.4,<=8.3.5 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.130.6 ; extra == 'test'
+  - ruff>=0.5.0,<=0.11.2 ; extra == 'test'
+  - coverage>=7.5.4,<=7.8.0 ; extra == 'test'
+  - pre-commit<=4.2.0 ; extra == 'test'
   - nbformat ; extra == 'test'
   - ipykernel ; extra == 'test'
   - pip ; extra == 'test'
