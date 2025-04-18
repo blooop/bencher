@@ -148,4 +148,4 @@ This uses bencher to display all the combinations of plots bencher is able to pr
 
 
 if __name__ == "__main__":
-    example_meta().report.show()
+    example_meta()
