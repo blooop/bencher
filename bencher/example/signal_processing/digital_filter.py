@@ -66,7 +66,6 @@ class DigitalFilterAnalysis(bch.ParametrizedSweep):
         nyquist = self.sampling_rate / 2
         norm_cutoff = self.cutoff_frequency / nyquist
         norm_center = self.center_frequency / nyquist
-        norm_transition = self.transition_width / nyquist
 
         # Apply frequency warping if enabled
         if self.use_frequency_warping and norm_cutoff > 0.1:

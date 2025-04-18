@@ -84,10 +84,20 @@ class FluidFlowSimulation(bch.ParametrizedSweep):
                 else 6000
             )
 
-            self.fluid_viscosity = (
+            # Calculate new viscosity but ensure it stays within bounds
+            new_viscosity = (
                 self.fluid_density * self.fluid_velocity * self.pipe_diameter
             ) / target_reynolds
-            self.reynolds_number = target_reynolds
+            # Clamp to bounds
+            new_viscosity = max(0.0005, min(new_viscosity, 0.1))
+
+            # Only update if within bounds
+            if 0.0005 <= new_viscosity <= 0.1:
+                self.fluid_viscosity = new_viscosity
+                # Recalculate Reynolds number with new viscosity
+                self.reynolds_number = (
+                    self.fluid_density * self.fluid_velocity * self.pipe_diameter
+                ) / self.fluid_viscosity
 
         # Calculate friction factor based on flow regime and boundary condition
         if self.reynolds_number < 2300:  # Laminar flow
