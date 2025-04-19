@@ -8,6 +8,7 @@ from bencher.results.panel_result import PanelResult
 from bencher.results.plotly_result import PlotlyResult
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.box_whisker_result import BoxWhiskerResult
+from bencher.results.holoview_results.violin_result import ViolinResult
 from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.bar_result import BarResult
 from bencher.results.holoview_results.line_result import LineResult
@@ -22,6 +23,7 @@ from bencher.utils import listify
 class BenchResult(
     PlotlyResult,
     BoxWhiskerResult,
+    ViolinResult,
     ScatterResult,
     LineResult,
     BarResult,
