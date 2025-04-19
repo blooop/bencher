@@ -183,3 +183,4 @@ docs/builtdocs*
 docs/jupyter_execute*
 thumbnails/
 docs/autoapi/*
+.qodo
