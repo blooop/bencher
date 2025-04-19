@@ -88,9 +88,9 @@ py312 = ["py312", "test", "rerun"]
 #AI AGENT TASKS
 
 #use this task to test any changes to the code, it will run docs, lint, and tests. 
-agent-iterate = { depends-on = ["generate-docs", "ci"] }
-#Once the agent-iterate task completes without any errors use this task to push the changes to the repo.
-agent-finish = { depends-on = [
+ai-agent-iterate = { depends-on = ["generate-docs", "ci"] }
+#Once the agent-iterate task completes without any errors use this task to push the changes to the repo. You may need to run it more than once if pre-commit fails.
+ai-agent-finish = { depends-on = [
     "git-commit-all",
     "fix-commit-push",
     "fix-commit-push",
