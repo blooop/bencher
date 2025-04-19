@@ -1,0 +1,4 @@
+read through the codebase and improve the docstrings and type hints. 
+
+Workflow:
+    Run and continue to debug the output of the task `pixi r agent-iterate` until it passes.

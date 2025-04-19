@@ -17,18 +17,30 @@ from bencher.results.laxtex_result import to_latex
 
 
 class BenchPlotSrvCfg(param.Parameterized):
+    """Configuration for the benchmarking plot server.
+
+    This class defines parameters for controlling how the benchmark visualization
+    server operates, including network configuration.
+    """
+
     port: int = param.Integer(None, doc="The port to launch panel with")
     allow_ws_origin = param.Boolean(
         False,
-        doc="Add the port to the whilelist, (warning will disable remote access if set to true)",
+        doc="Add the port to the whitelist, (warning will disable remote access if set to true)",
     )
     show: bool = param.Boolean(True, doc="Open the served page in a web browser")
 
 
 class BenchRunCfg(BenchPlotSrvCfg):
-    """A Class to store options for how to run a benchmark parameter sweep"""
+    """Configuration class for benchmark execution parameters.
 
-    repeats: bool = param.Integer(1, doc="The number of times to sample the inputs")
+    This class extends BenchPlotSrvCfg to provide comprehensive control over benchmark execution,
+    including caching behavior, reporting options, visualization settings, and execution strategy.
+    It defines numerous parameters that control how benchmark runs are performed, cached,
+    and displayed to the user.
+    """
+
+    repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
 
     over_time: bool = param.Boolean(
         False,
@@ -218,7 +230,17 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
 
 class BenchCfg(BenchRunCfg):
-    """A class for storing the arguments to configure a benchmark protocol  If the inputs variables are the same the class should return the same hash and same filename.  This is so that historical data can be referenced and ensures that the generated plots are unique per benchmark"""
+    """Complete configuration for a benchmark protocol.
+
+    This class extends BenchRunCfg and provides a comprehensive set of parameters
+    for configuring benchmark runs. It maintains a unique hash value based on its
+    configuration to ensure that benchmark results can be consistently referenced
+    and that plots are uniquely identified across runs.
+
+    The class handles input variables, result variables, constant values, meta variables,
+    and various presentation options. It also provides methods for generating
+    descriptive summaries and visualizations of the benchmark configuration.
+    """
 
     input_vars = param.List(
         default=None,
@@ -454,9 +476,22 @@ class BenchCfg(BenchRunCfg):
 
 
 class DimsCfg:
-    """A class to store data about the sampling and result dimensions"""
+    """A class to store data about the sampling and result dimensions.
+
+    This class processes a BenchCfg object to extract and organize information about
+    the dimensions of the benchmark, including names, ranges, sizes, and coordinates.
+    It is used to set up the structure for analyzing and visualizing benchmark results.
+    """
 
     def __init__(self, bench_cfg: BenchCfg) -> None:
+        """Initialize the DimsCfg with dimension information from a benchmark configuration.
+
+        Extracts dimension names, ranges, sizes, and coordinates from the provided benchmark
+        configuration for use in organizing and analyzing benchmark results.
+
+        Args:
+            bench_cfg (BenchCfg): The benchmark configuration containing dimension information
+        """
         self.dims_name = [i.name for i in bench_cfg.all_vars]
 
         self.dim_ranges = []
