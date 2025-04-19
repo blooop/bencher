@@ -8,6 +8,7 @@ from functools import partial
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
+import pandas as pd
 
 from bencher.utils import (
     hmap_canonical_input,
@@ -143,13 +144,59 @@ class HoloviewResult(PanelResult):
             **kwargs,
         )
 
+    def to_hv_dataset(
+        self,
+        reduce: ReduceType = ReduceType.AUTO,
+        result_var: ResultVar = None,
+        level: int = None,
+    ) -> hv.Dataset:
+        """Generate a holoviews dataset from the xarray dataset.
+
+        Args:
+            reduce (ReduceType, optional): Optionally perform reduce options on the dataset.  By default the returned dataset will calculate the mean and standard deviation over the "repeat" dimension so that the dataset plays nicely with most of the holoviews plot types.  Reduce.Sqeeze is used if there is only 1 repeat and you want the "reduce" variable removed from the dataset. ReduceType.None returns an unaltered dataset. Defaults to ReduceType.AUTO.
+
+        Returns:
+            hv.Dataset: results in the form of a holoviews dataset
+        """
+        ds = self.to_dataset(reduce, result_var, level)
+
+        # Always use xarray Dataset, not DataFrame
+        if isinstance(ds, pd.DataFrame):
+            # Special handling for MultiIndex DataFrames to make them work with HoloViews
+            if isinstance(ds.index, pd.MultiIndex):
+                # Instead of converting to xarray, adjust the DataFrame to work with HoloViews
+                # Reset the index to get index levels as columns
+                df_reset = ds.reset_index()
+
+                # Now HoloViews can find the columns it's looking for
+                hvds = hv.Dataset(df_reset)
+
+                # Set kdims to index columns
+                kdims = list(ds.index.names)
+                vdims = list(ds.columns)
+
+                return hv.Dataset(hvds, kdims=kdims, vdims=vdims)
+            else:
+                # For simple DataFrames, we can use the standard conversion
+                # Ensure index is preserved as a dimension
+                if ds.index.name is not None:
+                    ds = ds.reset_index()
+                ds = xr.Dataset.from_dataframe(ds)
+
+        # Set dimension names for NONE reduction
+        if reduce == ReduceType.NONE:
+            kdims = [i.name for i in self.bench_cfg.all_vars]
+            return hv.Dataset(ds, kdims=kdims)
+
+        return hv.Dataset(ds)
+
     def to_line(
         self,
         result_var: Parameter = None,
         tap_var=None,
         tap_container: pn.pane.panel = None,
         target_dimension=2,
-        override: bool = True,
+        override=bool,
         **kwargs,
     ) -> Optional[pn.panel]:
         if tap_var is None:
@@ -668,7 +715,7 @@ class HoloviewResult(PanelResult):
 
     def to_surface(
         self, result_var: Parameter = None, override: bool = True, **kwargs
-    ) -> Optional[pn.pane.Pane]:
+    ) -> Optional[pn.panel]:
         return self.filter(
             self.to_surface_ds,
             float_range=VarRange(2, None),
