@@ -6,15 +6,18 @@ import bencher as bch
 random.seed(0)
 
 
-class ExampleCat1D(bch.ParametrizedSweep):
-    """Example class for categorical parameter sweep with two output variables."""
+class DataStructureBenchmark(bch.ParametrizedSweep):
+    """Example class for comparing different data structure operations with two output variables."""
 
-    population = bch.StringSweep(["population1", "population2"], doc="Distribution to sample from")
-    age = bch.ResultVar(units="v", doc="Age of individual from population")
-    children = bch.ResultVar(units="v", doc="Number of children of individual from population")
+    operation = bch.StringSweep(
+        ["list_append", "dict_insert"],
+        doc="Type of data structure operation to benchmark",
+    )
+    execution_time = bch.ResultVar(units="ms", doc="Time taken to complete operations")
+    memory_usage = bch.ResultVar(units="KB", doc="Memory used by the operation")
 
     def __call__(self, **kwargs) -> dict:
-        """Execute the parameter sweep for the given population.
+        """Execute the parameter sweep for the given data structure operation.
 
         Args:
             **kwargs: Additional parameters to update before executing
@@ -24,12 +27,17 @@ class ExampleCat1D(bch.ParametrizedSweep):
         """
         self.update_params_from_kwargs(**kwargs)
 
-        if self.population == "population1":
-            self.age = random.gauss(mu=50.0, sigma=10.0)
-            self.children = random.gauss(mu=1.5, sigma=0.5)
-        else:
-            self.age = random.gauss(mu=60, sigma=20)
-            self.children = random.gauss(mu=3.0, sigma=1.0)
+        # Simple simulations of different data structure operations
+        # In a real benchmark, you would implement or measure actual operations
+
+        if self.operation == "list_append":
+            # List append operations (typically fast for adding elements)
+            self.execution_time = random.gauss(mu=5.0, sigma=1.0)
+            self.memory_usage = random.gauss(mu=120.0, sigma=20.0)
+        elif self.operation == "dict_insert":
+            # Dictionary insertions (hash table operations)
+            self.execution_time = random.gauss(mu=6.5, sigma=1.2)
+            self.memory_usage = random.gauss(mu=180.0, sigma=25.0)
 
         return super().__call__(**kwargs)
 
@@ -37,8 +45,8 @@ class ExampleCat1D(bch.ParametrizedSweep):
 def example_1_cat_in_2_out_repeats(
     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
 ) -> bch.Bench:
-    """This example shows how to sample a 1-dimensional categorical variable with multiple repeats
-    and plot the result of two output variables from that parameter sweep.
+    """This example shows how to benchmark different data structure operations with multiple repeats
+    and plot the results of execution time and memory usage.
 
     Args:
         run_cfg: Configuration for the benchmark run
@@ -50,8 +58,8 @@ def example_1_cat_in_2_out_repeats(
 
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 20
-    bench = ExampleCat1D().to_bench(run_cfg, report)
+    run_cfg.repeats = 30  # Increased repeats for better statistical significance
+    bench = DataStructureBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep()
     bench.report.append(bench.get_result().to_violin())
 
