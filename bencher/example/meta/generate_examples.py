@@ -1,5 +1,13 @@
 import nbformat as nbf
 from pathlib import Path
+import hashlib
+
+
+def get_deterministic_cell_id(content: str, cell_type: str) -> str:
+    """Generate a deterministic cell ID based on content and type."""
+    # Create a hash from the cell content and type
+    hash_input = f"{cell_type}:{content}"
+    return hashlib.md5(hash_input.encode()).hexdigest()
 
 
 def convert_example_to_jupyter_notebook(
@@ -29,11 +37,17 @@ output_notebook()
 bench.get_result().to_auto_plots()
 """
 
-    nb["cells"] = [
-        nbf.v4.new_markdown_cell(text),
-        nbf.v4.new_code_cell(code),
-        nbf.v4.new_code_cell(code_results),
-    ]
+    # Create cells with deterministic IDs
+    markdown_cell = nbf.v4.new_markdown_cell(text)
+    markdown_cell["id"] = get_deterministic_cell_id(text, "markdown")
+
+    code_cell = nbf.v4.new_code_cell(code)
+    code_cell["id"] = get_deterministic_cell_id(code, "code")
+
+    results_cell = nbf.v4.new_code_cell(code_results)
+    results_cell["id"] = get_deterministic_cell_id(code_results, "code")
+
+    nb["cells"] = [markdown_cell, code_cell, results_cell]
     output_path = Path(f"docs/reference/{output_path}/ex_{title}.ipynb")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # Add a newline character at the end to ensure proper end-of-file
