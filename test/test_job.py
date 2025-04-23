@@ -1,3 +1,13 @@
+import multiprocessing
+
+# Set the start method to 'spawn' to avoid fork-related warnings and potential deadlocks
+if hasattr(multiprocessing, "set_start_method"):
+    try:
+        multiprocessing.set_start_method("spawn")
+    except RuntimeError:
+        # Method might already be set
+        pass
+
 import unittest
 import bencher as bch
 import random
@@ -19,7 +29,7 @@ class CachedParamExample(bch.CachedParams):
 
 
 class TestJob(unittest.TestCase):
-    @settings(deadline=2000)  # Increased from 500ms to 2000ms
+    @settings(deadline=None)  # Setting deadline=None due to variable timing with 'spawn' method
     @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
     def test_basic(self, executor):
         cp = CachedParamExample()  # clears cache by default
@@ -49,7 +59,9 @@ class TestJob(unittest.TestCase):
         res1cp3 = jc3.call(var1=1).result()
         self.assertNotEqual(res1["result"], res1cp3["result"])
 
-    @settings(deadline=500)
+    @settings(
+        deadline=3000
+    )  # Increased from 2000ms to 3000ms to accommodate slower 'spawn' startup
     @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
     def test_overwrite(self, executor):
         cp = CachedParamExample()  # clears cache by default
@@ -81,7 +93,7 @@ class TestJob(unittest.TestCase):
 
         self.assertNotEqual(res1["result"], res3["result"], f"{res1}")
 
-    @settings(deadline=2000)  # Increased from 1000ms to 2000ms
+    @settings(deadline=None)  # Setting deadline=None due to variable timing with 'spawn' method
     @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
     def test_bench_runner_parallel(self, executor):
         run_cfg = bch.BenchRunCfg()
