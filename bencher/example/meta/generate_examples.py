@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def convert_example_to_jupyter_notebook(
-    filename: str, output_path: str, repeats: int = None
+    filename: str, output_path: str, repeats: int = None, backend="bokeh"
 ) -> None:
     source_path = Path(filename)
 
@@ -22,10 +22,16 @@ def convert_example_to_jupyter_notebook(
     code += f"""
 bench={function_name}
 """
-
-    code_results = """
+    if backend == "bokeh":
+        code_results = """
 from bokeh.io import output_notebook
 output_notebook()
+bench.report.pane
+    """
+    else:
+        code_results = """
+import plotly.io as pio
+pio.renderers.default = 'notebook'
 bench.report.pane
 """
 
@@ -125,7 +131,7 @@ if __name__ == "__main__":
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/example_pareto.py", "pareto"
+        "/workspaces/bencher/bencher/example/example_pareto.py", "pareto", backend="plotly"
     )
 
     # todo, enable
