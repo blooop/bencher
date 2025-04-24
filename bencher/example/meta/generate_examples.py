@@ -31,7 +31,13 @@ bench.report.pane
     else:
         code_results = """
 import plotly.io as pio
+# Configure Plotly for proper notebook rendering in Sphinx
 pio.renderers.default = 'notebook'
+# Initialize plotly for Jupyter notebooks
+from plotly.offline import init_notebook_mode
+init_notebook_mode(connected=True)
+# Set render_plotly to True to enable interactive Plotly plots
+bench.bench_cfg.render_plotly = True
 bench.report.pane
 """
 

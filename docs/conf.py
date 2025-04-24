@@ -24,6 +24,7 @@ extensions += [  # noqa
     "autoapi.extension",
     "nbsite.gallery",
     "sphinx_copybutton",
+    "jupyter_sphinx",
 ]
 
 templates_path = ["_templates"]
@@ -40,6 +41,13 @@ html_theme = "sphinx_rtd_theme"
 # }
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+
+# Required files for Plotly and interactive visualizations
+html_js_files = [
+    "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js",
+    "https://cdn.plot.ly/plotly-latest.min.js",
+    "plotly_support.js",
+]
 
 autoapi_dirs = ["../bencher"]
 autoapi_ignore = ["*example_*", "*example*", "*experimental*"]
