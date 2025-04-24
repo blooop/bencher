@@ -8,4 +8,5 @@ selenium
 chromedriver_binary
 jupyter_sphinx
 sphinx_copybutton
+matplotlib
 # moviepy>=2.1.2
