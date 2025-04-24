@@ -6,4 +6,6 @@ nbsite==0.8.7
 jupyter_bokeh
 selenium
 chromedriver_binary
+jupyter_sphinx
+sphinx_copybutton
 # moviepy>=2.1.2
