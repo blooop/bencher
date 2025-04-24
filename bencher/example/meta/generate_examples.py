@@ -20,7 +20,7 @@ def convert_example_to_jupyter_notebook(
     code += split_code[0]
 
     code += f"""
-bench={function_name}
+bench = {function_name}
 """
     if backend == "bokeh":
         code_results = """
