@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def convert_example_to_jupyter_notebook(
-    filename: str, output_path: str, repeats: int = None
+    filename: str, output_path: str, repeats: int = None, backend="bokeh"
 ) -> None:
     source_path = Path(filename)
 
@@ -22,11 +22,23 @@ def convert_example_to_jupyter_notebook(
     code += f"""
 bench = {function_name}
 """
-
-    code_results = """
+    if backend == "bokeh":
+        code_results = """
 from bokeh.io import output_notebook
 output_notebook()
-bench.get_result().to_auto_plots()
+bench.report.pane
+    """
+    else:
+        code_results = """
+import plotly.io as pio
+# Configure Plotly for proper notebook rendering in Sphinx
+pio.renderers.default = 'notebook'
+# Initialize plotly for Jupyter notebooks
+from plotly.offline import init_notebook_mode
+init_notebook_mode(connected=True)
+# Set render_plotly to True to enable interactive Plotly plots
+bench.bench_cfg.render_plotly = True
+bench.report.pane
 """
 
     nb["cells"] = [
@@ -125,7 +137,7 @@ if __name__ == "__main__":
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/example_pareto.py", "pareto"
+        "/workspaces/bencher/bencher/example/example_pareto.py", "pareto", backend="plotly"
     )
 
     # todo, enable
