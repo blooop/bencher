@@ -26,8 +26,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/dyson-ai/bencher"
-Home = "https://github.com/dyson-ai/bencher"
+Repository = "https://github.com/blooop/bencher"
+Home = "https://github.com/blooop/bencher"
 Documentation = "https://bencher.readthedocs.io/en/latest/"
 
 [tool.pixi.project]

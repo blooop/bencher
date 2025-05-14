@@ -361,8 +361,8 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma
 
         def publish_args(branch_name) -> Tuple[str, str]:
             return (
-                "https://github.com/dyson-ai/bencher.git",
-                f"https://github.com/dyson-ai/bencher/blob/{branch_name}")
+                "https://github.com/blooop/bencher.git",
+                f"https://github.com/blooop/bencher/blob/{branch_name}")
 
 
     Args:

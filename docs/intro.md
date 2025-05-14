@@ -41,7 +41,7 @@ pixi run demo
 
 An example of the type of output bencher produces can be seen here:
 
-https://dyson-ai.github.io/bencher/ 
+https://blooop.github.io/bencher/ 
 
 
 ## Examples
