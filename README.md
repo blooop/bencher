@@ -2,11 +2,11 @@
  
  ## Continuous Integration Status
 
-[![Ci](https://github.com/dyson-ai/bencher/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dyson-ai/bencher/actions/workflows/ci.yml?query=branch%3Amain)
+[![Ci](https://github.com/blooop/bencher/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/blooop/bencher/actions/workflows/ci.yml?query=branch%3Amain)
 ![Read the Docs](https://img.shields.io/readthedocs/bencher)
-[![Codecov](https://codecov.io/gh/dyson-ai/bencher/branch/main/graph/badge.svg?token=Y212GW1PG6)](https://codecov.io/gh/dyson-ai/bencher)
-[![GitHub issues](https://img.shields.io/github/issues/dyson-ai/bencher.svg)](https://GitHub.com/dyson-ai/bencher/issues/)
-[![GitHub pull-requests merged](https://badgen.net/github/merged-prs/dyson-ai/bencher)](https://github.com/dyson-ai/bencher/pulls?q=is%3Amerged)
+[![Codecov](https://codecov.io/gh/blooop/bencher/branch/main/graph/badge.svg?token=Y212GW1PG6)](https://codecov.io/gh/blooop/bencher)
+[![GitHub issues](https://img.shields.io/github/issues/blooop/bencher.svg)](https://GitHub.com/blooop/bencher/issues/)
+[![GitHub pull-requests merged](https://badgen.net/github/merged-prs/blooop/bencher)](https://github.com/blooop/bencher/pulls?q=is%3Amerged)
 [![PyPI](https://img.shields.io/pypi/v/holobench)](https://pypi.org/project/holobench/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/holobench)](https://pypistats.org/packages/holobench)
 [![License](https://img.shields.io/pypi/l/bencher)](https://opensource.org/license/mit/)

@@ -23,7 +23,7 @@ else:
     # publish data to a github branch
     bch.publish_and_view_rrd(
         file_path,
-        remote="https://github.com/dyson-ai/bencher.git",
+        remote="https://github.com/blooop/bencher.git",
         branch_name="test_rrd",
         content_callback=bch.github_content,
     ).show()
