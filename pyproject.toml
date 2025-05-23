@@ -7,7 +7,7 @@ description = "A package for benchmarking the performance of arbitrary functions
 readme = "README.md"
 license = "MIT"
 
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 
 dependencies = [
     "holoviews>=1.15,<=1.20.0",
@@ -43,6 +43,8 @@ python = "3.10.*"
 python = "3.11.*"
 [tool.pixi.feature.py312.dependencies]
 python = "3.12.*"
+[tool.pixi.feature.py313.dependencies]
+python = "3.13.*"
 
 
 [tool.pixi.pypi-dependencies]
@@ -82,6 +84,7 @@ default = { features = ["test", "rerun"], solve-group = "default" }
 py310 = ["py310", "test", "rerun"]
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
+py313 = ["py313", "test", "rerun"]
 
 
 [tool.pixi.tasks]

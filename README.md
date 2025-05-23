@@ -10,7 +10,7 @@
 [![PyPI](https://img.shields.io/pypi/v/holobench)](https://pypi.org/project/holobench/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/holobench)](https://pypistats.org/packages/holobench)
 [![License](https://img.shields.io/pypi/l/bencher)](https://opensource.org/license/mit/)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
 ## Install
@@ -87,4 +87,4 @@ Start with example_simple_float.py and explore other examples based on your data
 - [Examples Documentation](https://bencher.readthedocs.io/reference/index.html)
 - [API documentation](https://bencher.readthedocs.io/autoapi/bencher/index.html)
 
-More documentation is needed for the examples and general workflow. 
+More documentation is needed for the examples and general workflow.
