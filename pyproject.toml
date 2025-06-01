@@ -18,11 +18,11 @@ dependencies = [
     "diskcache>=5.6,<=5.6.3",
     "optuna>=3.2,<=4.3.0",
     "xarray>=2023.7,<=2025.4.0",
-    "plotly>=5.15,<=6.0.1",
+    "plotly>=5.15,<=6.1.2",
     "pandas>=2.0,<=2.2.3",
     "strenum>=0.4.0,<=0.4.15",
     "scikit-learn>=1.2,<=1.6.1",
-    "moviepy>=2.1.2,<=2.1.2",
+    "moviepy>=2.1.2,<=2.2.1",
 ]
 
 [project.urls]
@@ -66,7 +66,7 @@ test = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk==0.22.1", "rerun-notebook", "flask", "flask-cors"]
+rerun = ["rerun-sdk==0.23.2", "rerun-notebook", "flask", "flask-cors"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
