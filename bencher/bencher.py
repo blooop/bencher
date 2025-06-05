@@ -52,8 +52,8 @@ def set_xarray_multidim(
 ) -> xr.DataArray:
     """Set a value in a multi-dimensional xarray at the specified index position.
 
-    This function sets a value in an N-dimensional xarray using explicit matching on the
-    tuple length since direct indexing with variable length index tuples is not supported.
+    This function sets a value in an N-dimensional xarray using dynamic indexing
+    that works for any number of dimensions.
 
     Args:
         data_array (xr.DataArray): The data array to modify
@@ -63,62 +63,7 @@ def set_xarray_multidim(
     Returns:
         xr.DataArray: The modified data array
     """
-    match len(index_tuple):
-        case 1:
-            data_array[index_tuple[0]] = value
-        case 2:
-            data_array[index_tuple[0], index_tuple[1]] = value
-        case 3:
-            data_array[index_tuple[0], index_tuple[1], index_tuple[2]] = value
-        case 4:
-            data_array[index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]] = value
-        case 5:
-            data_array[
-                index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3], index_tuple[4]
-            ] = value
-        case 6:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-            ] = value
-        case 7:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-                index_tuple[6],
-            ] = value
-        case 8:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-                index_tuple[6],
-                index_tuple[7],
-            ] = value
-        case 9:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-                index_tuple[6],
-                index_tuple[7],
-                index_tuple[8],
-            ] = value
-
+    data_array[index_tuple] = value
     return data_array
 
 
