@@ -1311,8 +1311,8 @@ packages:
   requires_python: '>=3.9'
 - pypi: .
   name: holobench
-  version: 1.45.0
-  sha256: 8222dfb5123262867dff3712bd49e46da981861cbd49c609435463bfffac4238
+  version: 1.46.0
+  sha256: 3d2f2e5d39878463fe9d59ebeceaf5cdae422494e5115db90236bb998b51c038
   requires_dist:
   - holoviews>=1.15,<=1.21.0
   - numpy>=1.0,<=2.2.6
@@ -1338,7 +1338,7 @@ packages:
   - ipykernel ; extra == 'test'
   - pip ; extra == 'test'
   - jupyter-bokeh ; extra == 'test'
-  - rerun-sdk==0.23.4 ; extra == 'rerun'
+  - rerun-sdk>=0.22.1 ; extra == 'rerun'
   - rerun-notebook ; extra == 'rerun'
   - flask ; extra == 'rerun'
   - flask-cors ; extra == 'rerun'
