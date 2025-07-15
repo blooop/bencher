@@ -6,6 +6,8 @@ from param import Parameter
 import holoviews as hv
 from functools import partial
 import panel as pn
+import numpy as np
+from textwrap import wrap
 
 from bencher.utils import int_to_col, color_tuple_to_css, callable_name
 
@@ -14,7 +16,6 @@ from bencher.variables.inputs import with_level
 
 from bencher.variables.results import OptDir
 from copy import deepcopy
-from bencher.results.optuna_result import OptunaResult
 from bencher.variables.results import ResultVar
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
@@ -24,6 +25,13 @@ from bencher.variables.results import ResultReference, ResultDataSet
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
+
+from collections import defaultdict
+
+import pandas as pd
+
+from bencher.bench_cfg import BenchCfg
+from bencher.plotting.plt_cnt_cfg import PltCntCfg
 
 # todo add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
@@ -52,7 +60,87 @@ class EmptyContainer:
         return self.pane if len(self.pane) > 0 else None
 
 
-class BenchResultBase(OptunaResult):
+def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
+    """Given a dataarray that contains boolean coordinates, convert them to strings so that holoviews loads the data properly
+
+    Args:
+        dataarray (xr.DataArray): dataarray with boolean coordinates
+
+    Returns:
+        xr.DataArray: dataarray with boolean coordinates converted to strings
+    """
+    bool_coords = {}
+    for c in dataset.coords:
+        if dataset.coords[c].dtype == bool:
+            bool_coords[c] = [str(vals) for vals in dataset.coords[c].values]
+
+    if len(bool_coords) > 0:
+        return dataset.assign_coords(bool_coords)
+    return dataset
+
+
+class BenchResultBase:
+    def __init__(self, bench_cfg: BenchCfg) -> None:
+        self.bench_cfg = bench_cfg
+        # self.wrap_long_time_labels(bench_cfg)  # todo remove
+        self.ds = xr.Dataset()
+        self.object_index = []
+        self.hmaps = defaultdict(dict)
+        self.result_hmaps = bench_cfg.result_hmaps
+        self.studies = []
+        self.plt_cnt_cfg = PltCntCfg()
+        self.plot_inputs = []
+        self.dataset_list = []
+
+        # self.width=600/
+        # self.height=600
+
+        #   bench_res.objects.append(rv)
+        # bench_res.reference_index = len(bench_res.objects)
+
+    def to_xarray(self) -> xr.Dataset:
+        return self.ds
+
+    def setup_object_index(self):
+        self.object_index = []
+
+    def to_pandas(self, reset_index=True) -> pd.DataFrame:
+        """Get the xarray results as a pandas dataframe
+
+        Returns:
+            pd.DataFrame: The xarray results array as a pandas dataframe
+        """
+        ds = self.to_xarray().to_dataframe()
+        return ds.reset_index() if reset_index else ds
+
+    def wrap_long_time_labels(self, bench_cfg):
+        """Takes a benchCfg and wraps any index labels that are too long to be plotted easily
+
+        Args:
+            bench_cfg (BenchCfg):
+
+        Returns:
+            BenchCfg: updated config with wrapped labels
+        """
+        if bench_cfg.over_time:
+            if self.ds.coords["over_time"].dtype == np.datetime64:
+                # plotly catastrophically fails to plot anything with the default long string representation of time, so convert to a shorter time representation
+                self.ds.coords["over_time"] = [
+                    pd.to_datetime(t).strftime("%d-%m-%y %H-%M-%S")
+                    for t in self.ds.coords["over_time"].values
+                ]
+                # wrap very long time event labels because otherwise the graphs are unreadable
+            if bench_cfg.time_event is not None:
+                self.ds.coords["over_time"] = [
+                    "\n".join(wrap(t, 20)) for t in self.ds.coords["over_time"].values
+                ]
+        return bench_cfg
+
+    def post_setup(self):
+        self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg)
+        self.bench_cfg = self.wrap_long_time_labels(self.bench_cfg)
+        self.ds = convert_dataset_bool_dims_to_str(self.ds)
+
     def result_samples(self) -> int:
         """The number of samples in the results dataframe"""
         return self.ds.count()
@@ -80,7 +168,7 @@ class BenchResultBase(OptunaResult):
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar = None,
+        result_var: ResultVar | str = None,
         level: int = None,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
@@ -97,7 +185,15 @@ class BenchResultBase(OptunaResult):
         ds_out = self.ds.copy()
 
         if result_var is not None:
-            ds_out = ds_out[result_var.name]
+            if isinstance(result_var, Parameter):
+                var_name = result_var.name
+            elif isinstance(result_var, str):
+                var_name = result_var
+            else:
+                raise TypeError(
+                    f"Unsupported type for result_var: {type(result_var)}. Expected Parameter or str."
+                )
+            ds_out = ds_out[var_name].to_dataset(name=var_name)
 
         def rename_ds(dataset: xr.Dataset, suffix: str):
             # var_name =
@@ -219,9 +315,6 @@ class BenchResultBase(OptunaResult):
     def describe_sweep(self):
         return self.bench_cfg.describe_sweep()
 
-    def get_best_holomap(self, name: str = None):
-        return self.get_hmap(name)[self.get_best_trial_params(True)]
-
     def get_hmap(self, name: str = None):
         try:
             if name is None:
@@ -317,10 +410,11 @@ class BenchResultBase(OptunaResult):
         result_types=None,
         pane_collection: pn.pane = None,
         zip_results=False,
+        reduce: ReduceType = None,
         **kwargs,
     ) -> Optional[pn.Row]:
         if hv_dataset is None:
-            hv_dataset = self.to_hv_dataset()
+            hv_dataset = self.to_hv_dataset(reduce=reduce)
 
         if pane_collection is None:
             pane_collection = pn.Row()
@@ -361,7 +455,7 @@ class BenchResultBase(OptunaResult):
         pane_collection: pn.pane = None,
         override=False,
         **kwargs,
-    ):
+    ) -> Optional[pn.panel]:
         plot_filter = PlotFilter(
             float_range=float_range,
             cat_range=cat_range,
@@ -377,11 +471,12 @@ class BenchResultBase(OptunaResult):
         if matches_res.overall:
             return self.map_plot_panes(
                 plot_callback=plot_callback,
-                hv_dataset=self.to_hv_dataset(reduce=reduce),
+                hv_dataset=None,
                 target_dimension=target_dimension,
                 result_var=result_var,
                 result_types=result_types,
                 pane_collection=pane_collection,
+                reduce=reduce,
                 **kwargs,
             )
         return matches_res.to_panel()
@@ -556,3 +651,19 @@ class BenchResultBase(OptunaResult):
 
     def to_description(self, width: int = 800) -> pn.pane.Markdown:
         return self.bench_cfg.to_description(width)
+
+    def set_plot_size(self, **kwargs) -> dict:
+        if "width" not in kwargs:
+            if self.bench_cfg.plot_size is not None:
+                kwargs["width"] = self.bench_cfg.plot_size
+            # specific width overrides general size
+            if self.bench_cfg.plot_width is not None:
+                kwargs["width"] = self.bench_cfg.plot_width
+
+        if "height" not in kwargs:
+            if self.bench_cfg.plot_size is not None:
+                kwargs["height"] = self.bench_cfg.plot_size
+            # specific height overrides general size
+            if self.bench_cfg.plot_height is not None:
+                kwargs["height"] = self.bench_cfg.plot_height
+        return kwargs

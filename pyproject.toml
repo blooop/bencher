@@ -1,37 +1,33 @@
 [project]
 name = "holobench"
-version = "1.36.2"
+version = "1.46.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
 readme = "README.md"
 license = "MIT"
 
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 
 dependencies = [
-    "holoviews>=1.15,<=1.20.0",
-    "numpy>=1.0,<=2.2.1",
-    "param>=1.13.0,<=2.2.0",
-    "hvplot>=0.8,<=0.10.0",        #greater versions cause an error
-    "matplotlib>=3.6.3,<=3.10.0",
-    "panel>=1.3.6,<=1.5.5",
+    "holoviews>=1.15,<=1.21.0",
+    "numpy>=1.0,<=2.2.6",
+    "param>=1.13.0,<=2.2.1",
+    "hvplot>=0.11.3,<=0.11.3",
+    "panel>=1.3.6,<=1.7.2",
     "diskcache>=5.6,<=5.6.3",
-    "optuna>=3.2,<=4.1.0",
-    "xarray>=2023.7,<=2024.11.0",
-    "plotly>=5.15,<=5.24.1",
-    "sortedcontainers>=2.4,<=2.4",
-    "pandas>=2.0,<=2.2.3",
+    "optuna>=3.2,<=4.4.0",
+    "xarray>=2023.7,<=2025.6.1",
+    "plotly>=5.15,<=6.2.0",
+    "pandas>=2.0,<=2.3.1",
     "strenum>=0.4.0,<=0.4.15",
-    "scikit-learn>=1.2,<=1.6.0",
-    "str2bool>=1.1,<=1.1",
-    "scoop>=0.7.0,<=0.7.2.0",
-    "moviepy-fix-codec",
+    "scikit-learn>=1.2,<=1.7.0",
+    "moviepy>=2.1.2,<=2.2.1",
 ]
 
 [project.urls]
-Repository = "https://github.com/dyson-ai/bencher"
-Home = "https://github.com/dyson-ai/bencher"
+Repository = "https://github.com/blooop/bencher"
+Home = "https://github.com/blooop/bencher"
 Documentation = "https://bencher.readthedocs.io/en/latest/"
 
 [tool.pixi.project]
@@ -47,55 +43,40 @@ python = "3.10.*"
 python = "3.11.*"
 [tool.pixi.feature.py312.dependencies]
 python = "3.12.*"
+[tool.pixi.feature.py313.dependencies]
+python = "3.13.*"
 
 
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
 
-# Define a consolidated docs feature with all dependencies
-# [tool.pixi.feature.docs.dependencies]
-# python = "3.10.*"
-# firefox = ">=134.0,<135"         # Conda package
-# geckodriver = "*"                # Conda package
-# sphinx = "*"
-# gtk3 = "*"
-# python-chromedriver-binary = "*"
-
-# [tool.pixi.feature.docs.pypi-dependencies]
-# # All Python documentation dependencies
-# pydata-sphinx-theme = "*"
-# sphinx-rtd-theme = "*"
-# sphinxcontrib-napoleon = "*"
-# sphinx-autoapi = "*"
-# nbsite = "==0.8.7"
-# jupyter_bokeh = "*"
-# selenium = "*"
-# chromedriver_binary = "*"
-# ipykernel = "*"
-# "nbformat",
-
 [project.optional-dependencies]
 test = [
-    "pylint>=3.2.5,<=3.3.3",
-    "pytest-cov>=4.1,<=6.0.0",
-    "pytest>=7.4,<=8.3.4",
-    "hypothesis>=6.104.2,<=6.124.7",
-    "ruff>=0.5.0,<=0.9.3",
-    "coverage>=7.5.4,<=7.6.10",
-    "pre-commit<=4.1.0",
+    "pylint>=3.2.5,<=3.3.7",
+    "pytest-cov>=4.1,<=6.2.1",
+    "pytest>=7.4,<=8.4.1",
+    "hypothesis>=6.104.2,<=6.135.26",
+    "ruff>=0.5.0,<=0.12.2",
+    "coverage>=7.5.4,<=7.9.2",
+    "pre-commit<=4.2.0",
     "nbformat",
+    "ipykernel",
+    "pip",
+    "jupyter_bokeh",
 ]
 
-
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk==0.21.0", "rerun-notebook", "flask", "flask-cors"]
+rerun = ["rerun-sdk>=0.22.1", "rerun-notebook", "flask", "flask-cors"]
+
+#unused for the moment but may turn on later
+# scoop = ["scoop>=0.7.0,<=0.7.2.0"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["bencher"]
+include = ["bencher", "CHANGELOG.md"]
 
 # Environments
 [tool.pixi.environments]
@@ -103,9 +84,21 @@ default = { features = ["test", "rerun"], solve-group = "default" }
 py310 = ["py310", "test", "rerun"]
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
+py313 = ["py313", "test", "rerun"]
 
 
 [tool.pixi.tasks]
+#AI AGENT TASKS
+
+#use this task to test any changes to the code, it will run docs, lint, and tests. 
+agent-iterate = { depends-on = [
+    "generate-docs",
+    "ci",
+    "git-commit-all",
+    "fix-commit-push",
+    "fix-commit-push",
+] }
+
 pre-commit = "pre-commit run -a"
 pre-commit-update = "pre-commit autoupdate"
 format = "ruff format ."
@@ -131,17 +124,22 @@ ci = { depends-on = [
     "coverage",
     "coverage-report",
 ] }
+git-commit-all = "git add -A && git commit -m 'Add all untracked files' || true"
 ci-push = { depends-on = ["format", "ruff-lint", "update-lock", "ci", "push"] }
 clear-pixi = "rm -rf .pixi pixi.lock"
 setup-git-merge-driver = "git config merge.ours.driver true"
 update-from-template-repo = "./scripts/update_from_template.sh"
 
+generate-docs = "python /workspaces/bencher/bencher/example/meta/generate_examples.py"
 docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html docs docs/builtdocs"
 
 
 #demos
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
+
+[tool.pixi.dependencies]
+sqlite = "==3.48.0"
 
 
 [tool.pylint]
@@ -167,3 +165,6 @@ exclude_also = [
     "pass",
     "(_):",
 ]
+
+[tool.pytest.ini_options]
+tmp_path_retention_count = 0

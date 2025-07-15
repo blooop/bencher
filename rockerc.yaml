@@ -14,7 +14,6 @@ args:
   - pull 
   - deps
   - git 
-  - lazygit
   - pixi
   - cwd
   # - locales

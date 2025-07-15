@@ -1,0 +1,6 @@
+Simplify the 3 categorical variable example so that each of 3 categorical variables only has two conditions, to make the example simpler and easier to understand. 
+
+Workflow:
+    Run the task `pixi r agent-iterate` and continue to debug the output of the task until it passes.
+
+Do not ask for clarification.  Keep working the task `pixi r agent-iterate` and implementing the feature until the `agent-iterate` task completes fully

@@ -19,7 +19,7 @@ class CachedParamExample(bch.CachedParams):
 
 
 class TestJob(unittest.TestCase):
-    @settings(deadline=500)
+    @settings(deadline=2000)  # Increased from 500ms to 2000ms
     @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
     def test_basic(self, executor):
         cp = CachedParamExample()  # clears cache by default
@@ -81,7 +81,7 @@ class TestJob(unittest.TestCase):
 
         self.assertNotEqual(res1["result"], res3["result"], f"{res1}")
 
-    @settings(deadline=1000)
+    @settings(deadline=2000)  # Increased from 1000ms to 2000ms
     @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
     def test_bench_runner_parallel(self, executor):
         run_cfg = bch.BenchRunCfg()

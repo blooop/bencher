@@ -1,38 +1,41 @@
 from typing import Optional
-from pathlib import Path
+from functools import partial
 import panel as pn
+from param import Parameter
+import holoviews as hv
+from bencher.results.bench_result_base import BenchResultBase, ReduceType
+from bencher.results.video_controls import VideoControls
+from bencher.variables.results import (
+    PANEL_TYPES,
+)
 
 
-class VideoControls:
-    def __init__(self) -> None:
-        self.vid_p = []
+class VideoResult(BenchResultBase):
+    def to_video(self, result_var: Parameter = None, **kwargs):
+        vc = VideoControls()
+        return pn.Column(
+            vc.video_controls(),
+            self.to_panes(result_var=result_var, container=vc.video_container, **kwargs),
+        )
 
-    def video_container(self, path, **kwargs):
-        if path is not None and Path(path).exists():
-            vid = pn.pane.Video(path, autoplay=True, **kwargs)
-            vid.loop = True
-            self.vid_p.append(vid)
-            return vid
-        return pn.pane.Markdown(f"video does not exist {path}")
-
-    def video_controls(self) -> Optional[pn.Column]:
-        def play_vid(_):  # pragma: no cover
-            for r in self.vid_p:
-                r.paused = False
-
-        def reset_vid(_):  # pragma: no cover
-            for r in self.vid_p:
-                r.paused = False
-                r.time = 0
-
-        button_names = ["Play Videos", "Pause Videos", "Loop Videos", "Reset Videos"]
-        buttom_cb = [play_vid, reset_vid]
-
-        buttons = pn.Row()
-
-        for name, cb in zip(button_names, buttom_cb):
-            button = pn.widgets.Button(name=name)
-            pn.bind(cb, button, watch=True)
-            buttons.append(button)
-
-        return pn.Column(buttons)
+    def to_panes(
+        self,
+        result_var: Parameter = None,
+        hv_dataset=None,
+        target_dimension: int = 0,
+        container=None,
+        level: int = None,
+        **kwargs,
+    ) -> Optional[pn.pane.panel]:
+        if hv_dataset is None:
+            hv_dataset = self.to_hv_dataset(ReduceType.SQUEEZE, level=level)
+        elif not isinstance(hv_dataset, hv.Dataset):
+            hv_dataset = hv.Dataset(hv_dataset)
+        return self.map_plot_panes(
+            partial(self.ds_to_container, container=container),
+            hv_dataset=hv_dataset,
+            target_dimension=target_dimension,
+            result_var=result_var,
+            result_types=PANEL_TYPES,
+            **kwargs,
+        )

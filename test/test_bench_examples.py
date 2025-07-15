@@ -1,11 +1,19 @@
 import unittest
 import bencher as bch
-from bencher.example.inputs_0D.example_0D import example_0D
-from bencher.example.inputs_1D.example_1D import example_1D_float_repeats
+from bencher.example.inputs_0D.example_0_in_1_out import example_0_in_1_out
+from bencher.example.inputs_0D.example_0_in_2_out import example_0_in_2_out
+from bencher.example.inputs_1D.example_1_int_in_1_out import example_1_int_in_1_out
+from bencher.example.inputs_1D.example_1_int_in_2_out import example_1_int_in_2_out
+from bencher.example.inputs_1D.example_1_cat_in_2_out_repeats import example_1_cat_in_2_out_repeats
+from bencher.example.inputs_1D.example_1_int_in_2_out_repeats import example_1_int_in_2_out_repeats
+from bencher.example.inputs_0_float.example_3_cat_in_2_out import example_3_cat_in_2_out
+
+# from bencher.example.inputs_1D.example_1D import example_1D_float_repeats
 from bencher.example.example_floats2D import example_floats2D
 from bencher.example.example_pareto import example_pareto
 from bencher.example.example_simple_cat import example_1D_cat
 from bencher.example.example_simple_float2d import example_2D_float
+from bencher.example.example_simple_float import example_simple_float
 from bencher.example.example_consts import example_2D_float_const
 from bencher.example.example_float_cat import run_example_float_cat
 from bencher.example.example_time_event import run_example_time_event
@@ -13,7 +21,7 @@ from bencher.example.example_float3D import example_floats3D
 
 from bencher.example.example_custom_sweep import example_custom_sweep
 from bencher.example.example_custom_sweep2 import example_custom_sweep2
-from bencher.example.example_levels2 import example_levels2
+from bencher.example.example_levels import example_levels
 from bencher.example.example_workflow import example_floats2D_workflow, example_floats3D_workflow
 from bencher.example.example_holosweep import example_holosweep
 from bencher.example.example_holosweep_tap import example_holosweep_tap
@@ -68,10 +76,15 @@ class TestBenchExamples(unittest.TestCase):
     #     self.examples_asserts(example_floats(self.create_run_cfg()))
 
     def test_example0D(self) -> None:
-        self.examples_asserts(example_0D(self.create_run_cfg()))
+        self.examples_asserts(example_0_in_1_out(self.create_run_cfg()))
+        self.examples_asserts(example_0_in_2_out(self.create_run_cfg()))
 
     def test_example1D(self) -> None:
-        self.examples_asserts(example_1D_float_repeats(self.create_run_cfg()))
+        self.examples_asserts(example_1_int_in_1_out(self.create_run_cfg()))
+        self.examples_asserts(example_1_int_in_2_out(self.create_run_cfg()))
+        self.examples_asserts(example_1_int_in_2_out_repeats(self.create_run_cfg()))
+        self.examples_asserts(example_1_cat_in_2_out_repeats(self.create_run_cfg()))
+        self.examples_asserts(example_3_cat_in_2_out(self.create_run_cfg()))
 
     def test_example_simple_cat(self) -> None:
         self.examples_asserts(example_1D_cat(self.create_run_cfg()))
@@ -83,10 +96,7 @@ class TestBenchExamples(unittest.TestCase):
         self.examples_asserts(example_pareto(self.create_run_cfg()))
 
     def test_example_simple_float(self) -> None:
-        self.examples_asserts(example_1D_float_repeats(self.create_run_cfg()))
-
-    def test_example_simple_float1D(self) -> None:
-        self.examples_asserts(example_1D_float_repeats(self.create_run_cfg()))
+        self.examples_asserts(example_simple_float(self.create_run_cfg()))
 
     def test_example_simple_float2D(self) -> None:
         self.examples_asserts(example_2D_float(self.create_run_cfg()))
@@ -112,8 +122,8 @@ class TestBenchExamples(unittest.TestCase):
     def test_example_custom2(self) -> None:
         self.examples_asserts(example_custom_sweep2(self.create_run_cfg()))
 
-    def test_example_level2(self) -> None:
-        self.examples_asserts(example_levels2(self.create_run_cfg()))
+    def test_example_levels(self) -> None:
+        self.examples_asserts(example_levels(self.create_run_cfg()))
 
     def test_example_floats2D_workflow(self) -> None:
         self.examples_asserts(example_floats2D_workflow(self.create_run_cfg()))

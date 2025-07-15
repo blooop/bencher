@@ -5,11 +5,6 @@ from copy import deepcopy
 import numpy as np
 import optuna
 import panel as pn
-from collections import defaultdict
-from textwrap import wrap
-
-import pandas as pd
-import xarray as xr
 
 
 from optuna.visualization import (
@@ -18,9 +13,7 @@ from optuna.visualization import (
 )
 from bencher.utils import hmap_canonical_input
 from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.bench_cfg import BenchCfg
-from bencher.plotting.plt_cnt_cfg import PltCntCfg
-
+from bencher.results.bench_result_base import BenchResultBase, ReduceType
 
 # from bencher.results.bench_result_base import BenchResultBase
 from bencher.optuna_conversions import (
@@ -33,97 +26,15 @@ from bencher.optuna_conversions import (
 )
 
 
-def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
-    """Given a dataarray that contains boolean coordinates, convert them to strings so that holoviews loads the data properly
-
-    Args:
-        dataarray (xr.DataArray): dataarray with boolean coordinates
-
-    Returns:
-        xr.DataArray: dataarray with boolean coordinates converted to strings
-    """
-    bool_coords = {}
-    for c in dataset.coords:
-        if dataset.coords[c].dtype == bool:
-            bool_coords[c] = [str(vals) for vals in dataset.coords[c].values]
-
-    if len(bool_coords) > 0:
-        return dataset.assign_coords(bool_coords)
-    return dataset
-
-
-class OptunaResult:
-    def __init__(self, bench_cfg: BenchCfg) -> None:
-        self.bench_cfg = bench_cfg
-        # self.wrap_long_time_labels(bench_cfg)  # todo remove
-        self.ds = xr.Dataset()
-        self.object_index = []
-        self.hmaps = defaultdict(dict)
-        self.result_hmaps = bench_cfg.result_hmaps
-        self.studies = []
-        self.plt_cnt_cfg = PltCntCfg()
-        self.plot_inputs = []
-        self.dataset_list = []
-
-        # self.width=600/
-        # self.height=600
-
-        #   bench_res.objects.append(rv)
-        # bench_res.reference_index = len(bench_res.objects)
-
-    def post_setup(self):
-        self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg)
-        self.bench_cfg = self.wrap_long_time_labels(self.bench_cfg)
-        self.ds = convert_dataset_bool_dims_to_str(self.ds)
-
-    def to_xarray(self) -> xr.Dataset:
-        return self.ds
-
-    def setup_object_index(self):
-        self.object_index = []
-
-    def to_pandas(self, reset_index=True) -> pd.DataFrame:
-        """Get the xarray results as a pandas dataframe
-
-        Returns:
-            pd.DataFrame: The xarray results array as a pandas dataframe
-        """
-        ds = self.to_xarray().to_dataframe()
-        if reset_index:
-            return ds.reset_index()
-        return ds
-
-    def wrap_long_time_labels(self, bench_cfg):
-        """Takes a benchCfg and wraps any index labels that are too long to be plotted easily
-
-        Args:
-            bench_cfg (BenchCfg):
-
-        Returns:
-            BenchCfg: updated config with wrapped labels
-        """
-        if bench_cfg.over_time:
-            if self.ds.coords["over_time"].dtype == np.datetime64:
-                # plotly catastrophically fails to plot anything with the default long string representation of time, so convert to a shorter time representation
-                self.ds.coords["over_time"] = [
-                    pd.to_datetime(t).strftime("%d-%m-%y %H-%M-%S")
-                    for t in self.ds.coords["over_time"].values
-                ]
-                # wrap very long time event labels because otherwise the graphs are unreadable
-            if bench_cfg.time_event is not None:
-                self.ds.coords["over_time"] = [
-                    "\n".join(wrap(t, 20)) for t in self.ds.coords["over_time"].values
-                ]
-        return bench_cfg
-
-    def to_optuna_plots(self) -> List[pn.pane.panel]:
+class OptunaResult(BenchResultBase):
+    def to_optuna_plots(self, **kwargs) -> List[pn.pane.panel]:
         """Create an optuna summary from the benchmark results
 
         Returns:
             List[pn.pane.panel]: A list of optuna plot summarising the benchmark process
         """
 
-        return self.collect_optuna_plots()
+        return self.collect_optuna_plots(**kwargs)
 
     def to_optuna_from_sweep(self, bench, n_trials=30):
         optu = self.to_optuna_from_results(
@@ -175,7 +86,8 @@ class OptunaResult:
             optuna.Study: optuna description of the study
         """
         if include_meta:
-            df = self.to_pandas()
+            # df = self.to_pandas()
+            df = self.to_dataset(reduce=ReduceType.NONE).to_dataframe().reset_index()
             all_vars = []
             for v in self.bench_cfg.all_vars:
                 if type(v) is not TimeEvent:
@@ -189,10 +101,14 @@ class OptunaResult:
             # if self.bench_cfg.repeats>1:
             # df = self.bench_cfg.ds.mean("repeat").to_dataframe().reset_index()
             # else:
-            df = self.to_pandas().reset_index()
+            # df = self.to_pandas().reset_index()
+            df = self.to_dataset(reduce=ReduceType.AUTO).to_dataframe().reset_index()
         # df = self.bench_cfg.ds.mean("repeat").to_dataframe.reset_index()
         # self.bench_cfg.all_vars
         # del self.bench_cfg.meta_vars[1]
+
+        # optuna does not like the nan values so remove them.
+        df.dropna(inplace=True)
 
         trials = []
         distributions = {}
@@ -210,6 +126,9 @@ class OptunaResult:
                     params[i.name] = row[1][i.name]
 
             for r in self.bench_cfg.optuna_targets():
+                # print(row[1][r])
+                # print(np.isnan(row[1][r]))
+                # if not np.isnan(row[1][r]):
                 values.append(row[1][r])
 
             trials.append(
@@ -245,7 +164,9 @@ class OptunaResult:
     def get_pareto_front_params(self):
         return [p.params for p in self.studies[0].trials]
 
-    def collect_optuna_plots(self) -> List[pn.pane.panel]:
+    def collect_optuna_plots(
+        self, pareto_width: float = None, pareto_height: float = None
+    ) -> List[pn.pane.panel]:
         """Use optuna to plot various summaries of the optimisation
 
         Args:
@@ -292,11 +213,18 @@ class OptunaResult:
                             include_dominated_trials=False,
                         )
                     )
+                    if pareto_width is not None:
+                        study_pane[-1].width = pareto_width
+                    if pareto_height is not None:
+                        study_pane[-1].height = pareto_height
+                try:
+                    study_pane.append(param_importance(self.bench_cfg, study))
+                    param_str.append(
+                        f"    Number of trials on the Pareto front: {len(study.best_trials)}"
+                    )
+                except RuntimeError as e:
+                    study_pane.append(f"Error generating parameter importance: {str(e)}")
 
-                study_pane.append(param_importance(self.bench_cfg, study))
-                param_str.append(
-                    f"    Number of trials on the Pareto front: {len(study.best_trials)}"
-                )
                 for t in study.best_trials:
                     param_str.extend(summarise_trial(t, self.bench_cfg))
 
@@ -343,18 +271,5 @@ class OptunaResult:
         """Return a deep copy of these results"""
         return deepcopy(self)
 
-    def set_plot_size(self, **kwargs) -> dict:
-        if "width" not in kwargs:
-            if self.bench_cfg.plot_size is not None:
-                kwargs["width"] = self.bench_cfg.plot_size
-            # specific width overrides general size
-            if self.bench_cfg.plot_width is not None:
-                kwargs["width"] = self.bench_cfg.plot_width
-
-        if "height" not in kwargs:
-            if self.bench_cfg.plot_size is not None:
-                kwargs["height"] = self.bench_cfg.plot_size
-            # specific height overrides general size
-            if self.bench_cfg.plot_height is not None:
-                kwargs["height"] = self.bench_cfg.plot_height
-        return kwargs
+    def get_best_holomap(self, name: str = None):
+        return self.get_hmap(name)[self.get_best_trial_params(True)]

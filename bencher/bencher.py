@@ -2,7 +2,8 @@ import logging
 from datetime import datetime
 from itertools import product, combinations
 
-from typing import Callable, List, Optional
+from param import Parameter
+from typing import Callable, List, Optional, Tuple, Any
 from copy import deepcopy
 import numpy as np
 import param
@@ -46,79 +47,73 @@ for handler in logging.root.handlers:
     handler.setFormatter(formatter)
 
 
-def set_xarray_multidim(data_array: xr.DataArray, index_tuple, value: float) -> xr.DataArray:
-    # """This is terrible, I need to do this in a better way, but [] does not like *args syntax and the () version of the set function doesn't either"""
-    match len(index_tuple):
-        case 1:
-            data_array[index_tuple[0]] = value
-        case 2:
-            data_array[index_tuple[0], index_tuple[1]] = value
-        case 3:
-            data_array[index_tuple[0], index_tuple[1], index_tuple[2]] = value
-        case 4:
-            data_array[index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]] = value
-        case 5:
-            data_array[
-                index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3], index_tuple[4]
-            ] = value
-        case 6:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-            ] = value
-        case 7:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-                index_tuple[6],
-            ] = value
-        case 8:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-                index_tuple[6],
-                index_tuple[7],
-            ] = value
-        case 9:
-            data_array[
-                index_tuple[0],
-                index_tuple[1],
-                index_tuple[2],
-                index_tuple[3],
-                index_tuple[4],
-                index_tuple[5],
-                index_tuple[6],
-                index_tuple[7],
-                index_tuple[8],
-            ] = value
+def set_xarray_multidim(
+    data_array: xr.DataArray, index_tuple: Tuple[int, ...], value: Any
+) -> xr.DataArray:
+    """Set a value in a multi-dimensional xarray at the specified index position.
 
+    This function sets a value in an N-dimensional xarray using dynamic indexing
+    that works for any number of dimensions.
+
+    Args:
+        data_array (xr.DataArray): The data array to modify
+        index_tuple (Tuple[int, ...]): The index coordinates as a tuple
+        value (Any): The value to set at the specified position
+
+    Returns:
+        xr.DataArray: The modified data array
+    """
+    data_array[index_tuple] = value
     return data_array
 
 
 def kwargs_to_input_cfg(worker_input_cfg: ParametrizedSweep, **kwargs) -> ParametrizedSweep:
+    """Create a configured instance of a ParametrizedSweep with the provided keyword arguments.
+
+    Args:
+        worker_input_cfg (ParametrizedSweep): The ParametrizedSweep class to instantiate
+        **kwargs: Keyword arguments to update the configuration with
+
+    Returns:
+        ParametrizedSweep: A configured instance of the worker_input_cfg class
+    """
     input_cfg = worker_input_cfg()
     input_cfg.param.update(kwargs)
     return input_cfg
 
 
-def worker_cfg_wrapper(worker, worker_input_cfg: ParametrizedSweep, **kwargs) -> dict:
+def worker_cfg_wrapper(worker: Callable, worker_input_cfg: ParametrizedSweep, **kwargs) -> dict:
+    """Wrap a worker function to accept keyword arguments instead of a config object.
+
+    This wrapper creates an instance of the worker_input_cfg class, updates it with the
+    provided keyword arguments, and passes it to the worker function.
+
+    Args:
+        worker (Callable): The worker function that expects a config object
+        worker_input_cfg (ParametrizedSweep): The class defining the configuration
+        **kwargs: Keyword arguments to update the configuration with
+
+    Returns:
+        dict: The result of calling the worker function with the configured input
+    """
     input_cfg = kwargs_to_input_cfg(worker_input_cfg, **kwargs)
     return worker(input_cfg)
 
 
 def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> dict:
+    """Prepare keyword arguments and pass them to a worker function.
+
+    This wrapper helps filter out metadata parameters that should not be passed
+    to the worker function (like 'repeat', 'over_time', and 'time_event').
+
+    Args:
+        worker (Callable): The worker function to call
+        bench_cfg (BenchCfg): Benchmark configuration with parameters like pass_repeat
+        **kwargs: The keyword arguments to filter and pass to the worker
+
+    Returns:
+        dict: The result from the worker function
+    """
     function_input_deep = deepcopy(kwargs)
     if not bench_cfg.pass_repeat:
         function_input_deep.pop("repeat")
@@ -135,15 +130,32 @@ class Bench(BenchPlotServer):
         bench_name: str = None,
         worker: Callable | ParametrizedSweep = None,
         worker_input_cfg: ParametrizedSweep = None,
-        run_cfg=None,
-        report=None,
+        run_cfg: BenchRunCfg = None,
+        report: BenchReport = None,
     ) -> None:
-        """Create a new Bench object from a function and a class defining the inputs to the function
+        """Create a new Bench object for benchmarking a worker function with parametrized inputs.
+
+        This initializes a benchmarking environment that can execute and visualize the performance
+        of a worker function across different parameter combinations. The worker can be either a
+        callable function or a ParametrizedSweep instance with a __call__ method.
 
         Args:
-            bench_name (str): The name of the benchmark and output folder for the figures
-            worker (Callable | ParametrizedSweep): A function that accepts a class of type (worker_input_config)
-            worker_input_config (ParametrizedSweep): A class defining the parameters of the function.
+            bench_name (str): The name of the benchmark and output folder for the figures.
+                Must be a string.
+            worker (Callable | ParametrizedSweep, optional): Either a function that accepts a
+                ParametrizedSweep instance, or a ParametrizedSweep instance with a __call__ method.
+                Defaults to None.
+            worker_input_cfg (ParametrizedSweep, optional): A class defining the parameters expected
+                by the worker function. Only needed if worker is a function rather than a
+                ParametrizedSweep instance. Defaults to None.
+            run_cfg (BenchRunCfg, optional): Configuration parameters for the benchmark run,
+                such as caching settings, execution mode, etc. Defaults to None.
+            report (BenchReport, optional): An existing report to append benchmark results to.
+                If None, a new report will be created. Defaults to None.
+
+        Raises:
+            AssertionError: If bench_name is not a string.
+            RuntimeError: If worker is a class type instead of an instance.
         """
         assert isinstance(bench_name, str)
         self.bench_name = bench_name
@@ -178,21 +190,42 @@ class Bench(BenchPlotServer):
         self.plot = True
 
     def add_plot_callback(self, callback: Callable[[BenchResult], pn.panel], **kwargs) -> None:
-        """Add a plotting callback that will be called on any result produced when calling a sweep function.  You can pass additional arguments to the plotting function with kwargs.  e.g.  add_plot_callback(bch.BenchResult.to_video_grid,)
+        """Add a plotting callback to be called on benchmark results.
+
+        This method registers a plotting function that will be automatically called on any
+        BenchResult produced when running a sweep. You can pass additional arguments to
+        the plotting function using keyword arguments.
 
         Args:
-            callback (Callable[[BenchResult], pn.panel]): _description_
+            callback (Callable[[BenchResult], pn.panel]): A function that takes a BenchResult
+                and returns a panel object. For example: BenchResult.to_video_grid
+            **kwargs: Additional keyword arguments to pass to the callback function
+
+        Examples:
+            >>> bench.add_plot_callback(BenchResult.to_video_grid, width=800)
         """
         self.plot_callbacks.append(partial(callback, **kwargs))
 
-    def set_worker(self, worker: Callable, worker_input_cfg: ParametrizedSweep = None) -> None:
-        """Set the benchmark worker function and optionally the type the worker expects
+    def set_worker(
+        self, worker: Callable | ParametrizedSweep, worker_input_cfg: ParametrizedSweep = None
+    ) -> None:
+        """Set the benchmark worker function and its input configuration.
+
+        This method sets up the worker function to be benchmarked. The worker can be either a
+        callable function that takes a ParametrizedSweep instance or a ParametrizedSweep
+        instance with a __call__ method. In the latter case, worker_input_cfg is not needed.
 
         Args:
-            worker (Callable): The benchmark worker function
-            worker_input_cfg (ParametrizedSweep, optional): The input type the worker expects. Defaults to None.
-        """
+            worker (Callable | ParametrizedSweep): Either a function that will be benchmarked or a
+                ParametrizedSweep instance with a __call__ method. When a ParametrizedSweep is provided,
+                its __call__ method becomes the worker function.
+            worker_input_cfg (ParametrizedSweep, optional): The class defining the input parameters
+                for the worker function. Only needed if worker is a function rather than a
+                ParametrizedSweep instance. Defaults to None.
 
+        Raises:
+            RuntimeError: If worker is a class type instead of an instance.
+        """
         if isinstance(worker, ParametrizedSweep):
             self.worker_class_instance = worker
             # self.worker_class_type = type(worker)
@@ -210,7 +243,7 @@ class Bench(BenchPlotServer):
 
     def sweep_sequential(
         self,
-        title="",
+        title: str = "",
         input_vars: List[ParametrizedSweep] = None,
         result_vars: List[ParametrizedSweep] = None,
         const_vars: List[ParametrizedSweep] = None,
@@ -218,9 +251,33 @@ class Bench(BenchPlotServer):
         run_cfg: BenchRunCfg = None,
         group_size: int = 1,
         iterations: int = 1,
-        relationship_cb=None,
-        plot_callbacks: List | bool = None,
+        relationship_cb: Callable = None,
+        plot_callbacks: List[Callable] | bool = None,
     ) -> List[BenchResult]:
+        """Run a sequence of benchmarks by sweeping through groups of input variables.
+
+        This method performs sweeps on combinations of input variables, potentially
+        using the optimal value from each sweep as constants for the next iteration.
+
+        Args:
+            title (str, optional): Base title for all the benchmark sweeps. Defaults to "".
+            input_vars (List[ParametrizedSweep], optional): Input variables to sweep through.
+                If None, defaults to all input variables from the worker class instance.
+            result_vars (List[ParametrizedSweep], optional): Result variables to collect. Defaults to None.
+            const_vars (List[ParametrizedSweep], optional): Variables to keep constant. Defaults to None.
+            optimise_var (ParametrizedSweep, optional): Variable to optimize on each sweep iteration.
+                The optimal value will be used as constant input for subsequent sweeps. Defaults to None.
+            run_cfg (BenchRunCfg, optional): Run configuration. Defaults to None.
+            group_size (int, optional): Number of input variables to sweep together in each run. Defaults to 1.
+            iterations (int, optional): Number of optimization iterations to perform. Defaults to 1.
+            relationship_cb (Callable, optional): Function to determine how to group variables for sweeping.
+                Defaults to itertools.combinations if None.
+            plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting or bool to enable/disable.
+                Defaults to None.
+
+        Returns:
+            List[BenchResult]: A list of results from all the sweep runs
+        """
         if relationship_cb is None:
             relationship_cb = combinations
         if input_vars is None:
@@ -257,28 +314,43 @@ class Bench(BenchPlotServer):
         pass_repeat: bool = False,
         tag: str = "",
         run_cfg: BenchRunCfg = None,
-        plot_callbacks: List | bool = None,
+        plot_callbacks: List[Callable] | bool = None,
     ) -> BenchResult:
-        """The all in 1 function benchmarker and results plotter.
+        """The all-in-one function for benchmarking and results plotting.
+
+        This is the main function for performing benchmark sweeps. It handles all the setup,
+        execution, and visualization of benchmarks based on the input parameters.
 
         Args:
-            input_vars (List[ParametrizedSweep], optional): _description_. Defaults to None.
-            result_vars (List[ParametrizedSweep], optional): _description_. Defaults to None.
-            const_vars (List[ParametrizedSweep], optional): A list of variables to keep constant with a specified value. Defaults to None.
-            title (str, optional): The title of the benchmark. Defaults to None.
-            description (str, optional): A description of the benchmark. Defaults to None.
-            post_description (str, optional): A description that comes after the benchmark plots. Defaults to None.
-            time_src (datetime, optional): Set a time that the result was generated. Defaults to datetime.now().
-            pass_repeat (bool,optional) By default do not pass the kwarg 'repeat' to the benchmark function.  Set to true if
-            you want the benchmark function to be passed the repeat number
-            tag (str,optional): Use tags to group different benchmarks together.
-            run_cfg: (BenchRunCfg, optional): A config for storing how the benchmarks and run
-            plot_callbacks: (List | bool) A list of plot callbacks to call on the results. Pass false or an empty list to turn off plotting
-        Raises:
-            ValueError: If a result variable is not set
+            title (str, optional): The title of the benchmark. If None, a title will be
+                generated based on the input variables. Defaults to None.
+            input_vars (List[ParametrizedSweep], optional): Variables to sweep through in the benchmark.
+                If None and worker_class_instance exists, uses input variables from it. Defaults to None.
+            result_vars (List[ParametrizedSweep], optional): Variables to collect results for.
+                If None and worker_class_instance exists, uses result variables from it. Defaults to None.
+            const_vars (List[ParametrizedSweep], optional): Variables to keep constant with specified values.
+                If None and worker_class_instance exists, uses default input values. Defaults to None.
+            time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.
+                Defaults to None, which will use the current time.
+            description (str, optional): A description displayed before the benchmark plots. Defaults to None.
+            post_description (str, optional): A description displayed after the benchmark plots.
+                Defaults to a generic message recommending to set a custom description.
+            pass_repeat (bool, optional): If True, passes the 'repeat' parameter to the worker function.
+                Defaults to False.
+            tag (str, optional): Tag to group different benchmarks together. Defaults to "".
+            run_cfg (BenchRunCfg, optional): Configuration for how the benchmarks are run.
+                If None, uses the instance's run_cfg or creates a default one. Defaults to None.
+            plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting results.
+                If True, uses default plotting. If False, disables plotting.
+                If a list, uses the provided callbacks. Defaults to None.
 
         Returns:
-            BenchResult: A class with all the data used to generate the results and the results
+            BenchResult: An object containing all the benchmark data and results
+
+        Raises:
+            RuntimeError: If an unsupported input variable type is provided
+            TypeError: If variable parameters are not of the correct type
+            FileNotFoundError: If only_plot=True and no cached results exist
         """
 
         input_vars_in = deepcopy(input_vars)
@@ -301,7 +373,7 @@ class Bench(BenchPlotServer):
                     "No results variables passed, using all result variables in bench class:"
                 )
                 if self.result_vars is None:
-                    result_vars_in = self.worker_class_instance.get_results_only()
+                    result_vars_in = self.get_result_vars(as_str=False)
                 else:
                     result_vars_in = deepcopy(self.result_vars)
 
@@ -427,8 +499,26 @@ class Bench(BenchPlotServer):
         return self.run_sweep(bench_cfg, run_cfg, time_src)
 
     def run_sweep(
-        self, bench_cfg: BenchCfg, run_cfg: BenchRunCfg, time_src: datetime
+        self, bench_cfg: BenchCfg, run_cfg: BenchRunCfg, time_src: datetime = None
     ) -> BenchResult:
+        """Execute a benchmark sweep based on the provided configuration.
+
+        This method handles the caching, execution, and post-processing of a benchmark sweep
+        according to the provided configurations. It's typically called by `plot_sweep` rather
+        than directly by users.
+
+        Args:
+            bench_cfg (BenchCfg): Configuration defining inputs, results, and other benchmark parameters
+            run_cfg (BenchRunCfg): Configuration for how the benchmark should be executed
+            time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.
+                Defaults to None, which will use the current time.
+
+        Returns:
+            BenchResult: An object containing all benchmark data, results, and visualization
+
+        Raises:
+            FileNotFoundError: If only_plot=True and no cached results exist
+        """
         print("tag", bench_cfg.tag)
 
         bench_cfg.param.update(run_cfg.param.values())
@@ -495,14 +585,27 @@ class Bench(BenchPlotServer):
         var_type: str,
         run_cfg: Optional[BenchRunCfg],
     ) -> param.Parameter:
-        """check that a variable is a subclass of param
+        """Convert various input formats to param.Parameter objects.
+
+        This method handles different ways of specifying variables in benchmark sweeps,
+        including direct param.Parameter objects, string names of parameters, or dictionaries
+        with parameter configuration details. It ensures all inputs are properly converted
+        to param.Parameter objects with the correct configuration.
 
         Args:
-            variable (param.Parameter): the variable to check
-            var_type (str): a string representation of the variable type for better error messages
+            variable (param.Parameter | str | dict | tuple): The variable to convert, can be:
+                - param.Parameter: Already a parameter object
+                - str: Name of a parameter in the worker_class_instance
+                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
+                - tuple: Tuple that can be converted to a parameter
+            var_type (str): Type of variable ('input', 'result', or 'const') for error messages
+            run_cfg (Optional[BenchRunCfg]): Run configuration for level settings
+
+        Returns:
+            param.Parameter: The converted parameter object
 
         Raises:
-            TypeError: the input variable type is not a param.
+            TypeError: If the variable cannot be converted to a param.Parameter
         """
         if isinstance(variable, str):
             variable = self.worker_class_instance.param.objects(instance=False)[variable]
@@ -523,7 +626,17 @@ class Bench(BenchPlotServer):
             )
         return variable
 
-    def cache_results(self, bench_res: BenchResult, bench_cfg_hash: int) -> None:
+    def cache_results(self, bench_res: BenchResult, bench_cfg_hash: str) -> None:
+        """Cache benchmark results for future retrieval.
+
+        This method stores benchmark results in the disk cache using the benchmark
+        configuration hash as the key. It temporarily removes non-pickleable objects
+        from the benchmark result before caching.
+
+        Args:
+            bench_res (BenchResult): The benchmark result to cache
+            bench_cfg_hash (str): The hash value to use as the cache key
+        """
         with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
             logging.info(f"saving results with key: {bench_cfg_hash}")
             self.bench_cfg_hashes.append(bench_cfg_hash)
@@ -539,33 +652,47 @@ class Bench(BenchPlotServer):
             logging.info(f"saving benchmark: {self.bench_name}")
             c[self.bench_name] = self.bench_cfg_hashes
 
-    # def show(self, run_cfg: BenchRunCfg = None, pane=None) -> None:
-    #     """Launches a webserver with plots of the benchmark results, blocking
-
+    # def show(self, run_cfg: BenchRunCfg = None, pane: pn.panel = None) -> None:
+    #     """Launch a web server with plots of the benchmark results.
+    #
+    #     This method starts a Panel web server to display the benchmark results interactively.
+    #     It is a blocking call that runs until the server is terminated.
+    #
     #     Args:
-    #         run_cfg (BenchRunCfg, optional): Options for the webserve such as the port. Defaults to None.
-
+    #         run_cfg (BenchRunCfg, optional): Configuration options for the web server,
+    #             such as the port number. If None, uses the instance's last_run_cfg
+    #             or creates a default one. Defaults to None.
+    #         pane (pn.panel, optional): A custom panel to display instead of the default
+    #             benchmark visualization. Defaults to None.
+    #
+    #     Returns:
+    #         None
     #     """
     #     if run_cfg is None:
     #         if self.last_run_cfg is not None:
     #             run_cfg = self.last_run_cfg
     #         else:
     #             run_cfg = BenchRunCfg()
-
+    #
     #     return BenchPlotServer().plot_server(self.bench_name, run_cfg, pane)
 
     def load_history_cache(
-        self, dataset: xr.Dataset, bench_cfg_hash: int, clear_history: bool
+        self, dataset: xr.Dataset, bench_cfg_hash: str, clear_history: bool
     ) -> xr.Dataset:
-        """Load historical data from a cache if over_time=true
+        """Load historical data from a cache if over_time is enabled.
+
+        This method is used to retrieve and concatenate historical benchmark data from the cache
+        when tracking performance over time. If clear_history is True, it will clear any existing
+        historical data instead of loading it.
 
         Args:
-            ds (xr.Dataset): Freshly calculated data
-            bench_cfg_hash (int): Hash of the input variables used to generate the data
-            clear_history (bool): Optionally clear the history
+            dataset (xr.Dataset): Freshly calculated benchmark data for the current run
+            bench_cfg_hash (str): Hash of the input variables used to identify cached data
+            clear_history (bool): If True, clears historical data instead of loading it
 
         Returns:
-            xr.Dataset: historical data as an xr dataset
+            xr.Dataset: Combined dataset with both historical and current benchmark data,
+                or just the current data if no history exists or history is cleared
         """
         with Cache("cachedir/history", size_limit=self.cache_size) as c:
             if clear_history:
@@ -585,17 +712,23 @@ class Bench(BenchPlotServer):
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, List, List]:
-        """A function for generating an n-d xarray from a set of input variables in the BenchCfg
+    ) -> tuple[BenchResult, List[tuple], List[str]]:
+        """Initialize an n-dimensional xarray dataset from benchmark configuration parameters.
+
+        This function creates the data structures needed to store benchmark results based on
+        the provided configuration. It sets up the xarray dimensions, coordinates, and variables
+        based on input variables and result variables.
 
         Args:
-            bench_cfg (BenchCfg): description of the benchmark parameters
-            time_src (datetime | str): a representation of the sample time
+            bench_cfg (BenchCfg): Configuration defining the benchmark parameters, inputs, and results
+            time_src (datetime | str): Timestamp or event name for the benchmark run
 
         Returns:
-            tuple[BenchResult, List, List]: bench_result, function inputs, dimension names
+            tuple[BenchResult, List[tuple], List[str]]:
+                - A BenchResult object with the initialized dataset
+                - A list of function input tuples (index, value pairs)
+                - A list of dimension names for the dataset
         """
-
         if time_src is None:
             time_src = datetime.now()
         bench_cfg.meta_vars = self.define_extra_vars(bench_cfg, bench_cfg.repeats, time_src)
@@ -641,7 +774,17 @@ class Bench(BenchPlotServer):
 
         return bench_res, function_inputs, dims_cfg.dims_name
 
-    def define_const_inputs(self, const_vars) -> dict:
+    def define_const_inputs(self, const_vars: List[Tuple[param.Parameter, Any]]) -> Optional[dict]:
+        """Convert constant variable tuples into a dictionary of name-value pairs.
+
+        Args:
+            const_vars (List[Tuple[param.Parameter, Any]]): List of (parameter, value) tuples
+                representing constant parameters and their values
+
+        Returns:
+            Optional[dict]: Dictionary mapping parameter names to their constant values,
+                or None if const_vars is None
+        """
         constant_inputs = None
         if const_vars is not None:
             const_vars, constant_values = [
@@ -653,16 +796,22 @@ class Bench(BenchPlotServer):
             constant_inputs = dict(zip(constant_names, constant_values))
         return constant_inputs
 
-    def define_extra_vars(self, bench_cfg: BenchCfg, repeats: int, time_src) -> list[IntSweep]:
-        """Define extra meta vars that are stored in the n-d array but are not passed to the benchmarking function, such as number of repeats and the time the function was called.
+    def define_extra_vars(
+        self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
+    ) -> List[IntSweep]:
+        """Define extra meta variables for tracking benchmark execution details.
+
+        This function creates variables that aren't passed to the worker function but are stored
+        in the n-dimensional array to provide context about the benchmark, such as the number of
+        repeat measurements and timestamps.
 
         Args:
-            bench_cfg (BenchCfg): description of the benchmark parameters
-            repeats (int): the number of times to sample the function
-            time_src (datetime): a representation of the sample time
+            bench_cfg (BenchCfg): The benchmark configuration to add variables to
+            repeats (int): The number of times each sample point should be measured
+            time_src (datetime | str): Either a timestamp or a string event name for temporal tracking
 
         Returns:
-            _type_: _description_
+            List[IntSweep]: A list of additional parameter variables to include in the benchmark
         """
         bench_cfg.iv_repeat = IntSweep(
             default=repeats,
@@ -685,16 +834,26 @@ class Bench(BenchPlotServer):
         return extra_vars
 
     def calculate_benchmark_results(
-        self, bench_cfg, time_src: datetime | str, bench_cfg_sample_hash, bench_run_cfg
+        self,
+        bench_cfg: BenchCfg,
+        time_src: datetime | str,
+        bench_cfg_sample_hash: str,
+        bench_run_cfg: BenchRunCfg,
     ) -> BenchResult:
-        """A function for generating an n-d xarray from a set of input variables in the BenchCfg
+        """Execute the benchmark runs and collect results into an n-dimensional array.
+
+        This method handles the core benchmark execution process. It sets up the dataset,
+        initializes worker jobs, submits them to the sample cache for execution or retrieval,
+        and collects and stores the results.
 
         Args:
-            bench_cfg (BenchCfg): description of the benchmark parameters
-            time_src (datetime): a representation of the sample time
+            bench_cfg (BenchCfg): Configuration defining the benchmark parameters
+            time_src (datetime | str): Timestamp or event name for the benchmark run
+            bench_cfg_sample_hash (str): Hash of the benchmark configuration without repeats
+            bench_run_cfg (BenchRunCfg): Configuration for how the benchmark should be executed
 
         Returns:
-            bench_cfg (BenchCfg): description of the benchmark parameters
+            BenchResult: An object containing all the benchmark data and results
         """
         bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
         bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
@@ -748,6 +907,21 @@ class Bench(BenchPlotServer):
         worker_job: WorkerJob,
         bench_run_cfg: BenchRunCfg,
     ) -> None:
+        """Store the results from a benchmark worker job into the benchmark result dataset.
+
+        This method handles unpacking the results from worker jobs and placing them
+        in the correct locations in the n-dimensional result dataset. It supports different
+        types of result variables including scalars, vectors, references, and media.
+
+        Args:
+            job_result (JobFuture): The future containing the worker function result
+            bench_res (BenchResult): The benchmark result object to store results in
+            worker_job (WorkerJob): The job metadata needed to index the result
+            bench_run_cfg (BenchRunCfg): Configuration for how results should be handled
+
+        Raises:
+            RuntimeError: If an unsupported result variable type is encountered
+        """
         result = job_result.result()
         if result is not None:
             logging.info(f"{job_result.job.job_id}:")
@@ -806,7 +980,19 @@ class Bench(BenchPlotServer):
 
             # bench_cfg.hmap = bench_cfg.hmaps[bench_cfg.result_hmaps[0].name]
 
-    def init_sample_cache(self, run_cfg: BenchRunCfg):
+    def init_sample_cache(self, run_cfg: BenchRunCfg) -> FutureCache:
+        """Initialize the sample cache for storing benchmark function results.
+
+        This method creates a FutureCache for storing and retrieving benchmark results
+        based on the run configuration settings.
+
+        Args:
+            run_cfg (BenchRunCfg): Configuration with cache settings such as overwrite policy,
+                executor type, and whether to cache results
+
+        Returns:
+            FutureCache: A configured cache for storing benchmark results
+        """
         return FutureCache(
             overwrite=run_cfg.overwrite_sample_cache,
             executor=run_cfg.executor,
@@ -816,23 +1002,30 @@ class Bench(BenchPlotServer):
             cache_results=run_cfg.cache_samples,
         )
 
-    def clear_tag_from_sample_cache(self, tag: str, run_cfg):
-        """Clear all samples from the cache that match a tag
+    def clear_tag_from_sample_cache(self, tag: str, run_cfg: BenchRunCfg) -> None:
+        """Clear all samples from the cache that match a specific tag.
+
+        This method is useful when you want to rerun a benchmark with the same tag
+        but want fresh results instead of using cached data.
+
         Args:
-            tag(str): clear samples with this tag
+            tag (str): The tag identifying samples to clear from the cache
+            run_cfg (BenchRunCfg): Run configuration used to initialize the sample cache if needed
         """
         if self.sample_cache is None:
             self.sample_cache = self.init_sample_cache(run_cfg)
         self.sample_cache.clear_tag(tag)
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: ParametrizedSweep) -> None:
-        """Adds variable metadata to the xrarry so that it can be used to automatically plot the dimension units etc.
+        """Add variable metadata to the xarray dataset for improved visualization.
+
+        This method adds metadata like units, long names, and descriptions to the xarray dataset
+        attributes, which helps visualization tools properly label axes and tooltips.
 
         Args:
-            bench_cfg (BenchCfg):
+            bench_res (BenchResult): The benchmark result object containing the dataset to display
             input_var (ParametrizedSweep): The variable to extract metadata from
         """
-
         for rv in bench_res.bench_cfg.result_vars:
             if type(rv) is ResultVar:
                 bench_res.ds[rv.name].attrs["units"] = rv.units
@@ -851,29 +1044,113 @@ class Bench(BenchPlotServer):
         if input_var.__doc__ is not None:
             dsvar.attrs["description"] = input_var.__doc__
 
-    def report_results(self, bench_cfg: BenchCfg, print_xarray: bool, print_pandas: bool):
-        """Optionally display the calculated benchmark data as either as pandas, xarray or plot
+    def report_results(
+        self, bench_res: BenchResult, print_xarray: bool, print_pandas: bool
+    ) -> None:
+        """Display the calculated benchmark data in various formats.
+
+        This method provides options to display the benchmark results as xarray data structures
+        or pandas DataFrames for debugging and inspection.
 
         Args:
-            bench_cfg (BenchCfg):
-            print_xarray (bool):
-            print_pandas (bool):
+            bench_res (BenchResult): The benchmark result containing the dataset to display
+            print_xarray (bool): If True, log the raw xarray Dataset structure
+            print_pandas (bool): If True, log the dataset converted to a pandas DataFrame
         """
         if print_xarray:
-            logging.info(bench_cfg.ds)
+            logging.info(bench_res.ds)
         if print_pandas:
-            logging.info(bench_cfg.ds.to_dataframe())
+            logging.info(bench_res.ds.to_dataframe())
 
     def clear_call_counts(self) -> None:
         """Clear the worker and cache call counts, to help debug and assert caching is happening properly"""
         self.sample_cache.clear_call_counts()
 
     def get_result(self, index: int = -1) -> BenchResult:
+        """Get a specific benchmark result from the results list.
+
+        Args:
+            index (int, optional): Index of the result to retrieve. Negative indices are supported,
+                with -1 (default) returning the most recent result.
+
+        Returns:
+            BenchResult: The benchmark result at the specified index
+        """
         return self.results[index]
 
     def get_ds(self, index: int = -1) -> xr.Dataset:
+        """Get the xarray Dataset from a specific benchmark result.
+
+        This is a convenience method that retrieves a result and returns its dataset.
+
+        Args:
+            index (int, optional): Index of the result to retrieve the dataset from.
+                Negative indices are supported, with -1 (default) returning the most recent result.
+
+        Returns:
+            xr.Dataset: The xarray Dataset from the benchmark result
+        """
         return self.get_result(index).to_xarray()
 
-    def publish(self, remote_callback: Callable) -> str:
+    def publish(self, remote_callback: Callable[[str], str]) -> str:
+        """Publish the benchmark report to a remote location.
+
+        Uses the provided callback to publish the benchmark report to a remote location
+        such as a GitHub Pages site.
+
+        Args:
+            remote_callback (Callable[[str], str]): A function that takes a branch name
+                and publishes the report, returning the URL where it's published
+
+        Returns:
+            str: The URL where the report has been published
+        """
         branch_name = f"{self.bench_name}_{self.run_cfg.run_tag}"
         return self.report.publish(remote_callback, branch_name=branch_name)
+
+    def get_result_vars(self, as_str: bool = True) -> List[str | ParametrizedSweep]:
+        """
+        Retrieve the result variables from the worker class instance.
+
+        Args:
+            as_str (bool): If True, the result variables are returned as strings.
+                           If False, they are returned in their original form.
+                           Default is True.
+
+        Returns:
+            List[str | ParametrizedSweep]: A list of result variables, either as strings or in their original form.
+
+        Raises:
+            RuntimeError: If the worker class instance is not set.
+        """
+        if self.worker_class_instance is not None:
+            if as_str:
+                return [i.name for i in self.worker_class_instance.get_results_only()]
+            return self.worker_class_instance.get_results_only()
+        raise RuntimeError("Worker class instance not set")
+
+    def to(
+        self,
+        result_type: BenchResult,
+        result_var: Optional[Parameter] = None,
+        override: bool = True,
+        **kwargs: Any,
+    ) -> BenchResult:
+        # return
+        """Return the current instance of BenchResult.
+
+        Returns:
+            BenchResult: The current instance of the benchmark result
+        """
+        return self.get_result().to(
+            result_type=result_type, result_var=result_var, override=override, **kwargs
+        )
+
+    def add(
+        self,
+        result_type: BenchResult,
+        result_var: Optional[Parameter] = None,
+        override: bool = True,
+        **kwargs: Any,
+    ):
+        self.report.append(self.to(result_type, result_var=result_var, override=override, **kwargs))

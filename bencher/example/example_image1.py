@@ -1,7 +1,7 @@
 import bencher as bch
 import numpy as np
 import math
-import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw
 
 
 def polygon_points(radius: float, sides: int, start_angle: float):
@@ -28,10 +28,15 @@ class BenchPolygons(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         points = polygon_points(self.radius, self.sides, self.start_angle)
-        # self.hmap = hv.Curve(points)
-        self.polygon = self.points_to_polygon_png(points, bch.gen_image_path("polygon"), dpi=30)
+        filepath = bch.gen_image_path("polygon")
+        self.polygon = self.points_to_polygon_png(points, filepath, dpi=30)
         self.polygon_small = self.points_to_polygon_png(
             points, bch.gen_image_path("polygon"), dpi=10
+        )
+        # Verify filepaths are being returned
+        assert isinstance(self.polygon, str), f"Expected string filepath, got {type(self.polygon)}"
+        assert isinstance(self.polygon_small, str), (
+            f"Expected string filepath, got {type(self.polygon_small)}"
         )
 
         self.side_length = 2 * self.radius * math.sin(math.pi / self.sides)
@@ -39,25 +44,16 @@ class BenchPolygons(bch.ParametrizedSweep):
         return super().__call__()
 
     def points_to_polygon_png(self, points: list[float], filename: str, dpi):
-        """Draw a closed polygon and save to png"""
-        fig = plt.figure(frameon=False)
-        ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0], frameon=False)
-        ax.set_axis_off()
-        ax.plot(
-            [p[0] for p in points],
-            [p[1] for p in points],
-            linewidth=self.linewidth,
-            linestyle=self.linestyle,
-            color=self.color,
-        )
-        ax.set_xlim(-1, 1)
-        ax.set_ylim(-1, 1)
+        """Draw a closed polygon and save to png using PIL"""
+        size = int(100 * (dpi / 30))
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
 
-        ax.set_aspect("equal")
-        fig.add_axes(ax)
-        fig.savefig(filename, dpi=dpi)
+        scaled_points = [(((p[0] + 1) * size / 2), ((1 - p[1]) * size / 2)) for p in points]
+        draw.line(scaled_points, fill=self.color, width=int(self.linewidth))
 
-        return filename
+        img.save(filename, "PNG")
+        return str(filename)
 
 
 def example_image_vid_sequential1(

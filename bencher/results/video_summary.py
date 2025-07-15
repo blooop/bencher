@@ -8,7 +8,7 @@ from bencher.variables.results import ResultImage
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import callable_name, int_to_col, color_tuple_to_255
 from bencher.video_writer import VideoWriter
-from bencher.results.video_result import VideoControls
+from bencher.results.video_controls import VideoControls
 from bencher.results.composable_container.composable_container_video import (
     ComposableContainerVideo,
     ComposeType,
@@ -60,7 +60,7 @@ class VideoSummaryResult(BenchResultBase):
             input_range=VarRange(1, None),
         )
         matches_res = plot_filter.matches_result(
-            self.plt_cnt_cfg, callable_name(self.to_video_grid_ds)
+            self.plt_cnt_cfg, callable_name(self.to_video_grid_ds), override=False
         )
 
         if pane_collection is None:

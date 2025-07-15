@@ -1,51 +1,127 @@
-# pylint: disable=duplicate-code
+"""
+Advanced Pareto Optimization Example with Randomness
+
+This example demonstrates multi-objective optimization using Optuna with the Bencher framework.
+It shows how to:
+1. Define a problem with multiple competing objectives
+2. Use Optuna's multi-objective optimization capabilities
+3. Visualize and analyze the Pareto front
+4. Compare different optimization approaches
+5. Demonstrate the effect of randomness on Pareto optimization
+"""
 
 import bencher as bch
+import numpy as np
 
-# All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
+np.random.seed(0)
+
+
+class EngineeringDesignProblem(bch.ParametrizedSweep):
+    """
+    A simplified engineering design problem with two competing objectives.
+
+    This example simulates a common engineering trade-off problem:
+    - Performance vs Cost
+
+    This is a classic multi-objective optimization scenario.
+    The problem includes controlled randomness to simulate real-world variability
+    in manufacturing processes and materials.
+    """
+
+    # Input design parameters - reduced to just 2
+    material_quality = bch.FloatSweep(
+        default=0.5, bounds=[0.1, 1.0], doc="Quality of the material (dimensionless)", samples=20
+    )
+    thickness = bch.FloatSweep(
+        default=0.05, bounds=[0.01, 0.2], doc="Component thickness (m)", samples=20
+    )
+
+    # Result variables - reduced to just 2 objectives to be optimized
+    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance metric (maximize)")
+    cost = bch.ResultVar("$", bch.OptDir.minimize, doc="Manufacturing cost (minimize)")
+
+    def __call__(self, **kwargs) -> dict:
+        """
+        Calculate the multi-objective outcomes based on input parameters.
+
+        This simulates an engineering design problem where various objectives
+        compete with each other:
+        - Higher quality materials improve performance but increase cost
+        - Thicker material improves performance but increases cost
+
+        Includes inherent randomness to simulate:
+        - Manufacturing variability
+        - Material property variations
+        - Measurement uncertainty
+        """
+        self.update_params_from_kwargs(**kwargs)
+
+        # Base performance calculation
+        base_performance = self.material_quality * 80 + self.thickness * 50
+
+        # Add significant randomness (standard deviation = 10% of the base value)
+        # This will create noticeably different results on each run
+        performance_variability = 0.15 * base_performance
+        self.performance = base_performance + np.random.normal(0, performance_variability)
+
+        # Introduce a 30% chance of failure (e.g., due to manufacturing defects)
+        if np.random.rand() < 0.3:
+            self.performance = np.nan
+
+        # Base cost calculation
+        base_cost = self.material_quality * 100 + 10 / (self.thickness + 0.01)
+
+        # Add randomness to cost (standard deviation = 8% of the base value)
+        # Manufacturing costs can vary significantly in real-world scenarios
+        cost_variability = 0.12 * base_cost
+        self.cost = base_cost + np.random.normal(0, cost_variability)
+
+        return self.get_results_values_as_dict()
 
 
 def example_pareto(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    """Example of how to calculate the pareto front of a parameter sweep
+    """
+    Advanced example of multi-objective Pareto optimization using Optuna.
+
+    This function demonstrates:
+    1. Grid search approach to visualize the entire parameter space
+    2. True multi-objective optimization with Optuna
+    3. Analysis of the Pareto front
+    4. Effect of randomness on the Pareto front
 
     Args:
-        run_cfg (BenchRunCfg): configuration of how to perform the param sweep
+        run_cfg (BenchRunCfg): Configuration for the benchmark run
+        report (BenchReport): Report object to store results
 
     Returns:
-        Bench: results of the parameter sweep
+        Bench: Benchmark object with results
     """
+    if run_cfg is None:
+        run_cfg = bch.BenchRunCfg()
+        run_cfg.repeats = 5  # Multiple repeats to demonstrate randomness effects
+        run_cfg.level = 4
+
+    # Set up Optuna for multi-objective optimization
     run_cfg.use_optuna = True
 
-    bench = bch.Bench(
-        "Multi-objective optimisation",
-        bench_function,
-        ExampleBenchCfgIn,
-        run_cfg=run_cfg,
-        report=report,
+    # Important: Set multiple repeats to demonstrate the effect of randomness
+    # The framework will automatically calculate and plot both individual runs and averages
+    run_cfg.repeats = 5
+
+    # Create problem definition and benchmark
+    bench = EngineeringDesignProblem().to_bench(run_cfg, report)
+
+    # Perform grid search on our two input variables
+    grid_result = bench.plot_sweep(
+        title="Parameter Space Exploration with Variability",
+        description="Exploring how material quality and thickness affect performance and cost with inherent randomness",
     )
 
-    res = bench.plot_sweep(
-        title="Pareto Optimisation with Optuna",
-        description="This example shows how to plot the pareto front of the tradeoff between multiple criteria.  When multiple result variable are defined, and use_optuna=True a pareto plot and the relative importance of each input variable on the output criteria is plotted. A summary of the points on the pareto front is printed as well.  You can use the pareto plot to decide the how to trade off one objective for another.  Pareto plots are supported for 2D and 3D.  If you have more than 3 result variables the first 3 are selected for the pareto plot.  Plotting 4D surfaces is left as an exercise to the reader",
-        input_vars=[
-            ExampleBenchCfgIn.param.theta,
-            ExampleBenchCfgIn.param.offset,
-        ],
-        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
-        const_vars=ExampleBenchCfgIn.get_input_defaults(
-            [ExampleBenchCfgIn.param.noisy.with_const(True)]
-        ),
-        post_description="""# Post Description 
-This is a slightly unusual way of doing pareto optimisation as we are not using a typical multi-objective optimisation algorithm [TODO, add example].  Instead we are performing a grid search and looking at the resulting pareto plot.  The reason for doing a grid search instead of standard pareto optimisation is that we can produce more isolated plots of how an input affects an output which can help understanding of the parameter space.  Future examples will show how to use grid search to bootstrap further optimisation with a multi objective optimiser""",
-    )
+    # Add Optuna-specific visualizations
+    bench.report.append(grid_result.to_optuna_plots())
 
-    bench.report.append(res.to_optuna_plots())
     return bench
 
 
 if __name__ == "__main__":
-    run_cfg_ex = bch.BenchRunCfg()
-    run_cfg_ex.repeats = 2
-    run_cfg_ex.level = 2
-    example_pareto(run_cfg_ex).report.show()
+    example_pareto().report.show()

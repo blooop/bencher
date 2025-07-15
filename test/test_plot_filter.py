@@ -47,7 +47,7 @@ class TestPlotFilter(unittest.TestCase):
         null_case = PlotFilter()
         self.assertFalse(
             null_case.matches_result(
-                PltCntCfg(float_cnt=float_cnt, cat_cnt=cat_cnt), "test_matches_none"
+                PltCntCfg(float_cnt=float_cnt, cat_cnt=cat_cnt), "test_matches_none", False
             ).overall
         )
 
@@ -60,9 +60,15 @@ class TestPlotFilter(unittest.TestCase):
             input_range=VarRange(None, None),
         )
 
-        self.assertTrue(pf.matches_result(PltCntCfg(float_cnt=0), "test_matches_float0").overall)
-        self.assertTrue(pf.matches_result(PltCntCfg(float_cnt=1), "test_matches_float1").overall)
-        self.assertFalse(pf.matches_result(PltCntCfg(float_cnt=2), "test_matches_float2").overall)
+        self.assertTrue(
+            pf.matches_result(PltCntCfg(float_cnt=0), "test_matches_float0", False).overall
+        )
+        self.assertTrue(
+            pf.matches_result(PltCntCfg(float_cnt=1), "test_matches_float1", False).overall
+        )
+        self.assertFalse(
+            pf.matches_result(PltCntCfg(float_cnt=2), "test_matches_float2", False).overall
+        )
 
     @given(st.integers(min_value=0))
     def test_matches_float_cat(self, cat_cnt) -> None:
@@ -76,16 +82,16 @@ class TestPlotFilter(unittest.TestCase):
 
         self.assertTrue(
             pf.matches_result(
-                PltCntCfg(float_cnt=0, cat_cnt=cat_cnt), "test_matches_float0_cat"
+                PltCntCfg(float_cnt=0, cat_cnt=cat_cnt), "test_matches_float0_cat", False
             ).overall
         )
         self.assertTrue(
             pf.matches_result(
-                PltCntCfg(float_cnt=1, cat_cnt=cat_cnt), "test_matches_float1_cat"
+                PltCntCfg(float_cnt=1, cat_cnt=cat_cnt), "test_matches_float1_cat", False
             ).overall
         )
         self.assertFalse(
             pf.matches_result(
-                PltCntCfg(float_cnt=2, cat_cnt=cat_cnt), "test_matches_float2_cat"
+                PltCntCfg(float_cnt=2, cat_cnt=cat_cnt), "test_matches_float2_cat", False
             ).overall
         )

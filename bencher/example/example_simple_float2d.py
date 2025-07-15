@@ -21,7 +21,12 @@ def example_2D_float(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
     """This example shows how to sample a 1 dimensional float variable and plot the result of passing that parameter sweep to the benchmarking function"""
 
     bench = SimpleFloat().to_bench(run_cfg, report)
-    bench.plot_sweep()
+    res = bench.plot_sweep()
+
+    bench.add(bch.CurveResult)
+    bench.report.append(res.to(bch.CurveResult))
+    bench.report.append(res.to(bch.HeatmapResult))
+    bench.add(bch.BarResult)
     return bench
 
 

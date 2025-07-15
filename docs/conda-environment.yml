@@ -6,6 +6,9 @@ dependencies:
   - firefox  # Explicitly include Firefox
   - geckodriver  # Install geckodriver from conda-forge
   - pip
+  - sqlite=3.48.0
   - pip:
+      - -e ../
       - -r requirements.txt
+      - matplotlib
       

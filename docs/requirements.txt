@@ -1,4 +1,3 @@
-holobench
 sphinxcontrib-napoleon
 sphinx-rtd-theme
 sphinx-autoapi
@@ -7,3 +6,4 @@ nbsite==0.8.7
 jupyter_bokeh
 selenium
 chromedriver_binary
+# moviepy>=2.1.2

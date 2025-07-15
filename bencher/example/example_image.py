@@ -1,7 +1,7 @@
 import bencher as bch
 import numpy as np
 import math
-import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw
 
 
 def polygon_points(radius: float, sides: int, start_angle: float):
@@ -16,7 +16,6 @@ class BenchPolygons(bch.ParametrizedSweep):
     sides = bch.IntSweep(default=3, bounds=(3, 7))
     radius = bch.FloatSweep(default=1, bounds=(0.2, 1))
     linewidth = bch.FloatSweep(default=1, bounds=(1, 10))
-    linestyle = bch.StringSweep(["solid", "dashed", "dotted"])
     color = bch.StringSweep(["red", "green", "blue"])
     start_angle = bch.FloatSweep(default=0, bounds=[0, 360])
     polygon = bch.ResultImage()
@@ -26,33 +25,30 @@ class BenchPolygons(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         points = polygon_points(self.radius, self.sides, self.start_angle)
-        # self.hmap = hv.Curve(points)
-        self.polygon = self.points_to_polygon_png(points, bch.gen_image_path("polygon"))
+        filepath = bch.gen_image_path("polygon")
+        self.polygon = self.points_to_polygon_png(points, filepath)
+        # Verify filepath is being returned
+        assert isinstance(self.polygon, str), f"Expected string filepath, got {type(self.polygon)}"
 
         self.side_length = 2 * self.radius * math.sin(math.pi / self.sides)
         self.area = (self.sides * self.side_length**2) / (4 * math.tan(math.pi / self.sides))
         return super().__call__()
 
     def points_to_polygon_png(self, points: list[float], filename: str):
-        """Draw a closed polygon and save to png"""
-        fig = plt.figure(frameon=False)
-        ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0], frameon=False)
-        ax.set_axis_off()
-        ax.plot(
-            [p[0] for p in points],
-            [p[1] for p in points],
-            linewidth=self.linewidth,
-            linestyle=self.linestyle,
-            color=self.color,
-        )
-        ax.set_xlim(-1, 1)
-        ax.set_ylim(-1, 1)
+        """Draw a closed polygon and save to png using PIL"""
+        size = 300
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
 
-        ax.set_aspect("equal")
-        fig.add_axes(ax)
-        fig.savefig(filename, dpi=30)
+        # Scale points to image size (from [-1,1] to [0,size])
+        scaled_points = [(((p[0] + 1) * size / 2), ((1 - p[1]) * size / 2)) for p in points]
 
-        return filename
+        # Draw polygon outline
+        draw.line(scaled_points, fill=self.color, width=int(self.linewidth))
+
+        img.save(filename, "PNG")
+        # Explicitly return the filename string
+        return str(filename)
 
 
 def example_image(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:

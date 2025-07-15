@@ -66,6 +66,9 @@ echo "cat /etc/docker/daemon.json
 curl -fsSL https://pixi.sh/install.sh | bash
 echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
 
+#INSTALL UV
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 sudo groupadd docker
 sudo usermod -aG docker $USER
 newgrp docker || true

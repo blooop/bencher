@@ -1,6 +1,5 @@
 # THIS IS NOT A WORKING EXAMPLE YET
 # pylint: disable=duplicate-code
-import hvplot
 import bencher as bch
 from bencher import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
 
@@ -8,7 +7,7 @@ bench = bch.Bench("Bencher_Example_Simple", bench_function, ExampleBenchCfgIn)
 
 
 if __name__ == "__main__":
-    bench_out = bench.plot_sweep(
+    res = bench.plot_sweep(
         input_vars=[ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.offset],
         result_vars=[ExampleBenchCfgOut.param.out_sin],
         title="Float 1D Example",
@@ -35,5 +34,5 @@ if __name__ == "__main__":
         ),
     )
 
-    hvexplorer = hvplot.explorer(bench_out.get_dataframe())
-    hvexplorer.show()
+    bench.add(bch.ExplorerResult)
+    bench.report.show()

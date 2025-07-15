@@ -43,6 +43,24 @@ from .results.composable_container.composable_container_video import (
     RenderCfg,
 )
 
+from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
+from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
+from bencher.results.holoview_results.scatter_result import ScatterResult
+from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
+    ScatterJitterResult,
+)
+from bencher.results.holoview_results.bar_result import BarResult
+from bencher.results.holoview_results.line_result import LineResult
+from bencher.results.holoview_results.curve_result import CurveResult
+from bencher.results.holoview_results.heatmap_result import HeatmapResult
+from bencher.results.holoview_results.surface_result import SurfaceResult
+from bencher.results.holoview_results.tabulator_result import TabulatorResult
+from bencher.results.holoview_results.table_result import TableResult
+
+from bencher.results.histogram_result import HistogramResult
+from bencher.results.explorer_result import ExplorerResult
+from bencher.results.dataset_result import DataSetResult
+
 from .utils import (
     hmap_canonical_input,
     get_nearest_coords,
@@ -68,8 +86,8 @@ from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
 from .caching import CachedParams
 from .results.bench_result import BenchResult
-from .results.panel_result import PanelResult
-from .results.holoview_result import ReduceType, HoloviewResult
+from .results.video_result import VideoResult
+from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg
 from .job import Executors
 from .video_writer import VideoWriter, add_image
