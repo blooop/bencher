@@ -7,9 +7,9 @@ rr.init("rerun_example_local", spawn=True)
 file_path = "dat1.rrd"
 rr.save(file_path)
 
-rr.log("s1", rr.Scalar(1))
-rr.log("s1", rr.Scalar(4))
-rr.log("s1", rr.Scalar(2))
+rr.log("s1", rr.Scalars(1))
+rr.log("s1", rr.Scalars(4))
+rr.log("s1", rr.Scalars(2))
 
 local = True
 
