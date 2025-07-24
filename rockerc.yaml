@@ -8,7 +8,7 @@
 image: ubuntu:22.04
 # image: selenium/standalone-firefox
 args:
-  - nvidia
+  # - nvidia
   - x11 
   - user 
   - pull 

@@ -3,12 +3,9 @@
     "ms-python.python",
     "ms-python.vscode-pylance",
     "ms-python.pylint",
-    "njpwerner.autodocstring",
     "charliermarsh.ruff",
     "mhutchie.git-graph",
     "tamasfe.even-better-toml",
-    "ms-azuretools.vscode-docker",
-    "ryanluker.vscode-coverage-gutters",
     "jjjermiah.pixi-vscode"
   ]
 }
