@@ -3,6 +3,12 @@ apt_tools:
   - git-lfs
   - python3-pip
   - jq #for auto installing extensions in container
+  - libx11-6 # required for VTK rendering
+  - libxrender1 # required for VTK rendering
+  - libegl1-mesa # required for PyVista/Panel off-screen rendering
+  - libosmesa6 # required for PyVista/Panel off-screen rendering
+  - mesa-utils # provides glxinfo and other OpenGL utilities
+  - libgl1-mesa-dri # provides swrast_dri.so for software rasterizer
 
 pip_language-toolchain:
   - uv #use uv instead of pip
