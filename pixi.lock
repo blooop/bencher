@@ -59,7 +59,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/17/f8/01bf35a3afd734345528f98d0353f2a978a476528ad4d7e78b70c4d149dd/flask_cors-6.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/26/f2/ad51331a157c7015c675702e2d5230c243695c788f8f75feba1af32b3617/greenlet-3.2.3-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/30/75/d451b9a0ab3a9c0b2c7d1d3cf0bcf797ccac420f3479476f9867e1737d39/holoviews-1.21.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ca/4a/3490c93a699f3d5e4d708748b494a44639dec973b609eb4e17c2d94bc733/hvplot-0.11.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/06/51/b8cd6be4a303e6b88ca4b56feecf523f2a2e286ebd7cb56f0dbe986917f7/hvplot-0.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0a/06/e430a4134be021e1965473804409584ddf9b6a42906d360b9c75d3c35c79/hypothesis-6.135.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/cd/18f8da995b658420625f7ef13f037be53ae04ec5ad33f9b718240dcfd48c/identify-2.6.12-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl
@@ -156,7 +156,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py310:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -216,7 +216,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/17/f8/01bf35a3afd734345528f98d0353f2a978a476528ad4d7e78b70c4d149dd/flask_cors-6.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e9/45/626e974948713bc15775b696adb3eb0bd708bec267d6d2d5c47bb47a6119/greenlet-3.2.3-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/30/75/d451b9a0ab3a9c0b2c7d1d3cf0bcf797ccac420f3479476f9867e1737d39/holoviews-1.21.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ca/4a/3490c93a699f3d5e4d708748b494a44639dec973b609eb4e17c2d94bc733/hvplot-0.11.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/06/51/b8cd6be4a303e6b88ca4b56feecf523f2a2e286ebd7cb56f0dbe986917f7/hvplot-0.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0a/06/e430a4134be021e1965473804409584ddf9b6a42906d360b9c75d3c35c79/hypothesis-6.135.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/cd/18f8da995b658420625f7ef13f037be53ae04ec5ad33f9b718240dcfd48c/identify-2.6.12-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl
@@ -313,7 +313,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py311:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -373,7 +373,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/17/f8/01bf35a3afd734345528f98d0353f2a978a476528ad4d7e78b70c4d149dd/flask_cors-6.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/65/89/77acf9e3da38e9bcfca881e43b02ed467c1dedc387021fc4d9bd9928afb8/greenlet-3.2.3-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/30/75/d451b9a0ab3a9c0b2c7d1d3cf0bcf797ccac420f3479476f9867e1737d39/holoviews-1.21.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ca/4a/3490c93a699f3d5e4d708748b494a44639dec973b609eb4e17c2d94bc733/hvplot-0.11.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/06/51/b8cd6be4a303e6b88ca4b56feecf523f2a2e286ebd7cb56f0dbe986917f7/hvplot-0.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0a/06/e430a4134be021e1965473804409584ddf9b6a42906d360b9c75d3c35c79/hypothesis-6.135.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/cd/18f8da995b658420625f7ef13f037be53ae04ec5ad33f9b718240dcfd48c/identify-2.6.12-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl
@@ -470,7 +470,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py312:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -530,7 +530,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/17/f8/01bf35a3afd734345528f98d0353f2a978a476528ad4d7e78b70c4d149dd/flask_cors-6.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f6/f6/c82ac1851c60851302d8581680573245c8fc300253fc1ff741ae74a6c24d/greenlet-3.2.3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/30/75/d451b9a0ab3a9c0b2c7d1d3cf0bcf797ccac420f3479476f9867e1737d39/holoviews-1.21.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ca/4a/3490c93a699f3d5e4d708748b494a44639dec973b609eb4e17c2d94bc733/hvplot-0.11.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/06/51/b8cd6be4a303e6b88ca4b56feecf523f2a2e286ebd7cb56f0dbe986917f7/hvplot-0.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0a/06/e430a4134be021e1965473804409584ddf9b6a42906d360b9c75d3c35c79/hypothesis-6.135.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/cd/18f8da995b658420625f7ef13f037be53ae04ec5ad33f9b718240dcfd48c/identify-2.6.12-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl
@@ -627,7 +627,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py313:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -687,7 +687,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/17/f8/01bf35a3afd734345528f98d0353f2a978a476528ad4d7e78b70c4d149dd/flask_cors-6.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/26/f2/ad51331a157c7015c675702e2d5230c243695c788f8f75feba1af32b3617/greenlet-3.2.3-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/30/75/d451b9a0ab3a9c0b2c7d1d3cf0bcf797ccac420f3479476f9867e1737d39/holoviews-1.21.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ca/4a/3490c93a699f3d5e4d708748b494a44639dec973b609eb4e17c2d94bc733/hvplot-0.11.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/06/51/b8cd6be4a303e6b88ca4b56feecf523f2a2e286ebd7cb56f0dbe986917f7/hvplot-0.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0a/06/e430a4134be021e1965473804409584ddf9b6a42906d360b9c75d3c35c79/hypothesis-6.135.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/cd/18f8da995b658420625f7ef13f037be53ae04ec5ad33f9b718240dcfd48c/identify-2.6.12-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl
@@ -784,7 +784,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
@@ -1309,30 +1309,30 @@ packages:
   - objgraph ; extra == 'test'
   - psutil ; extra == 'test'
   requires_python: '>=3.9'
-- pypi: ./
+- pypi: .
   name: holobench
   version: 1.47.0
-  sha256: 11279f84f6ec951dbf933138163401e77fa90b63b2b4df838e19dcdfdd6d0a9a
+  sha256: d0d2abc521b632c8bae447385cafe602c1c62d8fcaa9b19ab0eea8296208349f
   requires_dist:
   - holoviews>=1.15,<=1.21.0
   - numpy>=1.0,<=2.2.6
   - param>=1.13.0,<=2.2.1
-  - hvplot>=0.11.3,<=0.11.3
-  - panel>=1.3.6,<=1.7.4
+  - hvplot>=0.12.0,<=0.12.0
+  - panel>=1.3.6,<=1.7.5
   - diskcache>=5.6,<=5.6.3
   - optuna>=3.2,<=4.4.0
   - xarray>=2023.7,<=2025.6.1
   - plotly>=5.15,<=6.2.0
   - pandas>=2.0,<=2.3.1
   - strenum>=0.4.0,<=0.4.15
-  - scikit-learn>=1.2,<=1.7.0
+  - scikit-learn>=1.2,<=1.7.1
   - moviepy>=2.1.2,<=2.2.1
   - pylint>=3.2.5,<=3.3.7 ; extra == 'test'
   - pytest-cov>=4.1,<=6.2.1 ; extra == 'test'
   - pytest>=7.4,<=8.4.1 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.135.32 ; extra == 'test'
-  - ruff>=0.5.0,<=0.12.4 ; extra == 'test'
-  - coverage>=7.5.4,<=7.9.2 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.136.6 ; extra == 'test'
+  - ruff>=0.5.0,<=0.12.7 ; extra == 'test'
+  - coverage>=7.5.4,<=7.10.1 ; extra == 'test'
   - pre-commit<=4.2.0 ; extra == 'test'
   - nbformat ; extra == 'test'
   - ipykernel ; extra == 'test'
@@ -1360,10 +1360,10 @@ packages:
   - matplotlib>=3 ; extra == 'recommended'
   - plotly>=4.0 ; extra == 'recommended'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/ca/4a/3490c93a699f3d5e4d708748b494a44639dec973b609eb4e17c2d94bc733/hvplot-0.11.3-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/06/51/b8cd6be4a303e6b88ca4b56feecf523f2a2e286ebd7cb56f0dbe986917f7/hvplot-0.12.0-py3-none-any.whl
   name: hvplot
-  version: 0.11.3
-  sha256: 5fa236a737ef3ca83870bf1b481218855834f4fad56ed0cb041ce5f2792cc7a3
+  version: 0.12.0
+  sha256: 479b16d8cce87921d83ef5df747d4ae87c180519f5615fbffc50cdaf2d2cdd2b
   requires_dist:
   - bokeh>=3.1
   - colorcet>=2
@@ -1373,34 +1373,113 @@ packages:
   - pandas>=1.3
   - panel>=1.0
   - param>=1.12.0,<3.0
-  - dask[dataframe]<2025.1.0 ; extra == 'tests-core'
-  - ipywidgets ; extra == 'tests-core'
-  - matplotlib ; extra == 'tests-core'
-  - parameterized ; extra == 'tests-core'
-  - plotly ; extra == 'tests-core'
-  - pooch ; extra == 'tests-core'
-  - pre-commit ; extra == 'tests-core'
-  - pytest-cov ; extra == 'tests-core'
-  - pytest ; extra == 'tests-core'
-  - ruff ; extra == 'tests-core'
-  - scipy ; extra == 'tests-core'
-  - xarray ; extra == 'tests-core'
-  - bokeh-sampledata ; python_full_version >= '3.10' and extra == 'tests-core'
-  - psutil ; extra == 'tests-core'
-  - cftime ; extra == 'tests-core'
-  - numpydoc ; extra == 'tests-core'
-  - hvplot[tests-core] ; extra == 'tests'
-  - fugue[sql] ; extra == 'tests'
-  - hvplot[fugue-sql] ; extra == 'tests'
-  - ibis-framework[duckdb] ; extra == 'tests'
-  - polars ; extra == 'tests'
-  - dask ; extra == 'tests'
-  - spatialpandas ; extra == 'tests'
-  - duckdb ; extra == 'tests'
-  - qpd>=0.4.4 ; extra == 'fugue-sql'
+  - setuptools-scm>=6 ; extra == 'dev-extras'
+  - bokeh-sampledata ; python_full_version >= '3.10' and extra == 'doc'
+  - dask[dataframe]>=2021.3.0,<2025.1.0 ; extra == 'doc'
+  - datashader>=0.6.5 ; extra == 'doc'
+  - duckdb ; extra == 'doc'
+  - fugue-sql-antlr>=0.2.0 ; extra == 'doc'
+  - fugue[sql] ; extra == 'doc'
+  - geodatasets>=2023.12.0 ; extra == 'doc'
+  - hvsampledata>=0.1.4a2 ; extra == 'doc'
+  - ibis-framework[duckdb] ; extra == 'doc'
+  - intake-parquet>=0.2.3 ; extra == 'doc'
+  - intake-xarray>=0.5.0,<2 ; extra == 'doc'
+  - intake>=0.6.5,<2.0.0 ; extra == 'doc'
+  - ipywidgets ; extra == 'doc'
+  - jinja2 ; extra == 'doc'
+  - matplotlib ; extra == 'doc'
+  - nbsite>=0.9.0a10 ; extra == 'doc'
+  - networkx>=2.6.3 ; extra == 'doc'
+  - notebook>=5.4 ; extra == 'doc'
+  - numba>=0.51.0 ; extra == 'doc'
+  - numpydoc ; extra == 'doc'
+  - pillow>=8.2.0 ; extra == 'doc'
+  - plotly ; extra == 'doc'
+  - polars ; extra == 'doc'
+  - pooch>=1.6.0 ; extra == 'doc'
+  - qpd>=0.4.4 ; extra == 'doc'
+  - s3fs>=2022.1.0 ; extra == 'doc'
+  - scikit-image>=0.17.2 ; extra == 'doc'
+  - scikit-learn>=1.4.0 ; extra == 'doc'
+  - scipy>=1.5.3 ; extra == 'doc'
+  - selenium>=3.141.0 ; extra == 'doc'
+  - sphinxcontrib-mermaid ; extra == 'doc'
+  - sphinxext-rediraffe ; extra == 'doc'
+  - sqlglot ; extra == 'doc'
+  - streamz>=0.3.0 ; extra == 'doc'
+  - xarray>=0.18.2 ; extra == 'doc'
+  - xyzservices>=2022.9.0 ; extra == 'doc'
+  - bokeh-sampledata ; python_full_version >= '3.10' and extra == 'examples'
+  - dask[dataframe]>=2021.3.0,<2025.1.0 ; extra == 'examples'
+  - datashader>=0.6.5 ; extra == 'examples'
+  - duckdb ; extra == 'examples'
+  - fugue-sql-antlr>=0.2.0 ; extra == 'examples'
+  - fugue[sql] ; extra == 'examples'
+  - geodatasets>=2023.12.0 ; extra == 'examples'
+  - hvsampledata>=0.1.4a2 ; extra == 'examples'
+  - ibis-framework[duckdb] ; extra == 'examples'
+  - intake-parquet>=0.2.3 ; extra == 'examples'
+  - intake-xarray>=0.5.0,<2 ; extra == 'examples'
+  - intake>=0.6.5,<2.0.0 ; extra == 'examples'
+  - ipywidgets ; extra == 'examples'
+  - jinja2 ; extra == 'examples'
+  - matplotlib ; extra == 'examples'
+  - networkx>=2.6.3 ; extra == 'examples'
+  - notebook>=5.4 ; extra == 'examples'
+  - numba>=0.51.0 ; extra == 'examples'
+  - pillow>=8.2.0 ; extra == 'examples'
+  - plotly ; extra == 'examples'
+  - polars ; extra == 'examples'
+  - pooch>=1.6.0 ; extra == 'examples'
+  - qpd>=0.4.4 ; extra == 'examples'
+  - s3fs>=2022.1.0 ; extra == 'examples'
+  - scikit-image>=0.17.2 ; extra == 'examples'
+  - scikit-learn>=1.4.0 ; extra == 'examples'
+  - scipy>=1.5.3 ; extra == 'examples'
+  - selenium>=3.141.0 ; extra == 'examples'
+  - sqlglot ; extra == 'examples'
+  - streamz>=0.3.0 ; extra == 'examples'
+  - xarray>=0.18.2 ; extra == 'examples'
+  - xyzservices>=2022.9.0 ; extra == 'examples'
+  - bokeh-sampledata ; python_full_version >= '3.10' and extra == 'examples-tests'
+  - dask[dataframe]>=2021.3.0,<2025.1.0 ; extra == 'examples-tests'
+  - datashader>=0.6.5 ; extra == 'examples-tests'
+  - duckdb ; extra == 'examples-tests'
+  - fugue-sql-antlr>=0.2.0 ; extra == 'examples-tests'
+  - fugue[sql] ; extra == 'examples-tests'
+  - geodatasets>=2023.12.0 ; extra == 'examples-tests'
+  - hvsampledata>=0.1.4a2 ; extra == 'examples-tests'
+  - ibis-framework[duckdb] ; extra == 'examples-tests'
+  - intake-parquet>=0.2.3 ; extra == 'examples-tests'
+  - intake-xarray>=0.5.0,<2 ; extra == 'examples-tests'
+  - intake>=0.6.5,<2.0.0 ; extra == 'examples-tests'
+  - ipywidgets ; extra == 'examples-tests'
+  - jinja2 ; extra == 'examples-tests'
+  - matplotlib ; extra == 'examples-tests'
+  - nbval ; extra == 'examples-tests'
+  - networkx>=2.6.3 ; extra == 'examples-tests'
+  - notebook>=5.4 ; extra == 'examples-tests'
+  - numba>=0.51.0 ; extra == 'examples-tests'
+  - pillow>=8.2.0 ; extra == 'examples-tests'
+  - plotly ; extra == 'examples-tests'
+  - polars ; extra == 'examples-tests'
+  - pooch>=1.6.0 ; extra == 'examples-tests'
+  - pytest-xdist ; extra == 'examples-tests'
+  - qpd>=0.4.4 ; extra == 'examples-tests'
+  - s3fs>=2022.1.0 ; extra == 'examples-tests'
+  - scikit-image>=0.17.2 ; extra == 'examples-tests'
+  - scikit-learn>=1.4.0 ; extra == 'examples-tests'
+  - scipy>=1.5.3 ; extra == 'examples-tests'
+  - selenium>=3.141.0 ; extra == 'examples-tests'
+  - sqlglot ; extra == 'examples-tests'
+  - streamz>=0.3.0 ; extra == 'examples-tests'
+  - xarray>=0.18.2 ; extra == 'examples-tests'
+  - xyzservices>=2022.9.0 ; extra == 'examples-tests'
   - fugue-sql-antlr>=0.2.0 ; extra == 'fugue-sql'
-  - sqlglot ; extra == 'fugue-sql'
   - jinja2 ; extra == 'fugue-sql'
+  - qpd>=0.4.4 ; extra == 'fugue-sql'
+  - sqlglot ; extra == 'fugue-sql'
   - cartopy ; extra == 'geo'
   - fiona ; extra == 'geo'
   - geopandas ; extra == 'geo'
@@ -1410,43 +1489,6 @@ packages:
   - rioxarray ; extra == 'geo'
   - spatialpandas>=0.4.3 ; extra == 'geo'
   - pygraphviz ; extra == 'graphviz'
-  - dask[dataframe]>=2021.3.0,<2025.1.0 ; extra == 'examples'
-  - datashader>=0.6.5 ; extra == 'examples'
-  - duckdb ; extra == 'examples'
-  - fugue[sql] ; extra == 'examples'
-  - hvplot[fugue-sql] ; extra == 'examples'
-  - ibis-framework[duckdb] ; extra == 'examples'
-  - intake-parquet>=0.2.3 ; extra == 'examples'
-  - intake-xarray>=0.5.0,<2 ; extra == 'examples'
-  - intake>=0.6.5,<2.0.0 ; extra == 'examples'
-  - ipywidgets ; extra == 'examples'
-  - networkx>=2.6.3 ; extra == 'examples'
-  - matplotlib ; extra == 'examples'
-  - notebook>=5.4 ; extra == 'examples'
-  - numba>=0.51.0 ; extra == 'examples'
-  - pillow>=8.2.0 ; extra == 'examples'
-  - plotly ; extra == 'examples'
-  - polars ; extra == 'examples'
-  - pooch>=1.6.0 ; extra == 'examples'
-  - s3fs>=2022.1.0 ; extra == 'examples'
-  - scikit-image>=0.17.2 ; extra == 'examples'
-  - scipy>=1.5.3 ; extra == 'examples'
-  - selenium>=3.141.0 ; extra == 'examples'
-  - streamz>=0.3.0 ; extra == 'examples'
-  - xarray>=0.18.2 ; extra == 'examples'
-  - xyzservices>=2022.9.0 ; extra == 'examples'
-  - geodatasets>=2023.12.0 ; extra == 'examples'
-  - bokeh-sampledata ; python_full_version >= '3.10' and extra == 'examples'
-  - hvsampledata>=0.1.1 ; extra == 'examples'
-  - pytest-xdist ; extra == 'tests-nb'
-  - nbval ; extra == 'tests-nb'
-  - hvplot[examples] ; extra == 'examples-tests'
-  - hvplot[tests-nb] ; extra == 'examples-tests'
-  - hvplot[examples] ; extra == 'doc'
-  - nbsite>=0.9.0a2 ; extra == 'doc'
-  - sphinxext-rediraffe ; extra == 'doc'
-  - numpydoc ; extra == 'doc'
-  - sphinxcontrib-mermaid ; extra == 'doc'
   - colorcet>=0.0.1a1 ; extra == 'hvdev'
   - datashader>=0.0.1a1 ; extra == 'hvdev'
   - holoviews>=0.0.1a1 ; extra == 'hvdev'
@@ -1454,8 +1496,51 @@ packages:
   - param>=0.0.1a1 ; extra == 'hvdev'
   - pyviz-comms>=0.0.1a1 ; extra == 'hvdev'
   - geoviews>=0.0.1a1 ; extra == 'hvdev-geo'
-  - setuptools-scm>=6 ; extra == 'dev-extras'
-  requires_python: '>=3.9'
+  - bokeh-sampledata ; python_full_version >= '3.10' and extra == 'tests'
+  - cftime ; extra == 'tests'
+  - dask ; extra == 'tests'
+  - dask[dataframe]<2025.1.0 ; extra == 'tests'
+  - duckdb ; extra == 'tests'
+  - fugue-sql-antlr>=0.2.0 ; extra == 'tests'
+  - fugue[sql] ; extra == 'tests'
+  - ibis-framework[duckdb] ; extra == 'tests'
+  - ipywidgets ; extra == 'tests'
+  - jinja2 ; extra == 'tests'
+  - matplotlib ; extra == 'tests'
+  - numpydoc ; extra == 'tests'
+  - parameterized ; extra == 'tests'
+  - plotly ; extra == 'tests'
+  - polars ; extra == 'tests'
+  - pooch ; extra == 'tests'
+  - pre-commit ; extra == 'tests'
+  - psutil ; extra == 'tests'
+  - pytest ; extra == 'tests'
+  - pytest-cov ; extra == 'tests'
+  - qpd>=0.4.4 ; extra == 'tests'
+  - ruff ; extra == 'tests'
+  - scipy ; extra == 'tests'
+  - spatialpandas ; extra == 'tests'
+  - sqlglot ; extra == 'tests'
+  - xarray ; extra == 'tests'
+  - bokeh-sampledata ; python_full_version >= '3.10' and extra == 'tests-core'
+  - cftime ; extra == 'tests-core'
+  - dask[dataframe]<2025.1.0 ; extra == 'tests-core'
+  - ipywidgets ; extra == 'tests-core'
+  - matplotlib ; extra == 'tests-core'
+  - numpydoc ; extra == 'tests-core'
+  - parameterized ; extra == 'tests-core'
+  - plotly ; extra == 'tests-core'
+  - pooch ; extra == 'tests-core'
+  - pre-commit ; extra == 'tests-core'
+  - psutil ; extra == 'tests-core'
+  - pytest ; extra == 'tests-core'
+  - pytest-cov ; extra == 'tests-core'
+  - ruff ; extra == 'tests-core'
+  - scipy ; extra == 'tests-core'
+  - xarray ; extra == 'tests-core'
+  - nbval ; extra == 'tests-nb'
+  - pytest-xdist ; extra == 'tests-nb'
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/0a/06/e430a4134be021e1965473804409584ddf9b6a42906d360b9c75d3c35c79/hypothesis-6.135.32-py3-none-any.whl
   name: hypothesis
   version: 6.135.32
