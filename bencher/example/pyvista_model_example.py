@@ -1,21 +1,3 @@
-def pyvista_volume_container(npdat, **kwargs):
-    plotter = pv.Plotter()
-    vol = pv.wrap(npdat)
-    plotter.add_volume(vol)
-    return pn.panel(plotter.ren_win, orientation_widget=True, **kwargs)
-def render_pyvista_mesh(ref, color="lightblue", **kwargs):
-    # Handle Bencher's per-cell rendering: ref may be a ResultReference or a dict
-    # if isinstance(ref, dict):
-    #     ref = ref.get("vtk_mesh", ref)
-    # if ref is None or not hasattr(ref, "obj"):
-    #     return pn.pane.Markdown("No mesh to display")
-    mesh = ref
-    plotter = pv.Plotter(off_screen=True)
-    plotter.add_mesh(mesh, color=color)
-    vtk_pane = pn.pane.VTK(
-        plotter.ren_win, sizing_mode="stretch_width", height=300, orientation_widget=True
-    )
-    return vtk_pane
 
 
 """
@@ -41,6 +23,19 @@ class MeshType(StrEnum):
     Cube = "cube"
     Cylinder = "cylinder"
 
+def render_pyvista_mesh(ref, color="lightblue", **kwargs):
+    # Handle Bencher's per-cell rendering: ref may be a ResultReference or a dict
+    # if isinstance(ref, dict):
+    #     ref = ref.get("vtk_mesh", ref)
+    # if ref is None or not hasattr(ref, "obj"):
+    #     return pn.pane.Markdown("No mesh to display")
+    mesh = ref
+    plotter = pv.Plotter(off_screen=True)
+    plotter.add_mesh(mesh, color=color)
+    vtk_pane = pn.pane.VTK(
+        plotter.ren_win, sizing_mode="stretch_width", height=300, orientation_widget=True
+    )
+    return vtk_pane
 
 class BenchPyVistaMesh(bch.ParametrizedSweep):
     mesh_type = bch.EnumSweep(MeshType, default=MeshType.Sphere, doc="Type of mesh to display")
