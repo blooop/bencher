@@ -1,5 +1,3 @@
-
-
 """
 Example: PyVista Meshes as Bencher Result Variables
 
@@ -17,11 +15,19 @@ except ImportError:
 
 pn.extension("vtk")
 
+#   - libx11-6 # required for VTK rendering
+#   - libxrender1 # required for VTK rendering
+#   - libegl1-mesa # required for PyVista/Panel off-screen rendering
+#   - libosmesa6 # required for PyVista/Panel off-screen rendering
+#   - mesa-utils # provides glxinfo and other OpenGL utilities
+#   - libgl1-mesa-dri # provides swrast_dri.so for software rasterizer
+
 
 class MeshType(StrEnum):
     Sphere = "sphere"
     Cube = "cube"
     Cylinder = "cylinder"
+
 
 def render_pyvista_mesh(ref, color="lightblue", **kwargs):
     # Handle Bencher's per-cell rendering: ref may be a ResultReference or a dict
@@ -36,6 +42,7 @@ def render_pyvista_mesh(ref, color="lightblue", **kwargs):
         plotter.ren_win, sizing_mode="stretch_width", height=300, orientation_widget=True
     )
     return vtk_pane
+
 
 class BenchPyVistaMesh(bch.ParametrizedSweep):
     mesh_type = bch.EnumSweep(MeshType, default=MeshType.Sphere, doc="Type of mesh to display")
