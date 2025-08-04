@@ -31,6 +31,7 @@ from .variables.results import (
     ResultVolume,
     OptDir,
     ResultDataSet,
+    ResultScatter3D,
     curve,
 )
 
@@ -46,6 +47,7 @@ from .results.composable_container.composable_container_video import (
 from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
 from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
 from bencher.results.holoview_results.scatter_result import ScatterResult
+from bencher.results.holoview_results.scatter3d_result import Scatter3DResult
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )

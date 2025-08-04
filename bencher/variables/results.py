@@ -218,6 +218,80 @@ class ResultVolume(param.Parameter):
         return hash_sha1(self)
 
 
+class ResultScatter3D(param.Parameter):
+    __slots__ = [
+        "units",
+        "obj",
+        "name",
+        "default",
+        "doc",
+        "precedence",
+        "instantiate",
+        "constant",
+        "readonly",
+        "pickle_default_value",
+        "allow_None",
+        "per_instance",
+    ]
+
+    def __init__(
+        self,
+        obj: Any = None,
+        default: Any = None,
+        units: str = "scatter3d",
+        name: str = None,
+        doc: str = None,
+        **params,
+    ):
+        super().__init__(default=default, **params)
+        self.units = units
+        self.obj = obj
+        self.name = name
+        self.default = default
+        self.doc = doc
+        self.precedence = params.get("precedence", None)
+        self.instantiate = params.get("instantiate", None)
+        self.constant = params.get("constant", None)
+        self.readonly = params.get("readonly", None)
+        self.pickle_default_value = params.get("pickle_default_value", None)
+        self.allow_None = params.get("allow_None", None)
+        self.per_instance = params.get("per_instance", None)
+
+    def hash_persistent(self) -> str:
+        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        return hash_sha1(self)
+
+    def __getstate__(self):
+        return {
+            "units": self.units,
+            "obj": self.obj,
+            "name": self.name,
+            "default": self.default,
+            "doc": self.doc,
+            "precedence": self.precedence,
+            "instantiate": self.instantiate,
+            "constant": self.constant,
+            "readonly": self.readonly,
+            "pickle_default_value": self.pickle_default_value,
+            "allow_None": self.allow_None,
+            "per_instance": self.per_instance,
+        }
+
+    def __setstate__(self, state):
+        self.units = state.get("units", "scatter3d")
+        self.obj = state.get("obj", None)
+        self.name = state.get("name", None)
+        self.default = state.get("default", None)
+        self.doc = state.get("doc", None)
+        self.precedence = state.get("precedence", None)
+        self.instantiate = state.get("instantiate", None)
+        self.constant = state.get("constant", None)
+        self.readonly = state.get("readonly", None)
+        self.pickle_default_value = state.get("pickle_default_value", None)
+        self.allow_None = state.get("allow_None", None)
+        self.per_instance = state.get("per_instance", None)
+
+
 PANEL_TYPES = (
     ResultPath,
     ResultImage,
@@ -226,6 +300,7 @@ PANEL_TYPES = (
     ResultString,
     ResultReference,
     ResultDataSet,
+    ResultScatter3D,
 )
 
 ALL_RESULT_TYPES = (
@@ -239,4 +314,5 @@ ALL_RESULT_TYPES = (
     ResultContainer,
     ResultDataSet,
     ResultReference,
+    ResultScatter3D,
 )

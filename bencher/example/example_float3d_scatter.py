@@ -14,9 +14,9 @@ class ScatterSweep(bch.ParametrizedSweep):
         ["sphere", "cube", "helix"], doc="Type of 3D pattern to generate"
     )
 
-    scatter_points = bch.ResultDataSet(doc="3D scatter point dataset with x,y,z coordinates")
+    scatter_points = bch.ResultScatter3D(doc="3D scatter point dataset with x,y,z coordinates")
     avg_distance = bch.ResultVar("ul", doc="Average distance from origin")
-    avg_intensity = bch.ResultVar("ul", doc="Average intensity value")
+    # avg_intensity = bch.ResultVar("ul", doc="Average intensity value")
 
     def __call__(self, **kwargs) -> dict:
         """Generate multiple 3D scatter points for each category."""
@@ -127,10 +127,9 @@ class ScatterSweep(bch.ParametrizedSweep):
             }
         )
 
-        # Store as ResultDataSet
-        self.scatter_points = bch.ResultDataSet(scatter_df)
+        # Store as ResultScatter3D
+        self.scatter_points = bch.ResultScatter3D(scatter_df)
         self.avg_distance = np.mean(distances)
-        self.avg_intensity = np.mean(intensities)
 
         return super().__call__()
 
@@ -152,21 +151,13 @@ def example_float3d_scatter(
     res = bench.plot_sweep(
         title="Float 3D Scatter Example - Three Distinct Patterns",
         result_vars=["scatter_points"],
-        description="""This example demonstrates 3D scatter plots with three distinct patterns: sphere, cube, and helix. Each category generates a variable number of points (20-100) with unique geometric patterns stored as datasets.""",
-        post_description="The visualization shows three separate 3D scatter plots - spherical distribution, cubic edge/face pattern, and helical trajectory - each stored as a ResultDataSet containing multiple x,y,z coordinates.",
-        plot_callbacks=[],
+        description="""This example demonstrates 3D scatter plots with three distinct patterns: sphere, cube, and helix. Each category generates 30 points with unique geometric patterns stored as ResultScatter3D.""",
+        post_description="The visualization shows three separate 3D scatter plots - spherical distribution, cubic edge/face pattern, and helical trajectory - automatically rendered as interactive 3D scatter plots.",
     )
 
-    # Add 3D scatter plot visualization for the datasets
-    def scatter3d_from_dataset(df: pd.DataFrame) -> hv.Scatter3D:
-        """Convert dataset to Scatter3D plot."""
-        return hv.Scatter3D((df["x"], df["y"], df["z"]), vdims=["color_value"]).opts(
-            color="color_value", cmap="viridis", size=8, title="3D Scatter Points"
-        )
-
-    bench.report.append(res.to_sweep_summary())
-
-    bench.add(bch.DataSetResult, container=scatter3d_from_dataset)
+    bench.report.append(res.to_scatter3d())
+    # Add automatic 3D scatter plot visualization
+    # bench.add(bch.Scatter3DResult)
 
     return bench
 

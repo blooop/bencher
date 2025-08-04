@@ -24,6 +24,7 @@ from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.dataset_result import DataSetResult
+from bencher.variables.results import ResultScatter3D
 from bencher.utils import listify
 
 
@@ -43,6 +44,7 @@ class BenchResult(
     VideoSummaryResult,
     DataSetResult,
     OptunaResult,
+    ResultScatter3D,
 ):  # noqa pylint: disable=too-many-ancestors
     """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
 
@@ -55,6 +57,15 @@ class BenchResult(
         VolumeResult.__init__(self, bench_cfg)
         HoloviewResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
+        self.units = getattr(bench_cfg, "units", None)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["units"] = getattr(self, "units", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
     @classmethod
     def from_existing(cls, original: BenchResult) -> BenchResult:

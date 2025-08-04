@@ -32,6 +32,7 @@ from bencher.variables.results import (
     ResultContainer,
     ResultReference,
     ResultDataSet,
+    ResultScatter3D,
 )
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -752,7 +753,7 @@ class Bench(BenchPlotServer):
             if isinstance(rv, ResultVar):
                 result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(rv, (ResultReference, ResultDataSet)):
+            if isinstance(rv, (ResultReference, ResultDataSet, ResultScatter3D)):
                 result_data = np.full(dims_cfg.dims_size, -1, dtype=int)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(
@@ -948,7 +949,7 @@ class Bench(BenchPlotServer):
                     ),
                 ):
                     set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
-                elif isinstance(rv, ResultDataSet):
+                elif isinstance(rv, (ResultDataSet, ResultScatter3D)):
                     bench_res.dataset_list.append(result_value)
                     set_xarray_multidim(
                         bench_res.ds[rv.name],
