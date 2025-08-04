@@ -1,53 +1,143 @@
 # pylint: disable=duplicate-code
 import numpy as np
 import bencher as bch
+import holoviews as hv
+import pandas as pd
+
+hv.extension("plotly")
 
 
 class ScatterSweep(bch.ParametrizedSweep):
     """A class to represent a 3D scatter plot example."""
 
-    x = bch.FloatSweep(
-        default=0, bounds=[-2.0, 2.0], doc="x coordinate for scatter points", samples=8
-    )
-    y = bch.FloatSweep(
-        default=0, bounds=[-2.0, 2.0], doc="y coordinate for scatter points", samples=8
-    )
-    z = bch.FloatSweep(
-        default=0, bounds=[-2.0, 2.0], doc="z coordinate for scatter points", samples=8
+    category_type = bch.StringSweep(
+        ["sphere", "cube", "helix"], doc="Type of 3D pattern to generate"
     )
 
-    distance = bch.ResultVar("ul", doc="Distance from origin to the point")
-    category = bch.ResultVar("cat", doc="Categorical classification based on distance")
-    intensity = bch.ResultVar("ul", doc="Intensity value based on trigonometric function")
-    color_value = bch.ResultVar("ul", doc="Color mapping value for visualization")
+    scatter_points = bch.ResultDataSet(doc="3D scatter point dataset with x,y,z coordinates")
+    avg_distance = bch.ResultVar("ul", doc="Average distance from origin")
+    avg_intensity = bch.ResultVar("ul", doc="Average intensity value")
 
     def __call__(self, **kwargs) -> dict:
-        """Calculate scatter point properties based on 3D coordinates."""
+        """Generate multiple 3D scatter points for each category."""
         self.update_params_from_kwargs(**kwargs)
-        
-        # Calculate distance from origin
-        self.distance = np.linalg.norm(np.array([self.x, self.y, self.z]))
-        
-        # Categorize points based on distance
-        if self.distance < 1.0:
-            self.category = "close"
-        elif self.distance < 2.0:
-            self.category = "medium"
-        else:
-            self.category = "far"
-        
-        # Create intensity based on trigonometric functions
-        self.intensity = np.abs(
-            np.sin(self.x) * np.cos(self.y) * np.sin(self.z)
+
+        # Initialize arrays for storing points
+        x_points = []
+        y_points = []
+        z_points = []
+        distances = []
+        intensities = []
+
+        num_points = 30
+
+        # Generate multiple points for the selected category
+        for i in range(num_points):
+            t = i / (num_points - 1)  # Normalize to [0, 1]
+
+            if self.category_type == "sphere":
+                # Spherical distribution
+                phi = t * 4 * np.pi  # More rotations for denser sampling
+                theta = np.arccos(1 - 2 * (t * 0.8 + 0.1))  # Avoid poles
+                radius = 1.5 + 0.5 * np.sin(t * 6 * np.pi)
+                x = radius * np.sin(theta) * np.cos(phi)
+                y = radius * np.sin(theta) * np.sin(phi)
+                z = radius * np.cos(theta)
+                self.category = 1  # sphere category code
+                intensity = np.abs(np.sin(np.linalg.norm([x, y, z]) * 2))
+
+            elif self.category_type == "cube":
+                # Cube edge and face pattern
+                if i < num_points // 2:
+                    # Edge points
+                    edge = int(t * 12) % 12
+                    s = (t * 12) % 1
+                    if edge < 4:  # Bottom edges
+                        positions = [
+                            (s - 0.5, -0.5, -0.5),
+                            (0.5, s - 0.5, -0.5),
+                            (0.5 - s, 0.5, -0.5),
+                            (-0.5, 0.5 - s, -0.5),
+                        ]
+                        x, y, z = [2 * p for p in positions[edge]]
+                    elif edge < 8:  # Top edges
+                        positions = [
+                            (s - 0.5, -0.5, 0.5),
+                            (0.5, s - 0.5, 0.5),
+                            (0.5 - s, 0.5, 0.5),
+                            (-0.5, 0.5 - s, 0.5),
+                        ]
+                        x, y, z = [2 * p for p in positions[edge - 4]]
+                    else:  # Vertical edges
+                        positions = [
+                            (-0.5, -0.5, s - 0.5),
+                            (0.5, -0.5, s - 0.5),
+                            (0.5, 0.5, s - 0.5),
+                            (-0.5, 0.5, s - 0.5),
+                        ]
+                        x, y, z = [2 * p for p in positions[edge - 8]]
+                else:
+                    # Face center points
+                    face = i % 6
+                    offset = 0.3 * np.sin(t * 2 * np.pi)
+                    if face == 0:  # front
+                        x, y, z = offset, offset, 1
+                    elif face == 1:  # back
+                        x, y, z = offset, offset, -1
+                    elif face == 2:  # right
+                        x, y, z = 1, offset, offset
+                    elif face == 3:  # left
+                        x, y, z = -1, offset, offset
+                    elif face == 4:  # top
+                        x, y, z = offset, 1, offset
+                    else:  # bottom
+                        x, y, z = offset, -1, offset
+                self.category = 2  # cube category code
+                intensity = np.abs(x * y * z) / 8 + 0.1
+
+            else:  # helix
+                # Helical pattern
+                angle = t * 8 * np.pi  # More rotations
+                height = (t - 0.5) * 4  # Height from -2 to 2
+                radius = 1.2 + 0.4 * np.cos(t * 10 * np.pi)
+                x = radius * np.cos(angle)
+                y = radius * np.sin(angle)
+                z = height
+                self.category = 3  # helix category code
+                intensity = (np.abs(z) + 2) / 4
+
+            # Store the point
+            x_points.append(x)
+            y_points.append(y)
+            z_points.append(z)
+            distance = np.linalg.norm([x, y, z])
+            distances.append(distance)
+            intensities.append(intensity)
+
+        # Create pandas DataFrame for the scatter points
+
+        scatter_df = pd.DataFrame(
+            {
+                "x": x_points,
+                "y": y_points,
+                "z": z_points,
+                "distance": distances,
+                "intensity": intensities,
+                "color_value": [d * i for d, i in zip(distances, intensities)],
+            }
         )
-        
-        # Color value combining distance and intensity
-        self.color_value = self.distance * self.intensity
+
+        # Store as ResultDataSet
+        self.scatter_points = bch.ResultDataSet(scatter_df)
+        self.avg_distance = np.mean(distances)
+        self.avg_intensity = np.mean(intensities)
 
         return super().__call__()
 
 
-def example_float3d_scatter(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_float3d_scatter(
+    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
+) -> bch.Bench:
     """Example of how to create a 3D scatter plot with bencher
 
     Args:
@@ -59,23 +149,29 @@ def example_float3d_scatter(run_cfg: bch.BenchRunCfg = None, report: bch.BenchRe
     """
     bench = ScatterSweep().to_bench(run_cfg=run_cfg, report=report)
 
-    bench.plot_sweep(
-        title="Float 3D Scatter Example",
-        input_vars=["x", "y", "z"],
-        result_vars=[
-            "distance",
-            "category", 
-            "intensity",
-            "color_value",
-        ],
-        description="""This example demonstrates a 3D scatter plot using bencher. Points are sampled in 3D space and colored based on their distance from origin and trigonometric intensity values.""",
-        post_description="The scatter plot shows points categorized by distance (close, medium, far) with color intensity based on combined distance and trigonometric functions.",
+    res = bench.plot_sweep(
+        title="Float 3D Scatter Example - Three Distinct Patterns",
+        result_vars=["scatter_points"],
+        description="""This example demonstrates 3D scatter plots with three distinct patterns: sphere, cube, and helix. Each category generates a variable number of points (20-100) with unique geometric patterns stored as datasets.""",
+        post_description="The visualization shows three separate 3D scatter plots - spherical distribution, cubic edge/face pattern, and helical trajectory - each stored as a ResultDataSet containing multiple x,y,z coordinates.",
+        plot_callbacks=[],
     )
+
+    # Add 3D scatter plot visualization for the datasets
+    def scatter3d_from_dataset(df: pd.DataFrame) -> hv.Scatter3D:
+        """Convert dataset to Scatter3D plot."""
+        return hv.Scatter3D((df["x"], df["y"], df["z"]), vdims=["color_value"]).opts(
+            color="color_value", cmap="viridis", size=8, title="3D Scatter Points"
+        )
+
+    bench.report.append(res.to_sweep_summary())
+
+    bench.add(bch.DataSetResult, container=scatter3d_from_dataset)
 
     return bench
 
 
 if __name__ == "__main__":
     ex_run_cfg = bch.BenchRunCfg()
-    ex_run_cfg.level = 6
+    ex_run_cfg.level = 4
     example_float3d_scatter(ex_run_cfg).report.show()
