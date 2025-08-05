@@ -53,6 +53,7 @@ class CurveResult(HoloviewResult):
         Args:
             result_var (Parameter, optional): The result variable to plot. If None, uses the default.
             override (bool, optional): Whether to override filter restrictions. Defaults to True.
+            target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 2.
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:

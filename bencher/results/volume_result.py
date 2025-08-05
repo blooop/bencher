@@ -38,6 +38,21 @@ class VolumeResult(BenchResultBase):
         target_dimension: int = 3,
         **kwargs,
     ):
+        """Generates a 3D volume plot from benchmark data.
+
+        This method applies filters to ensure the data is appropriate for a volume plot
+        and then passes the filtered data to to_volume_ds for rendering.
+
+        Args:
+            result_var (Parameter, optional): The result variable to plot. If None, uses the default.
+            override (bool, optional): Whether to override filter restrictions. Defaults to True.
+            target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 3.
+            **kwargs: Additional keyword arguments passed to the plot rendering.
+
+        Returns:
+            Optional[pn.pane.Plotly]: A panel containing the volume plot if data is appropriate,
+                                    otherwise returns filter match results.
+        """
         return self.filter(
             self.to_volume_ds,
             float_range=VarRange(3, 3),
