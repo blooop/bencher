@@ -38,7 +38,13 @@ class CurveResult(HoloviewResult):
         """
         return self.to_curve(result_var=result_var, override=override, **kwargs)
 
-    def to_curve(self, result_var: Parameter = None, override: bool = True, **kwargs):
+    def to_curve(
+        self,
+        result_var: Parameter = None,
+        override: bool = True,
+        target_dimension: int = 2,
+        **kwargs,
+    ):
         """Generates a curve plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a curve plot
@@ -47,6 +53,7 @@ class CurveResult(HoloviewResult):
         Args:
             result_var (Parameter, optional): The result variable to plot. If None, uses the default.
             override (bool, optional): Whether to override filter restrictions. Defaults to True.
+            target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 2.
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
@@ -59,8 +66,7 @@ class CurveResult(HoloviewResult):
             cat_range=VarRange(0, None),
             repeats_range=VarRange(2, None),
             reduce=ReduceType.REDUCE,
-            # reduce=ReduceType.MINMAX,
-            target_dimension=2,
+            target_dimension=target_dimension,
             result_var=result_var,
             result_types=(ResultVar),
             override=override,

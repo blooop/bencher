@@ -26,7 +26,11 @@ class BarResult(HoloviewResult):
         return self.to_bar(result_var, override, **kwargs)
 
     def to_bar(
-        self, result_var: Parameter = None, override: bool = True, **kwargs
+        self,
+        result_var: Parameter = None,
+        override: bool = True,
+        target_dimension: int = 2,
+        **kwargs,
     ) -> Optional[pn.panel]:
         """Generates a bar chart from benchmark data.
 
@@ -36,6 +40,7 @@ class BarResult(HoloviewResult):
         Args:
             result_var (Parameter, optional): The result variable to plot. If None, uses the default.
             override (bool, optional): Whether to override filter restrictions. Defaults to True.
+            target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 2.
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
@@ -49,7 +54,7 @@ class BarResult(HoloviewResult):
             repeats_range=VarRange(1, 1),
             panel_range=VarRange(0, None),
             reduce=ReduceType.SQUEEZE,
-            target_dimension=2,
+            target_dimension=target_dimension,
             result_var=result_var,
             result_types=(ResultVar),
             override=override,
