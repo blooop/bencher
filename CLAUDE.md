@@ -57,6 +57,8 @@ Bencher is a benchmarking framework built around these core concepts:
 - `bencher/example/` - Comprehensive examples organized by input dimensions
 - `bencher/variables/` - Parameter sweep and result variable definitions
 - `bencher/results/` - Result containers and visualization classes
+- `bencher/extensions/` - Extension system for third-party result types
+- `examples/extensions/` - Example extensions and usage patterns
 - `test/` - Test suite
 
 ### Configuration Files
@@ -64,8 +66,40 @@ Bencher is a benchmarking framework built around these core concepts:
 - `ruff.toml` - Code formatting/linting configuration (100 char line length)
 - Line length limit: 100 characters (configured in ruff.toml)
 
+### Extension System
+Bencher includes a plugin architecture for adding new result visualization types:
+
+#### Creating Extensions
+```python
+from bencher.extensions import result_extension, ResultExtensionBase
+
+@result_extension(
+    name="my_extension",
+    description="Custom visualization",
+    dependencies=["plotly>=5.0"],
+    result_types=["ResultVar"],
+    target_dimensions=[3]
+)
+class MyExtension(ResultExtensionBase):
+    def to_plot(self, **kwargs):
+        # Custom plotting logic
+        return panel_object
+```
+
+#### Key Extension Classes
+- **ResultExtension**: Protocol defining extension interface
+- **ResultExtensionRegistry**: Central registry for discovering/managing extensions
+- **DynamicBenchResult**: Automatically loads applicable extensions at runtime
+- **@result_extension**: Decorator for registering extensions
+
+#### Extension Discovery
+- Automatic discovery via setuptools entry points: `bencher.result_extensions`
+- Manual registration via decorator or registry
+- Extensions filtered based on data characteristics and `can_handle()` method
+
 ### Testing Strategy
 - Uses pytest framework
 - Coverage reporting with coverage.py
 - Examples serve as integration tests
 - Meta-generated examples in `bencher/example/meta/`
+- Extension system tests in `test/test_extensions.py`

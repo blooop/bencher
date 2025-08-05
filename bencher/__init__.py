@@ -75,6 +75,16 @@ from .utils import (
     github_content,
 )
 
+# Extension system
+from .extensions import (
+    ResultExtension,
+    ExtensionMetadata,
+    ResultExtensionRegistry,
+    get_registry,
+    result_extension,
+    DynamicBenchResult,
+)
+
 try:
     from .utils_rerun import publish_and_view_rrd, rrd_to_pane, capture_rerun_window
     from .flask_server import run_flask_in_thread

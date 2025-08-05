@@ -26,6 +26,9 @@ from bencher.results.optuna_result import OptunaResult
 from bencher.results.dataset_result import DataSetResult
 from bencher.utils import listify
 
+# Import extension system
+from bencher.extensions.dynamic_result import DynamicBenchResult
+
 
 class BenchResult(
     VolumeResult,
@@ -43,6 +46,7 @@ class BenchResult(
     VideoSummaryResult,
     DataSetResult,
     OptunaResult,
+    DynamicBenchResult,  # Add extension support
 ):  # noqa pylint: disable=too-many-ancestors
     """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
 
@@ -54,6 +58,7 @@ class BenchResult(
         """
         VolumeResult.__init__(self, bench_cfg)
         HoloviewResult.__init__(self, bench_cfg)
+        DynamicBenchResult.__init__(self, bench_cfg)  # Initialize extension system
         # DataSetResult.__init__(self.bench_cfg)
 
     @classmethod
@@ -106,6 +111,23 @@ class BenchResult(
             # PanelResult.to_video,
             VideoResult.to_panes,
         ]
+
+    def get_all_plot_callbacks(self) -> List[callable]:
+        """Get all available plot callbacks including extensions.
+
+        Combines default callbacks with extension callbacks for comprehensive plotting.
+
+        Returns:
+            List[callable]: Combined list of all available plot callbacks
+        """
+        callbacks = self.default_plot_callbacks()
+
+        # Add extension callbacks if available
+        if hasattr(self, "get_extension_plot_callbacks"):
+            extension_callbacks = self.get_extension_plot_callbacks()
+            callbacks.extend(extension_callbacks)
+
+        return callbacks
 
     @staticmethod
     def plotly_callbacks() -> List[callable]:
