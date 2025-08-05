@@ -31,13 +31,19 @@ class VolumeResult(BenchResultBase):
             **kwargs,
         )
 
-    def to_volume(self, result_var: Parameter = None, override: bool = True, **kwargs):
+    def to_volume(
+        self,
+        result_var: Parameter = None,
+        override: bool = True,
+        target_dimension: int = 3,
+        **kwargs,
+    ):
         return self.filter(
             self.to_volume_ds,
             float_range=VarRange(3, 3),
             cat_range=VarRange(-1, 0),
             reduce=ReduceType.REDUCE,
-            target_dimension=3,
+            target_dimension=target_dimension,
             result_var=result_var,
             result_types=(ResultVar),
             override=override,

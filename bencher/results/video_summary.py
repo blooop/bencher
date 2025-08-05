@@ -92,12 +92,13 @@ class VideoSummaryResult(BenchResultBase):
         video_controls: VideoControls = None,
         target_duration: float = None,
         compose_method_list: List = None,
+        target_dimension: int = 0,
         **kwargs,
     ):
         cvc = self._to_video_panes_ds(
             dataset,
             self.plot_cb,
-            target_dimension=0,
+            target_dimension=target_dimension,
             horizontal=True,
             compose_method=ComposeType.right,
             time_sequence_dimension=time_sequence_dimension,

@@ -14,14 +14,16 @@ from bencher.variables.results import ResultVar
 
 
 class HistogramResult(VideoResult):
-    def to_plot(self, result_var: Parameter = None, **kwargs) -> Optional[pn.pane.Pane]:
+    def to_plot(
+        self, result_var: Parameter = None, target_dimension: int = 2, **kwargs
+    ) -> Optional[pn.pane.Pane]:
         return self.filter(
             self.to_histogram_ds,
             float_range=VarRange(0, 0),
             cat_range=VarRange(0, None),
             input_range=VarRange(0, 0),
             reduce=ReduceType.NONE,
-            target_dimension=2,
+            target_dimension=target_dimension,
             result_var=result_var,
             result_types=(ResultVar),
             **kwargs,

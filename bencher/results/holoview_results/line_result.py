@@ -67,7 +67,7 @@ class LineResult(HoloviewResult):
         result_var: Parameter = None,
         tap_var=None,
         tap_container: pn.pane.panel = None,
-        target_dimension=2,
+        target_dimension: int = 2,
         override: bool = True,
         use_tap: bool = None,
         **kwargs,
