@@ -103,7 +103,5 @@ def example_holosweep(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
 
 
 if __name__ == "__main__":
-    bench_run = bch.BenchRunner("bench_runner_test", run_cfg=bch.BenchRunCfg())
-
-    bench_run.add_run(example_holosweep)
+    bench_run = bch.BenchRunner(example_holosweep)
     bench_run.run(level=4, show=True)

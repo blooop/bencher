@@ -22,7 +22,7 @@ class BenchRunner:
 
     def __init__(
         self,
-        name: str,
+        name: str | Benchable,
         bench_class: ParametrizedSweep = None,
         run_cfg: BenchRunCfg = BenchRunCfg(),
         publisher: Callable = None,
@@ -35,9 +35,13 @@ class BenchRunner:
             run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
             publisher (Callable, optional): Function to publish results. Defaults to None.
         """
-        self.name = name
-        self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         self.bench_fns = []
+        if isinstance(name, Callable):
+            self.name = name.__name__
+            self.add_run(name)
+        else:
+            self.name = name
+        self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         self.publisher = publisher
         if bench_class is not None:
             self.add_bench(bench_class)
