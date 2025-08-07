@@ -7,7 +7,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar,ResultBool
+from bencher.variables.results import ResultVar, ResultBool
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -61,7 +61,7 @@ class BarResult(HoloviewResult):
             **kwargs,
         )
         if res is None:
-            res= self.filter(
+            res = self.filter(
                 self.to_bar_ds,
                 float_range=VarRange(0, 0),
                 cat_range=VarRange(0, None),
@@ -96,4 +96,9 @@ class BarResult(HoloviewResult):
         da_plot = dataset[result_var.name]
         title = self.title_from_ds(da_plot, result_var, **kwargs)
         time_widget_args = self.time_widget(title)
-        return da_plot.hvplot.bar(by=by, **time_widget_args, **kwargs)
+        return da_plot.hvplot.bar(by=by, **time_widget_args, **kwargs).opts(
+            title=title,
+            ylabel=f"{result_var.name} [{result_var.units}]",
+            xrotation=30,  # Rotate x-axis labels by 30 degrees
+            **kwargs,
+        )
