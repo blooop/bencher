@@ -87,13 +87,6 @@ def example_2_cat_in_4_out_repeats(
         description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
     )
 
-    averagexr = bench.get_result().to_dataset(reduce=bch.ReduceType.REDUCE)
-    # average = bench.get_result().to_dataset(reduce=bch.ReduceType.REDUCE)
-
-    bench.report.append(
-        res.to_bar_ds(averagexr, result_var=ProgrammingBenchmark.param.is_successful)
-    )
-
     return bench
 
 

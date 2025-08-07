@@ -17,6 +17,7 @@ from bencher.results.holoview_results.distribution_result.scatter_jitter_result 
     ScatterJitterResult,
 )
 from bencher.results.holoview_results.bar_result import BarResult
+from bencher.results.holoview_results.bar_mean_result import BarMeanResult
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.curve_result import CurveResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
@@ -35,6 +36,7 @@ class BenchResult(
     ScatterResult,
     LineResult,
     BarResult,
+    BarMeanResult,
     HeatmapResult,
     CurveResult,
     SurfaceResult,
@@ -95,6 +97,7 @@ class BenchResult(
         return [
             # VideoSummaryResult.to_video_summary, #quite expensive so not turned on by default
             BarResult.to_plot,
+            BarMeanResult.to_plot,
             BoxWhiskerResult.to_plot,
             # ViolinResult.to_violin,
             # ScatterJitterResult.to_plot,

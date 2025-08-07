@@ -18,8 +18,10 @@ from .variables.inputs import (
 from .variables.time import TimeSnapshot
 
 from .variables.inputs import box, p
+
 from .variables.results import (
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,
@@ -33,6 +35,7 @@ from .variables.results import (
     ResultDataSet,
     curve,
 )
+
 
 from .results.composable_container.composable_container_base import (
     ComposeType,
@@ -50,6 +53,7 @@ from bencher.results.holoview_results.distribution_result.scatter_jitter_result 
     ScatterJitterResult,
 )
 from bencher.results.holoview_results.bar_result import BarResult
+from bencher.results.holoview_results.bar_mean_result import BarMeanResult
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.curve_result import CurveResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult

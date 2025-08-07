@@ -37,6 +37,26 @@ class ResultVar(Number):
         return hash_sha1((self.units, self.direction))
 
 
+class ResultBool(Number):
+    """A class to represent result variables and the desired optimisation direction"""
+
+    __slots__ = ["units", "direction"]
+
+    def __init__(self, units="%", direction: OptDir = OptDir.minimize, **params):
+        Number.__init__(self, **params)
+        assert isinstance(units, str)
+        self.units = units
+        self.default = 0  # json is terrible and does not support nan values
+        self.direction = direction
+
+    def as_dim(self) -> hv.Dimension:
+        return hv.Dimension((self.name, self.name), unit=self.units)
+
+    def hash_persistent(self) -> str:
+        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        return hash_sha1((self.units, self.direction))
+
+
 class ResultVec(param.List):
     """A class to represent fixed size vector result variable"""
 
@@ -230,6 +250,7 @@ PANEL_TYPES = (
 
 ALL_RESULT_TYPES = (
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,
