@@ -7,7 +7,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultVar,ResultBool
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -47,7 +47,7 @@ class BarResult(HoloviewResult):
             Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
-        return self.filter(
+        res = self.filter(
             self.to_bar_ds,
             float_range=VarRange(0, 0),
             cat_range=VarRange(0, None),
@@ -60,6 +60,20 @@ class BarResult(HoloviewResult):
             override=override,
             **kwargs,
         )
+        if res is None:
+            return self.filter(
+                self.to_bar_mean_ds,
+                float_range=VarRange(0, 0),
+                cat_range=VarRange(0, None),
+                repeats_range=VarRange(2, None),
+                panel_range=VarRange(0, None),
+                reduce=ReduceType.REDUCE,
+                target_dimension=target_dimension,
+                result_var=result_var,
+                result_types=(ResultBool),
+                override=override,
+                **kwargs,
+            )
 
     def to_bar_ds(self, dataset: xr.Dataset, result_var: Parameter = None, **kwargs):
         """Creates a bar chart from the provided dataset.
