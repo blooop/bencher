@@ -750,7 +750,7 @@ class Bench(BenchPlotServer):
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, ResultVar) or isinstance(rv, ResultBool):
+            if isinstance(rv, (ResultVar, ResultBool)):
                 result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(rv, (ResultReference, ResultDataSet)):
