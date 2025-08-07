@@ -61,7 +61,7 @@ class BarResult(HoloviewResult):
             **kwargs,
         )
         if res is None:
-            return self.filter(
+            res= self.filter(
                 self.to_bar_ds,
                 float_range=VarRange(0, 0),
                 cat_range=VarRange(0, None),
@@ -74,6 +74,7 @@ class BarResult(HoloviewResult):
                 override=override,
                 **kwargs,
             )
+        return res
 
     def to_bar_ds(self, dataset: xr.Dataset, result_var: Parameter = None, **kwargs):
         """Creates a bar chart from the provided dataset.
