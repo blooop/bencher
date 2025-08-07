@@ -938,10 +938,7 @@ class Bench(BenchPlotServer):
                 if bench_run_cfg.print_bench_results:
                     logging.info(f"{rv.name}: {result_value}")
 
-                if isinstance(
-                    rv,
-                    XARRAY_MULTIDIM_RESULT_TYPES
-                ):
+                if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
                     set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
                 elif isinstance(rv, ResultDataSet):
                     bench_res.dataset_list.append(result_value)
