@@ -75,7 +75,6 @@ class BarResult(HoloviewResult):
             if res is not None:
                 return res
         return None
-        return None
 
     def to_bar_ds(self, dataset: xr.Dataset, result_var: Parameter = None, **kwargs):
         """Creates a bar chart from the provided dataset.
