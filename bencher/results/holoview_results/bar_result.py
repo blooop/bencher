@@ -62,7 +62,7 @@ class BarResult(HoloviewResult):
         )
         if res is None:
             return self.filter(
-                self.to_bar_mean_ds,
+                self.to_bar_ds,
                 float_range=VarRange(0, 0),
                 cat_range=VarRange(0, None),
                 repeats_range=VarRange(2, None),

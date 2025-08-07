@@ -20,6 +20,7 @@ from .variables.time import TimeSnapshot
 from .variables.inputs import box, p
 from .variables.results import (
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,
