@@ -23,6 +23,7 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,
@@ -749,7 +750,7 @@ class Bench(BenchPlotServer):
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, ResultVar):
+            if isinstance(rv, ResultVar) or isinstance(rv, ResultBool):
                 result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(rv, (ResultReference, ResultDataSet)):
@@ -940,6 +941,7 @@ class Bench(BenchPlotServer):
                     rv,
                     (
                         ResultVar,
+                        ResultBool,
                         ResultVideo,
                         ResultImage,
                         ResultString,
