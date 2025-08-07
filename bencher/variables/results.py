@@ -42,11 +42,11 @@ class ResultBool(Number):
 
     __slots__ = ["units", "direction"]
 
-    def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, **params):
+    def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
+        params.setdefault("default", default)
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
-        self.default = 0  # json is terrible and does not support nan values
         self.direction = direction
         self.bounds = (0, 1)  # bools are always between 0 and 1
 
