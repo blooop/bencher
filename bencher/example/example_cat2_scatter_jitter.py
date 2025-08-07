@@ -82,17 +82,10 @@ def example_2_cat_in_4_out_repeats(
         run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 15  # Run multiple times to get statistical significance
     bench = ProgrammingBenchmark().to_bench(run_cfg, report)
-    res = bench.plot_sweep(
+    bench.plot_sweep(
         title="Programming Language and Environment: Boolean and Float Results",
         description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
     )
-
-    # averagexr = bench.get_result().to_dataset(reduce=bch.ReduceType.REDUCE)
-    # # average = bench.get_result().to_dataset(reduce=bch.ReduceType.REDUCE)
-
-    # bench.report.append(
-    #     res.to_bar_ds(averagexr, result_var=ProgrammingBenchmark.param.is_successful)
-    # )
 
     return bench
 
