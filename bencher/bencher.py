@@ -22,6 +22,7 @@ from bencher.bench_report import BenchReport
 from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
+    XARRAY_MULTIDIM_RESULT_TYPES,
     ResultVar,
     ResultBool,
     ResultVec,
@@ -939,15 +940,7 @@ class Bench(BenchPlotServer):
 
                 if isinstance(
                     rv,
-                    (
-                        ResultVar,
-                        ResultBool,
-                        ResultVideo,
-                        ResultImage,
-                        ResultString,
-                        ResultContainer,
-                        ResultPath,
-                    ),
+                    XARRAY_MULTIDIM_RESULT_TYPES
                 ):
                     set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
                 elif isinstance(rv, ResultDataSet):

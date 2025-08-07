@@ -249,6 +249,17 @@ PANEL_TYPES = (
     ResultDataSet,
 )
 
+
+XARRAY_MULTIDIM_RESULT_TYPES = (
+    ResultVar,
+    ResultBool,
+    ResultVideo,
+    ResultImage,
+    ResultString,
+    ResultContainer,
+    ResultPath,
+)
+
 ALL_RESULT_TYPES = (
     ResultVar,
     ResultBool,
