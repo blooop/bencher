@@ -22,7 +22,9 @@ from bencher.bench_report import BenchReport
 from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
+    XARRAY_MULTIDIM_RESULT_TYPES,
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,
@@ -749,7 +751,7 @@ class Bench(BenchPlotServer):
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, ResultVar):
+            if isinstance(rv, (ResultVar, ResultBool)):
                 result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(rv, (ResultReference, ResultDataSet)):
@@ -936,17 +938,7 @@ class Bench(BenchPlotServer):
                 if bench_run_cfg.print_bench_results:
                     logging.info(f"{rv.name}: {result_value}")
 
-                if isinstance(
-                    rv,
-                    (
-                        ResultVar,
-                        ResultVideo,
-                        ResultImage,
-                        ResultString,
-                        ResultContainer,
-                        ResultPath,
-                    ),
-                ):
+                if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
                     set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
                 elif isinstance(rv, ResultDataSet):
                     bench_res.dataset_list.append(result_value)
