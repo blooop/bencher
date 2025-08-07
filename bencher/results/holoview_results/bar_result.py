@@ -47,34 +47,33 @@ class BarResult(HoloviewResult):
             Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
-        res = self.filter(
-            self.to_bar_ds,
-            float_range=VarRange(0, 0),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(1, 1),
-            panel_range=VarRange(0, None),
-            reduce=ReduceType.SQUEEZE,
-            target_dimension=target_dimension,
-            result_var=result_var,
-            result_types=(ResultVar),
-            override=override,
+        common = {
+            "float_range": VarRange(0, 0),
+            "cat_range": VarRange(0, None),
+            "panel_range": VarRange(0, None),
+            "target_dimension": target_dimension,
+            "result_var": result_var,
+            "override": override,
             **kwargs,
-        )
-        if res is None:
-            res = self.filter(
-                self.to_bar_ds,
-                float_range=VarRange(0, 0),
-                cat_range=VarRange(0, None),
-                repeats_range=VarRange(2, None),
-                panel_range=VarRange(0, None),
-                reduce=ReduceType.REDUCE,
-                target_dimension=target_dimension,
-                result_var=result_var,
-                result_types=(ResultBool),
-                override=override,
-                **kwargs,
-            )
-        return res
+        }
+
+        scenarios = [
+            {
+                "repeats_range": VarRange(1, 1),
+                "reduce": ReduceType.SQUEEZE,
+                "result_types": (ResultVar,),
+            },
+            {
+                "repeats_range": VarRange(2, None),
+                "reduce": ReduceType.REDUCE,
+                "result_types": (ResultBool,),
+            },
+        ]
+
+        for params in scenarios:
+            res = self.filter(self.to_bar_ds, **common, **params)
+            if res is not None:
+                return res
 
     def to_bar_ds(self, dataset: xr.Dataset, result_var: Parameter = None, **kwargs):
         """Creates a bar chart from the provided dataset.
