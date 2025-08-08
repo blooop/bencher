@@ -20,7 +20,10 @@ class ProgrammingBenchmark(bch.ParametrizedSweep):
         ["Development", "Testing", "Production"], doc="Environment configuration"
     )
 
+    float1 = bch.FloatSweep(bounds=[0, 100], doc="First float result variable")
+
     is_successful = bch.ResultBool(doc="Whether the benchmark run was successful")
+    is_successful_float = bch.ResultVar(doc="Whether the benchmark run was successful")
     score = bch.ResultVar(units="score", doc="A floating point score for the run")
 
     def __call__(self, **kwargs) -> dict:
@@ -54,10 +57,11 @@ class ProgrammingBenchmark(bch.ParametrizedSweep):
             env_modifier = 1.0
 
         # Calculate final score with some randomness
-        self.score = base_score * env_modifier * random.uniform(0.95, 1.05)
+        self.score = base_score * env_modifier * random.uniform(0.85, 1.15)
 
         # Boolean result: success if score above a threshold
         self.is_successful = self.score > 65.0
+        self.is_successful_float = float(self.is_successful)
 
         return super().__call__(**kwargs)
 
@@ -83,9 +87,18 @@ def example_2_cat_in_4_out_repeats(
     run_cfg.repeats = 15  # Run multiple times to get statistical significance
     bench = ProgrammingBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
+        input_vars=["language", "environment"],
         title="Programming Language and Environment: Boolean and Float Results",
         description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
     )
+
+    bench.plot_sweep(
+        input_vars=["float1"],
+        title="Programming Language and Environment: Boolean and Float Results",
+        description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
+    )
+
+    # bench.report.append(res.to_line())
 
     return bench
 

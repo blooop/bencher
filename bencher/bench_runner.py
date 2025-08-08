@@ -125,6 +125,7 @@ class BenchRunner:
         min_level: int = 2,
         max_level: int = 6,
         level: int = None,
+        start_repeats: int = 1,
         repeats: int = 1,
         run_cfg: BenchRunCfg = None,
         publish: bool = False,
@@ -140,7 +141,8 @@ class BenchRunner:
             min_level (int, optional): The minimum level to start sampling at. Defaults to 2.
             max_level (int, optional): The maximum level to sample up to. Defaults to 6.
             level (int, optional): If this is set, then min_level and max_level are not used and only a single level is sampled. Defaults to None.
-            repeats (int, optional): The number of times to run the entire benchmarking procedure. Defaults to 1.
+            start_repeats (int, optional): The startingnumber of times to run the entire benchmarking procedure. Defaults to 1.
+            repeats (int, optional): The maximum number of times to run the entire benchmarking procedure. Defaults to 1.
             run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
             publish (bool, optional): Publish the results to git, requires a publish url to be set up. Defaults to False.
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
@@ -159,7 +161,8 @@ class BenchRunner:
         if level is not None:
             min_level = level
             max_level = level
-        for r in range(1, repeats + 1):
+
+        for r in range(start_repeats, repeats + 1):
             for lvl in range(min_level, max_level + 1):
                 if grouped:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
@@ -193,7 +196,7 @@ class BenchRunner:
             debug (bool): Whether to enable debug mode for publishing
         """
         if save:
-            report.save_index()
+            report.save_index(filename=f"{self.name}.html")
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher

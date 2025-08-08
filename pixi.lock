@@ -129,8 +129,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/0a/2356305c423a975000867de56888b79e44ec2192c690ff93c3109fd78081/pyzmq-27.0.1-cp312-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c1/b1/3baf80dc6d2b7bc27a95a67752d0208e410351e3feb4eb78de5f77454d8d/referencing-0.36.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/e4/56027c4a6b4ae70ca9de302488c5ca95ad4a39e190093d6c1a8ace08341b/requests-2.32.4-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/22/c9/4a46b469eed428113b5e2c2f6e77fa1a1ce3b35f2a5db237acb8f4ccfb45/rerun_notebook-0.24.0-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/25/6d/94dc5388c0223b33843c1ae7dae6627caf543faf5d49c4f7ebfbdc3e4f0e/rerun_sdk-0.24.0-cp39-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/38/ed/8485f9beb93696401d2d251888e511ff6fa0cf19724d43e8ec5220fbc887/rerun_notebook-0.24.1-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f2/2a/1bfdf86646bac8290a18f2997ec1afb316841f181f39e46686d0eb6f0012/rerun_sdk-0.24.1-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/33/cc/6b0ee8f0ba3f2df2daac1beda17fde5cf10897a7d466f252bd184ef20162/rpds_py-0.27.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/55/bf/9cb1ea5e3066779e42ade8d0cd3d3b0582a5720a814ae1586f85014656b6/ruff-0.12.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/99/72/c86a4cd867816350fe8dee13f30222340b9cd6b96173955819a5561810c5/scikit_learn-1.7.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -285,8 +285,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ee/ed/341a7148e08d2830f480f53ab3d136d88fc5011bb367b516d95d0ebb46dd/pyzmq-27.0.1-cp310-cp310-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c1/b1/3baf80dc6d2b7bc27a95a67752d0208e410351e3feb4eb78de5f77454d8d/referencing-0.36.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/e4/56027c4a6b4ae70ca9de302488c5ca95ad4a39e190093d6c1a8ace08341b/requests-2.32.4-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/22/c9/4a46b469eed428113b5e2c2f6e77fa1a1ce3b35f2a5db237acb8f4ccfb45/rerun_notebook-0.24.0-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/25/6d/94dc5388c0223b33843c1ae7dae6627caf543faf5d49c4f7ebfbdc3e4f0e/rerun_sdk-0.24.0-cp39-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/38/ed/8485f9beb93696401d2d251888e511ff6fa0cf19724d43e8ec5220fbc887/rerun_notebook-0.24.1-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f2/2a/1bfdf86646bac8290a18f2997ec1afb316841f181f39e46686d0eb6f0012/rerun_sdk-0.24.1-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/88/59/2d6789bb898fb3e2f0f7b82b7bcf27f579ebcb6cc36c24f4e208f7f58a5b/rpds_py-0.27.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/55/bf/9cb1ea5e3066779e42ade8d0cd3d3b0582a5720a814ae1586f85014656b6/ruff-0.12.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fb/a4/e488acdece6d413f370a9589a7193dac79cd486b2e418d3276d6ea0b9305/scikit_learn-1.7.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -443,8 +443,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/6c/29/0652a39d4e876e0d61379047ecf7752685414ad2e253434348246f7a2a39/pyzmq-27.0.1-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c1/b1/3baf80dc6d2b7bc27a95a67752d0208e410351e3feb4eb78de5f77454d8d/referencing-0.36.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/e4/56027c4a6b4ae70ca9de302488c5ca95ad4a39e190093d6c1a8ace08341b/requests-2.32.4-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/22/c9/4a46b469eed428113b5e2c2f6e77fa1a1ce3b35f2a5db237acb8f4ccfb45/rerun_notebook-0.24.0-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/25/6d/94dc5388c0223b33843c1ae7dae6627caf543faf5d49c4f7ebfbdc3e4f0e/rerun_sdk-0.24.0-cp39-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/38/ed/8485f9beb93696401d2d251888e511ff6fa0cf19724d43e8ec5220fbc887/rerun_notebook-0.24.1-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f2/2a/1bfdf86646bac8290a18f2997ec1afb316841f181f39e46686d0eb6f0012/rerun_sdk-0.24.1-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/4b/ac/cf644803d8d417653fe2b3604186861d62ea6afaef1b2284045741baef17/rpds_py-0.27.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/55/bf/9cb1ea5e3066779e42ade8d0cd3d3b0582a5720a814ae1586f85014656b6/ruff-0.12.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/26/92/85ec172418f39474c1cd0221d611345d4f433fc4ee2fc68e01f524ccc4e4/scikit_learn-1.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -600,8 +600,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/0a/2356305c423a975000867de56888b79e44ec2192c690ff93c3109fd78081/pyzmq-27.0.1-cp312-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c1/b1/3baf80dc6d2b7bc27a95a67752d0208e410351e3feb4eb78de5f77454d8d/referencing-0.36.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/e4/56027c4a6b4ae70ca9de302488c5ca95ad4a39e190093d6c1a8ace08341b/requests-2.32.4-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/22/c9/4a46b469eed428113b5e2c2f6e77fa1a1ce3b35f2a5db237acb8f4ccfb45/rerun_notebook-0.24.0-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/25/6d/94dc5388c0223b33843c1ae7dae6627caf543faf5d49c4f7ebfbdc3e4f0e/rerun_sdk-0.24.0-cp39-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/38/ed/8485f9beb93696401d2d251888e511ff6fa0cf19724d43e8ec5220fbc887/rerun_notebook-0.24.1-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f2/2a/1bfdf86646bac8290a18f2997ec1afb316841f181f39e46686d0eb6f0012/rerun_sdk-0.24.1-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/95/ae/5d15c83e337c082d0367053baeb40bfba683f42459f6ebff63a2fd7e5518/rpds_py-0.27.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/55/bf/9cb1ea5e3066779e42ade8d0cd3d3b0582a5720a814ae1586f85014656b6/ruff-0.12.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f3/1b/998312db6d361ded1dd56b457ada371a8d8d77ca2195a7d18fd8a1736f21/scikit_learn-1.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -757,8 +757,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/0a/2356305c423a975000867de56888b79e44ec2192c690ff93c3109fd78081/pyzmq-27.0.1-cp312-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c1/b1/3baf80dc6d2b7bc27a95a67752d0208e410351e3feb4eb78de5f77454d8d/referencing-0.36.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/e4/56027c4a6b4ae70ca9de302488c5ca95ad4a39e190093d6c1a8ace08341b/requests-2.32.4-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/22/c9/4a46b469eed428113b5e2c2f6e77fa1a1ce3b35f2a5db237acb8f4ccfb45/rerun_notebook-0.24.0-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/25/6d/94dc5388c0223b33843c1ae7dae6627caf543faf5d49c4f7ebfbdc3e4f0e/rerun_sdk-0.24.0-cp39-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/38/ed/8485f9beb93696401d2d251888e511ff6fa0cf19724d43e8ec5220fbc887/rerun_notebook-0.24.1-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f2/2a/1bfdf86646bac8290a18f2997ec1afb316841f181f39e46686d0eb6f0012/rerun_sdk-0.24.1-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/33/cc/6b0ee8f0ba3f2df2daac1beda17fde5cf10897a7d466f252bd184ef20162/rpds_py-0.27.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/55/bf/9cb1ea5e3066779e42ade8d0cd3d3b0582a5720a814ae1586f85014656b6/ruff-0.12.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/99/72/c86a4cd867816350fe8dee13f30222340b9cd6b96173955819a5561810c5/scikit_learn-1.7.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -1320,8 +1320,8 @@ packages:
   requires_python: '>=3.9'
 - pypi: .
   name: holobench
-  version: 1.51.0
-  sha256: ecca2f48bd21882d0236818559aba308c0a5747b1c5cf18363517d84878a9652
+  version: 1.51.1
+  sha256: 9f9935b27fee66c62e233c6f713d742a42a53985506f0942b4fc581a49fd8fd2
   requires_dist:
   - holoviews>=1.15,<=1.21.0
   - numpy>=1.0,<=2.2.6
@@ -3634,20 +3634,20 @@ packages:
   - pysocks>=1.5.6,!=1.5.7 ; extra == 'socks'
   - chardet>=3.0.2,<6 ; extra == 'use-chardet-on-py3'
   requires_python: '>=3.8'
-- pypi: https://files.pythonhosted.org/packages/22/c9/4a46b469eed428113b5e2c2f6e77fa1a1ce3b35f2a5db237acb8f4ccfb45/rerun_notebook-0.24.0-py2.py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/38/ed/8485f9beb93696401d2d251888e511ff6fa0cf19724d43e8ec5220fbc887/rerun_notebook-0.24.1-py2.py3-none-any.whl
   name: rerun-notebook
-  version: 0.24.0
-  sha256: eb2a929762ef4741999557a7b60e1c7a0d6197eccdd2ad90055c7e53efef294c
+  version: 0.24.1
+  sha256: 20e881c719211ec84a9573f50b688ee3da90e002341c8fb22dea61ed078ec746
   requires_dist:
   - anywidget
   - jupyter-ui-poll
   - hatch ; extra == 'dev'
   - jupyterlab ; extra == 'dev'
   - watchfiles ; extra == 'dev'
-- pypi: https://files.pythonhosted.org/packages/25/6d/94dc5388c0223b33843c1ae7dae6627caf543faf5d49c4f7ebfbdc3e4f0e/rerun_sdk-0.24.0-cp39-abi3-manylinux_2_28_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/f2/2a/1bfdf86646bac8290a18f2997ec1afb316841f181f39e46686d0eb6f0012/rerun_sdk-0.24.1-cp39-abi3-manylinux_2_28_x86_64.whl
   name: rerun-sdk
-  version: 0.24.0
-  sha256: a4e5c7452df556fc5f64667cb3974ddcf01e3fc03374748348de6855f2919397
+  version: 0.24.1
+  sha256: bff6772bb0219798dfb40fd95858db2942ad5c68ec278a6ac73cacab6436cea4
   requires_dist:
   - attrs>=23.1.0
   - numpy>=2
@@ -3655,7 +3655,10 @@ packages:
   - pyarrow>=18.0.0
   - typing-extensions>=4.5
   - pytest==7.1.2 ; extra == 'tests'
-  - rerun-notebook==0.24.0 ; extra == 'notebook'
+  - rerun-notebook==0.24.1 ; extra == 'notebook'
+  - datafusion==47.0.0 ; extra == 'datafusion'
+  - notebook ; extra == 'all'
+  - datafusion ; extra == 'all'
   requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/33/cc/6b0ee8f0ba3f2df2daac1beda17fde5cf10897a7d466f252bd184ef20162/rpds_py-0.27.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
   name: rpds-py
