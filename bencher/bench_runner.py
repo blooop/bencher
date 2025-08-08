@@ -26,7 +26,6 @@ class BenchRunner:
         bench_class: ParametrizedSweep = None,
         run_cfg: BenchRunCfg = BenchRunCfg(),
         publisher: Callable = None,
-        start_repeats: int = 1,
     ) -> None:
         """Initialize a BenchRunner instance.
 
@@ -44,7 +43,6 @@ class BenchRunner:
             self.name = name
         self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         self.publisher = publisher
-        self.start_repeats = start_repeats
         if bench_class is not None:
             self.add_bench(bench_class)
         self.results = []
