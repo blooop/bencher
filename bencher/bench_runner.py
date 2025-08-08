@@ -26,6 +26,7 @@ class BenchRunner:
         bench_class: ParametrizedSweep = None,
         run_cfg: BenchRunCfg = BenchRunCfg(),
         publisher: Callable = None,
+        start_repeats: int = 1,
     ) -> None:
         """Initialize a BenchRunner instance.
 
@@ -43,6 +44,7 @@ class BenchRunner:
             self.name = name
         self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         self.publisher = publisher
+        self.start_repeats = start_repeats
         if bench_class is not None:
             self.add_bench(bench_class)
         self.results = []
@@ -133,6 +135,7 @@ class BenchRunner:
         save: bool = False,
         grouped: bool = True,
         cache_results: bool = True,
+        start_repeats: int = None,
     ) -> List[BenchCfg]:
         """This function controls how a benchmark or a set of benchmarks are run. If you are only running a single benchmark it can be simpler to just run it directly, but if you are running several benchmarks together and want them to be sampled at different levels of fidelity or published together in a single report this function enables that workflow.  If you have an expensive function, it can be useful to view low fidelity results as they are computed but also continue to compute higher fidelity results while reusing previously computed values. The parameters min_level and max_level let you specify how to progressivly increase the sampling resolution of the benchmark sweep. By default cache_results=True so that previous values are reused.
 
@@ -159,7 +162,12 @@ class BenchRunner:
         if level is not None:
             min_level = level
             max_level = level
-        for r in range(1, repeats + 1):
+
+        # Determine starting repeat index
+        if start_repeats is None:
+            start_repeats = getattr(self, "start_repeats", 1)
+
+        for r in range(start_repeats, repeats + 1):
             for lvl in range(min_level, max_level + 1):
                 if grouped:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
@@ -193,7 +201,7 @@ class BenchRunner:
             debug (bool): Whether to enable debug mode for publishing
         """
         if save:
-            report.save_index(filename=f"{self.name}.html")
+            report.save_index(filename=f"{self.name}")
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
