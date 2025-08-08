@@ -127,6 +127,7 @@ class BenchRunner:
         min_level: int = 2,
         max_level: int = 6,
         level: int = None,
+        start_repeats: int = 1,
         repeats: int = 1,
         run_cfg: BenchRunCfg = None,
         publish: bool = False,
@@ -134,23 +135,26 @@ class BenchRunner:
         show: bool = False,
         save: bool = False,
         grouped: bool = True,
-        cache_results: bool = True,
-        start_repeats: int = None,
     ) -> List[BenchCfg]:
-        """This function controls how a benchmark or a set of benchmarks are run. If you are only running a single benchmark it can be simpler to just run it directly, but if you are running several benchmarks together and want them to be sampled at different levels of fidelity or published together in a single report this function enables that workflow.  If you have an expensive function, it can be useful to view low fidelity results as they are computed but also continue to compute higher fidelity results while reusing previously computed values. The parameters min_level and max_level let you specify how to progressivly increase the sampling resolution of the benchmark sweep. By default cache_results=True so that previous values are reused.
+        """
+        Run the benchmark(s) with control over repeat iteration range.
+
+        The repeat loop will start at start_repeats and increment up to and including repeats.
+        This allows resuming or skipping initial repeat runs if desired.
 
         Args:
             min_level (int, optional): The minimum level to start sampling at. Defaults to 2.
             max_level (int, optional): The maximum level to sample up to. Defaults to 6.
-            level (int, optional): If this is set, then min_level and max_level are not used and only a single level is sampled. Defaults to None.
-            repeats (int, optional): The number of times to run the entire benchmarking procedure. Defaults to 1.
-            run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
+            level (int, optional): If set, min_level and max_level are ignored and only this level is sampled. Defaults to None.
+            start_repeats (int, optional): The repeat index to start from (inclusive). Defaults to 1.
+            repeats (int, optional): The maximum number of repeats to run (inclusive). Defaults to 1.
+            run_cfg (BenchRunCfg, optional): Benchmark run configuration. Defaults to None.
             publish (bool, optional): Publish the results to git, requires a publish url to be set up. Defaults to False.
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
-            show (bool, optional): show the results in the local web browser. Defaults to False.
-            save (bool, optional): save the results to disk in index.html. Defaults to False.
+            show (bool, optional): Show the results in the local web browser. Defaults to False.
+            save (bool, optional): Save the results to disk in index.html. Defaults to False.
             grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to True.
-            cache_results (bool, optional): Use the sample cache to reused previous results. Defaults to True.
+            cache_results (bool, optional): Use the sample cache to reuse previous results. Defaults to True.
 
         Returns:
             List[BenchCfg]: A list of benchmark configuration objects with results
@@ -162,10 +166,6 @@ class BenchRunner:
         if level is not None:
             min_level = level
             max_level = level
-
-        # Determine starting repeat index
-        if start_repeats is None:
-            start_repeats = getattr(self, "start_repeats", 1)
 
         for r in range(start_repeats, repeats + 1):
             for lvl in range(min_level, max_level + 1):
