@@ -20,7 +20,7 @@ class ProgrammingBenchmark(bch.ParametrizedSweep):
         ["Development", "Testing", "Production"], doc="Environment configuration"
     )
 
-    float1= bch.FloatSweep(bounds=[0, 100], doc="First float result variable")
+    float1 = bch.FloatSweep(bounds=[0, 100], doc="First float result variable")
 
     is_successful = bch.ResultBool(doc="Whether the benchmark run was successful")
     is_successful_float = bch.ResultVar(doc="Whether the benchmark run was successful")
@@ -92,8 +92,8 @@ def example_2_cat_in_4_out_repeats(
         description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
     )
 
-    res=bench.plot_sweep(
-        input_vars=[ "float1"],
+    res = bench.plot_sweep(
+        input_vars=["float1"],
         title="Programming Language and Environment: Boolean and Float Results",
         description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
     )
