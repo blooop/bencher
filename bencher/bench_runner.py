@@ -176,7 +176,9 @@ class BenchRunner:
                         res = bch_fn(run_lvl, report_level)
                     else:
                         res = bch_fn(run_lvl, BenchReport())
-                        res.report.bench_name = f"{run_cfg.run_tag}_{res.report.bench_name}"
+                        res.report.bench_name = (
+                            f"{run_cfg.run_tag}_{res.report.bench_name}_{bch_fn.__name__}"
+                        )
                         self.show_publish(res.report, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
@@ -196,7 +198,7 @@ class BenchRunner:
             debug (bool): Whether to enable debug mode for publishing
         """
         if save:
-            report.save(directory="reports", in_html_folder=False)
+            report.save(directory="reports", filename=report.bench_name, in_html_folder=False)
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
