@@ -92,7 +92,7 @@ def example_2_cat_in_4_out_repeats(
         description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
     )
 
-    res = bench.plot_sweep(
+    bench.plot_sweep(
         input_vars=["float1"],
         title="Programming Language and Environment: Boolean and Float Results",
         description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
