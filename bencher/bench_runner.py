@@ -196,7 +196,7 @@ class BenchRunner:
             debug (bool): Whether to enable debug mode for publishing
         """
         if save:
-            report.save(directory="")
+            report.save(directory="reports", in_html_folder=False)
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
