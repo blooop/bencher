@@ -24,6 +24,7 @@ from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.dataset_result import DataSetResult
+from bencher.results.rerun_results import RerunComposableResult
 from bencher.utils import listify
 
 
@@ -43,6 +44,7 @@ class BenchResult(
     VideoSummaryResult,
     DataSetResult,
     OptunaResult,
+    RerunComposableResult,
 ):  # noqa pylint: disable=too-many-ancestors
     """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
 
@@ -54,6 +56,7 @@ class BenchResult(
         """
         VolumeResult.__init__(self, bench_cfg)
         HoloviewResult.__init__(self, bench_cfg)
+        RerunComposableResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
 
     @classmethod
