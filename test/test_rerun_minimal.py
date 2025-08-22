@@ -6,7 +6,7 @@ import numpy as np
 
 # Skip all tests if rerun is not available
 try:
-    import rerun as rr  # noqa: F401
+    import rerun  # noqa: F401
 
     RERUN_AVAILABLE = True
 except ImportError:
@@ -39,9 +39,9 @@ def test_categorical_conversion_standalone():
     # Test just the static method without creating instance
     categorical_data = np.array(["sin", "cos", "sin", "tan"])
 
-    # Create minimal mock for the method
-    class MockVar:
-        name = "test"
+    # Create minimal mock for the method (unused but kept for test structure)
+    # class MockVar:
+    #     name = "test"
 
     # Test the conversion logic directly
     if hasattr(categorical_data, "dtype") and categorical_data.dtype.kind in ["U", "S", "O"]:

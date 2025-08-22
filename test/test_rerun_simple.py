@@ -170,7 +170,7 @@ def test_bench_result_integration():
     assert issubclass(BenchResult, RerunComposableResult)
 
     # Create a minimal benchmark to test integration
-    benchmark = SimpleTestBenchmark()
+    # benchmark = SimpleTestBenchmark()  # Unused but kept for test structure
     bench_cfg = bch.BenchCfg(
         title="Integration Test",
         input_vars=[SimpleTestBenchmark.param.theta],

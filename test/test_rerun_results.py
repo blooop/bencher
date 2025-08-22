@@ -311,10 +311,9 @@ class TestRerunComposableResult:
 
     def test_composable_result_no_rerun_available(self):
         """Test graceful handling when rerun is not available"""
-        from bencher.results.rerun_results.rerun_composable_result import RerunComposableResult
 
         # Temporarily mock rerun as unavailable
-        original_available = getattr(RerunComposableResult, "RERUN_AVAILABLE", True)
+        # original_available = getattr(RerunComposableResult, "RERUN_AVAILABLE", True)
 
         try:
             # Create instance with mocked unavailable rerun

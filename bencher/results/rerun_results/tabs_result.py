@@ -95,7 +95,7 @@ class TabsRerunResult(RerunResultBase):
 
         # Get coordinate values for tab dimension
         tab_coords = dataset.coords[tab_var.name].values
-        tab_numeric, tab_labels = self._convert_coords_to_numeric(tab_coords, tab_var)
+        _, tab_labels = self._convert_coords_to_numeric(tab_coords, tab_var)
 
         # Create a tab for each value of the tab dimension
         tab_views = []
@@ -132,14 +132,25 @@ class TabsRerunResult(RerunResultBase):
     def _create_2d_visualization_for_tab(
         self, tab_data, result_var, primary_vars, entity_path, tab_value, tab_var
     ):
-        """Create 2D visualization for a single tab"""
+        """Create 2D visualization for a single tab
+
+        Args:
+            tab_data: Data for this tab
+            result_var: Result variable (used for logging)
+            primary_vars: Primary plotting variables
+            entity_path: Entity path for logging
+            tab_value: Value for this tab (unused)
+            tab_var: Tab variable (unused)
+        """
+        # Acknowledge unused args
+        _ = tab_value, tab_var
         if len(primary_vars) == 1:
             # 1D data - create line plot
             x_var = primary_vars[0]
             x_coords = tab_data.coords[x_var.name].values
             y_values = tab_data.values
 
-            x_numeric, x_labels = self._convert_coords_to_numeric(x_coords, x_var)
+            x_numeric, _ = self._convert_coords_to_numeric(x_coords, x_var)
 
             # Log as time series
             for i, (x, y) in enumerate(zip(x_numeric, y_values.flatten())):
@@ -158,8 +169,8 @@ class TabsRerunResult(RerunResultBase):
             x_coords_raw = tab_data.coords[x_var.name].values
             y_coords_raw = tab_data.coords[y_var.name].values
 
-            x_coords, x_labels = self._convert_coords_to_numeric(x_coords_raw, x_var)
-            y_coords, y_labels = self._convert_coords_to_numeric(y_coords_raw, y_var)
+            x_coords, _ = self._convert_coords_to_numeric(x_coords_raw, x_var)
+            y_coords, _ = self._convert_coords_to_numeric(y_coords_raw, y_var)
 
             z_values = tab_data.values
 
@@ -201,7 +212,7 @@ class TabsRerunResult(RerunResultBase):
 
             x_numeric, _ = self._convert_coords_to_numeric(x_coords, x_var)
 
-            for i, (x, y) in enumerate(zip(x_numeric, y_values.flatten())):
+            for i, (_, y) in enumerate(zip(x_numeric, y_values.flatten())):
                 rr.set_time_sequence("step", int(i))
                 rr.log(f"{entity_path}/scalar", rr.Scalars(float(y)))
 

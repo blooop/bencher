@@ -76,10 +76,10 @@ def example_rerun_slider(
 ) -> bch.Bench:
     """Example showing how to navigate rerun results with a slider in a single window"""
 
-    bench = SweepRerunSlider().to_bench(run_cfg, report)
+    slider_bench = SweepRerunSlider().to_bench(run_cfg, report)
 
     # Create the sweep and get results
-    results = bench.plot_sweep(plot_callbacks=False)
+    results = slider_bench.plot_sweep(plot_callbacks=False)
 
     # Create interactive slider viewer that auto-adapts to sweep parameters
     viewer = RerunSliderViewer(results)

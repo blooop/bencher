@@ -38,7 +38,7 @@ class RerunResultBase(BenchResultBase):
             rr.init(app_id, spawn=True)
             self._rerun_initialized = True
 
-    def _convert_coords_to_numeric(self, coords, var):
+    def _convert_coords_to_numeric(self, coords, var=None):
         """Convert coordinate values to numeric, handling categorical data"""
         if hasattr(coords, "dtype") and coords.dtype.kind in [
             "U",
@@ -50,9 +50,8 @@ class RerunResultBase(BenchResultBase):
             value_to_index = {val: i for i, val in enumerate(unique_values)}
             numeric_coords = np.array([value_to_index[val] for val in coords])
             return numeric_coords, unique_values
-        else:
-            # Already numeric
-            return coords, None
+        # Already numeric
+        return coords, None
 
     def _create_entity_path(self, result_var: Parameter, plot_type: str = "default") -> str:
         """Create a hierarchical entity path for rerun logging"""
@@ -89,13 +88,28 @@ class RerunResultBase(BenchResultBase):
 
         This method should be overridden by subclasses to define when
         they are appropriate for a given dataset.
+
+        Args:
+            dataset: The dataset to check
+            **match_criteria: Additional criteria (unused in base class)
         """
+        # Base implementation always returns True - subclasses should override
+        _ = dataset, match_criteria  # Acknowledge unused args
         return True
 
     def to_plot(
         self, result_var: Parameter = None, override: bool = False, **kwargs
     ) -> Optional[pn.panel]:
-        """Main plotting method - should be overridden by subclasses"""
+        """Main plotting method - should be overridden by subclasses
+
+        Args:
+            result_var: Variable to plot (unused in base class)
+            override: Override normal behavior (unused in base class)
+            **kwargs: Additional arguments (unused in base class)
+        """
+        # Acknowledge unused args
+        _ = result_var, override, kwargs
+
         if not RERUN_AVAILABLE:
             return pn.pane.Markdown(
                 "⚠️ Rerun visualization unavailable - install with `pip install rerun-sdk`"

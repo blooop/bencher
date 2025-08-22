@@ -74,8 +74,8 @@ def example_rerun_tabs(
     print("Blueprint sent to rerun")
 
     # Now run the actual sweep (this will log all data to rerun)
-    bench = sweep.to_bench(run_cfg, report)
-    bench.plot_sweep()
+    sweep_bench = sweep.to_bench(run_cfg, report)
+    sweep_bench.plot_sweep()
 
     print("Finished logging data to rerun")
     print(
@@ -85,11 +85,11 @@ def example_rerun_tabs(
     # Don't try to capture the rerun window - just let the native viewer show the tabs
     # The rerun viewer should already be showing the tabbed interface
 
-    return bench
+    return sweep_bench
 
 
 if __name__ == "__main__":
-    bench = example_rerun_tabs(bch.BenchRunCfg(level=3))
+    result_bench = example_rerun_tabs(bch.BenchRunCfg(level=3))
     print("Example completed successfully!")
     print("The Rerun viewer window should be open showing tabs for each theta value.")
     print("Each tab contains the boxes for that specific theta value.")
