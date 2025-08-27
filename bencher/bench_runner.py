@@ -161,8 +161,7 @@ class BenchRunner:
         if level is not None:
             min_level = level
             max_level = level
-
-        for r in range(start_repeats, repeats + 1):
+        for r in range(start_repeats, max(start_repeats, repeats) + 1):
             for lvl in range(min_level, max_level + 1):
                 if grouped:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
