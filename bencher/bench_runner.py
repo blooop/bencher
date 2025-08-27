@@ -161,7 +161,6 @@ class BenchRunner:
         if level is not None:
             min_level = level
             max_level = level
-        # Loop over repeats ensuring the end is at least start_repeats
         for r in range(start_repeats, max(start_repeats, repeats) + 1):
             for lvl in range(min_level, max_level + 1):
                 if grouped:
