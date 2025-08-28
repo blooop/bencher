@@ -5,18 +5,7 @@ from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg
-from bencher.sampling_strategy import (
-    SamplingStrategy,
-    SamplingMode,
-    single_run,
-    repeats_first,
-    level_first,
-    alternating,
-    SingleSamplingStrategy,
-    RepeatsFirstStrategy,
-    LevelFirstStrategy,
-    AlternatingStrategy,
-)
+from bencher.simple_sampling import SamplingStrategy as SimpleSamplingStrategy
 from copy import deepcopy
 
 
@@ -70,7 +59,6 @@ class BenchRunner:
         bench_class: ParametrizedSweep = None,
         run_cfg: BenchRunCfg = BenchRunCfg(),
         publisher: Callable = None,
-        sampling_strategy: SamplingStrategy = None,
     ) -> None:
         """Initialize a BenchRunner instance.
 
@@ -81,7 +69,6 @@ class BenchRunner:
             bench_class (ParametrizedSweep, optional): An initial benchmark class to add. Defaults to None.
             run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
             publisher (Callable, optional): Function to publish results. Defaults to None.
-            sampling_strategy (SamplingStrategy, optional): Strategy for sampling density progression. Defaults to None (uses single run).
         """
         self.bench_fns = []
 
@@ -107,7 +94,6 @@ class BenchRunner:
             self.name = str(name)
         self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         self.publisher = publisher
-        self.sampling_strategy = sampling_strategy or single_run()
         if bench_class is not None:
             self.add_bench(bench_class)
         self.results = []
@@ -230,11 +216,12 @@ class BenchRunner:
         repeats: int = 1,
         max_level: int = None,
         max_repeats: int = None,
+        # Simple sampling strategy (autocomplete-friendly!)
+        simple_sampling: SimpleSamplingStrategy = None,
         # Legacy parameters for backward compatibility (deprecated)
         min_level: int = None,
         start_repeats: int = None,
-        # Advanced parameters
-        sampling_strategy: SamplingStrategy = None,
+        # Other parameters
         input_vars: List = None,
         result_vars: List = None,
         const_vars: List = None,
@@ -254,6 +241,7 @@ class BenchRunner:
         This function provides a single entry point for all types of benchmark runs:
         - Single runs: Use level and repeats parameters only
         - Progressive sampling: Set max_level and/or max_repeats for automatic progression
+        - Simple strategies: Use simple_sampling parameter with autocomplete-friendly enums
         - Custom strategies: Use sampling_strategy parameter
 
         Args:
@@ -263,13 +251,21 @@ class BenchRunner:
             max_level (int, optional): Maximum level for progression. If None, uses single level.
             max_repeats (int, optional): Maximum repeats for progression. If None, uses single repeat count.
 
+            # Simple sampling strategy (RECOMMENDED - easy autocomplete!)
+            simple_sampling (SimpleSamplingStrategy, optional): Choose from autocomplete-friendly enum:
+                - SimpleSamplingStrategy.SINGLE: Single run with specified level/repeats
+                - SimpleSamplingStrategy.REPEATS_FIRST: Exhaust repeats before increasing level
+                - SimpleSamplingStrategy.LEVEL_FIRST: Exhaust levels before increasing repeats
+                - SimpleSamplingStrategy.ALTERNATING: Alternate between repeat/level increases
+                - SimpleSamplingStrategy.BALANCED: Smart progression for time/accuracy balance
+                Uses existing level/max_level and repeats/max_repeats parameters for values.
+
             # Legacy parameters (deprecated - use level/max_level instead)
             min_level (int, optional): DEPRECATED - use 'level' parameter instead.
             start_repeats (int, optional): DEPRECATED - use 'repeats' parameter instead.
 
-            # Advanced parameters
-            sampling_strategy (SamplingStrategy, optional): Custom strategy for sampling progression.
-                If None, creates strategy based on level/max_level and repeats/max_repeats.
+            # Advanced parameters (deprecated - use simple_sampling instead)
+            sampling_strategy: Use simple_sampling parameter instead for better UX.
             input_vars (List, optional): Input variables for the benchmark sweep.
             result_vars (List, optional): Result variables to collect.
             const_vars (List, optional): Variables to keep constant.
@@ -307,18 +303,28 @@ class BenchRunner:
             if repeats == 1:  # Only override if repeats is still default
                 repeats = start_repeats
 
-        # Create sampling strategy if needed
-        if sampling_strategy is None:
-            sampling_strategy = self._create_sampling_strategy_from_params(
-                level, max_level, repeats, max_repeats
+        # Create sampling configs based on simple strategy
+        if simple_sampling is not None:
+            # Use the simple sampling strategy enum
+            sampling_configs = self._generate_simple_sampling_configs(
+                simple_sampling, level, max_level, repeats, max_repeats, run_cfg
+            )
+        else:
+            # Default behavior - single run if no max values, otherwise repeats first
+            if max_level is None and max_repeats is None:
+                # Single run
+                default_strategy = SimpleSamplingStrategy.SINGLE
+            else:
+                # Progressive sampling with repeats first as default
+                default_strategy = SimpleSamplingStrategy.REPEATS_FIRST
+
+            sampling_configs = self._generate_simple_sampling_configs(
+                default_strategy, level, max_level, repeats, max_repeats, run_cfg
             )
 
         if run_cfg is None:
             run_cfg = deepcopy(self.run_cfg)
         run_cfg = BenchRunner.setup_run_cfg(run_cfg, cache_results=cache_results)
-
-        # Generate configurations based on sampling strategy
-        sampling_configs = sampling_strategy.generate_configs(run_cfg)
 
         # Execute benchmark with each configuration
         for config_idx, sample_cfg in enumerate(sampling_configs):
@@ -440,28 +446,124 @@ class BenchRunner:
         while self.servers:
             self.servers.pop().stop()
 
-    def _create_sampling_strategy_from_params(
-        self, level: int, max_level: int, repeats: int, max_repeats: int
-    ) -> SamplingStrategy:
-        """Create sampling strategy from current parameters."""
-        # Use instance strategy if available
-        if hasattr(self, "sampling_strategy") and self.sampling_strategy is not None:
-            return self.sampling_strategy
+    def _generate_simple_sampling_configs(
+        self, strategy, level, max_level, repeats, max_repeats, run_cfg
+    ):
+        """Generate configs based on simple sampling strategy enum."""
+        from copy import deepcopy
+        from itertools import product
 
-        # Determine if this is a single run or progressive sampling
-        if max_level is None and max_repeats is None:
-            # Single run - use current level and repeats
-            return single_run(level=level, repeats=repeats)
-        else:
-            # Progressive sampling - use repeats_first as default progression
-            final_max_level = max_level if max_level is not None else level
-            final_max_repeats = max_repeats if max_repeats is not None else repeats
-            return repeats_first(
-                min_level=level,
-                max_level=final_max_level,
-                min_repeats=repeats,
-                max_repeats=final_max_repeats,
-            )
+        # Determine actual ranges
+        min_level = level
+        final_max_level = max_level if max_level is not None else level
+        min_repeats = repeats
+        final_max_repeats = max_repeats if max_repeats is not None else repeats
+
+        if run_cfg is None:
+            run_cfg = deepcopy(self.run_cfg)
+
+        if strategy == SimpleSamplingStrategy.SINGLE:
+            # Single run with specified values
+            cfg = deepcopy(run_cfg)
+            cfg.level = min_level
+            cfg.repeats = min_repeats
+            return [cfg]
+
+        # Generate all combinations
+        levels = list(range(min_level, final_max_level + 1))
+        repeat_counts = list(range(min_repeats, final_max_repeats + 1))
+
+        configs = []
+
+        if strategy == SimpleSamplingStrategy.REPEATS_FIRST:
+            # Exhaust repeats before increasing level
+            for current_level in levels:
+                for current_repeats in repeat_counts:
+                    cfg = deepcopy(run_cfg)
+                    cfg.level = current_level
+                    cfg.repeats = current_repeats
+                    configs.append(cfg)
+
+        elif strategy == SimpleSamplingStrategy.LEVEL_FIRST:
+            # Exhaust levels before increasing repeats
+            for current_repeats in repeat_counts:
+                for current_level in levels:
+                    cfg = deepcopy(run_cfg)
+                    cfg.level = current_level
+                    cfg.repeats = current_repeats
+                    configs.append(cfg)
+
+        elif strategy == SimpleSamplingStrategy.ALTERNATING:
+            # Alternate between increasing repeats and levels
+            level_idx = 0
+            repeat_idx = 0
+            increase_level_next = True
+
+            # Start with minimum values
+            cfg = deepcopy(run_cfg)
+            cfg.level = levels[level_idx]
+            cfg.repeats = repeat_counts[repeat_idx]
+            configs.append(cfg)
+
+            # Alternate increases
+            max_level_idx = len(levels) - 1
+            max_repeat_idx = len(repeat_counts) - 1
+
+            while level_idx < max_level_idx or repeat_idx < max_repeat_idx:
+                if increase_level_next and level_idx < max_level_idx:
+                    level_idx += 1
+                elif repeat_idx < max_repeat_idx:
+                    repeat_idx += 1
+                elif level_idx < max_level_idx:
+                    level_idx += 1
+
+                cfg = deepcopy(run_cfg)
+                cfg.level = levels[level_idx]
+                cfg.repeats = repeat_counts[repeat_idx]
+                configs.append(cfg)
+
+                increase_level_next = not increase_level_next
+
+        elif strategy == SimpleSamplingStrategy.BALANCED:
+            # Smart progression for time/accuracy balance
+            cfg = deepcopy(run_cfg)
+            cfg.level = min_level
+            cfg.repeats = min_repeats
+            configs.append(cfg)
+
+            # Add strategic intermediate points if ranges are large enough
+            if len(levels) > 2:
+                mid_level = levels[len(levels) // 2]
+                cfg = deepcopy(run_cfg)
+                cfg.level = mid_level
+                cfg.repeats = min_repeats
+                configs.append(cfg)
+
+            if len(repeat_counts) > 2:
+                mid_repeats = repeat_counts[len(repeat_counts) // 2]
+                cfg = deepcopy(run_cfg)
+                cfg.level = min_level
+                cfg.repeats = mid_repeats
+                configs.append(cfg)
+
+            # Fill in remaining with repeats-first ordering
+            remaining = set(product(repeat_counts, levels)) - {(min_repeats, min_level)}
+            if len(levels) > 2:
+                remaining = remaining - {(min_repeats, levels[len(levels) // 2])}
+            if len(repeat_counts) > 2:
+                remaining = remaining - {(repeat_counts[len(repeat_counts) // 2], min_level)}
+
+            sorted_remaining = sorted(
+                remaining, key=lambda x: (x[1], x[0])
+            )  # level first, then repeat
+
+            for current_repeats, current_level in sorted_remaining:
+                cfg = deepcopy(run_cfg)
+                cfg.level = current_level
+                cfg.repeats = current_repeats
+                configs.append(cfg)
+
+        return configs
 
     def _run_enhanced_benchmark(
         self,
@@ -481,152 +583,6 @@ class BenchRunner:
         except TypeError:
             # Fall back to legacy signature
             return bch_fn(run_cfg, report)
-
-    def set_sampling_strategy(self, strategy: SamplingStrategy) -> None:
-        """Set the sampling strategy for this runner."""
-        self.sampling_strategy = strategy
-
-    def run_single(
-        self,
-        level: int = 2,
-        repeats: int = 1,
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-        **kwargs,
-    ) -> List[BenchCfg]:
-        """Convenience method for single benchmark run."""
-        strategy = single_run(level=level, repeats=repeats, **kwargs)
-        return self.run(
-            sampling_strategy=strategy,
-            input_vars=input_vars,
-            result_vars=result_vars,
-            const_vars=const_vars,
-            title=title,
-            description=description,
-        )
-
-    def run_progressive(
-        self,
-        level: int = 2,
-        max_level: int = 6,
-        mode: str = "repeats_first",
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-        **kwargs,
-    ) -> List[BenchCfg]:
-        """Convenience method for progressive sampling."""
-        if mode == "repeats_first":
-            strategy = repeats_first(level=level, max_level=max_level, **kwargs)
-        elif mode == "level_first":
-            strategy = level_first(level=level, max_level=max_level, **kwargs)
-        elif mode == "alternating":
-            strategy = alternating(level=level, max_level=max_level, **kwargs)
-        else:
-            raise ValueError(
-                f"Unknown sampling mode: {mode}. Available modes: repeats_first, level_first, alternating"
-            )
-
-        return self.run(
-            sampling_strategy=strategy,
-            input_vars=input_vars,
-            result_vars=result_vars,
-            const_vars=const_vars,
-            title=title,
-            description=description,
-        )
-
-    def run_repeats_first(
-        self,
-        level: int = 2,
-        max_level: int = 6,
-        repeats: int = 1,
-        max_repeats: int = 5,
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-    ) -> List[BenchCfg]:
-        """Convenience method for repeats-first sampling strategy.
-
-        This strategy increases repeats to maximum before increasing level.
-        Good for getting statistical confidence at lower fidelity first.
-        """
-        strategy = repeats_first(
-            level=level, max_level=max_level, repeats=repeats, max_repeats=max_repeats
-        )
-        return self.run(
-            sampling_strategy=strategy,
-            input_vars=input_vars,
-            result_vars=result_vars,
-            const_vars=const_vars,
-            title=title,
-            description=description,
-        )
-
-    def run_level_first(
-        self,
-        level: int = 2,
-        max_level: int = 6,
-        repeats: int = 1,
-        max_repeats: int = 5,
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-    ) -> List[BenchCfg]:
-        """Convenience method for level-first sampling strategy.
-
-        This strategy increases level to maximum before increasing repeats.
-        Good for exploring the full parameter space quickly.
-        """
-        strategy = level_first(
-            level=level, max_level=max_level, repeats=repeats, max_repeats=max_repeats
-        )
-        return self.run(
-            sampling_strategy=strategy,
-            input_vars=input_vars,
-            result_vars=result_vars,
-            const_vars=const_vars,
-            title=title,
-            description=description,
-        )
-
-    def run_alternating(
-        self,
-        level: int = 2,
-        max_level: int = 6,
-        repeats: int = 1,
-        max_repeats: int = 5,
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-    ) -> List[BenchCfg]:
-        """Convenience method for alternating sampling strategy.
-
-        This strategy alternates between increasing repeats and level.
-        Good for balanced exploration of both dimensions.
-        """
-        strategy = alternating(
-            level=level, max_level=max_level, repeats=repeats, max_repeats=max_repeats
-        )
-        return self.run(
-            sampling_strategy=strategy,
-            input_vars=input_vars,
-            result_vars=result_vars,
-            const_vars=const_vars,
-            title=title,
-            description=description,
-        )
 
     def __del__(self) -> None:
         """Destructor that ensures proper cleanup of resources.
