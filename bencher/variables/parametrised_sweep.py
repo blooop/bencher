@@ -213,3 +213,29 @@ class ParametrizedSweep(Parameterized):
             name = self.name[:-5]  # param adds 5 digit number to the end, so remove it
 
         return Bench(name, self, run_cfg=run_cfg, report=report)
+
+    def to_bench_runner(self, run_cfg: BenchRunCfg = None, name: str = None):
+        """Create a BenchRunner instance from this ParametrizedSweep.
+        
+        This enables fluent chaining like:
+        MyConfig().to_bench_runner().add_run(func).run(level=2, max_level=4)
+        
+        Args:
+            run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to None.
+            name (str, optional): Name for the BenchRunner. If None, auto-generates. Defaults to None.
+            
+        Returns:
+            BenchRunner: A BenchRunner instance with this ParametrizedSweep already added
+        """
+        from bencher.bench_runner import BenchRunner
+        
+        if run_cfg is None:
+            from bencher.bench_cfg import BenchRunCfg
+            run_cfg = BenchRunCfg()
+            
+        if name is None:
+            # Create BenchRunner with auto-generated name
+            return BenchRunner(self, run_cfg=run_cfg)
+        else:
+            # Create BenchRunner with specified name
+            return BenchRunner(name, self, run_cfg=run_cfg)
