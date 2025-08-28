@@ -13,6 +13,11 @@ class SamplingMode(Enum):
     REPEATS_FIRST = auto()  # Increase repeats to max before increasing level
     LEVEL_FIRST = auto()  # Increase level to max before increasing repeats
     ALTERNATING = auto()  # Alternate between increasing repeats and level
+    
+    # Function interleaving modes
+    FUNCTIONS_PARALLEL = auto()  # Run all functions at same level/repeat, then advance together
+    FUNCTIONS_SEQUENTIAL = auto()  # Complete one function fully before starting next
+    FUNCTIONS_ROUND_ROBIN = auto()  # Alternate between functions at each level/repeat increment
 
 
 class SamplingStrategy(ABC):
@@ -149,6 +154,87 @@ class AlternatingStrategy(SamplingStrategy):
             configs.append(cfg)
             
             increase_level_next = not increase_level_next
+        
+        return configs
+
+
+class FunctionsParallelStrategy(SamplingStrategy):
+    """Strategy that runs all functions at same level/repeat, then advances together."""
+    
+    def __init__(self, level: int = 2, max_level: int = 6,
+                 repeats: int = 1, max_repeats: int = 5):
+        super().__init__(SamplingMode.FUNCTIONS_PARALLEL)
+        self.level = level
+        self.max_level = max_level
+        self.repeats = repeats
+        self.max_repeats = max_repeats
+    
+    def generate_configs(self, base_cfg: BenchRunCfg) -> List[BenchRunCfg]:
+        """Generate configs where all functions run at same level/repeat before advancing."""
+        from copy import deepcopy
+        configs = []
+        
+        for current_level in range(self.level, self.max_level + 1):
+            for current_repeats in range(self.repeats, self.max_repeats + 1):
+                cfg = deepcopy(base_cfg)
+                cfg.level = current_level
+                cfg.repeats = current_repeats
+                cfg.interleaving_mode = "parallel"  # All functions at this level/repeat
+                configs.append(cfg)
+        
+        return configs
+
+
+class FunctionsSequentialStrategy(SamplingStrategy):
+    """Strategy that completes one function fully before starting the next."""
+    
+    def __init__(self, level: int = 2, max_level: int = 6,
+                 repeats: int = 1, max_repeats: int = 5):
+        super().__init__(SamplingMode.FUNCTIONS_SEQUENTIAL)
+        self.level = level
+        self.max_level = max_level
+        self.repeats = repeats
+        self.max_repeats = max_repeats
+    
+    def generate_configs(self, base_cfg: BenchRunCfg) -> List[BenchRunCfg]:
+        """Generate configs where each function completes fully before next starts."""
+        from copy import deepcopy
+        configs = []
+        
+        for current_level in range(self.level, self.max_level + 1):
+            for current_repeats in range(self.repeats, self.max_repeats + 1):
+                cfg = deepcopy(base_cfg)
+                cfg.level = current_level
+                cfg.repeats = current_repeats
+                cfg.interleaving_mode = "sequential"  # One function at a time
+                configs.append(cfg)
+        
+        return configs
+
+
+class FunctionsRoundRobinStrategy(SamplingStrategy):
+    """Strategy that alternates between functions at each level/repeat increment."""
+    
+    def __init__(self, level: int = 2, max_level: int = 6,
+                 repeats: int = 1, max_repeats: int = 5):
+        super().__init__(SamplingMode.FUNCTIONS_ROUND_ROBIN)
+        self.level = level
+        self.max_level = max_level
+        self.repeats = repeats
+        self.max_repeats = max_repeats
+    
+    def generate_configs(self, base_cfg: BenchRunCfg) -> List[BenchRunCfg]:
+        """Generate configs alternating between functions at each increment."""
+        from copy import deepcopy
+        configs = []
+        
+        for current_level in range(self.level, self.max_level + 1):
+            for current_repeats in range(self.repeats, self.max_repeats + 1):
+                cfg = deepcopy(base_cfg)
+                cfg.level = current_level
+                cfg.repeats = current_repeats
+                cfg.interleaving_mode = "round_robin"  # Alternate functions
+                configs.append(cfg)
         
         return configs
 
