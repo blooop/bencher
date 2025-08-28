@@ -6,17 +6,14 @@ from enum import Enum
 class SamplingStrategy(Enum):
     """Simple enum for sampling strategies - perfect for autocomplete!
 
-    Each strategy defines the ORDER of iteration through (repeat, level) combinations.
+    Each strategy defines the ORDER of iteration through (repeats, levels, benchmarks) combinations.
     The actual values come from the run() method parameters.
     """
 
-    # Single run strategies
-    SINGLE = "single"  # Just one run with specified level/repeats
-
-    # Progressive strategies (most common)
-    REPEATS_FIRST = "repeats_first"  # Exhaust repeats before increasing level
-    LEVEL_FIRST = "level_first"  # Exhaust levels before increasing repeats
-    ALTERNATING = "alternating"  # Alternate between repeat and level increases
-
-    # Balanced strategy
-    BALANCED = "balanced"  # Smart progression balancing time vs accuracy
+    # All possible orderings of (repeats, levels, benchmarks)
+    REPEATS_LEVELS_BENCHMARKS = "repeats,levels,benchmarks"  # Vary repeats first, then levels, then benchmarks
+    REPEATS_BENCHMARKS_LEVELS = "repeats,benchmarks,levels"  # Vary repeats first, then benchmarks, then levels
+    LEVELS_REPEATS_BENCHMARKS = "levels,repeats,benchmarks"  # Vary levels first, then repeats, then benchmarks  
+    LEVELS_BENCHMARKS_REPEATS = "levels,benchmarks,repeats"  # Vary levels first, then benchmarks, then repeats
+    BENCHMARKS_REPEATS_LEVELS = "benchmarks,repeats,levels"  # Vary benchmarks first, then repeats, then levels
+    BENCHMARKS_LEVELS_REPEATS = "benchmarks,levels,repeats"  # Vary benchmarks first, then levels, then repeats

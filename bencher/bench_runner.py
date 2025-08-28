@@ -253,11 +253,12 @@ class BenchRunner:
 
             # Simple sampling strategy (RECOMMENDED - easy autocomplete!)
             simple_sampling (SimpleSamplingStrategy, optional): Choose from autocomplete-friendly enum:
-                - SimpleSamplingStrategy.SINGLE: Single run with specified level/repeats
-                - SimpleSamplingStrategy.REPEATS_FIRST: Exhaust repeats before increasing level
-                - SimpleSamplingStrategy.LEVEL_FIRST: Exhaust levels before increasing repeats
-                - SimpleSamplingStrategy.ALTERNATING: Alternate between repeat/level increases
-                - SimpleSamplingStrategy.BALANCED: Smart progression for time/accuracy balance
+                - SimpleSamplingStrategy.REPEATS_LEVELS_BENCHMARKS: Vary repeats first, then levels, then benchmarks
+                - SimpleSamplingStrategy.REPEATS_BENCHMARKS_LEVELS: Vary repeats first, then benchmarks, then levels
+                - SimpleSamplingStrategy.LEVELS_REPEATS_BENCHMARKS: Vary levels first, then repeats, then benchmarks
+                - SimpleSamplingStrategy.LEVELS_BENCHMARKS_REPEATS: Vary levels first, then benchmarks, then repeats
+                - SimpleSamplingStrategy.BENCHMARKS_REPEATS_LEVELS: Vary benchmarks first, then repeats, then levels
+                - SimpleSamplingStrategy.BENCHMARKS_LEVELS_REPEATS: Vary benchmarks first, then levels, then repeats
                 Uses existing level/max_level and repeats/max_repeats parameters for values.
 
             # Legacy parameters (deprecated - use level/max_level instead)
@@ -310,13 +311,8 @@ class BenchRunner:
                 simple_sampling, level, max_level, repeats, max_repeats, run_cfg
             )
         else:
-            # Default behavior - single run if no max values, otherwise repeats first
-            if max_level is None and max_repeats is None:
-                # Single run
-                default_strategy = SimpleSamplingStrategy.SINGLE
-            else:
-                # Progressive sampling with repeats first as default
-                default_strategy = SimpleSamplingStrategy.REPEATS_FIRST
+            # Default behavior - use repeats,levels,benchmarks ordering
+            default_strategy = SimpleSamplingStrategy.REPEATS_LEVELS_BENCHMARKS
 
             sampling_configs = self._generate_simple_sampling_configs(
                 default_strategy, level, max_level, repeats, max_repeats, run_cfg
@@ -331,7 +327,16 @@ class BenchRunner:
             if grouped:
                 report_level = BenchReport(f"{sample_cfg.run_tag}_{self.name}")
 
-            for bch_fn in self.bench_fns:
+            # Check if config specifies which benchmark to run (for simple_sampling strategies that include benchmark ordering)
+            if hasattr(sample_cfg, '_benchmark_idx'):
+                # Config specifies which benchmark to run
+                bch_fn = self.bench_fns[sample_cfg._benchmark_idx]
+                bench_functions = [bch_fn]
+            else:
+                # Run all benchmark functions (legacy behavior)
+                bench_functions = self.bench_fns
+
+            for bch_fn in bench_functions:
                 logging.info(
                     f"Running {bch_fn} at level: {sample_cfg.level} with repeats: {sample_cfg.repeats} (config {config_idx + 1}/{len(sampling_configs)})"
                 )
@@ -451,7 +456,6 @@ class BenchRunner:
     ):
         """Generate configs based on simple sampling strategy enum."""
         from copy import deepcopy
-        from itertools import product
 
         # Determine actual ranges
         min_level = level
@@ -462,106 +466,82 @@ class BenchRunner:
         if run_cfg is None:
             run_cfg = deepcopy(self.run_cfg)
 
-        if strategy == SimpleSamplingStrategy.SINGLE:
-            # Single run with specified values
-            cfg = deepcopy(run_cfg)
-            cfg.level = min_level
-            cfg.repeats = min_repeats
-            return [cfg]
-
         # Generate all combinations
         levels = list(range(min_level, final_max_level + 1))
         repeat_counts = list(range(min_repeats, final_max_repeats + 1))
+        benchmarks = list(range(len(self.bench_fns)))  # Benchmark indices
 
         configs = []
 
-        if strategy == SimpleSamplingStrategy.REPEATS_FIRST:
-            # Exhaust repeats before increasing level
-            for current_level in levels:
-                for current_repeats in repeat_counts:
-                    cfg = deepcopy(run_cfg)
-                    cfg.level = current_level
-                    cfg.repeats = current_repeats
-                    configs.append(cfg)
-
-        elif strategy == SimpleSamplingStrategy.LEVEL_FIRST:
-            # Exhaust levels before increasing repeats
+        # Handle ordering strategies based on enum value
+        if strategy.value.startswith("repeats,levels,benchmarks"):
+            # Order: repeats -> levels -> benchmarks  
             for current_repeats in repeat_counts:
                 for current_level in levels:
-                    cfg = deepcopy(run_cfg)
-                    cfg.level = current_level
-                    cfg.repeats = current_repeats
-                    configs.append(cfg)
+                    for bench_idx in benchmarks:
+                        cfg = deepcopy(run_cfg)
+                        cfg.level = current_level
+                        cfg.repeats = current_repeats
+                        cfg._benchmark_idx = bench_idx  # Store which benchmark to run
+                        configs.append(cfg)
 
-        elif strategy == SimpleSamplingStrategy.ALTERNATING:
-            # Alternate between increasing repeats and levels
-            level_idx = 0
-            repeat_idx = 0
-            increase_level_next = True
+        elif strategy.value.startswith("repeats,benchmarks,levels"):
+            # Order: repeats -> benchmarks -> levels
+            for current_repeats in repeat_counts:
+                for bench_idx in benchmarks:
+                    for current_level in levels:
+                        cfg = deepcopy(run_cfg)
+                        cfg.level = current_level
+                        cfg.repeats = current_repeats
+                        cfg._benchmark_idx = bench_idx
+                        configs.append(cfg)
 
-            # Start with minimum values
-            cfg = deepcopy(run_cfg)
-            cfg.level = levels[level_idx]
-            cfg.repeats = repeat_counts[repeat_idx]
-            configs.append(cfg)
+        elif strategy.value.startswith("levels,repeats,benchmarks"):
+            # Order: levels -> repeats -> benchmarks
+            for current_level in levels:
+                for current_repeats in repeat_counts:
+                    for bench_idx in benchmarks:
+                        cfg = deepcopy(run_cfg)
+                        cfg.level = current_level
+                        cfg.repeats = current_repeats
+                        cfg._benchmark_idx = bench_idx
+                        configs.append(cfg)
 
-            # Alternate increases
-            max_level_idx = len(levels) - 1
-            max_repeat_idx = len(repeat_counts) - 1
+        elif strategy.value.startswith("levels,benchmarks,repeats"):
+            # Order: levels -> benchmarks -> repeats  
+            for current_level in levels:
+                for bench_idx in benchmarks:
+                    for current_repeats in repeat_counts:
+                        cfg = deepcopy(run_cfg)
+                        cfg.level = current_level
+                        cfg.repeats = current_repeats
+                        cfg._benchmark_idx = bench_idx
+                        configs.append(cfg)
 
-            while level_idx < max_level_idx or repeat_idx < max_repeat_idx:
-                if increase_level_next and level_idx < max_level_idx:
-                    level_idx += 1
-                elif repeat_idx < max_repeat_idx:
-                    repeat_idx += 1
-                elif level_idx < max_level_idx:
-                    level_idx += 1
+        elif strategy.value.startswith("benchmarks,repeats,levels"):
+            # Order: benchmarks -> repeats -> levels
+            for bench_idx in benchmarks:
+                for current_repeats in repeat_counts:
+                    for current_level in levels:
+                        cfg = deepcopy(run_cfg)
+                        cfg.level = current_level
+                        cfg.repeats = current_repeats
+                        cfg._benchmark_idx = bench_idx
+                        configs.append(cfg)
 
-                cfg = deepcopy(run_cfg)
-                cfg.level = levels[level_idx]
-                cfg.repeats = repeat_counts[repeat_idx]
-                configs.append(cfg)
+        elif strategy.value.startswith("benchmarks,levels,repeats"):
+            # Order: benchmarks -> levels -> repeats
+            for bench_idx in benchmarks:
+                for current_level in levels:
+                    for current_repeats in repeat_counts:
+                        cfg = deepcopy(run_cfg)
+                        cfg.level = current_level
+                        cfg.repeats = current_repeats
+                        cfg._benchmark_idx = bench_idx
+                        configs.append(cfg)
 
-                increase_level_next = not increase_level_next
-
-        elif strategy == SimpleSamplingStrategy.BALANCED:
-            # Smart progression for time/accuracy balance
-            cfg = deepcopy(run_cfg)
-            cfg.level = min_level
-            cfg.repeats = min_repeats
-            configs.append(cfg)
-
-            # Add strategic intermediate points if ranges are large enough
-            if len(levels) > 2:
-                mid_level = levels[len(levels) // 2]
-                cfg = deepcopy(run_cfg)
-                cfg.level = mid_level
-                cfg.repeats = min_repeats
-                configs.append(cfg)
-
-            if len(repeat_counts) > 2:
-                mid_repeats = repeat_counts[len(repeat_counts) // 2]
-                cfg = deepcopy(run_cfg)
-                cfg.level = min_level
-                cfg.repeats = mid_repeats
-                configs.append(cfg)
-
-            # Fill in remaining with repeats-first ordering
-            remaining = set(product(repeat_counts, levels)) - {(min_repeats, min_level)}
-            if len(levels) > 2:
-                remaining = remaining - {(min_repeats, levels[len(levels) // 2])}
-            if len(repeat_counts) > 2:
-                remaining = remaining - {(repeat_counts[len(repeat_counts) // 2], min_level)}
-
-            sorted_remaining = sorted(
-                remaining, key=lambda x: (x[1], x[0])
-            )  # level first, then repeat
-
-            for current_repeats, current_level in sorted_remaining:
-                cfg = deepcopy(run_cfg)
-                cfg.level = current_level
-                cfg.repeats = current_repeats
-                configs.append(cfg)
+        else:
+            raise ValueError(f"Unknown sampling strategy: {strategy}")
 
         return configs
 
