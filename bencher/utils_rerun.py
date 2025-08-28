@@ -9,7 +9,7 @@ def rrd_to_pane(
     url: str, width: int = 500, height: int = 600, version: str = None
 ):  # pragma: no cover
     if version is None:
-        version = "0.20.1"  # TODO find a better way of doing this
+        version = rr.__version__
     return pn.pane.HTML(
         f'<iframe src="https://app.rerun.io/version/{version}/?url={url}" width={width} height={height}></iframe>'
     )
