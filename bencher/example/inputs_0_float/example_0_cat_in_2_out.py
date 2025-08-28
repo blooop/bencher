@@ -63,9 +63,6 @@ def example_0_cat_in_2_out(
         bch.Bench: The benchmark object
     """
 
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 100  # More repeats to show distribution
     bench = PythonOperations0CatBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
         title="Python List Read Operation Performance (Fixed Inputs)",
@@ -85,4 +82,5 @@ def example_0_cat_in_2_out(
 
 
 if __name__ == "__main__":
-    example_0_cat_in_2_out().report.show()
+    br = bch.BenchRunner()
+    br.add(example_0_cat_in_2_out).run(repeats=100, show=True)
