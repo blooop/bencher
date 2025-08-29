@@ -127,7 +127,7 @@ class OptunaResult(BenchResultBase):
                     # Handle boolean values that may have been converted to strings
                     val = row[1][i.name]
                     if isinstance(val, str):
-                        params[i.name] = val.lower() == 'true'
+                        params[i.name] = val.lower() == "true"
                     else:
                         params[i.name] = bool(val)
                 else:
