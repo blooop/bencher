@@ -27,4 +27,5 @@ def example_simple_float(
 
 
 if __name__ == "__main__":
-    example_simple_float().report.show()
+    br = bch.BenchRunner()
+    br.add(example_simple_float).run(show=True)
