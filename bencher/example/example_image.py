@@ -141,7 +141,7 @@ if __name__ == "__main__":
     br = bch.BenchRunner()
     br.add(simple)
     br.add(example_image_vid)
-    br.run(repeats=5, show=True)
+    br.run(repeats=5, max_repeats=7, show=True)
 
     # br.show()
 

@@ -1,4 +1,4 @@
-from typing import Protocol, Callable, List, Union, Dict, Any, Optional
+from typing import Protocol, Callable, List
 import logging
 import warnings
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
@@ -6,6 +6,14 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg
 from bencher.simple_sampling import SamplingStrategy as SimpleSamplingStrategy
+from bencher.sampling_strategy import (
+    REPEATS_LEVELS_BENCHMARKS,
+    REPEATS_BENCHMARKS_LEVELS,
+    LEVELS_REPEATS_BENCHMARKS,
+    LEVELS_BENCHMARKS_REPEATS,
+    BENCHMARKS_REPEATS_LEVELS,
+    BENCHMARKS_LEVELS_REPEATS,
+)
 from copy import deepcopy
 
 
@@ -216,6 +224,8 @@ class BenchRunner:
         repeats: int = 1,
         max_level: int = None,
         max_repeats: int = None,
+        # Modern simple sampling strategy
+        sampling=None,
         # Simple sampling strategy (autocomplete-friendly!)
         simple_sampling: SimpleSamplingStrategy = None,
         # Legacy parameters for backward compatibility (deprecated)
@@ -241,8 +251,8 @@ class BenchRunner:
         This function provides a single entry point for all types of benchmark runs:
         - Single runs: Use level and repeats parameters only
         - Progressive sampling: Set max_level and/or max_repeats for automatic progression
+        - Expressive strategies: Use sampling parameter with composable strategies
         - Simple strategies: Use simple_sampling parameter with autocomplete-friendly enums
-        - Custom strategies: Use sampling_strategy parameter
 
         Args:
             # Primary parameters (starting values)
@@ -251,7 +261,14 @@ class BenchRunner:
             max_level (int, optional): Maximum level for progression. If None, uses single level.
             max_repeats (int, optional): Maximum repeats for progression. If None, uses single repeat count.
 
-            # Simple sampling strategy (RECOMMENDED - easy autocomplete!)
+            # Modern simple sampling (RECOMMENDED!)
+            sampling: Simple sampling strategy. Examples:
+                - REPEATS_LEVELS_BENCHMARKS: Traditional repeats-first ordering
+                - LEVELS_REPEATS_BENCHMARKS: Levels-first ordering
+                - BENCHMARKS_REPEATS_LEVELS: Benchmarks-first ordering
+                - All 6 permutations available
+
+            # Simple sampling strategy (RECOMMENDED for basic use!)
             simple_sampling (SimpleSamplingStrategy, optional): Choose from autocomplete-friendly enum:
                 - SimpleSamplingStrategy.REPEATS_LEVELS_BENCHMARKS: Vary repeats first, then levels, then benchmarks
                 - SimpleSamplingStrategy.REPEATS_BENCHMARKS_LEVELS: Vary repeats first, then benchmarks, then levels
@@ -265,8 +282,6 @@ class BenchRunner:
             min_level (int, optional): DEPRECATED - use 'level' parameter instead.
             start_repeats (int, optional): DEPRECATED - use 'repeats' parameter instead.
 
-            # Advanced parameters (deprecated - use simple_sampling instead)
-            sampling_strategy: Use simple_sampling parameter instead for better UX.
             input_vars (List, optional): Input variables for the benchmark sweep.
             result_vars (List, optional): Result variables to collect.
             const_vars (List, optional): Variables to keep constant.
@@ -304,18 +319,22 @@ class BenchRunner:
             if repeats == 1:  # Only override if repeats is still default
                 repeats = start_repeats
 
-        # Create sampling configs based on simple strategy
-        if simple_sampling is not None:
+        # Create sampling configs based on strategy
+        if sampling is not None:
+            # Use the modern expressive sampling strategy
+            sampling_configs = self._generate_modern_sampling_configs(
+                sampling, level, max_level, repeats, max_repeats, run_cfg
+            )
+        elif simple_sampling is not None:
             # Use the simple sampling strategy enum
             sampling_configs = self._generate_simple_sampling_configs(
                 simple_sampling, level, max_level, repeats, max_repeats, run_cfg
             )
         else:
-            # Default behavior - use repeats,levels,benchmarks ordering
-            default_strategy = SimpleSamplingStrategy.REPEATS_LEVELS_BENCHMARKS
-
-            sampling_configs = self._generate_simple_sampling_configs(
-                default_strategy, level, max_level, repeats, max_repeats, run_cfg
+            # Default behavior - use benchmarks,levels,repeats ordering
+            default_sampling = BENCHMARKS_LEVELS_REPEATS
+            sampling_configs = self._generate_modern_sampling_configs(
+                default_sampling, level, max_level, repeats, max_repeats, run_cfg
             )
 
         if run_cfg is None:
@@ -328,7 +347,7 @@ class BenchRunner:
                 report_level = BenchReport(f"{sample_cfg.run_tag}_{self.name}")
 
             # Check if config specifies which benchmark to run (for simple_sampling strategies that include benchmark ordering)
-            if hasattr(sample_cfg, '_benchmark_idx'):
+            if hasattr(sample_cfg, "_benchmark_idx"):
                 # Config specifies which benchmark to run
                 bch_fn = self.bench_fns[sample_cfg._benchmark_idx]
                 bench_functions = [bch_fn]
@@ -451,11 +470,12 @@ class BenchRunner:
         while self.servers:
             self.servers.pop().stop()
 
-    def _generate_simple_sampling_configs(
-        self, strategy, level, max_level, repeats, max_repeats, run_cfg
+    def _generate_modern_sampling_configs(
+        self, sampling_config, level, max_level, repeats, max_repeats, run_cfg
     ):
-        """Generate configs based on simple sampling strategy enum."""
-        from copy import deepcopy
+        """Generate configs using modern expressive sampling strategy."""
+        if run_cfg is None:
+            run_cfg = deepcopy(self.run_cfg)
 
         # Determine actual ranges
         min_level = level
@@ -463,87 +483,37 @@ class BenchRunner:
         min_repeats = repeats
         final_max_repeats = max_repeats if max_repeats is not None else repeats
 
-        if run_cfg is None:
-            run_cfg = deepcopy(self.run_cfg)
-
-        # Generate all combinations
         levels = list(range(min_level, final_max_level + 1))
         repeat_counts = list(range(min_repeats, final_max_repeats + 1))
-        benchmarks = list(range(len(self.bench_fns)))  # Benchmark indices
+        benchmark_indices = list(range(len(self.bench_fns)))
 
-        configs = []
+        # Use the expressive sampling strategy to generate configs
+        return list(
+            sampling_config.generate_configs(run_cfg, levels, repeat_counts, benchmark_indices)
+        )
 
-        # Handle ordering strategies based on enum value
-        if strategy.value.startswith("repeats,levels,benchmarks"):
-            # Order: repeats -> levels -> benchmarks  
-            for current_repeats in repeat_counts:
-                for current_level in levels:
-                    for bench_idx in benchmarks:
-                        cfg = deepcopy(run_cfg)
-                        cfg.level = current_level
-                        cfg.repeats = current_repeats
-                        cfg._benchmark_idx = bench_idx  # Store which benchmark to run
-                        configs.append(cfg)
+    def _generate_simple_sampling_configs(
+        self, strategy, level, max_level, repeats, max_repeats, run_cfg
+    ):
+        """Generate configs based on simple sampling strategy enum (legacy compatibility)."""
+        # Convert simple enum to modern sampling config for unified handling
+        strategy_map = {
+            SimpleSamplingStrategy.REPEATS_LEVELS_BENCHMARKS: REPEATS_LEVELS_BENCHMARKS,
+            SimpleSamplingStrategy.REPEATS_BENCHMARKS_LEVELS: REPEATS_BENCHMARKS_LEVELS,
+            SimpleSamplingStrategy.LEVELS_REPEATS_BENCHMARKS: LEVELS_REPEATS_BENCHMARKS,
+            SimpleSamplingStrategy.LEVELS_BENCHMARKS_REPEATS: LEVELS_BENCHMARKS_REPEATS,
+            SimpleSamplingStrategy.BENCHMARKS_REPEATS_LEVELS: BENCHMARKS_REPEATS_LEVELS,
+            SimpleSamplingStrategy.BENCHMARKS_LEVELS_REPEATS: BENCHMARKS_LEVELS_REPEATS,
+        }
 
-        elif strategy.value.startswith("repeats,benchmarks,levels"):
-            # Order: repeats -> benchmarks -> levels
-            for current_repeats in repeat_counts:
-                for bench_idx in benchmarks:
-                    for current_level in levels:
-                        cfg = deepcopy(run_cfg)
-                        cfg.level = current_level
-                        cfg.repeats = current_repeats
-                        cfg._benchmark_idx = bench_idx
-                        configs.append(cfg)
+        modern_strategy = strategy_map.get(strategy)
+        if modern_strategy is None:
+            # Fallback for unmapped strategies - use default
+            modern_strategy = BENCHMARKS_LEVELS_REPEATS
 
-        elif strategy.value.startswith("levels,repeats,benchmarks"):
-            # Order: levels -> repeats -> benchmarks
-            for current_level in levels:
-                for current_repeats in repeat_counts:
-                    for bench_idx in benchmarks:
-                        cfg = deepcopy(run_cfg)
-                        cfg.level = current_level
-                        cfg.repeats = current_repeats
-                        cfg._benchmark_idx = bench_idx
-                        configs.append(cfg)
-
-        elif strategy.value.startswith("levels,benchmarks,repeats"):
-            # Order: levels -> benchmarks -> repeats  
-            for current_level in levels:
-                for bench_idx in benchmarks:
-                    for current_repeats in repeat_counts:
-                        cfg = deepcopy(run_cfg)
-                        cfg.level = current_level
-                        cfg.repeats = current_repeats
-                        cfg._benchmark_idx = bench_idx
-                        configs.append(cfg)
-
-        elif strategy.value.startswith("benchmarks,repeats,levels"):
-            # Order: benchmarks -> repeats -> levels
-            for bench_idx in benchmarks:
-                for current_repeats in repeat_counts:
-                    for current_level in levels:
-                        cfg = deepcopy(run_cfg)
-                        cfg.level = current_level
-                        cfg.repeats = current_repeats
-                        cfg._benchmark_idx = bench_idx
-                        configs.append(cfg)
-
-        elif strategy.value.startswith("benchmarks,levels,repeats"):
-            # Order: benchmarks -> levels -> repeats
-            for bench_idx in benchmarks:
-                for current_level in levels:
-                    for current_repeats in repeat_counts:
-                        cfg = deepcopy(run_cfg)
-                        cfg.level = current_level
-                        cfg.repeats = current_repeats
-                        cfg._benchmark_idx = bench_idx
-                        configs.append(cfg)
-
-        else:
-            raise ValueError(f"Unknown sampling strategy: {strategy}")
-
-        return configs
+        return self._generate_modern_sampling_configs(
+            modern_strategy, level, max_level, repeats, max_repeats, run_cfg
+        )
 
     def _run_enhanced_benchmark(
         self,
