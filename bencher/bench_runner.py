@@ -5,44 +5,12 @@ from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg
-
 from copy import deepcopy
 
 
 class Benchable(Protocol):
     def bench(self, run_cfg: BenchRunCfg, report: BenchReport) -> BenchCfg:
         raise NotImplementedError
-
-
-class ParametrizedSweepProvider(Protocol):
-    def get_parametrized_sweep(self) -> ParametrizedSweep:
-        """Return the ParametrizedSweep instance to be benchmarked."""
-        raise NotImplementedError
-
-
-class ReusableParametrizedSweep:
-    """A wrapper that provides a ParametrizedSweep for reuse in benchmarking.
-
-    This class implements the ParametrizedSweepProvider protocol and simply
-    returns the wrapped ParametrizedSweep instance. It can be extended to
-    add caching, modification, or other reuse patterns.
-    """
-
-    def __init__(self, parametrized_sweep: ParametrizedSweep):
-        """Initialize with a ParametrizedSweep to be reused.
-
-        Args:
-            parametrized_sweep (ParametrizedSweep): The sweep instance to wrap and reuse
-        """
-        self._parametrized_sweep = parametrized_sweep
-
-    def get_parametrized_sweep(self) -> ParametrizedSweep:
-        """Return the wrapped ParametrizedSweep instance.
-
-        Returns:
-            ParametrizedSweep: The wrapped sweep instance
-        """
-        return self._parametrized_sweep
 
 
 class BenchRunner:
@@ -55,7 +23,7 @@ class BenchRunner:
 
     def __init__(
         self,
-        name: str | Benchable | ParametrizedSweep | ParametrizedSweepProvider = None,
+        name: str | Benchable,
         bench_class: ParametrizedSweep = None,
         run_cfg: BenchRunCfg = BenchRunCfg(),
         publisher: Callable = None,
@@ -63,59 +31,23 @@ class BenchRunner:
         """Initialize a BenchRunner instance.
 
         Args:
-            name (str | Benchable | ParametrizedSweep | ParametrizedSweepProvider, optional): The name of the benchmark runner,
-                a Benchable object to add, a ParametrizedSweep class to add, or a ParametrizedSweepProvider.
-                If None, auto-generates a name. Used for reports and caching. Defaults to None.
+            name (str): The name of the benchmark runner, used for reports and caching
             bench_class (ParametrizedSweep, optional): An initial benchmark class to add. Defaults to None.
             run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
             publisher (Callable, optional): Function to publish results. Defaults to None.
         """
         self.bench_fns = []
-
-        # Handle name parameter - can be None, string, Benchable, ParametrizedSweep, or ParametrizedSweepProvider
-        if name is None:
-            self.name = self._generate_name()
-        elif isinstance(name, str):
-            self.name = name
-        elif isinstance(name, ParametrizedSweep):
-            # It's a ParametrizedSweep, so shift parameters
-            self.name = self._generate_name()
-            bench_class = name
-        elif hasattr(name, "get_parametrized_sweep"):
-            # It's a ParametrizedSweepProvider
-            self.name = self._generate_name()
-            bench_class = name.get_parametrized_sweep()
-        elif hasattr(name, "bench"):
-            # It's a Benchable object
-            self.name = self._generate_name()
+        if isinstance(name, Callable):
+            self.name = name.__name__
             self.add_run(name)
         else:
-            # Fallback - treat as name
-            self.name = str(name)
+            self.name = name
         self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         self.publisher = publisher
         if bench_class is not None:
             self.add_bench(bench_class)
         self.results = []
         self.servers = []
-
-    def _generate_name(self) -> str:
-        """Generate an auto name for the benchmark runner."""
-        import time
-        import hashlib
-        import random
-
-        # Create a unique name based on timestamp, object id, and random value
-        timestamp = int(time.time() * 1000000)  # microseconds for more precision
-        obj_id = id(self)
-        random_val = random.randint(0, 999999)
-        combined = f"bench_runner_{timestamp}_{obj_id}_{random_val}"
-
-        # Create a short hash for a cleaner name
-        hash_obj = hashlib.md5(combined.encode())
-        short_hash = hash_obj.hexdigest()[:8]
-
-        return f"bench_runner_{short_hash}"
 
     @staticmethod
     def setup_run_cfg(
@@ -175,19 +107,15 @@ class BenchRunner:
         self.add_run(bench_fn)
         return self
 
-    def add_run(self, bench_fn: Benchable) -> "BenchRunner":
+    def add_run(self, bench_fn: Benchable) -> None:
         """Add a benchmark function to be executed by this runner.
 
         Args:
             bench_fn (Benchable): A callable that implements the Benchable protocol
-
-        Returns:
-            BenchRunner: Self for method chaining
         """
         self.bench_fns.append(bench_fn)
-        return self
 
-    def add_bench(self, class_instance: ParametrizedSweep) -> "BenchRunner":
+    def add_bench(self, class_instance: ParametrizedSweep) -> None:
         """Add a parametrized sweep class instance as a benchmark.
 
         Creates and adds a function that will create a Bench instance from the
@@ -195,9 +123,6 @@ class BenchRunner:
 
         Args:
             class_instance (ParametrizedSweep): The parametrized sweep to benchmark
-
-        Returns:
-            BenchRunner: Self for method chaining
         """
 
         def cb(run_cfg: BenchRunCfg, report: BenchReport) -> BenchCfg:
@@ -207,7 +132,6 @@ class BenchRunner:
             return bench.plot_sweep(f"bench_{class_instance.name}")
 
         self.add_run(cb)
-        return self
 
     def run(
         self,
@@ -216,19 +140,10 @@ class BenchRunner:
         repeats: int = 1,
         max_level: int = None,
         max_repeats: int = None,
-        # Modern simple sampling strategy
-        sampling=None,
-        # Simple sampling strategy (autocomplete-friendly!)
         # Legacy parameters for backward compatibility (deprecated)
         min_level: int = None,
         start_repeats: int = None,
         # Other parameters
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-        # Execution parameters
         run_cfg: BenchRunCfg = None,
         publish: bool = False,
         debug: bool = False,
@@ -237,17 +152,15 @@ class BenchRunner:
         grouped: bool = True,
         cache_results: bool = True,
     ) -> List[BenchCfg]:
-        """Unified interface for running benchmarks with flexible sampling strategies.
+        """Unified interface for running benchmarks.
 
-        This function provides a single entry point for all types of benchmark runs:
+        This function provides a single entry point for benchmark runs:
         - Single runs: Use level and repeats parameters only
-        - Progressive sampling: Set max_level and/or max_repeats for automatic progression
-        - Expressive strategies: Use sampling parameter with composable strategies
-        - Simple strategies: Use simple_sampling parameter with autocomplete-friendly enums
+        - Progressive runs: Set max_level and/or max_repeats for automatic progression
 
         Args:
             # Primary parameters (starting values)
-            level (int): Starting sampling level. Defaults to 2.
+            level (int): Starting benchmark level. Defaults to 2.
             repeats (int): Starting number of repeats. Defaults to 1.
             max_level (int, optional): Maximum level for progression. If None, uses single level.
             max_repeats (int, optional): Maximum repeats for progression. If None, uses single repeat count.
@@ -256,20 +169,13 @@ class BenchRunner:
             min_level (int, optional): DEPRECATED - use 'level' parameter instead.
             start_repeats (int, optional): DEPRECATED - use 'repeats' parameter instead.
 
-            input_vars (List, optional): Input variables for the benchmark sweep.
-            result_vars (List, optional): Result variables to collect.
-            const_vars (List, optional): Variables to keep constant.
-            title (str, optional): Title for the benchmark.
-            description (str, optional): Description for the benchmark.
-
-            # Execution parameters
-            run_cfg (BenchRunCfg, optional): Benchmark run configuration.
-            publish (bool, optional): Publish results. Defaults to False.
-            debug (bool, optional): Enable debug output. Defaults to False.
-            show (bool, optional): Show results in browser. Defaults to False.
-            save (bool, optional): Save results to disk. Defaults to False.
-            grouped (bool, optional): Group results in single page. Defaults to True.
-            cache_results (bool, optional): Use sample cache. Defaults to True.
+            run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
+            publish (bool, optional): Publish the results to git, requires a publish url to be set up. Defaults to False.
+            debug (bool, optional): Enable debug output during publishing. Defaults to False.
+            show (bool, optional): show the results in the local web browser. Defaults to False.
+            save (bool, optional): save the results to disk in index.html. Defaults to False.
+            grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to True.
+            cache_results (bool, optional): Use the sample cache to reused previous results. Defaults to True.
 
         Returns:
             List[BenchCfg]: A list of benchmark configuration objects with results
@@ -297,69 +203,33 @@ class BenchRunner:
             run_cfg = deepcopy(self.run_cfg)
         run_cfg = BenchRunner.setup_run_cfg(run_cfg, cache_results=cache_results)
 
-        # Execute benchmark with each configuration
-        for config_idx, sample_cfg in enumerate(sampling_configs):
-            if grouped:
-                report_level = BenchReport(f"{sample_cfg.run_tag}_{self.name}")
+        # Set up level and repeat ranges
+        min_level = level
+        final_max_level = max_level if max_level is not None else level
+        min_repeats = repeats
+        final_max_repeats = max_repeats if max_repeats is not None else repeats
 
-            # Check if config specifies which benchmark to run (for simple_sampling strategies that include benchmark ordering)
-            if hasattr(sample_cfg, "_benchmark_idx"):
-                # Config specifies which benchmark to run
-                bch_fn = self.bench_fns[sample_cfg._benchmark_idx]  # pylint: disable=protected-access
-                bench_functions = [bch_fn]
-            else:
-                # Run all benchmark functions (legacy behavior)
-                bench_functions = self.bench_fns
-
-            for bch_fn in bench_functions:
-                logging.info(
-                    f"Running {bch_fn} at level: {sample_cfg.level} with repeats: {sample_cfg.repeats} (config {config_idx + 1}/{len(sampling_configs)})"
-                )
-
+        for r in range(min_repeats, final_max_repeats + 1):
+            for lvl in range(min_level, final_max_level + 1):
                 if grouped:
-                    if hasattr(bch_fn, "__code__") and len(bch_fn.__code__.co_varnames) > 2:
-                        # Enhanced benchmark function that can accept additional parameters
-                        res = self._run_enhanced_benchmark(
-                            bch_fn,
-                            sample_cfg,
-                            report_level,
-                            input_vars,
-                            result_vars,
-                            const_vars,
-                            title,
-                            description,
-                        )
+                    report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
+
+                for bch_fn in self.bench_fns:
+                    run_lvl = deepcopy(run_cfg)
+                    run_lvl.level = lvl
+                    run_lvl.repeats = r
+                    logging.info(f"Running {bch_fn} at level: {lvl} with repeats:{r}")
+                    if grouped:
+                        res = bch_fn(run_lvl, report_level)
                     else:
-                        # Legacy benchmark function
-                        res = bch_fn(sample_cfg, report_level)
-                else:
-                    if hasattr(bch_fn, "__code__") and len(bch_fn.__code__.co_varnames) > 2:
-                        report = BenchReport()
-                        res = self._run_enhanced_benchmark(
-                            bch_fn,
-                            sample_cfg,
-                            report,
-                            input_vars,
-                            result_vars,
-                            const_vars,
-                            title,
-                            description,
-                        )
+                        res = bch_fn(run_lvl, BenchReport())
                         res.report.bench_name = (
-                            f"{res.report.bench_name}_{bch_fn.__name__}_{sample_cfg.run_tag}"
+                            f"{res.report.bench_name}_{bch_fn.__name__}_{run_cfg.run_tag}"
                         )
-                    else:
-                        res = bch_fn(sample_cfg, BenchReport())
-                        res.report.bench_name = (
-                            f"{res.report.bench_name}_{bch_fn.__name__}_{sample_cfg.run_tag}"
-                        )
-                    self.show_publish(res.report, show, publish, save, debug)
-
-                self.results.append(res)
-
-            if grouped:
-                self.show_publish(report_level, show, publish, save, debug)
-
+                        self.show_publish(res.report, show, publish, save, debug)
+                    self.results.append(res)
+                if grouped:
+                    self.show_publish(report_level, show, publish, save, debug)
         return self.results
 
     def show_publish(
@@ -426,25 +296,6 @@ class BenchRunner:
         while self.servers:
             self.servers.pop().stop()
 
-    def _run_enhanced_benchmark(
-        self,
-        bch_fn: Callable,
-        run_cfg: BenchRunCfg,
-        report: BenchReport,
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-    ) -> BenchCfg:
-        """Run benchmark function with enhanced parameters."""
-        try:
-            # Try to call with enhanced signature
-            return bch_fn(run_cfg, report, input_vars, result_vars, const_vars, title, description)
-        except TypeError:
-            # Fall back to legacy signature
-            return bch_fn(run_cfg, report)
-
     def __del__(self) -> None:
         """Destructor that ensures proper cleanup of resources.
 
@@ -452,70 +303,3 @@ class BenchRunner:
         BenchRunner instance is garbage collected.
         """
         self.shutdown()
-
-    @staticmethod
-    def create_enhanced_benchmark(
-        benchmark_fn: Callable,
-        input_vars: List = None,
-        result_vars: List = None,
-        const_vars: List = None,
-        title: str = None,
-        description: str = None,
-    ) -> Callable:
-        """Create an enhanced benchmark function with predefined parameters.
-
-        Args:
-            benchmark_fn: Base benchmark function
-            input_vars: Default input variables
-            result_vars: Default result variables
-            const_vars: Default constant variables
-            title: Default title
-            description: Default description
-
-        Returns:
-            Enhanced benchmark function that accepts additional parameters
-        """
-
-        def enhanced_benchmark(
-            run_cfg: BenchRunCfg,
-            report: BenchReport,
-            override_input_vars: List = None,
-            override_result_vars: List = None,
-            override_const_vars: List = None,
-            override_title: str = None,
-            override_description: str = None,
-        ) -> BenchCfg:
-            # Use overrides if provided, otherwise use defaults
-            final_input_vars = (
-                override_input_vars if override_input_vars is not None else input_vars
-            )
-            final_result_vars = (
-                override_result_vars if override_result_vars is not None else result_vars
-            )
-            final_const_vars = (
-                override_const_vars if override_const_vars is not None else const_vars
-            )
-            final_title = override_title if override_title is not None else title
-            final_description = (
-                override_description if override_description is not None else description
-            )
-
-            # Create Bench instance and run sweep
-            if hasattr(benchmark_fn, "worker_class_instance"):
-                # Direct Bench instance
-                bench = benchmark_fn
-            else:
-                # Create Bench from function
-                bench_name = final_title or benchmark_fn.__name__
-                bench = Bench(bench_name, benchmark_fn, run_cfg=run_cfg, report=report)
-
-            return bench.plot_sweep(
-                input_vars=final_input_vars,
-                result_vars=final_result_vars,
-                const_vars=final_const_vars,
-                title=final_title,
-                description=final_description,
-                run_cfg=run_cfg,
-            )
-
-        return enhanced_benchmark

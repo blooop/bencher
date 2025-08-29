@@ -1,5 +1,5 @@
 from .bencher import Bench, BenchCfg, BenchRunCfg
-from .bench_runner import BenchRunner, ReusableParametrizedSweep
+from .bench_runner import BenchRunner
 from .example.benchmark_data import (
     ExampleBenchCfgIn,
     ExampleBenchCfgOut,
