@@ -180,7 +180,7 @@ class BenchRunner:
         debug: bool = False,
         show: bool = False,
         save: bool = False,
-        grouped: bool = True,
+        grouped: bool = False,
         cache_results: bool = True,
     ) -> List[BenchCfg]:
         """Unified interface for running benchmarks.
@@ -205,7 +205,7 @@ class BenchRunner:
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
             show (bool, optional): show the results in the local web browser. Defaults to False.
             save (bool, optional): save the results to disk in index.html. Defaults to False.
-            grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to True.
+            grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to False.
             cache_results (bool, optional): Use the sample cache to reused previous results. Defaults to True.
 
         Returns:
