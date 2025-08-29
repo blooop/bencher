@@ -159,7 +159,7 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner = bch.BenchRunner("test_deprecation")
 
         # Very simple function that returns immediately
-        def simple_test(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
+        def simple_test(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:  # pylint: disable=unused-argument
             cfg = bch.BenchCfg()
             cfg.run_cfg = run_cfg
             return cfg
