@@ -29,8 +29,8 @@ class EngineeringDesignProblem(bch.ParametrizedSweep):
     """
 
     # Input design parameters - reduced to just 2
-    material_quality = bch.FloatSweep(
-        default=0.5, bounds=[0.1, 1.0], doc="Quality of the material (dimensionless)", samples=20
+    material_quality = bch.BoolSweep(
+        default=True, doc="Quality of the material (True = high, False = low)"
     )
     thickness = bch.FloatSweep(
         default=0.05, bounds=[0.01, 0.2], doc="Component thickness (m)", samples=20
