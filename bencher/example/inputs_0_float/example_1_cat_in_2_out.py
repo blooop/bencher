@@ -95,4 +95,5 @@ def example_1_cat_in_2_out(
 
 
 if __name__ == "__main__":
-    example_1_cat_in_2_out().report.show()
+    br = bch.BenchRunner()
+    br.add(example_1_cat_in_2_out).run(repeats=5, show=True)
