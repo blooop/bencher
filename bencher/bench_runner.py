@@ -1,6 +1,7 @@
 from typing import Protocol, Callable, List
 import logging
 import warnings
+from datetime import datetime
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
@@ -267,8 +268,6 @@ class BenchRunner:
                         if run_cfg.run_tag:
                             tag_suffix = f"_{run_cfg.run_tag}"
                         else:
-                            from datetime import datetime
-
                             current_date = datetime.now().strftime("%Y-%m-%d")
                             tag_suffix = f"_{current_date}"
                         # Update the report name for saving
