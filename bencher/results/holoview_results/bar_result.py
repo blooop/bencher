@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional
 import panel as pn
 from param import Parameter
+import holoviews as hv
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
 
@@ -96,9 +97,21 @@ class BarResult(HoloviewResult):
         da_plot = dataset[result_var.name]
         title = self.title_from_ds(da_plot, result_var, **kwargs)
         time_widget_args = self.time_widget(title)
-        return da_plot.hvplot.bar(by=by, **time_widget_args, **kwargs).opts(
+        plot = da_plot.hvplot.bar(by=by, **time_widget_args, **kwargs).opts(
             title=title,
             ylabel=f"{result_var.name} [{result_var.units}]",
-            xrotation=30,  # Rotate x-axis labels by 30 degrees
+            xrotation=30,  # Rotate x-axis labels by 30 degrees (inner level)
             **kwargs,
         )
+        
+        # Apply Bokeh-specific formatting for both levels of hierarchical labels
+        if self.plt_cnt_cfg.cat_cnt >= 2:
+            plot = plot.opts(
+                hv.opts.Bars(
+                    major_label_orientation=45,      # Rotate inner level labels (individual categories)
+                    group_label_orientation=45,      # Rotate outer level labels (group headers)
+                    backend='bokeh'
+                )
+            )
+        
+        return plot

@@ -148,8 +148,8 @@ class HeatmapResult(HoloviewResult):
             C = result_var.name
             title = f"Heatmap of {result_var.name}"
             time_args = self.time_widget(title)
-            return dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", **time_args, **kwargs).opts(
-                xrotation=30
+            return dataset.hvplot.heatmap(
+                x=x, y=y, C=C, cmap="plasma", rot=30, **time_args, **kwargs
             )
         return None
 

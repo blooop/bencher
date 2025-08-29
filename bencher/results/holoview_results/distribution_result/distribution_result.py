@@ -106,4 +106,5 @@ class DistributionResult(HoloviewResult):
                 xrotation=30,  # Rotate x-axis labels by 30 degrees
                 **kwargs,
             )
+        
         return overlay
