@@ -145,6 +145,58 @@ class BenchResultBase:
         """The number of samples in the results dataframe"""
         return self.ds.count()
 
+    def _clean_reduced_dataset_for_plotting(self, dataset: xr.Dataset, result_var_name: str) -> xr.Dataset:
+        """Clean up reduced datasets to prevent hvplot from creating unwanted groupings.
+        
+        When datasets are reduced (averaged over repeats), they often contain both mean and std 
+        variables (e.g., 'is_successful' and 'is_successful_std'). When plotting only one variable,
+        hvplot interprets this as grouped data and creates unwanted sub-labels or groupings.
+        
+        This method detects such cases and returns a clean dataset with only the requested variable.
+        
+        Args:
+            dataset: The dataset to clean
+            result_var_name: The name of the variable being plotted
+            
+        Returns:
+            Cleaned dataset appropriate for single-variable plotting
+        """
+        # Check if this looks like a reduced dataset with mean+std variables
+        data_vars = list(dataset.data_vars)
+        has_std_companion = f"{result_var_name}_std" in data_vars
+        has_multiple_vars = len(data_vars) > 1
+        
+        if has_multiple_vars and has_std_companion and result_var_name in data_vars:
+            # This is a reduced dataset - extract only the requested variable
+            return dataset[result_var_name].to_dataset(name=result_var_name)
+        
+        return dataset
+
+    def get_clean_dataset_for_plotting(self, dataset: xr.Dataset, result_var: Parameter) -> xr.Dataset:
+        """Get a clean dataset for plotting a specific result variable.
+        
+        This is the main method plotting functions should use to get datasets.
+        It applies necessary cleaning to prevent hvplot from creating unwanted groupings.
+        
+        **Usage in plotting functions:**
+        Instead of directly using `dataset[result_var.name]`, use:
+        ```python
+        clean_dataset = self.get_clean_dataset_for_plotting(dataset, result_var)
+        da_plot = clean_dataset[result_var.name]
+        ```
+        
+        This ensures that reduced datasets (with both mean and std variables) don't
+        cause hvplot to create unwanted multi-level groupings or sub-labels.
+        
+        Args:
+            dataset: The raw dataset from the holoviews dataset
+            result_var: The result variable being plotted
+            
+        Returns:
+            Cleaned dataset ready for plotting with only the requested variable
+        """
+        return self._clean_reduced_dataset_for_plotting(dataset, result_var.name)
+
     def to_hv_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
