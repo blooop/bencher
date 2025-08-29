@@ -37,7 +37,7 @@ class BenchRunner:
             bench_class (ParametrizedSweep, optional): An initial benchmark class to add. Defaults to None.
             run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
             publisher (Callable, optional): Function to publish results. Defaults to None.
-            run_tag (str, optional): Tag for the run, used in naming and caching. If provided, 
+            run_tag (str, optional): Tag for the run, used in naming and caching. If provided,
                 overrides the run_tag in run_cfg. Defaults to None.
         """
         self.bench_fns = []
