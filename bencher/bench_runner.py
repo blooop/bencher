@@ -31,14 +31,14 @@ class BenchRunner:
         """Initialize a BenchRunner instance.
 
         Args:
-            name (str, optional): The name of the benchmark runner, used for reports and caching. 
+            name (str, optional): The name of the benchmark runner, used for reports and caching.
                 If None, auto-generates a unique name. Defaults to None.
             bench_class (ParametrizedSweep, optional): An initial benchmark class to add. Defaults to None.
             run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
             publisher (Callable, optional): Function to publish results. Defaults to None.
         """
         self.bench_fns = []
-        
+
         # Handle name parameter - can be None, string, or Benchable
         if name is None:
             self.name = self._generate_name()
@@ -50,7 +50,7 @@ class BenchRunner:
         else:
             # Fallback - treat as name
             self.name = str(name)
-            
+
         self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         self.publisher = publisher
         if bench_class is not None:
@@ -60,24 +60,24 @@ class BenchRunner:
 
     def _generate_name(self) -> str:
         """Generate a unique name for the BenchRunner instance.
-        
+
         Returns:
             str: A unique name based on timestamp, object id, and random value
         """
         import time
         import hashlib
         import random
-        
+
         # Create a unique name based on timestamp, object id, and random value
         timestamp = int(time.time() * 1000)  # millisecond precision
         obj_id = id(self)
         random_val = random.randint(0, 999999)
-        
+
         # Create a hash from these values
         unique_string = f"{timestamp}_{obj_id}_{random_val}"
         hash_obj = hashlib.md5(unique_string.encode())
         hash_hex = hash_obj.hexdigest()[:8]  # Use first 8 characters
-        
+
         return f"bench_runner_{hash_hex}"
 
     @staticmethod
