@@ -166,7 +166,10 @@ class BenchRunner:
             bench = BenchRunner.from_parametrized_sweep(
                 class_instance, run_cfg=run_cfg, report=report
             )
-            return bench.plot_sweep(f"bench_{class_instance.name}")
+            result = bench.plot_sweep(f"bench_{class_instance.name}")
+            # Attach the report to the result for access later
+            result.report = report
+            return result
 
         self.add_run(cb)
 
@@ -259,7 +262,8 @@ class BenchRunner:
                     if grouped:
                         res = bch_fn(run_lvl, report_level)
                     else:
-                        res = bch_fn(run_lvl, BenchReport())
+                        individual_report = BenchReport()
+                        res = bch_fn(run_lvl, individual_report)
                         if run_cfg.run_tag:
                             tag_suffix = f"_{run_cfg.run_tag}"
                         else:
@@ -267,10 +271,24 @@ class BenchRunner:
 
                             current_date = datetime.now().strftime("%Y-%m-%d")
                             tag_suffix = f"_{current_date}"
-                        res.report.bench_name = (
-                            f"{res.report.bench_name}_{bch_fn.__name__}{tag_suffix}"
-                        )
-                        self.show_publish(res.report, show, publish, save, debug)
+                        # Update the report name for saving
+                        if hasattr(res, "bench_cfg") and hasattr(res.bench_cfg, "bench_name"):
+                            # For BenchResult objects
+                            original_name = res.bench_cfg.bench_name
+                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            res.bench_cfg.bench_name = new_name
+                            individual_report.bench_name = new_name
+                        elif hasattr(res, "report"):
+                            # For objects with report attribute
+                            original_name = res.report.bench_name
+                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            res.report.bench_name = new_name
+                            individual_report.bench_name = new_name
+                        else:
+                            # Fallback - use function name
+                            new_name = f"{bch_fn.__name__}{tag_suffix}"
+                            individual_report.bench_name = new_name
+                        self.show_publish(individual_report, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
                     self.show_publish(report_level, show, publish, save, debug)
