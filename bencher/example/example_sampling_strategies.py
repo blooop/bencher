@@ -29,7 +29,7 @@ def demo_sampling_strategies():
     print("=== Modern Sampling Strategy Demo ===\n")
 
     # Create benchmark runner for testing
-    def simple_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport):
+    def simple_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport):  # pylint: disable=unused-argument
         bench = bch.Bench("demo", SimpleCfg.simple_function, SimpleCfg)
         return bench.plot_sweep(input_vars=[SimpleCfg.param.value], run_cfg=run_cfg)
 

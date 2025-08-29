@@ -230,13 +230,12 @@ class ParametrizedSweep(Parameterized):
         from bencher.bench_runner import BenchRunner
 
         if run_cfg is None:
-            from bencher.bench_cfg import BenchRunCfg
+            from bencher.bench_cfg import BenchRunCfg  # pylint: disable=import-outside-toplevel,reimported,redefined-outer-name
 
             run_cfg = BenchRunCfg()
 
         if name is None:
             # Create BenchRunner with auto-generated name
             return BenchRunner(self, run_cfg=run_cfg)
-        else:
-            # Create BenchRunner with specified name
-            return BenchRunner(name, self, run_cfg=run_cfg)
+        # Create BenchRunner with specified name
+        return BenchRunner(name, self, run_cfg=run_cfg)

@@ -349,7 +349,7 @@ class BenchRunner:
             # Check if config specifies which benchmark to run (for simple_sampling strategies that include benchmark ordering)
             if hasattr(sample_cfg, "_benchmark_idx"):
                 # Config specifies which benchmark to run
-                bch_fn = self.bench_fns[sample_cfg._benchmark_idx]
+                bch_fn = self.bench_fns[sample_cfg._benchmark_idx]  # pylint: disable=protected-access
                 bench_functions = [bch_fn]
             else:
                 # Run all benchmark functions (legacy behavior)
