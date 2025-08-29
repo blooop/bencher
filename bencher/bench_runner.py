@@ -27,6 +27,7 @@ class BenchRunner:
         bench_class: ParametrizedSweep = None,
         run_cfg: BenchRunCfg = BenchRunCfg(),
         publisher: Callable = None,
+        run_tag: str = None,
     ) -> None:
         """Initialize a BenchRunner instance.
 
@@ -36,6 +37,8 @@ class BenchRunner:
             bench_class (ParametrizedSweep, optional): An initial benchmark class to add. Defaults to None.
             run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
             publisher (Callable, optional): Function to publish results. Defaults to None.
+            run_tag (str, optional): Tag for the run, used in naming and caching. If provided, 
+                overrides the run_tag in run_cfg. Defaults to None.
         """
         self.bench_fns = []
 
@@ -52,6 +55,9 @@ class BenchRunner:
             self.name = str(name)
 
         self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
+        # Override run_tag if provided as parameter
+        if run_tag is not None:
+            self.run_cfg.run_tag = run_tag
         self.publisher = publisher
         if bench_class is not None:
             self.add_bench(bench_class)
@@ -180,7 +186,7 @@ class BenchRunner:
         debug: bool = False,
         show: bool = False,
         save: bool = False,
-        grouped: bool = True,
+        grouped: bool = False,
         cache_results: bool = True,
     ) -> List[BenchCfg]:
         """Unified interface for running benchmarks.
@@ -205,7 +211,7 @@ class BenchRunner:
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
             show (bool, optional): show the results in the local web browser. Defaults to False.
             save (bool, optional): save the results to disk in index.html. Defaults to False.
-            grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to True.
+            grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to False.
             cache_results (bool, optional): Use the sample cache to reused previous results. Defaults to True.
 
         Returns:
@@ -254,7 +260,16 @@ class BenchRunner:
                         res = bch_fn(run_lvl, report_level)
                     else:
                         res = bch_fn(run_lvl, BenchReport())
-                        res.report.bench_name = f"{res.report.bench_name}_{bch_fn.__name__}_{run_cfg.run_tag}"
+                        if run_cfg.run_tag:
+                            tag_suffix = f"_{run_cfg.run_tag}"
+                        else:
+                            from datetime import datetime
+
+                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            tag_suffix = f"_{current_date}"
+                        res.report.bench_name = (
+                            f"{res.report.bench_name}_{bch_fn.__name__}{tag_suffix}"
+                        )
                         self.show_publish(res.report, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
