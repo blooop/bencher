@@ -85,7 +85,6 @@ def example_2_cat_in_2_out(
 
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 5  # Fewer repeats for a quicker benchmark
     bench = PythonOperations2CatBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
         title="Python Operations Performance Benchmark (2 Variables)",
