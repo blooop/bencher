@@ -87,16 +87,23 @@ def example_2_cat_in_4_out_repeats(
     run_cfg.repeats = 15  # Run multiple times to get statistical significance
     bench = ProgrammingBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
-        input_vars=["language", "environment"],
-        title="Programming Language and Environment: Boolean and Float Results",
-        description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
+        input_vars=["language"],
+        result_vars=["is_successful"],
+        title="Programming Language Success Rate",
+        description="Success rate by programming language (boolean result)",
     )
 
-    bench.plot_sweep(
-        input_vars=["float1"],
-        title="Programming Language and Environment: Boolean and Float Results",
-        description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
-    )
+    # bench.plot_sweep(
+    #     input_vars=["language", "environment"],
+    #     title="Programming Language and Environment: Boolean and Float Results",
+    #     description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
+    # )
+
+    # bench.plot_sweep(
+    #     input_vars=["float1"],
+    #     title="Programming Language and Environment: Boolean and Float Results",
+    #     description="Comparing a boolean (success) and a float (score) result across different programming languages and environments",
+    # )
 
     # bench.report.append(res.to_line())
 
