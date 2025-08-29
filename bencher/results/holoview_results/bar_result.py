@@ -93,17 +93,17 @@ class BarResult(HoloviewResult):
         # Use the general data cleaning pipeline
         clean_dataset = self.get_clean_dataset_for_plotting(dataset, result_var)
         da_plot = clean_dataset[result_var.name]
-        
+
         by = None
         if self.plt_cnt_cfg.cat_cnt >= 2:
             # Only use grouping if the second categorical variable exists in the clean dataset
             second_cat_var = self.plt_cnt_cfg.cat_vars[1]
             if second_cat_var.name in clean_dataset.dims:
                 by = second_cat_var.name
-        
+
         title = self.title_from_ds(da_plot, result_var, **kwargs)
         time_widget_args = self.time_widget(title)
-        
+
         return da_plot.hvplot.bar(by=by, **time_widget_args, **kwargs).opts(
             title=title,
             ylabel=f"{result_var.name} [{result_var.units}]",
