@@ -81,4 +81,6 @@ def example_bool_result_clean_bars(
 
 
 if __name__ == "__main__":
-    example_bool_result_clean_bars().report.show()
+    bench_runner = bch.BenchRunner()
+    bench_runner.add(example_bool_result_clean_bars).run(show=True)
+    # example_bool_result_clean_bars().report.show()
