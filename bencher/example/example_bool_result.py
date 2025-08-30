@@ -71,8 +71,8 @@ def example_bool_result_clean_bars(
 
     bench = SystemBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
-        # input_vars=["system_type"],
-        # result_vars=["task_completed"],
+        input_vars=["system_type"],
+        result_vars=["task_completed"],
         title="System Reliability: Task Completion Success Rate",
         description="Boolean success rates averaged over multiple runs, displayed as clean bars without unwanted groupings",
     )
@@ -82,5 +82,4 @@ def example_bool_result_clean_bars(
 
 if __name__ == "__main__":
     bench_runner = bch.BenchRunner()
-    bench_runner.add(example_bool_result_clean_bars).run(repeats=10, show=True)
-    # example_bool_result_clean_bars().report.show()
+    bench_runner.add(example_bool_result_clean_bars).run(level=5, repeats=100, show=True)
