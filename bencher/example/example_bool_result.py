@@ -1,7 +1,7 @@
-"""Example demonstrating ResultBool plotting with clean bar charts.
+"""Example demonstrating ResultBool plotting with bar charts.
 
-This example shows how boolean success/failure results are properly averaged
-over multiple repeats and displayed as success rates in a clean bar chart.
+This example shows how boolean success/failure results are averaged
+over multiple repeats and displayed as success rates in bar charts.
 """
 
 import bencher as bch
@@ -11,7 +11,7 @@ from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 def example_bool_result_1d(
     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
 ) -> bch.Bench:
-    """Example showing clean boolean result visualization with 1 input dimension.
+    """Example showing boolean result visualization with 1 input dimension.
 
     This demonstrates how ResultBool values work with single categorical input:
     1. Collected over multiple repeats for each programming language
@@ -29,8 +29,8 @@ def example_bool_result_1d(
     bench.plot_sweep(
         input_vars=["language"],
         result_vars=["is_successful"],
-        title="Programming Success Rate by Language (1D)",
-        description="Boolean success rates by programming language only, displayed as clean bars",
+        title="Programming Success Rate by Language",
+        description="Boolean success rates by programming language",
     )
 
     return bench
@@ -39,14 +39,11 @@ def example_bool_result_1d(
 def example_bool_result_2d(
     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
 ) -> bch.Bench:
-    """Example showing clean boolean result visualization.
+    """Example showing boolean result visualization with 2 input dimensions.
 
-    This demonstrates how ResultBool values are:
-    1. Collected over multiple repeats for each programming language/environment
+    This demonstrates how ResultBool values work with two categorical inputs:
+    1. Collected over multiple repeats for each programming language/environment combination
     2. Automatically averaged to show success rates (0.0 to 1.0)
-
-    The fix ensures that boolean results don't create multi-level groupings
-    or show variable names under each bar.
 
     Args:
         run_cfg: Configuration for the benchmark run
@@ -61,7 +58,7 @@ def example_bool_result_2d(
         input_vars=["language", "environment"],
         result_vars=["is_successful"],
         title="Programming Success Rate by Language and Environment",
-        description="Boolean success rates averaged over multiple runs, displayed as clean bars without unwanted groupings",
+        description="Boolean success rates by programming language and environment",
     )
 
     return bench
