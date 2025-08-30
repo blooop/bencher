@@ -91,14 +91,16 @@ class BarResult(HoloviewResult):
             hvplot.element.Bars: A bar chart visualization of the benchmark data.
         """
         by = None
-        if self.plt_cnt_cfg.cat_cnt >= 2:
+        if self.plt_cnt_cfg.cat_cnt >= 2 and self.plt_cnt_cfg.cat_vars[1].name in dataset.dims:
             by = self.plt_cnt_cfg.cat_vars[1].name
-        da_plot = dataset[result_var.name]
-        title = self.title_from_ds(da_plot, result_var, **kwargs)
-        time_widget_args = self.time_widget(title)
-        return da_plot.hvplot.bar(by=by, **time_widget_args, **kwargs).opts(
-            title=title,
-            ylabel=f"{result_var.name} [{result_var.units}]",
-            xrotation=30,  # Rotate x-axis labels by 30 degrees
-            **kwargs,
+
+        da = dataset[result_var.name]
+        title = self.title_from_ds(da, result_var, **kwargs)
+        time_args = self.time_widget(title)
+
+        # Explicitly pass x and y on the DataArray to prevent unwanted grouping
+        plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs).opts(
+            title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
         )
+
+        return plot
