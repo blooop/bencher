@@ -100,9 +100,7 @@ class BarResult(HoloviewResult):
 
         # Explicitly pass x and y on the DataArray to prevent unwanted grouping
         plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs).opts(
-            title=title,
-            ylabel=f"{da.name} [{result_var.units}]",
-            xrotation=30,
+            title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
         )
 
         return plot
