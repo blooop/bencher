@@ -4,59 +4,46 @@ This example shows how boolean success/failure results are properly averaged
 over multiple repeats and displayed as success rates in a clean bar chart.
 """
 
-import random
 import bencher as bch
+from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 
-random.seed(42)  # Fixed seed for reproducibility
 
+def example_bool_result_1d(
+    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
+) -> bch.Bench:
+    """Example showing clean boolean result visualization with 1 input dimension.
 
-class SystemBenchmark(bch.ParametrizedSweep):
-    """Benchmark class testing different system configurations."""
+    This demonstrates how ResultBool values work with single categorical input:
+    1. Collected over multiple repeats for each programming language
+    2. Automatically averaged to show success rates (0.0 to 1.0)
 
-    system_type = bch.StringSweep(
-        ["Server", "Desktop", "Mobile", "Embedded"], doc="Type of system being tested"
+    Args:
+        run_cfg: Configuration for the benchmark run
+        report: Report to append the results to
+
+    Returns:
+        bch.Bench: The benchmark object with results
+    """
+
+    bench = ProgrammingBenchmark().to_bench(run_cfg, report)
+    bench.plot_sweep(
+        input_vars=["language"],
+        result_vars=["is_successful"],
+        title="Programming Success Rate by Language (1D)",
+        description="Boolean success rates by programming language only, displayed as clean bars",
     )
 
-    task_completed = bch.ResultBool(doc="Whether the benchmark task completed successfully")
-
-    def __call__(self, **kwargs) -> dict:
-        """Execute the benchmark for the given system type.
-
-        Args:
-            **kwargs: Additional parameters to update before executing
-
-        Returns:
-            dict: Dictionary containing the benchmark results
-        """
-        self.update_params_from_kwargs(**kwargs)
-
-        # Simulate different success rates based on system type
-        success_rates = {
-            "Server": 0.95,  # Servers are very reliable
-            "Desktop": 0.85,  # Desktops are fairly reliable
-            "Mobile": 0.70,  # Mobile devices have more constraints
-            "Embedded": 0.60,  # Embedded systems have limited resources
-        }
-
-        base_rate = success_rates[self.system_type]
-        # Add some randomness to simulate real-world variability
-        actual_rate = base_rate + random.uniform(-0.1, 0.1)
-
-        # Boolean result: success based on the probability
-        self.task_completed = random.random() < actual_rate
-
-        return super().__call__(**kwargs)
+    return bench
 
 
-def example_bool_result_clean_bars(
+def example_bool_result_2d(
     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
 ) -> bch.Bench:
     """Example showing clean boolean result visualization.
 
     This demonstrates how ResultBool values are:
-    1. Collected over multiple repeats for each system type
+    1. Collected over multiple repeats for each programming language/environment
     2. Automatically averaged to show success rates (0.0 to 1.0)
-    3. Displayed as clean bar charts without unwanted sub-labels
 
     The fix ensures that boolean results don't create multi-level groupings
     or show variable names under each bar.
@@ -69,11 +56,11 @@ def example_bool_result_clean_bars(
         bch.Bench: The benchmark object with results
     """
 
-    bench = SystemBenchmark().to_bench(run_cfg, report)
+    bench = ProgrammingBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
-        input_vars=["system_type"],
-        result_vars=["task_completed"],
-        title="System Reliability: Task Completion Success Rate",
+        input_vars=["language", "environment"],
+        result_vars=["is_successful"],
+        title="Programming Success Rate by Language and Environment",
         description="Boolean success rates averaged over multiple runs, displayed as clean bars without unwanted groupings",
     )
 
@@ -82,4 +69,6 @@ def example_bool_result_clean_bars(
 
 if __name__ == "__main__":
     bench_runner = bch.BenchRunner()
-    bench_runner.add(example_bool_result_clean_bars).run(level=5, repeats=100, show=True)
+    bench_runner.add(example_bool_result_1d)
+    bench_runner.add(example_bool_result_2d)
+    bench_runner.run(level=5, repeats=100, show=True, grouped=True)
