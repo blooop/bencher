@@ -91,33 +91,18 @@ class BarResult(HoloviewResult):
             hvplot.element.Bars: A bar chart visualization of the benchmark data.
         """
         by = None
-        if self.plt_cnt_cfg.cat_cnt >= 2:
-            # Only use grouping if the second categorical variable exists in the reduced dataset
-            second_cat_var = self.plt_cnt_cfg.cat_vars[1]
-            if second_cat_var.name in dataset.dims:
-                by = second_cat_var.name
+        if self.plt_cnt_cfg.cat_cnt >= 2 and self.plt_cnt_cfg.cat_vars[1].name in dataset.dims:
+            by = self.plt_cnt_cfg.cat_vars[1].name
 
-        da_plot = dataset[result_var.name]
-        title = self.title_from_ds(da_plot, result_var, **kwargs)
-        time_widget_args = self.time_widget(title)
-        plot_kwargs = dict(kwargs)
+        da = dataset[result_var.name]
+        title = self.title_from_ds(da, result_var, **kwargs)
+        time_args = self.time_widget(title)
 
-        # For reduced datasets (with both mean and std), use explicit x/y parameters
-        # to prevent hvplot from creating grouped sub-labels
-        if len(dataset.data_vars) > 1 and result_var.name in dataset.data_vars:
-            # Convert to DataFrame and specify x/y explicitly
-            df = da_plot.to_dataframe().reset_index()
-            plot = df.hvplot.bar(
-                x=da_plot.dims[0], y=result_var.name, by=by, **time_widget_args, **plot_kwargs
-            )
-        else:
-            # Standard DataArray plotting for non-reduced data
-            plot = da_plot.hvplot.bar(by=by, **time_widget_args, **plot_kwargs)
-
-        # Apply common options to both plot types
-        return plot.opts(
+        # Explicitly pass x and y on the DataArray to prevent unwanted grouping
+        plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs).opts(
             title=title,
-            ylabel=f"{result_var.name} [{result_var.units}]",
+            ylabel=f"{da.name} [{result_var.units}]",
             xrotation=30,
-            **kwargs,
         )
+
+        return plot
