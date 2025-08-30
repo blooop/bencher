@@ -39,49 +39,46 @@ class ProgrammingBenchmark(bch.ParametrizedSweep):
 
         # Execution time varies by language (lower is better)
         base_execution_times = {
-            "Python": 120.0,     # Slower interpreted language
+            "Python": 120.0,  # Slower interpreted language
             "JavaScript": 80.0,  # V8 optimizations help
-            "Rust": 25.0,        # Fast compiled language
-            "Go": 35.0,          # Fast with good concurrency
+            "Rust": 25.0,  # Fast compiled language
+            "Go": 35.0,  # Fast with good concurrency
         }
 
         # Memory usage varies by language (lower is better)
         base_memory_usage = {
-            "Python": 45.0,      # High due to interpreter overhead
+            "Python": 45.0,  # High due to interpreter overhead
             "JavaScript": 35.0,  # V8 heap management
-            "Rust": 12.0,        # Efficient memory management
-            "Go": 18.0,          # Garbage collector overhead
+            "Rust": 12.0,  # Efficient memory management
+            "Go": 18.0,  # Garbage collector overhead
         }
 
         # Environment affects performance
         if self.environment == "Development":
-            time_modifier = 1.3    # Debug builds, more logging
+            time_modifier = 1.3  # Debug builds, more logging
             memory_modifier = 1.4  # Debug symbols, profiling overhead
         elif self.environment == "Testing":
-            time_modifier = 1.1    # Some test overhead
+            time_modifier = 1.1  # Some test overhead
             memory_modifier = 1.2  # Test frameworks loaded
         else:  # Production
-            time_modifier = 1.0    # Optimized builds
+            time_modifier = 1.0  # Optimized builds
             memory_modifier = 1.0  # Minimal overhead
 
         # Calculate realistic metrics with variability
         self.execution_time = (
-            base_execution_times[self.language] * 
-            time_modifier * 
-            random.uniform(0.8, 1.2)
+            base_execution_times[self.language] * time_modifier * random.uniform(0.8, 1.2)
         )
-        
+
         self.memory_usage = (
-            base_memory_usage[self.language] * 
-            memory_modifier * 
-            random.uniform(0.85, 1.15)
+            base_memory_usage[self.language] * memory_modifier * random.uniform(0.85, 1.15)
         )
 
         # Success based on reasonable performance thresholds
         time_threshold = 100.0  # ms
         memory_threshold = 40.0  # MB
-        self.is_successful = (self.execution_time < time_threshold and 
-                            self.memory_usage < memory_threshold)
+        self.is_successful = (
+            self.execution_time < time_threshold and self.memory_usage < memory_threshold
+        )
 
         return super().__call__(**kwargs)
 
