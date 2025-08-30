@@ -119,6 +119,5 @@ class BarResult(HoloviewResult):
             title=title,
             ylabel=f"{result_var.name} [{result_var.units}]",
             xrotation=30,
-            show_legend=False,
             **kwargs,
         )
