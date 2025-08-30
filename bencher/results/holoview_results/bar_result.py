@@ -96,28 +96,24 @@ class BarResult(HoloviewResult):
             second_cat_var = self.plt_cnt_cfg.cat_vars[1]
             if second_cat_var.name in dataset.dims:
                 by = second_cat_var.name
-        
+
         da_plot = dataset[result_var.name]
         title = self.title_from_ds(da_plot, result_var, **kwargs)
         time_widget_args = self.time_widget(title)
         plot_kwargs = dict(kwargs)
-        
+
         # For reduced datasets (with both mean and std), use explicit x/y parameters
         # to prevent hvplot from creating grouped sub-labels
         if len(dataset.data_vars) > 1 and result_var.name in dataset.data_vars:
             # Convert to DataFrame and specify x/y explicitly
             df = da_plot.to_dataframe().reset_index()
             plot = df.hvplot.bar(
-                x=da_plot.dims[0], 
-                y=result_var.name,
-                by=by, 
-                **time_widget_args, 
-                **plot_kwargs
+                x=da_plot.dims[0], y=result_var.name, by=by, **time_widget_args, **plot_kwargs
             )
         else:
             # Standard DataArray plotting for non-reduced data
             plot = da_plot.hvplot.bar(by=by, **time_widget_args, **plot_kwargs)
-        
+
         # Apply common options to both plot types
         return plot.opts(
             title=title,
