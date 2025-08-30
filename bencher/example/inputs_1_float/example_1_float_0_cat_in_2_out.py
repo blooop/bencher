@@ -92,9 +92,6 @@ def example_1_float_0_cat_in_2_out(
         bch.Bench: The benchmark object
     """
 
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 5  # Slightly more repeats to show variance
     bench = Algorithm0CatBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
         title="Algorithm Performance Benchmark (1 Float, 0 Categorical Variables)",

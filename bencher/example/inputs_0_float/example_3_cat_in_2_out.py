@@ -89,7 +89,6 @@ def example_3_cat_in_2_out(
 
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 5  # Fewer repeats for a quicker benchmark
     bench = PythonOperationsBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
         title="Python Operations Performance Benchmark",
@@ -108,4 +107,5 @@ def example_3_cat_in_2_out(
 
 
 if __name__ == "__main__":
-    example_3_cat_in_2_out().report.show()
+    br = bch.BenchRunner()
+    br.add(example_3_cat_in_2_out).run(repeats=5, show=True)

@@ -76,7 +76,6 @@ def example_1_cat_in_2_out(
 
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 5  # Fewer repeats for a quicker benchmark
     bench = PythonOperations1CatBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
         title="Python Data Structure Performance Benchmark (1 Variable)",
@@ -95,4 +94,5 @@ def example_1_cat_in_2_out(
 
 
 if __name__ == "__main__":
-    example_1_cat_in_2_out().report.show()
+    br = bch.BenchRunner()
+    br.add(example_1_cat_in_2_out).run(repeats=5, show=True)
