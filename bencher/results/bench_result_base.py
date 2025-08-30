@@ -164,7 +164,7 @@ class BenchResultBase:
         da_plot = clean_dataset[result_var.name]
         ```
 
-        This ensures that reduced datasets don't cause hvplot to create unwanted multi-level 
+        This ensures that reduced datasets don't cause hvplot to create unwanted multi-level
         groupings or sub-labels.
 
         Args:

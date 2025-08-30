@@ -108,6 +108,5 @@ class BarResult(HoloviewResult):
             title=title,
             ylabel=f"{result_var.name} [{result_var.units}]",
             xrotation=30,  # Rotate x-axis labels by 30 degrees
-            show_legend=False,  # Hide any legends
             **kwargs,
         )
