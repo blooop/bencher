@@ -1,7 +1,7 @@
 from .parametrised_sweep import ParametrizedSweep
 
 
-class SingletonParametrizedSweep(ParametrizedSweep):
+class ParametrizedSweepSingleton(ParametrizedSweep):
     """Base class that adds singleton behavior to ParametrizedSweep."""
 
     _instances = {}
