@@ -1,0 +1,3 @@
+# Export ParametrizedSweep and SingletonParametrizedSweep for easy import
+from .parametrised_sweep import ParametrizedSweep
+from .singleton_parametrized_sweep import SingletonParametrizedSweep
