@@ -12,21 +12,19 @@ def clear_singleton_cache():
 
 class ChildA(SingletonParametrizedSweep):
     def __init__(self, value=1):
-        # Run subclass init only once by checking the singleton flag
-        if getattr(self, "_singleton_initialized", False):
-            return
-        self.init_count = 1
-        self.value = value
+        # Use the helper to avoid boilerplate; only runs once
+        if self.init_singleton():
+            self.init_count = 1
+            self.value = value
+        # Call super for pylint; base no-ops on subsequent calls
         super().__init__()
 
 
 class ChildB(SingletonParametrizedSweep):
     def __init__(self, value=2):
-        # Run subclass init only once by checking the singleton flag
-        if getattr(self, "_singleton_initialized", False):
-            return
-        self.init_count = 1
-        self.value = value
+        if self.init_singleton():
+            self.init_count = 1
+            self.value = value
         super().__init__()
 
 
@@ -67,10 +65,8 @@ class MySingletonSweep(SingletonParametrizedSweep):
     result = bch.ResultVar()
 
     def __init__(self):
-        # Guard with the singleton flag then run normal field initialisation once
-        if getattr(self, "_singleton_initialized", False):
-            return
-        self.init_count = 1
+        if self.init_singleton():
+            self.init_count = 1
         super().__init__()
 
     def __call__(self, **kwargs):
