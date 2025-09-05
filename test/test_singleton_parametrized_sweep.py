@@ -1,17 +1,17 @@
 import pytest
 from bencher.variables.singleton_parametrized_sweep import SingletonParametrizedSweep
 
+
 # Ensure singleton cache is cleared before each test for isolation
 @pytest.fixture(autouse=True)
 def clear_singleton_cache():
     SingletonParametrizedSweep._instances.clear()
-from bencher.variables.singleton_parametrized_sweep import SingletonParametrizedSweep
 
 
 class ChildA(SingletonParametrizedSweep):
     def __init__(self, value=1):
         super().__init__()
-        if not hasattr(self, 'init_count'):
+        if not hasattr(self, "init_count"):
             self.init_count = 1
             self.value = value
 
@@ -19,9 +19,10 @@ class ChildA(SingletonParametrizedSweep):
 class ChildB(SingletonParametrizedSweep):
     def __init__(self, value=2):
         super().__init__()
-        if not hasattr(self, 'init_count'):
+        if not hasattr(self, "init_count"):
             self.init_count = 1
             self.value = value
+
 
 def test_singleton_per_child():
     a1 = ChildA()
@@ -32,6 +33,7 @@ def test_singleton_per_child():
     assert b1 is b2, "ChildB should return the same instance"
     assert a1 is not b1, "ChildA and ChildB should have different singleton instances"
 
+
 def test_singleton_init_only_once():
     a1 = ChildA()
     a2 = ChildA()
@@ -39,6 +41,7 @@ def test_singleton_init_only_once():
     b1 = ChildB()
     b2 = ChildB()
     assert b1.init_count == 1, "__init__ should only run once for ChildB"
+
 
 def test_singleton_value_persistence():
     a1 = ChildA(value=10)

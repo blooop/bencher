@@ -1,7 +1,9 @@
 from .parametrised_sweep import ParametrizedSweep
 
+
 class SingletonParametrizedSweep(ParametrizedSweep):
     """Base class that adds singleton behavior to ParametrizedSweep."""
+
     _instances = {}
 
     def __new__(cls, *args, **kwargs):
@@ -12,7 +14,7 @@ class SingletonParametrizedSweep(ParametrizedSweep):
 
     def __init__(self, **params):
         # Only initialize once due to singleton pattern, including all subclass logic
-        if getattr(self, '_singleton_initialized', False):
+        if getattr(self, "_singleton_initialized", False):
             return
         super().__init__(**params)
         self._singleton_initialized = True

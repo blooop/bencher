@@ -9,7 +9,6 @@ from bencher.utils import make_namedtuple, hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
 
 
-
 class ParametrizedSweep(Parameterized):
     """Parent class for all Sweep types that need a custom hash"""
 
@@ -204,7 +203,7 @@ class ParametrizedSweep(Parameterized):
         return self.__call__(**kwargs)["hmap"]
 
     # TODO Add type hints here and fix the circular imports
-    def to_bench(self, run_cfg = None, report=None, name: str = None):
+    def to_bench(self, run_cfg=None, report=None, name: str = None):
         from bencher import Bench
 
         assert isinstance(self, ParametrizedSweep)
@@ -214,15 +213,15 @@ class ParametrizedSweep(Parameterized):
 
         return Bench(name, self, run_cfg=run_cfg, report=report)
 
-    def to_bench_runner(self, run_cfg = None, name: str = None):
+    def to_bench_runner(self, run_cfg=None, name: str = None):
         # Create a BenchRunner instance from this ParametrizedSweep.
         # Enables fluent chaining like:
         # MyConfig().to_bench_runner().add_run(func).run(level=2, max_level=4)
         from bencher.bench_runner import BenchRunner
 
-
         if run_cfg is None:
             from bencher.bench_cfg import BenchRunCfg  # pylint: disable=import-outside-toplevel,reimported,redefined-outer-name
+
             run_cfg = BenchRunCfg()
 
         if name is None:
