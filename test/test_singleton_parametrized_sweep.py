@@ -1,5 +1,5 @@
 import pytest
-from bencher.variables.singleton_parametrized_sweep import SingletonParametrizedSweep
+from bencher.variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 import bencher as bch
 
 
@@ -7,10 +7,10 @@ import bencher as bch
 @pytest.fixture(autouse=True)
 def clear_singleton_cache():
     # Use the public method to avoid touching protected members
-    SingletonParametrizedSweep.reset_singletons()
+    ParametrizedSweepSingleton.reset_singletons()
 
 
-class ChildA(SingletonParametrizedSweep):
+class ChildA(ParametrizedSweepSingleton):
     def __init__(self, value=1):
         # Use the helper to avoid boilerplate; only runs once
         if self.init_singleton():
@@ -20,7 +20,7 @@ class ChildA(SingletonParametrizedSweep):
         super().__init__()
 
 
-class ChildB(SingletonParametrizedSweep):
+class ChildB(ParametrizedSweepSingleton):
     def __init__(self, value=2):
         if self.init_singleton():
             self.init_count = 1
@@ -57,7 +57,7 @@ def test_singleton_value_persistence():
 # ---- BenchRunner integration test with SingletonParametrizedSweep ----
 
 
-class MySingletonSweep(SingletonParametrizedSweep):
+class MySingletonSweep(ParametrizedSweepSingleton):
     """Simple singleton sweep used to validate BenchRunner reruns."""
 
     # One float input and a single numeric result
