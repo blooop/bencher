@@ -84,7 +84,8 @@ except ModuleNotFoundError as e:
 
 
 from .plotting.plot_filter import VarRange, PlotFilter
-from .variables.parametrised_sweep import ParametrizedSweep, SingletonParametrizedSweep
+from .variables.parametrised_sweep import ParametrizedSweep
+from .variables.singleton_parametrized_sweep import SingletonParametrizedSweep
 from .caching import CachedParams
 from .results.bench_result import BenchResult
 from .results.video_result import VideoResult
