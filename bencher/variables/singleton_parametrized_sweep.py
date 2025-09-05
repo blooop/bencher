@@ -18,3 +18,12 @@ class SingletonParametrizedSweep(ParametrizedSweep):
             return
         super().__init__(**params)
         self._singleton_initialized = True
+
+    @classmethod
+    def reset_singletons(cls) -> None:
+        """Clear the singleton instance cache for all subclasses.
+
+        Intended primarily for tests to ensure isolation between test cases without
+        reaching into protected attributes from outside the class.
+        """
+        cls._instances.clear()
