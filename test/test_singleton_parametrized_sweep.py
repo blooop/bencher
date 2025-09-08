@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 from bencher.variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 import bencher as bch
 
@@ -109,3 +110,19 @@ def test_benchrunner_rerun_with_singleton():
 
     # Verify the singleton was only initialised once across both runs
     assert MySingletonSweep().init_count == 1
+
+
+def test_singleton_report_save_and_pickling():
+    # Ensure running and saving the report works and the result is pickled
+    run_cfg = bch.BenchRunCfg(run_tag="singleton_save_test")
+    br = bch.BenchRunner(name="singleton_runner_save", run_cfg=run_cfg)
+    br.add(benchable_singleton_fn)
+
+    # Run and save report; also exercises diskcache pickling of results
+    br.run(level=1, repeats=1, cache_results=False, save=True)
+
+    expected_filename = f"MySingletonSweep_benchable_singleton_fn_{run_cfg.run_tag}.html"
+    expected_path = Path("reports") / expected_filename
+    assert expected_path.exists(), f"Report not saved at {expected_path}"
+    # Cleanup saved report to avoid polluting workspace
+    expected_path.unlink(missing_ok=True)
