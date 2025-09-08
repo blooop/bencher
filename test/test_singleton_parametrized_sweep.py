@@ -92,6 +92,9 @@ def test_singleton_value_persistence():
 
 
 def test_benchrunner_rerun_with_singleton():
+    # Grab the singleton instance before any run
+    singleton_before = MySingletonSweep()
+
     # Use a fixed run_tag so naming is deterministic and cache isolation is explicit
     run_cfg = bch.BenchRunCfg(run_tag="singleton_rerun_test")
     br = bch.BenchRunner(name="singleton_runner", run_cfg=run_cfg)
@@ -108,8 +111,12 @@ def test_benchrunner_rerun_with_singleton():
     # Ensure rerunning appends results and does not error
     assert len(br.results) == 2
 
-    # Verify the singleton was only initialised once across both runs
-    assert MySingletonSweep().init_count == 1
+    # Verify the same instance is returned and init only happened once
+    singleton_after = MySingletonSweep()
+    assert singleton_before is singleton_after, "Singleton instance changed across reruns"
+    assert singleton_after.init_count == 1, "Singleton reinitialised across reruns"
+    # Ensure the singleton class was marked as seen (no re-first-time)
+    assert MySingletonSweep in ParametrizedSweepSingleton._seen
 
 
 def test_singleton_report_save_and_pickling():
