@@ -63,7 +63,9 @@ def example_float_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
     return bench
 
 
-def run_example_float_cat(ex_run_cfg=bch.BenchRunCfg()) -> None:
+def run_example_float_cat(ex_run_cfg: bch.BenchRunCfg | None = None) -> None:
+    if ex_run_cfg is None:
+        ex_run_cfg = bch.BenchRunCfg()
     ex_run_cfg.repeats = 2
     ex_run_cfg.over_time = True
     ex_run_cfg.clear_cache = True

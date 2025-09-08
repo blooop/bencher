@@ -20,17 +20,20 @@ class BenchPlotServer:
         """Create a new BenchPlotServer object"""
 
     def plot_server(
-        self, bench_name: str, plot_cfg: BenchPlotSrvCfg = BenchPlotSrvCfg(), plots_instance=None
+        self, bench_name: str, plot_cfg: BenchPlotSrvCfg | None = None, plots_instance=None
     ) -> Thread:
         """Load previously calculated benchmark data from the database and start a plot server to display it
 
         Args:
             bench_name (str): The name of the benchmark and output folder for the figures
-            plot_cfg (BenchPlotSrvCfg, optional): Options for the plot server. Defaults to BenchPlotSrvCfg().
+            plot_cfg (BenchPlotSrvCfg, optional): Options for the plot server. Defaults to None.
 
         Raises:
             FileNotFoundError: No data found was found in the database to plot
         """
+
+        if plot_cfg is None:
+            plot_cfg = BenchPlotSrvCfg()
 
         if plots_instance is None:
             plots_instance = self.load_data_from_cache(bench_name)
