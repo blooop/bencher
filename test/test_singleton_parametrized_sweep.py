@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 from bencher.variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 import bencher as bch
