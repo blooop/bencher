@@ -1,4 +1,5 @@
 from pathlib import Path
+import pytest
 from bencher.variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 import bencher as bch
 
@@ -125,3 +126,26 @@ def test_singleton_report_save_and_pickling():
     assert expected_path.exists(), f"Report not saved at {expected_path}"
     # Cleanup saved report to avoid polluting workspace
     expected_path.unlink(missing_ok=True)
+
+
+def test_singleton_init_failure_consistency():
+    class FailingChild(ParametrizedSweepSingleton):
+        def __init__(self, value=1):
+            # Intentionally fail before calling base __init__ for value==1
+            if value == 1:
+                raise RuntimeError("Intentional failure during init")
+            self.value = value
+            super().__init__()
+
+    # First instantiation should fail
+    with pytest.raises(RuntimeError, match="Intentional failure during init"):
+        FailingChild(value=1)
+
+    # Second instantiation with a non-failing value should succeed
+    instance = FailingChild(value=2)
+    assert isinstance(instance, FailingChild)
+    assert instance.value == 2
+
+    # Third instantiation with the same non-failing value should return the same instance
+    instance2 = FailingChild(value=2)
+    assert instance is instance2
