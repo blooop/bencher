@@ -42,7 +42,7 @@ class ParametrizedSweepSingleton(ParametrizedSweep):
         self._singleton_inited = True
 
     @classmethod
-    def first_time(cls) -> bool:
+    def init_singleton(cls) -> bool:
         """Return True the first time a subclass is constructed in this process."""
         if cls in cls._seen:
             return False

@@ -11,7 +11,7 @@ class MySingletonSweep(ParametrizedSweepSingleton):
     result = bch.ResultVar()
 
     def __init__(self):
-        if self.first_time():
+        if self.init_singleton():
             self.init_count = 1
         super().__init__()
 
@@ -32,14 +32,14 @@ def benchable_singleton_fn(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) ->
 def test_singleton_per_child():
     class ChildA(ParametrizedSweepSingleton):
         def __init__(self, value=1):
-            if self.first_time():
+            if self.init_singleton():
                 self.init_count = 1
                 self.value = value
             super().__init__()
 
     class ChildB(ParametrizedSweepSingleton):
         def __init__(self, value=2):
-            if self.first_time():
+            if self.init_singleton():
                 self.init_count = 1
                 self.value = value
             super().__init__()
@@ -56,14 +56,14 @@ def test_singleton_per_child():
 def test_singleton_init_only_once():
     class ChildA(ParametrizedSweepSingleton):
         def __init__(self, value=1):
-            if self.first_time():
+            if self.init_singleton():
                 self.init_count = 1
                 self.value = value
             super().__init__()
 
     class ChildB(ParametrizedSweepSingleton):
         def __init__(self, value=2):
-            if self.first_time():
+            if self.init_singleton():
                 self.init_count = 1
                 self.value = value
             super().__init__()
@@ -79,7 +79,7 @@ def test_singleton_init_only_once():
 def test_singleton_value_persistence():
     class ChildA(ParametrizedSweepSingleton):
         def __init__(self, value=1):
-            if self.first_time():
+            if self.init_singleton():
                 self.init_count = 1
                 self.value = value
             super().__init__()
