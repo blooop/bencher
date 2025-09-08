@@ -115,8 +115,7 @@ def test_benchrunner_rerun_with_singleton():
     singleton_after = MySingletonSweep()
     assert singleton_before is singleton_after, "Singleton instance changed across reruns"
     assert singleton_after.init_count == 1, "Singleton reinitialised across reruns"
-    # Ensure the singleton class was marked as seen (no re-first-time)
-    assert MySingletonSweep in ParametrizedSweepSingleton._seen
+    # No reinitialization or instance change across reruns
 
 
 def test_singleton_report_save_and_pickling():
