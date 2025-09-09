@@ -48,11 +48,14 @@ class OptunaResult(BenchResultBase):
         worker,
         n_trials=100,
         extra_results: List[OptunaResult] = None,
-        sampler=optuna.samplers.TPESampler(),
+        sampler=None,
     ):
         directions = []
         for rv in self.bench_cfg.optuna_targets(True):
             directions.append(rv.direction)
+
+        if sampler is None:
+            sampler = optuna.samplers.TPESampler()
 
         study = optuna.create_study(
             sampler=sampler, directions=directions, study_name=self.bench_cfg.title
