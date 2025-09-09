@@ -1,5 +1,5 @@
 import logging
-from typing import List, Any, Tuple, Optional
+from typing import List, Any, Tuple, Optional, Literal
 from enum import Enum, auto
 import xarray as xr
 from param import Parameter
@@ -151,7 +151,7 @@ class BenchResultBase:
         result_var: ResultVar = None,
         level: int = None,
         agg_dims: list[str] | None = None,
-        agg_fn: str | None = None,
+        agg_fn: Literal["sum", "mean", "max", "min", "median"] | None = None,
     ) -> hv.Dataset:
         """Generate a holoviews dataset from the xarray dataset.
 
@@ -182,7 +182,7 @@ class BenchResultBase:
         result_var: ResultVar | str = None,
         level: int = None,
         agg_dims: list[str] | None = None,
-        agg_fn: str | None = None,
+        agg_fn: Literal["sum", "mean", "max", "min", "median"] | None = None,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
 
@@ -490,7 +490,7 @@ class BenchResultBase:
         override=False,
         hv_dataset: hv.Dataset | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: str = "sum",
+        agg_fn: Literal["sum", "mean", "max", "min", "median"] = "sum",
         **kwargs,
     ) -> Optional[pn.panel]:
         # Initialize default filters if not provided to avoid shared mutable defaults

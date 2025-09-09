@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Literal
 import panel as pn
 from param import Parameter
 
@@ -72,7 +72,7 @@ class BenchResult(
         reduce: ReduceType = ReduceType.AUTO,
         # Aggregation controls (applied in filter())
         agg_over_dims: list[str] | None = None,
-        agg_fn: str = "sum",
+        agg_fn: Literal["sum", "mean", "max", "min", "median"] = "sum",
         **kwargs: Any,
     ) -> BenchResult:
         """Return the current instance of BenchResult.
