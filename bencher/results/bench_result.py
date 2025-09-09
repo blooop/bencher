@@ -69,7 +69,7 @@ class BenchResult(
         result_type: BenchResult,
         result_var: Optional[Parameter] = None,
         override: bool = True,
-        reduce: ReduceType = ReduceType.AUTO,
+        reduce: ReduceType | None = None,
         # Aggregation controls (applied in filter())
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["sum", "mean", "max", "min", "median"] = "sum",
@@ -84,14 +84,17 @@ class BenchResult(
         result_instance.ds = self.ds
         result_instance.plt_cnt_cfg = self.plt_cnt_cfg
         result_instance.dataset_list = self.dataset_list
-        return result_instance.to_plot(
+        # Build kwargs for the plot call, only include reduce if explicitly set
+        plot_kwargs = dict(
             result_var=result_var,
             override=override,
-            reduce=reduce,
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
-            **kwargs,
         )
+        if reduce is not None:
+            plot_kwargs["reduce"] = reduce
+        plot_kwargs.update(kwargs)
+        return result_instance.to_plot(**plot_kwargs)
 
     @staticmethod
     def default_plot_callbacks() -> List[callable]:
