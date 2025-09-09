@@ -528,9 +528,7 @@ class BenchResultBase:
                     agg_dims = list(dict.fromkeys(agg_over_dims))
 
                 if agg_dims:
-                    hv_dataset = self.to_hv_dataset(
-                        reduce=reduce, agg_dims=agg_dims, agg_fn=agg_fn
-                    )
+                    hv_dataset = self.to_hv_dataset(reduce=reduce, agg_dims=agg_dims, agg_fn=agg_fn)
             return self.map_plot_panes(
                 plot_callback=plot_callback,
                 hv_dataset=hv_dataset,
