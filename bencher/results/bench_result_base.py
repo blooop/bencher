@@ -240,6 +240,16 @@ class BenchResultBase:
             # Only aggregate over dims that actually exist in the dataset
             dims_present = [d for d in agg_dims if d in ds_out.dims]
             if dims_present:
+                # If some requested dims are missing, log an info for visibility
+                missing = [d for d in agg_dims if d not in dims_present]
+                if missing:
+                    logging.info(
+                        "Aggregation requested for dims %s but only found %s in dataset dims %s",
+                        agg_dims,
+                        dims_present,
+                        list(ds_out.dims),
+                    )
+
                 # Support basic aggregations; default to sum
                 fn = (agg_fn or "sum").lower()
                 if fn == "sum":
@@ -255,6 +265,12 @@ class BenchResultBase:
                 else:
                     # Fall back to sum if unknown string provided
                     ds_out = ds_out.sum(dim=dims_present, skipna=True)
+            else:
+                logging.warning(
+                    "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
+                    agg_dims,
+                    list(ds_out.dims),
+                )
         if level is not None:
             coords_no_repeat = {}
             for c, v in ds_out.coords.items():
