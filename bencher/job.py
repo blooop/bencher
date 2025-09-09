@@ -264,7 +264,7 @@ class FutureCache:
 
     def clear_cache(self) -> None:
         """Clear all entries from the cache."""
-        if self.cache:
+        if self.cache is not None:
             self.cache.clear()
 
     def clear_tag(self, tag: str) -> None:
@@ -279,11 +279,19 @@ class FutureCache:
 
     def close(self) -> None:
         """Close the cache and shutdown the executor if they exist."""
-        if self.cache:
+        if self.cache is not None:
             self.cache.close()
         if self.executor:
             self.executor.shutdown()
             self.executor = None
+
+    # Context manager support for deterministic cleanup
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
 
     def stats(self) -> str:
         """Get statistics about cache usage.

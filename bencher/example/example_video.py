@@ -77,8 +77,8 @@ class TuringPattern(bch.ParametrizedSweep):
             if i % 500 == 0:
                 # Apply colormap to create RGB image
                 rgb = apply_colormap(U)
-                # Create PIL image with alpha channel
-                img = Image.fromarray(rgb, "RGB").convert("RGBA")
+                # Create PIL image with alpha channel (avoid deprecated 'mode' param)
+                img = Image.fromarray(rgb).convert("RGBA")
                 img = img.resize((200, 200), Image.Resampling.LANCZOS)
                 rgb_alpha = np.array(img)
                 vid_writer.append(rgb_alpha)

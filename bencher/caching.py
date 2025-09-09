@@ -16,6 +16,13 @@ class CachedParams(ParametrizedSweep):
         if clear_cache:
             self.cache.clear()
 
+    def close(self):
+        if getattr(self, "cache", None) is not None:
+            try:
+                self.cache.close()
+            finally:
+                self.cache = None
+
     def kwargs_to_hash_key(self, **kwargs):
         return tuple(sorted(kwargs.items(), key=lambda item: str(item[0])))
 
