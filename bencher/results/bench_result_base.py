@@ -150,6 +150,8 @@ class BenchResultBase:
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultVar = None,
         level: int = None,
+        agg_dims: list[str] | None = None,
+        agg_fn: str | None = None,
     ) -> hv.Dataset:
         """Generate a holoviews dataset from the xarray dataset.
 
@@ -162,14 +164,25 @@ class BenchResultBase:
 
         if reduce == ReduceType.NONE:
             kdims = [i.name for i in self.bench_cfg.all_vars]
-            return hv.Dataset(self.to_dataset(reduce, result_var, level), kdims=kdims)
-        return hv.Dataset(self.to_dataset(reduce, result_var, level))
+            return hv.Dataset(
+                self.to_dataset(
+                    reduce, result_var=result_var, level=level, agg_dims=agg_dims, agg_fn=agg_fn
+                ),
+                kdims=kdims,
+            )
+        return hv.Dataset(
+            self.to_dataset(
+                reduce, result_var=result_var, level=level, agg_dims=agg_dims, agg_fn=agg_fn
+            )
+        )
 
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultVar | str = None,
         level: int = None,
+        agg_dims: list[str] | None = None,
+        agg_fn: str | None = None,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
 
@@ -221,6 +234,27 @@ class BenchResultBase:
                 ds_out = xr.merge([ds_reduce_mean, ds_reduce_range])
             case ReduceType.SQUEEZE:
                 ds_out = ds_out.squeeze(drop=True)
+
+        # Optional aggregation across non-repeat dimensions (e.g., categorical)
+        if agg_dims:
+            # Only aggregate over dims that actually exist in the dataset
+            dims_present = [d for d in agg_dims if d in ds_out.dims]
+            if len(dims_present) > 0:
+                # Support basic aggregations; default to sum
+                fn = (agg_fn or "sum").lower()
+                if fn == "sum":
+                    ds_out = ds_out.sum(dim=dims_present, skipna=True)
+                elif fn == "mean":
+                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+                elif fn == "max":
+                    ds_out = ds_out.max(dim=dims_present, skipna=True)
+                elif fn == "min":
+                    ds_out = ds_out.min(dim=dims_present, skipna=True)
+                elif fn == "median":
+                    ds_out = ds_out.median(dim=dims_present, skipna=True)
+                else:
+                    # Fall back to sum if unknown string provided
+                    ds_out = ds_out.sum(dim=dims_present, skipna=True)
         if level is not None:
             coords_no_repeat = {}
             for c, v in ds_out.coords.items():
@@ -454,6 +488,9 @@ class BenchResultBase:
         result_types=None,
         pane_collection: pn.pane = None,
         override=False,
+        hv_dataset: hv.Dataset | None = None,
+        agg_over_dims: list[str] | None = None,
+        agg_fn: str = "sum",
         **kwargs,
     ) -> Optional[pn.panel]:
         plot_filter = PlotFilter(
@@ -469,9 +506,19 @@ class BenchResultBase:
             self.plt_cnt_cfg, callable_name(plot_callback), override
         )
         if matches_res.overall:
+            # Compute aggregated dataset once (if requested) so all plotters benefit
+            if hv_dataset is None:
+                agg_dims: list[str] | None = None
+                if agg_over_dims:
+                    agg_dims = list(dict.fromkeys(agg_over_dims))
+
+                if agg_dims:
+                    hv_dataset = self.to_hv_dataset(
+                        reduce=reduce, agg_dims=agg_dims, agg_fn=agg_fn
+                    )
             return self.map_plot_panes(
                 plot_callback=plot_callback,
-                hv_dataset=None,
+                hv_dataset=hv_dataset,
                 target_dimension=target_dimension,
                 result_var=result_var,
                 result_types=result_types,

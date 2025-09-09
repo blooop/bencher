@@ -3,7 +3,7 @@ from typing import List, Optional, Any
 import panel as pn
 from param import Parameter
 
-from bencher.results.bench_result_base import EmptyContainer
+from bencher.results.bench_result_base import EmptyContainer, ReduceType
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.video_result import VideoResult
 from bencher.results.volume_result import VolumeResult
@@ -69,6 +69,10 @@ class BenchResult(
         result_type: BenchResult,
         result_var: Optional[Parameter] = None,
         override: bool = True,
+        reduce: ReduceType = ReduceType.AUTO,
+        # Aggregation controls (applied in filter())
+        agg_over_dims: list[str] | None = None,
+        agg_fn: str = "sum",
         **kwargs: Any,
     ) -> BenchResult:
         """Return the current instance of BenchResult.
@@ -80,7 +84,14 @@ class BenchResult(
         result_instance.ds = self.ds
         result_instance.plt_cnt_cfg = self.plt_cnt_cfg
         result_instance.dataset_list = self.dataset_list
-        return result_instance.to_plot(result_var=result_var, override=override, **kwargs)
+        return result_instance.to_plot(
+            result_var=result_var,
+            override=override,
+            reduce=reduce,
+            agg_over_dims=agg_over_dims,
+            agg_fn=agg_fn,
+            **kwargs,
+        )
 
     @staticmethod
     def default_plot_callbacks() -> List[callable]:
