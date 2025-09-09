@@ -523,10 +523,7 @@ class BenchResultBase:
         if matches_res.overall:
             # Compute aggregated dataset once (if requested) so all plotters benefit
             if hv_dataset is None:
-                agg_dims: list[str] | None = None
-                if agg_over_dims:
-                    agg_dims = list(dict.fromkeys(agg_over_dims))
-
+                agg_dims = list(dict.fromkeys(agg_over_dims)) if agg_over_dims else None
                 if agg_dims:
                     hv_dataset = self.to_hv_dataset(reduce=reduce, agg_dims=agg_dims, agg_fn=agg_fn)
             return self.map_plot_panes(
