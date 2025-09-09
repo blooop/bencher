@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Literal
 import panel as pn
 from param import Parameter
 
-from bencher.results.bench_result_base import EmptyContainer
+from bencher.results.bench_result_base import EmptyContainer, ReduceType
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.video_result import VideoResult
 from bencher.results.volume_result import VolumeResult
@@ -69,6 +69,10 @@ class BenchResult(
         result_type: BenchResult,
         result_var: Optional[Parameter] = None,
         override: bool = True,
+        reduce: ReduceType | None = None,
+        # Aggregation controls (applied in filter())
+        agg_over_dims: list[str] | None = None,
+        agg_fn: Literal["sum", "mean", "max", "min", "median"] = "sum",
         **kwargs: Any,
     ) -> BenchResult:
         """Return the current instance of BenchResult.
@@ -80,7 +84,17 @@ class BenchResult(
         result_instance.ds = self.ds
         result_instance.plt_cnt_cfg = self.plt_cnt_cfg
         result_instance.dataset_list = self.dataset_list
-        return result_instance.to_plot(result_var=result_var, override=override, **kwargs)
+        # Build kwargs for the plot call, only include reduce if explicitly set
+        plot_kwargs = dict(
+            result_var=result_var,
+            override=override,
+            agg_over_dims=agg_over_dims,
+            agg_fn=agg_fn,
+        )
+        if reduce is not None:
+            plot_kwargs["reduce"] = reduce
+        plot_kwargs.update(kwargs)
+        return result_instance.to_plot(**plot_kwargs)
 
     @staticmethod
     def default_plot_callbacks() -> List[callable]:

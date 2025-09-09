@@ -105,6 +105,10 @@ def example_2_float_1_cat_in_2_out(
         and "smooth" feature settings.
         """,
     )
+    res = bench.get_result()
+
+    bench.report.append(res.to(bch.HeatmapResult, agg_over_dims=["pattern_type"]))
+
     return bench
 
 
