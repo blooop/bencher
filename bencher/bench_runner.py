@@ -104,10 +104,7 @@ class BenchRunner:
         Returns:
             BenchRunCfg: A new configuration object with the specified settings
         """
-        if run_cfg is None:
-            run_cfg_out = BenchRunCfg()
-        else:
-            run_cfg_out = deepcopy(run_cfg)
+        run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
         run_cfg_out.cache_samples = cache_results
         run_cfg_out.only_hash_tag = cache_results
         run_cfg_out.level = level
