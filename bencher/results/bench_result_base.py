@@ -475,13 +475,13 @@ class BenchResultBase:
         self,
         plot_callback: callable,
         plot_filter=None,
-        float_range: VarRange = VarRange(0, None),
-        cat_range: VarRange = VarRange(0, None),
-        vector_len: VarRange = VarRange(1, 1),
-        result_vars: VarRange = VarRange(1, 1),
-        panel_range: VarRange = VarRange(0, 0),
-        repeats_range: VarRange = VarRange(1, None),
-        input_range: VarRange = VarRange(1, None),
+        float_range: VarRange | None = None,
+        cat_range: VarRange | None = None,
+        vector_len: VarRange | None = None,
+        result_vars: VarRange | None = None,
+        panel_range: VarRange | None = None,
+        repeats_range: VarRange | None = None,
+        input_range: VarRange | None = None,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
         result_var: ResultVar = None,
@@ -493,6 +493,21 @@ class BenchResultBase:
         agg_fn: str = "sum",
         **kwargs,
     ) -> Optional[pn.panel]:
+        # Initialize default filters if not provided to avoid shared mutable defaults
+        if float_range is None:
+            float_range = VarRange(0, None)
+        if cat_range is None:
+            cat_range = VarRange(0, None)
+        if vector_len is None:
+            vector_len = VarRange(1, 1)
+        if result_vars is None:
+            result_vars = VarRange(1, 1)
+        if panel_range is None:
+            panel_range = VarRange(0, 0)
+        if repeats_range is None:
+            repeats_range = VarRange(1, None)
+        if input_range is None:
+            input_range = VarRange(1, None)
         plot_filter = PlotFilter(
             float_range=float_range,
             cat_range=cat_range,

@@ -26,7 +26,7 @@ class BenchRunner:
         self,
         name: str | Benchable = None,
         bench_class: ParametrizedSweep = None,
-        run_cfg: BenchRunCfg = BenchRunCfg(),
+        run_cfg: BenchRunCfg | None = None,
         publisher: Callable = None,
         run_tag: str = None,
     ) -> None:
@@ -36,7 +36,7 @@ class BenchRunner:
             name (str, optional): The name of the benchmark runner, used for reports and caching.
                 If None, auto-generates a unique name. Defaults to None.
             bench_class (ParametrizedSweep, optional): An initial benchmark class to add. Defaults to None.
-            run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
+            run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to None.
             publisher (Callable, optional): Function to publish results. Defaults to None.
             run_tag (str, optional): Tag for the run, used in naming and caching. If provided,
                 overrides the run_tag in run_cfg. Defaults to None.
@@ -89,7 +89,7 @@ class BenchRunner:
 
     @staticmethod
     def setup_run_cfg(
-        run_cfg: BenchRunCfg = BenchRunCfg(), level: int = 2, cache_results: bool = True
+        run_cfg: BenchRunCfg | None = None, level: int = 2, cache_results: bool = True
     ) -> BenchRunCfg:
         """Configure benchmark run settings with reasonable defaults.
 
@@ -97,14 +97,14 @@ class BenchRunner:
         caching behavior settings applied.
 
         Args:
-            run_cfg (BenchRunCfg, optional): Base configuration to modify. Defaults to BenchRunCfg().
+            run_cfg (BenchRunCfg, optional): Base configuration to modify. Defaults to None.
             level (int, optional): Benchmark sampling resolution level. Defaults to 2.
             cache_results (bool, optional): Whether to enable result caching. Defaults to True.
 
         Returns:
             BenchRunCfg: A new configuration object with the specified settings
         """
-        run_cfg_out = deepcopy(run_cfg)
+        run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
         run_cfg_out.cache_samples = cache_results
         run_cfg_out.only_hash_tag = cache_results
         run_cfg_out.level = level
@@ -113,19 +113,23 @@ class BenchRunner:
     @staticmethod
     def from_parametrized_sweep(
         class_instance: ParametrizedSweep,
-        run_cfg: BenchRunCfg = BenchRunCfg(),
-        report: BenchReport = BenchReport(),
+        run_cfg: BenchRunCfg | None = None,
+        report: BenchReport | None = None,
     ) -> Bench:
         """Create a Bench instance from a ParametrizedSweep class.
 
         Args:
             class_instance (ParametrizedSweep): The parametrized sweep class instance to benchmark
-            run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to BenchRunCfg().
-            report (BenchReport, optional): Report to store benchmark results. Defaults to BenchReport().
+            run_cfg (BenchRunCfg, optional): Configuration for benchmark execution. Defaults to None.
+            report (BenchReport, optional): Report to store benchmark results. Defaults to None.
 
         Returns:
             Bench: A configured Bench instance ready to run the benchmark
         """
+        if run_cfg is None:
+            run_cfg = BenchRunCfg()
+        if report is None:
+            report = BenchReport()
         return Bench(
             f"bench_{class_instance.name}",
             class_instance,
