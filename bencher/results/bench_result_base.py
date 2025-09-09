@@ -239,7 +239,7 @@ class BenchResultBase:
         if agg_dims:
             # Only aggregate over dims that actually exist in the dataset
             dims_present = [d for d in agg_dims if d in ds_out.dims]
-            if len(dims_present) > 0:
+            if dims_present:
                 # Support basic aggregations; default to sum
                 fn = (agg_fn or "sum").lower()
                 if fn == "sum":
