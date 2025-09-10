@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import Callable
 import logging
+import os
+import weakref
 from diskcache import Cache
 from concurrent.futures import Future, ProcessPoolExecutor
 from .utils import hash_sha1
@@ -11,6 +13,26 @@ try:
     from scoop import futures as scoop_future_executor
 except ImportError as e:
     scoop_future_executor = None
+
+_FUTURECACHE_REGISTRY: "weakref.WeakSet[FutureCache]"  # type: ignore[name-defined]
+_FUTURECACHE_REGISTRY = weakref.WeakSet()
+
+
+def _close_inherited_caches_after_fork() -> None:  # pragma: no cover - exercised via multiprocessing
+    for fc in list(_FUTURECACHE_REGISTRY):
+        cache = getattr(fc, "cache", None)
+        if cache is not None:
+            try:
+                cache.close()
+            except Exception:
+                pass
+            fc.cache = None
+
+
+try:  # Register after-fork cleanup on platforms that support it
+    os.register_at_fork(after_in_child=_close_inherited_caches_after_fork)
+except Exception:
+    pass
 
 
 class Job:
@@ -201,6 +223,9 @@ class FutureCache:
         self.worker_wrapper_call_count = 0
         self.worker_fn_call_count = 0
         self.worker_cache_call_count = 0
+
+        # Track for at-fork cleanup to avoid inheriting open sqlite connections
+        _FUTURECACHE_REGISTRY.add(self)
 
     def submit(self, job: Job) -> JobFuture:
         """Submit a job for execution, with caching if enabled.

@@ -571,6 +571,7 @@ class Bench(BenchPlotServer):
             self.cache_results(bench_res, bench_cfg_hash)
 
         logging.info(self.sample_cache.stats())
+        # Close sample cache to flush writes; instance remains for stats inspection
         self.sample_cache.close()
 
         bench_res.post_setup()

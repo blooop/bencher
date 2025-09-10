@@ -1,4 +1,5 @@
 from diskcache import Cache
+import weakref
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.utils import hash_sha1
@@ -15,6 +16,15 @@ class CachedParams(ParametrizedSweep):
 
         if clear_cache:
             self.cache.clear()
+
+        # Ensure cache is closed when this object is garbage-collected
+        def _safe_close(c: Cache):
+            try:
+                c.close()
+            except Exception:
+                pass
+
+        weakref.finalize(self, _safe_close, self.cache)
 
     def close(self):
         if getattr(self, "cache", None) is not None:
