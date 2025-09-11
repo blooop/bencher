@@ -8,6 +8,7 @@ import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
+import pandas as pd
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
@@ -63,44 +64,19 @@ class TabulatorResult(HoloviewResult):
         Returns:
             pn.widgets.Tabulator: An interactive table widget.
         """
-        import xarray as xr
-        import pandas as pd
-        import numpy as np
 
-        # Ensure we are working with an xarray.Dataset
-        ds: xr.Dataset
-        if isinstance(dataset, xr.DataArray):
-            name = dataset.name or (result_var.name if result_var is not None else "value")
-            ds = dataset.to_dataset(name=name)
-        else:
-            ds = dataset
+        # Assume input is an xarray.Dataset. Keep Dataset throughout.
+        ds: xr.Dataset = dataset if isinstance(dataset, xr.Dataset) else xr.Dataset(dataset)
 
-        # If a specific result variable is requested, reduce to that single variable
-        if result_var is not None and isinstance(ds, xr.Dataset):
-            # Use double brackets to keep it a Dataset (not a DataArray)
-            if result_var.name in ds.data_vars:
-                ds = ds[[result_var.name]]
-            else:
-                # Fall back gracefully if missing; keep current dataset
-                pass
+        # Step 1: If a result variable is specified, select it and keep as Dataset
+        if result_var is not None and result_var.name in ds.data_vars:
+            ds = ds[[result_var.name]]
 
-        # Convert to a flattened pandas DataFrame (indices -> columns)
-        # Handle 0-D Dataset explicitly since xarray cannot create an index for it.
+        # Step 2: Build a flat pandas DataFrame
         if len(ds.dims) == 0:
-            if result_var is not None and result_var.name in ds.data_vars:
-                df = pd.DataFrame({result_var.name: [ds[result_var.name].values.item()]})
-            else:
-                # Collect all data variables into a single-row DataFrame
-                data = {
-                    name: [da.values.item()]
-                    for name, da in ds.data_vars.items()
-                } or {"value": [ds.values.item()] if hasattr(ds, "values") else [None]}
-                df = pd.DataFrame(data)
+            df = pd.DataFrame({name: [da.values.item()] for name, da in ds.data_vars.items()})
         else:
+            # N-D: to DataFrame and reset the index so coordinates become columns
             df = ds.to_dataframe().reset_index()
-
-        # Guard against accidental numpy array outputs (shouldn't occur with to_dataframe)
-        if isinstance(df, np.ndarray):
-            df = pd.DataFrame({result_var.name if result_var is not None else "value": df.ravel()})
 
         return pn.widgets.Tabulator(df, **kwargs)
