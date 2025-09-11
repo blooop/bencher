@@ -150,7 +150,7 @@ class BenchResultBase:
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultVar = None,
         level: int = None,
-        agg_dims: list[str] | None = None,
+        agg_over_dims: list[str] | None = None,
         agg_fn: Literal["sum", "mean", "max", "min", "median"] | None = None,
     ) -> hv.Dataset:
         """Generate a holoviews dataset from the xarray dataset.
@@ -166,13 +166,21 @@ class BenchResultBase:
             kdims = [i.name for i in self.bench_cfg.all_vars]
             return hv.Dataset(
                 self.to_dataset(
-                    reduce, result_var=result_var, level=level, agg_dims=agg_dims, agg_fn=agg_fn
+                    reduce,
+                    result_var=result_var,
+                    level=level,
+                    agg_over_dims=agg_over_dims,
+                    agg_fn=agg_fn,
                 ),
                 kdims=kdims,
             )
         return hv.Dataset(
             self.to_dataset(
-                reduce, result_var=result_var, level=level, agg_dims=agg_dims, agg_fn=agg_fn
+                reduce,
+                result_var=result_var,
+                level=level,
+                agg_over_dims=agg_over_dims,
+                agg_fn=agg_fn,
             )
         )
 
@@ -181,7 +189,7 @@ class BenchResultBase:
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultVar | str = None,
         level: int = None,
-        agg_dims: list[str] | None = None,
+        agg_over_dims: list[str] | None = None,
         agg_fn: Literal["sum", "mean", "max", "min", "median"] | None = None,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
@@ -236,16 +244,16 @@ class BenchResultBase:
                 ds_out = ds_out.squeeze(drop=True)
 
         # Optional aggregation across non-repeat dimensions (e.g., categorical)
-        if agg_dims:
+        if agg_over_dims:
             # Only aggregate over dims that actually exist in the dataset
-            dims_present = [d for d in agg_dims if d in ds_out.dims]
+            dims_present = [d for d in agg_over_dims if d in ds_out.dims]
             if dims_present:
                 # If some requested dims are missing, log an info for visibility
-                missing = [d for d in agg_dims if d not in dims_present]
+                missing = [d for d in agg_over_dims if d not in dims_present]
                 if missing:
                     logging.info(
                         "Aggregation requested for dims %s but only found %s in dataset dims %s",
-                        agg_dims,
+                        agg_over_dims,
                         dims_present,
                         list(ds_out.dims),
                     )
@@ -268,7 +276,7 @@ class BenchResultBase:
             else:
                 logging.warning(
                     "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
-                    agg_dims,
+                    agg_over_dims,
                     list(ds_out.dims),
                 )
         if level is not None:
@@ -541,7 +549,9 @@ class BenchResultBase:
             if hv_dataset is None:
                 agg_dims = list(dict.fromkeys(agg_over_dims)) if agg_over_dims else None
                 if agg_dims:
-                    hv_dataset = self.to_hv_dataset(reduce=reduce, agg_dims=agg_dims, agg_fn=agg_fn)
+                    hv_dataset = self.to_hv_dataset(
+                        reduce=reduce, agg_over_dims=agg_dims, agg_fn=agg_fn
+                    )
             return self.map_plot_panes(
                 plot_callback=plot_callback,
                 hv_dataset=hv_dataset,
