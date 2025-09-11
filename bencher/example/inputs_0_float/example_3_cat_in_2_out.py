@@ -103,9 +103,15 @@ def example_3_cat_in_2_out(
         - Note that variance in the results simulates real-world measurement fluctuations
         """,
     )
+
+    res = bench.get_result()
+
+    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_structure","data_size"]))
+    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_structure"]))
+    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_size"]))
     return bench
 
 
 if __name__ == "__main__":
     br = bch.BenchRunner()
-    br.add(example_3_cat_in_2_out).run(repeats=5, show=True)
+    br.add(example_3_cat_in_2_out).run(repeats=1, show=True)

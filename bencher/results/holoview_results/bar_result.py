@@ -91,8 +91,8 @@ class BarResult(HoloviewResult):
             hvplot.element.Bars: A bar chart visualization of the benchmark data.
         """
         by = None
-        if self.plt_cnt_cfg.cat_cnt >= 2 and self.plt_cnt_cfg.cat_vars[1].name in dataset.dims:
-            by = self.plt_cnt_cfg.cat_vars[1].name
+        # if self.plt_cnt_cfg.cat_cnt >= 2 and self.plt_cnt_cfg.cat_vars[1].name in dataset.dims:
+        #     by = self.plt_cnt_cfg.cat_vars[1].name
 
         da = dataset[result_var.name]
         title = self.title_from_ds(da, result_var, **kwargs)
