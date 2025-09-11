@@ -869,9 +869,32 @@ class Bench(BenchPlotServer):
             BenchResult: An object containing all the benchmark data and results
         """
         bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
-        # Adjust only the sampling order; leave dims/plotting unchanged
+        # Adjust only the sampling traversal; leave dims/plotting unchanged
         if sample_order == SampleOrder.REVERSED:
-            func_inputs = list(reversed(func_inputs))
+            total_dims = len(dims_name)
+            num_input_dims = len(bench_res.bench_cfg.input_vars)
+
+            # Extract coordinate values from the dataset to rebuild the Cartesian product
+            dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
+            dim_indices = [list(range(len(v))) for v in dim_values]
+
+            # Build iteration order: reverse the input portion only
+            iter_order = list(range(num_input_dims))[::-1] + list(range(num_input_dims, total_dims))
+
+            # Generate product in iter_order and map back to original order
+            ordered = []
+            for idx_ord, val_ord in zip(
+                product(*[dim_indices[i] for i in iter_order]),
+                product(*[dim_values[i] for i in iter_order]),
+            ):
+                idx_orig = [None] * total_dims
+                val_orig = [None] * total_dims
+                for j, pos in enumerate(iter_order):
+                    idx_orig[pos] = idx_ord[j]
+                    val_orig[pos] = val_ord[j]
+                ordered.append((tuple(idx_orig), tuple(val_orig)))
+
+            func_inputs = ordered
         bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
         constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
         callcount = 1

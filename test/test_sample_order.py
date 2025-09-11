@@ -94,9 +94,22 @@ class TestSampleOrder(unittest.TestCase):
         inorder = run(bch.SampleOrder.INORDER)
         reversed_order = run(bch.SampleOrder.REVERSED)
 
-        # In-order should be 0..N-1, reversed should be reversed
+        # In-order should be 0..N-1
         self.assertEqual(inorder, list(range(len(inorder))))
-        self.assertEqual(reversed_order, list(reversed(inorder)))
+
+        # For reversed traversal, the left-most input (a) varies fastest.
+        # Compute expected flattened sequence using dims order (a,b).
+        la = len(OrderExample.param.a.values())
+        lb = len(OrderExample.param.b.values())
+        expected_rev = [None] * (la * lb)
+        for i in range(la):
+            for j in range(lb):
+                # Flatten index position for (i,j) in C-order is i*lb + j
+                pos = i * lb + j
+                # Sampling sequence index when 'a' varies fastest: j*la + i
+                expected_rev[pos] = j * la + i
+
+        self.assertEqual(reversed_order, expected_rev)
 
 
 if __name__ == "__main__":
