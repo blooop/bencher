@@ -91,7 +91,7 @@ def example_2_float_1_cat_in_2_out(
     """
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 3  # Fewer repeats for a quicker benchmark
+    run_cfg.repeats = 1  # Fewer repeats for a quicker benchmark
 
     bench = Pattern1CatBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
@@ -108,6 +108,19 @@ def example_2_float_1_cat_in_2_out(
     res = bench.get_result()
 
     bench.report.append(res.to(bch.HeatmapResult, agg_over_dims=["pattern_type"]))
+    # bench.report.append(res.to(bch.TabulatorResult, agg_over_dims=["pattern_type", "x_value"]))
+    # bench.report.append(res.to(bch.TableResult, agg_over_dims=["pattern_type", "x_value", "y_value"]))
+
+    bench.report.append(
+        res.to(bch.TabulatorResult, agg_over_dims=["pattern_type", "x_value", "y_value"])
+    )
+    bench.report.append(
+        res.to(
+            bch.TabulatorResult,
+            agg_over_dims=["pattern_type", "x_value"],
+        )
+    )
+    bench.report.append(res.to(bch.TabulatorResult, agg_over_dims=["pattern_type"]))
 
     return bench
 
