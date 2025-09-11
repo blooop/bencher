@@ -3,17 +3,10 @@ import panel as pn
 
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
-from typing import Optional
-import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
 import pandas as pd
-
-from bencher.results.bench_result_base import ReduceType
-from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar, ResultBool
-from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 class TabulatorResult(HoloviewResult):

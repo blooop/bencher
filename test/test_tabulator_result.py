@@ -52,4 +52,3 @@ def test_to_tabulator_ds_2d_dataset():
     for col in ["x", "y", "v"]:
         assert col in tab.value.columns
     assert len(tab.value) == 6
-

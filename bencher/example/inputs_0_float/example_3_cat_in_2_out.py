@@ -106,7 +106,7 @@ def example_3_cat_in_2_out(
 
     res = bench.get_result()
 
-    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_structure","data_size"]))
+    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_structure", "data_size"]))
     bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_structure"]))
     bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_size"]))
     return bench
