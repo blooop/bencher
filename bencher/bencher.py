@@ -39,6 +39,7 @@ from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str
+from bencher.sample_order import SampleOrder
 
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -317,6 +318,7 @@ class Bench(BenchPlotServer):
         tag: str = "",
         run_cfg: BenchRunCfg = None,
         plot_callbacks: List[Callable] | bool = None,
+        sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -345,6 +347,8 @@ class Bench(BenchPlotServer):
             plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting results.
                 If True, uses default plotting. If False, disables plotting.
                 If a list, uses the provided callbacks. Defaults to None.
+            sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
+                Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
@@ -498,10 +502,14 @@ class Bench(BenchPlotServer):
             tag=run_cfg.run_tag + tag,
             plot_callbacks=plot_callbacks,
         )
-        return self.run_sweep(bench_cfg, run_cfg, time_src)
+        return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
     def run_sweep(
-        self, bench_cfg: BenchCfg, run_cfg: BenchRunCfg, time_src: datetime = None
+        self,
+        bench_cfg: BenchCfg,
+        run_cfg: BenchRunCfg,
+        time_src: datetime = None,
+        sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """Execute a benchmark sweep based on the provided configuration.
 
@@ -514,6 +522,8 @@ class Bench(BenchPlotServer):
             run_cfg (BenchRunCfg): Configuration for how the benchmark should be executed
             time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.
                 Defaults to None, which will use the current time.
+            sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
+                Defaults to SampleOrder.INORDER.
 
         Returns:
             BenchResult: An object containing all benchmark data, results, and visualization
@@ -558,7 +568,7 @@ class Bench(BenchPlotServer):
             if run_cfg.time_event is not None:
                 time_src = run_cfg.time_event
             bench_res = self.calculate_benchmark_results(
-                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg
+                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
             )
 
             # use the hash of the inputs to look up historical values in the cache
@@ -841,6 +851,7 @@ class Bench(BenchPlotServer):
         time_src: datetime | str,
         bench_cfg_sample_hash: str,
         bench_run_cfg: BenchRunCfg,
+        sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """Execute the benchmark runs and collect results into an n-dimensional array.
 
@@ -858,6 +869,9 @@ class Bench(BenchPlotServer):
             BenchResult: An object containing all the benchmark data and results
         """
         bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
+        # Adjust only the sampling order; leave dims/plotting unchanged
+        if sample_order == SampleOrder.REVERSED:
+            func_inputs = list(reversed(func_inputs))
         bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
         constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
         callcount = 1
