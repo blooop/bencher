@@ -90,11 +90,25 @@ class BarResult(HoloviewResult):
         Returns:
             hvplot.element.Bars: A bar chart visualization of the benchmark data.
         """
-        by = None
-        if self.plt_cnt_cfg.cat_cnt >= 2 and self.plt_cnt_cfg.cat_vars[1].name in dataset.dims:
-            by = self.plt_cnt_cfg.cat_vars[1].name
-
+        # Determine grouping ('by') dynamically based on dims that still exist
         da = dataset[result_var.name]
+
+        # Allow explicit override via kwargs
+        by = kwargs.pop("by", None)
+        if by is None:
+            # Candidate categorical dims from the original config, filtered to those still present
+            cat_dim_names = [cv.name for cv in self.plt_cnt_cfg.cat_vars]
+            dims_present = [d for d in da.dims if d not in ("repeat", "over_time")]
+            # Prefer categorical dims that are not the primary x-axis
+            candidates = [d for d in dims_present if d != da.dims[0] and d in cat_dim_names]
+
+            if len(candidates) == 1:
+                by = candidates[0]
+            elif len(candidates) > 1:
+                # Preserve multi-level grouping when multiple categorical dims remain
+                by = candidates
+            else:
+                by = None
         title = self.title_from_ds(da, result_var, **kwargs)
         time_args = self.time_widget(title)
 
