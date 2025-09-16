@@ -258,8 +258,8 @@ class BenchResultBase:
                         list(ds_out.dims),
                     )
 
-                # Support basic aggregations; default to sum
-                fn = (agg_fn or "sum").lower()
+                # Support basic aggregations; default to mean
+                fn = (agg_fn or "mean").lower()
                 if fn == "sum":
                     ds_out = ds_out.sum(dim=dims_present, skipna=True)
                 elif fn == "mean":
@@ -271,8 +271,8 @@ class BenchResultBase:
                 elif fn == "median":
                     ds_out = ds_out.median(dim=dims_present, skipna=True)
                 else:
-                    # Fall back to sum if unknown string provided
-                    ds_out = ds_out.sum(dim=dims_present, skipna=True)
+                    # Fall back to mean if unknown string provided
+                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
             else:
                 logging.warning(
                     "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
@@ -514,7 +514,7 @@ class BenchResultBase:
         override=False,
         hv_dataset: hv.Dataset | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["sum", "mean", "max", "min", "median"] = "sum",
+        agg_fn: Literal["sum", "mean", "max", "min", "median"] = "mean",
         **kwargs,
     ) -> Optional[pn.panel]:
         # Initialize default filters if not provided to avoid shared mutable defaults
