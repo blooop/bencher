@@ -72,7 +72,7 @@ class BenchResult(
         reduce: ReduceType | None = None,
         # Aggregation controls (applied in filter())
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["sum", "mean", "max", "min", "median"] = "mean",
+        agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
         **kwargs: Any,
     ) -> BenchResult:
         """Return the current instance of BenchResult.
