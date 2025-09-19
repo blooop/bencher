@@ -16,9 +16,12 @@ def test_yaml_sweep_reads_yaml_values():
     keys = sweep.keys()
 
     assert keys == ["quick", "balanced", "thorough"]
-    assert values[0] == "quick"
-    assert values[0].value == [12, 18, 27]
-    assert sum(values[1].value) == 100
+    key0, value0 = values[0]
+    assert key0 == "quick"
+    assert value0 == [12, 18, 27]
+    assert values[0].key() == "quick"
+    assert values[0].value() == [12, 18, 27]
+    assert sum(values[1].value()) == 100
     assert sweep.items()[2][0] == "thorough"
     assert sweep.items()[2][1] == [15, 20, 25, 30, 35]
 
@@ -26,7 +29,7 @@ def test_yaml_sweep_reads_yaml_values():
 def test_yaml_sweep_sampling_respects_requested_samples():
     sweep = bch.YamlSweep(EXAMPLE_YAML, samples=2)
     assert sweep.keys() == ["quick", "thorough"]
-    assert sweep.values()[0].value == [12, 18, 27]
+    assert sweep.values()[0].value() == [12, 18, 27]
 
 
 def test_yaml_sweep_key_lookup_and_default():

@@ -18,9 +18,7 @@ class YamlConfigSweep(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
 
-        workload_selection = self.workload
-        workload_values = workload_selection.value
-        self.total_workload = sum(workload_values)
+        self.total_workload = sum(self.workload.value())
 
         return super().__call__()
 

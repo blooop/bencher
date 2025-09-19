@@ -126,38 +126,43 @@ class EnumSweep(SweepSelector):
 class YamlSelection(str):
     """String-like wrapper that keeps a reference to the YAML value."""
 
-    __slots__ = ("value",)
+    __slots__ = ("_value",)
 
     def __new__(cls, key: str, value: Any):
         obj = str.__new__(cls, key)
-        obj.value = value
+        obj._value = value
         return obj
 
-    @property
     def key(self) -> str:
         return str(self)
 
+    def value(self) -> Any:
+        return self._value
+
     def __repr__(self) -> str:
-        return f"YamlSelection(key={self.key!r}, value={self.value!r})"
+        return f"YamlSelection(key={self.key()!r}, value={self.value()!r})"
 
     def as_tuple(self) -> tuple[str, Any]:
-        return (self.key, self.value)
+        return (self.key(), self.value())
+
+    def __iter__(self):
+        return iter((self.key(), self.value()))
 
     def __getitem__(self, item):
-        return self.value[item]
+        return self.value()[item]
 
     def get(self, item, default=None):
-        if isinstance(self.value, Mapping):
-            return self.value.get(item, default)
+        if isinstance(self.value(), Mapping):
+            return self.value().get(item, default)
         return default
 
     def items(self):
-        if isinstance(self.value, Mapping):
-            return self.value.items()
+        if isinstance(self.value(), Mapping):
+            return self.value().items()
         raise TypeError("YamlSelection value is not a mapping")
 
     def __reduce__(self):
-        return (YamlSelection, (self.key, self.value))
+        return (YamlSelection, (self.key(), self.value()))
 
 
 class YamlSweep(SweepSelector):
@@ -230,7 +235,7 @@ class YamlSweep(SweepSelector):
 
     def items(self) -> List[tuple[str, Any]]:
         selected_keys = self.keys()
-        return [(key, self._entries[key].value) for key in selected_keys]
+        return [(key, self._entries[key].value()) for key in selected_keys]
 
     def values(self) -> List[Any]:
         selected_keys = self.keys()
@@ -238,7 +243,7 @@ class YamlSweep(SweepSelector):
 
     def key_for_value(self, value: Any) -> str | None:
         if hasattr(value, "key"):
-            return value.key
+            return value.key()
         return self._value_id_to_key.get(id(value))
 
 
