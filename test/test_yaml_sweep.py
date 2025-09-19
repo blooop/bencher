@@ -15,28 +15,29 @@ def test_yaml_sweep_reads_yaml_values():
     values = sweep.values()
     keys = sweep.keys()
 
-    assert keys == ["baseline", "extended", "heavy"]
-    assert values[0].value["iterations"] == 10
-    assert values[1].value["learning_rate"] == 0.05
-    assert sweep.items()[2][0] == "heavy"
-    assert sweep.items()[2][1].key == "heavy"
+    assert keys == ["quick", "balanced", "thorough"]
+    assert values[0] == "quick"
+    assert values[0].value == [12, 18, 27]
+    assert sum(values[1].value) == 100
+    assert sweep.items()[2][0] == "thorough"
+    assert sweep.items()[2][1] == [15, 20, 25, 30, 35]
 
 
 def test_yaml_sweep_sampling_respects_requested_samples():
     sweep = bch.YamlSweep(EXAMPLE_YAML, samples=2)
-    assert sweep.keys() == ["baseline", "heavy"]
-    assert sweep.values()[0].value["description"].startswith("Baseline")
+    assert sweep.keys() == ["quick", "thorough"]
+    assert sweep.values()[0].value == [12, 18, 27]
 
 
 def test_yaml_sweep_key_lookup_and_default():
-    sweep = bch.YamlSweep(EXAMPLE_YAML, default_key="extended")
+    sweep = bch.YamlSweep(EXAMPLE_YAML, default_key="balanced")
     items = dict(sweep.items())
-    extended_value = items["extended"]
+    balanced_value = items["balanced"]
 
-    assert sweep.default is extended_value
-    assert sweep.default_key == "extended"
-    assert sweep.key_for_value(extended_value) == "extended"
-    assert extended_value.key == "extended"
+    assert sweep.default == "balanced"
+    assert sweep.default_key == "balanced"
+    assert sweep.key_for_value(sweep.default) == "balanced"
+    assert sum(balanced_value) == 100
 
 
 def test_yaml_sweep_missing_file(tmp_path):

@@ -123,25 +123,25 @@ class EnumSweep(SweepSelector):
             self.doc = enum_type.__doc__
 
 
-class YamlSelection:
-    """Wrapper around a YAML entry that keeps track of the originating key."""
+class YamlSelection(str):
+    """String-like wrapper that keeps a reference to the YAML value."""
 
-    __slots__ = ("key", "value")
+    __slots__ = ("value",)
 
-    def __init__(self, key: str, value: Any):
-        self.key = key
-        self.value = value
+    def __new__(cls, key: str, value: Any):
+        obj = str.__new__(cls, key)
+        obj.value = value
+        return obj
 
-    def __hash__(self) -> int:
-        return hash(self.key)
+    @property
+    def key(self) -> str:
+        return str(self)
 
     def __repr__(self) -> str:
         return f"YamlSelection(key={self.key!r}, value={self.value!r})"
 
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, YamlSelection):
-            return self.key == other.key and self.value == other.value
-        return False
+    def as_tuple(self) -> tuple[str, Any]:
+        return (self.key, self.value)
 
     def __getitem__(self, item):
         return self.value[item]
@@ -155,6 +155,9 @@ class YamlSelection:
         if isinstance(self.value, Mapping):
             return self.value.items()
         raise TypeError("YamlSelection value is not a mapping")
+
+    def __reduce__(self):
+        return (YamlSelection, (self.key, self.value))
 
 
 class YamlSweep(SweepSelector):
@@ -227,7 +230,7 @@ class YamlSweep(SweepSelector):
 
     def items(self) -> List[tuple[str, Any]]:
         selected_keys = self.keys()
-        return [(key, self._entries[key]) for key in selected_keys]
+        return [(key, self._entries[key].value) for key in selected_keys]
 
     def values(self) -> List[Any]:
         selected_keys = self.keys()

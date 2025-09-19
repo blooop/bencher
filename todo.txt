@@ -7,3 +7,9 @@ create a example that loads from a yaml
 create tests
 
 make sure everything passes.
+
+when the yamlsweep is acessed it should return a key,value tuple.
+
+if the contents of the yaml changes between runs that should break the cache. 
+
+the example should be a set of named keys and list values.

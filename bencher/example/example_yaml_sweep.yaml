@@ -1,12 +1,3 @@
-baseline:
-  iterations: 10
-  learning_rate: 0.1
-  description: Baseline configuration with moderate learning rate
-extended:
-  iterations: 20
-  learning_rate: 0.05
-  description: Extended training with reduced learning rate
-heavy:
-  iterations: 30
-  learning_rate: 0.01
-  description: Heavy configuration focusing on stability
+quick: [12, 18, 27]
+balanced: [20, 25, 30, 25]
+thorough: [15, 20, 25, 30, 35]
