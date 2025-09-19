@@ -1,8 +1,12 @@
+from collections import OrderedDict
+from collections.abc import Mapping
 from enum import Enum
+from pathlib import Path
 from typing import List, Any, Dict
 
 import numpy as np
 from param import Integer, Number, Selector
+import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
 
 
@@ -117,6 +121,122 @@ class EnumSweep(SweepSelector):
         )
         if not list_of_enums:  # Grab the docs from the enum type def
             self.doc = enum_type.__doc__
+
+
+class YamlSelection:
+    """Wrapper around a YAML entry that keeps track of the originating key."""
+
+    __slots__ = ("key", "value")
+
+    def __init__(self, key: str, value: Any):
+        self.key = key
+        self.value = value
+
+    def __hash__(self) -> int:
+        return hash(self.key)
+
+    def __repr__(self) -> str:
+        return f"YamlSelection(key={self.key!r}, value={self.value!r})"
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, YamlSelection):
+            return self.key == other.key and self.value == other.value
+        return False
+
+    def __getitem__(self, item):
+        return self.value[item]
+
+    def get(self, item, default=None):
+        if isinstance(self.value, Mapping):
+            return self.value.get(item, default)
+        return default
+
+    def items(self):
+        if isinstance(self.value, Mapping):
+            return self.value.items()
+        raise TypeError("YamlSelection value is not a mapping")
+
+
+class YamlSweep(SweepSelector):
+    """Sweep over configurations stored in a YAML file.
+
+    Loads the YAML mapping once during initialisation and exposes each
+    top-level key as a sweep choice. Each sampled value is a
+    :class:`YamlSelection` instance that exposes the underlying YAML
+    content via the ``value`` attribute (and dict-like helpers).
+    """
+
+    __slots__ = shared_slots + ["yaml_path", "_entries", "_value_id_to_key", "default_key"]
+
+    def __init__(
+        self,
+        yaml_path: str | Path,
+        units: str = "ul",
+        samples: int = None,
+        default_key: str = None,
+        **params,
+    ):
+        path = Path(yaml_path)
+        if not path.exists():
+            raise FileNotFoundError(f"YamlSweep could not find yaml file at {path}")
+
+        entries = self._load_yaml(path)
+        if not isinstance(entries, Mapping):
+            raise ValueError(
+                "YamlSweep requires the YAML file to contain a mapping at the top level"
+            )
+
+        ordered_entries = OrderedDict(entries)
+        if len(ordered_entries) == 0:
+            raise ValueError("YamlSweep requires at least one top-level key in the YAML file")
+
+        if default_key is None:
+            default_key = next(iter(ordered_entries))
+        elif default_key not in ordered_entries:
+            raise ValueError(f"Default key '{default_key}' not found in {path}")
+
+        selection_entries = OrderedDict(
+            (key, YamlSelection(key, value)) for key, value in ordered_entries.items()
+        )
+        default_value = selection_entries[default_key]
+
+        self.yaml_path = str(path)
+        self._entries = selection_entries
+        self.default_key = default_key
+        self._value_id_to_key = {id(value): key for key, value in selection_entries.items()}
+
+        SweepSelector.__init__(
+            self,
+            objects=selection_entries,
+            instantiate=False,
+            units=units,
+            samples=samples,
+            default=default_value,
+            **params,
+        )
+
+    @staticmethod
+    def _load_yaml(path: Path) -> Mapping[str, Any]:
+        with path.open("r", encoding="utf-8") as stream:
+            data = yaml.safe_load(stream)
+        return data
+
+    def keys(self) -> List[str]:
+        key_list = list(self._entries.keys())
+        return self.indices_to_samples(self.samples, key_list)
+
+    def items(self) -> List[tuple[str, Any]]:
+        selected_keys = self.keys()
+        return [(key, self._entries[key]) for key in selected_keys]
+
+    def values(self) -> List[Any]:
+        selected_keys = self.keys()
+        return [self._entries[key] for key in selected_keys]
+
+    def key_for_value(self, value: Any) -> str | None:
+        if hasattr(value, "key"):
+            return value.key
+        return self._value_id_to_key.get(id(value))
 
 
 class IntSweep(Integer, SweepBase):

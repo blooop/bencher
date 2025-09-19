@@ -1,9 +1,9 @@
-hvplot heatmap adds nothing over holoviews heatmap
+create a new inputvar type call YamlSweep
 
-need to work out how to use holoviews area 
+It should accept a path to a yaml file in the constructor.
+and the values it sweeps over should be the top level keys in the yaml and return contents of that key when iterating through.
 
-need to work out how to do holoviews scatter
+create a example that loads from a yaml
+create tests
 
-use to_panel to do faceting, or work out why faceting is broken for hvplot/holoviews
-
-add to_panes_limited which stops at a certain level of dimensionality
+make sure everything passes.

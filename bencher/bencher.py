@@ -429,7 +429,8 @@ class Bench(BenchPlotServer):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
 
         for r in result_vars_in:
-            logging.info(f"result var: {r.name}")
+            r_name = getattr(r, "name", str(r))
+            logging.info("result var: %s", r_name)
 
         if isinstance(const_vars_in, dict):
             const_vars_in = list(const_vars_in.items())
@@ -449,11 +450,13 @@ class Bench(BenchPlotServer):
                     title += "s"
                 title += ": " + ", ".join([f"{c[0].name}={c[1]}" for c in const_vars_in])
             else:
-                title = "Recording: " + ", ".join([i.name for i in result_vars_in])
+                title = "Recording: " + ", ".join(
+                    [getattr(i, "name", str(i)) for i in result_vars_in]
+                )
 
         if run_cfg.level > 0:
             inputs = []
-            print(input_vars_in)
+            logging.debug("Input vars prior to level adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
                     inputs.append(i.with_level(run_cfg.level))
