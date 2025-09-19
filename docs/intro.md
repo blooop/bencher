@@ -60,4 +60,3 @@ Start with example_simple_float.py and explore other examples based on your data
 - example_filepath.py: Output arbitrary files as part of the sweep
 - and many others
 - example_yaml_dict_sweep.py: Loads sweeps from a yaml file
-

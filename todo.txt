@@ -8,7 +8,7 @@ create tests
 
 make sure everything passes.
 
-when the yamlsweep is acessed it should return a key,value tuple.
+when the yamlsweep is accessed it should return a key,value tuple.
 
 if the contents of the yaml changes between runs that should break the cache. 
 
