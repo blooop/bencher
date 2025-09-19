@@ -39,8 +39,7 @@ def example_yaml_dict_sweep(
     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
 ) -> bch.Bench:
     bench = YamlDictConfig().to_bench(name="yaml_dict_sweep", run_cfg=run_cfg, report=report)
-    bench.plot_sweep(
-    )
+    bench.plot_sweep()
     return bench
 
 
