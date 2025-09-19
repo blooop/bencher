@@ -40,6 +40,7 @@ def test_yaml_sweep_key_lookup_and_default():
     assert sweep.default == "balanced"
     assert sweep.default_key == "balanced"
     assert sweep.key_for_value(sweep.default) == "balanced"
+    assert sweep.key_for_value(balanced_value) == "balanced"
     assert sum(balanced_value) == 100
 
 
@@ -55,3 +56,31 @@ def test_yaml_sweep_requires_mapping(tmp_path):
 
     with pytest.raises(ValueError):
         bch.YamlSweep(invalid)
+
+
+def test_yaml_sweep_sampling_zero_samples():
+    with pytest.raises(ValueError):
+        bch.YamlSweep(EXAMPLE_YAML, samples=0)
+
+
+def test_yaml_sweep_sampling_negative_samples():
+    with pytest.raises(ValueError):
+        bch.YamlSweep(EXAMPLE_YAML, samples=-1)
+
+
+def test_yaml_sweep_sampling_too_many_samples():
+    sweep = bch.YamlSweep(EXAMPLE_YAML, samples=10)
+    assert len(sweep.keys()) == 3
+
+
+def test_yaml_sweep_invalid_default_key_raises():
+    with pytest.raises(ValueError):
+        bch.YamlSweep(EXAMPLE_YAML, default_key="nonexistent_key")
+
+
+def test_yaml_sweep_empty_mapping_raises(tmp_path):
+    empty = tmp_path / "empty.yaml"
+    empty.write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        bch.YamlSweep(empty)

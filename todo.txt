@@ -3,7 +3,7 @@ create a new inputvar type call YamlSweep
 It should accept a path to a yaml file in the constructor.
 and the values it sweeps over should be the top level keys in the yaml and return contents of that key when iterating through.
 
-create a example that loads from a yaml
+create an example that loads from a yaml
 create tests
 
 make sure everything passes.

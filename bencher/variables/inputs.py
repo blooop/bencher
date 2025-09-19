@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from enum import Enum
 from pathlib import Path
 from typing import List, Any, Dict
@@ -8,6 +8,7 @@ import numpy as np
 from param import Integer, Number, Selector
 import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
+from threading import RLock
 
 
 class SweepSelector(Selector, SweepBase):
@@ -149,7 +150,29 @@ class YamlSelection(str):
         return iter((self.key(), self.value()))
 
     def __getitem__(self, item):
-        return self.value()[item]
+        value = self.value()
+        if isinstance(value, Mapping):
+            return value[item]
+        if isinstance(value, Sequence) or hasattr(value, "__getitem__"):
+            return value[item]
+        raise TypeError("YamlSelection value does not support indexing")
+
+    def __len__(self) -> int:
+        value = self.value()
+        if hasattr(value, "__len__"):
+            return len(value)
+        return super().__len__()
+
+    def __contains__(self, item) -> bool:
+        value = self.value()
+        if isinstance(value, Mapping):
+            return item in value
+        try:
+            if hasattr(value, "__contains__"):
+                return item in value
+        except TypeError:
+            pass
+        return super().__contains__(item)
 
     def get(self, item, default=None):
         if isinstance(self.value(), Mapping):
@@ -174,7 +197,10 @@ class YamlSweep(SweepSelector):
     content via the ``value`` attribute (and dict-like helpers).
     """
 
-    __slots__ = shared_slots + ["yaml_path", "_entries", "_value_id_to_key", "default_key"]
+    __slots__ = shared_slots + ["yaml_path", "_entries", "default_key"]
+
+    _cache_lock: RLock = RLock()
+    _yaml_cache: dict[str, tuple[tuple[int, int], Mapping[str, Any]]] = {}
 
     def __init__(
         self,
@@ -198,6 +224,9 @@ class YamlSweep(SweepSelector):
         if len(ordered_entries) == 0:
             raise ValueError("YamlSweep requires at least one top-level key in the YAML file")
 
+        if samples is not None and samples <= 0:
+            raise ValueError("samples must be greater than 0")
+
         if default_key is None:
             default_key = next(iter(ordered_entries))
         elif default_key not in ordered_entries:
@@ -211,7 +240,6 @@ class YamlSweep(SweepSelector):
         self.yaml_path = str(path)
         self._entries = selection_entries
         self.default_key = default_key
-        self._value_id_to_key = {id(value): key for key, value in selection_entries.items()}
 
         SweepSelector.__init__(
             self,
@@ -223,10 +251,23 @@ class YamlSweep(SweepSelector):
             **params,
         )
 
-    @staticmethod
-    def _load_yaml(path: Path) -> Mapping[str, Any]:
+    @classmethod
+    def _load_yaml(cls, path: Path) -> Mapping[str, Any]:
+        resolved = path.resolve()
+        cache_key = str(resolved)
+        stat = path.stat()
+        cache_token = (stat.st_mtime_ns, stat.st_size)
+
+        with cls._cache_lock:
+            cached = cls._yaml_cache.get(cache_key)
+            if cached and cached[0] == cache_token:
+                return cached[1]
+
         with path.open("r", encoding="utf-8") as stream:
             data = yaml.safe_load(stream)
+
+        with cls._cache_lock:
+            cls._yaml_cache[cache_key] = (cache_token, data)
         return data
 
     def keys(self) -> List[str]:
@@ -242,9 +283,17 @@ class YamlSweep(SweepSelector):
         return [self._entries[key] for key in selected_keys]
 
     def key_for_value(self, value: Any) -> str | None:
-        if hasattr(value, "key"):
+        if isinstance(value, YamlSelection):
             return value.key()
-        return self._value_id_to_key.get(id(value))
+        if isinstance(value, str) and value in self._entries:
+            return value
+        for key, selection in self._entries.items():
+            selection_value = selection.value()
+            if selection_value is value:
+                return key
+            if selection_value == value:
+                return key
+        return None
 
 
 class IntSweep(Integer, SweepBase):
