@@ -84,3 +84,22 @@ def test_yaml_sweep_empty_mapping_raises(tmp_path):
 
     with pytest.raises(ValueError):
         bch.YamlSweep(empty)
+
+
+def test_yaml_sweep_hash_includes_value(tmp_path):
+    yaml_file = tmp_path / "config.yaml"
+    yaml_file.write_text("profile:\n  param: 1\n", encoding="utf-8")
+
+    class ConfigSweepV1(bch.ParametrizedSweep):
+        profile = bch.YamlSweep(yaml_file)
+
+    hash_v1 = ConfigSweepV1().hash_persistent()
+
+    yaml_file.write_text("profile:\n  param: 2\n", encoding="utf-8")
+
+    class ConfigSweepV2(bch.ParametrizedSweep):
+        profile = bch.YamlSweep(yaml_file)
+
+    hash_v2 = ConfigSweepV2().hash_persistent()
+
+    assert hash_v1 != hash_v2

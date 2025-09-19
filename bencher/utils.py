@@ -99,6 +99,8 @@ def hash_sha1(var: Any) -> str:
     Returns:
         str: A hexadecimal SHA1 hash of the string representation of the variable
     """
+    if hasattr(var, "__bencher_hash__") and callable(getattr(var, "__bencher_hash__")):
+        var = var.__bencher_hash__()
     return hashlib.sha1(str(var).encode("ASCII")).hexdigest()
 
 

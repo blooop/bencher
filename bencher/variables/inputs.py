@@ -143,6 +143,23 @@ class YamlSelection(str):
     def __repr__(self) -> str:
         return f"YamlSelection(key={self.key()!r}, value={self.value()!r})"
 
+    @staticmethod
+    def _hashable(value: Any) -> Any:
+        """Create a deterministic, hashable representation of the YAML value."""
+        if isinstance(value, np.ndarray):
+            return YamlSelection._hashable(value.tolist())
+        if isinstance(value, Mapping):
+            return tuple((key, YamlSelection._hashable(val)) for key, val in value.items())
+        if isinstance(value, set):
+            return tuple(sorted(YamlSelection._hashable(val) for val in value))
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            return tuple(YamlSelection._hashable(val) for val in value)
+        return value
+
+    def __bencher_hash__(self) -> tuple[str, Any]:
+        """Return the key/value pair in a stable form for the caching layer."""
+        return (self.key(), self._hashable(self.value()))
+
     def as_tuple(self) -> tuple[str, Any]:
         return (self.key(), self.value())
 
