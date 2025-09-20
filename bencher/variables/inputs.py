@@ -1,6 +1,6 @@
-from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Any, Dict
 
@@ -8,7 +8,6 @@ import numpy as np
 from param import Integer, Number, Selector
 import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
-from threading import RLock
 
 
 class SweepSelector(Selector, SweepBase):
@@ -124,13 +123,27 @@ class EnumSweep(SweepSelector):
             self.doc = enum_type.__doc__
 
 
+def _make_hashable(value: Any) -> Any:
+    """Create a deterministic, hashable representation of arbitrary YAML data."""
+
+    if isinstance(value, np.ndarray):
+        return _make_hashable(value.tolist())
+    if isinstance(value, Mapping):
+        return tuple((key, _make_hashable(val)) for key, val in value.items())
+    if isinstance(value, set):
+        return tuple(sorted(_make_hashable(val) for val in value))
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return tuple(_make_hashable(val) for val in value)
+    return value
+
+
 class YamlSelection(str):
-    """String-like wrapper that keeps a reference to the YAML value."""
+    """String-like wrapper that keeps track of the underlying YAML value."""
 
     __slots__ = ("_value",)
 
     def __new__(cls, key: str, value: Any):
-        obj = str.__new__(cls, key)
+        obj = super().__new__(cls, key)
         obj._value = value
         return obj
 
@@ -143,66 +156,31 @@ class YamlSelection(str):
     def __repr__(self) -> str:
         return f"YamlSelection(key={self.key()!r}, value={self.value()!r})"
 
-    @staticmethod
-    def _hashable(value: Any) -> Any:
-        """Create a deterministic, hashable representation of the YAML value."""
-        if isinstance(value, np.ndarray):
-            return YamlSelection._hashable(value.tolist())
-        if isinstance(value, Mapping):
-            return tuple((key, YamlSelection._hashable(val)) for key, val in value.items())
-        if isinstance(value, set):
-            return tuple(sorted(YamlSelection._hashable(val) for val in value))
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-            return tuple(YamlSelection._hashable(val) for val in value)
-        return value
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, YamlSelection):
+            return (self.key(), self.value()) == (other.key(), other.value())
+        if isinstance(other, str):
+            return self.key() == other
+        return NotImplemented
 
-    def __bencher_hash__(self) -> tuple[str, Any]:
-        """Return the key/value pair in a stable form for the caching layer."""
-        return (self.key(), self._hashable(self.value()))
-
-    def as_tuple(self) -> tuple[str, Any]:
-        return (self.key(), self.value())
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, YamlSelection):
+            return self.key() < other.key()
+        if isinstance(other, str):
+            return self.key() < other
+        return NotImplemented
 
     def __iter__(self):
         return iter((self.key(), self.value()))
 
-    def __getitem__(self, item):
-        value = self.value()
-        if isinstance(value, Mapping):
-            return value[item]
-        if isinstance(value, Sequence) or hasattr(value, "__getitem__"):
-            return value[item]
-        raise TypeError("YamlSelection value does not support indexing")
-
-    def __len__(self) -> int:
-        value = self.value()
-        if hasattr(value, "__len__"):
-            return len(value)
-        return super().__len__()
-
-    def __contains__(self, item) -> bool:
-        value = self.value()
-        if isinstance(value, Mapping):
-            return item in value
-        try:
-            if hasattr(value, "__contains__"):
-                return item in value
-        except TypeError:
-            pass
-        return super().__contains__(item)
-
-    def get(self, item, default=None):
-        if isinstance(self.value(), Mapping):
-            return self.value().get(item, default)
-        return default
-
-    def items(self):
-        if isinstance(self.value(), Mapping):
-            return self.value().items()
-        raise TypeError("YamlSelection value is not a mapping")
-
     def __reduce__(self):
         return (YamlSelection, (self.key(), self.value()))
+
+    def __bencher_hash__(self) -> tuple[str, Any]:
+        return (self.key(), _make_hashable(self.value()))
+
+    def as_tuple(self) -> tuple[str, Any]:
+        return (self.key(), self.value())
 
 
 class YamlSweep(SweepSelector):
@@ -215,9 +193,6 @@ class YamlSweep(SweepSelector):
     """
 
     __slots__ = shared_slots + ["yaml_path", "_entries", "default_key"]
-
-    _cache_lock: RLock = RLock()
-    _yaml_cache: dict[str, tuple[tuple[int, int], Mapping[str, Any]]] = {}
 
     def __init__(
         self,
@@ -237,21 +212,20 @@ class YamlSweep(SweepSelector):
                 "YamlSweep requires the YAML file to contain a mapping at the top level"
             )
 
-        ordered_entries = OrderedDict(entries)
-        if len(ordered_entries) == 0:
+        entries = dict(entries)
+
+        if len(entries) == 0:
             raise ValueError("YamlSweep requires at least one top-level key in the YAML file")
 
         if samples is not None and samples <= 0:
             raise ValueError("samples must be greater than 0")
 
         if default_key is None:
-            default_key = next(iter(ordered_entries))
-        elif default_key not in ordered_entries:
+            default_key = next(iter(entries))
+        elif default_key not in entries:
             raise ValueError(f"Default key '{default_key}' not found in {path}")
 
-        selection_entries = OrderedDict(
-            (key, YamlSelection(key, value)) for key, value in ordered_entries.items()
-        )
+        selection_entries = {key: YamlSelection(key, value) for key, value in entries.items()}
         default_value = selection_entries[default_key]
 
         self.yaml_path = str(path)
@@ -271,21 +245,16 @@ class YamlSweep(SweepSelector):
     @classmethod
     def _load_yaml(cls, path: Path) -> Mapping[str, Any]:
         resolved = path.resolve()
-        cache_key = str(resolved)
         stat = path.stat()
-        cache_token = (stat.st_mtime_ns, stat.st_size)
+        data = cls._read_yaml(str(resolved), stat.st_mtime_ns, stat.st_size)
+        return data if data is not None else {}
 
-        with cls._cache_lock:
-            cached = cls._yaml_cache.get(cache_key)
-            if cached and cached[0] == cache_token:
-                return cached[1]
-
-        with path.open("r", encoding="utf-8") as stream:
-            data = yaml.safe_load(stream)
-
-        with cls._cache_lock:
-            cls._yaml_cache[cache_key] = (cache_token, data)
-        return data
+    @staticmethod
+    @lru_cache(maxsize=64)
+    def _read_yaml(path_str: str, modified_ns: int, size: int) -> Any:
+        _ = modified_ns, size  # values are part of the cache key
+        with Path(path_str).open("r", encoding="utf-8") as stream:
+            return yaml.safe_load(stream)
 
     def keys(self) -> List[str]:
         key_list = list(self._entries.keys())
