@@ -44,4 +44,5 @@ def example_yaml_dict_sweep(
 
 
 if __name__ == "__main__":
-    example_yaml_dict_sweep().report.show()
+    bench_runner = bch.BenchRunner()
+    bench_runner.add(example_yaml_dict_sweep).run(level=7, show=True)
