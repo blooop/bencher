@@ -3,7 +3,7 @@ from pathlib import Path
 import bencher as bch
 
 
-_YAML_PATH = Path(__file__).with_name("example_yaml_dict_sweep.yaml")
+_YAML_PATH = Path(__file__).with_name("example_yaml_sweep_dict.yaml")
 
 
 class YamlDictConfig(bch.ParametrizedSweep):

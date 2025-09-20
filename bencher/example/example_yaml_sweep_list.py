@@ -3,13 +3,15 @@ from pathlib import Path
 import bencher as bch
 
 
-_YAML_PATH = Path(__file__).with_name("example_yaml_sweep.yaml")
+_YAML_PATH = Path(__file__).with_name("example_yaml_sweep_list.yaml")
 
 
 class YamlConfigSweep(bch.ParametrizedSweep):
     """Example sweep that aggregates YAML list entries into a single metric."""
 
-    workload = bch.YamlSweep(_YAML_PATH, doc="Workload lists stored in example_yaml_sweep.yaml")
+    workload = bch.YamlSweep(
+        _YAML_PATH, doc="Workload lists stored in example_yaml_sweep_list.yaml"
+    )
 
     total_workload = bch.ResultVar(units="tasks", doc="Total workload summed from the YAML list")
 
