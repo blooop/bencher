@@ -13,6 +13,7 @@ from .variables.inputs import (
     StringSweep,
     EnumSweep,
     BoolSweep,
+    YamlSweep,
     SweepBase,
 )
 from .variables.time import TimeSnapshot

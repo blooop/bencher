@@ -140,12 +140,19 @@ class Executors(StrEnum):
         Returns:
             Future | None: The executor instance, or None for serial execution
         """
-        providers = {
-            Executors.SERIAL: None,
-            Executors.MULTIPROCESSING: ProcessPoolExecutor(),
-            Executors.SCOOP: scoop_future_executor,
-        }
-        return providers[provider]
+        if provider == Executors.SERIAL:
+            return None
+        if provider == Executors.MULTIPROCESSING:
+            try:
+                return ProcessPoolExecutor()
+            except (OSError, PermissionError) as exc:  # pragma: no cover - env specific
+                logging.warning(
+                    "Falling back to serial execution; multiprocessing unavailable: %s", exc
+                )
+                return None
+        if provider == Executors.SCOOP:
+            return scoop_future_executor
+        raise ValueError(f"Unknown executor provider: {provider}")
 
 
 class FutureCache:
