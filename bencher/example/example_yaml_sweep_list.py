@@ -21,7 +21,7 @@ class YamlConfigSweep(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_yaml_sweep(
+def example_yaml_sweep_list(
     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
 ) -> bch.Bench:
     bench = YamlConfigSweep().to_bench(name="yaml_sweep", run_cfg=run_cfg, report=report)
@@ -34,4 +34,4 @@ def example_yaml_sweep(
 
 
 if __name__ == "__main__":
-    example_yaml_sweep().report.show()
+    example_yaml_sweep_list().report.show()

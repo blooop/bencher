@@ -33,7 +33,7 @@ class YamlDictConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_yaml_dict_sweep(
+def example_yaml_sweep_dict(
     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
 ) -> bch.Bench:
     bench = YamlDictConfig().to_bench(name="yaml_dict_sweep", run_cfg=run_cfg, report=report)
@@ -43,4 +43,4 @@ def example_yaml_dict_sweep(
 
 if __name__ == "__main__":
     bench_runner = bch.BenchRunner()
-    bench_runner.add(example_yaml_dict_sweep).run(level=7, show=True)
+    bench_runner.add(example_yaml_sweep_dict).run(level=7, show=True)
