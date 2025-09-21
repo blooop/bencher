@@ -1,29 +1,7 @@
-from pathlib import Path
-
 import bencher as bch
+from bencher.example.example_utils import resolve_example_path
 
-
-def _resolve_example_path(filename: str) -> Path:
-    """Locate example assets when running as a script, notebook, or installed package."""
-
-    module_file = globals().get("__file__")
-    search_roots = []
-    if module_file:
-        search_roots.append(Path(module_file).resolve().parent)
-
-    search_roots.append(Path.cwd())
-    search_roots.append(Path(bch.__file__).resolve().parent / "example")
-
-    for root in search_roots:
-        candidate = Path(root) / filename
-        if candidate.exists():
-            return candidate
-
-    searched = ", ".join(str(Path(root)) for root in search_roots)
-    raise FileNotFoundError(f"Unable to locate {filename}. Searched: {searched}")
-
-
-_YAML_PATH = _resolve_example_path("example_yaml_sweep_dict.yaml")
+_YAML_PATH = resolve_example_path("example_yaml_sweep_dict.yaml")
 
 
 class YamlDictConfig(bch.ParametrizedSweep):
