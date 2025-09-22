@@ -1,5 +1,6 @@
 import bencher as bch
 import param
+import pytest
 
 
 class DummyCfg(param.Parameterized):
@@ -38,9 +39,20 @@ def test_update_options_provided_default():
 
 def test_update_options_invalid_default():
     cfg = DummyCfg()
-    try:
+    with pytest.raises(ValueError):
         cfg.param.state_id.load_values_dynamically(["foo"], default="bar")
-    except ValueError:
-        pass
-    else:  # pragma: no cover - ensure error raised
-        assert False, "Expected ValueError for invalid default"
+
+
+def test_update_options_empty_list():
+    cfg = DummyCfg()
+    with pytest.raises(ValueError):
+        cfg.param.state_id.load_values_dynamically([])
+
+
+def test_update_options_no_keep_current():
+    cfg = DummyCfg()
+    cfg.param.state_id.load_values_dynamically(["a", "b", "c"], default="b")
+    assert cfg.state_id == "b"
+    cfg.param.state_id.load_values_dynamically(["x", "b", "y"], keep_current_if_possible=False)
+    # Should pick first element since we asked not to preserve current
+    assert cfg.state_id == "x"

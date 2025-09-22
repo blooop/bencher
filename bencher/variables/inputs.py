@@ -84,107 +84,88 @@ class SweepSelector(Selector, SweepBase):
         keep_current_if_possible: bool = True,
         set_on_class: bool = True,
     ) -> None:
-        """Dynamically update the selectable objects for this sweep variable.
+        """Dynamically update selectable objects for this sweep variable.
 
-        This is a convenience helper for user code that needs to populate a
-        ``StringSweep`` (or any ``SweepSelector`` subclass) *after* initial
-        construction – e.g. when valid choices are only known at runtime.
-
-        Typical manual pattern (now replaced by this helper)::
-
-            self.param.state_id.objects = list(state_keys)
-            self.__class__.param.state_id.objects = list(state_keys)
-            self.__class__.param.state_id.default = state_keys[0]
-            self.param.update(state_id=state_keys[0])
-
-        Parameters
-        ----------
-        new_objects:
-            The new list/tuple of selectable values.
-        default:
-            Optional explicit default value to select. If ``None`` a default
-            is chosen using the following precedence:
-              1. Current value (if ``keep_current_if_possible`` is True and
-                 present in ``new_objects``)
-              2. Existing default (if present in ``new_objects``)
-              3. First element of ``new_objects``
-        keep_current_if_possible:
-            Retain the currently selected value if it is still valid.
-        set_on_class:
-            Also update the underlying class parameter (recommended so that
-            Panel/param widgets created later inherit the new options).
-
-        Notes
-        -----
-        - This mutates the parameter *in place*; no new object is created.
-        - ``samples`` is updated to reflect the new number of objects if it
-          was previously set to the old length (typical behaviour). If the
-          user had explicitly specified ``samples`` smaller than the list
-          length, that custom value is preserved.
-        - Does not return ``self`` to emphasise side effects.
+        See original implementation for detailed semantics. This refactored version
+        delegates work to smaller helpers for clarity and easier testing.
         """
-
         new_list = list(new_objects)
-        if len(new_list) == 0:
-            raise ValueError("load_values_dynamically requires at least one object")
+        self._ensure_nonempty(new_list)
+        candidate_default = self._choose_default(new_list, default, keep_current_if_possible)
+        self._update_instance_objects(new_list)
+        if set_on_class:
+            self._sync_class_defaults(new_list, candidate_default)
+        self._apply_owner_value(candidate_default)
+        self.default = candidate_default  # type: ignore[attr-defined]
 
-        # Determine target default
+    # --- helper methods -------------------------------------------------
+    def _ensure_nonempty(self, new_list: list[Any]) -> None:
+        if not new_list:
+            raise ValueError(
+                "Parameter 'new_objects' passed to load_values_dynamically is empty. At least one object is required to dynamically load values."
+            )
+
+    def _choose_default(
+        self,
+        new_list: list[Any],
+        explicit_default: Any | None,
+        keep_current: bool,
+    ) -> Any:
         current_value = getattr(self.owner, self.name) if getattr(self, "owner", None) else None
-        # Treat the dynamic sentinel as if there is no meaningful current value.
         if current_value is LoadValuesDynamically:
             current_value = None
-        candidate_default = None
+        if explicit_default is not None:
+            if explicit_default not in new_list:
+                raise ValueError(
+                    f"Provided default {explicit_default!r} is not in new options: {new_list}"
+                )
+            return explicit_default
+        if keep_current and current_value in new_list:
+            return current_value
+        existing_default = getattr(self, "default", None)
+        # Only reuse the previous default if we are allowed to preserve state
+        if keep_current and existing_default in new_list:
+            return existing_default  # type: ignore[attr-defined]
+        return new_list[0]
 
-        if default is not None:
-            if default not in new_list:
-                raise ValueError(f"Provided default {default!r} is not in new options: {new_list}")
-            candidate_default = default
-        else:
-            if keep_current_if_possible and current_value in new_list:
-                candidate_default = current_value
-            elif getattr(self, "default", None) in new_list:
-                candidate_default = self.default  # type: ignore[attr-defined]
-            else:
-                candidate_default = new_list[0]
-
-        # Update instance objects
+    def _update_instance_objects(self, new_list: list[Any]) -> None:
         self.objects = new_list  # type: ignore[assignment]
-        # Update samples only if it matched previous full length
-        # Adjust samples if it was implicitly bound to the old list length. If samples
-        # was a custom smaller number we leave it untouched.
-        if isinstance(getattr(self, "samples", None), int):
-            if self.samples == len(new_list) or self.samples == len(new_list) - 1:  # type: ignore[attr-defined]
-                self.samples = len(new_list)  # type: ignore[attr-defined]
+        # Adjust samples if it was implicitly bound to the old list length.
+        if isinstance(getattr(self, "samples", None), int) and (
+            self.samples in (len(new_list), len(new_list) - 1)  # type: ignore[attr-defined]
+        ):
+            self.samples = len(new_list)  # type: ignore[attr-defined]
 
-        # Set defaults at both instance and class level if requested
-        self.default = candidate_default  # type: ignore[attr-defined]
-        if set_on_class and self.owner is not None:
-            owner_cls = getattr(self.owner, "__class__", None)
-            param_container = getattr(owner_cls, "param", None)
-            cls_param = None
-            if param_container is not None:
-                # Param's Parameterized.param supports dict-like access via __getitem__.
-                # Only catch the specific errors that can occur (AttributeError/KeyError/TypeError)
-                # instead of a blanket Exception to satisfy linting and avoid masking bugs.
-                try:
-                    cls_param = param_container[self.name]  # type: ignore[index]
-                except (AttributeError, KeyError, TypeError):  # pragma: no cover - fallback path
-                    cls_param = getattr(param_container, self.name, None)
-            if getattr(cls_param, "objects", None) is not None:
-                cls_param.objects = list(new_list)
-                if hasattr(cls_param, "default"):
-                    cls_param.default = candidate_default
+    def _sync_class_defaults(self, new_list: list[Any], candidate_default: Any) -> None:
+        if self.owner is None:
+            return
+        owner_cls = getattr(self.owner, "__class__", None)
+        param_container = getattr(owner_cls, "param", None)
+        cls_param = None
+        if param_container is not None:
+            try:
+                cls_param = param_container[self.name]  # type: ignore[index]
+            except (AttributeError, KeyError, TypeError):  # pragma: no cover - fallback path
+                cls_param = getattr(param_container, self.name, None)
+        if getattr(cls_param, "objects", None) is not None:
+            cls_param.objects = list(new_list)
+            if hasattr(cls_param, "default"):
+                cls_param.default = candidate_default
 
-        # Finally, update current value if possible
-        if self.owner is not None:
-            owner_param = getattr(self.owner, "param", None)
-            if owner_param is not None:
-                # Trust update; let param raise if invalid
-                try:
-                    owner_param.update(**{self.name: candidate_default})
-                except (ValueError, TypeError):  # pragma: no cover - param validation edge case
-                    # Invalid update (e.g., candidate value rejected by param validators); ignore.
-                    pass
+    def _apply_owner_value(self, candidate_default: Any) -> None:
+        if self.owner is None:
+            return
+        owner_param = getattr(self.owner, "param", None)
+        if owner_param is None:
+            return
+        try:
+            owner_param.update(**{self.name: candidate_default})
+        except (ValueError, TypeError) as e:  # pragma: no cover - param validation edge case
+            import logging
+
+            logging.warning(
+                "Failed to update param '%s' with value %r: %s", self.name, candidate_default, e
+            )
 
 
 class BoolSweep(SweepSelector):
