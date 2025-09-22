@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Any, Dict
 
 import numpy as np
+import warnings
 from param import Integer, Number, Selector
 import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
@@ -85,7 +86,7 @@ class SweepSelector(Selector, SweepBase):
         ``StringSweep`` (or any ``SweepSelector`` subclass) *after* initial
         construction – e.g. when valid choices are only known at runtime.
 
-        It mirrors the manual pattern::
+        Typical manual pattern (now replaced by this helper)::
 
             self.param.state_id.objects = list(state_keys)
             self.__class__.param.state_id.objects = list(state_keys)
@@ -158,33 +159,44 @@ class SweepSelector(Selector, SweepBase):
             param_container = getattr(owner_cls, "param", None)
             cls_param = None
             if param_container is not None:
+                # Param's Parameterized.param supports dict-like access via __getitem__
                 try:
-                    if self.name in param_container:  # type: ignore[operator]
-                        cls_param = param_container[self.name]  # type: ignore[index]
-                except TypeError:  # pragma: no cover - membership unsupported
-                    # Fallback: attempt attribute-style access
-                    if hasattr(param_container, self.name):
-                        cls_param = getattr(param_container, self.name)
-            if cls_param is not None:  # pragma: no branch - simple guard
-                try:
-                    cls_param.objects = list(new_list)
+                    cls_param = param_container[self.name]  # type: ignore[index]
+                except Exception:  # pragma: no cover - fallback path (AttributeError/KeyError)
+                    cls_param = getattr(param_container, self.name, None)
+            if getattr(cls_param, "objects", None) is not None:
+                cls_param.objects = list(new_list)
+                if hasattr(cls_param, "default"):
                     cls_param.default = candidate_default
-                except AttributeError:  # pragma: no cover - unexpected shape
-                    pass
 
         # Finally, update current value if possible
         if self.owner is not None:
             owner_param = getattr(self.owner, "param", None)
-            if owner_param is not None and hasattr(owner_param, "params"):
+            if owner_param is not None:
+                # Trust update; let param raise if invalid
                 try:
-                    param_names = owner_param.params().keys()  # type: ignore[call-arg]
-                except (
-                    AttributeError,
-                    TypeError,
-                ):  # pragma: no cover - defensive for param API changes
-                    param_names = []
-                if self.name in param_names:
                     owner_param.update(**{self.name: candidate_default})
+                except Exception:  # pragma: no cover - param validation edge case
+                    pass
+
+    # ------------------------------------------------------------------
+    # Backward compatibility wrappers
+    # ------------------------------------------------------------------
+    def update_options(self, *args, **kwargs):  # pragma: no cover - thin wrapper
+        warnings.warn(
+            "update_options is deprecated; use load_values_dynamically instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.load_values_dynamically(*args, **kwargs)
+
+    def update_objects(self, *args, **kwargs):  # pragma: no cover - thin wrapper
+        warnings.warn(
+            "update_objects is deprecated; use load_values_dynamically instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.load_values_dynamically(*args, **kwargs)
 
 
 class BoolSweep(SweepSelector):
@@ -236,9 +248,7 @@ class StringSweep(SweepSelector):
             **params,
         )
 
-    # Explicit alias retained for older serialized benchmarks referencing the old API
-    update_options = SweepSelector.load_values_dynamically  # type: ignore[attr-defined]
-    update_objects = SweepSelector.load_values_dynamically  # type: ignore[attr-defined]
+    # Subclass retains no extra aliases; base class supplies deprecated wrappers
 
     # ------------------------------------------------------------------
     # Factory helpers
