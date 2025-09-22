@@ -21,6 +21,14 @@ The project uses Pixi for package management and task automation. Key commands:
 ### Testing Individual Examples
 To test a specific example: `python bencher/example/example_simple_float.py`
 
+### Updating Examples & Docs
+1. Add or modify the example implementation under `bencher/example/`.
+2. Register the example in `bencher/example/meta/generate_examples.py` so the documentation generator emits a notebook (pick an appropriate gallery subdirectory).
+3. Run `pixi run generate-docs` to regenerate gallery notebooks.
+4. Update relevant user docs (for instance `docs/intro.md` or gallery sections) to mention the new example.
+5. Make sure conf.py includes the docs that are added
+6. Execute `pixi run ci` before committing to ensure formatting, linting, and tests all pass.
+
 ## Code Architecture
 
 Bencher is a benchmarking framework built around these core concepts:

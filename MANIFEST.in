@@ -1,1 +1,2 @@
 recursive-include bencher/ *.py
+recursive-include bencher/ *.yaml

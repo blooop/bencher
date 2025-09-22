@@ -1,0 +1,18 @@
+prototype:
+  label: Prototype nightly job
+  durations: [3, 5, 2]
+  resources:
+    cpu: 2
+    memory: 8
+production:
+  label: Production batch job
+  durations: [12, 15, 20]
+  resources:
+    cpu: 8
+    memory: 32
+expansion:
+  label: Experimental scale-out job
+  durations: [7, 9, 11, 13]
+  resources:
+    cpu: 16
+    memory: 64

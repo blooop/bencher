@@ -160,6 +160,15 @@ if __name__ == "__main__":
         "/workspaces/bencher/bencher/example/example_levels.py", "Levels"
     )
 
+    # YAML driven sweeps
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_yaml_sweep_list.py", "yaml"
+    )
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_yaml_sweep_dict.py", "yaml"
+    )
+
     # todo, enable
     # convert_example_to_jupyter_notebook(
     #     "/workspaces/bencher/bencher/example/example_composable_container_video.py",

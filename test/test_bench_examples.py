@@ -30,6 +30,8 @@ from bencher.example.example_dataframe import example_dataset
 from bencher.example.optuna.example_optuna import optuna_rastrigin
 from bencher.example.example_sample_cache import example_sample_cache
 from bencher.example.example_strings import example_strings
+from bencher.example.example_yaml_sweep_list import example_yaml_sweep_list
+from bencher.example.example_yaml_sweep_dict import example_yaml_sweep_dict
 from bencher.example.example_image import example_image, example_image_vid
 from bencher.example.example_video import example_video
 from bencher.example.example_filepath import example_filepath
@@ -145,6 +147,12 @@ class TestBenchExamples(unittest.TestCase):
 
     def test_example_strings(self) -> None:
         self.examples_asserts(example_strings(self.create_run_cfg()))
+
+    def test_example_yaml_sweep(self) -> None:
+        self.examples_asserts(example_yaml_sweep_list(self.create_run_cfg()))
+
+    def test_example_yaml_dict_sweep(self) -> None:
+        self.examples_asserts(example_yaml_sweep_dict(self.create_run_cfg()))
 
     def test_example_image(self) -> None:
         self.examples_asserts(example_image(self.create_run_cfg()))
