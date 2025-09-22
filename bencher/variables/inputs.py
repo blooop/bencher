@@ -22,24 +22,6 @@ class _DynamicValuesSentinel(str):
 
 
 LoadValuesDynamically = _DynamicValuesSentinel()
-"""
-Internal sentinel for dynamic sweep variables. Users should **never** import or use this directly.
-
-**Recommended usage:**
-
-    class C(param.Parameterized):
-        state_id = bch.StringSweep.dynamic(doc="State", placeholder="Select state")
-
-    # Later, once states are known:
-    c = C()
-    c.param.state_id.load_values_dynamically(state_keys)
-
-Panel widgets will initially show the placeholder text and then update cleanly once the
-real values are supplied.
-
-**Do not import or use `LoadValuesDynamically` directly.**
-Always use `StringSweep.dynamic()` for dynamic options.
-"""
 
 
 class SweepSelector(Selector, SweepBase):
