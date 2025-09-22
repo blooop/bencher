@@ -9,6 +9,32 @@ from param import Integer, Number, Selector
 import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
 
+# Sentinel value used to indicate that the actual selectable values for a SweepSelector
+# will be populated dynamically at runtime. Prefer using this constant instead of magic
+# strings like "__initialising__".
+class _DynamicValuesSentinel(str):
+    def __new__(cls):  # pragma: no cover - trivial
+        return super().__new__(cls, "<dynamic values loading>")
+
+    def __repr__(self):  # pragma: no cover - trivial
+        return "LoadValuesDynamically"
+
+
+LoadValuesDynamically = _DynamicValuesSentinel()
+"""Sentinel used in sweep variable definitions when the concrete option list will be
+provided later via update_options(). Example:
+
+    class C(param.Parameterized):
+        state_id = bch.StringSweep.dynamic(doc="State", placeholder="Select state")
+
+    # Later once states known:
+    c = C()
+    c.param.state_id.update_options(state_keys)
+
+Panel widgets will initially show the placeholder text and then update cleanly once the
+real values are supplied.
+"""
+
 
 class SweepSelector(Selector, SweepBase):
     """A class representing a parameter sweep for selectable options.
@@ -44,7 +70,7 @@ class SweepSelector(Selector, SweepBase):
     # ------------------------------------------------------------------
     # Dynamic update helpers
     # ------------------------------------------------------------------
-    def update_options(
+    def load_values_dynamically(
         self,
         new_objects: list[Any] | tuple[Any, ...],
         *,
@@ -94,10 +120,13 @@ class SweepSelector(Selector, SweepBase):
 
         new_list = list(new_objects)
         if len(new_list) == 0:
-            raise ValueError("update_options requires at least one object")
+            raise ValueError("load_values_dynamically requires at least one object")
 
         # Determine target default
         current_value = getattr(self.owner, self.name) if getattr(self, "owner", None) else None
+        # Treat the dynamic sentinel as if there is no meaningful current value.
+        if current_value is LoadValuesDynamically:
+            current_value = None
         candidate_default = None
 
         if default is not None:
@@ -136,8 +165,12 @@ class SweepSelector(Selector, SweepBase):
             except Exception:  # pragma: no cover - if validation rejects value
                 pass
 
-    # Backwards compatible alias (shorter name)
-    update_objects = update_options
+    # Backwards compatible aliases
+    def update_options(self, *args, **kwargs):  # pragma: no cover - shim
+        return self.load_values_dynamically(*args, **kwargs)
+
+    def update_objects(self, *args, **kwargs):  # pragma: no cover - shim
+        return self.load_values_dynamically(*args, **kwargs)
 
 
 class BoolSweep(SweepSelector):
@@ -188,6 +221,40 @@ class StringSweep(SweepSelector):
             samples=samples,
             **params,
         )
+
+    # ------------------------------------------------------------------
+    # Factory helpers
+    # ------------------------------------------------------------------
+    @classmethod
+    def dynamic(
+        cls,
+        *,
+        placeholder: str | None = None,
+        units: str = "ul",
+        doc: str | None = None,
+        **params,
+    ) -> "StringSweep":
+        """Create a StringSweep intended for later population.
+
+        Parameters
+        ----------
+        placeholder:
+            Optional text to show before real values are loaded. Defaults to the
+            sentinel's displayed text.
+        units:
+            Units label (optional, passed through).
+        doc:
+            Documentation string for the parameter.
+        params:
+            Additional param overrides.
+
+        Returns
+        -------
+        StringSweep
+            A sweep with a single sentinel placeholder value.
+        """
+        ph = placeholder if placeholder is not None else str(LoadValuesDynamically)
+        return cls([ph], units=units, doc=doc, **params)
 
 
 class EnumSweep(SweepSelector):
