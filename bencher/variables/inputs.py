@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Any, Dict
 
 import numpy as np
-import warnings
 from param import Integer, Number, Selector
 import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
@@ -24,14 +23,14 @@ class _DynamicValuesSentinel(str):
 
 LoadValuesDynamically = _DynamicValuesSentinel()
 """Sentinel used in sweep variable definitions when the concrete option list will be
-provided later via update_options(). Example:
+provided later via load_values_dynamically(). Example:
 
     class C(param.Parameterized):
         state_id = bch.StringSweep.dynamic(doc="State", placeholder="Select state")
 
     # Later once states known:
     c = C()
-    c.param.state_id.update_options(state_keys)
+    c.param.state_id.load_values_dynamically(state_keys)
 
 Panel widgets will initially show the placeholder text and then update cleanly once the
 real values are supplied.

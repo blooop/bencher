@@ -16,7 +16,7 @@ def test_dynamic_placeholder_initial():
 def test_dynamic_placeholder_replaced():
     cfg = DynCfg()
     new_vals = ["idle", "moving", "error"]
-    cfg.param.state_id.update_options(new_vals)
+    cfg.param.state_id.load_values_dynamically(new_vals)
     assert list(cfg.param.state_id.objects) == new_vals
     # Default becomes first entry
     assert cfg.state_id == "idle"

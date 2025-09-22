@@ -21,8 +21,6 @@ def test_update_options_basic():
     # class parameter also updated
     assert list(DummyCfg.param.state_id.objects) == new_states
 
-
-def test_update_options_keep_current():
     cfg = DummyCfg()
     cfg.param.state_id.load_values_dynamically(["a", "b", "c"], default="b")
     assert cfg.state_id == "b"
