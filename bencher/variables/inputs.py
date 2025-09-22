@@ -159,10 +159,12 @@ class SweepSelector(Selector, SweepBase):
             param_container = getattr(owner_cls, "param", None)
             cls_param = None
             if param_container is not None:
-                # Param's Parameterized.param supports dict-like access via __getitem__
+                # Param's Parameterized.param supports dict-like access via __getitem__.
+                # Only catch the specific errors that can occur (AttributeError/KeyError/TypeError)
+                # instead of a blanket Exception to satisfy linting and avoid masking bugs.
                 try:
                     cls_param = param_container[self.name]  # type: ignore[index]
-                except Exception:  # pragma: no cover - fallback path (AttributeError/KeyError)
+                except (AttributeError, KeyError, TypeError):  # pragma: no cover - fallback path
                     cls_param = getattr(param_container, self.name, None)
             if getattr(cls_param, "objects", None) is not None:
                 cls_param.objects = list(new_list)
@@ -176,7 +178,8 @@ class SweepSelector(Selector, SweepBase):
                 # Trust update; let param raise if invalid
                 try:
                     owner_param.update(**{self.name: candidate_default})
-                except Exception:  # pragma: no cover - param validation edge case
+                except (ValueError, TypeError):  # pragma: no cover - param validation edge case
+                    # Invalid update (e.g., candidate value rejected by param validators); ignore.
                     pass
 
     # ------------------------------------------------------------------
