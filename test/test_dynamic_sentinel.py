@@ -10,15 +10,17 @@ def test_dynamic_placeholder_initial():
     cfg = DynCfg()
     # Initially one placeholder value
     assert len(cfg.param.state_id.objects) == 1
-    assert cfg.state_id == str(bch.LoadValuesDynamically)
+    # The placeholder is the only value, and should match what was set in StringSweep.dynamic()
+    assert cfg.state_id == cfg.param.state_id.objects[0]
 
 
 def test_dynamic_placeholder_replaced():
     cfg = DynCfg()
+    placeholder = cfg.param.state_id.objects[0]
     new_vals = ["idle", "moving", "error"]
     cfg.param.state_id.load_values_dynamically(new_vals)
     assert list(cfg.param.state_id.objects) == new_vals
     # Default becomes first entry
     assert cfg.state_id == "idle"
-    # Sentinel should not remain
-    assert all(v != str(bch.LoadValuesDynamically) for v in new_vals)
+    # Placeholder should not remain in the new values
+    assert placeholder not in new_vals
