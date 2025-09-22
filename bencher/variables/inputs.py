@@ -182,25 +182,6 @@ class SweepSelector(Selector, SweepBase):
                     # Invalid update (e.g., candidate value rejected by param validators); ignore.
                     pass
 
-    # ------------------------------------------------------------------
-    # Backward compatibility wrappers
-    # ------------------------------------------------------------------
-    def update_options(self, *args, **kwargs):  # pragma: no cover - thin wrapper
-        warnings.warn(
-            "update_options is deprecated; use load_values_dynamically instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.load_values_dynamically(*args, **kwargs)
-
-    def update_objects(self, *args, **kwargs):  # pragma: no cover - thin wrapper
-        warnings.warn(
-            "update_objects is deprecated; use load_values_dynamically instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.load_values_dynamically(*args, **kwargs)
-
 
 class BoolSweep(SweepSelector):
     """A class representing a parameter sweep for boolean values.
