@@ -41,6 +41,106 @@ class SweepSelector(Selector, SweepBase):
         """
         return self.indices_to_samples(self.samples, self.objects)
 
+    # ------------------------------------------------------------------
+    # Dynamic update helpers
+    # ------------------------------------------------------------------
+    def update_options(
+        self,
+        new_objects: list[Any] | tuple[Any, ...],
+        *,
+        default: Any | None = None,
+        keep_current_if_possible: bool = True,
+        set_on_class: bool = True,
+    ) -> None:
+        """Dynamically update the selectable objects for this sweep variable.
+
+        This is a convenience helper for user code that needs to populate a
+        ``StringSweep`` (or any ``SweepSelector`` subclass) *after* initial
+        construction – e.g. when valid choices are only known at runtime.
+
+        It mirrors the manual pattern::
+
+            self.param.state_id.objects = list(state_keys)
+            self.__class__.param.state_id.objects = list(state_keys)
+            self.__class__.param.state_id.default = state_keys[0]
+            self.param.update(state_id=state_keys[0])
+
+        Parameters
+        ----------
+        new_objects:
+            The new list/tuple of selectable values.
+        default:
+            Optional explicit default value to select. If ``None`` a default
+            is chosen using the following precedence:
+              1. Current value (if ``keep_current_if_possible`` is True and
+                 present in ``new_objects``)
+              2. Existing default (if present in ``new_objects``)
+              3. First element of ``new_objects``
+        keep_current_if_possible:
+            Retain the currently selected value if it is still valid.
+        set_on_class:
+            Also update the underlying class parameter (recommended so that
+            Panel/param widgets created later inherit the new options).
+
+        Notes
+        -----
+        - This mutates the parameter *in place*; no new object is created.
+        - ``samples`` is updated to reflect the new number of objects if it
+          was previously set to the old length (typical behaviour). If the
+          user had explicitly specified ``samples`` smaller than the list
+          length, that custom value is preserved.
+        - Does not return ``self`` to emphasise side effects.
+        """
+
+        new_list = list(new_objects)
+        if len(new_list) == 0:
+            raise ValueError("update_options requires at least one object")
+
+        # Determine target default
+        current_value = getattr(self.owner, self.name) if getattr(self, "owner", None) else None
+        candidate_default = None
+
+        if default is not None:
+            if default not in new_list:
+                raise ValueError(
+                    f"Provided default {default!r} is not in new options: {new_list}"
+                )
+            candidate_default = default
+        else:
+            if keep_current_if_possible and current_value in new_list:
+                candidate_default = current_value
+            elif getattr(self, "default", None) in new_list:
+                candidate_default = self.default  # type: ignore[attr-defined]
+            else:
+                candidate_default = new_list[0]
+
+        # Update instance objects
+        self.objects = new_list  # type: ignore[assignment]
+        # Update samples only if it matched previous full length
+        try:
+            if self.samples == len(new_list) or self.samples == len(new_list) - 1:
+                self.samples = len(new_list)  # type: ignore[attr-defined]
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+        # Set defaults at both instance and class level if requested
+        self.default = candidate_default  # type: ignore[attr-defined]
+        if set_on_class and self.owner is not None:
+            # Update class parameter for future instances / widgets
+            cls_param = self.owner.__class__.param[self.name]
+            cls_param.objects = list(new_list)
+            cls_param.default = candidate_default
+
+        # Finally, update current value if possible
+        if self.owner is not None:
+            try:
+                self.owner.param.update(**{self.name: candidate_default})
+            except Exception:  # pragma: no cover - if validation rejects value
+                pass
+
+    # Backwards compatible alias (shorter name)
+    update_objects = update_options
+
 
 class BoolSweep(SweepSelector):
     """A class representing a parameter sweep for boolean values.
