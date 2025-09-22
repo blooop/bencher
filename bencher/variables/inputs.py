@@ -102,9 +102,7 @@ class SweepSelector(Selector, SweepBase):
 
         if default is not None:
             if default not in new_list:
-                raise ValueError(
-                    f"Provided default {default!r} is not in new options: {new_list}"
-                )
+                raise ValueError(f"Provided default {default!r} is not in new options: {new_list}")
             candidate_default = default
         else:
             if keep_current_if_possible and current_value in new_list:

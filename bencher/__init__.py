@@ -86,6 +86,7 @@ except ModuleNotFoundError as e:
 
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
+
 # Note: SingletonParametrizedSweep temporarily removed due to missing implementation file.
 # from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 from .sample_order import SampleOrder
