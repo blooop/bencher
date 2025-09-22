@@ -9,6 +9,7 @@ from param import Integer, Number, Selector
 import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
 
+
 # Sentinel value used to indicate that the actual selectable values for a SweepSelector
 # will be populated dynamically at runtime. Prefer using this constant instead of magic
 # strings like "__initialising__".
