@@ -145,26 +145,46 @@ class SweepSelector(Selector, SweepBase):
         # Update instance objects
         self.objects = new_list  # type: ignore[assignment]
         # Update samples only if it matched previous full length
-        try:
-            if self.samples == len(new_list) or self.samples == len(new_list) - 1:
+        # Adjust samples if it was implicitly bound to the old list length. If samples
+        # was a custom smaller number we leave it untouched.
+        if isinstance(getattr(self, "samples", None), int):
+            if self.samples == len(new_list) or self.samples == len(new_list) - 1:  # type: ignore[attr-defined]
                 self.samples = len(new_list)  # type: ignore[attr-defined]
-        except Exception:  # pragma: no cover - defensive
-            pass
 
         # Set defaults at both instance and class level if requested
         self.default = candidate_default  # type: ignore[attr-defined]
         if set_on_class and self.owner is not None:
-            # Update class parameter for future instances / widgets
-            cls_param = self.owner.__class__.param[self.name]
-            cls_param.objects = list(new_list)
-            cls_param.default = candidate_default
+            owner_cls = getattr(self.owner, "__class__", None)
+            param_container = getattr(owner_cls, "param", None)
+            cls_param = None
+            if param_container is not None:
+                try:
+                    if self.name in param_container:  # type: ignore[operator]
+                        cls_param = param_container[self.name]  # type: ignore[index]
+                except TypeError:  # pragma: no cover - membership unsupported
+                    # Fallback: attempt attribute-style access
+                    if hasattr(param_container, self.name):
+                        cls_param = getattr(param_container, self.name)
+            if cls_param is not None:  # pragma: no branch - simple guard
+                try:
+                    cls_param.objects = list(new_list)
+                    cls_param.default = candidate_default
+                except AttributeError:  # pragma: no cover - unexpected shape
+                    pass
 
         # Finally, update current value if possible
         if self.owner is not None:
-            try:
-                self.owner.param.update(**{self.name: candidate_default})
-            except Exception:  # pragma: no cover - if validation rejects value
-                pass
+            owner_param = getattr(self.owner, "param", None)
+            if owner_param is not None and hasattr(owner_param, "params"):
+                try:
+                    param_names = owner_param.params().keys()  # type: ignore[call-arg]
+                except (
+                    AttributeError,
+                    TypeError,
+                ):  # pragma: no cover - defensive for param API changes
+                    param_names = []
+                if self.name in param_names:
+                    owner_param.update(**{self.name: candidate_default})
 
 
 class BoolSweep(SweepSelector):
@@ -215,6 +235,10 @@ class StringSweep(SweepSelector):
             samples=samples,
             **params,
         )
+
+    # Explicit alias retained for older serialized benchmarks referencing the old API
+    update_options = SweepSelector.load_values_dynamically  # type: ignore[attr-defined]
+    update_objects = SweepSelector.load_values_dynamically  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Factory helpers
