@@ -166,13 +166,6 @@ class SweepSelector(Selector, SweepBase):
             except Exception:  # pragma: no cover - if validation rejects value
                 pass
 
-    # Backwards compatible aliases
-    def update_options(self, *args, **kwargs):  # pragma: no cover - shim
-        return self.load_values_dynamically(*args, **kwargs)
-
-    def update_objects(self, *args, **kwargs):  # pragma: no cover - shim
-        return self.load_values_dynamically(*args, **kwargs)
-
 
 class BoolSweep(SweepSelector):
     """A class representing a parameter sweep for boolean values.
