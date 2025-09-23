@@ -13,8 +13,8 @@ from .variables.inputs import (
     StringSweep,
     EnumSweep,
     BoolSweep,
-    YamlSweep,
     SweepBase,
+    YamlSweep,
 )
 from .variables.time import TimeSnapshot
 
@@ -87,6 +87,7 @@ except ModuleNotFoundError as e:
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
+from .sample_order import SampleOrder
 from .caching import CachedParams
 from .results.bench_result import BenchResult
 from .results.video_result import VideoResult
@@ -95,4 +96,3 @@ from .bench_report import BenchReport, GithubPagesCfg
 from .job import Executors
 from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
-from .sample_order import SampleOrder

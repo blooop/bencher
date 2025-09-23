@@ -10,6 +10,20 @@ import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
 
 
+# Sentinel value used to indicate that the actual selectable values for a SweepSelector
+# will be populated dynamically at runtime. Prefer using this constant instead of magic
+# strings like "__initialising__".
+class _DynamicValuesSentinel(str):
+    def __new__(cls):  # pragma: no cover - trivial
+        return super().__new__(cls, "<dynamic values loading>")
+
+    def __repr__(self):  # pragma: no cover - trivial
+        return "LoadValuesDynamically"
+
+
+LoadValuesDynamically = _DynamicValuesSentinel()
+
+
 class SweepSelector(Selector, SweepBase):
     """A class representing a parameter sweep for selectable options.
 
@@ -40,6 +54,100 @@ class SweepSelector(Selector, SweepBase):
             List[Any]: A list of parameter values to sweep through
         """
         return self.indices_to_samples(self.samples, self.objects)
+
+    # ------------------------------------------------------------------
+    # Dynamic update helpers
+    # ------------------------------------------------------------------
+    def load_values_dynamically(
+        self,
+        new_objects: list[Any] | tuple[Any, ...],
+        *,
+        default: Any | None = None,
+        keep_current_if_possible: bool = True,
+        set_on_class: bool = True,
+    ) -> None:
+        """Dynamically update selectable objects for this sweep variable.
+
+        See original implementation for detailed semantics. This refactored version
+        delegates work to smaller helpers for clarity and easier testing.
+        """
+        new_list = list(new_objects)
+        self._ensure_nonempty(new_list)
+        candidate_default = self._choose_default(new_list, default, keep_current_if_possible)
+        self._update_instance_objects(new_list)
+        if set_on_class:
+            self._sync_class_defaults(new_list, candidate_default)
+        self._apply_owner_value(candidate_default)
+        self.default = candidate_default  # type: ignore[attr-defined]
+
+    # --- helper methods -------------------------------------------------
+    def _ensure_nonempty(self, new_list: list[Any]) -> None:
+        if not new_list:
+            raise ValueError(
+                "Parameter 'new_objects' passed to load_values_dynamically is empty. At least one object is required to dynamically load values."
+            )
+
+    def _choose_default(
+        self,
+        new_list: list[Any],
+        explicit_default: Any | None,
+        keep_current: bool,
+    ) -> Any:
+        current_value = getattr(self.owner, self.name) if getattr(self, "owner", None) else None
+        if current_value is LoadValuesDynamically:
+            current_value = None
+        if explicit_default is not None:
+            if explicit_default not in new_list:
+                raise ValueError(
+                    f"Provided default {explicit_default!r} is not in new options: {new_list}"
+                )
+            return explicit_default
+        if keep_current and current_value in new_list:
+            return current_value
+        existing_default = getattr(self, "default", None)
+        # Only reuse the previous default if we are allowed to preserve state
+        if keep_current and existing_default in new_list:
+            return existing_default  # type: ignore[attr-defined]
+        return new_list[0]
+
+    def _update_instance_objects(self, new_list: list[Any]) -> None:
+        self.objects = new_list  # type: ignore[assignment]
+        # Adjust samples if it was implicitly bound to the old list length.
+        if isinstance(getattr(self, "samples", None), int) and (
+            self.samples in (len(new_list), len(new_list) - 1)  # type: ignore[attr-defined]
+        ):
+            self.samples = len(new_list)  # type: ignore[attr-defined]
+
+    def _sync_class_defaults(self, new_list: list[Any], candidate_default: Any) -> None:
+        if self.owner is None:
+            return
+        owner_cls = getattr(self.owner, "__class__", None)
+        param_container = getattr(owner_cls, "param", None)
+        cls_param = None
+        if param_container is not None:
+            try:
+                cls_param = param_container[self.name]  # type: ignore[index]
+            except (AttributeError, KeyError, TypeError):  # pragma: no cover - fallback path
+                cls_param = getattr(param_container, self.name, None)
+        if getattr(cls_param, "objects", None) is not None:
+            cls_param.objects = list(new_list)
+            if hasattr(cls_param, "default"):
+                cls_param.default = candidate_default
+
+    def _apply_owner_value(self, candidate_default: Any) -> None:
+        if self.owner is None:
+            return
+        owner_param = getattr(self.owner, "param", None)
+        if owner_param is None:
+            return
+        try:
+            owner_param.update(**{self.name: candidate_default})
+        except (ValueError, TypeError) as e:  # pragma: no cover - param validation edge case
+            import logging
+
+            logging.warning(
+                "Failed to update param '%s' with value %r: %s", self.name, candidate_default, e
+            )
 
 
 class BoolSweep(SweepSelector):
@@ -90,6 +198,42 @@ class StringSweep(SweepSelector):
             samples=samples,
             **params,
         )
+
+    # Subclass retains no extra aliases; base class supplies deprecated wrappers
+
+    # ------------------------------------------------------------------
+    # Factory helpers
+    # ------------------------------------------------------------------
+    @classmethod
+    def dynamic(
+        cls,
+        *,
+        placeholder: str | None = None,
+        units: str = "ul",
+        doc: str | None = None,
+        **params,
+    ) -> "StringSweep":
+        """Create a StringSweep intended for later population.
+
+        Parameters
+        ----------
+        placeholder:
+            Optional text to show before real values are loaded. Defaults to the
+            sentinel's displayed text.
+        units:
+            Units label (optional, passed through).
+        doc:
+            Documentation string for the parameter.
+        params:
+            Additional param overrides.
+
+        Returns
+        -------
+        StringSweep
+            A sweep with a single sentinel placeholder value.
+        """
+        ph = placeholder if placeholder is not None else str(LoadValuesDynamically)
+        return cls([ph], units=units, doc=doc, **params)
 
 
 class EnumSweep(SweepSelector):
