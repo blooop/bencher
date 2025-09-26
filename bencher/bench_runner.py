@@ -367,8 +367,8 @@ class BenchRunner:
             # Copy each tab from src into dest
             for pane in list(src.pane):
                 dest.append_tab(pane, name=getattr(pane, "name", None))
-        except Exception:  # pragma: no cover - defensive
-            logging.exception("Failed to merge reports")
+        except (ValueError, TypeError, AttributeError, RuntimeError) as err:
+            logging.exception("Failed to merge reports: %s", err)
 
     def show_publish(
         self, report: BenchReport, show: bool, publish: bool, save: bool, debug: bool
