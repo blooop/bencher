@@ -77,7 +77,10 @@ def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     # wv = PlotFunctions()
 
     bench = bch.Bench(
-        "waves", bench_fn, worker_input_cfg=FunctionInputs, run_cfg=run_cfg, 
+        "waves",
+        bench_fn,
+        worker_input_cfg=FunctionInputs,
+        run_cfg=run_cfg,
     )
 
     res = bench.plot_sweep(

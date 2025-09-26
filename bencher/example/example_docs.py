@@ -14,14 +14,21 @@ def example_docs(run_cfg: bch.BenchRunCfg | None = None) -> bch.BenchReport:
     run_cfg.repeats = 1
     run_cfg.level = 2
 
-    for example in (example_image, example_video, example_meta_cat, example_meta_float, example_meta_levels):
+    for example in (
+        example_image,
+        example_video,
+        example_meta_cat,
+        example_meta_float,
+        example_meta_levels,
+    ):
         result = example(run_cfg)
         bench_report = getattr(result, "report", None)
         if isinstance(bench_report, bch.BenchReport):
-            bch.BenchRunner._merge_reports(report, bench_report)  # type: ignore[arg-type]
+            # Merge reports by copying each pane from src into dest
+            for pane in list(bench_report.pane):
+                report.append_tab(pane, name=getattr(pane, "name", None))
 
     return report
-
 
 
 if __name__ == "__main__":

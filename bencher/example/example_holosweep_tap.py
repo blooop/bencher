@@ -78,9 +78,7 @@ class PlotFunctions(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_holosweep_tap(
-    run_cfg: bch.BenchRunCfg | None = None
-) -> bch.Bench:
+def example_holosweep_tap(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     wv = PlotFunctions()
 
     run_cfg.use_optuna = True
@@ -101,7 +99,7 @@ def example_holosweep_tap(
 
 
 def example_holosweep_tap_slider(
-    run_cfg: bch.BenchRunCfg | None = None
+    run_cfg: bch.BenchRunCfg | None = None,
 ) -> bch.Bench:  # pragma: no cover
     wv = PlotFunctions()
 

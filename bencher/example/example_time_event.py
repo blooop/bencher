@@ -8,9 +8,7 @@ import bencher as bch
 from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
 
 
-def example_time_event(
-    run_cfg: bch.BenchRunCfg | None = None
-) -> bch.Bench:
+def example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example shows how to manually set time events as a string so that progress can be monitored over time"""
 
     bencher = bch.Bench(

@@ -86,8 +86,8 @@ def example_1_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     run_config = bch.BenchRunCfg()
-    bench = example_1_in_2_out(run_config)
-    bench.report.show()
+    bench_result = example_1_in_2_out(run_config)
+    bench_result.report.show()
 
     run_config.repeats = 4
     example_1_in_2_out(run_config)
