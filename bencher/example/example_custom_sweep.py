@@ -21,7 +21,7 @@ class Square(bch.ParametrizedSweep):
 
 
 def example_custom_sweep(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
+    run_cfg: bch.BenchRunCfg | None = None
 ) -> bch.Bench:
     """This example shows how to define a custom set of value to sample from instead of a uniform sweep
 
@@ -33,7 +33,7 @@ def example_custom_sweep(
     """
 
     bencher = bch.Bench(
-        "benchmarking_example_custom_sweep", Square(), run_cfg=run_cfg, report=report
+        "benchmarking_example_custom_sweep", Square(), run_cfg=run_cfg
     )
     # bencher = bch.Bench("benchmarking_example_custom_sweep", call,run_cfg=run_cfg)
 

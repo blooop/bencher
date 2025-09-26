@@ -89,9 +89,7 @@ class Algorithm2CatBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_1_float_2_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_1_float_2_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example demonstrates benchmarking with 1 float and 2 categorical inputs.
 
     It creates a synthetic benchmark that simulates performance characteristics of different
@@ -101,13 +99,12 @@ def example_1_float_2_cat_in_2_out(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
 
-    bench = Algorithm2CatBenchmark().to_bench(run_cfg, report)
+    bench = Algorithm2CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Algorithm Performance Benchmark (1 Float, 2 Categorical Variables)",
         description="Comparing execution time and memory usage across problem sizes, algorithm types, and data structures",

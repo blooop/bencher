@@ -46,9 +46,7 @@ class PythonOperations0CatBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_0_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_0_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example demonstrates benchmarking with no categorical variables and multiple output metrics.
 
     It creates a synthetic benchmark that simulates performance variations when repeatedly running
@@ -57,13 +55,12 @@ def example_0_cat_in_2_out(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
 
-    bench = PythonOperations0CatBenchmark().to_bench(run_cfg, report)
+    bench = PythonOperations0CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Python List Read Operation Performance (Fixed Inputs)",
         description="Distribution of execution time and peak memory usage across multiple runs",

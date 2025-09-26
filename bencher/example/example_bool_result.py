@@ -8,9 +8,7 @@ import bencher as bch
 from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 
 
-def example_bool_result_1d(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_bool_result_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Example showing boolean result visualization with 1 input dimension.
 
     This demonstrates how ResultBool values work with single categorical input:
@@ -19,13 +17,12 @@ def example_bool_result_1d(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object with results
     """
 
-    bench = ProgrammingBenchmark().to_bench(run_cfg, report)
+    bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["language"],
         result_vars=["is_successful"],
@@ -36,9 +33,7 @@ def example_bool_result_1d(
     return bench
 
 
-def example_bool_result_2d(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_bool_result_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Example showing boolean result visualization with 2 input dimensions.
 
     This demonstrates how ResultBool values work with two categorical inputs:
@@ -47,13 +42,12 @@ def example_bool_result_2d(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object with results
     """
 
-    bench = ProgrammingBenchmark().to_bench(run_cfg, report)
+    bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["language", "environment"],
         result_vars=["is_successful"],

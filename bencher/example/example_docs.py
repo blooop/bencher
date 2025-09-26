@@ -6,28 +6,22 @@ from bencher.example.meta.example_meta_cat import example_meta_cat
 from bencher.example.meta.example_meta_float import example_meta_float
 
 
-def example_docs(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    if report is None:
-        report = bch.BenchReport()
-    # b_run = bch.BenchRunner("bench_runner_test", run_cfg=run_cfg)
-    # b_run.add_run(example_categorical)
-    # b_run.add_run(example_floats)
-    # b_run.add_run(example_image)
-    # b_run.add_run(example_video)
-    # b_run.add_run(example_meta_levels)
-    # b_run.add_run(run_levels)
-    # b_run.run(level=4, grouped=True, save=True)
-    # b_run.shutdown()
+def example_docs(run_cfg: bch.BenchRunCfg | None = None) -> bch.BenchReport:
+    if run_cfg is None:
+        run_cfg = bch.BenchRunCfg()
+    report = bch.BenchReport("example_docs")
+
     run_cfg.repeats = 1
     run_cfg.level = 2
-    example_image(run_cfg, report)
-    example_video(run_cfg, report)
-    example_meta_cat(report=report)
-    example_meta_float(report=report)
-    example_meta_levels(report=report)
-    # example_meta(run_cfg,report)
+
+    for example in (example_image, example_video, example_meta_cat, example_meta_float, example_meta_levels):
+        result = example(run_cfg)
+        bench_report = getattr(result, "report", None)
+        if isinstance(bench_report, bch.BenchReport):
+            bch.BenchRunner._merge_reports(report, bench_report)  # type: ignore[arg-type]
 
     return report
+
 
 
 if __name__ == "__main__":

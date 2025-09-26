@@ -67,9 +67,7 @@ class ProgrammingBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_2_cat_in_4_out_repeats(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_2_cat_in_4_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example compares a boolean and a float result across programming languages and environments.
 
     It demonstrates how to sample categorical variables with multiple repeats
@@ -77,7 +75,6 @@ def example_2_cat_in_4_out_repeats(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
@@ -86,7 +83,7 @@ def example_2_cat_in_4_out_repeats(
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 15  # Run multiple times to get statistical significance
-    bench = ProgrammingBenchmark().to_bench(run_cfg, report)
+    bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["language", "environment"],
         title="Programming Language and Environment: Boolean and Float Results",

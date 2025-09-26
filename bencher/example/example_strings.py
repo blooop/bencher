@@ -27,8 +27,8 @@ class TestPrinting(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_strings(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    bench = bch.Bench("strings", TestPrinting(), run_cfg=run_cfg, report=report)
+def example_strings(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = bch.Bench("strings", TestPrinting(), run_cfg=run_cfg)
 
     for s in [
         [TestPrinting.param.a],

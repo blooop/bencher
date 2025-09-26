@@ -10,7 +10,7 @@ from bencher.example.benchmark_data import (
 )
 
 
-def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_floats2D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Example of how to perform a 2D floating point parameter sweep
 
     Args:
@@ -23,7 +23,6 @@ def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
         "Bencher_Example_Floats",
         call,
         run_cfg=run_cfg,
-        report=report,
     )
     run_cfg.use_optuna = True
 

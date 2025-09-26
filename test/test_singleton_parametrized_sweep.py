@@ -24,7 +24,7 @@ class MySingletonSweep(ParametrizedSweepSingleton):
 
 def benchable_singleton_fn(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
     sweep = MySingletonSweep()
-    bench = sweep.to_bench(run_cfg=run_cfg, report=report)
+    bench = sweep.to_bench(run_cfg, report=report)
     # Disable plotting to avoid hvplot/xarray requirements in headless tests
     # We still exercise the full compute path and BenchRunner integration
     return bench.plot_sweep(plot_callbacks=False)

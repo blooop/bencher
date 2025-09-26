@@ -65,9 +65,7 @@ class PythonOperations2CatBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_2_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_2_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example demonstrates benchmarking with 2 categorical variables and multiple output metrics.
 
     It creates a synthetic benchmark that simulates performance characteristics of different
@@ -77,7 +75,6 @@ def example_2_cat_in_2_out(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
@@ -85,7 +82,7 @@ def example_2_cat_in_2_out(
 
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    bench = PythonOperations2CatBenchmark().to_bench(run_cfg, report)
+    bench = PythonOperations2CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Python Operations Performance Benchmark (2 Variables)",
         description="Comparing execution time and peak memory usage across Python data structures and operations",

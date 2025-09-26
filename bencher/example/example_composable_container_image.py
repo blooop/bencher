@@ -34,10 +34,8 @@ class BenchComposableContainerImage(BenchPolygons):
         return self.get_results_values_as_dict()
 
 
-def example_composable_container_image(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
-    bench = BenchComposableContainerImage().to_bench(run_cfg, report)
+def example_composable_container_image(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = BenchComposableContainerImage().to_bench(run_cfg)
     # bench.add_plot_callback(bch.BenchResult.to_panes)
     # bench.add_plot_callback(bch.BenchResult.to_video_grid, result_types=(bch.ResultVideo))
     # bench.add_plot_callback(bch.BenchResult.to_video_summary, result_types=(bch.ResultVideo))

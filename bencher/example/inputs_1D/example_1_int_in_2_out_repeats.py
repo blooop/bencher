@@ -67,15 +67,12 @@ class Example1D(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_1_int_in_2_out_repeats(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_1_int_in_2_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example shows how to sample a 1-dimensional integer variable with multiple repeats
     and plot the result of two output variables from that parameter sweep.
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
@@ -87,13 +84,11 @@ def example_1_int_in_2_out_repeats(
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 4
-    bench = Example1D().to_bench(run_cfg, report)
+    bench = Example1D().to_bench(run_cfg)
     bench.plot_sweep()
     return bench
 
 
 if __name__ == "__main__":
     run_config = bch.BenchRunCfg()
-    report_obj = bch.BenchReport()
-    example_1_int_in_2_out_repeats(run_config, report_obj)
-    report_obj.show()
+    example_1_int_in_2_out_repeats(run_config).report.show()

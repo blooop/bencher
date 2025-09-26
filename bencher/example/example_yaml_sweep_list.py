@@ -22,9 +22,9 @@ class YamlConfigSweep(bch.ParametrizedSweep):
 
 
 def example_yaml_sweep_list(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
+    run_cfg: bch.BenchRunCfg | None = None
 ) -> bch.Bench:
-    bench = YamlConfigSweep().to_bench(name="yaml_sweep", run_cfg=run_cfg, report=report)
+    bench = YamlConfigSweep().to_bench(name="yaml_sweep", run_cfg=run_cfg)
     bench.plot_sweep(
         title="YAML workload sweep",
         input_vars=[YamlConfigSweep.param.workload],

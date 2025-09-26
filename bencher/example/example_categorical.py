@@ -7,7 +7,7 @@ from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut
 
 
 def example_categorical(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
+    run_cfg: bch.BenchRunCfg | None = None
 ) -> bch.Bench:
     """Example of how to perform a categorical parameter sweep
 
@@ -28,7 +28,6 @@ def example_categorical(
         bench_function,
         ExampleBenchCfgIn,
         run_cfg=run_cfg,
-        report=report,
     )
 
     bench.report.append(readme, "Intro")

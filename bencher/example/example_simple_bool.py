@@ -6,19 +6,17 @@ import bencher as bch
 from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
 
 
-def example_1D_bool(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.Bench:
-    """[DEPRECATED form] Two-arg signature bench(run_cfg, report).
+def example_1D_bool(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """Sample a 1D boolean input and visualise the resulting success metric."""
 
-    This example shows how to sample a 1 dimensional categorical variable and plot the result of
-    passing that parameter sweep to the benchmarking function. Prefer the simpler one-arg form
-    bench(run_cfg) in new code; the two-arg form remains supported for compatibility.
-    """
+    if run_cfg is None:
+        run_cfg = bch.BenchRunCfg()
 
     bench = bch.Bench(
         "benchmarking_example_categorical1D",
         bench_function,
         ExampleBenchCfgIn,
-        report=report,
+        run_cfg=run_cfg,
     )
 
     # here we sample the input variable theta and plot the value of output1. The (noisy) function is sampled 20 times so you can see the distribution
