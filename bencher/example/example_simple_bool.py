@@ -7,7 +7,12 @@ from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut
 
 
 def example_1D_bool(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.Bench:
-    """This example shows how to sample a 1 dimensional categorical variable and plot the result of passing that parameter sweep to the benchmarking function"""
+    """[DEPRECATED form] Two-arg signature bench(run_cfg, report).
+
+    This example shows how to sample a 1 dimensional categorical variable and plot the result of
+    passing that parameter sweep to the benchmarking function. Prefer the simpler one-arg form
+    bench(run_cfg) in new code; the two-arg form remains supported for compatibility.
+    """
 
     bench = bch.Bench(
         "benchmarking_example_categorical1D",

@@ -1,4 +1,4 @@
-from typing import Protocol, Callable, List
+from typing import Protocol, Callable, List, Union, runtime_checkable
 import logging
 import warnings
 from datetime import datetime
@@ -7,11 +7,29 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg
 from copy import deepcopy
+import inspect
 
 
-class Benchable(Protocol):
-    def bench(self, run_cfg: BenchRunCfg, report: BenchReport) -> BenchCfg:
-        raise NotImplementedError
+@runtime_checkable
+class BenchableV1(Protocol):
+    """Legacy two-argument bench callable: bench(run_cfg, report)."""
+
+    def __call__(
+        self, run_cfg: BenchRunCfg, report: BenchReport
+    ) -> BenchCfg:  # pragma: no cover - typing only
+        ...
+
+
+@runtime_checkable
+class BenchableV2(Protocol):
+    """New one-argument bench callable: bench(run_cfg)."""
+
+    def __call__(self, run_cfg: BenchRunCfg) -> BenchCfg:  # pragma: no cover - typing only
+        ...
+
+
+# Accept both versions during transition
+Benchable = Union[BenchableV1, BenchableV2]
 
 
 class BenchRunner:
@@ -264,38 +282,93 @@ class BenchRunner:
                     run_lvl.level = lvl
                     run_lvl.repeats = r
                     logging.info(f"Running {bch_fn} at level: {lvl} with repeats:{r}")
+
+                    # Determine callable arity (positional parameters excluding *args/**kwargs)
+                    try:
+                        sig = inspect.signature(bch_fn)
+                        pos_params = [
+                            p
+                            for p in sig.parameters.values()
+                            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+                        ]
+                        num_params = len(pos_params)
+                    except (TypeError, ValueError):
+                        # Fallback: assume legacy (2 params)
+                        num_params = 2
+
+                    # Resolve a friendly function name (handles functools.partial)
+                    func_name = getattr(bch_fn, "__name__", None)
+                    if func_name is None and hasattr(bch_fn, "func"):
+                        func_name = getattr(bch_fn.func, "__name__", None)
+                    if func_name is None:
+                        func_name = "bench"
+
                     if grouped:
-                        res = bch_fn(run_lvl, report_level)
+                        # Grouped: prefer passing the shared report when supported; otherwise merge later
+                        if num_params >= 2:
+                            res = bch_fn(run_lvl, report_level)
+                        else:
+                            res = bch_fn(run_lvl)
+                            # Best-effort: if the result contains its own report, merge into the grouped one
+                            if hasattr(res, "report") and isinstance(res.report, BenchReport):
+                                self._merge_reports(report_level, res.report)
                     else:
-                        individual_report = BenchReport()
-                        res = bch_fn(run_lvl, individual_report)
+                        # Individual report per bench
+                        target_report: BenchReport | None = None
+                        if num_params >= 2:
+                            target_report = BenchReport()
+                            res = bch_fn(run_lvl, target_report)
+                        else:
+                            res = bch_fn(run_lvl)
+                            if hasattr(res, "report") and isinstance(res.report, BenchReport):
+                                target_report = res.report
+                            else:
+                                # Fallback empty report for publishing/saving
+                                target_report = BenchReport()
+
+                        # Compute tag suffix
                         if run_cfg.run_tag:
                             tag_suffix = f"_{run_cfg.run_tag}"
                         else:
                             current_date = datetime.now().strftime("%Y-%m-%d")
                             tag_suffix = f"_{current_date}"
-                        # Update the report name for saving
+
+                        # Update report/bench names for saving
                         if hasattr(res, "bench_cfg") and hasattr(res.bench_cfg, "bench_name"):
-                            # For BenchResult objects
                             original_name = res.bench_cfg.bench_name
-                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            new_name = f"{original_name}_{func_name}{tag_suffix}"
                             res.bench_cfg.bench_name = new_name
-                            individual_report.bench_name = new_name
-                        elif hasattr(res, "report"):
-                            # For objects with report attribute
+                            target_report.bench_name = new_name
+                        elif hasattr(res, "report") and isinstance(res.report, BenchReport):
                             original_name = res.report.bench_name
-                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            new_name = f"{original_name}_{func_name}{tag_suffix}"
                             res.report.bench_name = new_name
-                            individual_report.bench_name = new_name
+                            target_report.bench_name = new_name
                         else:
-                            # Fallback - use function name
-                            new_name = f"{bch_fn.__name__}{tag_suffix}"
-                            individual_report.bench_name = new_name
-                        self.show_publish(individual_report, show, publish, save, debug)
+                            new_name = f"{func_name}{tag_suffix}"
+                            target_report.bench_name = new_name
+
+                        self.show_publish(target_report, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
                     self.show_publish(report_level, show, publish, save, debug)
         return self.results
+
+    @staticmethod
+    def _merge_reports(dest: BenchReport, src: BenchReport | None) -> None:
+        """Merge tabs from src report into dest report (best-effort).
+
+        This is used when a one-arg bench function builds its own report but the
+        runner is aggregating into a grouped report.
+        """
+        if src is None or src is dest:
+            return
+        try:
+            # Copy each tab from src into dest
+            for pane in list(src.pane):
+                dest.append_tab(pane, name=getattr(pane, "name", None))
+        except Exception:  # pragma: no cover - defensive
+            logging.exception("Failed to merge reports")
 
     def show_publish(
         self, report: BenchReport, show: bool, publish: bool, save: bool, debug: bool
