@@ -1,10 +1,6 @@
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .bench_runner import BenchRunner
-from .example.benchmark_data import (
-    ExampleBenchCfgIn,
-    ExampleBenchCfgOut,
-    bench_function,
-)
+from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
 from .variables.sweep_base import hash_sha1
 from .variables.inputs import (

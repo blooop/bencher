@@ -25,14 +25,14 @@ class OrderExample(bch.ParametrizedSweep):
 class TestSampleOrder(unittest.TestCase):
     def test_sample_order_does_not_change_results_or_dims(self):
         # Use deterministic example worker (no noise by default)
-        bench1 = bch.Bench("sample_order_eq_1", bch.bench_function, bch.ExampleBenchCfgIn)
-        bench2 = bch.Bench("sample_order_eq_2", bch.bench_function, bch.ExampleBenchCfgIn)
+        bench1 = bch.Bench("sample_order_eq_1", bch.ExampleBenchCfg())
+        bench2 = bch.Bench("sample_order_eq_2", bch.ExampleBenchCfg())
 
         input_vars = [
-            bch.ExampleBenchCfgIn.param.theta,
-            bch.ExampleBenchCfgIn.param.postprocess_fn,
+            bch.ExampleBenchCfg.param.theta,
+            bch.ExampleBenchCfg.param.postprocess_fn,
         ]
-        result_vars = [bch.ExampleBenchCfgOut.param.out_sin]
+        result_vars = [bch.ExampleBenchCfg.param.out_sin]
         run_cfg = bch.BenchRunCfg(
             repeats=1,
             over_time=False,
@@ -65,7 +65,7 @@ class TestSampleOrder(unittest.TestCase):
         self.assertTrue(ds_in.equals(ds_rev))
 
         # Dimension order should match input_vars order and remain unchanged
-        var_name = bch.ExampleBenchCfgOut.param.out_sin.name
+        var_name = bch.ExampleBenchCfg.param.out_sin.name
         self.assertEqual(
             list(ds_in[var_name].dims)[:2],
             [v.name for v in input_vars],
