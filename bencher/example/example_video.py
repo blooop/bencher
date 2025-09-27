@@ -97,7 +97,7 @@ def example_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench.plot_sweep(
         "Turing patterns with different parameters",
         input_vars=["alpha", "beta"],
-        result_vars=[TuringPattern.param.video],
+        result_vars=["video"],
     )
 
     return bench

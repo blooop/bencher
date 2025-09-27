@@ -160,10 +160,10 @@ This uses bencher to display all the combinations of plots bencher is able to pr
             bch.p("sample_with_repeats", [1, 20]),
         ],
         const_vars=[
-            # BenchMeta.param.float_vars_count.with_const(1),
-            # BenchMeta.param.sample_with_repeats.with_const(2),
-            # BenchMeta.param.categorical_vars_count.with_const(2),
-            # BenchMeta.param.sample_over_time.with_const(True),
+            # ("float_vars_count", 1),
+            # ("sample_with_repeats", 2),
+            # ("categorical_vars_count", 2),
+            # ("sample_over_time", True),
         ],
     )
     bench.plot_sweep(
@@ -186,9 +186,9 @@ This uses bencher to display all the combinations of plots bencher is able to pr
     #         ],
     #         const_vars=[
     #             dict(level=3)
-    #             # BenchMeta.param.sample_with_repeats.with_const(2),
-    #             # BenchMeta.param.categorical_vars_count.with_const(2),
-    #             # BenchMeta.param.sample_over_time.with_const(True),
+    #             # ("sample_with_repeats", 2),
+    #             # ("categorical_vars_count", 2),
+    #             # ("sample_over_time", True),
     #         ],
     #     )
 

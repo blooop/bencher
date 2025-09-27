@@ -29,5 +29,5 @@ res = bench.plot_sweep(input_vars=["noisy"], result_vars=["distance", "sample_no
 
 
 bench.report.append(res.to_tabulator())
-# bench.report.append(res.to_scatter_jitter_single(BenchableObject.param.sample_noise))
+# bench.report.append(res.to_scatter_jitter_single("sample_noise"))
 bench.report.show()

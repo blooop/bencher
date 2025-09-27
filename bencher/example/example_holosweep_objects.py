@@ -85,11 +85,11 @@ def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     res = bench.plot_sweep(
         "phase",
-        input_vars=[FunctionInputs.param.theta, FunctionInputs.param.freq],
+        input_vars=["theta", "freq"],
         result_vars=[
-            FunctionOutputs.param.fn_output,
-            FunctionOutputs.param.hmap,
-            FunctionOutputs.param.hmap2,
+            "fn_output",
+            "hmap",
+            "hmap2",
         ],
     )
 

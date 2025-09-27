@@ -124,10 +124,10 @@ class BenchMeta(bch.ParametrizedSweep):
         res = bench.plot_sweep(
             "test",
             input_vars=input_vars,
-            result_vars=[BenchableObject.param.distance],
-            # result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
-            # result_vars=[ BenchableObject.param.sample_noise],
-            # result_vars=[BenchableObject.param.result_hmap],
+            result_vars=["distance"],
+            # result_vars=["distance", "sample_noise"],
+            # result_vars=["sample_noise"],
+            # result_vars=["result_hmap"],
             plot_callbacks=False,
         )
 
@@ -150,15 +150,15 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 This uses bencher to display all the combinations of plots bencher is able to produce""",
         input_vars=[
             bch.p("float_vars", [0, 1, 2, 3]),
-            BenchMeta.param.categorical_vars,
+            "categorical_vars",
             bch.p("sample_with_repeats", [1, 2]),
-            # BenchMeta.param.sample_over_time,
+            # "sample_over_time",
         ],
         const_vars=[
-            # BenchMeta.param.float_vars.with_const(1),
-            # BenchMeta.param.sample_with_repeats.with_const(2),
-            # BenchMeta.param.categorical_vars.with_const(2),
-            # BenchMeta.param.sample_over_time.with_const(True),
+            # ("float_vars", 1),
+            # ("sample_with_repeats", 2),
+            # ("categorical_vars", 2),
+            # ("sample_over_time", True),
         ],
     )
 

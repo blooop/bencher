@@ -4,7 +4,7 @@ import bencher as bch
 
 
 # All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
+from bencher.example.benchmark_data import ExampleBenchCfg
 
 
 def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
@@ -18,28 +18,27 @@ def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """
     bench = bch.Bench(
         "Bencher_Example_Float_Cat",
-        bench_function,
-        ExampleBenchCfgIn,
+        ExampleBenchCfg(),
         run_cfg=run_cfg,
     )
 
     bench.plot_sweep(
         input_vars=[
-            ExampleBenchCfgIn.param.theta,
-            ExampleBenchCfgIn.param.offset,
-            ExampleBenchCfgIn.param.postprocess_fn,
+            "theta",
+            "offset",
+            "postprocess_fn",
         ],
-        result_vars=[ExampleBenchCfgOut.param.out_sin],
-        const_vars=[ExampleBenchCfgIn.param.noisy.with_const(True)],
+        result_vars=["out_sin"],
+        const_vars=dict(noisy=True),
         title="Float 2D Cat 1D Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
         post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",
     )
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfgIn.param.theta],
-        result_vars=[ExampleBenchCfgOut.param.out_sin],
-        const_vars=[ExampleBenchCfgIn.param.noisy.with_const(True)],
+        input_vars=["theta"],
+        result_vars=["out_sin"],
+        const_vars=dict(noisy=True),
         title="Float 1D Cat 1D  Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
         post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",
@@ -50,9 +49,9 @@ def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     # # this does not work yet because it tries to find min and max of categorical values
     # bench.plot_sweep(
-    #     input_vars=[ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.postprocess_fn],
-    #     result_vars=[ExampleBenchCfgOut.param.out_sin],
-    #     const_vars=[ExampleBenchCfgIn.param.noisy.with_const(True)],
+    #     input_vars=["theta", "postprocess_fn"],
+    #     result_vars=["out_sin"],
+    #     const_vars=dict(noisy=True),
     #     title="Float 1D Cat 1D  Example",
     #     description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
     #     post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",

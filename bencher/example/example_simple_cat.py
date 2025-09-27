@@ -5,7 +5,7 @@
 import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
+from bencher.example.benchmark_data import ExampleBenchCfg
 
 
 def example_1D_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
@@ -18,11 +18,10 @@ def example_1D_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         Bench: results of the parameter sweep
     """
 
-    explorer = ExampleBenchCfgIn()
+    explorer = ExampleBenchCfg()
     bench = bch.Bench(
         "benchmarking_example_categorical1D",
-        bench_function,
-        ExampleBenchCfgIn,
+        ExampleBenchCfg(),
         run_cfg=run_cfg,
     )
 
@@ -30,8 +29,8 @@ def example_1D_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench.plot_sweep(
         title="Example 1D Categorical",
         description="""This example shows how to sample a 1 dimensional categorical variable and plot the result of passing that parameter sweep to the benchmarking function""",
-        input_vars=[ExampleBenchCfgIn.param.postprocess_fn],
-        result_vars=[ExampleBenchCfgOut.param.out_cos, ExampleBenchCfgOut.param.out_sin],
+        input_vars=["postprocess_fn"],
+        result_vars=["out_cos", "out_sin"],
         const_vars=explorer.get_input_defaults(),
     )
 

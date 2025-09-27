@@ -31,12 +31,12 @@ def example_strings(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = bch.Bench("strings", TestPrinting(), run_cfg=run_cfg)
 
     for s in [
-        [TestPrinting.param.a],
-        [TestPrinting.param.a, TestPrinting.param.b],
-        [TestPrinting.param.a, TestPrinting.param.b, TestPrinting.param.c],
-        [TestPrinting.param.a, TestPrinting.param.b, TestPrinting.param.c, TestPrinting.param.d],
+        ["a"],
+        ["a", "b"],
+        ["a", "b", "c"],
+        ["a", "b", "c", "d"],
     ]:
-        bench.plot_sweep(f"String Panes {[v.name for v in s]}", input_vars=s)
+        bench.plot_sweep(f"String Panes {s}", input_vars=s)
 
     return bench
 
