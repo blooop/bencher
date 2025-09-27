@@ -16,4 +16,7 @@ args:
   - git 
   - pixi
   - cwd
+  - ssh
+  - ssh-client
+  
   # - locales
