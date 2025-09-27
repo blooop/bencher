@@ -17,4 +17,6 @@ args:
   - cwd
   - ssh
   - ssh-client
+  - claude
+  - codex
   # - locales
