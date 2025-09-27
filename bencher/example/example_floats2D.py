@@ -3,7 +3,9 @@ import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import (
+    ExampleBenchCfgOut,
     NoiseDistribution,
+    ExampleBenchCfg,
     call,
 )
 
@@ -26,12 +28,12 @@ def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
     run_cfg.use_optuna = True
 
     bench.plot_sweep(
-        input_vars=["theta", "offset"],
-        result_vars=["out_sin", "out_cos"],
+        input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.offset],
+        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
         const_vars=[
-            ("sigma", 0.1),
-            ("noise_distribution", NoiseDistribution.gaussian),
-            ("noisy", True),
+            ExampleBenchCfg.param.sigma.with_const(0.1),
+            ExampleBenchCfg.param.noise_distribution.with_const(NoiseDistribution.gaussian),
+            ExampleBenchCfg.param.noisy.with_const(True),
         ],
         title="Float 2D Example",
         description="""Bencher is a tool to make it easy to explore how input parameter affect a range of output metrics.  In these examples we are going to benchmark an example function which has been selected to show the features of bencher.
@@ -46,15 +48,15 @@ def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
 
     bench.plot_sweep(
         input_vars=[
-            "theta",
-            "offset",
-            "postprocess_fn",
+            ExampleBenchCfg.param.theta,
+            ExampleBenchCfg.param.offset,
+            ExampleBenchCfg.param.postprocess_fn,
         ],
-        result_vars=["out_sin", "out_cos"],
+        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
         const_vars=[
-            ("sigma", 0.1),
-            ("noise_distribution", NoiseDistribution.gaussian),
-            ("noisy", True),
+            (ExampleBenchCfg.param.sigma, 0.1),
+            (ExampleBenchCfg.param.noise_distribution, NoiseDistribution.gaussian),
+            (ExampleBenchCfg.param.noisy, True),
         ],
         title="Float 2D with categorical Example",
         description="""Here we add plot a 2d surface and facet over a categorical variable
@@ -64,16 +66,16 @@ def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
 
     bench.plot_sweep(
         input_vars=[
-            "theta",
-            "offset",
-            "postprocess_fn",
-            "noise_distribution",
+            ExampleBenchCfg.param.theta,
+            ExampleBenchCfg.param.offset,
+            ExampleBenchCfg.param.postprocess_fn,
+            ExampleBenchCfg.param.noise_distribution,
         ],
-        result_vars=["out_sin", "out_cos"],
+        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
         const_vars=[
-            ("sigma", 0.1),
-            ("noise_distribution", NoiseDistribution.gaussian),
-            ("noisy", True),
+            (ExampleBenchCfg.param.sigma, 0.1),
+            (ExampleBenchCfg.param.noise_distribution, NoiseDistribution.gaussian),
+            (ExampleBenchCfg.param.noisy, True),
         ],
         title="Float 2D with categorical x2 Example",
         description="""Here we add plot a 2d surface and facet over two categorical variable

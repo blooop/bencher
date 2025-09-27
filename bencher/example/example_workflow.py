@@ -90,22 +90,22 @@ def example_floats2D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None)
     # run_cfg.debug = False
 
     res = bench.plot_sweep(
-        input_vars=["x", "y"],
+        input_vars=[VolumeSample.param.x, VolumeSample.param.y],
         result_vars=[
-            "total_dis",
-            "p1_dis",
-            "p2_dis",
+            VolumeResult.param.total_dis,
+            VolumeResult.param.p1_dis,
+            VolumeResult.param.p2_dis,
         ],
-        const_vars=[("z", 0)],
+        const_vars=[VolumeSample.param.z.with_const(0)],
         title="Float 2D Example",
         run_cfg=run_cfg,
     )
-    recovered_p1 = res.get_optimal_vec("p1_dis", res.bench_cfg.input_vars)
+    recovered_p1 = res.get_optimal_vec(VolumeResult.param.p1_dis, res.bench_cfg.input_vars)
     print(f"recovered p1: {recovered_p1}, distance: {np.linalg.norm(recovered_p1 - p1[:2])}")
     # within tolerance of sampling
     # assert np.linalg.norm(recovered_p1 - p1[:2]) < 0.15
 
-    recovered_p2 = res.get_optimal_vec("p2_dis", res.bench_cfg.input_vars)
+    recovered_p2 = res.get_optimal_vec(VolumeResult.param.p2_dis, res.bench_cfg.input_vars)
     print(f"recovered p2: {recovered_p2} distance: {np.linalg.norm(recovered_p2 - p2[:2])}")
     # within tolerance of sampling
     # assert np.linalg.norm(recovered_p2 - p2[:2]) < 0.15
@@ -113,9 +113,9 @@ def example_floats2D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None)
     run_cfg.use_optuna = True
     for rv in res.bench_cfg.result_vars:
         bench.plot_sweep(
-            input_vars=["surf_x", "surf_y"],
+            input_vars=[VolumeSample.param.surf_x, VolumeSample.param.surf_y],
             result_vars=[
-                "surf_value",
+                VolumeResult.param.surf_value,
             ],
             const_vars=res.get_optimal_inputs(rv, True),
             title=f"Slice of 5D space for {rv.name}",
@@ -141,11 +141,11 @@ def example_floats3D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None)
     # run_cfg.debug = False
 
     res = bench.plot_sweep(
-        input_vars=["x", "y", "z"],
+        input_vars=[VolumeSample.param.x, VolumeSample.param.y, VolumeSample.param.z],
         result_vars=[
-            "total_dis",
-            "p1_dis",
-            "p2_dis",
+            VolumeResult.param.total_dis,
+            VolumeResult.param.p1_dis,
+            VolumeResult.param.p2_dis,
             # get_optimal_inputsm.occupancy,
         ],
         title="Float 3D Example",
@@ -154,12 +154,12 @@ def example_floats3D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None)
         run_cfg=run_cfg,
     )
 
-    recovered_p1 = res.get_optimal_vec("p1_dis", res.bench_cfg.input_vars)
+    recovered_p1 = res.get_optimal_vec(VolumeResult.param.p1_dis, res.bench_cfg.input_vars)
     print(f"recovered p1: {recovered_p1}, distance: {np.linalg.norm(recovered_p1 - p1)}")
     # within tolerance of sampling
     # assert np.linalg.norm(recovered_p1 - p1) < 0.15
 
-    recovered_p2 = res.get_optimal_vec("p2_dis", res.bench_cfg.input_vars)
+    recovered_p2 = res.get_optimal_vec(VolumeResult.param.p2_dis, res.bench_cfg.input_vars)
     print(f"recovered p2: {recovered_p2} distance: {np.linalg.norm(recovered_p2 - p2)}")
     # within tolerance of sampling
     # assert np.linalg.norm(recovered_p2 - p2) < 0.15
@@ -167,9 +167,9 @@ def example_floats3D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None)
     run_cfg.use_optuna = True
     for rv in res.bench_cfg.result_vars:
         bench.plot_sweep(
-            input_vars=["surf_x", "surf_y"],
+            input_vars=[VolumeSample.param.surf_x, VolumeSample.param.surf_y],
             result_vars=[
-                "surf_value",
+                VolumeResult.param.surf_value,
             ],
             const_vars=res.get_optimal_inputs(rv, True),
             title=f"Slice of 5D space for {rv.name}",

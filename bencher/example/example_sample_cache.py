@@ -48,8 +48,8 @@ def example_sample_cache(
 
     bencher.plot_sweep(
         title="Example Crashy Function with the sample_cache",
-        input_vars=["input_val"],
-        result_vars=["return_value", "trigger_crash"],
+        input_vars=[UnreliableClass.param.input_val],
+        result_vars=[UnreliableClass.param.return_value, UnreliableClass.param.trigger_crash],
         description="""This example shows how to use the cache_samples option to deal with unreliable functions and to continue benchmarking using previously calculated results even if the code crashed during the run""",
         run_cfg=run_cfg,
         post_description="The input_val vs return value graph is a straight line as expected and there is no record of the fact the benchmark crashed halfway through. The second graph shows that for values >1 the trigger_crash value had to be 0 in order to proceed",
