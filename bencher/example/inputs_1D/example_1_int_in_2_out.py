@@ -67,20 +67,17 @@ class Example1D(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_1_int_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_1_int_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example shows how to sample a 1-dimensional integer variable and plot
     the result of two output variables from that parameter sweep.
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
-    bench = Example1D().to_bench(run_cfg, report)
+    bench = Example1D().to_bench(run_cfg)
     bench.plot_sweep()
 
     # bench.report.append(bench.get_result().to_heatmap())
@@ -89,13 +86,11 @@ def example_1_int_in_2_out(
 
 if __name__ == "__main__":
     run_config = bch.BenchRunCfg()
-    report_obj = bch.BenchReport()
-    example_1_int_in_2_out(run_config, report_obj)
+    example_1_int_in_2_out(run_config).report.show()
     # run_config.over_time = True
     # run_config.auto_plot = False
     # for i in range(4):
-    #     example_1_in_2_out(run_config, report_obj)
+    #     example_1_in_2_out(run_config)
 
     # run_config.auto_plot = True
-    # example_1_in_2_out(run_config, report_obj)
-    report_obj.show()
+    # example_1_in_2_out(run_config).report.show()

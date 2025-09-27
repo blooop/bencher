@@ -56,10 +56,8 @@ class BenchPolygons(bch.ParametrizedSweep):
         return str(filename)
 
 
-def example_image_vid_sequential1(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
-    bench = BenchPolygons().to_bench(run_cfg, report)
+def example_image_vid_sequential1(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = BenchPolygons().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["sides"])
 
     bench.report.append(res.to_panes(zip_results=True))

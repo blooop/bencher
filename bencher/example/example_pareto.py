@@ -79,7 +79,7 @@ class EngineeringDesignProblem(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_pareto(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_pareto(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """
     Advanced example of multi-objective Pareto optimization using Optuna.
 
@@ -109,7 +109,7 @@ def example_pareto(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     run_cfg.repeats = 5
 
     # Create problem definition and benchmark
-    bench = EngineeringDesignProblem().to_bench(run_cfg, report)
+    bench = EngineeringDesignProblem().to_bench(run_cfg)
 
     # Perform grid search on our two input variables
     grid_result = bench.plot_sweep(

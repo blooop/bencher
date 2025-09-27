@@ -51,9 +51,9 @@ class BenchPolygons(bch.ParametrizedSweep):
         return str(filename)
 
 
-def example_image(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_image(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     run_cfg.cache_results = False
-    bench = bch.Bench("polygons", BenchPolygons(), run_cfg=run_cfg, report=report)
+    bench = bch.Bench("polygons", BenchPolygons(), run_cfg=run_cfg)
 
     bench.result_vars = ["polygon", "area"]
 
@@ -77,8 +77,8 @@ def example_image(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = Non
     return bench
 
 
-def example_image_vid(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    bench = BenchPolygons().to_bench(run_cfg, report)
+def example_image_vid(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = BenchPolygons().to_bench(run_cfg)
     bench.add_plot_callback(bch.BenchResult.to_sweep_summary)
     bench.add_plot_callback(
         bch.BenchResult.to_video_grid,
@@ -108,8 +108,8 @@ def example_image_vid(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
 
 if __name__ == "__main__":
 
-    def simple(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:  # pylint: disable=unused-argument
-        bench = BenchPolygons().to_bench(bch.BenchRunCfg(level=4), report=report)
+    def simple(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:  # pylint: disable=unused-argument
+        bench = BenchPolygons().to_bench(bch.BenchRunCfg(level=4))
         bench.plot_sweep(input_vars=["sides"])
         bench.plot_sweep(input_vars=["sides", "color"])
 
@@ -119,10 +119,8 @@ if __name__ == "__main__":
 
         return bench
 
-    def example_image_vid_sequential(
-        run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-    ) -> bch.Bench:
-        bench = BenchPolygons().to_bench(run_cfg, report)
+    def example_image_vid_sequential(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+        bench = BenchPolygons().to_bench(run_cfg)
         bench.add_plot_callback(bch.BenchResult.to_title)
         bench.add_plot_callback(bch.BenchResult.to_video_grid)
         bench.sweep_sequential(input_vars=["radius", "sides", "linewidth", "color"], group_size=4)

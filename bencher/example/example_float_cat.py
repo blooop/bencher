@@ -7,7 +7,7 @@ import bencher as bch
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_float_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Example of how to perform a parameter sweep for categorical variables
 
     Args:
@@ -20,7 +20,6 @@ def example_float_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
         "Bencher_Example_Float_Cat",
         ExampleBenchCfg(),
         run_cfg=run_cfg,
-        report=report,
     )
 
     bench.plot_sweep(

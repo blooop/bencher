@@ -33,10 +33,8 @@ class YamlDictConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_yaml_sweep_dict(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
-    bench = YamlDictConfig().to_bench(name="yaml_dict_sweep", run_cfg=run_cfg, report=report)
+def example_yaml_sweep_dict(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = YamlDictConfig().to_bench(run_cfg)
     bench.plot_sweep()
     return bench
 
