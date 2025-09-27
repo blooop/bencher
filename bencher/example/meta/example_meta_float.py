@@ -11,8 +11,8 @@ def example_meta_float(
         title="Sweeping Floating Point Variables",
         input_vars=[bch.p("float_vars", [1, 2, 3])],
         const_vars=[
-            BenchMeta.param.categorical_vars.with_const(0),
-            BenchMeta.param.level.with_const(3),
+            ("categorical_vars", 0),
+            ("level", 3),
         ],
     )
 

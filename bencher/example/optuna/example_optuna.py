@@ -59,8 +59,8 @@ def optuna_rastrigin(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
     # run_cfg.use_optuna = True
     res = bench.plot_sweep(
         "Rastrigin",
-        input_vars=[explorer.param.input1, explorer.param.input2],
-        result_vars=[explorer.param.output],
+        input_vars=["input1", "input2"],
+        result_vars=["output"],
         run_cfg=run_cfg,
     )
 

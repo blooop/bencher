@@ -81,8 +81,8 @@ if __name__ == "__main__":
 
     # Bencher needs to know the metadata of the variable in order to automatically sweep and plot it, so it is passed by using param's metadata syntax.  InputCfg.param.* is how to access the metadata defined in the class description.  Unfortunately vscode autocomplete doesn't work with params metaclass machinery so you will need to look at the class definition to get a list of possible settings. Define what parameter you want to sweep over and the result variable you want to plot.  If you pass 1 input, it will perform a 1D sweep over that dimension and plot a line or a bar graph of the result (depending on if that variable on continuous or discrete).  In this example we are going to sweep the enum variable and record the accuracy.
     bench.plot_sweep(
-        input_vars=[InputCfg.param.algo_setting_enum],
-        result_vars=[OutputCfg.param.accuracy],
+        input_vars=["algo_setting_enum"],
+        result_vars=["accuracy"],
         title="Simple example 1D enum sweep",
         description="""Sample all the values in enum setting and record the resulting accuracy.  The algo_setting_float is not mentioned in the inputs and so it takes the default value that was set in the InputCfg class.  Repeats=10 so the benchmark function is called 10 times serially.  This is why the function must be pure, if a past call to the function affects the future call to the function (through global side effects) any statistics you calculate will not be correct. 
         """,
@@ -92,8 +92,8 @@ if __name__ == "__main__":
 
     # There is also a floating point input setting that affects the performance of the algorithm.  By passing only the float setting, the InputCfg class will use the default setting of the categorical value so you can understand the float setting in isolation
     bench.plot_sweep(
-        input_vars=[InputCfg.param.algo_setting_float],
-        result_vars=[OutputCfg.param.accuracy],
+        input_vars=["algo_setting_float"],
+        result_vars=["accuracy"],
         title="Simple example 1D float sweep",
         description="""Perform a 1D sweep over the continuous variable algo_setting_float taking sweep the bounds and number of samples from the InputCfg class definition.  The algo_setting_enum is not mentioned in the inputs and so it takes the default value that was set in the InputCfg class.  Repeats=10 so the benchmark function is called 10 times serially.  
         """,
@@ -104,10 +104,10 @@ if __name__ == "__main__":
     # This sweep is a combination of the previous two sweeps
     bench.plot_sweep(
         input_vars=[
-            InputCfg.param.algo_setting_float,
-            InputCfg.param.algo_setting_enum,
+            "algo_setting_float",
+            "algo_setting_enum",
         ],
-        result_vars=[OutputCfg.param.accuracy],
+        result_vars=["accuracy"],
         title="Simple example 2D sweep",
         description="""Perform a 2D sweep over the enum and continuous variable to see how they act together.  Here the setting use_optuna=True so additional graphs a plotted at the end. 
         """,
@@ -118,9 +118,9 @@ if __name__ == "__main__":
     # In the last example we track the value of the categorical values over time.
     # run this code in a loop twice to simulate calling the benchmarking function at different times.  The most common use case for tracking over time would be run once a day during nightly benchmarking
     bench.plot_sweep(
-        input_vars=[InputCfg.param.algo_setting_enum],
-        result_vars=[OutputCfg.param.accuracy],
-        const_vars=[(InputCfg.param.algo_setting_float, 1.33)],
+        input_vars=["algo_setting_enum"],
+        result_vars=["accuracy"],
+        const_vars=[("algo_setting_float", 1.33)],
         title="Simple example 1D sweep over time",
         description="""Once you have found the optimal settings for your algorithm you want to make sure that the performance is not lost over time.  You can set variables to a constant value and in this case the float value is set to its optimum value.  The first time this function is run only the results from sweeping the categorical value is plotted (the same as example 1), but the second time it is run a graph the values over time is shown. [Run the code again if you don't see a graph over time]. If the graphs over time shows long term changes (not just noise), it indicate there is another external factor that is affecting your performance over time, i.e. dependencies changing, physical degradation of equipment, an unnoticed bug from a pull request etc...
 

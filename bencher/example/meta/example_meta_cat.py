@@ -12,7 +12,7 @@ def example_meta_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
             bch.p("sample_with_repeats", [1, 2]),
         ],
         const_vars=[
-            BenchMeta.param.float_vars.with_const(0),
+            ("float_vars", 0),
         ],
     )
 
