@@ -12,7 +12,7 @@ from hypothesis import given, settings, strategies as st
 from datetime import datetime
 from diskcache import Cache
 
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
+from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher import Bench, BenchCfg, BenchRunCfg
 
 
@@ -22,7 +22,7 @@ def get_hash_isolated_process() -> bytes:
         [
             "python3",
             "-c",
-            "'from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut;import bencher as bch;cfg1 = bch.BenchCfg(input_vars=[ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.noise_distribution],result_vars=[ExampleBenchCfgOut.param.out_sin],const_vars=[ExampleBenchCfgIn.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
+            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bch;cfg1 = bch.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
         ],
         stdout=subprocess.PIPE,
         check=False,
@@ -48,19 +48,19 @@ with Cache("unique_names") as c:
 
 # define a set of input variables that are used across multiple tests.  These configurations are
 input_var_cat_permutations = [
-    [ExampleBenchCfgIn.param.postprocess_fn],
-    [ExampleBenchCfgIn.param.postprocess_fn, ExampleBenchCfgIn.param.noisy],
+    [ExampleBenchCfg.param.postprocess_fn],
+    [ExampleBenchCfg.param.postprocess_fn, ExampleBenchCfg.param.noisy],
     [
-        ExampleBenchCfgIn.param.postprocess_fn,
-        ExampleBenchCfgIn.param.noisy,
-        ExampleBenchCfgIn.param.noise_distribution,
+        ExampleBenchCfg.param.postprocess_fn,
+        ExampleBenchCfg.param.noisy,
+        ExampleBenchCfg.param.noise_distribution,
     ],
 ]
 
 # set up float variable permutations
 input_var_float_permutations = [
-    [ExampleBenchCfgIn.param.theta],
-    [ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.postprocess_fn],
+    [ExampleBenchCfg.param.theta],
+    [ExampleBenchCfg.param.theta, ExampleBenchCfg.param.postprocess_fn],
 ]
 
 input_var_cat_float_permutations = input_var_cat_permutations + input_var_float_permutations
@@ -69,22 +69,22 @@ input_var_cat_float_permutations = input_var_cat_permutations + input_var_float_
 input_var_and_none_permutations = [] + input_var_cat_permutations
 
 result_var_permutations = [
-    [ExampleBenchCfgOut.param.out_sin],
-    [ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
+    [ExampleBenchCfg.param.out_sin],
+    [ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
 ]
 
 
 class TestBencher(unittest.TestCase):
     def create_bench(self) -> Bench:
-        return Bench("test_bencher", bench_function, ExampleBenchCfgIn)
+        return Bench("test_bencher", ExampleBenchCfg())
 
     @settings(deadline=10000)
     @given(
         input_vars=st.sampled_from(
             [
-                [ExampleBenchCfgIn.param.theta],
-                [ExampleBenchCfgIn.param.postprocess_fn],
-                [ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.postprocess_fn],
+                [ExampleBenchCfg.param.theta],
+                [ExampleBenchCfg.param.postprocess_fn],
+                [ExampleBenchCfg.param.theta, ExampleBenchCfg.param.postprocess_fn],
             ]
         ),
         result_vars=st.sampled_from(result_var_permutations),
@@ -130,7 +130,7 @@ class TestBencher(unittest.TestCase):
     @settings(deadline=30000)
     @given(
         input_vars=st.sampled_from(input_var_cat_permutations),
-        result_vars=st.sampled_from([[ExampleBenchCfgOut.param.out_sin]]),
+        result_vars=st.sampled_from([[ExampleBenchCfg.param.out_sin]]),
     )
     def test_combinations_over_time(self, input_vars, result_vars) -> None:
         """check that up to 3 categorical values over time can be plotted"""
@@ -156,7 +156,7 @@ class TestBencher(unittest.TestCase):
     @given(
         input_vars=st.sampled_from(input_var_cat_permutations),
         result_vars=st.sampled_from(
-            [[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos]]
+            [[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos]]
         ),
         repeats=st.sampled_from([20]),
         # repeats=st.sampled_from([1, 2]), #TODO this fails at the moment
@@ -179,11 +179,9 @@ class TestBencher(unittest.TestCase):
 
     @settings(deadline=10000)
     @given(
-        input_vars=st.sampled_from(
-            [[ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.offset]]
-        ),
+        input_vars=st.sampled_from([[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.offset]]),
         result_vars=st.sampled_from(
-            [[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos]]
+            [[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos]]
         ),
         repeats=st.sampled_from([2]),
     )
@@ -268,8 +266,8 @@ class TestBencher(unittest.TestCase):
 
         # set up inputs and results that are shared across runs
         title = "test_benching_cache"
-        iv = [ExampleBenchCfgIn.param.theta]
-        rv = [ExampleBenchCfgOut.param.out_sin]
+        iv = [ExampleBenchCfg.param.theta]
+        rv = [ExampleBenchCfg.param.out_sin]
 
         bench = self.create_bench()
 
@@ -284,7 +282,7 @@ class TestBencher(unittest.TestCase):
         )
 
         self.assertEqual(
-            bench.sample_cache.worker_wrapper_call_count, ExampleBenchCfgIn.param.theta.samples
+            bench.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
         )
 
         bench2 = self.create_bench()
@@ -296,7 +294,7 @@ class TestBencher(unittest.TestCase):
             run_cfg=BenchRunCfg(over_time=over_time, cache_results=False, auto_plot=False),
         )
         self.assertEqual(
-            bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfgIn.param.theta.samples
+            bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
         )
 
         # bench3 = self.create_bench()
@@ -308,7 +306,7 @@ class TestBencher(unittest.TestCase):
             run_cfg=BenchRunCfg(over_time=over_time, cache_results=True, auto_plot=False),
         )
         self.assertEqual(
-            bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfgIn.param.theta.samples
+            bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
         )
 
     @settings(deadline=10000)
@@ -316,7 +314,7 @@ class TestBencher(unittest.TestCase):
     def test_const_hashing(self, noisy) -> None:
         """check that const variables are hashed correctly. This test was created because setting a const variable was resulting in a hash value that changed over time even though the inputs were not changing.  The source of the problem was that the input config had a native param instead of a paramSweep object.  The native param objects don't have a constant hash because they include the .name field which changes for every instance of the param.  the paramSweep objects have the .name field removed from the hash so that hashes for the same inputs remain constant"""
 
-        ExampleBenchCfgIn.param.theta.samples = 5
+        ExampleBenchCfg.param.theta.samples = 5
 
         logging.info(f"starting with const value noisy:{noisy}")
 
@@ -325,16 +323,16 @@ class TestBencher(unittest.TestCase):
         # run without caching and make sure any old caches are cleared
         bench.plot_sweep(
             title="test_const_hashing",
-            input_vars=[ExampleBenchCfgIn.param.theta],
-            result_vars=[ExampleBenchCfgOut.param.out_sin],
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=[ExampleBenchCfg.param.out_sin],
             const_vars=[
-                (ExampleBenchCfgIn.param.noisy, noisy),
+                (ExampleBenchCfg.param.noisy, noisy),
             ],
             run_cfg=BenchRunCfg(clear_cache=True, clear_history=True, auto_plot=False),
         )
         self.assertEqual(
             bench.sample_cache.worker_wrapper_call_count,
-            ExampleBenchCfgIn.param.theta.samples,
+            ExampleBenchCfg.param.theta.samples,
             "no cache used so the function should sample again",
         )
         logging.info("re-run and attempt to load from cache")
@@ -343,10 +341,10 @@ class TestBencher(unittest.TestCase):
         # run again without caching, the function should be called again
         bench2.plot_sweep(
             title="test_const_hashing",
-            input_vars=[ExampleBenchCfgIn.param.theta],
-            result_vars=[ExampleBenchCfgOut.param.out_sin],
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=[ExampleBenchCfg.param.out_sin],
             const_vars=[
-                (ExampleBenchCfgIn.param.noisy, noisy),
+                (ExampleBenchCfg.param.noisy, noisy),
             ],
             run_cfg=BenchRunCfg(cache_results=True, auto_plot=False),
         )
@@ -363,21 +361,21 @@ class TestBencher(unittest.TestCase):
         with self.assertRaises(TypeError):
             bench.plot_sweep(
                 title="test_param_usage",
-                input_vars=[ExampleBenchCfgIn.param.theta],
-                result_vars=[ExampleBenchCfgOut.out_sin],  # forgot to use param here
+                input_vars=[ExampleBenchCfg.param.theta],
+                result_vars=[ExampleBenchCfg.out_sin],  # forgot to use param here
             )
 
         with self.assertRaises(TypeError):
             bench.plot_sweep(
                 title="test_param_usage",
-                input_vars=[ExampleBenchCfgIn.theta],  # forgot to use param here
-                result_vars=[ExampleBenchCfgOut.param.out_sin],
+                input_vars=[ExampleBenchCfg.theta],  # forgot to use param here
+                result_vars=[ExampleBenchCfg.param.out_sin],
             )
 
         with self.assertRaises(TypeError):
             bench.plot_sweep(
                 title="test_param_usage",
-                input_vars=[ExampleBenchCfgIn.param.theta],
-                result_vars=[ExampleBenchCfgOut.param.out_sin],
-                const_vars=[(ExampleBenchCfgIn.offset, 0.1)],  # forgot to use param here
+                input_vars=[ExampleBenchCfg.param.theta],
+                result_vars=[ExampleBenchCfg.param.out_sin],
+                const_vars=[(ExampleBenchCfg.offset, 0.1)],  # forgot to use param here
             )

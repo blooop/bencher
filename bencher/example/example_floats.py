@@ -4,7 +4,7 @@
 import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, ExampleBenchCfg
+from bencher.example.benchmark_data import ExampleBenchCfg
 
 
 def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
@@ -30,9 +30,9 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
         description="""Bencher is a tool to make it easy to explore how input parameter affect a range of output metrics.  In these examples we are going to benchmark an example function which has been selected to show the features of bencher.
         The example function takes an input theta and returns the absolute value of sin(theta) and cos(theta) +- various types of noise.
 
-        def bench_function(cfg: ExampleBenchCfgIn) -> ExampleBenchCfgOut:
-            "Takes an ExampleBenchCfgIn and returns a ExampleBenchCfgOut output"
-            out = ExampleBenchCfgOut()
+        def bench_function(cfg: ExampleBenchCfg) -> dict:
+            "Takes an ExampleBenchCfg and returns a dict output"
+            return cfg()
             noise = calculate_noise(cfg)
             offset = 0.0
 

@@ -3,7 +3,6 @@ import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import (
-    ExampleBenchCfgOut,
     NoiseDistribution,
     ExampleBenchCfg,
     call,
@@ -29,7 +28,7 @@ def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
 
     bench.plot_sweep(
         input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.offset],
-        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
+        result_vars=[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
         const_vars=[
             ExampleBenchCfg.param.sigma.with_const(0.1),
             ExampleBenchCfg.param.noise_distribution.with_const(NoiseDistribution.gaussian),
@@ -52,7 +51,7 @@ def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
             ExampleBenchCfg.param.offset,
             ExampleBenchCfg.param.postprocess_fn,
         ],
-        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
+        result_vars=[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
         const_vars=[
             (ExampleBenchCfg.param.sigma, 0.1),
             (ExampleBenchCfg.param.noise_distribution, NoiseDistribution.gaussian),
@@ -71,7 +70,7 @@ def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
             ExampleBenchCfg.param.postprocess_fn,
             ExampleBenchCfg.param.noise_distribution,
         ],
-        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
+        result_vars=[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
         const_vars=[
             (ExampleBenchCfg.param.sigma, 0.1),
             (ExampleBenchCfg.param.noise_distribution, NoiseDistribution.gaussian),

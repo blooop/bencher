@@ -5,7 +5,7 @@
 import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
+from bencher.example.benchmark_data import ExampleBenchCfg
 
 
 def example_1D_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
@@ -18,11 +18,10 @@ def example_1D_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
         Bench: results of the parameter sweep
     """
 
-    explorer = ExampleBenchCfgIn()
+    explorer = ExampleBenchCfg()
     bench = bch.Bench(
         "benchmarking_example_categorical1D",
-        bench_function,
-        ExampleBenchCfgIn,
+        ExampleBenchCfg(),
         run_cfg=run_cfg,
         report=report,
     )
