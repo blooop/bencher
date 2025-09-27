@@ -89,13 +89,13 @@ def example_holosweep_tap(
 
     res = bench.plot_sweep(
         "phase",
-        input_vars=[PlotFunctions.param.theta, PlotFunctions.param.freq],
-        result_vars=[PlotFunctions.param.fn_output, PlotFunctions.param.hmap],
+        input_vars=["theta", "freq"],
+        result_vars=["fn_output", "hmap"],
         run_cfg=run_cfg,
     )
 
     bench.report.append(res.describe_sweep())
-    bench.report.append(res.to_heatmap_tap(PlotFunctions.param.fn_output))
+    bench.report.append(res.to_heatmap_tap("fn_output"))
 
     return bench
 
@@ -110,8 +110,8 @@ def example_holosweep_tap_slider(
 
     res = bench.plot_sweep(
         "phase",
-        input_vars=[PlotFunctions.param.theta, PlotFunctions.param.freq, PlotFunctions.param.phase],
-        result_vars=[PlotFunctions.param.fn_output],
+        input_vars=["theta", "freq", "phase"],
+        result_vars=["fn_output"],
         run_cfg=run_cfg,
     )
 

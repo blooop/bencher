@@ -13,7 +13,7 @@ def example_levels(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
             bch.p("level", [2, 3, 4, 5]),
         ],
         const_vars=[
-            BenchMeta.param.categorical_vars.with_const(0),
+            ("categorical_vars", 0),
         ],
     )
     return bench

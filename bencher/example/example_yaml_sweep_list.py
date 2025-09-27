@@ -27,8 +27,8 @@ def example_yaml_sweep_list(
     bench = YamlConfigSweep().to_bench(name="yaml_sweep", run_cfg=run_cfg, report=report)
     bench.plot_sweep(
         title="YAML workload sweep",
-        input_vars=[YamlConfigSweep.param.workload],
-        result_vars=[YamlConfigSweep.param.total_workload],
+        input_vars=["workload"],
+        result_vars=["total_workload"],
     )
     return bench
 

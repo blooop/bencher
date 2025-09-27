@@ -51,8 +51,8 @@ def optuna_rastrigin(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
     bench = bch.Bench("Rastrigin", explorer.rastrigin, run_cfg=run_cfg, report=report)
 
     # res = bench.to_optuna(
-    #     input_vars=[explorer.param.input1, explorer.param.input2],
-    #     result_vars=[explorer.param.output],
+    #     input_vars=["input1", "input2"],
+    #     result_vars=["output"],
     #     n_trials=30
     # )
 

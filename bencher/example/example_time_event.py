@@ -28,8 +28,8 @@ def example_time_event(
     # here we sample the input variable theta and plot the value of output1. The (noisy) function is sampled 20 times so you can see the distribution
     bencher.plot_sweep(
         title="Example 1D Categorical",
-        input_vars=[ExampleBenchCfg.param.postprocess_fn],
-        result_vars=[ExampleBenchCfg.param.out_cos],
+        input_vars=["postprocess_fn"],
+        result_vars=["out_cos"],
         description=example_time_event.__doc__,
         run_cfg=run_cfg,
     )
