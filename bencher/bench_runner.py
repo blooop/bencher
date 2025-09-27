@@ -311,7 +311,9 @@ class BenchRunner:
                     self.show_publish(shared_report, show, publish, save, debug)
         return self.results
 
-    def _normalize_bench(self, bench_fn: Benchable) -> tuple[Callable[[BenchRunCfg], tuple[BenchCfg, BenchReport]], str]:
+    def _normalize_bench(
+        self, bench_fn: Benchable
+    ) -> tuple[Callable[[BenchRunCfg], tuple[BenchCfg, BenchReport]], str]:
         arity = self._determine_arity(bench_fn)
         func_name = self._resolve_name(bench_fn)
 
