@@ -2,10 +2,7 @@
 import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import (
-    NoiseDistribution,
-    ExampleBenchCfg,
-)
+from bencher.example.benchmark_data import NoiseDistribution, ExampleBenchCfg
 
 
 def example_floats2D(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
