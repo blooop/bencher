@@ -24,7 +24,7 @@ def example_docs(run_cfg: bch.BenchRunCfg | None = None) -> bch.BenchReport:
         result = example(run_cfg)
         bench_report = getattr(result, "report", None)
         if isinstance(bench_report, bch.BenchReport):
-            bch.BenchRunner._merge_reports(report, bench_report)  # type: ignore[arg-type]
+            bch.BenchRunner._merge_reports(report, bench_report)  # type: ignore[arg-type] # pylint: disable=protected-access
 
     return report
 

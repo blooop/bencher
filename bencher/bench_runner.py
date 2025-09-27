@@ -176,7 +176,6 @@ class BenchRunner:
             bench_fn (Benchable): A callable that implements the Benchable protocol
         """
         self.bench_fns.append(bench_fn)
-        self._bench_entries.append(self._prepare_bench_entry(bench_fn))
 
     def add_bench(self, class_instance: ParametrizedSweep) -> None:
         """Add a parametrized sweep class instance as a benchmark.
