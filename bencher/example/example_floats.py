@@ -24,8 +24,8 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     bench.report.append(readme, "Intro")
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfg.param.theta],
-        result_vars=[ExampleBenchCfg.param.out_sin],
+        input_vars=["theta"],
+        result_vars=["out_sin"],
         title="Float 1D Example",
         description="""Bencher is a tool to make it easy to explore how input parameter affect a range of output metrics.  In these examples we are going to benchmark an example function which has been selected to show the features of bencher.
         The example function takes an input theta and returns the absolute value of sin(theta) and cos(theta) +- various types of noise.
@@ -48,16 +48,16 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     )
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noisy],
-        result_vars=[ExampleBenchCfg.param.out_sin],
+        input_vars=["theta", "noisy"],
+        result_vars=["out_sin"],
         title="Float 1D and Bool Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
         post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",
     )
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noisy],
-        result_vars=[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
+        input_vars=["theta", "noisy"],
+        result_vars=["out_sin", "out_cos"],
         title="Float 1D and Bool Example with multiple outputs",
         description="""Following from the previous example here the second output is added to the result variables""",
         post_description="Another column is added for the result variable that shows cos(theta)",
@@ -65,13 +65,13 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
 
     bench.plot_sweep(
         input_vars=[
-            ExampleBenchCfg.param.theta,
-            ExampleBenchCfg.param.noisy,
-            ExampleBenchCfg.param.postprocess_fn,
+            "theta",
+            "noisy",
+            "postprocess_fn",
         ],
         result_vars=[
-            ExampleBenchCfg.param.out_sin,
-            ExampleBenchCfg.param.out_cos,
+            "out_sin",
+            "out_cos",
         ],
         title="Float 1D, Bool and Categorical Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We add the 'postprocess_fn' categorical enum value which either takes the absolute value or negates the output of the function.""",

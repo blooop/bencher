@@ -33,8 +33,8 @@ def example_categorical(
     bench.report.append(readme, "Intro")
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfg.param.noisy],
-        result_vars=[ExampleBenchCfg.param.out_sin],
+        input_vars=["noisy"],
+        result_vars=["out_sin"],
         title="Categorical 1D Example",
         description="""This example shows how to sample categorical values. The same objective from the float examples is used but theta is kept constant with a value of 0 (as described in the ExampleBenchCfg class definition).
 
@@ -50,8 +50,8 @@ def example_categorical(
     )
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfg.param.noisy, ExampleBenchCfg.param.noise_distribution],
-        result_vars=[ExampleBenchCfg.param.out_sin],
+        input_vars=["noisy", "noise_distribution"],
+        result_vars=["out_sin"],
         title="Categorical 2D Example",
         description="""Adding another categorical value creates a facet plot over that dimension""",
         post_description="The output shows swarm plots of different noise distributions",
@@ -59,11 +59,11 @@ def example_categorical(
 
     bench.plot_sweep(
         input_vars=[
-            ExampleBenchCfg.param.noisy,
-            ExampleBenchCfg.param.noise_distribution,
-            ExampleBenchCfg.param.postprocess_fn,
+            "noisy",
+            "noise_distribution",
+            "postprocess_fn",
         ],
-        result_vars=[ExampleBenchCfg.param.out_sin],
+        result_vars=["out_sin"],
         title="Categorical 3D Example",
         description="""Adding another categorical value extends the facets to the right""",
         post_description="The output shows swarm plots of different noise distributions",
@@ -72,12 +72,12 @@ def example_categorical(
     run_cfg.over_time = True
     bench.plot_sweep(
         input_vars=[
-            ExampleBenchCfg.param.noisy,
-            ExampleBenchCfg.param.noise_distribution,
-            ExampleBenchCfg.param.postprocess_fn,
+            "noisy",
+            "noise_distribution",
+            "postprocess_fn",
         ],
         title="Categorical 3D Example Over Time",
-        result_vars=[ExampleBenchCfg.param.out_sin],
+        result_vars=["out_sin"],
         description="""Lastly, what if you want to track these distributions over time? Set over_time=True and bencher will cache and display historical results alongside the latest result.  Use clear_history=True to clear that cache.""",
         post_description="The output shows faceted line plot with confidence intervals for the mean value over time.",
         run_cfg=run_cfg,

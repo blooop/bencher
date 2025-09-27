@@ -41,8 +41,8 @@ def example_custom_sweep(
 
     bencher.plot_sweep(
         title="Example User Defined Sweep 1D",
-        input_vars=[Square.param.x],
-        result_vars=[Square.param.result],
+        input_vars=["x"],
+        result_vars=["result"],
         description="Sample the x parameter",
     )
 

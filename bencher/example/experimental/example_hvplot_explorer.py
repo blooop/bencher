@@ -8,8 +8,8 @@ bench = bch.Bench("Bencher_Example_Simple", ExampleBenchCfg())
 
 if __name__ == "__main__":
     res = bench.plot_sweep(
-        input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.offset],
-        result_vars=[ExampleBenchCfg.param.out_sin],
+        input_vars=["theta", "offset"],
+        result_vars=["out_sin"],
         title="Float 1D Example",
         description="""Bencher is a tool to make it easy to explore how input parameter affect a range of output metrics.  In these examples we are going to benchmark an example function which has been selected to show the features of bencher.
         The example function takes an input theta and returns the absolute value of sin(theta) and cos(theta) +- various types of noise.
