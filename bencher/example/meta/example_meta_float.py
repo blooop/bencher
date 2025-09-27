@@ -10,10 +10,7 @@ def example_meta_float(
     bench.plot_sweep(
         title="Sweeping Floating Point Variables",
         input_vars=[bch.p("float_vars", [1, 2, 3])],
-        const_vars=[
-            ("categorical_vars", 0),
-            ("level", 3),
-        ],
+        const_vars=dict(categorical_vars=0, level=3),
     )
 
     return bench

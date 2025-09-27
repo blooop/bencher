@@ -30,7 +30,7 @@ def example_float_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
             "postprocess_fn",
         ],
         result_vars=["out_sin"],
-        const_vars=[("noisy", True)],
+        const_vars=dict(noisy=True),
         title="Float 2D Cat 1D Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
         post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",
@@ -39,7 +39,7 @@ def example_float_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
     bench.plot_sweep(
         input_vars=["theta"],
         result_vars=["out_sin"],
-        const_vars=[("noisy", True)],
+        const_vars=dict(noisy=True),
         title="Float 1D Cat 1D  Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
         post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",
@@ -52,7 +52,7 @@ def example_float_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
     # bench.plot_sweep(
     #     input_vars=["theta", "postprocess_fn"],
     #     result_vars=["out_sin"],
-    #     const_vars=[("noisy", True)],
+    #     const_vars=dict(noisy=True),
     #     title="Float 1D Cat 1D  Example",
     #     description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
     #     post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",

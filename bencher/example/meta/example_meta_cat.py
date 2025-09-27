@@ -11,9 +11,7 @@ def example_meta_cat(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = 
             bch.p("categorical_vars", [1, 2, 3]),
             bch.p("sample_with_repeats", [1, 2]),
         ],
-        const_vars=[
-            ("float_vars", 0),
-        ],
+        const_vars=dict(float_vars=0),
     )
 
     return bench

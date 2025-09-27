@@ -14,9 +14,7 @@ def example_meta_levels(
             bch.p("float_vars", [1, 2]),
             bch.p("level", [2, 3, 4]),
         ],
-        const_vars=[
-            ("categorical_vars", 0),
-        ],
+        const_vars=dict(categorical_vars=0),
     )
 
     return bench
