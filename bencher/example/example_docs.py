@@ -6,29 +6,13 @@ from bencher.example.meta.example_meta_cat import example_meta_cat
 from bencher.example.meta.example_meta_float import example_meta_float
 
 
-def example_docs(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    if report is None:
-        report = bch.BenchReport()
-    # b_run = bch.BenchRunner("bench_runner_test", run_cfg=run_cfg)
-    # b_run.add_run(example_categorical)
-    # b_run.add_run(example_floats)
-    # b_run.add_run(example_image)
-    # b_run.add_run(example_video)
-    # b_run.add_run(example_meta_levels)
-    # b_run.add_run(run_levels)
-    # b_run.run(level=4, grouped=True, save=True)
-    # b_run.shutdown()
-    run_cfg.repeats = 1
-    run_cfg.level = 2
-    example_image(run_cfg, report)
-    example_video(run_cfg, report)
-    example_meta_cat(report=report)
-    example_meta_float(report=report)
-    example_meta_levels(report=report)
-    # example_meta(run_cfg,report)
-
-    return report
-
-
 if __name__ == "__main__":
-    example_docs().show()
+    runner = bch.BenchRunner("example_docs")
+
+    runner.add(example_image)
+    runner.add(example_video)
+    runner.add(example_meta_cat)
+    runner.add(example_meta_float)
+    runner.add(example_meta_levels)
+
+    runner.run(level=2, grouped=True, show=True, cache_results=False)
