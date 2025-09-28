@@ -36,7 +36,6 @@ from bencher.example.example_image import example_image, example_image_vid
 from bencher.example.example_video import example_video
 from bencher.example.example_filepath import example_filepath
 from bencher.example.meta.example_meta import example_meta
-from bencher.example.example_docs import example_docs
 
 import os
 
@@ -65,11 +64,6 @@ class TestBenchExamples(unittest.TestCase):
         if save or self.generate_all:
             path = example_result.report.save_index("cachedir")
             self.assertTrue(os.path.exists(path))
-
-    def test_publish_docs(self):
-        report = example_docs(run_cfg=self.create_run_cfg())
-        index = report.save_index(filename="index_tmp.html")
-        index.unlink()  # remove tmp index
 
     # def test_example_categorical(self) -> None:
     #     self.examples_asserts(example_categorical(self.create_run_cfg()))
