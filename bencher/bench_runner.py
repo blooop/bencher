@@ -1,5 +1,4 @@
-from typing import Protocol, Callable, List, Union, runtime_checkable
-from functools import partial
+from typing import Protocol, Callable, List
 import logging
 import warnings
 from datetime import datetime
@@ -8,29 +7,11 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg
 from copy import deepcopy
-import inspect
 
 
-@runtime_checkable
-class BenchableV1(Protocol):
-    """Legacy two-argument bench callable: bench(run_cfg, report)."""
-
-    def __call__(
-        self, run_cfg: BenchRunCfg, report: BenchReport
-    ) -> BenchCfg:  # pragma: no cover - typing only
-        ...
-
-
-@runtime_checkable
-class BenchableV2(Protocol):
-    """New one-argument bench callable: bench(run_cfg)."""
-
-    def __call__(self, run_cfg: BenchRunCfg) -> BenchCfg:  # pragma: no cover - typing only
-        ...
-
-
-# Accept both versions during transition
-Benchable = Union[BenchableV1, BenchableV2]
+class Benchable(Protocol):
+    def bench(self, run_cfg: BenchRunCfg, report: BenchReport) -> BenchCfg:
+        raise NotImplementedError
 
 
 class BenchRunner:
@@ -60,7 +41,7 @@ class BenchRunner:
             run_tag (str, optional): Tag for the run, used in naming and caching. If provided,
                 overrides the run_tag in run_cfg. Defaults to None.
         """
-        self.bench_fns: List[Benchable] = []
+        self.bench_fns = []
 
         # Handle name parameter - can be None, string, or Benchable
         if name is None:
@@ -83,7 +64,6 @@ class BenchRunner:
             self.add_bench(bench_class)
         self.results = []
         self.servers = []
-        self._legacy_warning_emitted: set = set()
 
     def _generate_name(self) -> str:
         """Generate a unique name for the BenchRunner instance.
@@ -276,165 +256,46 @@ class BenchRunner:
 
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_level, final_max_level + 1):
-                shared_report = None
-                if grouped and self.bench_fns:
-                    shared_name = (
-                        f"{run_cfg.run_tag}_{self.name}"
-                        if run_cfg.run_tag
-                        else f"{self.name}_grouped"
-                    )
-                    shared_report = BenchReport(shared_name)
+                if grouped:
+                    report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
 
-                for bench_fn in self.bench_fns:
-                    adapter, func_name = self._normalize_bench(bench_fn)
+                for bch_fn in self.bench_fns:
                     run_lvl = deepcopy(run_cfg)
                     run_lvl.level = lvl
                     run_lvl.repeats = r
-                    logging.info(
-                        "Running %s at level: %s with repeats:%s",
-                        func_name,
-                        lvl,
-                        r,
-                    )
-
-                    result, report = adapter(run_lvl)
-                    self._finalise_names(result, report, func_name, run_lvl)
-                    self.results.append(result)
-
-                    if shared_report is not None:
-                        self._merge_reports(shared_report, report)
-                    elif report is not None:
-                        self.show_publish(report, show, publish, save, debug)
-
-                if shared_report is not None:
-                    self.show_publish(shared_report, show, publish, save, debug)
+                    logging.info(f"Running {bch_fn} at level: {lvl} with repeats:{r}")
+                    if grouped:
+                        res = bch_fn(run_lvl, report_level)
+                    else:
+                        individual_report = BenchReport()
+                        res = bch_fn(run_lvl, individual_report)
+                        if run_cfg.run_tag:
+                            tag_suffix = f"_{run_cfg.run_tag}"
+                        else:
+                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            tag_suffix = f"_{current_date}"
+                        # Update the report name for saving
+                        if hasattr(res, "bench_cfg") and hasattr(res.bench_cfg, "bench_name"):
+                            # For BenchResult objects
+                            original_name = res.bench_cfg.bench_name
+                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            res.bench_cfg.bench_name = new_name
+                            individual_report.bench_name = new_name
+                        elif hasattr(res, "report"):
+                            # For objects with report attribute
+                            original_name = res.report.bench_name
+                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            res.report.bench_name = new_name
+                            individual_report.bench_name = new_name
+                        else:
+                            # Fallback - use function name
+                            new_name = f"{bch_fn.__name__}{tag_suffix}"
+                            individual_report.bench_name = new_name
+                        self.show_publish(individual_report, show, publish, save, debug)
+                    self.results.append(res)
+                if grouped:
+                    self.show_publish(report_level, show, publish, save, debug)
         return self.results
-
-    def _normalize_bench(
-        self, bench_fn: Benchable
-    ) -> tuple[Callable[[BenchRunCfg], tuple[BenchCfg, BenchReport]], str]:
-        arity = self._determine_arity(bench_fn)
-        func_name = self._resolve_name(bench_fn)
-
-        if arity >= 2 and bench_fn not in self._legacy_warning_emitted:
-            warnings.warn(
-                (
-                    "Benchable callables that accept (run_cfg, report) are deprecated and will "
-                    "be removed in a future release. Update to a single-argument signature: "
-                    "bench(run_cfg)."
-                ),
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            self._legacy_warning_emitted.add(bench_fn)
-
-        if arity >= 2:
-
-            def legacy_adapter(run_cfg: BenchRunCfg, fn=bench_fn, name=func_name):
-                report = BenchReport(name)
-                bound = partial(fn, report=report)
-                result = bound(run_cfg)
-                ensured_report = self._ensure_report(result, name, fallback=report)
-                return result, ensured_report
-
-            return legacy_adapter, func_name
-
-        def modern_adapter(run_cfg: BenchRunCfg, fn=bench_fn, name=func_name):
-            result = fn(run_cfg)
-            report = self._ensure_report(result, name)
-            return result, report
-
-        return modern_adapter, func_name
-
-    @staticmethod
-    def _determine_arity(fn: Benchable) -> int:
-        try:
-            sig = inspect.signature(fn)
-        except (TypeError, ValueError):
-            return 2
-
-        pos_params = [
-            p
-            for p in sig.parameters.values()
-            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
-        ]
-        return len(pos_params)
-
-    @staticmethod
-    def _resolve_name(fn: Benchable) -> str:
-        func_name = getattr(fn, "__name__", None)
-        if func_name is None and hasattr(fn, "func"):
-            func_name = getattr(fn.func, "__name__", None)
-        return func_name or "bench"
-
-    @staticmethod
-    def _ensure_report(
-        result: BenchCfg,
-        default_name: str,
-        *,
-        fallback: BenchReport | None = None,
-    ) -> BenchReport:
-        report = getattr(result, "report", None)
-        if isinstance(report, BenchReport):
-            if not report.bench_name:
-                report.bench_name = default_name
-            return report
-
-        report = fallback or BenchReport(default_name)
-        try:
-            setattr(result, "report", report)
-        except AttributeError:
-            pass
-        if not report.bench_name:
-            report.bench_name = default_name
-        return report
-
-    @staticmethod
-    def _merge_reports(dest: BenchReport | None, src: BenchReport | None) -> None:
-        if dest is None or src is None or dest is src:
-            return
-
-        for pane in list(src.pane):
-            dest.append_tab(pane, name=getattr(pane, "name", None))
-
-    @staticmethod
-    def _tag_suffix(run_cfg: BenchRunCfg) -> str:
-        if run_cfg.run_tag:
-            return f"_{run_cfg.run_tag}"
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        return f"_{current_date}"
-
-    @staticmethod
-    def _compose_bench_name(base: str | None, func_name: str, suffix: str) -> str:
-        name = base or func_name
-        if func_name and not name.endswith(func_name):
-            name = f"{name}_{func_name}"
-        if suffix and not name.endswith(suffix):
-            name = f"{name}{suffix}"
-        return name
-
-    def _finalise_names(
-        self,
-        result: BenchCfg,
-        report: BenchReport | None,
-        func_name: str,
-        run_cfg: BenchRunCfg,
-    ) -> None:
-        suffix = self._tag_suffix(run_cfg)
-
-        base = None
-        if hasattr(result, "bench_cfg") and hasattr(result.bench_cfg, "bench_name"):
-            base = result.bench_cfg.bench_name
-        elif report is not None and report.bench_name:
-            base = report.bench_name
-
-        bench_name = self._compose_bench_name(base, func_name, suffix)
-
-        if hasattr(result, "bench_cfg") and hasattr(result.bench_cfg, "bench_name"):
-            result.bench_cfg.bench_name = bench_name
-
-        if report is not None:
-            report.bench_name = bench_name
 
     def show_publish(
         self, report: BenchReport, show: bool, publish: bool, save: bool, debug: bool
