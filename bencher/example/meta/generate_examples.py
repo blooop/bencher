@@ -48,12 +48,6 @@ if __name__ == "__main__":
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/example_video.py",
-        "media",
-        repeats=1,
-    )
-
-    convert_example_to_jupyter_notebook(
         "/workspaces/bencher/bencher/example/inputs_0_float/example_0_cat_in_2_out.py",
         "inputs_0_float",
         repeats=100,
