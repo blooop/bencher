@@ -39,6 +39,7 @@ libc = "2.31"
 
 [tool.pixi.dependencies]
 python = ">=3.10"
+sqlite = "==3.48.0"
 shellcheck = ">=0.10.0,<0.11"
 
 [tool.pixi.feature.py310.dependencies]
@@ -141,9 +142,6 @@ docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html
 #demos
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
-
-[tool.pixi.dependencies]
-sqlite = "==3.48.0"
 
 
 [tool.pylint]
