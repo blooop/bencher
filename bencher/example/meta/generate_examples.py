@@ -47,13 +47,13 @@ if __name__ == "__main__":
     convert_example_to_jupyter_notebook(
         "/workspaces/bencher/bencher/example/example_image.py",
         "media",
-        repeats=100,
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
         "/workspaces/bencher/bencher/example/example_video.py",
         "media",
-        repeats=100,
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
