@@ -32,7 +32,8 @@ from bencher.example.example_sample_cache import example_sample_cache
 from bencher.example.example_strings import example_strings
 from bencher.example.example_yaml_sweep_list import example_yaml_sweep_list
 from bencher.example.example_yaml_sweep_dict import example_yaml_sweep_dict
-from bencher.example.example_image import example_image, example_image_vid
+from bencher.example.example_image import example_image
+from bencher.example.example_image_vid import example_image_vid
 from bencher.example.example_video import example_video
 from bencher.example.example_filepath import example_filepath
 from bencher.example.meta.example_meta import example_meta
