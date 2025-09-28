@@ -80,6 +80,7 @@ nbsite_gallery_conf = {
                 {"path": "examples", "title": "Examples"},
                 {"path": "Meta", "title": "Meta"},
                 {"path": "yaml", "title": "YAML"},
+                {"path": "media", "title": "Media"},
             ],
             "skip_rst_notebook_directive": True,
         }
