@@ -20,14 +20,12 @@ def convert_example_to_jupyter_notebook(
     code += split_code[0]
 
     code += f"""
-bench={function_name}
-"""
+bench = {function_name}"""
 
-    code_results = """
-from bokeh.io import output_notebook
+    code_results = """from bokeh.io import output_notebook
+
 output_notebook()
-bench.get_result().to_auto_plots()
-"""
+bench.get_result().to_auto_plots()"""
 
     nb["cells"] = [
         nbf.v4.new_markdown_cell(text),
