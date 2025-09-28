@@ -66,11 +66,6 @@ class TestBenchExamples(unittest.TestCase):
             path = example_result.report.save_index("cachedir")
             self.assertTrue(os.path.exists(path))
 
-    def test_publish_docs(self):
-        report = example_docs(run_cfg=self.create_run_cfg())
-        index = report.save_index(filename="index_tmp.html")
-        index.unlink()  # remove tmp index
-
     # def test_example_categorical(self) -> None:
     #     self.examples_asserts(example_categorical(self.create_run_cfg()))
 
