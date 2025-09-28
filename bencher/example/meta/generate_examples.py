@@ -19,15 +19,12 @@ def convert_example_to_jupyter_notebook(
     split_code = example_code.split("""if __name__ == "__main__":""")
     code += split_code[0]
 
-    code += f"""
-bench={function_name}
-"""
+    code += f"bench = {function_name}"
 
-    code_results = """
-from bokeh.io import output_notebook
+    code_results = """from bokeh.io import output_notebook
+
 output_notebook()
-bench.get_result().to_auto_plots()
-"""
+bench.get_result().to_auto_plots()"""
 
     nb["cells"] = [
         nbf.v4.new_markdown_cell(text),
@@ -43,6 +40,13 @@ bench.get_result().to_auto_plots()
 
 if __name__ == "__main__":
     # Examples with different numbers of categorical variables in increasing order
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_image.py",
+        "media",
+        repeats=1,
+    )
+
     convert_example_to_jupyter_notebook(
         "/workspaces/bencher/bencher/example/inputs_0_float/example_0_cat_in_2_out.py",
         "inputs_0_float",
