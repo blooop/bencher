@@ -1,6 +1,7 @@
 from typing import Callable, List, Protocol, Union, runtime_checkable
 import logging
 import warnings
+import inspect
 from datetime import datetime
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -211,13 +212,17 @@ class BenchRunner:
         report: BenchReport | None,
     ) -> tuple[BenchCfg, BenchReport | None]:
         """Execute a bench function handling legacy and new signatures."""
-        if isinstance(bench_fn, BenchableV1):
+        # Check function signature to determine version
+        sig = inspect.signature(bench_fn)
+        if len(sig.parameters) == 2:
+            # BenchableV1: takes (run_cfg, report)
             report = report or BenchReport()
             result = bench_fn(run_cfg, report)
             if getattr(result, "report", None) is None:
                 result.report = report
             return result, report
 
+        # BenchableV2: takes (run_cfg)
         result = bench_fn(run_cfg)
         result_report = getattr(result, "report", None)
 
