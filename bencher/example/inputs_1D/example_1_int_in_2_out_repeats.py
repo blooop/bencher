@@ -84,8 +84,6 @@ def example_1_int_in_2_out_repeats(
     from importlib.metadata import version
 
     print(version("holobench"))
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 4
     bench = Example1D().to_bench(run_cfg, report)
     bench.plot_sweep()

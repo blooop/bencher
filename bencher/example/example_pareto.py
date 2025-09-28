@@ -96,10 +96,8 @@ def example_pareto(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     Returns:
         Bench: Benchmark object with results
     """
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-        run_cfg.repeats = 5  # Multiple repeats to demonstrate randomness effects
-        run_cfg.level = 4
+    run_cfg.repeats = 5  # Multiple repeats to demonstrate randomness effects
+    run_cfg.level = 4
 
     # Set up Optuna for multi-objective optimization
     run_cfg.use_optuna = True
