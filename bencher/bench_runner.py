@@ -1,4 +1,4 @@
-from typing import Protocol, Callable, List
+from typing import Callable, List, Protocol, Union, runtime_checkable
 import logging
 import warnings
 from datetime import datetime
@@ -9,9 +9,26 @@ from bencher.bench_report import BenchReport, GithubPagesCfg
 from copy import deepcopy
 
 
-class Benchable(Protocol):
-    def bench(self, run_cfg: BenchRunCfg, report: BenchReport) -> BenchCfg:
-        raise NotImplementedError
+@runtime_checkable
+class BenchableV1(Protocol):
+    """Legacy two-argument bench callable: bench(run_cfg, report)."""
+
+    def __call__(
+        self, run_cfg: BenchRunCfg, report: BenchReport
+    ) -> BenchCfg:  # pragma: no cover - typing only
+        ...
+
+
+@runtime_checkable
+class BenchableV2(Protocol):
+    """New one-argument bench callable: bench(run_cfg)."""
+
+    def __call__(self, run_cfg: BenchRunCfg) -> BenchCfg:  # pragma: no cover - typing only
+        ...
+
+
+# Accept both versions during transition
+Benchable = Union[BenchableV1, BenchableV2]
 
 
 class BenchRunner:
@@ -178,6 +195,43 @@ class BenchRunner:
 
         self.add_run(cb)
 
+    def _merge_reports(self, target: BenchReport, source: BenchReport | None) -> None:
+        """Append all tabs from source report into the target report."""
+        if source is None or target is source:
+            return
+        if target.bench_name is None:
+            target.bench_name = source.bench_name
+        for pane in list(source.pane):
+            target.pane.append(pane)
+
+    def _execute_bench_fn(
+        self,
+        bench_fn: Benchable,
+        run_cfg: BenchRunCfg,
+        report: BenchReport | None,
+    ) -> tuple[BenchCfg, BenchReport | None]:
+        """Execute a bench function handling legacy and new signatures."""
+        if isinstance(bench_fn, BenchableV1):
+            report = report or BenchReport()
+            result = bench_fn(run_cfg, report)
+            if getattr(result, "report", None) is None:
+                result.report = report
+            return result, report
+
+        result = bench_fn(run_cfg)
+        result_report = getattr(result, "report", None)
+
+        if report is not None:
+            if result_report is None:
+                result.report = report
+                result_report = report
+            elif result_report is not report:
+                self._merge_reports(report, result_report)
+                result.report = report
+                result_report = report
+
+        return result, result_report
+
     def run(
         self,
         # New unified parameters (level and repeats are starting values)
@@ -256,42 +310,47 @@ class BenchRunner:
 
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_level, final_max_level + 1):
+                report_level = None
                 if grouped:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
-
                 for bch_fn in self.bench_fns:
                     run_lvl = deepcopy(run_cfg)
                     run_lvl.level = lvl
                     run_lvl.repeats = r
                     logging.info(f"Running {bch_fn} at level: {lvl} with repeats:{r}")
+                    res, active_report = self._execute_bench_fn(bch_fn, run_lvl, report_level)
                     if grouped:
-                        res = bch_fn(run_lvl, report_level)
+                        if report_level is not None and active_report is not report_level:
+                            self._merge_reports(report_level, active_report)
+                        if (
+                            getattr(res, "report", None) is not report_level
+                            and report_level is not None
+                        ):
+                            res.report = report_level
                     else:
-                        individual_report = BenchReport()
-                        res = bch_fn(run_lvl, individual_report)
+                        report_to_publish = active_report or BenchReport()
+                        if active_report is None:
+                            res.report = report_to_publish
                         if run_cfg.run_tag:
                             tag_suffix = f"_{run_cfg.run_tag}"
                         else:
                             current_date = datetime.now().strftime("%Y-%m-%d")
                             tag_suffix = f"_{current_date}"
-                        # Update the report name for saving
+                        bench_fn_name = getattr(bch_fn, "__name__", bch_fn.__class__.__name__)
                         if hasattr(res, "bench_cfg") and hasattr(res.bench_cfg, "bench_name"):
-                            # For BenchResult objects
-                            original_name = res.bench_cfg.bench_name
-                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            original_name = res.bench_cfg.bench_name or bench_fn_name
+                            new_name = f"{original_name}_{bench_fn_name}{tag_suffix}"
                             res.bench_cfg.bench_name = new_name
-                            individual_report.bench_name = new_name
-                        elif hasattr(res, "report"):
-                            # For objects with report attribute
-                            original_name = res.report.bench_name
-                            new_name = f"{original_name}_{bch_fn.__name__}{tag_suffix}"
+                            report_to_publish.bench_name = new_name
+                        elif hasattr(res, "report") and getattr(res, "report", None) is not None:
+                            original_name = res.report.bench_name or bench_fn_name
+                            new_name = f"{original_name}_{bench_fn_name}{tag_suffix}"
                             res.report.bench_name = new_name
-                            individual_report.bench_name = new_name
+                            report_to_publish.bench_name = new_name
                         else:
-                            # Fallback - use function name
-                            new_name = f"{bch_fn.__name__}{tag_suffix}"
-                            individual_report.bench_name = new_name
-                        self.show_publish(individual_report, show, publish, save, debug)
+                            new_name = f"{bench_fn_name}{tag_suffix}"
+                            report_to_publish.bench_name = new_name
+                        self.show_publish(report_to_publish, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
                     self.show_publish(report_level, show, publish, save, debug)
