@@ -59,9 +59,7 @@ class Pattern0CatBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_2_float_0_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_2_float_0_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark demonstrating a surface pattern based solely on float parameters.
 
     This example is simplified from the 1-category version by fixing all categorical
@@ -69,14 +67,13 @@ def example_2_float_0_cat_in_2_out(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
     run_cfg.repeats = 3  # Fewer repeats for a quicker benchmark
 
-    bench = Pattern0CatBenchmark().to_bench(run_cfg, report)
+    bench = Pattern0CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Pattern Visualization (2 Float, 0 Categorical Variables)",
         description="Response pattern with a valley shape based on x and y values",

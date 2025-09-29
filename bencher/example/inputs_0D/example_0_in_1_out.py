@@ -21,21 +21,18 @@ class SimpleFloat0D(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_0_in_1_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_0_in_1_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example shows how to sample a 0-dimensional variable (no input parameters)
     and plot the result of that sampling operation.
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
 
-    bench = SimpleFloat0D().to_bench(run_cfg, report)
+    bench = SimpleFloat0D().to_bench(run_cfg)
     bench.plot_sweep()
 
     bench.add(bch.TableResult)
@@ -46,19 +43,19 @@ if __name__ == "__main__":
     example_0_in_1_out().report.show()
     # run_config = bch.BenchRunCfg(repeats=100)
     # report_obj = bch.BenchReport()
-    # example_0_in_1_out(run_config, report_obj).report.show()
+    # example_0_in_1_out(run_config).report.show()
 
     # run_cfg.over_time = True
     # run_cfg.cache_samples = True
     # for i in range(4):
-    #     example_0_in_1_out(run_cfg, report_obj)
+    #     example_0_in_1_out(run_cfg)
 
     # run_config.over_time = True
     # run_config.auto_plot = False
     # for _ in range(4):
-    #     example_0_in_1_out(run_config, report_obj)
+    #     example_0_in_1_out(run_config)
 
     # run_config.auto_plot = True
-    # example_0_in_1_out(run_config, report_obj)
+    # example_0_in_1_out(run_config)
 
     # report_obj.show()

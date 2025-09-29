@@ -147,8 +147,8 @@ res.to_auto_plots()
         return super().__call__()
 
 
-def example_meta(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    bench = BenchMetaGen().to_bench(run_cfg, report)
+def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = BenchMetaGen().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Meta Bench",

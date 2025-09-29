@@ -89,14 +89,11 @@ class Pattern3DModel(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_3_float_3_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_3_float_3_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark demonstrating 3D visual patterns based on categorical settings.
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
@@ -108,7 +105,7 @@ def example_3_float_3_cat_in_2_out(
 
     hv.opts.defaults(hv.opts.HeatMap(cmap="plasma", width=300, height=300, colorbar=True))
 
-    bench = Pattern3DModel().to_bench(run_cfg, report)
+    bench = Pattern3DModel().to_bench(run_cfg)
     bench.plot_sweep(
         title="3D Pattern Visualization (3 Float, 3 Categorical Variables)",
         description="Response patterns with distinctive shapes based on 3D coordinates and categorical settings",

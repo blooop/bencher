@@ -17,8 +17,8 @@ class ExampleFile(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_filepath(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None):
-    bench = ExampleFile().to_bench(run_cfg, report)
+def example_filepath(run_cfg: bch.BenchRunCfg | None = None):
+    bench = ExampleFile().to_bench(run_cfg)
     bench.plot_sweep()
     return bench
 

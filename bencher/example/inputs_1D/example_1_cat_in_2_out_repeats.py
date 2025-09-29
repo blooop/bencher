@@ -42,22 +42,19 @@ class DataStructureBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_1_cat_in_2_out_repeats(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_1_cat_in_2_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example shows how to benchmark different data structure operations with multiple repeats
     and plot the results of execution time and memory usage.
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
 
     run_cfg.repeats = 30  # Increased repeats for better statistical significance
-    bench = DataStructureBenchmark().to_bench(run_cfg, report)
+    bench = DataStructureBenchmark().to_bench(run_cfg)
     bench.plot_sweep()
     return bench
 

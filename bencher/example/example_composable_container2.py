@@ -29,8 +29,8 @@ class BenchImageTest(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def bench_image(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    bench = BenchImageTest().to_bench(run_cfg, report)
+def bench_image(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = BenchImageTest().to_bench(run_cfg)
     bench.sweep_sequential(group_size=1)
     return bench
 
@@ -96,10 +96,8 @@ class BenchComposableContainerImage(BenchImageTest):
 #         return self.get_results_values_as_dict()
 
 
-def example_composable_container_image(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
-    bench = BenchComposableContainerImage().to_bench(run_cfg, report)
+def example_composable_container_image(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = BenchComposableContainerImage().to_bench(run_cfg)
     bench.result_vars = ["text_vid", "duration"]
     # bench.result_vars = ["duration"]
     # bench.add_plot_callback(bch.BenchResult.to_panes)
@@ -121,9 +119,9 @@ def example_composable_container_image(
 
 
 # def example_composable_container_video(
-#     run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
+#     run_cfg: bch.BenchRunCfg | None = None
 # ) -> bch.Bench:
-#     bench = BenchComposableContainerVideo().to_bench(run_cfg, report)
+#     bench = BenchComposableContainerVideo().to_bench(run_cfg)
 
 #     bench.result_vars = ["polygon_vid"]
 #     bench.add_plot_callback(bch.BenchResult.to_panes)
@@ -147,8 +145,8 @@ def example_composable_container_image(
 #     ex_run_cfg.cache_samples = False
 #     # ex_run_cfg.level = 2
 #     ex_report = bch.BenchReport()
-#     example_composable_container_image(ex_run_cfg, report=ex_report)
-#     # example_composable_container_video(ex_run_cfg, report=ex_report)
+#     example_composable_container_image(ex_run_cfg, )
+#     # example_composable_container_video(ex_run_cfg, )
 #     ex_report.show()
 
 

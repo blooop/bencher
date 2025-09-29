@@ -24,9 +24,15 @@ class MySingletonSweep(ParametrizedSweepSingleton):
 
 def benchable_singleton_fn(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
     sweep = MySingletonSweep()
-    bench = sweep.to_bench(run_cfg=run_cfg, report=report)
+    bench = sweep.to_bench(run_cfg, report=report)
     # Disable plotting to avoid hvplot/xarray requirements in headless tests
     # We still exercise the full compute path and BenchRunner integration
+    return bench.plot_sweep(plot_callbacks=False)
+
+
+def benchable_singleton_fn_v2(run_cfg: bch.BenchRunCfg) -> bch.BenchCfg:
+    sweep = MySingletonSweep()
+    bench = sweep.to_bench(run_cfg=run_cfg)
     return bench.plot_sweep(plot_callbacks=False)
 
 
@@ -155,3 +161,12 @@ def test_singleton_init_failure_consistency():
     # Third instantiation with the same non-failing value should return the same instance
     instance2 = FailingChild(value=2)
     assert instance is instance2
+
+
+def test_single_argument_benchable_supported():
+    run_cfg = bch.BenchRunCfg(run_tag="singleton_single_arg_test")
+    br = bch.BenchRunner(name="singleton_runner_v2", run_cfg=run_cfg)
+    br.add(benchable_singleton_fn_v2)
+
+    results = br.run(level=1, repeats=1, cache_results=False)
+    assert len(results) == 1

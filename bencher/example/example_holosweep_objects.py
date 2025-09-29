@@ -73,11 +73,14 @@ def plot_holo(self, plot=True) -> hv.core.ViewableElement:
     return None
 
 
-def example_holosweep(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     # wv = PlotFunctions()
 
     bench = bch.Bench(
-        "waves", bench_fn, worker_input_cfg=FunctionInputs, run_cfg=run_cfg, report=report
+        "waves",
+        bench_fn,
+        worker_input_cfg=FunctionInputs,
+        run_cfg=run_cfg,
     )
 
     res = bench.plot_sweep(
