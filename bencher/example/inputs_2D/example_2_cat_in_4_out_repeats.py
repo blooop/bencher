@@ -86,8 +86,6 @@ def example_2_cat_in_4_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
         bch.Bench: The benchmark object
     """
 
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 15  # Run multiple times to get statistical significance
     bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(

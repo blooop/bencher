@@ -80,8 +80,6 @@ def example_2_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         bch.Bench: The benchmark object
     """
 
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
     bench = PythonOperations2CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Python Operations Performance Benchmark (2 Variables)",
