@@ -99,8 +99,6 @@ def example_2_float_2_cat_in_2_out(
     Returns:
         bch.Bench: The benchmark object
     """
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 3  # Fewer repeats for a quicker benchmark
 
     bench = Pattern2CatBenchmark().to_bench(run_cfg, report)

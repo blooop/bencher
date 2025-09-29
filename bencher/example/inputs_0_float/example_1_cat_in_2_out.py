@@ -74,8 +74,6 @@ def example_1_cat_in_2_out(
         bch.Bench: The benchmark object
     """
 
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
     bench = PythonOperations1CatBenchmark().to_bench(run_cfg, report)
     bench.plot_sweep(
         title="Python Data Structure Performance Benchmark (1 Variable)",
