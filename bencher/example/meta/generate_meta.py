@@ -61,7 +61,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 float_param_names.append(name)
             elif isinstance(param, (bch.BoolSweep, bch.EnumSweep, bch.StringSweep)):
                 categorical_param_names.append(name)
-            elif isinstance(param, bch.ResultVar):
+            elif isinstance(param, (bch.ResultVar, bch.ResultBool)):
                 result_param_names.append(name)
 
         # Use provided parameter lists or discovered ones
