@@ -5,6 +5,7 @@ both with and without repeats.
 """
 
 import bencher as bch
+from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 
 
 class SimpleBoolBenchmark(bch.ParametrizedSweep):
@@ -83,7 +84,6 @@ def example_bool_result_categorical_no_repeats(run_cfg: bch.BenchRunCfg | None =
     Returns:
         bch.Bench: The benchmark object with results
     """
-    from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
@@ -141,7 +141,6 @@ def example_bool_result_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     Returns:
         bch.Bench: The benchmark object with results
     """
-    from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 
     bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
@@ -160,4 +159,4 @@ if __name__ == "__main__":
     bench_runner.add(example_bool_result_categorical_no_repeats)
     bench_runner.add(example_bool_result_1d)
     bench_runner.add(example_bool_result_2d)
-    bench_runner.run(level=5, repeats=1, show=True, grouped=True)
+    bench_runner.run(level=5, repeats=100, show=True, grouped=True)
