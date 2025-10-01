@@ -12,7 +12,7 @@ from bencher.utils import (
 )
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultVar, ResultBool
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -113,7 +113,7 @@ class LineResult(HoloviewResult):
             reduce=ReduceType.SQUEEZE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar),
+            result_types=(ResultVar, ResultBool),
             override=override,
             **kwargs,
         )
