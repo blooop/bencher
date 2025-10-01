@@ -46,6 +46,7 @@ class BenchableObject(bch.ParametrizedSweep):
 
     distance = bch.ResultVar("m", doc="The distance from the sample point to the origin")
     sample_noise = bch.ResultVar("m", doc="The amount of noise added to the distance sample")
+    is_far_from_origin = bch.ResultBool(doc="Whether the distance from origin exceeds threshold")
 
     result_hmap = bch.ResultHmap()
     # result_im
@@ -67,8 +68,13 @@ class BenchableObject(bch.ParametrizedSweep):
         if self.negate_output == "negative":
             self.distance *= -1
 
+        # Boolean result: consider "far" if distance > 0.5
+        self.is_far_from_origin = abs(self.distance) > 0.5
+
         self.result_hmap = hv.Text(
-            x=0, y=0, text=f"distance:{self.distance}\nnoise:{self.sample_noise}"
+            x=0,
+            y=0,
+            text=f"distance:{self.distance}\nnoise:{self.sample_noise}\nfar:{self.is_far_from_origin}",
         )
 
         return super().__call__()
@@ -124,7 +130,7 @@ class BenchMeta(bch.ParametrizedSweep):
         res = bench.plot_sweep(
             "test",
             input_vars=input_vars,
-            result_vars=["distance"],
+            result_vars=["distance", "is_far_from_origin"],
             # result_vars=["distance", "sample_noise"],
             # result_vars=["sample_noise"],
             # result_vars=["result_hmap"],

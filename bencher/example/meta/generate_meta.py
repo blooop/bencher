@@ -61,7 +61,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 float_param_names.append(name)
             elif isinstance(param, (bch.BoolSweep, bch.EnumSweep, bch.StringSweep)):
                 categorical_param_names.append(name)
-            elif isinstance(param, bch.ResultVar):
+            elif isinstance(param, (bch.ResultVar, bch.ResultBool)):
                 result_param_names.append(name)
 
         # Use provided parameter lists or discovered ones
@@ -140,7 +140,7 @@ res.to_auto_plots()
         ]
         from pathlib import Path
 
-        fname = Path(f"docs/reference/Meta/ex_{title}.ipynb")
+        fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
         fname.write_text(nbf.writes(nb), encoding="utf-8")
 
