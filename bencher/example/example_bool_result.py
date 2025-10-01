@@ -115,7 +115,6 @@ def example_bool_result_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     Returns:
         bch.Bench: The benchmark object with results
     """
-    from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 
     bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
