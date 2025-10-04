@@ -11,6 +11,7 @@ args:
   - user
   - pull
   - deps
+  - git
   - git-clone
   - pixi
   - cwd
