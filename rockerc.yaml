@@ -7,14 +7,13 @@
 
 image: ubuntu:22.04
 args:
-  # - nvidia
-  - x11 
-  - user 
-  - pull 
+  - x11
+  - user
+  - pull
   - deps
-  - git 
+  - git
+  - git-clone
   - pixi
   - cwd
   - ssh
   - ssh-client
-  # - locales

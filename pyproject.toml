@@ -41,7 +41,7 @@ libc = "2.31"
 python = ">=3.10"
 sqlite = "==3.48.0"
 shellcheck = ">=0.10.0,<0.11"
-pre-commit = ">=4.0,<4.4"
+pre-commit = "==4.3.0"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
@@ -64,7 +64,6 @@ test = [
     "hypothesis>=6.104.2,<=6.140.2",
     "ruff>=0.5.0,<=0.13.2",
     "coverage>=7.5.4,<=7.10.7",
-    "pre-commit<=4.3.0",
     "nbformat",
     "ipykernel",
     "pip",
@@ -101,7 +100,6 @@ agent-iterate = { depends-on = [
     "generate-docs",
     "ci",
     "git-commit-all",
-    "fix-commit-push",
     "fix-commit-push",
 ] }
 
