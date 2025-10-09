@@ -246,7 +246,8 @@ def example_image_heatmap_hover(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
         description="""
         This example demonstrates composable images with interactive heatmap visualization.
         Each point on the heatmap represents a (radius, rotation) pair, and when you hover
-        over it, you see a composed image containing all color variants stacked together.
+        over it, you see a composed image containing all color variants blended together
+        using alpha blending (overlay compose method).
         """,
         plot_callbacks=False
     )
@@ -271,24 +272,28 @@ def example_image_heatmap_hover(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
 
     composed_res = composed_bench.get_result()
 
-    # Create heatmaps with composed image hover - one for each composition method
+    # Filter to only show overlay compose method for the hover images
+    # This uses alpha blending to create beautiful composited images
+    overlay_ds = composed_res.ds.sel(compose_method="overlay")
+    composed_res_overlay = bch.BenchResult.from_existing(composed_res)
+    composed_res_overlay.ds = overlay_ds
+
+    # Create heatmaps with overlay-composed image hover
     bench.report.append(
-        composed_res.to(
+        composed_res_overlay.to(
             bch.HeatmapResult,
             result_var=ComposedImageResult.param.avg_brightness_composed,
             tap_var=[ComposedImageResult.param.composed_image],
             use_tap=True,
-            agg_over_dims=["compose_method"],
         )
     )
 
     bench.report.append(
-        composed_res.to(
+        composed_res_overlay.to(
             bch.HeatmapResult,
             result_var=ComposedImageResult.param.color_intensity_composed,
             tap_var=[ComposedImageResult.param.composed_image],
             use_tap=True,
-            agg_over_dims=["compose_method"],
         )
     )
 
