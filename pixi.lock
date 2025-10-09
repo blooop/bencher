@@ -1404,27 +1404,27 @@ packages:
 - pypi: ./
   name: holobench
   version: 1.58.0
-  sha256: 0dbb80667ff339477b96f506a4090ce8ecede7f57955b20338bb8a2d75d5a8d4
+  sha256: d4b4aecbb069d2c281867cafaa6bd1b8435915d1f25eb5bf49215571d1a50632
   requires_dist:
   - holoviews>=1.15,<=1.21.0
   - numpy>=1.0,<=2.2.6
   - param>=1.13.0,<=2.2.1
-  - hvplot>=0.12.0,<=0.12.0
-  - panel>=1.3.6,<=1.7.5
+  - hvplot>=0.12.0,<=0.12.1
+  - panel>=1.3.6,<=1.8.1
   - diskcache>=5.6,<=5.6.3
   - optuna>=3.2,<=4.5.0
   - xarray>=2023.7,<=2025.6.1
   - plotly>=5.15,<=6.3.0
-  - pandas>=2.0,<=2.3.2
+  - pandas>=2.0,<=2.3.3
   - strenum>=0.4.0,<=0.4.15
-  - scikit-learn>=1.2,<=1.7.1
+  - scikit-learn>=1.2,<=1.7.2
   - moviepy>=2.1.2,<=2.2.1
   - pylint>=3.2.5,<=3.3.8 ; extra == 'test'
-  - pytest-cov>=4.1,<=6.2.1 ; extra == 'test'
-  - pytest>=7.4,<=8.4.1 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.138.2 ; extra == 'test'
-  - ruff>=0.5.0,<=0.12.10 ; extra == 'test'
-  - coverage>=7.5.4,<=7.10.4 ; extra == 'test'
+  - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
+  - pytest>=7.4,<=8.4.2 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.140.2 ; extra == 'test'
+  - ruff>=0.5.0,<=0.13.2 ; extra == 'test'
+  - coverage>=7.5.4,<=7.10.7 ; extra == 'test'
   - pre-commit<=4.3.0 ; extra == 'test'
   - nbformat ; extra == 'test'
   - ipykernel ; extra == 'test'

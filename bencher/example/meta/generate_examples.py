@@ -110,6 +110,13 @@ if __name__ == "__main__":
         "inputs_2_float",
     )
 
+    # Image examples
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_image_heatmap_hover.py",
+        "media",
+        repeats=1,
+    )
+
     # Examples with 3 float inputs plus categorical inputs
     convert_example_to_jupyter_notebook(
         "/workspaces/bencher/bencher/example/inputs_3_float/example_3_float_3_cat_in_2_out.py",

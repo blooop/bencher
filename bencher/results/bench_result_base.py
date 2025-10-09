@@ -258,21 +258,54 @@ class BenchResultBase:
                         list(ds_out.dims),
                     )
 
-                # Support basic aggregations; default to mean
+                # Separate numeric and non-numeric variables
+                numeric_vars = []
+                non_numeric_vars = []
+                for var in ds_out.data_vars:
+                    dtype = ds_out[var].dtype
+                    # Check if the variable is numeric (int, float, complex, bool)
+                    if np.issubdtype(dtype, np.number) or np.issubdtype(dtype, np.bool_):
+                        numeric_vars.append(var)
+                    else:
+                        non_numeric_vars.append(var)
+
+                # Aggregate numeric variables
                 fn = (agg_fn or "mean").lower()
-                if fn == "sum":
-                    ds_out = ds_out.sum(dim=dims_present, skipna=True)
-                elif fn == "mean":
-                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
-                elif fn == "max":
-                    ds_out = ds_out.max(dim=dims_present, skipna=True)
-                elif fn == "min":
-                    ds_out = ds_out.min(dim=dims_present, skipna=True)
-                elif fn == "median":
-                    ds_out = ds_out.median(dim=dims_present, skipna=True)
+                if numeric_vars:
+                    ds_numeric = ds_out[numeric_vars]
+                    if fn == "sum":
+                        ds_numeric_agg = ds_numeric.sum(dim=dims_present, skipna=True)
+                    elif fn == "mean":
+                        ds_numeric_agg = ds_numeric.mean(dim=dims_present, skipna=True)
+                    elif fn == "max":
+                        ds_numeric_agg = ds_numeric.max(dim=dims_present, skipna=True)
+                    elif fn == "min":
+                        ds_numeric_agg = ds_numeric.min(dim=dims_present, skipna=True)
+                    elif fn == "median":
+                        ds_numeric_agg = ds_numeric.median(dim=dims_present, skipna=True)
+                    else:
+                        # Fall back to mean if unknown string provided
+                        ds_numeric_agg = ds_numeric.mean(dim=dims_present, skipna=True)
                 else:
-                    # Fall back to mean if unknown string provided
-                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+                    ds_numeric_agg = None
+
+                # For non-numeric variables, select the first value along aggregation dims
+                if non_numeric_vars:
+                    ds_non_numeric = ds_out[non_numeric_vars]
+                    # Select first index along each aggregation dimension
+                    sel_dict = {dim: 0 for dim in dims_present}
+                    ds_non_numeric_selected = ds_non_numeric.isel(sel_dict)
+                    # isel with single index already removes the dimension, so no need to squeeze
+                else:
+                    ds_non_numeric_selected = None
+
+                # Merge numeric and non-numeric datasets
+                if ds_numeric_agg is not None and ds_non_numeric_selected is not None:
+                    ds_out = xr.merge([ds_numeric_agg, ds_non_numeric_selected])
+                elif ds_numeric_agg is not None:
+                    ds_out = ds_numeric_agg
+                elif ds_non_numeric_selected is not None:
+                    ds_out = ds_non_numeric_selected
             else:
                 logging.warning(
                     "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
