@@ -139,84 +139,6 @@ class ImageHeatmapHoverBenchmark(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-class ComposedImageResult(bch.ParametrizedSweep):
-    """Benchmark that composes images across categorical dimension."""
-
-    radius = bch.FloatSweep(default=0.5, bounds=[0.2, 1.0], samples=4)
-    rotation = bch.FloatSweep(default=0, bounds=[0, 180], units="deg", samples=4)
-    compose_method = bch.EnumSweep(bch.ComposeType, doc="Image composition method")
-
-    composed_image = bch.ResultImage(doc="Composed image from all colors")
-    avg_brightness_composed = bch.ResultVar(units="intensity", doc="Average brightness")
-    color_intensity_composed = bch.ResultVar(units="intensity", doc="Average color intensity")
-
-    # Store dataset reference
-    _source_dataset = None
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
-        # Get dataset from class variable
-        if self._source_dataset is None:
-            raise RuntimeError("Source dataset not set. Call set_source_dataset() first.")
-
-        ds = self._source_dataset
-
-        # Create composable container for this radius/rotation pair
-        container = bch.ComposableContainerImage()
-
-        total_brightness = 0
-        total_intensity = 0
-        count = 0
-
-        # Collect all color images for this radius/rotation
-        for color in ["red", "green", "blue", "yellow"]:
-            try:
-                img_path = (
-                    ds["pattern_image"]
-                    .sel(radius=self.radius, rotation=self.rotation, color=color)
-                    .values.item()
-                )
-                container.append(img_path)
-
-                brightness = (
-                    ds["avg_brightness"]
-                    .sel(radius=self.radius, rotation=self.rotation, color=color)
-                    .values.item()
-                )
-                intensity = (
-                    ds["color_intensity"]
-                    .sel(radius=self.radius, rotation=self.rotation, color=color)
-                    .values.item()
-                )
-
-                total_brightness += brightness
-                total_intensity += intensity
-                count += 1
-            except Exception as e:
-                print(f"Warning: Could not load image for {color}: {e}")
-
-        # Render composed image
-        self.composed_image = container.to_image(
-            bch.ImageRenderCfg(
-                compose_method=self.compose_method,
-                var_name="colors",
-                var_value="all",
-            )
-        )
-
-        # Average the metrics across colors
-        self.avg_brightness_composed = total_brightness / count if count > 0 else 0
-        self.color_intensity_composed = total_intensity / count if count > 0 else 0
-
-        return self.get_results_values_as_dict()
-
-    @classmethod
-    def set_source_dataset(cls, dataset):
-        """Set the source dataset for image composition."""
-        cls._source_dataset = dataset
-
-
 def example_image_heatmap_hover(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Create benchmark with composable image heatmap hover functionality.
 
@@ -224,8 +146,8 @@ def example_image_heatmap_hover(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
     - Sampling 2 continuous variables (radius, rotation) + 1 categorical (color)
     - Generating images for each combination
     - Computing scalar metrics from images
-    - Composing images across the categorical dimension
-    - Creating a heatmap where hovering shows the composed image stack
+    - Automatically composing images across the categorical dimension when hovering
+    - Creating a heatmap where hovering shows alpha-blended composed images
 
     Args:
         run_cfg: Benchmark run configuration
@@ -244,56 +166,40 @@ def example_image_heatmap_hover(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
     bench.plot_sweep(
         title="Image Generation with Composable Hover Heatmap",
         description="""
-        This example demonstrates composable images with interactive heatmap visualization.
+        This example demonstrates automatic image composition with interactive heatmap visualization.
         Each point on the heatmap represents a (radius, rotation) pair, and when you hover
         over it, you see a composed image containing all color variants blended together
         using alpha blending (overlay compose method).
+
+        The composition happens automatically - just specify compose_over_dims and compose_method!
         """,
         plot_callbacks=False
     )
 
     res = bench.get_result()
-    ds = res.ds
 
-    # Set the source dataset for the composed image benchmark
-    ComposedImageResult.set_source_dataset(ds)
-
-    # Create benchmark for composed images
-    composed_bench = ComposedImageResult().to_bench(run_cfg)
-    composed_bench.plot_sweep(
-        title="Composed Images Heatmap",
-        input_vars=[
-            ComposedImageResult.param.radius,
-            ComposedImageResult.param.rotation,
-            ComposedImageResult.param.compose_method,
-        ],
-        plot_callbacks=False
-    )
-
-    composed_res = composed_bench.get_result()
-
-    # Filter to only show overlay compose method for the hover images
-    # This uses alpha blending to create beautiful composited images
-    overlay_ds = composed_res.ds.sel(compose_method="overlay")
-    composed_res_overlay = bch.BenchResult.from_existing(composed_res)
-    composed_res_overlay.ds = overlay_ds
-
-    # Create heatmaps with overlay-composed image hover
+    # Create heatmaps with automatic image composition on hover
+    # The framework automatically composes images across the 'color' dimension
+    # using the specified compose_method (overlay = alpha blending)
     bench.report.append(
-        composed_res_overlay.to(
+        res.to(
             bch.HeatmapResult,
-            result_var=ComposedImageResult.param.avg_brightness_composed,
-            tap_var=[ComposedImageResult.param.composed_image],
+            result_var=ImageHeatmapHoverBenchmark.param.avg_brightness,
+            tap_var=[ImageHeatmapHoverBenchmark.param.pattern_image],
             use_tap=True,
+            compose_over_dims=["color"],
+            compose_method=bch.ComposeType.overlay,
         )
     )
 
     bench.report.append(
-        composed_res_overlay.to(
+        res.to(
             bch.HeatmapResult,
-            result_var=ComposedImageResult.param.color_intensity_composed,
-            tap_var=[ComposedImageResult.param.composed_image],
+            result_var=ImageHeatmapHoverBenchmark.param.color_intensity,
+            tap_var=[ImageHeatmapHoverBenchmark.param.pattern_image],
             use_tap=True,
+            compose_over_dims=["color"],
+            compose_method=bch.ComposeType.overlay,
         )
     )
 

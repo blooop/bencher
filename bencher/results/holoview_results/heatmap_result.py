@@ -74,6 +74,8 @@ class HeatmapResult(HoloviewResult):
         target_dimension=2,
         override: bool = True,
         use_tap: bool = None,
+        compose_over_dims: List[str] = None,
+        compose_method=None,
         **kwargs,
     ) -> Optional[pn.panel]:
         """Generates a heatmap visualization from benchmark data.
@@ -91,6 +93,8 @@ class HeatmapResult(HoloviewResult):
             target_dimension (int, optional): Target dimensionality for the plot. Defaults to 2.
             override (bool, optional): Whether to override filter restrictions. Defaults to True.
             use_tap (bool, optional): Whether to enable tap functionality.
+            compose_over_dims (List[str], optional): Dimensions to compose images over (e.g., ["color"]).
+            compose_method: ComposeType enum specifying how to compose images (e.g., ComposeType.overlay).
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
@@ -110,6 +114,8 @@ class HeatmapResult(HoloviewResult):
                 result_var_plots=tap_var,
                 container=tap_container,
                 tap_container_direction=tap_container_direction,
+                compose_over_dims=compose_over_dims,
+                compose_method=compose_method,
             )
 
         return self.filter(
