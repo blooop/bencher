@@ -54,7 +54,7 @@ from bencher.results.holoview_results.heatmap_result import HeatmapResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.holoview_results.table_result import TableResult
-from bencher.results.VolumeResult.table_result import VolumeResult
+from bencher.results.volume_result import VolumeResult
 
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.explorer_result import ExplorerResult
