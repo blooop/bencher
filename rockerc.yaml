@@ -7,10 +7,10 @@
 
 image: ubuntu:24.04
 args:
+  - jquery 
   - x11
   - user
   - pull
-  - deps
   - git
   - git-clone
   - pixi

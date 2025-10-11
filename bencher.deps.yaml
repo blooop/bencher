@@ -1,2 +1,0 @@
-apt_tools:
-  - jq #for auto installing extensions in container
