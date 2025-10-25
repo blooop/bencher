@@ -23,6 +23,7 @@ dependencies = [
     "strenum>=0.4.0,<=0.4.15",
     "scikit-learn>=1.2,<=1.7.1",
     "moviepy>=2.1.2,<=2.2.1",
+    "pyvista>=0.46.0,<=0.46.3"
 ]
 
 [project.urls]
