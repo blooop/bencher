@@ -148,7 +148,9 @@ class HeatmapResult(HoloviewResult):
             C = result_var.name
             title = f"Heatmap of {result_var.name}"
             time_args = self.time_widget(title)
-            return dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", **time_args, **kwargs)
+            return dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", **time_args, **kwargs).opts(
+                xrotation=30
+            )
         return None
 
     def to_heatmap_container_tap_ds(
@@ -176,7 +178,9 @@ class HeatmapResult(HoloviewResult):
         Returns:
             pn.Row: A panel row containing the interactive heatmap and containers for tapped information.
         """
-        htmap = self.to_heatmap_ds(dataset, result_var).opts(tools=["hover"], **kwargs)
+        htmap = self.to_heatmap_ds(dataset, result_var).opts(
+            tools=["hover"], xrotation=30, **kwargs
+        )
         result_var_plots, cont_instances = self.setup_results_and_containers(
             result_var_plots, container
         )
@@ -279,7 +283,9 @@ class HeatmapResult(HoloviewResult):
 
             color_label = f"{z.name} [{z.units}]"
 
-            return self.to_hv_type(hv.HeatMap, reduce).opts(clabel=color_label, **kwargs)
+            return self.to_hv_type(hv.HeatMap, reduce).opts(
+                clabel=color_label, xrotation=30, **kwargs
+            )
         return matches_res.to_panel()
 
     def to_heatmap_tap(
@@ -306,7 +312,7 @@ class HeatmapResult(HoloviewResult):
             hv.Layout: A layout containing both the heatmap and the dynamically updated detail view.
         """
         htmap = self.to_heatmap_single(result_var, reduce).opts(
-            tools=["hover", "tap"], width=width, height=height
+            tools=["hover", "tap"], width=width, height=height, xrotation=30
         )
         htmap_posxy = hv.streams.Tap(source=htmap, x=0, y=0)
 

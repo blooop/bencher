@@ -13,6 +13,7 @@ from optuna.visualization import (
 )
 from bencher.utils import hmap_canonical_input
 from bencher.variables.time import TimeSnapshot, TimeEvent
+from bencher.variables.inputs import BoolSweep
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 
 # from bencher.results.bench_result_base import BenchResultBase
@@ -47,11 +48,14 @@ class OptunaResult(BenchResultBase):
         worker,
         n_trials=100,
         extra_results: List[OptunaResult] = None,
-        sampler=optuna.samplers.TPESampler(),
+        sampler=None,
     ):
         directions = []
         for rv in self.bench_cfg.optuna_targets(True):
             directions.append(rv.direction)
+
+        if sampler is None:
+            sampler = optuna.samplers.TPESampler()
 
         study = optuna.create_study(
             sampler=sampler, directions=directions, study_name=self.bench_cfg.title
@@ -122,6 +126,13 @@ class OptunaResult(BenchResultBase):
                 if type(i) is TimeSnapshot:
                     if type(row[1][i.name]) is np.datetime64:
                         params[i.name] = row[1][i.name].timestamp()
+                elif type(i) is BoolSweep:
+                    # Handle boolean values that may have been converted to strings
+                    val = row[1][i.name]
+                    if isinstance(val, str):
+                        params[i.name] = val.lower() == "true"
+                    else:
+                        params[i.name] = bool(val)
                 else:
                     params[i.name] = row[1][i.name]
 

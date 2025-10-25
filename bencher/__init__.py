@@ -1,10 +1,6 @@
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .bench_runner import BenchRunner
-from .example.benchmark_data import (
-    ExampleBenchCfgIn,
-    ExampleBenchCfgOut,
-    bench_function,
-)
+from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
 from .variables.sweep_base import hash_sha1
 from .variables.inputs import (
@@ -14,12 +10,14 @@ from .variables.inputs import (
     EnumSweep,
     BoolSweep,
     SweepBase,
+    YamlSweep,
 )
 from .variables.time import TimeSnapshot
 
 from .variables.inputs import box, p
 from .variables.results import (
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,
@@ -56,6 +54,7 @@ from bencher.results.holoview_results.heatmap_result import HeatmapResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.holoview_results.table_result import TableResult
+from bencher.results.volume_result import VolumeResult
 
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.explorer_result import ExplorerResult
@@ -84,6 +83,8 @@ except ModuleNotFoundError as e:
 
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
+from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
+from .sample_order import SampleOrder
 from .caching import CachedParams
 from .results.bench_result import BenchResult
 from .results.video_result import VideoResult

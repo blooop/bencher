@@ -5,32 +5,28 @@
 import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
+from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_time_event(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example shows how to manually set time events as a string so that progress can be monitored over time"""
 
     bencher = bch.Bench(
         "benchmarking_example_categorical1D",
-        bench_function,
-        ExampleBenchCfgIn,
+        ExampleBenchCfg(),
         run_cfg=run_cfg,
-        report=report,
     )
 
-    ExampleBenchCfgIn.param.offset.bounds = [0, 100]
+    ExampleBenchCfg.param.offset.bounds = [0, 100]
 
     # manually override the default value based on the time event string so that the graphs are not all just straight lines
-    ExampleBenchCfgIn.param.offset.default = int(str(hash(run_cfg.time_event))[-1])
+    ExampleBenchCfg.param.offset.default = int(str(hash(run_cfg.time_event))[-1])
 
     # here we sample the input variable theta and plot the value of output1. The (noisy) function is sampled 20 times so you can see the distribution
     bencher.plot_sweep(
         title="Example 1D Categorical",
-        input_vars=[ExampleBenchCfgIn.param.postprocess_fn],
-        result_vars=[ExampleBenchCfgOut.param.out_cos],
+        input_vars=["postprocess_fn"],
+        result_vars=["out_cos"],
         description=example_time_event.__doc__,
         run_cfg=run_cfg,
     )

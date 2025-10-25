@@ -103,6 +103,104 @@ class TestBenchRunner(unittest.TestCase):
         ).plot_sweep("float")
         self.assertEqual(res.result_samples(), 10)
 
+    def test_benchrunner_unified_interface(self):
+        """Test the new unified interface with level/repeats and max_level/max_repeats."""
+        # Track what configurations are run
+        executed_configs = []
+
+        def simple_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
+            executed_configs.append((run_cfg.level, run_cfg.repeats))
+            bench = bch.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("test")
+
+        # Test 1: Single level and repeats (no max values)
+        br1 = bch.BenchRunner()
+        br1.add(simple_benchmark)
+        executed_configs.clear()
+        results = br1.run(level=2, repeats=1)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(executed_configs), 1)
+        self.assertEqual(executed_configs[0], (2, 1))
+
+        # Test 2: Progressive levels (level=2, max_level=3, repeats=1)
+        br2 = bch.BenchRunner()
+        br2.add(simple_benchmark)
+        executed_configs.clear()
+        results = br2.run(level=2, repeats=1, max_level=3)
+        # Should run at level 2 and 3 = 2 results
+        levels = sorted([config[0] for config in executed_configs])
+        self.assertEqual(levels, [2, 3])
+        self.assertEqual(len(executed_configs), 2)
+
+        # Test 3: Progressive repeats (level=2, repeats=1, max_repeats=2)
+        br3 = bch.BenchRunner()
+        br3.add(simple_benchmark)
+        executed_configs.clear()
+        results = br3.run(level=2, repeats=1, max_repeats=2)
+        # Should run with repeats 1 and 2 = 2 results
+        repeats = sorted([config[1] for config in executed_configs])
+        self.assertEqual(repeats, [1, 2])
+        self.assertEqual(len(executed_configs), 2)
+
+        # Test 4: Both progressive (level=2-3, repeats=1-2) = 4 combinations
+        br4 = bch.BenchRunner()
+        br4.add(simple_benchmark)
+        executed_configs.clear()
+        results = br4.run(level=2, repeats=1, max_level=3, max_repeats=2)
+        # Check all combinations were executed
+        expected_combinations = [(2, 1), (2, 2), (3, 1), (3, 2)]
+        self.assertEqual(sorted(executed_configs), sorted(expected_combinations))
+        self.assertEqual(len(executed_configs), 4)
+
+    def test_benchrunner_deprecation_warnings(self):
+        """Test that legacy parameters show deprecation warnings."""
+        import warnings
+
+        bench_runner = bch.BenchRunner("test_deprecation")
+
+        # Very simple function that returns immediately
+        def simple_test(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:  # pylint: disable=unused-argument
+            cfg = bch.BenchCfg()
+            cfg.run_cfg = run_cfg
+            return cfg
+
+        bench_runner.add_run(simple_test)
+
+        # Capture warnings manually to avoid import issues
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            bench_runner.run(min_level=3)
+            self.assertTrue(
+                any("min_level parameter is deprecated" in str(warning.message) for warning in w)
+            )
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            bench_runner.run(start_repeats=2)
+            self.assertTrue(
+                any(
+                    "start_repeats parameter is deprecated" in str(warning.message) for warning in w
+                )
+            )
+
+    def test_benchrunner_no_name_instantiation(self):
+        """Test that BenchRunner can be instantiated without a name."""
+        bench_runner = bch.BenchRunner()
+
+        # Should have auto-generated name
+        self.assertIsNotNone(bench_runner.name)
+        self.assertIsInstance(bench_runner.name, str)
+        self.assertTrue(bench_runner.name.startswith("bench_runner_"))
+
+        # Should work normally
+        def test_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
+            bench = bch.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("test")
+
+        bench_runner.add(test_benchmark)
+        results = bench_runner.run(level=2, repeats=1)
+        self.assertEqual(len(results), 1)
+
     # def test_benchrunner_cache(self):
     #     res = bch.Bench(
     #         "float", SimpleBenchClassFloat(), run_cfg=bch.BenchRunCfg(level=2, repeats=1)

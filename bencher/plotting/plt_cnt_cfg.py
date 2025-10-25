@@ -9,6 +9,7 @@ from bencher.variables.inputs import (
     BoolSweep,
     EnumSweep,
     StringSweep,
+    YamlSweep,
 )
 from bencher.variables.time import TimeSnapshot
 
@@ -59,7 +60,7 @@ class PltCntCfg(param.Parameterized):
                 # if "IntSweep" in typestr or "FloatSweep" in typestr:
                 plt_cnt_cfg.float_vars.append(iv)
                 type_allocated = True
-            if isinstance(iv, (EnumSweep, BoolSweep, StringSweep)):
+            if isinstance(iv, (EnumSweep, BoolSweep, StringSweep, YamlSweep)):
                 # if "EnumSweep" in typestr or "BoolSweep" in typestr or "StringSweep" in typestr:
                 plt_cnt_cfg.cat_vars.append(iv)
                 type_allocated = True

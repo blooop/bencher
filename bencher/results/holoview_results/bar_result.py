@@ -64,6 +64,11 @@ class BarResult(HoloviewResult):
                 "result_types": (ResultVar,),
             },
             {
+                "repeats_range": VarRange(1, 1),
+                "reduce": ReduceType.SQUEEZE,
+                "result_types": (ResultBool,),
+            },
+            {
                 "repeats_range": VarRange(2, None),
                 "reduce": ReduceType.REDUCE,
                 "result_types": (ResultBool,),
@@ -90,15 +95,31 @@ class BarResult(HoloviewResult):
         Returns:
             hvplot.element.Bars: A bar chart visualization of the benchmark data.
         """
-        by = None
-        if self.plt_cnt_cfg.cat_cnt >= 2:
-            by = self.plt_cnt_cfg.cat_vars[1].name
-        da_plot = dataset[result_var.name]
-        title = self.title_from_ds(da_plot, result_var, **kwargs)
-        time_widget_args = self.time_widget(title)
-        return da_plot.hvplot.bar(by=by, **time_widget_args, **kwargs).opts(
-            title=title,
-            ylabel=f"{result_var.name} [{result_var.units}]",
-            xrotation=30,  # Rotate x-axis labels by 30 degrees
-            **kwargs,
+        # Determine grouping ('by') dynamically based on dims that still exist
+        da = dataset[result_var.name]
+
+        # Allow explicit override via kwargs
+        by = kwargs.pop("by", None)
+        if by is None:
+            # Candidate categorical dims from the original config, filtered to those still present
+            cat_dim_names = [cv.name for cv in self.plt_cnt_cfg.cat_vars]
+            dims_present = [d for d in da.dims if d not in ("repeat", "over_time")]
+            # Prefer categorical dims that are not the primary x-axis
+            candidates = [d for d in dims_present if d != da.dims[0] and d in cat_dim_names]
+
+            if len(candidates) == 1:
+                by = candidates[0]
+            elif len(candidates) > 1:
+                # Preserve multi-level grouping when multiple categorical dims remain
+                by = candidates
+            else:
+                by = None
+        title = self.title_from_ds(da, result_var, **kwargs)
+        time_args = self.time_widget(title)
+
+        # Explicitly pass x and y on the DataArray to prevent unwanted grouping
+        plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs).opts(
+            title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
         )
+
+        return plot

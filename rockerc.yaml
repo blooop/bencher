@@ -5,16 +5,15 @@
 # - image: Specifies the base image to pass to rocker
 # - args: Lists additional features or tools to be added to the docker image
 
-image: ubuntu:22.04
-# image: selenium/standalone-firefox
+image: ubuntu:24.04
 args:
-  # - nvidia
-  - x11 
-  - user 
-  - pull 
-  - deps
-  - git 
+  - jquery 
+  - x11
+  - user
+  - pull
+  - git
+  - git-clone
   - pixi
   - cwd
-
-  # - locales
+  - ssh
+  - ssh-client

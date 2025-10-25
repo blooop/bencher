@@ -140,7 +140,7 @@
             "label": "Install All Recommended Extensions",
             "type": "shell",           
             "linux": {
-                "command": "cat .vscode/extensions.json | jq .recommendations[] | xargs -n 1 code . --install-extension"
+                "command": "if [ -f /.dockerenv ] || grep -q 'docker\\|lxc' /proc/1/cgroup 2>/dev/null; then echo 'Docker container detected, installing extensions...'; cat .vscode/extensions.json | jq .recommendations[] | xargs -n 1 code . --install-extension; else echo 'Not in Docker container, skipping extension installation'; fi"
             },
             "runOptions": {
                 "runOn": "folderOpen"

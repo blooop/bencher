@@ -91,22 +91,20 @@ class TuringPattern(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_video(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    bench = TuringPattern().to_bench(run_cfg, report)
+def example_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    bench = TuringPattern().to_bench(run_cfg)
 
     bench.plot_sweep(
         "Turing patterns with different parameters",
         input_vars=["alpha", "beta"],
-        result_vars=[TuringPattern.param.video],
+        result_vars=["video"],
     )
 
     return bench
 
 
-def example_video_tap(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:  # pragma: no cover
-    bench = TuringPattern().to_bench(run_cfg=run_cfg, report=report)
+def example_video_tap(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:  # pragma: no cover
+    bench = TuringPattern().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["alpha", "beta"])
 
     bench.report.append(res.to_video_grid(result_types=(bch.ResultVideo)))

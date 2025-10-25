@@ -85,25 +85,20 @@ class Pattern2CatBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_2_float_2_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_2_float_2_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark demonstrating visually distinct patterns based on 2 categorical settings.
 
     This example is simplified from the 3-category version by fixing the feature_type to "smooth".
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 3  # Fewer repeats for a quicker benchmark
 
-    bench = Pattern2CatBenchmark().to_bench(run_cfg, report)
+    bench = Pattern2CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Pattern Visualization (2 Float, 2 Categorical Variables)",
         description="Response patterns with distinctive shapes based on pattern and symmetry types",

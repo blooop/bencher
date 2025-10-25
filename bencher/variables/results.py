@@ -37,6 +37,27 @@ class ResultVar(Number):
         return hash_sha1((self.units, self.direction))
 
 
+class ResultBool(Number):
+    """A class to represent result variables and the desired optimisation direction"""
+
+    __slots__ = ["units", "direction"]
+
+    def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
+        params.setdefault("default", default)
+        Number.__init__(self, **params)
+        assert isinstance(units, str)
+        self.units = units
+        self.direction = direction
+        self.bounds = (0, 1)  # bools are always between 0 and 1
+
+    def as_dim(self) -> hv.Dimension:
+        return hv.Dimension((self.name, self.name), unit=self.units)
+
+    def hash_persistent(self) -> str:
+        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+        return hash_sha1((self.units, self.direction))
+
+
 class ResultVec(param.List):
     """A class to represent fixed size vector result variable"""
 
@@ -228,8 +249,20 @@ PANEL_TYPES = (
     ResultDataSet,
 )
 
+
+XARRAY_MULTIDIM_RESULT_TYPES = (
+    ResultVar,
+    ResultBool,
+    ResultVideo,
+    ResultImage,
+    ResultString,
+    ResultContainer,
+    ResultPath,
+)
+
 ALL_RESULT_TYPES = (
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,

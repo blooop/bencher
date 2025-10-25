@@ -22,7 +22,9 @@ from bencher.bench_report import BenchReport
 from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
+    XARRAY_MULTIDIM_RESULT_TYPES,
     ResultVar,
+    ResultBool,
     ResultVec,
     ResultHmap,
     ResultPath,
@@ -37,6 +39,7 @@ from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str
+from bencher.sample_order import SampleOrder
 
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -315,6 +318,7 @@ class Bench(BenchPlotServer):
         tag: str = "",
         run_cfg: BenchRunCfg = None,
         plot_callbacks: List[Callable] | bool = None,
+        sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -343,6 +347,8 @@ class Bench(BenchPlotServer):
             plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting results.
                 If True, uses default plotting. If False, disables plotting.
                 If a list, uses the provided callbacks. Defaults to None.
+            sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
+                Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
@@ -423,7 +429,8 @@ class Bench(BenchPlotServer):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
 
         for r in result_vars_in:
-            logging.info(f"result var: {r.name}")
+            r_name = getattr(r, "name", str(r))
+            logging.info("result var: %s", r_name)
 
         if isinstance(const_vars_in, dict):
             const_vars_in = list(const_vars_in.items())
@@ -443,11 +450,13 @@ class Bench(BenchPlotServer):
                     title += "s"
                 title += ": " + ", ".join([f"{c[0].name}={c[1]}" for c in const_vars_in])
             else:
-                title = "Recording: " + ", ".join([i.name for i in result_vars_in])
+                title = "Recording: " + ", ".join(
+                    [getattr(i, "name", str(i)) for i in result_vars_in]
+                )
 
         if run_cfg.level > 0:
             inputs = []
-            print(input_vars_in)
+            logging.debug("Input vars prior to level adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
                     inputs.append(i.with_level(run_cfg.level))
@@ -496,10 +505,14 @@ class Bench(BenchPlotServer):
             tag=run_cfg.run_tag + tag,
             plot_callbacks=plot_callbacks,
         )
-        return self.run_sweep(bench_cfg, run_cfg, time_src)
+        return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
     def run_sweep(
-        self, bench_cfg: BenchCfg, run_cfg: BenchRunCfg, time_src: datetime = None
+        self,
+        bench_cfg: BenchCfg,
+        run_cfg: BenchRunCfg,
+        time_src: datetime = None,
+        sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """Execute a benchmark sweep based on the provided configuration.
 
@@ -512,6 +525,8 @@ class Bench(BenchPlotServer):
             run_cfg (BenchRunCfg): Configuration for how the benchmark should be executed
             time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.
                 Defaults to None, which will use the current time.
+            sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
+                Defaults to SampleOrder.INORDER.
 
         Returns:
             BenchResult: An object containing all benchmark data, results, and visualization
@@ -556,7 +571,7 @@ class Bench(BenchPlotServer):
             if run_cfg.time_event is not None:
                 time_src = run_cfg.time_event
             bench_res = self.calculate_benchmark_results(
-                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg
+                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
             )
 
             # use the hash of the inputs to look up historical values in the cache
@@ -749,7 +764,7 @@ class Bench(BenchPlotServer):
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, ResultVar):
+            if isinstance(rv, (ResultVar, ResultBool)):
                 result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(rv, (ResultReference, ResultDataSet)):
@@ -839,6 +854,7 @@ class Bench(BenchPlotServer):
         time_src: datetime | str,
         bench_cfg_sample_hash: str,
         bench_run_cfg: BenchRunCfg,
+        sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """Execute the benchmark runs and collect results into an n-dimensional array.
 
@@ -856,6 +872,32 @@ class Bench(BenchPlotServer):
             BenchResult: An object containing all the benchmark data and results
         """
         bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
+        # Adjust only the sampling traversal; leave dims/plotting unchanged
+        if sample_order == SampleOrder.REVERSED:
+            total_dims = len(dims_name)
+            num_input_dims = len(bench_res.bench_cfg.input_vars)
+
+            # Extract coordinate values from the dataset to rebuild the Cartesian product
+            dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
+            dim_indices = [list(range(len(v))) for v in dim_values]
+
+            # Build iteration order: reverse the input portion only
+            iter_order = list(range(num_input_dims))[::-1] + list(range(num_input_dims, total_dims))
+
+            # Generate product in iter_order and map back to original order
+            ordered = []
+            for idx_ord, val_ord in zip(
+                product(*[dim_indices[i] for i in iter_order]),
+                product(*[dim_values[i] for i in iter_order]),
+            ):
+                idx_orig = [None] * total_dims
+                val_orig = [None] * total_dims
+                for j, pos in enumerate(iter_order):
+                    idx_orig[pos] = idx_ord[j]
+                    val_orig[pos] = val_ord[j]
+                ordered.append((tuple(idx_orig), tuple(val_orig)))
+
+            func_inputs = ordered
         bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
         constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
         callcount = 1
@@ -936,17 +978,7 @@ class Bench(BenchPlotServer):
                 if bench_run_cfg.print_bench_results:
                     logging.info(f"{rv.name}: {result_value}")
 
-                if isinstance(
-                    rv,
-                    (
-                        ResultVar,
-                        ResultVideo,
-                        ResultImage,
-                        ResultString,
-                        ResultContainer,
-                        ResultPath,
-                    ),
-                ):
+                if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
                     set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
                 elif isinstance(rv, ResultDataSet):
                     bench_res.dataset_list.append(result_value)

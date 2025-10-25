@@ -20,9 +20,7 @@ class Square(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_custom_sweep(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_custom_sweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example shows how to define a custom set of value to sample from instead of a uniform sweep
 
     Args:
@@ -32,17 +30,15 @@ def example_custom_sweep(
         Bench: results of the parameter sweep
     """
 
-    bencher = bch.Bench(
-        "benchmarking_example_custom_sweep", Square(), run_cfg=run_cfg, report=report
-    )
+    bencher = bch.Bench("benchmarking_example_custom_sweep", Square(), run_cfg=run_cfg)
     # bencher = bch.Bench("benchmarking_example_custom_sweep", call,run_cfg=run_cfg)
 
     # here we sample the input variable theta and plot the value of output1. The (noisy) function is sampled 20 times so you can see the distribution
 
     bencher.plot_sweep(
         title="Example User Defined Sweep 1D",
-        input_vars=[Square.param.x],
-        result_vars=[Square.param.result],
+        input_vars=["x"],
+        result_vars=["result"],
         description="Sample the x parameter",
     )
 

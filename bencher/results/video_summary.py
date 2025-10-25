@@ -92,12 +92,32 @@ class VideoSummaryResult(BenchResultBase):
         video_controls: VideoControls = None,
         target_duration: float = None,
         compose_method_list: List = None,
+        target_dimension: int = 0,
         **kwargs,
     ):
+        """Creates a video grid from the provided dataset.
+
+        This method generates a video by composing multiple plot panes into a grid
+        layout and renders them as a video file.
+
+        Args:
+            dataset (xr.Dataset): The dataset containing benchmark results.
+            result_var (Parameter): The result variable to plot.
+            reverse (bool, optional): Whether to reverse the sequence. Defaults to True.
+            time_sequence_dimension (int, optional): The dimension to use for time sequencing. Defaults to 0.
+            video_controls (VideoControls, optional): Controls for video playback. If None, creates default controls.
+            target_duration (float, optional): Target duration for the video in seconds.
+            compose_method_list (List, optional): List of composition methods for combining panes.
+            target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 0.
+            **kwargs: Additional keyword arguments passed to video rendering.
+
+        Returns:
+            Optional[pn.pane.HTML]: A video container with playback controls if successful, None otherwise.
+        """
         cvc = self._to_video_panes_ds(
             dataset,
             self.plot_cb,
-            target_dimension=0,
+            target_dimension=target_dimension,
             horizontal=True,
             compose_method=ComposeType.right,
             time_sequence_dimension=time_sequence_dimension,

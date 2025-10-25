@@ -1,9 +1,27 @@
+from collections.abc import Mapping, Sequence
 from enum import Enum
+from functools import lru_cache
+from pathlib import Path
 from typing import List, Any, Dict
 
 import numpy as np
 from param import Integer, Number, Selector
+import yaml
 from bencher.variables.sweep_base import SweepBase, shared_slots
+
+
+# Sentinel value used to indicate that the actual selectable values for a SweepSelector
+# will be populated dynamically at runtime. Prefer using this constant instead of magic
+# strings like "__initialising__".
+class _DynamicValuesSentinel(str):
+    def __new__(cls):  # pragma: no cover - trivial
+        return super().__new__(cls, "<dynamic values loading>")
+
+    def __repr__(self):  # pragma: no cover - trivial
+        return "LoadValuesDynamically"
+
+
+LoadValuesDynamically = _DynamicValuesSentinel()
 
 
 class SweepSelector(Selector, SweepBase):
@@ -36,6 +54,100 @@ class SweepSelector(Selector, SweepBase):
             List[Any]: A list of parameter values to sweep through
         """
         return self.indices_to_samples(self.samples, self.objects)
+
+    # ------------------------------------------------------------------
+    # Dynamic update helpers
+    # ------------------------------------------------------------------
+    def load_values_dynamically(
+        self,
+        new_objects: list[Any] | tuple[Any, ...],
+        *,
+        default: Any | None = None,
+        keep_current_if_possible: bool = True,
+        set_on_class: bool = True,
+    ) -> None:
+        """Dynamically update selectable objects for this sweep variable.
+
+        See original implementation for detailed semantics. This refactored version
+        delegates work to smaller helpers for clarity and easier testing.
+        """
+        new_list = list(new_objects)
+        self._ensure_nonempty(new_list)
+        candidate_default = self._choose_default(new_list, default, keep_current_if_possible)
+        self._update_instance_objects(new_list)
+        if set_on_class:
+            self._sync_class_defaults(new_list, candidate_default)
+        self._apply_owner_value(candidate_default)
+        self.default = candidate_default  # type: ignore[attr-defined]
+
+    # --- helper methods -------------------------------------------------
+    def _ensure_nonempty(self, new_list: list[Any]) -> None:
+        if not new_list:
+            raise ValueError(
+                "Parameter 'new_objects' passed to load_values_dynamically is empty. At least one object is required to dynamically load values."
+            )
+
+    def _choose_default(
+        self,
+        new_list: list[Any],
+        explicit_default: Any | None,
+        keep_current: bool,
+    ) -> Any:
+        current_value = getattr(self.owner, self.name) if getattr(self, "owner", None) else None
+        if current_value is LoadValuesDynamically:
+            current_value = None
+        if explicit_default is not None:
+            if explicit_default not in new_list:
+                raise ValueError(
+                    f"Provided default {explicit_default!r} is not in new options: {new_list}"
+                )
+            return explicit_default
+        if keep_current and current_value in new_list:
+            return current_value
+        existing_default = getattr(self, "default", None)
+        # Only reuse the previous default if we are allowed to preserve state
+        if keep_current and existing_default in new_list:
+            return existing_default  # type: ignore[attr-defined]
+        return new_list[0]
+
+    def _update_instance_objects(self, new_list: list[Any]) -> None:
+        self.objects = new_list  # type: ignore[assignment]
+        # Adjust samples if it was implicitly bound to the old list length.
+        if isinstance(getattr(self, "samples", None), int) and (
+            self.samples in (len(new_list), len(new_list) - 1)  # type: ignore[attr-defined]
+        ):
+            self.samples = len(new_list)  # type: ignore[attr-defined]
+
+    def _sync_class_defaults(self, new_list: list[Any], candidate_default: Any) -> None:
+        if self.owner is None:
+            return
+        owner_cls = getattr(self.owner, "__class__", None)
+        param_container = getattr(owner_cls, "param", None)
+        cls_param = None
+        if param_container is not None:
+            try:
+                cls_param = param_container[self.name]  # type: ignore[index]
+            except (AttributeError, KeyError, TypeError):  # pragma: no cover - fallback path
+                cls_param = getattr(param_container, self.name, None)
+        if getattr(cls_param, "objects", None) is not None:
+            cls_param.objects = list(new_list)
+            if hasattr(cls_param, "default"):
+                cls_param.default = candidate_default
+
+    def _apply_owner_value(self, candidate_default: Any) -> None:
+        if self.owner is None:
+            return
+        owner_param = getattr(self.owner, "param", None)
+        if owner_param is None:
+            return
+        try:
+            owner_param.update(**{self.name: candidate_default})
+        except (ValueError, TypeError) as e:  # pragma: no cover - param validation edge case
+            import logging
+
+            logging.warning(
+                "Failed to update param '%s' with value %r: %s", self.name, candidate_default, e
+            )
 
 
 class BoolSweep(SweepSelector):
@@ -87,6 +199,42 @@ class StringSweep(SweepSelector):
             **params,
         )
 
+    # Subclass retains no extra aliases; base class supplies deprecated wrappers
+
+    # ------------------------------------------------------------------
+    # Factory helpers
+    # ------------------------------------------------------------------
+    @classmethod
+    def dynamic(
+        cls,
+        *,
+        placeholder: str | None = None,
+        units: str = "ul",
+        doc: str | None = None,
+        **params,
+    ) -> "StringSweep":
+        """Create a StringSweep intended for later population.
+
+        Parameters
+        ----------
+        placeholder:
+            Optional text to show before real values are loaded. Defaults to the
+            sentinel's displayed text.
+        units:
+            Units label (optional, passed through).
+        doc:
+            Documentation string for the parameter.
+        params:
+            Additional param overrides.
+
+        Returns
+        -------
+        StringSweep
+            A sweep with a single sentinel placeholder value.
+        """
+        ph = placeholder if placeholder is not None else str(LoadValuesDynamically)
+        return cls([ph], units=units, doc=doc, **params)
+
 
 class EnumSweep(SweepSelector):
     """A class representing a parameter sweep for enum values.
@@ -117,6 +265,165 @@ class EnumSweep(SweepSelector):
         )
         if not list_of_enums:  # Grab the docs from the enum type def
             self.doc = enum_type.__doc__
+
+
+def _make_hashable(value: Any) -> Any:
+    """Create a deterministic, hashable representation of arbitrary YAML data."""
+
+    if isinstance(value, np.ndarray):
+        return _make_hashable(value.tolist())
+    if isinstance(value, Mapping):
+        return tuple((key, _make_hashable(val)) for key, val in value.items())
+    if isinstance(value, set):
+        return tuple(sorted(_make_hashable(val) for val in value))
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return tuple(_make_hashable(val) for val in value)
+    return value
+
+
+class YamlSelection(str):
+    """String-like wrapper that keeps track of the underlying YAML value."""
+
+    __slots__ = ("_value",)
+
+    def __new__(cls, key: str, value: Any):
+        obj = super().__new__(cls, key)
+        obj._value = value
+        return obj
+
+    def key(self) -> str:
+        return str(self)
+
+    def value(self) -> Any:
+        return self._value
+
+    def __repr__(self) -> str:
+        return f"YamlSelection(key={self.key()!r}, value={self.value()!r})"
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, YamlSelection):
+            return (self.key(), self.value()) == (other.key(), other.value())
+        if isinstance(other, str):
+            return self.key() == other
+        return NotImplemented
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, YamlSelection):
+            return self.key() < other.key()
+        if isinstance(other, str):
+            return self.key() < other
+        return NotImplemented
+
+    def __iter__(self):
+        return iter((self.key(), self.value()))
+
+    def __reduce__(self):
+        return (YamlSelection, (self.key(), self.value()))
+
+    def __bencher_hash__(self) -> tuple[str, Any]:
+        return (self.key(), _make_hashable(self.value()))
+
+    def as_tuple(self) -> tuple[str, Any]:
+        return (self.key(), self.value())
+
+
+class YamlSweep(SweepSelector):
+    """Sweep over configurations stored in a YAML file.
+
+    Loads the YAML mapping once during initialisation and exposes each
+    top-level key as a sweep choice. Each sampled value is a
+    :class:`YamlSelection` instance that exposes the underlying YAML
+    content via the ``value`` attribute (and dict-like helpers).
+    """
+
+    __slots__ = shared_slots + ["yaml_path", "_entries", "default_key"]
+
+    def __init__(
+        self,
+        yaml_path: str | Path,
+        units: str = "ul",
+        samples: int = None,
+        default_key: str = None,
+        **params,
+    ):
+        path = Path(yaml_path)
+        if not path.exists():
+            raise FileNotFoundError(f"YamlSweep could not find yaml file at {path}")
+
+        entries = self._load_yaml(path)
+        if not isinstance(entries, Mapping):
+            raise ValueError(
+                "YamlSweep requires the YAML file to contain a mapping at the top level"
+            )
+
+        entries = dict(entries)
+
+        if len(entries) == 0:
+            raise ValueError("YamlSweep requires at least one top-level key in the YAML file")
+
+        if samples is not None and samples <= 0:
+            raise ValueError("samples must be greater than 0")
+
+        if default_key is None:
+            default_key = next(iter(entries))
+        elif default_key not in entries:
+            raise ValueError(f"Default key '{default_key}' not found in {path}")
+
+        selection_entries = {key: YamlSelection(key, value) for key, value in entries.items()}
+        default_value = selection_entries[default_key]
+
+        self.yaml_path = str(path)
+        self._entries = selection_entries
+        self.default_key = default_key
+
+        SweepSelector.__init__(
+            self,
+            objects=selection_entries,
+            instantiate=False,
+            units=units,
+            samples=samples,
+            default=default_value,
+            **params,
+        )
+
+    @classmethod
+    def _load_yaml(cls, path: Path) -> Mapping[str, Any]:
+        resolved = path.resolve()
+        stat = path.stat()
+        data = cls._read_yaml(str(resolved), stat.st_mtime_ns, stat.st_size)
+        return data if data is not None else {}
+
+    @staticmethod
+    @lru_cache(maxsize=64)
+    def _read_yaml(path_str: str, modified_ns: int, size: int) -> Any:
+        _ = modified_ns, size  # values are part of the cache key
+        with Path(path_str).open("r", encoding="utf-8") as stream:
+            return yaml.safe_load(stream)
+
+    def keys(self) -> List[str]:
+        key_list = list(self._entries.keys())
+        return self.indices_to_samples(self.samples, key_list)
+
+    def items(self) -> List[tuple[str, Any]]:
+        selected_keys = self.keys()
+        return [(key, self._entries[key].value()) for key in selected_keys]
+
+    def values(self) -> List[Any]:
+        selected_keys = self.keys()
+        return [self._entries[key] for key in selected_keys]
+
+    def key_for_value(self, value: Any) -> str | None:
+        if isinstance(value, YamlSelection):
+            return value.key()
+        if isinstance(value, str) and value in self._entries:
+            return value
+        for key, selection in self._entries.items():
+            selection_value = selection.value()
+            if selection_value is value:
+                return key
+            if selection_value == value:
+                return key
+        return None
 
 
 class IntSweep(Integer, SweepBase):

@@ -69,9 +69,7 @@ class PythonOperationsBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_3_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_3_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """This example demonstrates benchmarking with categorical variables and multiple output metrics.
 
     It creates a synthetic benchmark that simulates performance characteristics of different
@@ -81,16 +79,12 @@ def example_3_cat_in_2_out(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
 
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 5  # Fewer repeats for a quicker benchmark
-    bench = PythonOperationsBenchmark().to_bench(run_cfg, report)
+    bench = PythonOperationsBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Python Operations Performance Benchmark",
         description="Comparing execution time and peak memory usage across Python data structures and operations",
@@ -104,8 +98,15 @@ def example_3_cat_in_2_out(
         - Note that variance in the results simulates real-world measurement fluctuations
         """,
     )
+
+    res = bench.get_result()
+
+    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_structure", "data_size"]))
+    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_structure"]))
+    bench.report.append(res.to(bch.BarResult, agg_over_dims=["data_size"]))
     return bench
 
 
 if __name__ == "__main__":
-    example_3_cat_in_2_out().report.show()
+    br = bch.BenchRunner()
+    br.add(example_3_cat_in_2_out).run(repeats=1, show=True)

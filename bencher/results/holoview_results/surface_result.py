@@ -41,7 +41,11 @@ class SurfaceResult(HoloviewResult):
         return self.to_surface(result_var=result_var, override=override, **kwargs)
 
     def to_surface(
-        self, result_var: Parameter = None, override: bool = True, **kwargs
+        self,
+        result_var: Parameter = None,
+        override: bool = True,
+        target_dimension: int = 2,
+        **kwargs,
     ) -> Optional[pn.pane.Pane]:
         """Generates a 3D surface plot from benchmark data.
 
@@ -51,6 +55,7 @@ class SurfaceResult(HoloviewResult):
         Args:
             result_var (Parameter, optional): The result variable to plot. If None, uses the default.
             override (bool, optional): Whether to override filter restrictions. Defaults to True.
+            target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 2.
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
@@ -63,7 +68,7 @@ class SurfaceResult(HoloviewResult):
             cat_range=VarRange(0, None),
             input_range=VarRange(1, None),
             reduce=ReduceType.REDUCE,
-            target_dimension=2,
+            target_dimension=target_dimension,
             result_var=result_var,
             result_types=(ResultVar),
             override=override,

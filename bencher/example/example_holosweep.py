@@ -69,8 +69,12 @@ class PlotFunctions(bch.ParametrizedSweep):
         return None
 
 
-def example_holosweep(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
-    bench = PlotFunctions().to_bench(run_cfg, report)
+def example_holosweep(run_cfg: bch.BenchRunCfg = None) -> bch.Bench:
+    """Example using the new one-arg bench signature: bench(run_cfg).
+
+    A report is created internally by Bench when not provided.
+    """
+    bench = PlotFunctions().to_bench(run_cfg)
 
     bench.plot_sweep(
         input_vars=["theta", "freq"],

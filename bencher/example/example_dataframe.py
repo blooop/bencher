@@ -23,8 +23,8 @@ class ExampleMergeDataset(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_dataset(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None):
-    bench = ExampleMergeDataset().to_bench(run_cfg, report)
+def example_dataset(run_cfg: bch.BenchRunCfg | None = None):
+    bench = ExampleMergeDataset().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["value"], const_vars=dict(repeats_x=4))
     # bench.report.append(res.to_panes(target_dimension=1))
     # bench.report.append(res.to_panes(target_dimension=2))
