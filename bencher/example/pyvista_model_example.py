@@ -1,13 +1,11 @@
 """
-Example: PyVista Meshes as Bencher Result Variables with HTML Export Support
+Example: PyVista Meshes as Bencher Result Variables with Interactive Display
 
-This example demonstrates how to use PyVista to create and visualize three types of meshes 
-(sphere, cube, cylinder) as result variables in Bencher. The example provides both:
-1. Static images that render properly when reports are saved to HTML
-2. Interactive VTK panes for dynamic display
+This example demonstrates how to use PyVista to create and visualize three types of meshes
+(sphere, cube, cylinder) as result variables in Bencher with interactive VTK panes for
+dynamic display.
 
-You can sweep mesh type and color. The static images ensure proper rendering in HTML exports
-without requiring dynamic content support.
+You can sweep mesh type and color with interactive 3D visualizations.
 """
 
 import bencher as bch
@@ -39,6 +37,10 @@ def render_pyvista_mesh_interactive(mesh, color="lightblue", **kwargs):
     """Create interactive VTK pane for dynamic display (when supported)"""
     plotter = pv.Plotter(off_screen=True)
     plotter.add_mesh(mesh, color=color)
+
+    # Zoom out by setting camera position further away
+    plotter.camera.zoom(0.7)  # Zoom out (values < 1 zoom out, > 1 zoom in)
+
     vtk_pane = pn.pane.VTK(
         plotter.ren_win, sizing_mode="stretch_width", height=300, orientation_widget=True
     )
@@ -50,23 +52,13 @@ class BenchPyVistaMesh(bch.ParametrizedSweep):
     color = bch.StringSweep(
         ["lightblue", "lightgreen", "lightcoral"], default="lightblue", doc="Mesh color"
     )
-    mesh_image = bch.ResultImage(doc="Static image of the PyVista mesh")
     mesh_interactive = bch.ResultReference(doc="Interactive VTK visualization of mesh")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
-        mesh = self.create_mesh(self.mesh_type.value)
-        
-        # Create static image for HTML export - this ensures PyVista visualizations
-        # render properly when the report is saved to HTML format
-        image_path = bch.gen_image_path("pyvista_mesh")
-        plotter = pv.Plotter(off_screen=True)
-        plotter.add_mesh(mesh, color=self.color.value)
-        plotter.screenshot(image_path, transparent_background=True, window_size=(400, 300))
-        plotter.close()
-        self.mesh_image = str(image_path)
-        
-        # Create interactive version for dynamic display (works in live server mode)
+        mesh = self.create_mesh(self.mesh_type)
+
+        # Create interactive version for dynamic display
         self.mesh_interactive = bch.ResultReference(
             obj=mesh, container=render_pyvista_mesh_interactive, doc="Interactive VTK visualization"
         )
@@ -89,26 +81,18 @@ def example_pyvista_mesh(
 ) -> bch.Bench:
     bench = bch.Bench("pyvista_mesh", BenchPyVistaMesh(), run_cfg=run_cfg, report=report)
     bench.plot_sweep(
-        title="PyVista Mesh Sweep - Static Images (HTML Export)",
-        input_vars=[BenchPyVistaMesh.param.mesh_type, BenchPyVistaMesh.param.color],
-        result_vars=[BenchPyVistaMesh.param.mesh_image],
-        description="Sweep mesh type and color, displaying PyVista meshes as static images that render properly in HTML exports.",
-    )
-    bench.plot_sweep(
-        title="PyVista Mesh Sweep - Interactive (Dynamic Display)",
+        title="PyVista Mesh Sweep - Interactive Display",
         input_vars=[BenchPyVistaMesh.param.mesh_type, BenchPyVistaMesh.param.color],
         result_vars=[BenchPyVistaMesh.param.mesh_interactive],
-        description="Interactive VTK visualization (available in dynamic mode only).",
+        description="Sweep mesh type and color with interactive 3D VTK visualizations.",
     )
     return bench
 
 
 if __name__ == "__main__":
-    # Example usage for dynamic display
+    # Example usage for interactive display
     bench = example_pyvista_mesh()
-    
-    # To save the report to HTML (static images will render properly):
-    # bench.report.save(".", filename="pyvista_example.html")
-    
-    # For dynamic display (interactive VTK widgets):
+
+    # For dynamic display with interactive VTK widgets:
     bench.report.save()
+    # bench.report.show()
