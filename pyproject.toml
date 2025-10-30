@@ -30,7 +30,7 @@ Repository = "https://github.com/blooop/bencher"
 Home = "https://github.com/blooop/bencher"
 Documentation = "https://bencher.readthedocs.io/en/latest/"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
