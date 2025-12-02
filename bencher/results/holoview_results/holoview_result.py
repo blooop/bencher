@@ -151,7 +151,7 @@ class HoloviewResult(VideoResult):
         reduce_type: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
         result_var: Parameter | None = None,
-        result_types: tuple | None = (ResultVar),
+        result_types: tuple | None = (ResultVar,),
         **kwargs,
     ) -> Optional[pn.pane.panel]:
         """Convert the data to a HoloViews container with specified dimensions and options.
