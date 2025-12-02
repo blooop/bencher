@@ -49,11 +49,11 @@ repos:
       - id: ruff-format
         types_or: [ python, pyi ]
   # Type checker for Python
-  - repo: https://github.com/astral-sh/ty
-    rev: v0.1.5
     hooks:
       - id: ty
-        types: [python]
+        name: ty check
+        entry: uvx ty check . --ignore unresolved-import
+        language: python
 
   # Checks for spelling mistakes
   - repo: https://github.com/codespell-project/codespell
