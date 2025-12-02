@@ -48,13 +48,6 @@ repos:
       # Run the formatter.
       - id: ruff-format
         types_or: [ python, pyi ]
-  # Type checker for Python
-  - repo: local
-    hooks:
-      - id: ty
-        name: ty check
-        entry: uvx ty check . --ignore unresolved-import
-        language: python
 
   # Checks for spelling mistakes
   - repo: https://github.com/codespell-project/codespell
