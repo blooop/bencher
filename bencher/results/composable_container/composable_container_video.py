@@ -43,8 +43,8 @@ class RenderCfg:
     """
 
     compose_method: ComposeType = ComposeType.sequence
-    var_name: str = None
-    var_value: str = None
+    var_name: str | None = None
+    var_value: str | None = None
     background_col: tuple[int, int, int] = (255, 255, 255)
     duration: float = 10.0
     default_duration: float = 10.0
@@ -111,7 +111,7 @@ class ComposableContainerVideo(ComposableContainerBase):
 
         return duration, frame_duration
 
-    def render(self, render_cfg: RenderCfg = None, **kwargs) -> CompositeVideoClip:
+    def render(self, render_cfg: RenderCfg | None = None, **kwargs) -> CompositeVideoClip:
         """Composes the images/videos into a single image/video based on the type of compose method
 
         Args:
@@ -186,7 +186,7 @@ class ComposableContainerVideo(ComposableContainerBase):
 
     def to_video(
         self,
-        render_args: RenderCfg = None,
+        render_args: RenderCfg | None = None,
     ) -> str:
         """Returns the composite video clip as a webm file path
 

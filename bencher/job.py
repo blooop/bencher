@@ -28,7 +28,7 @@ class Job:
     """
 
     def __init__(
-        self, job_id: str, function: Callable, job_args: dict, job_key: str = None, tag: str = ""
+        self, job_id: str, function: Callable, job_args: dict, job_key: str | None = None, tag: str = ""
     ) -> None:
         """Initialize a Job with function and arguments.
 
@@ -64,7 +64,7 @@ class JobFuture:
         cache: The cache to store results in when they become available
     """
 
-    def __init__(self, job: Job, res: dict = None, future: Future = None, cache=None) -> None:
+    def __init__(self, job: Job, res: dict | None = None, future: Future | None = None, cache: Cache | None = None) -> None:
         """Initialize a JobFuture with either an immediate result or a future.
 
         Args:

@@ -130,7 +130,7 @@ class HoloviewResult(VideoResult):
         # return time_widget_args
 
     def hv_container_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, container: hv.Chart = None, **kwargs
+        self, dataset: xr.Dataset, result_var: Parameter, container: hv.Chart | None = None, **kwargs
     ) -> hv.Chart:
         """Convert an xarray Dataset to a HoloViews container for a specific result variable.
 
@@ -150,8 +150,8 @@ class HoloviewResult(VideoResult):
         container: pn.pane.panel,
         reduce_type: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
-        result_var: Parameter = None,
-        result_types: tuple = (ResultVar),
+        result_var: Parameter | None = None,
+        result_types: tuple | None = (ResultVar),
         **kwargs,
     ) -> Optional[pn.pane.panel]:
         """Convert the data to a HoloViews container with specified dimensions and options.
@@ -192,7 +192,7 @@ class HoloviewResult(VideoResult):
     def setup_results_and_containers(
         self,
         result_var_plots: Parameter | List[Parameter],
-        container: type | List[type] = None,
+        container: type | List[type] | None = None,
         **kwargs,
     ) -> tuple[List[Parameter], List[pn.pane.panel]]:
         """Set up appropriate containers for result variables.
@@ -216,7 +216,7 @@ class HoloviewResult(VideoResult):
         cont_instances = [c(**kwargs) if c is not None else None for c in containers]
         return result_var_plots, cont_instances
 
-    def to_error_bar(self, result_var: Parameter | str = None, **kwargs) -> hv.Bars:
+    def to_error_bar(self, result_var: Parameter | str | None = None, **kwargs) -> hv.Bars:
         """Convert the dataset to an ErrorBars visualization for a specific result variable.
 
         Args:
@@ -258,7 +258,7 @@ class HoloviewResult(VideoResult):
             shared_axes=False, shared_datasource=False
         )
 
-    def to_holomap(self, name: str = None) -> hv.HoloMap:
+    def to_holomap(self, name: str | None = None) -> hv.HoloMap:
         """Convert an NdLayout to a HoloMap for animated/interactive visualization.
 
         Args:
@@ -269,7 +269,7 @@ class HoloviewResult(VideoResult):
         """
         return hv.HoloMap(self.to_nd_layout(name)).opts(shared_axes=False)
 
-    def to_holomap_list(self, hmap_names: List[str] = None) -> pn.Column:
+    def to_holomap_list(self, hmap_names: List[str] | None = None) -> pn.Column:
         """Create a column of HoloMaps from multiple named maps.
 
         Args:
@@ -286,7 +286,7 @@ class HoloviewResult(VideoResult):
             self.to_holomap(name)
         return col
 
-    def get_nearest_holomap(self, name: str = None, **kwargs) -> hv.HoloMap:
+    def get_nearest_holomap(self, name: str | None = None, **kwargs) -> hv.HoloMap:
         """Get the HoloMap element closest to the specified coordinates.
 
         Args:
@@ -301,7 +301,7 @@ class HoloviewResult(VideoResult):
         )
         return self.get_hmap(name)[canonical_inp].opts(framewise=True)
 
-    def to_dynamic_map(self, name: str = None) -> hv.DynamicMap:
+    def to_dynamic_map(self, name: str | None = None) -> hv.DynamicMap:
         """Create a DynamicMap from the HoloMap dictionary.
 
         Uses the values stored in the holomap dictionary to populate a dynamic map.
@@ -326,7 +326,7 @@ class HoloviewResult(VideoResult):
 
         return hv.DynamicMap(cb, kdims=kdims)
 
-    def to_grid(self, inputs: List[str] = None) -> hv.GridSpace:
+    def to_grid(self, inputs: List[str] | None = None) -> hv.GridSpace:
         """Create a grid visualization from a HoloMap.
 
         Args:

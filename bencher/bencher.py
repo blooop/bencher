@@ -130,11 +130,11 @@ def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> di
 class Bench(BenchPlotServer):
     def __init__(
         self,
-        bench_name: str = None,
-        worker: Callable | ParametrizedSweep = None,
-        worker_input_cfg: ParametrizedSweep = None,
-        run_cfg: BenchRunCfg = None,
-        report: BenchReport = None,
+        bench_name: str | None = None,
+        worker: Callable | ParametrizedSweep | None = None,
+        worker_input_cfg: ParametrizedSweep | None = None,
+        run_cfg: BenchRunCfg | None = None,
+        report: BenchReport | None = None,
     ) -> None:
         """Create a new Bench object for benchmarking a worker function with parametrized inputs.
 
@@ -166,7 +166,8 @@ class Bench(BenchPlotServer):
         self.worker_class_instance = None
         self.worker_input_cfg = None
         self.worker_class_instance = None
-        self.set_worker(worker, worker_input_cfg)
+        if worker is not None:
+            self.set_worker(worker, worker_input_cfg)
         self.run_cfg = run_cfg
         if report is None:
             self.report = BenchReport(self.bench_name)
@@ -210,7 +211,7 @@ class Bench(BenchPlotServer):
         self.plot_callbacks.append(partial(callback, **kwargs))
 
     def set_worker(
-        self, worker: Callable | ParametrizedSweep, worker_input_cfg: ParametrizedSweep = None
+        self, worker: Callable | ParametrizedSweep, worker_input_cfg: ParametrizedSweep | None = None
     ) -> None:
         """Set the benchmark worker function and its input configuration.
 
@@ -247,15 +248,15 @@ class Bench(BenchPlotServer):
     def sweep_sequential(
         self,
         title: str = "",
-        input_vars: List[ParametrizedSweep] = None,
-        result_vars: List[ParametrizedSweep] = None,
-        const_vars: List[ParametrizedSweep] = None,
-        optimise_var: ParametrizedSweep = None,
-        run_cfg: BenchRunCfg = None,
+        input_vars: List[ParametrizedSweep] | None = None,
+        result_vars: List[ParametrizedSweep] | None = None,
+        const_vars: List[ParametrizedSweep] | None = None,
+        optimise_var: ParametrizedSweep | None = None,
+        run_cfg: BenchRunCfg | None = None,
         group_size: int = 1,
         iterations: int = 1,
-        relationship_cb: Callable = None,
-        plot_callbacks: List[Callable] | bool = None,
+        relationship_cb: Callable | None = None,
+        plot_callbacks: List[Callable] | bool | None = None,
     ) -> List[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
@@ -307,17 +308,17 @@ class Bench(BenchPlotServer):
 
     def plot_sweep(
         self,
-        title: str = None,
-        input_vars: List[ParametrizedSweep] = None,
-        result_vars: List[ParametrizedSweep] = None,
-        const_vars: List[ParametrizedSweep] = None,
-        time_src: datetime = None,
-        description: str = None,
-        post_description: str = None,
+        title: str | None = None,
+        input_vars: List[ParametrizedSweep] | None = None,
+        result_vars: List[ParametrizedSweep] | None = None,
+        const_vars: List[ParametrizedSweep] | None = None,
+        time_src: datetime | None = None,
+        description: str | None = None,
+        post_description: str | None = None,
         pass_repeat: bool = False,
         tag: str = "",
-        run_cfg: BenchRunCfg = None,
-        plot_callbacks: List[Callable] | bool = None,
+        run_cfg: BenchRunCfg | None = None,
+        plot_callbacks: List[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
@@ -408,6 +409,10 @@ class Bench(BenchPlotServer):
             run_cfg.cache_results = True
 
         self.last_run_cfg = run_cfg
+
+        assert input_vars_in is not None
+        assert result_vars_in is not None
+        assert const_vars_in is not None
 
         if isinstance(input_vars_in, dict):
             input_lists = []
@@ -511,7 +516,7 @@ class Bench(BenchPlotServer):
         self,
         bench_cfg: BenchCfg,
         run_cfg: BenchRunCfg,
-        time_src: datetime = None,
+        time_src: datetime | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """Execute a benchmark sweep based on the provided configuration.
@@ -667,7 +672,7 @@ class Bench(BenchPlotServer):
             logging.info(f"saving benchmark: {self.bench_name}")
             c[self.bench_name] = self.bench_cfg_hashes
 
-    # def show(self, run_cfg: BenchRunCfg = None, pane: pn.panel = None) -> None:
+    # def show(self, run_cfg: BenchRunCfg | None = None, pane: pn.panel = None) -> None:
     #     """Launch a web server with plots of the benchmark results.
     #
     #     This method starts a Panel web server to display the benchmark results interactively.

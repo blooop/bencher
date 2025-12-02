@@ -2,7 +2,7 @@ from bencher.example.example_image import BenchPolygons
 import bencher as bch
 
 
-def example_image_vid(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_image_vid(run_cfg: bch.BenchRunCfg | None = None, report: bch.BenchReport | None = None) -> bch.Bench:
     bench = BenchPolygons().to_bench(run_cfg, report)
     bench.add_plot_callback(bch.BenchResult.to_sweep_summary)
     bench.add_plot_callback(
@@ -33,7 +33,7 @@ def example_image_vid(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport =
 
 if __name__ == "__main__":
 
-    def simple(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:  # pylint: disable=unused-argument
+    def simple(run_cfg: bch.BenchRunCfg | None = None, report: bch.BenchReport | None = None) -> bch.Bench:  # pylint: disable=unused-argument
         bench = BenchPolygons().to_bench(bch.BenchRunCfg(level=4), report=report)
         bench.plot_sweep(input_vars=["sides"])
         bench.plot_sweep(input_vars=["sides", "color"])
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         return bench
 
     def example_image_vid_sequential(
-        run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
+        run_cfg: bch.BenchRunCfg | None = None, report: bch.BenchReport | None = None
     ) -> bch.Bench:
         bench = BenchPolygons().to_bench(run_cfg, report)
         bench.add_plot_callback(bch.BenchResult.to_title)

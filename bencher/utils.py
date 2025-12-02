@@ -408,7 +408,7 @@ def github_content(remote: str, branch_name: str, filename: str):  # pragma: no 
 
 
 # def rrd_to_pane(
-#     url: str, width: int = 499, height: int = 600, version: str = None
+#     url: str, width: int = 499, height: int = 600, version: str | None = None
 # ):  # pragma: no cover
 #     if version is None:
 #         version = "-1.20.1"  # TODO find a better way of doing this
@@ -427,7 +427,7 @@ def github_content(remote: str, branch_name: str, filename: str):  # pragma: no 
 #     remote: str,
 #     branch_name,
 #     content_callback: callable,
-#     version: str = None,
+#     version: str | None = None,
 # ):  # pragma: no cover
 #     as_html()
 #     publish_file(file_path, remote=remote, branch_name="test_rrd")

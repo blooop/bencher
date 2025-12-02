@@ -69,7 +69,7 @@ class VideoWriter:
         return self.filename
 
     @staticmethod
-    def extract_frame(video_path: str, time: float = None, output_path: str = None) -> str:
+    def extract_frame(video_path: str, time: float | None = None, output_path: str | None = None) -> str:
         """Extract a frame from a video at a specific time.
 
         Args:

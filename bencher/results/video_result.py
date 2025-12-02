@@ -11,7 +11,7 @@ from bencher.variables.results import (
 
 
 class VideoResult(BenchResultBase):
-    def to_video(self, result_var: Parameter = None, **kwargs):
+    def to_video(self, result_var: Parameter | None = None, **kwargs):
         vc = VideoControls()
         return pn.Column(
             vc.video_controls(),
@@ -20,11 +20,11 @@ class VideoResult(BenchResultBase):
 
     def to_panes(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         hv_dataset=None,
         target_dimension: int = 0,
         container=None,
-        level: int = None,
+        level: int | None = None,
         **kwargs,
     ) -> Optional[pn.pane.panel]:
         if hv_dataset is None:

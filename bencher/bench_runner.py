@@ -42,11 +42,11 @@ class BenchRunner:
 
     def __init__(
         self,
-        name: str | Benchable = None,
-        bench_class: ParametrizedSweep = None,
+        name: str | Benchable | None = None,
+        bench_class: ParametrizedSweep | None = None,
         run_cfg: BenchRunCfg | None = None,
-        publisher: Callable = None,
-        run_tag: str = None,
+        publisher: Callable | None = None,
+        run_tag: str | None = None,
     ) -> None:
         """Initialize a BenchRunner instance.
 
@@ -242,13 +242,13 @@ class BenchRunner:
         # New unified parameters (level and repeats are starting values)
         level: int = 2,
         repeats: int = 1,
-        max_level: int = None,
-        max_repeats: int = None,
+        max_level: int | None = None,
+        max_repeats: int | None = None,
         # Legacy parameters for backward compatibility (deprecated)
-        min_level: int = None,
-        start_repeats: int = None,
+        min_level: int | None = None,
+        start_repeats: int | None = None,
         # Other parameters
-        run_cfg: BenchRunCfg = None,
+        run_cfg: BenchRunCfg | None = None,
         publish: bool = False,
         debug: bool = False,
         show: bool = False,
@@ -358,6 +358,7 @@ class BenchRunner:
                         self.show_publish(report_to_publish, show, publish, save, debug)
                     self.results.append(res)
                 if grouped:
+                    assert report_level is not None
                     self.show_publish(report_level, show, publish, save, debug)
         return self.results
 
@@ -388,7 +389,7 @@ class BenchRunner:
 
     def show(
         self,
-        report: BenchReport = None,
+        report: BenchReport | None = None,
         show: bool = True,
         publish: bool = False,
         save: bool = False,

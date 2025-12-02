@@ -23,7 +23,7 @@ class SurfaceResult(HoloviewResult):
     """
 
     def to_plot(
-        self, result_var: Parameter = None, override: bool = True, **kwargs
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs
     ) -> Optional[pn.pane.Pane]:
         """Generates a 3D surface plot from benchmark data.
 
@@ -42,7 +42,7 @@ class SurfaceResult(HoloviewResult):
 
     def to_surface(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         target_dimension: int = 2,
         **kwargs,

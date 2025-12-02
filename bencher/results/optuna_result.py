@@ -47,7 +47,7 @@ class OptunaResult(BenchResultBase):
         self,
         worker,
         n_trials=100,
-        extra_results: List[OptunaResult] = None,
+        extra_results: List[OptunaResult] | None = None,
         sampler=None,
     ):
         directions = []
@@ -176,7 +176,7 @@ class OptunaResult(BenchResultBase):
         return [p.params for p in self.studies[0].trials]
 
     def collect_optuna_plots(
-        self, pareto_width: float = None, pareto_height: float = None
+        self, pareto_width: float | None = None, pareto_height: float | None = None
     ) -> List[pn.pane.panel]:
         """Use optuna to plot various summaries of the optimisation
 
@@ -282,5 +282,5 @@ class OptunaResult(BenchResultBase):
         """Return a deep copy of these results"""
         return deepcopy(self)
 
-    def get_best_holomap(self, name: str = None):
+    def get_best_holomap(self, name: str | None = None):
         return self.get_hmap(name)[self.get_best_trial_params(True)]

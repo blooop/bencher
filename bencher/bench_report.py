@@ -23,7 +23,7 @@ class GithubPagesCfg:
 class BenchReport(BenchPlotServer):
     def __init__(
         self,
-        bench_name: str = None,
+        bench_name: str | None = None,
     ) -> None:
         self.bench_name = bench_name
         self.pane = pn.Tabs(tabs_location="left", name=self.bench_name)
@@ -33,14 +33,14 @@ class BenchReport(BenchPlotServer):
             return self.append_tab(pn.pane.Markdown(f"# {title}", name=title), title)
         return self.append_markdown(f"# {title}", title)
 
-    def append_markdown(self, markdown: str, name=None, width=800, **kwargs) -> pn.pane.Markdown:
+    def append_markdown(self, markdown: str, name: str | None = None, width: int = 800, **kwargs) -> pn.pane.Markdown:
         if name is None:
             name = markdown
         md = pn.pane.Markdown(markdown, name=name, width=width, **kwargs)
         self.append(md, name)
         return md
 
-    def append(self, pane: pn.panel, name: str = None) -> None:
+    def append(self, pane: pn.panel, name: str | None = None) -> None:
         if len(self.pane) == 0:
             if name is None:
                 name = pane.name
@@ -48,7 +48,7 @@ class BenchReport(BenchPlotServer):
         else:
             self.pane[-1].append(pane)
 
-    def append_col(self, pane: pn.panel, name: str = None) -> None:
+    def append_col(self, pane: pn.panel, name: str | None = None) -> None:
         if name is not None:
             col = pn.Column(pane, name=name)
         else:
@@ -58,13 +58,13 @@ class BenchReport(BenchPlotServer):
     def append_result(self, bench_res: BenchResult) -> None:
         self.append_tab(bench_res.plot(), bench_res.bench_cfg.title)
 
-    def append_tab(self, pane: pn.panel, name: str = None) -> None:
+    def append_tab(self, pane: pn.panel, name: str | None = None) -> None:
         if pane is not None:
             if name is None:
                 name = pane.name
             self.pane.append(pn.Column(pane, name=name))
 
-    def save_index(self, directory="", filename="index.html") -> Path:
+    def save_index(self, directory: str = "", filename: str = "index.html") -> Path:
         """Saves the result to index.html in the root folder so that it can be displayed by github pages.
 
         Returns:
@@ -75,7 +75,7 @@ class BenchReport(BenchPlotServer):
     def save(
         self,
         directory: str | Path = "cachedir",
-        filename: str = None,
+        filename: str | None = None,
         in_html_folder: bool = True,
         **kwargs,
     ) -> Path:
@@ -108,7 +108,7 @@ class BenchReport(BenchPlotServer):
         self.pane.save(filename=base_path, progress=True, embed=True, **kwargs)
         return base_path
 
-    def show(self, run_cfg: BenchRunCfg = None) -> Thread:  # pragma: no cover
+    def show(self, run_cfg: BenchRunCfg | None = None) -> Thread:  # pragma: no cover
         """Launches a webserver with plots of the benchmark results, blocking
 
         Args:
@@ -118,6 +118,7 @@ class BenchReport(BenchPlotServer):
         if run_cfg is None:
             run_cfg = BenchRunCfg()
 
+        assert isinstance(self.bench_name, str), "bench_name must be a string"
         return BenchPlotServer().plot_server(self.bench_name, run_cfg, self.pane)
 
     def publish_gh_pages(
@@ -154,7 +155,7 @@ class BenchReport(BenchPlotServer):
         return publish_url
 
     def publish(
-        self, remote_callback: Callable, branch_name: str = None, debug: bool = False
+        self, remote_callback: Callable, branch_name: str | None = None, debug: bool = False
     ) -> str:  # pragma: no cover
         """Publish the results as an html file by committing it to the bench_results branch in the current repo. If you have set up your repo with github pages or equivalent then the html file will be served as a viewable webpage.  This is an example of a callable to publish on github pages:
 
