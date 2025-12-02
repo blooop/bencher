@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Callable
 from copy import deepcopy
 import panel as pn
 import xarray as xr
@@ -178,7 +178,7 @@ class VideoSummaryResult(BenchResultBase):
     def _to_video_panes_ds(
         self,
         dataset: xr.Dataset,
-        plot_callback: callable | None = None,
+        plot_callback: Callable | None = None,
         target_dimension=0,
         compose_method=ComposeType.right,
         compose_method_list=None,

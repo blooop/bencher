@@ -1,5 +1,5 @@
 import logging
-from typing import List, Any, Tuple, Optional, Literal
+from typing import List, Any, Tuple, Optional, Literal, Callable
 from enum import Enum, auto
 import xarray as xr
 from param import Parameter
@@ -409,7 +409,7 @@ class BenchResultBase:
 
     def map_plots(
         self,
-        plot_callback: callable,
+        plot_callback: Callable,
         result_var: ParametrizedSweep | None = None,
         row: EmptyContainer | None = None,
     ) -> Optional[pn.Row]:
@@ -461,7 +461,7 @@ class BenchResultBase:
 
     def map_plot_panes(
         self,
-        plot_callback: callable,
+        plot_callback: Callable,
         hv_dataset: hv.Dataset = None,
         target_dimension: int = 2,
         result_var: ResultVar | None = None,
@@ -497,7 +497,7 @@ class BenchResultBase:
 
     def filter(
         self,
-        plot_callback: callable,
+        plot_callback: Callable,
         plot_filter=None,
         float_range: VarRange | None = None,
         cat_range: VarRange | None = None,
@@ -568,7 +568,7 @@ class BenchResultBase:
         self,
         hv_dataset: hv.Dataset,
         result_var: ResultVar,
-        plot_callback: callable | None = None,
+        plot_callback: Callable | None = None,
         target_dimension: int = 1,
         **kwargs,
     ):
@@ -587,7 +587,7 @@ class BenchResultBase:
     def _to_panes_da(
         self,
         dataset: xr.Dataset,
-        plot_callback: callable | None = None,
+        plot_callback: Callable | None = None,
         target_dimension=1,
         horizontal=False,
         result_var=None,
