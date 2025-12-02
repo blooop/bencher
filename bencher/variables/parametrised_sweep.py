@@ -157,7 +157,11 @@ class ParametrizedSweep(Parameterized):
         return [iv.as_dim(compute_values) for iv in inputs]
 
     def to_dynamic_map(
-        self, callback=None, name=None, remove_dims: str | List[str] | None = None, result_var: str | None = None
+        self,
+        callback=None,
+        name=None,
+        remove_dims: str | List[str] | None = None,
+        result_var: str | None = None,
     ) -> hv.DynamicMap:
         if callback is None:
             callback = self.__call__

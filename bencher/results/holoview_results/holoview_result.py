@@ -130,7 +130,11 @@ class HoloviewResult(VideoResult):
         # return time_widget_args
 
     def hv_container_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, container: hv.Chart | None = None, **kwargs
+        self,
+        dataset: xr.Dataset,
+        result_var: Parameter,
+        container: hv.Chart | None = None,
+        **kwargs,
     ) -> hv.Chart:
         """Convert an xarray Dataset to a HoloViews container for a specific result variable.
 

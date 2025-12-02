@@ -211,7 +211,9 @@ class Bench(BenchPlotServer):
         self.plot_callbacks.append(partial(callback, **kwargs))
 
     def set_worker(
-        self, worker: Callable | ParametrizedSweep, worker_input_cfg: ParametrizedSweep | None = None
+        self,
+        worker: Callable | ParametrizedSweep,
+        worker_input_cfg: ParametrizedSweep | None = None,
     ) -> None:
         """Set the benchmark worker function and its input configuration.
 

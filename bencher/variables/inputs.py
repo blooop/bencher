@@ -161,7 +161,9 @@ class BoolSweep(SweepSelector):
         samples (int): The number of samples to take (typically 2 for booleans)
     """
 
-    def __init__(self, units: str = "ul", samples: int | None = None, default: bool = True, **params):
+    def __init__(
+        self, units: str = "ul", samples: int | None = None, default: bool = True, **params
+    ):
         SweepSelector.__init__(
             self,
             units=units,
@@ -442,7 +444,11 @@ class IntSweep(Integer, SweepBase):
     __slots__ = shared_slots + ["sample_values"]
 
     def __init__(
-        self, units: str = "ul", samples: int | None = None, sample_values: List[int] | None = None, **params
+        self,
+        units: str = "ul",
+        samples: int | None = None,
+        sample_values: List[int] | None = None,
+        **params,
     ):
         SweepBase.__init__(self)
         Integer.__init__(self, **params)
@@ -575,7 +581,10 @@ def box(name: str, center: float, width: float) -> FloatSweep:
 
 
 def p(
-    name: str, values: List[Any] | None = None, samples: int | None = None, max_level: int | None = None
+    name: str,
+    values: List[Any] | None = None,
+    samples: int | None = None,
+    max_level: int | None = None,
 ) -> Dict[str, Any]:
     """
     Create a parameter dictionary with optional values, samples, and max_level.
