@@ -184,3 +184,6 @@ docs/jupyter_execute*
 thumbnails/
 docs/autoapi/*
 .qodo
+
+# Auto-generated documentation excluded from type checking
+docs/reference/
