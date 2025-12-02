@@ -49,6 +49,7 @@ repos:
       - id: ruff-format
         types_or: [ python, pyi ]
   # Type checker for Python
+  - repo: local
     hooks:
       - id: ty
         name: ty check
