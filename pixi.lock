@@ -162,7 +162,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py310:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -327,7 +327,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py311:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -492,7 +492,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py312:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -657,7 +657,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
   py313:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -820,7 +820,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ca/51/5447876806d1088a0f8f71e16542bf350918128d0a69437df26047c8e46f/widgetsnbextension-4.0.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/8a/6b50c1dd2260d407c1a499d47cf829f59f07007e0dcebafdabb24d1d26a5/xarray-2025.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d6/7d/b77455d7c7c51255b2992b429107fab811b2e36ceaf76da1e55a045dc568/xyzservices-2025.4.0-py3-none-any.whl
-      - pypi: ./
+      - pypi: .
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
@@ -1360,30 +1360,30 @@ packages:
   - psutil ; extra == 'test'
   - setuptools ; extra == 'test'
   requires_python: '>=3.9'
-- pypi: ./
+- pypi: .
   name: holobench
   version: 1.58.1
-  sha256: be1caa24c2079ceab0a73e6142431f3a10d1aef018f847198e82b0c2ae3010f5
+  sha256: b093e62d794da15bf458c9d536cb91a748eeace0c8aed583fa70dceed8a13cff
   requires_dist:
   - holoviews>=1.15,<=1.21.0
   - numpy>=1.0,<=2.2.6
   - param>=1.13.0,<=2.2.1
   - hvplot>=0.12.0,<=0.12.1
-  - panel>=1.3.6,<=1.8.1
+  - panel>=1.3.6,<=1.8.2
   - diskcache>=5.6,<=5.6.3
   - optuna>=3.2,<=4.5.0
   - xarray>=2023.7,<=2025.6.1
-  - plotly>=5.15,<=6.3.0
+  - plotly>=5.15,<=6.3.1
   - pandas>=2.0,<=2.3.3
   - strenum>=0.4.0,<=0.4.15
   - scikit-learn>=1.2,<=1.7.2
   - moviepy>=2.1.2,<=2.2.1
-  - pylint>=3.2.5,<=3.3.8 ; extra == 'test'
+  - pylint>=3.2.5,<=4.0.2 ; extra == 'test'
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
   - pytest>=7.4,<=8.4.2 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.140.2 ; extra == 'test'
-  - ruff>=0.5.0,<=0.13.2 ; extra == 'test'
-  - coverage>=7.5.4,<=7.10.7 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.142.5 ; extra == 'test'
+  - ruff>=0.5.0,<=0.14.3 ; extra == 'test'
+  - coverage>=7.5.4,<=7.11.0 ; extra == 'test'
   - nbformat ; extra == 'test'
   - ipykernel ; extra == 'test'
   - pip ; extra == 'test'
