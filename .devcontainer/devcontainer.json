@@ -22,7 +22,8 @@
 	//docker in docker is included in the pixi devcontainer example, but disabling for the moment due to security issues
 	"features": {
 		//   "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+		"ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
 	},
 	"mounts": [
 		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
