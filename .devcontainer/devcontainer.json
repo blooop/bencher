@@ -4,7 +4,7 @@
 		"dockerfile": "Dockerfile",
 		"context": "..",
 		"args": {
-			"PIXI_VERSION": "v0.41.4"
+			"PIXI_VERSION": "v0.62.2"
 		}
 	},
 	"customizations": {
@@ -13,11 +13,9 @@
 				"ms-python.python",
 				"ms-python.vscode-pylance",
 				"ms-python.pylint",
-				"njpwerner.autodocstring",
 				"charliermarsh.ruff",
 				"mhutchie.git-graph",
 				"tamasfe.even-better-toml",
-				"ryanluker.vscode-coverage-gutters"
 			]
 		}
 	},
