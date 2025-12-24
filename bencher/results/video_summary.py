@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Callable
 from copy import deepcopy
 import panel as pn
 import xarray as xr
@@ -19,7 +19,7 @@ from bencher.results.composable_container.composable_container_video import (
 class VideoSummaryResult(BenchResultBase):
     def to_video_summary(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         reverse: bool = True,
         result_types=(ResultImage,),
         **kwargs,
@@ -34,12 +34,12 @@ class VideoSummaryResult(BenchResultBase):
 
     def to_video_grid(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         result_types=(ResultImage,),
         pane_collection: pn.pane = None,
         time_sequence_dimension=0,
-        target_duration: float = None,
-        compose_method_list: List = None,
+        target_duration: float | None = None,
+        compose_method_list: List | None = None,
         **kwargs,
     ) -> Optional[pn.panel]:
         """Returns the results compiled into a video
@@ -89,9 +89,9 @@ class VideoSummaryResult(BenchResultBase):
         result_var: Parameter,
         reverse=True,
         time_sequence_dimension=0,
-        video_controls: VideoControls = None,
-        target_duration: float = None,
-        compose_method_list: List = None,
+        video_controls: VideoControls | None = None,
+        target_duration: float | None = None,
+        compose_method_list: List | None = None,
         target_dimension: int = 0,
         **kwargs,
     ):
@@ -178,7 +178,7 @@ class VideoSummaryResult(BenchResultBase):
     def _to_video_panes_ds(
         self,
         dataset: xr.Dataset,
-        plot_callback: callable = None,
+        plot_callback: Callable | None = None,
         target_dimension=0,
         compose_method=ComposeType.right,
         compose_method_list=None,
@@ -186,7 +186,7 @@ class VideoSummaryResult(BenchResultBase):
         time_sequence_dimension=0,
         root_dimensions=None,
         reverse=False,
-        target_duration: float = None,
+        target_duration: float | None = None,
         **kwargs,
     ) -> pn.panel:
         num_dims = len(dataset.sizes)

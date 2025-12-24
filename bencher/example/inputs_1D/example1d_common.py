@@ -19,7 +19,7 @@ class DataSource:
 
         self.call_count = [0] * len(self.data)
 
-    def call(self, index: int, repeat: int = None) -> int:
+    def call(self, index: int, repeat: int | None = None) -> int:
         """Retrieve a data point at the specified index and repeat count.
 
         Args:

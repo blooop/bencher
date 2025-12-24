@@ -12,11 +12,11 @@ from bencher.results.bench_result_base import BenchResultBase, ReduceType
 class DataSetResult(BenchResultBase):
     def to_plot(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         hv_dataset=None,
         target_dimension: int = 0,
         container=None,
-        level: int = None,
+        level: int | None = None,
         **kwargs,
     ) -> Optional[pn.pane.panel]:
         if hv_dataset is None:

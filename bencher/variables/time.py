@@ -48,7 +48,7 @@ class TimeSnapshot(TimeBase):
         self,
         datetime_src: datetime | str,
         units: str = "time",
-        samples: int = None,
+        samples: int | None = None,
         **params,
     ):
         if isinstance(datetime_src, str):
@@ -76,7 +76,7 @@ class TimeEvent(TimeBase):
         self,
         time_event: str,
         units: str = "event",
-        samples: int = None,
+        samples: int | None = None,
         **params,
     ):
         TimeBase.__init__(

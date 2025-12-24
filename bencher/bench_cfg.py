@@ -32,12 +32,12 @@ class BenchPlotSrvCfg(param.Parameterized):
         show (bool): Open the served page in a web browser
     """
 
-    port: Optional[int] = param.Integer(None, doc="The port to launch panel with")
-    allow_ws_origin: bool = param.Boolean(
+    port: Optional[int] = param.Integer(None, doc="The port to launch panel with")  # type: ignore[assignment]
+    allow_ws_origin: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="Add the port to the whitelist, (warning will disable remote access if set to true)",
     )
-    show: bool = param.Boolean(True, doc="Open the served page in a web browser")
+    show: bool = param.Boolean(True, doc="Open the served page in a web browser")  # type: ignore[assignment]
 
 
 class BenchRunCfg(BenchPlotSrvCfg):
@@ -88,121 +88,121 @@ class BenchRunCfg(BenchPlotSrvCfg):
         plot_height (int): Sets height of the plot
     """
 
-    repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
+    repeats: int = param.Integer(1, doc="The number of times to sample the inputs")  # type: ignore[assignment]
 
-    over_time: bool = param.Boolean(
+    over_time: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="If true each time the function is called it will plot a timeseries of historical and the latest result.",
     )
 
-    use_optuna: bool = param.Boolean(False, doc="show optuna plots")
+    use_optuna: bool = param.Boolean(False, doc="show optuna plots")  # type: ignore[assignment]
 
-    summarise_constant_inputs: bool = param.Boolean(
+    summarise_constant_inputs: bool = param.Boolean(  # type: ignore[assignment]
         True, doc="Print the inputs that are kept constant when describing the sweep parameters"
     )
 
-    print_bench_inputs: bool = param.Boolean(
+    print_bench_inputs: bool = param.Boolean(  # type: ignore[assignment]
         True, doc="Print the inputs to the benchmark function every time it is called"
     )
 
-    print_bench_results: bool = param.Boolean(
+    print_bench_results: bool = param.Boolean(  # type: ignore[assignment]
         True, doc="Print the results of the benchmark function every time it is called"
     )
 
-    clear_history: bool = param.Boolean(False, doc="Clear historical results")
+    clear_history: bool = param.Boolean(False, doc="Clear historical results")  # type: ignore[assignment]
 
-    print_pandas: bool = param.Boolean(
+    print_pandas: bool = param.Boolean(  # type: ignore[assignment]
         False, doc="Print a pandas summary of the results to the console."
     )
 
-    print_xarray: bool = param.Boolean(
+    print_xarray: bool = param.Boolean(  # type: ignore[assignment]
         False, doc="Print an xarray summary of the results to the console"
     )
 
-    serve_pandas: bool = param.Boolean(
+    serve_pandas: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="Serve a pandas summary on the results webpage.  If you have a large dataset consider setting this to false if the page loading is slow",
     )
 
-    serve_pandas_flat: bool = param.Boolean(
+    serve_pandas_flat: bool = param.Boolean(  # type: ignore[assignment]
         True,
         doc="Serve a flattened pandas summary on the results webpage.  If you have a large dataset consider setting this to false if the page loading is slow",
     )
 
-    serve_xarray: bool = param.Boolean(
+    serve_xarray: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="Serve an xarray summary on the results webpage. If you have a large dataset consider setting this to false if the page loading is slow",
     )
 
-    auto_plot: bool = param.Boolean(
+    auto_plot: bool = param.Boolean(  # type: ignore[assignment]
         True, doc=" Automatically dedeuce the best type of plot for the results."
     )
 
-    raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")
+    raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")  # type: ignore[assignment]
 
-    cache_results: bool = param.Boolean(
+    cache_results: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="This is a benchmark level cache that stores the results of a fully completed benchmark. At the end of a benchmark the values are added to the cache but are not if the benchmark does not complete.  If you want to cache values during the benchmark you need to use the cache_samples option. Beware that depending on how you change code in the objective function, the cache could provide values that are not correct.",
     )
 
-    clear_cache: bool = param.Boolean(
+    clear_cache: bool = param.Boolean(  # type: ignore[assignment]
         False, doc=" Clear the cache of saved input->output mappings."
     )
 
-    cache_samples: bool = param.Boolean(
+    cache_samples: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="If true, every time the benchmark function is called, bencher will check if that value has been calculated before and if so load the from the cache.  Note that the sample level cache is different from the benchmark level cache which only caches the aggregate of all the results at the end of the benchmark. This cache lets you stop a benchmark halfway through and continue. However, beware that depending on how you change code in the objective function, the cache could provide values that are not correct.",
     )
 
-    only_hash_tag: bool = param.Boolean(
+    only_hash_tag: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="By default when checking if a sample has been calculated before it includes the hash of the greater benchmarking context.  This is safer because it means that data generated from one benchmark will not affect data from another benchmark.  However, if you are careful it can be more flexible to ignore which benchmark generated the data and only use the tag hash to check if that data has been calculated before. ie, you can create two benchmarks that sample a subset of the problem during exploration and give them the same tag, and then afterwards create a larger benchmark that covers the cases you already explored.  If this value is true, the combined benchmark will use any data from other benchmarks with the same tag.",
     )
 
-    clear_sample_cache: bool = param.Boolean(
+    clear_sample_cache: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="Clears the per-sample cache.  Use this if you get unexpected behavior.  The per_sample cache is tagged by the specific benchmark it was sampled from. So clearing the cache of one benchmark will not clear the cache of other benchmarks.",
     )
 
-    overwrite_sample_cache: bool = param.Boolean(
+    overwrite_sample_cache: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="If True, recalculate the value and overwrite the value stored in the sample cache",
     )
 
-    only_plot: bool = param.Boolean(
+    only_plot: bool = param.Boolean(  # type: ignore[assignment]
         False, doc="Do not attempt to calculate benchmarks if no results are found in the cache"
     )
 
-    use_holoview: bool = param.Boolean(False, doc="Use holoview for plotting")
+    use_holoview: bool = param.Boolean(False, doc="Use holoview for plotting")  # type: ignore[assignment]
 
-    nightly: bool = param.Boolean(
+    nightly: bool = param.Boolean(  # type: ignore[assignment]
         False, doc="Run a more extensive set of tests for a nightly benchmark"
     )
 
-    time_event: Optional[str] = param.String(
+    time_event: Optional[str] = param.String(  # type: ignore[assignment]
         None,
         doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",
     )
 
-    headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")
+    headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")  # type: ignore[assignment]
 
-    render_plotly: bool = param.Boolean(
+    render_plotly: bool = param.Boolean(  # type: ignore[assignment]
         True,
         doc="Plotly and Bokeh don't play nicely together, so by default pre-render plotly figures to a non dynamic version so that bokeh plots correctly.  If you want interactive 3D graphs, set this to true but be aware that your 2D interactive graphs will probably stop working.",
     )
 
-    level: int = param.Integer(
+    level: int = param.Integer(  # type: ignore[assignment]
         default=0,
         bounds=[0, 12],
         doc="The level parameter is a method of defining the number samples to sweep over in a variable agnostic way, i.e you don't need to specify the number of samples for each variable as they are calculated dynamically from the sampling level.  See example_level.py for more information.",
     )
 
-    run_tag: str = param.String(
+    run_tag: str = param.String(  # type: ignore[assignment]
         default="",
         doc="Define a tag for a run to isolate the results stored in the cache from other runs",
     )
 
-    run_date: datetime = param.Date(
+    run_date: datetime = param.Date(  # type: ignore[assignment]
         default=datetime.now(),
         doc="The date the bench run was performed",
     )
@@ -217,14 +217,14 @@ class BenchRunCfg(BenchPlotSrvCfg):
         doc="The function can be run serially or in parallel with different futures executors",
     )
 
-    plot_size: Optional[int] = param.Integer(
+    plot_size: Optional[int] = param.Integer(  # type: ignore[assignment]
         default=None, doc="Sets the width and height of the plot"
     )
-    plot_width: Optional[int] = param.Integer(
+    plot_width: Optional[int] = param.Integer(  # type: ignore[assignment]
         default=None,
         doc="Sets with width of the plots, this will override the plot_size parameter",
     )
-    plot_height: Optional[int] = param.Integer(
+    plot_height: Optional[int] = param.Integer(  # type: ignore[assignment]
         default=None, doc="Sets the height of the plot, this will override the plot_size parameter"
     )
 
@@ -355,41 +355,41 @@ class BenchCfg(BenchRunCfg):
         doc="A parameter to represent the sampling the same inputs over time as a discrete type",
     )
 
-    over_time: bool = param.Boolean(
+    over_time: bool = param.Boolean(  # type: ignore[assignment]
         False, doc="A parameter to control whether the function is sampled over time"
     )
-    name: Optional[str] = param.String(None, doc="The name of the benchmarkCfg")
-    title: Optional[str] = param.String(None, doc="The title of the benchmark")
-    raise_duplicate_exception: bool = param.Boolean(
+    name: Optional[str] = param.String(None, doc="The name of the benchmarkCfg")  # type: ignore[assignment]
+    title: Optional[str] = param.String(None, doc="The title of the benchmark")  # type: ignore[assignment]
+    raise_duplicate_exception: bool = param.Boolean(  # type: ignore[assignment]
         False, doc="Use this while debugging if filename generation is unique"
     )
-    bench_name: Optional[str] = param.String(
+    bench_name: Optional[str] = param.String(  # type: ignore[assignment]
         None, doc="The name of the benchmark and the name of the save folder"
     )
-    description: Optional[str] = param.String(
+    description: Optional[str] = param.String(  # type: ignore[assignment]
         None,
         doc="A place to store a longer description of the function of the benchmark",
     )
-    post_description: Optional[str] = param.String(
+    post_description: Optional[str] = param.String(  # type: ignore[assignment]
         None, doc="A place to comment on the output of the graphs"
     )
 
-    has_results: bool = param.Boolean(
+    has_results: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="If this config has results, true, otherwise used to store titles and other bench metadata",
     )
 
-    pass_repeat: bool = param.Boolean(
+    pass_repeat: bool = param.Boolean(  # type: ignore[assignment]
         False,
         doc="By default do not pass the kwarg 'repeat' to the benchmark function.  Set to true if you want the benchmark function to be passed the repeat number",
     )
 
-    tag: str = param.String(
+    tag: str = param.String(  # type: ignore[assignment]
         "",
         doc="Use tags to group different benchmarks together. By default benchmarks are considered distinct from each other and are identified by the hash of their name and inputs, constants and results and tag, but you can optionally change the hash value to only depend on the tag.  This way you can have multiple unrelated benchmarks share values with each other based only on the tag value.",
     )
 
-    hash_value: str = param.String(
+    hash_value: str = param.String(  # type: ignore[assignment]
         "",
         doc="store the hash value of the config to avoid having to hash multiple times",
     )

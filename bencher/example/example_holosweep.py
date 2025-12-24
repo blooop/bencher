@@ -69,7 +69,7 @@ class PlotFunctions(bch.ParametrizedSweep):
         return None
 
 
-def example_holosweep(run_cfg: bch.BenchRunCfg = None) -> bch.Bench:
+def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Example using the new one-arg bench signature: bench(run_cfg).
 
     A report is created internally by Bench when not provided.

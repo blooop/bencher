@@ -145,8 +145,8 @@ class BenchResult(
 
     def to_auto(
         self,
-        plot_list: List[callable] = None,
-        remove_plots: List[callable] = None,
+        plot_list: List[callable] | None = None,
+        remove_plots: List[callable] | None = None,
         default_container=pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
         **kwargs,

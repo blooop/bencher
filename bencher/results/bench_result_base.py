@@ -1,5 +1,5 @@
 import logging
-from typing import List, Any, Tuple, Optional, Literal
+from typing import List, Any, Tuple, Optional, Literal, Callable
 from enum import Enum, auto
 import xarray as xr
 from param import Parameter
@@ -148,8 +148,8 @@ class BenchResultBase:
     def to_hv_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar = None,
-        level: int = None,
+        result_var: ResultVar | None = None,
+        level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
     ) -> hv.Dataset:
@@ -187,8 +187,8 @@ class BenchResultBase:
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | str = None,
-        level: int = None,
+        result_var: ResultVar | str | None = None,
+        level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
     ) -> xr.Dataset:
@@ -373,7 +373,7 @@ class BenchResultBase:
     def describe_sweep(self):
         return self.bench_cfg.describe_sweep()
 
-    def get_hmap(self, name: str = None):
+    def get_hmap(self, name: str | None = None):
         try:
             if name is None:
                 name = self.result_hmaps[0].name
@@ -404,14 +404,14 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(self, result_var: ParametrizedSweep = None) -> List[ResultVar]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> List[ResultVar]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(
         self,
-        plot_callback: callable,
-        result_var: ParametrizedSweep = None,
-        row: EmptyContainer = None,
+        plot_callback: Callable,
+        result_var: ParametrizedSweep | None = None,
+        row: EmptyContainer | None = None,
     ) -> Optional[pn.Row]:
         if row is None:
             row = EmptyContainer(pn.Row(name=self.to_plot_title()))
@@ -461,14 +461,14 @@ class BenchResultBase:
 
     def map_plot_panes(
         self,
-        plot_callback: callable,
+        plot_callback: Callable,
         hv_dataset: hv.Dataset = None,
         target_dimension: int = 2,
-        result_var: ResultVar = None,
+        result_var: ResultVar | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         zip_results=False,
-        reduce: ReduceType = None,
+        reduce: ReduceType | None = None,
         **kwargs,
     ) -> Optional[pn.Row]:
         if hv_dataset is None:
@@ -497,7 +497,7 @@ class BenchResultBase:
 
     def filter(
         self,
-        plot_callback: callable,
+        plot_callback: Callable,
         plot_filter=None,
         float_range: VarRange | None = None,
         cat_range: VarRange | None = None,
@@ -508,7 +508,7 @@ class BenchResultBase:
         input_range: VarRange | None = None,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
-        result_var: ResultVar = None,
+        result_var: ResultVar | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         override=False,
@@ -568,7 +568,7 @@ class BenchResultBase:
         self,
         hv_dataset: hv.Dataset,
         result_var: ResultVar,
-        plot_callback: callable = None,
+        plot_callback: Callable | None = None,
         target_dimension: int = 1,
         **kwargs,
     ):
@@ -587,7 +587,7 @@ class BenchResultBase:
     def _to_panes_da(
         self,
         dataset: xr.Dataset,
-        plot_callback: callable = None,
+        plot_callback: Callable | None = None,
         target_dimension=1,
         horizontal=False,
         result_var=None,
@@ -690,8 +690,8 @@ class BenchResultBase:
     def select_level(
         dataset: xr.Dataset,
         level: int,
-        include_types: List[type] = None,
-        exclude_names: List[str] = None,
+        include_types: List[type] | None = None,
+        exclude_names: List[str] | None = None,
     ) -> xr.Dataset:
         """Given a dataset, return a reduced dataset that only contains data from a specified level.  By default all types of variables are filtered at the specified level.  If you only want to get a reduced level for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
@@ -729,7 +729,7 @@ class BenchResultBase:
     def to_sweep_summary(self, **kwargs):
         return self.bench_cfg.to_sweep_summary(**kwargs)
 
-    def to_title(self, panel_name: str = None) -> pn.pane.Markdown:
+    def to_title(self, panel_name: str | None = None) -> pn.pane.Markdown:
         return self.bench_cfg.to_title(panel_name)
 
     def to_description(self, width: int = 800) -> pn.pane.Markdown:

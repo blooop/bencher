@@ -79,7 +79,11 @@ class BenchPlotServer:
         )
 
     def serve(
-        self, bench_name: str, plots_instance: List[pn.panel], port: int = None, show: bool = True
+        self,
+        bench_name: str,
+        plots_instance: List[pn.panel],
+        port: int | None = None,
+        show: bool = True,
     ) -> Thread:
         """Launch a panel server to view results
 

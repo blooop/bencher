@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def convert_example_to_jupyter_notebook(
-    filename: str, output_path: str, repeats: int = None
+    filename: str, output_path: str, repeats: int | None = None
 ) -> None:
     source_path = Path(filename)
 

@@ -191,9 +191,9 @@ class ResultReference(param.Parameter):
 
     def __init__(
         self,
-        obj: Any = None,
-        container: Callable[Any, pn.pane.panel] = None,
-        default: Any = None,
+        obj: Any | None = None,
+        container: Callable[Any, pn.pane.panel] | None = None,
+        default: Any | None = None,
         units: str = "container",
         **params,
     ):
@@ -212,8 +212,8 @@ class ResultDataSet(param.Parameter):
 
     def __init__(
         self,
-        obj: Any = None,
-        default: Any = None,
+        obj: Any | None = None,
+        default: Any | None = None,
         units: str = "dataset",
         **params,
     ):

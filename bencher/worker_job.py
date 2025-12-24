@@ -35,11 +35,11 @@ class WorkerJob:
     bench_cfg_sample_hash: str
     tag: str
 
-    function_input: dict = None
-    canonical_input: Tuple[Any] = None
-    fn_inputs_sorted: List[Tuple[str, Any]] = None
-    function_input_signature_pure: str = None
-    function_input_signature_benchmark_context: str = None
+    function_input: dict | None = None
+    canonical_input: Tuple[Any] | None = None
+    fn_inputs_sorted: List[Tuple[str, Any]] | None = None
+    function_input_signature_pure: str | None = None
+    function_input_signature_benchmark_context: str | None = None
     found_in_cache: bool = False
     msgs: List[str] = field(default_factory=list)
 

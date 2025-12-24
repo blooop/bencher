@@ -6,7 +6,7 @@ from .utils import publish_file, gen_rerun_data_path
 
 
 def rrd_to_pane(
-    url: str, width: int = 500, height: int = 600, version: str = None
+    url: str, width: int = 500, height: int = 600, version: str | None = None
 ):  # pragma: no cover
     if version is None:
         version = "0.20.1"  # TODO find a better way of doing this
@@ -25,7 +25,7 @@ def publish_and_view_rrd(
     remote: str,
     branch_name,
     content_callback: callable,
-    version: str = None,
+    version: str | None = None,
 ):  # pragma: no cover
     as_html()
     publish_file(file_path, remote=remote, branch_name="test_rrd")

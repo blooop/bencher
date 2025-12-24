@@ -48,9 +48,10 @@ repos:
       # Run the formatter.
       - id: ruff-format
         types_or: [ python, pyi ]
+
   # Checks for spelling mistakes
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0 
+    rev: v2.3.0
     hooks:
       - id: codespell
         args: ['--write-changes','--skip=index.html',"--ignore-words=./codespell-ignore.txt"]

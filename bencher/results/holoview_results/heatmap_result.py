@@ -27,13 +27,13 @@ class HeatmapResult(HoloviewResult):
 
     def to_plot(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         tap_var=None,
         tap_container: pn.pane.panel = None,
-        tap_container_direction: pn.Column | pn.Row = None,
+        tap_container_direction: pn.Column | pn.Row | None = None,
         target_dimension=2,
         override: bool = True,
-        use_tap: bool = None,
+        use_tap: bool | None = None,
         **kwargs,
     ) -> Optional[pn.panel]:
         """Generates a heatmap visualization from benchmark data.
@@ -67,13 +67,13 @@ class HeatmapResult(HoloviewResult):
 
     def to_heatmap(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         tap_var=None,
         tap_container: pn.pane.panel = None,
-        tap_container_direction: pn.Column | pn.Row = None,
+        tap_container_direction: pn.Column | pn.Row | None = None,
         target_dimension=2,
         override: bool = True,
-        use_tap: bool = None,
+        use_tap: bool | None = None,
         **kwargs,
     ) -> Optional[pn.panel]:
         """Generates a heatmap visualization from benchmark data.
@@ -157,9 +157,9 @@ class HeatmapResult(HoloviewResult):
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        result_var_plots: List[Parameter] = None,
+        result_var_plots: List[Parameter] | None = None,
         container: pn.pane.panel = None,
-        tap_container_direction: pn.Column | pn.Row = None,
+        tap_container_direction: pn.Column | pn.Row | None = None,
         **kwargs,
     ) -> pn.Row:
         """Creates an interactive heatmap with tap functionality.

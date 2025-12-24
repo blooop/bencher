@@ -21,13 +21,13 @@ class BarResult(HoloviewResult):
     """
 
     def to_plot(
-        self, result_var: Parameter = None, override: bool = True, **kwargs
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs
     ) -> Optional[pn.panel]:
         return self.to_bar(result_var, override, **kwargs)
 
     def to_bar(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         target_dimension: int = 2,
         **kwargs,
@@ -81,7 +81,7 @@ class BarResult(HoloviewResult):
                 return res
         return None
 
-    def to_bar_ds(self, dataset: xr.Dataset, result_var: Parameter = None, **kwargs):
+    def to_bar_ds(self, dataset: xr.Dataset, result_var: Parameter | None = None, **kwargs):
         """Creates a bar chart from the provided dataset.
 
         Given a filtered dataset, this method generates a bar chart visualization showing
