@@ -412,10 +412,6 @@ class Bench(BenchPlotServer):
 
         self.last_run_cfg = run_cfg
 
-        assert input_vars_in is not None
-        assert result_vars_in is not None
-        assert const_vars_in is not None
-
         if isinstance(input_vars_in, dict):
             input_lists = []
             for k, v in input_vars_in.items():
