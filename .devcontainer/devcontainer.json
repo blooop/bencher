@@ -4,7 +4,7 @@
 		"dockerfile": "Dockerfile",
 		"context": "..",
 		"args": {
-			"PIXI_VERSION": "v0.41.4"
+			"PIXI_VERSION": "v0.62.2"
 		}
 	},
 	"customizations": {
@@ -13,20 +13,25 @@
 				"ms-python.python",
 				"ms-python.vscode-pylance",
 				"ms-python.pylint",
-				"njpwerner.autodocstring",
 				"charliermarsh.ruff",
 				"mhutchie.git-graph",
 				"tamasfe.even-better-toml",
-				"ryanluker.vscode-coverage-gutters"
 			]
 		}
 	},
+	"capAdd": [
+		"NET_ADMIN",
+		"NET_RAW"
+	],
 	//docker in docker is included in the pixi devcontainer example, but disabling for the moment due to security issues
-	// "features": {
-	//   "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-	// },
+	"features": {
+		//   "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
+	},
 	"mounts": [
-		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
+		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+		"source=${localWorkspaceFolderBasename}-claude-config,target=/home/vscode/.claude,type=volume"
 	],
 	"postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }

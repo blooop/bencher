@@ -187,3 +187,4 @@ docs/autoapi/*
 
 # Auto-generated documentation excluded from type checking
 docs/reference/
+.devpod/
