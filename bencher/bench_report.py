@@ -120,8 +120,8 @@ class BenchReport(BenchPlotServer):
         if run_cfg is None:
             run_cfg = BenchRunCfg()
 
-        assert isinstance(self.bench_name, str), "bench_name must be a string"
-        return BenchPlotServer().plot_server(self.bench_name, run_cfg, self.pane)
+        bench_name = self.bench_name or ""
+        return BenchPlotServer().plot_server(bench_name, run_cfg, self.pane)
 
     def publish_gh_pages(
         self,
