@@ -14,51 +14,32 @@ from bencher.bench_cfg.display_cfg import DisplayCfg
 from bencher.bench_cfg.visualization_cfg import VisualizationCfg
 from bencher.bench_cfg.time_cfg import TimeCfg
 
-# Mapping of delegated attribute names to their sub-config
-_DELEGATION_MAP = {
-    # Server
-    "port": "server",
-    "allow_ws_origin": "server",
-    "show": "server",
-    # Cache
-    "cache_results": "cache",
-    "clear_cache": "cache",
-    "cache_samples": "cache",
-    "only_hash_tag": "cache",
-    "clear_sample_cache": "cache",
-    "overwrite_sample_cache": "cache",
-    "only_plot": "cache",
-    # Execution
-    "repeats": "execution",
-    "level": "execution",
-    "executor": "execution",
-    "nightly": "execution",
-    "headless": "execution",
-    # Display
-    "summarise_constant_inputs": "display",
-    "print_bench_inputs": "display",
-    "print_bench_results": "display",
-    "print_pandas": "display",
-    "print_xarray": "display",
-    "serve_pandas": "display",
-    "serve_pandas_flat": "display",
-    "serve_xarray": "display",
-    # Visualization
-    "auto_plot": "visualization",
-    "use_holoview": "visualization",
-    "use_optuna": "visualization",
-    "render_plotly": "visualization",
-    "raise_duplicate_exception": "visualization",
-    "plot_size": "visualization",
-    "plot_width": "visualization",
-    "plot_height": "visualization",
-    # Time
-    "over_time": "time",
-    "clear_history": "time",
-    "time_event": "time",
-    "run_tag": "time",
-    "run_date": "time",
+# Sub-config classes mapped to their attribute names
+_SUBCONFIG_CLASSES = {
+    "server": BenchPlotSrvCfg,
+    "cache": CacheCfg,
+    "execution": ExecutionCfg,
+    "display": DisplayCfg,
+    "visualization": VisualizationCfg,
+    "time": TimeCfg,
 }
+
+# Param internals to skip when building delegation map
+_PARAM_INTERNALS = {"name"}
+
+
+def _build_delegation_map():
+    """Build delegation map from sub-config param definitions."""
+    delegation_map = {}
+    for sub_name, cfg_cls in _SUBCONFIG_CLASSES.items():
+        for pname in cfg_cls.param:
+            if pname in _PARAM_INTERNALS:
+                continue
+            delegation_map[pname] = sub_name
+    return delegation_map
+
+
+_DELEGATION_MAP = _build_delegation_map()
 
 
 class BenchRunCfg(param.Parameterized):
@@ -150,7 +131,8 @@ class BenchRunCfg(param.Parameterized):
             sub_name = _DELEGATION_MAP[name]
             sub_cfg = object.__getattribute__(self, sub_name)
             return getattr(sub_cfg, name)
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+        # Delegate to parent to preserve Parameterized behavior
+        return super().__getattribute__(name)
 
     def __setattr__(self, name, value):
         """Delegate attribute setting to sub-configs for backward compatibility."""

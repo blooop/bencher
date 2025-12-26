@@ -110,10 +110,28 @@ class TestBenchRunCfgComposition(unittest.TestCase):
     def test_deep_copy(self):
         """deep() creates independent copy."""
         cfg = BenchRunCfg(repeats=5)
-        copy = cfg.deep()
-        copy.repeats = 10
+        cfg_copy = cfg.deep()
+        cfg_copy.repeats = 10
         self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(copy.repeats, 10)
+        self.assertEqual(cfg_copy.repeats, 10)
+
+    def test_deep_copy_sub_configs_not_shared(self):
+        """deep() creates independent sub-config instances."""
+        cfg = BenchRunCfg()
+        cfg.cache.cache_results = False
+        cfg_copy = cfg.deep()
+
+        # Sub-config objects must not be shared
+        self.assertIsNot(cfg.cache, cfg_copy.cache)
+        self.assertIsNot(cfg.execution, cfg_copy.execution)
+        self.assertIsNot(cfg.display, cfg_copy.display)
+        self.assertIsNot(cfg.visualization, cfg_copy.visualization)
+        self.assertIsNot(cfg.time, cfg_copy.time)
+
+        # Mutating copy must not affect original
+        cfg_copy.cache.cache_results = True
+        self.assertTrue(cfg_copy.cache.cache_results)
+        self.assertFalse(cfg.cache.cache_results)
 
 
 class TestBenchCfgInheritance(unittest.TestCase):
@@ -144,6 +162,48 @@ class TestBenchCfgInheritance(unittest.TestCase):
             over_time=True,
         )
         self.assertTrue(cfg.over_time)
+
+    def test_hash_persistent_varies_with_repeats(self):
+        """hash_persistent changes when repeats differs."""
+        cfg1 = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            repeats=1,
+        )
+        cfg2 = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            repeats=2,
+        )
+        # With include_repeats=True, hashes should differ
+        self.assertNotEqual(cfg1.hash_persistent(True), cfg2.hash_persistent(True))
+        # With include_repeats=False, hashes should be equal
+        self.assertEqual(cfg1.hash_persistent(False), cfg2.hash_persistent(False))
+
+    def test_describe_benchmark_includes_delegated_fields(self):
+        """describe_benchmark output includes delegated config values."""
+        cfg = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            meta_vars=[],
+            bench_name="test",
+            title="test",
+            level=5,
+            cache_results=True,
+            cache_samples=True,
+        )
+        description = cfg.describe_benchmark()
+        # Check delegated fields appear in output
+        self.assertIn("bench level: 5", description)
+        self.assertIn("cache_results: True", description)
+        self.assertIn("cache_samples True", description)
 
 
 class TestBackwardCompatibility(unittest.TestCase):
