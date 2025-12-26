@@ -18,11 +18,11 @@ if TYPE_CHECKING:
 
 
 def create_bench(
-    sweep: "ParametrizedSweep",
-    run_cfg: "BenchRunCfg | None" = None,
-    report: "BenchReport | None" = None,
+    sweep: ParametrizedSweep,
+    run_cfg: BenchRunCfg | None = None,
+    report: BenchReport | None = None,
     name: str | None = None,
-) -> "Bench":
+) -> Bench:
     """Create a Bench instance from a ParametrizedSweep.
 
     Args:
@@ -43,10 +43,10 @@ def create_bench(
 
 
 def create_bench_runner(
-    sweep: "ParametrizedSweep",
-    run_cfg: "BenchRunCfg | None" = None,
+    sweep: ParametrizedSweep,
+    run_cfg: BenchRunCfg | None = None,
     name: str | None = None,
-) -> "BenchRunner":
+) -> BenchRunner:
     """Create a BenchRunner instance from a ParametrizedSweep.
 
     Enables fluent chaining like:
