@@ -1,5 +1,5 @@
 import logging
-from importlib.metadata import version as get_package_version
+from importlib.metadata import version as get_package_version, PackageNotFoundError
 from rerun.legacy_notebook import as_html
 import rerun as rr
 import panel as pn
@@ -10,7 +10,7 @@ def _get_rerun_version() -> str:
     """Get the installed rerun package version."""
     try:
         return get_package_version("rerun-sdk")
-    except Exception:
+    except PackageNotFoundError:
         return "0.20.1"  # Fallback version
 
 
