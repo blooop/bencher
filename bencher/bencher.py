@@ -536,7 +536,7 @@ class Bench(BenchPlotServer):
 
     def cache_results(self, bench_res: BenchResult, bench_cfg_hash: str) -> None:
         """Cache benchmark results to disk using the config hash as key."""
-        self.bench_cfg_hashes = self._collector.cache_results(bench_res, bench_cfg_hash)
+        self._collector.cache_results(bench_res, bench_cfg_hash, self.bench_cfg_hashes)
 
     # def show(self, run_cfg: BenchRunCfg = None, pane: pn.panel = None) -> None:
     #     """Launch a web server with plots of the benchmark results.

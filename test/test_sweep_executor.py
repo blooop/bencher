@@ -147,6 +147,49 @@ class TestSweepExecutor(unittest.TestCase):
         result = self.executor.get_cache_stats()
         self.assertEqual(result, "")
 
+    def test_get_cache_stats_with_cache(self):
+        """Test getting stats when cache is present."""
+        run_cfg = BenchRunCfg()
+        run_cfg.cache_samples = True
+        run_cfg.executor = Executors.SERIAL
+
+        self.executor.init_sample_cache(run_cfg)
+        result = self.executor.get_cache_stats()
+
+        # Should return non-empty stats string
+        self.assertIsInstance(result, str)
+
+    def test_convert_vars_to_params_with_max_level(self):
+        """Test max_level handling when run_cfg.level is set."""
+        run_cfg = BenchRunCfg()
+        run_cfg.level = 2
+
+        result = self.executor.convert_vars_to_params(
+            {"name": "theta", "max_level": 3},
+            "input",
+            run_cfg,
+            worker_class_instance=self.worker_instance,
+            worker_input_cfg=ExampleBenchCfg,
+        )
+
+        self.assertEqual(result.name, "theta")
+        # The parameter should have been processed with level adjustment
+
+    def test_clear_tag_from_sample_cache_lazy_init(self):
+        """Test clear_tag_from_sample_cache initializes cache if None."""
+        # sample_cache should be None initially
+        self.assertIsNone(self.executor.sample_cache)
+
+        run_cfg = BenchRunCfg()
+        run_cfg.cache_samples = True
+        run_cfg.executor = Executors.SERIAL
+
+        # This should initialize the cache lazily
+        self.executor.clear_tag_from_sample_cache("test_tag", run_cfg)
+
+        # Cache should now be initialized
+        self.assertIsNotNone(self.executor.sample_cache)
+
     # Hypothesis property-based tests
     @settings(deadline=10000)
     @given(

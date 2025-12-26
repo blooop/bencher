@@ -23,7 +23,7 @@ class TestWorkerManager(unittest.TestCase):
     def test_set_worker_from_callable(self):
         """Test setting worker from function."""
 
-        def my_worker(**kwargs):
+        def my_worker(**_kwargs):
             return {"result": 1}
 
         self.manager.set_worker(my_worker)

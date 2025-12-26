@@ -10,8 +10,7 @@ from typing import Callable, List, Optional
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
-# Customize the formatter
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def kwargs_to_input_cfg(worker_input_cfg: ParametrizedSweep, **kwargs) -> ParametrizedSweep:
@@ -66,7 +65,9 @@ class WorkerManager:
         self.worker_input_cfg: Optional[ParametrizedSweep] = None
 
     def set_worker(
-        self, worker: Callable | ParametrizedSweep, worker_input_cfg: ParametrizedSweep = None
+        self,
+        worker: Callable | ParametrizedSweep,
+        worker_input_cfg: Optional[ParametrizedSweep] = None,
     ) -> None:
         """Set the benchmark worker function and its input configuration.
 
@@ -88,7 +89,7 @@ class WorkerManager:
         if isinstance(worker, ParametrizedSweep):
             self.worker_class_instance = worker
             self.worker = self.worker_class_instance.__call__
-            logging.info("setting worker from bench class.__call__")
+            logger.info("setting worker from bench class.__call__")
         else:
             if isinstance(worker, type):
                 raise RuntimeError("This should be a class instance, not a class")
@@ -96,7 +97,7 @@ class WorkerManager:
                 self.worker = worker
             else:
                 self.worker = partial(worker_cfg_wrapper, worker, worker_input_cfg)
-            logging.info(f"setting worker {worker}")
+            logger.info(f"setting worker {worker}")
         self.worker_input_cfg = worker_input_cfg
 
     def get_result_vars(self, as_str: bool = True) -> List[str | ParametrizedSweep]:

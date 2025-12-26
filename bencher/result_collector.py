@@ -36,7 +36,7 @@ from bencher.job import JobFuture
 # Default cache size for benchmark results (100 GB)
 DEFAULT_CACHE_SIZE_BYTES = int(100e9)
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def set_xarray_multidim(
@@ -106,7 +106,7 @@ class ResultCollector:
         bench_cfg.all_vars = bench_cfg.input_vars + bench_cfg.meta_vars
 
         for i in bench_cfg.all_vars:
-            logging.info(i.sampling_str())
+            logger.info(i.sampling_str())
 
         dims_cfg = DimsCfg(bench_cfg)
         function_inputs = list(
@@ -205,17 +205,17 @@ class ResultCollector:
         """
         result = job_result.result()
         if result is not None:
-            logging.info(f"{job_result.job.job_id}:")
+            logger.info(f"{job_result.job.job_id}:")
             if bench_res.bench_cfg.print_bench_inputs:
                 for k, v in worker_job.function_input.items():
-                    logging.info(f"\t {k}:{v}")
+                    logger.info(f"\t {k}:{v}")
 
             result_dict = result if isinstance(result, dict) else result.param.values()
 
             for rv in bench_res.bench_cfg.result_vars:
                 result_value = result_dict[rv.name]
                 if bench_run_cfg.print_bench_results:
-                    logging.info(f"{rv.name}: {result_value}")
+                    logger.info(f"{rv.name}: {result_value}")
 
                 if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
                     set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
@@ -249,7 +249,9 @@ class ResultCollector:
             for rv in bench_res.result_hmaps:
                 bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
 
-    def cache_results(self, bench_res: BenchResult, bench_cfg_hash: str) -> List[str]:
+    def cache_results(
+        self, bench_res: BenchResult, bench_cfg_hash: str, bench_cfg_hashes: List[str]
+    ) -> None:
         """Cache benchmark results for future retrieval.
 
         This method stores benchmark results in the disk cache using the benchmark
@@ -259,13 +261,10 @@ class ResultCollector:
         Args:
             bench_res (BenchResult): The benchmark result to cache
             bench_cfg_hash (str): The hash value to use as the cache key
-
-        Returns:
-            List[str]: Updated list of benchmark configuration hashes
+            bench_cfg_hashes (List[str]): List to append the hash to (modified in place)
         """
-        bench_cfg_hashes = []
         with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-            logging.info(f"saving results with key: {bench_cfg_hash}")
+            logger.info(f"saving results with key: {bench_cfg_hash}")
             bench_cfg_hashes.append(bench_cfg_hash)
             # object index may not be pickleable so remove before caching
             obj_index_tmp = bench_res.object_index
@@ -276,10 +275,8 @@ class ResultCollector:
             # restore object index
             bench_res.object_index = obj_index_tmp
 
-            logging.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
+            logger.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
             c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
-
-        return bench_cfg_hashes
 
     def load_history_cache(
         self, dataset: xr.Dataset, bench_cfg_hash: str, clear_history: bool
@@ -301,17 +298,17 @@ class ResultCollector:
         """
         with Cache("cachedir/history", size_limit=self.cache_size) as c:
             if clear_history:
-                logging.info("clearing history")
+                logger.info("clearing history")
             else:
-                logging.info(f"checking historical key: {bench_cfg_hash}")
+                logger.info(f"checking historical key: {bench_cfg_hash}")
                 if bench_cfg_hash in c:
-                    logging.info("loading historical data from cache")
+                    logger.info("loading historical data from cache")
                     ds_old = c[bench_cfg_hash]
                     dataset = xr.concat([ds_old, dataset], "over_time")
                 else:
-                    logging.info("did not detect any historical data")
+                    logger.info("did not detect any historical data")
 
-            logging.info("saving data to history cache")
+            logger.info("saving data to history cache")
             c[bench_cfg_hash] = dataset
         return dataset
 
@@ -357,6 +354,6 @@ class ResultCollector:
             print_pandas (bool): If True, log the dataset converted to a pandas DataFrame
         """
         if print_xarray:
-            logging.info(bench_res.ds)
+            logger.info(bench_res.ds)
         if print_pandas:
-            logging.info(bench_res.ds.to_dataframe())
+            logger.info(bench_res.ds.to_dataframe())

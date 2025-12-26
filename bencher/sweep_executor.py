@@ -17,7 +17,7 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 # Default cache size for benchmark results (100 GB)
 DEFAULT_CACHE_SIZE_BYTES = int(100e9)
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> dict:
@@ -97,6 +97,12 @@ class SweepExecutor:
         Raises:
             TypeError: If the variable cannot be converted to a param.Parameter
         """
+        if isinstance(variable, (str, dict)):
+            if worker_class_instance is None:
+                raise TypeError(
+                    f"Cannot convert {var_type}_vars from string/dict without a worker class instance. "
+                    f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
+                )
         if isinstance(variable, str):
             variable = worker_class_instance.param.objects(instance=False)[variable]
         if isinstance(variable, dict):
