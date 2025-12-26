@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from bencher.bencher import set_xarray_multidim
+from bencher.result_collector import set_xarray_multidim
 
 
 class TestSetXarrayMultidim:
