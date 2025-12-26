@@ -151,26 +151,33 @@ class TestBackwardCompatibility(unittest.TestCase):
 
     def test_import_from_bench_cfg_module(self):
         """Classes importable from bencher.bench_cfg."""
-        from bencher.bench_cfg import DimsCfg
+        # pylint: disable=import-outside-toplevel,reimported
+        from bencher.bench_cfg import DimsCfg as DimsCfgImport
 
         self.assertIsNotNone(BenchRunCfg)
         self.assertIsNotNone(BenchCfg)
-        self.assertIsNotNone(DimsCfg)
+        self.assertIsNotNone(DimsCfgImport)
 
     def test_import_from_bencher(self):
         """Classes importable from bencher."""
-        from bencher import BenchRunCfg, BenchCfg
+        # pylint: disable=import-outside-toplevel,reimported
+        from bencher import BenchRunCfg as RunCfgImport, BenchCfg as CfgImport
 
-        self.assertIsNotNone(BenchRunCfg)
-        self.assertIsNotNone(BenchCfg)
+        self.assertIsNotNone(RunCfgImport)
+        self.assertIsNotNone(CfgImport)
 
     def test_import_new_sub_configs(self):
         """New sub-config classes are importable."""
-        from bencher.bench_cfg import CacheCfg, ExecutionCfg, DisplayCfg
+        # pylint: disable=import-outside-toplevel,reimported
+        from bencher.bench_cfg import (
+            CacheCfg as CacheImport,
+            ExecutionCfg as ExecImport,
+            DisplayCfg as DispImport,
+        )
 
-        self.assertIsNotNone(CacheCfg)
-        self.assertIsNotNone(ExecutionCfg)
-        self.assertIsNotNone(DisplayCfg)
+        self.assertIsNotNone(CacheImport)
+        self.assertIsNotNone(ExecImport)
+        self.assertIsNotNone(DispImport)
 
 
 if __name__ == "__main__":
