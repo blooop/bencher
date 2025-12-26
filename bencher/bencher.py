@@ -41,6 +41,9 @@ from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str
 from bencher.sample_order import SampleOrder
 
+# Default cache size for benchmark results (100 GB)
+DEFAULT_CACHE_SIZE_BYTES = int(100e9)
+
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -157,15 +160,15 @@ class Bench(BenchPlotServer):
                 If None, a new report will be created. Defaults to None.
 
         Raises:
-            AssertionError: If bench_name is not a string.
+            TypeError: If bench_name is not a string.
             RuntimeError: If worker is a class type instead of an instance.
         """
-        assert isinstance(bench_name, str)
+        if not isinstance(bench_name, str):
+            raise TypeError(f"bench_name must be a string, got {type(bench_name).__name__}")
         self.bench_name = bench_name
         self.worker = None
         self.worker_class_instance = None
         self.worker_input_cfg = None
-        self.worker_class_instance = None
         self.set_worker(worker, worker_input_cfg)
         self.run_cfg = run_cfg
         if report is None:
@@ -181,7 +184,7 @@ class Bench(BenchPlotServer):
         self.sample_cache = None  # store the results of each benchmark function call in a cache
         self.ds_dynamic = {}  # A dictionary to store unstructured vector datasets
 
-        self.cache_size = int(100e9)  # default to 100gb
+        self.cache_size = DEFAULT_CACHE_SIZE_BYTES
 
         # self.bench_cfg = BenchCfg()
 
@@ -414,7 +417,8 @@ class Bench(BenchPlotServer):
             for k, v in input_vars_in.items():
                 param_var = self.convert_vars_to_params(k, "input", run_cfg)
                 if isinstance(v, list):
-                    assert len(v) > 0
+                    if len(v) == 0:
+                        raise ValueError(f"Input variable '{k}' cannot be an empty list")
                     param_var = param_var.with_sample_values(v)
 
                 else:
