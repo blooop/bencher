@@ -44,9 +44,7 @@ class TestResultCollector(unittest.TestCase):
             repeats=2,
         )
 
-        bench_res, _, dims_name = self.collector.setup_dataset(
-            bench_cfg, datetime(2024, 1, 1)
-        )
+        bench_res, _, dims_name = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         self.assertIsNotNone(bench_res)
         self.assertIsNotNone(bench_res.ds)
