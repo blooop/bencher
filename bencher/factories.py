@@ -66,6 +66,4 @@ def create_bench_runner(
     if run_cfg is None:
         run_cfg = BenchRunCfg()
 
-    if name is None:
-        return BenchRunner(sweep, run_cfg=run_cfg)
-    return BenchRunner(name, sweep, run_cfg=run_cfg)
+    return BenchRunner(name=name, bench_class=sweep, run_cfg=run_cfg)
