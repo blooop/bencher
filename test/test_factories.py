@@ -9,8 +9,6 @@ from bencher.bench_cfg import BenchRunCfg
 class SimpleSweep(ParametrizedSweep):
     """Simple sweep class for testing."""
 
-    pass
-
 
 class TestCreateBench(unittest.TestCase):
     def test_create_bench_default_name(self):
@@ -52,7 +50,7 @@ class TestCreateBenchRunner(unittest.TestCase):
         """Test create_bench_runner uses provided name."""
         sweep = SimpleSweep()
         runner = create_bench_runner(sweep, name="custom_runner")
-        assert runner.bench_name == "custom_runner"
+        assert runner.name == "custom_runner"
 
 
 class TestParametrizedSweepDelegation(unittest.TestCase):
@@ -68,7 +66,7 @@ class TestParametrizedSweepDelegation(unittest.TestCase):
         """Test to_bench_runner delegates to create_bench_runner."""
         sweep = SimpleSweep()
         runner = sweep.to_bench_runner(name="test_runner")
-        assert runner.bench_name == "test_runner"
+        assert runner.name == "test_runner"
 
 
 if __name__ == "__main__":
