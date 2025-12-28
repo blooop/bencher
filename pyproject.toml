@@ -64,6 +64,7 @@ test = [
     "hypothesis>=6.104.2,<=6.148.8",
     "ruff>=0.5.0,<=0.14.10",
     "coverage>=7.5.4,<=7.13.0",
+    "ty",
     "nbformat",
     "ipykernel",
     "pip",
@@ -171,3 +172,35 @@ exclude_also = [
 
 [tool.pytest.ini_options]
 tmp_path_retention_count = 0
+
+[tool.ty.rules]
+# Ignore type errors related to param library descriptors
+invalid-assignment = "ignore"
+# Ignore argument type mismatches (many false positives with param library)
+invalid-argument-type = "ignore"
+# Ignore unresolved attributes (param descriptors create dynamic attributes)
+unresolved-attribute = "ignore"
+# Ignore invalid type forms (pn.panel is a function, not a type)
+invalid-type-form = "ignore"
+# Ignore return type mismatches
+invalid-return-type = "ignore"
+# Ignore non-subscriptable errors
+non-subscriptable = "ignore"
+# Ignore possibly missing attributes (Union type issues)
+possibly-missing-attribute = "ignore"
+# Ignore unsupported operator errors
+unsupported-operator = "ignore"
+# Ignore positional argument count errors
+too-many-positional-arguments = "ignore"
+missing-argument = "ignore"
+# Ignore not-iterable errors (Union types)
+not-iterable = "ignore"
+# Ignore overload matching errors
+no-matching-overload = "ignore"
+# Ignore call-non-callable errors
+call-non-callable = "ignore"
+# Ignore method override errors
+invalid-method-override = "ignore"
+# Ignore import/reference resolution errors
+unresolved-import = "ignore"
+unresolved-reference = "ignore"

@@ -37,8 +37,8 @@ if __name__ == "__main__":
 
     def simple(
         run_cfg: bch.BenchRunCfg | None = None, report: bch.BenchReport | None = None
-    ) -> bch.Bench:  # pylint: disable=unused-argument
-        bench = BenchPolygons().to_bench(bch.BenchRunCfg(level=4), report=report)
+    ) -> bch.Bench:
+        bench = BenchPolygons().to_bench(run_cfg or bch.BenchRunCfg(level=4), report=report)
         bench.plot_sweep(input_vars=["sides"])
         bench.plot_sweep(input_vars=["sides", "color"])
 
