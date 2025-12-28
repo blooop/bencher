@@ -33,7 +33,7 @@ class VolumeResult(BenchResultBase):
 
     def to_volume(
         self,
-        result_var: Parameter = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         target_dimension: int = 3,
         **kwargs,

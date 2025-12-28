@@ -15,7 +15,7 @@ def _get_rerun_version() -> str:
 
 
 def rrd_to_pane(
-    url: str, width: int = 500, height: int = 600, version: str = None
+    url: str, width: int = 500, height: int = 600, version: str | None = None
 ):  # pragma: no cover
     if version is None:
         version = _get_rerun_version()
@@ -34,7 +34,7 @@ def publish_and_view_rrd(
     remote: str,
     branch_name,
     content_callback: callable,
-    version: str = None,
+    version: str | None = None,
 ):  # pragma: no cover
     as_html()
     publish_file(file_path, remote=remote, branch_name="test_rrd")

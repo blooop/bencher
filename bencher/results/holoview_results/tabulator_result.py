@@ -24,7 +24,7 @@ class TabulatorResult(HoloviewResult):
         """
         return self.to_tabulator(**kwargs)
 
-    def to_tabulator(self, result_var: Parameter = None, **kwargs) -> pn.widgets.Tabulator:
+    def to_tabulator(self, result_var: Parameter | None = None, **kwargs) -> pn.widgets.Tabulator:
         """Generates a Tabulator widget from benchmark data.
 
         This is a convenience method that calls to_tabulator_ds() with the same parameters.

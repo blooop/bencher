@@ -15,7 +15,7 @@ from bencher.variables.results import ResultVar
 
 class HistogramResult(VideoResult):
     def to_plot(
-        self, result_var: Parameter = None, target_dimension: int = 2, **kwargs
+        self, result_var: Parameter | None = None, target_dimension: int = 2, **kwargs
     ) -> Optional[pn.pane.Pane]:
         """Generates a histogram plot from benchmark data.
 

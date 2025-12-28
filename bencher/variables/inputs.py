@@ -37,7 +37,7 @@ class SweepSelector(Selector, SweepBase):
 
     __slots__ = shared_slots
 
-    def __init__(self, units: str = "ul", samples: int = None, **params):
+    def __init__(self, units: str = "ul", samples: int | None = None, **params):
         SweepBase.__init__(self)
         Selector.__init__(self, **params)
 
@@ -161,7 +161,9 @@ class BoolSweep(SweepSelector):
         samples (int): The number of samples to take (typically 2 for booleans)
     """
 
-    def __init__(self, units: str = "ul", samples: int = None, default: bool = True, **params):
+    def __init__(
+        self, units: str = "ul", samples: int | None = None, default: bool = True, **params
+    ):
         SweepSelector.__init__(
             self,
             units=units,
@@ -187,7 +189,7 @@ class StringSweep(SweepSelector):
         self,
         string_list: List[str],
         units: str = "ul",
-        samples: int = None,
+        samples: int | None = None,
         **params,
     ):
         SweepSelector.__init__(
@@ -250,7 +252,7 @@ class EnumSweep(SweepSelector):
     __slots__ = shared_slots
 
     def __init__(
-        self, enum_type: Enum | List[Enum], units: str = "ul", samples: int = None, **params
+        self, enum_type: Enum | List[Enum], units: str = "ul", samples: int | None = None, **params
     ):
         # The enum can either be an Enum type or a list of enums
         list_of_enums = isinstance(enum_type, list)
@@ -342,8 +344,8 @@ class YamlSweep(SweepSelector):
         self,
         yaml_path: str | Path,
         units: str = "ul",
-        samples: int = None,
-        default_key: str = None,
+        samples: int | None = None,
+        default_key: str | None = None,
         **params,
     ):
         path = Path(yaml_path)
@@ -442,7 +444,11 @@ class IntSweep(Integer, SweepBase):
     __slots__ = shared_slots + ["sample_values"]
 
     def __init__(
-        self, units: str = "ul", samples: int = None, sample_values: List[int] = None, **params
+        self,
+        units: str = "ul",
+        samples: int | None = None,
+        sample_values: List[int] | None = None,
+        **params,
     ):
         SweepBase.__init__(self)
         Integer.__init__(self, **params)
@@ -519,8 +525,8 @@ class FloatSweep(Number, SweepBase):
         self,
         units: str = "ul",
         samples: int = 10,
-        sample_values: List[float] = None,
-        step: float = None,
+        sample_values: List[float] | None = None,
+        step: float | None = None,
         **params,
     ):
         SweepBase.__init__(self)
@@ -575,7 +581,10 @@ def box(name: str, center: float, width: float) -> FloatSweep:
 
 
 def p(
-    name: str, values: List[Any] = None, samples: int = None, max_level: int = None
+    name: str,
+    values: List[Any] | None = None,
+    samples: int | None = None,
+    max_level: int | None = None,
 ) -> Dict[str, Any]:
     """
     Create a parameter dictionary with optional values, samples, and max_level.

@@ -58,7 +58,9 @@ surf_x_max = 0.5
 surf_y_max = -0.2
 
 
-def example_floats2D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None) -> bch.Bench:
+def example_floats2D_workflow(
+    run_cfg: bch.BenchRunCfg, bench: bch.Bench | None = None
+) -> bch.Bench:
     """Example of how to perform a 3D floating point parameter sweep
 
     Args:
@@ -93,7 +95,9 @@ def example_floats2D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None)
     return bench
 
 
-def example_floats3D_workflow(run_cfg: bch.BenchRunCfg, bench: bch.Bench = None) -> bch.Bench:
+def example_floats3D_workflow(
+    run_cfg: bch.BenchRunCfg, bench: bch.Bench | None = None
+) -> bch.Bench:
     """Example of how to perform a 3D floating point parameter sweep
 
     Args:

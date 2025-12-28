@@ -110,7 +110,7 @@ class ParametrizedSweep(Parameterized):
     @classmethod
     def get_input_defaults(
         cls,
-        override_defaults: List = None,
+        override_defaults: List | None = None,
     ) -> List[Tuple[Parameter, Any]]:
         inp = cls.get_inputs_only()
         if override_defaults is None:
@@ -145,7 +145,7 @@ class ParametrizedSweep(Parameterized):
 
     @classmethod
     def get_inputs_as_dims(
-        self, compute_values=False, remove_dims: str | List[str] = None
+        self, compute_values=False, remove_dims: str | List[str] | None = None
     ) -> List[hv.Dimension]:
         inputs = self.get_inputs_only()
 
@@ -158,7 +158,11 @@ class ParametrizedSweep(Parameterized):
         return [iv.as_dim(compute_values) for iv in inputs]
 
     def to_dynamic_map(
-        self, callback=None, name=None, remove_dims: str | List[str] = None, result_var: str = None
+        self,
+        callback=None,
+        name=None,
+        remove_dims: str | List[str] | None = None,
+        result_var: str | None = None,
     ) -> hv.DynamicMap:
         if callback is None:
             callback = self.__call__
@@ -178,13 +182,13 @@ class ParametrizedSweep(Parameterized):
             name=name,
         ).opts(shared_axes=False, framewise=True, width=1000, height=1000)
 
-    def to_gui(self, result_var: str = None, **kwargs):  # pragma: no cover
+    def to_gui(self, result_var: str | None = None, **kwargs):  # pragma: no cover
         main = pn.Row(
             self.to_dynamic_map(result_var=result_var, **kwargs),
         )
         main.show()
 
-    def to_holomap(self, callback, remove_dims: str | List[str] = None) -> hv.DynamicMap:
+    def to_holomap(self, callback, remove_dims: str | List[str] | None = None) -> hv.DynamicMap:
         return hv.HoloMap(
             hv.DynamicMap(
                 callback=callback,
