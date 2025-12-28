@@ -1,0 +1,50 @@
+#!/bin/bash
+# SessionStart hook for Claude Code online environment
+# This script sets up the Python development environment using pixi
+
+set -e
+
+echo "🚀 Setting up Python Template environment..."
+
+# Check if pixi is installed
+if ! command -v pixi &> /dev/null; then
+    echo "📦 Installing pixi..."
+    curl -fsSL https://pixi.sh/install.sh | bash
+
+    # Add pixi to PATH for current session
+    export PATH="$HOME/.pixi/bin:$PATH"
+
+    # Source bashrc to get pixi in PATH (if bashrc was updated)
+    [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
+
+    echo "✅ Pixi installed successfully"
+else
+    echo "✅ Pixi already installed"
+fi
+
+# Ensure pixi is in PATH for this session
+export PATH="$HOME/.pixi/bin:$PATH"
+
+# Install project dependencies
+echo "📦 Installing project dependencies..."
+pixi install
+
+# Run pre-commit installation
+echo "🔧 Setting up pre-commit hooks..."
+pixi run pre-commit install || echo "⚠️  Pre-commit installation skipped (optional)"
+
+# Set up git merge driver for lockfiles
+echo "🔧 Configuring git merge driver..."
+pixi run setup-git-merge-driver || true
+
+echo "✅ Environment setup complete!"
+echo ""
+echo "Available pixi tasks:"
+pixi task list
+echo ""
+echo "💡 Common commands:"
+echo "  pixi run test        - Run tests"
+echo "  pixi run lint        - Run linters"
+echo "  pixi run format      - Format code"
+echo "  pixi run ci          - Run full CI pipeline"
+echo ""
