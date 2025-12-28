@@ -139,21 +139,19 @@
 				"reveal": "always"
 			},
 		},
-		{
-			"label": "set git config recurse submodules",
-			"type": "shell",
-			"linux": {
-				"command": [
-					" git config submodule.recurse true"
-				],
-			},
-			"runOptions": {
-				"runOn": "folderOpen"
-			},
-			"presentation": {
-				"reveal": "silent"
-			},
-		},
+		// {
+		//     "label": "set git config recurse submodules",
+		//     "type": "shell",           
+		//     "linux": {
+		//         "command": [" git config submodule.recurse true"],
+		//     },
+		//     "runOptions": {
+		//         "runOn": "folderOpen"
+		//     },
+		//     "presentation": {
+		//         "reveal": "silent"
+		//     },
+		// },	
 	],
 	"inputs": [
 		{

@@ -21,10 +21,21 @@
 		}
 	},
 	"features": {
+		"ghcr.io/devcontainers/features/node:1": {},
+		"./claude-code": {}
 		// "ghcr.io/devcontainers/features/docker-in-docker:2": {}
 		// "ghcr.io/devcontainers/features/common-utils:2": {},
 		// "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
+	},
+	"runArgs": [
+		"--network=host"
+	],
+	"containerEnv": {
+		"CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+		"XDG_CONFIG_HOME": "/home/vscode/.config",
+		"XDG_CACHE_HOME": "/home/vscode/.cache",
+		"XDG_DATA_HOME": "/home/vscode/.local/share"
 	},
 	"mounts": [
 		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
