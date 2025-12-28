@@ -23,9 +23,9 @@
 		},
 		{
 			"label": "autoformat",
-			"detail": "Use ruff and black to automatically fix and format the code",
+			"detail": "Use ruff to automatically fix and format the code",
 			"type": "shell",
-			"command": "pixi run fmt"
+			"command": "pixi run format"
 		},
 		{
 			"label": "lint",
@@ -97,22 +97,12 @@
 			"detail": "Pull any changes from the template repo into this repo by adding it as a remote. The remote is removed at the end of the command.  You may need to resolve merge conflicts",
 			"type": "shell",
 			"command": "scripts/update_from_template.sh"
-		},		
+		},
 		{
 			"label": "rename template project",
 			"detail": "Replaces all instances of the template project name with a new name. ",
 			"type": "shell",
 			"command": "scripts/rename_project.sh '${input:new_project_name}' '${input:new_author_name}'  '${input:new_author_email}'  '${input:github_username}'"
-		},		
-		{
-			"label": "flit install",
-			"type": "shell",
-			"command": "flit install --symlink"
-		},
-		{
-			"label": "flit publish",
-			"type": "shell",
-			"command": "flit publish"
 		},
 		{
 			"label": "setup: host",
@@ -137,18 +127,18 @@
 			"command": "scripts/launch_vscode.sh --nocache"
 		},
 		{
-            "label": "Install All Recommended Extensions",
-            "type": "shell",           
-            "linux": {
-                "command": "if [ -f /.dockerenv ] || grep -q 'docker\\|lxc' /proc/1/cgroup 2>/dev/null; then echo 'Docker container detected, installing extensions...'; cat .vscode/extensions.json | jq .recommendations[] | xargs -n 1 code . --install-extension; else echo 'Not in Docker container, skipping extension installation'; fi"
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            },
-            "presentation": {
-                "reveal": "always"
-            },
-        },	
+			"label": "Install All Recommended Extensions",
+			"type": "shell",
+			"linux": {
+				"command": "if [ -f /.dockerenv ] || grep -q 'docker\\|lxc' /proc/1/cgroup 2>/dev/null; then echo 'Docker container detected, installing extensions...'; cat .vscode/extensions.json | jq .recommendations[] | xargs -n 1 code . --install-extension; else echo 'Not in Docker container, skipping extension installation'; fi"
+			},
+			"runOptions": {
+				"runOn": "folderOpen"
+			},
+			"presentation": {
+				"reveal": "always"
+			},
+		},
 		{
 			"label": "set git config recurse submodules",
 			"type": "shell",

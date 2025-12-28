@@ -9,29 +9,25 @@
 	},
 	"customizations": {
 		"vscode": {
+			"settings": {},
 			"extensions": [
 				"ms-python.python",
 				"ms-python.vscode-pylance",
-				"ms-python.pylint",
+				"jjjermiah.pixi-vscode",
 				"charliermarsh.ruff",
-				"mhutchie.git-graph",
 				"tamasfe.even-better-toml",
+				"mhutchie.git-graph"
 			]
 		}
 	},
-	"capAdd": [
-		"NET_ADMIN",
-		"NET_RAW"
-	],
-	//docker in docker is included in the pixi devcontainer example, but disabling for the moment due to security issues
 	"features": {
-		//   "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+		// "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+		// "ghcr.io/devcontainers/features/common-utils:2": {},
+		// "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
 	},
 	"mounts": [
-		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
-		"source=${localWorkspaceFolderBasename}-claude-config,target=/home/vscode/.claude,type=volume"
+		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
 	],
 	"postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }
