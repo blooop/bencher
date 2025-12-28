@@ -2,6 +2,9 @@
 cachedir/
 unique_names/
 
+# Generated HTML output files
+index.html
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

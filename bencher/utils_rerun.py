@@ -1,15 +1,24 @@
 import logging
+from importlib.metadata import version as get_package_version, PackageNotFoundError
 from rerun.legacy_notebook import as_html
 import rerun as rr
 import panel as pn
 from .utils import publish_file, gen_rerun_data_path
 
 
+def _get_rerun_version() -> str:
+    """Get the installed rerun package version."""
+    try:
+        return get_package_version("rerun-sdk")
+    except PackageNotFoundError:
+        return "0.20.1"  # Fallback version
+
+
 def rrd_to_pane(
     url: str, width: int = 500, height: int = 600, version: str | None = None
 ):  # pragma: no cover
     if version is None:
-        version = "0.20.1"  # TODO find a better way of doing this
+        version = _get_rerun_version()
     return pn.pane.HTML(
         f'<iframe src="https://app.rerun.io/version/{version}/?url={url}" width={width} height={height}></iframe>'
     )

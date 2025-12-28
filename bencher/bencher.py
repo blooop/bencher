@@ -5,7 +5,6 @@ from itertools import product, combinations
 from param import Parameter
 from typing import Callable, List, Optional, Tuple, Any
 from copy import deepcopy
-import numpy as np
 import param
 import xarray as xr
 from diskcache import Cache
@@ -15,31 +14,25 @@ import panel as pn
 
 from bencher.worker_job import WorkerJob
 
-from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
+from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 
 from bencher.variables.inputs import IntSweep
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.results import (
-    XARRAY_MULTIDIM_RESULT_TYPES,
-    ResultVar,
-    ResultBool,
-    ResultVec,
-    ResultHmap,
-    ResultPath,
-    ResultVideo,
-    ResultImage,
-    ResultString,
-    ResultContainer,
-    ResultReference,
-    ResultDataSet,
-)
+from bencher.variables.results import ResultHmap
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str
 from bencher.sample_order import SampleOrder
+
+# Import helper classes
+from bencher.worker_manager import WorkerManager
+from bencher.result_collector import ResultCollector
+from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
+
+# Default cache size for benchmark results (100 GB)
+DEFAULT_CACHE_SIZE_BYTES = int(100e9)
 
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -48,83 +41,6 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 for handler in logging.root.handlers:
     handler.setFormatter(formatter)
-
-
-def set_xarray_multidim(
-    data_array: xr.DataArray, index_tuple: Tuple[int, ...], value: Any
-) -> xr.DataArray:
-    """Set a value in a multi-dimensional xarray at the specified index position.
-
-    This function sets a value in an N-dimensional xarray using dynamic indexing
-    that works for any number of dimensions.
-
-    Args:
-        data_array (xr.DataArray): The data array to modify
-        index_tuple (Tuple[int, ...]): The index coordinates as a tuple
-        value (Any): The value to set at the specified position
-
-    Returns:
-        xr.DataArray: The modified data array
-    """
-    data_array[index_tuple] = value
-    return data_array
-
-
-def kwargs_to_input_cfg(worker_input_cfg: ParametrizedSweep, **kwargs) -> ParametrizedSweep:
-    """Create a configured instance of a ParametrizedSweep with the provided keyword arguments.
-
-    Args:
-        worker_input_cfg (ParametrizedSweep): The ParametrizedSweep class to instantiate
-        **kwargs: Keyword arguments to update the configuration with
-
-    Returns:
-        ParametrizedSweep: A configured instance of the worker_input_cfg class
-    """
-    input_cfg = worker_input_cfg()
-    input_cfg.param.update(kwargs)
-    return input_cfg
-
-
-def worker_cfg_wrapper(worker: Callable, worker_input_cfg: ParametrizedSweep, **kwargs) -> dict:
-    """Wrap a worker function to accept keyword arguments instead of a config object.
-
-    This wrapper creates an instance of the worker_input_cfg class, updates it with the
-    provided keyword arguments, and passes it to the worker function.
-
-    Args:
-        worker (Callable): The worker function that expects a config object
-        worker_input_cfg (ParametrizedSweep): The class defining the configuration
-        **kwargs: Keyword arguments to update the configuration with
-
-    Returns:
-        dict: The result of calling the worker function with the configured input
-    """
-    input_cfg = kwargs_to_input_cfg(worker_input_cfg, **kwargs)
-    return worker(input_cfg)
-
-
-def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> dict:
-    """Prepare keyword arguments and pass them to a worker function.
-
-    This wrapper helps filter out metadata parameters that should not be passed
-    to the worker function (like 'repeat', 'over_time', and 'time_event').
-
-    Args:
-        worker (Callable): The worker function to call
-        bench_cfg (BenchCfg): Benchmark configuration with parameters like pass_repeat
-        **kwargs: The keyword arguments to filter and pass to the worker
-
-    Returns:
-        dict: The result from the worker function
-    """
-    function_input_deep = deepcopy(kwargs)
-    if not bench_cfg.pass_repeat:
-        function_input_deep.pop("repeat")
-    if "over_time" in function_input_deep:
-        function_input_deep.pop("over_time")
-    if "time_event" in function_input_deep:
-        function_input_deep.pop("time_event")
-    return worker(**function_input_deep)
 
 
 class Bench(BenchPlotServer):
@@ -157,17 +73,22 @@ class Bench(BenchPlotServer):
                 If None, a new report will be created. Defaults to None.
 
         Raises:
-            AssertionError: If bench_name is not a string.
+            TypeError: If bench_name is not a string.
             RuntimeError: If worker is a class type instead of an instance.
         """
-        assert isinstance(bench_name, str)
+        if not isinstance(bench_name, str):
+            raise TypeError(f"bench_name must be a string, got {type(bench_name).__name__}")
         self.bench_name = bench_name
-        self.worker = None
-        self.worker_class_instance = None
-        self.worker_input_cfg = None
-        self.worker_class_instance = None
-        if worker is not None:
-            self.set_worker(worker, worker_input_cfg)
+
+        # Initialize helper classes
+        self.cache_size = DEFAULT_CACHE_SIZE_BYTES
+        self._worker_mgr = WorkerManager()
+        self._executor = SweepExecutor(cache_size=self.cache_size)
+        self._collector = ResultCollector(cache_size=self.cache_size)
+
+        # Set worker using the manager
+        self.set_worker(worker, worker_input_cfg)
+
         self.run_cfg = run_cfg
         if report is None:
             self.report = BenchReport(self.bench_name)
@@ -179,12 +100,6 @@ class Bench(BenchPlotServer):
 
         self.bench_cfg_hashes = []  # a list of hashes that point to benchmark results
         self.last_run_cfg = None  # cached run_cfg used to pass to the plotting function
-        self.sample_cache = None  # store the results of each benchmark function call in a cache
-        self.ds_dynamic = {}  # A dictionary to store unstructured vector datasets
-
-        self.cache_size = int(100e9)  # default to 100gb
-
-        # self.bench_cfg = BenchCfg()
 
         # Maybe put this in SweepCfg
         self.input_vars = None
@@ -192,6 +107,26 @@ class Bench(BenchPlotServer):
         self.const_vars = None
         self.plot_callbacks = []
         self.plot = True
+
+    @property
+    def sample_cache(self):
+        """Access the sample cache from the executor (for backward compatibility)."""
+        return self._executor.sample_cache
+
+    @sample_cache.setter
+    def sample_cache(self, value):
+        """Set the sample cache on the executor (for backward compatibility)."""
+        self._executor.sample_cache = value
+
+    @property
+    def ds_dynamic(self):
+        """Access the dynamic dataset from the collector (for backward compatibility)."""
+        return self._collector.ds_dynamic
+
+    @ds_dynamic.setter
+    def ds_dynamic(self, value):
+        """Set the dynamic dataset on the collector (for backward compatibility)."""
+        self._collector.ds_dynamic = value
 
     def add_plot_callback(self, callback: Callable[[BenchResult], pn.panel], **kwargs) -> None:
         """Add a plotting callback to be called on benchmark results.
@@ -232,20 +167,11 @@ class Bench(BenchPlotServer):
         Raises:
             RuntimeError: If worker is a class type instead of an instance.
         """
-        if isinstance(worker, ParametrizedSweep):
-            self.worker_class_instance = worker
-            # self.worker_class_type = type(worker)
-            self.worker = self.worker_class_instance.__call__
-            logging.info("setting worker from bench class.__call__")
-        else:
-            if isinstance(worker, type):
-                raise RuntimeError("This should be a class instance, not a class")
-            if worker_input_cfg is None:
-                self.worker = worker
-            else:
-                self.worker = partial(worker_cfg_wrapper, worker, worker_input_cfg)
-            logging.info(f"setting worker {worker}")
-        self.worker_input_cfg = worker_input_cfg
+        self._worker_mgr.set_worker(worker, worker_input_cfg)
+        # Expose worker attributes for backward compatibility
+        self.worker = self._worker_mgr.worker
+        self.worker_class_instance = self._worker_mgr.worker_class_instance
+        self.worker_input_cfg = self._worker_mgr.worker_input_cfg
 
     def sweep_sequential(
         self,
@@ -417,7 +343,8 @@ class Bench(BenchPlotServer):
             for k, v in input_vars_in.items():
                 param_var = self.convert_vars_to_params(k, "input", run_cfg)
                 if isinstance(v, list):
-                    assert len(v) > 0
+                    if len(v) == 0:
+                        raise ValueError(f"Input variable '{k}' cannot be an empty list")
                     param_var = param_var.with_sample_values(v)
 
                 else:
@@ -597,78 +524,21 @@ class Bench(BenchPlotServer):
         self.results.append(bench_res)
         return bench_res
 
+    # TODO: Remove thin wrapper methods in major version bump - callers can use helpers directly
     def convert_vars_to_params(
         self,
         variable: param.Parameter | str | dict | tuple,
         var_type: str,
         run_cfg: Optional[BenchRunCfg],
     ) -> param.Parameter:
-        """Convert various input formats to param.Parameter objects.
-
-        This method handles different ways of specifying variables in benchmark sweeps,
-        including direct param.Parameter objects, string names of parameters, or dictionaries
-        with parameter configuration details. It ensures all inputs are properly converted
-        to param.Parameter objects with the correct configuration.
-
-        Args:
-            variable (param.Parameter | str | dict | tuple): The variable to convert, can be:
-                - param.Parameter: Already a parameter object
-                - str: Name of a parameter in the worker_class_instance
-                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
-                - tuple: Tuple that can be converted to a parameter
-            var_type (str): Type of variable ('input', 'result', or 'const') for error messages
-            run_cfg (Optional[BenchRunCfg]): Run configuration for level settings
-
-        Returns:
-            param.Parameter: The converted parameter object
-
-        Raises:
-            TypeError: If the variable cannot be converted to a param.Parameter
-        """
-        if isinstance(variable, str):
-            variable = self.worker_class_instance.param.objects(instance=False)[variable]
-        if isinstance(variable, dict):
-            param_var = self.worker_class_instance.param.objects(instance=False)[variable["name"]]
-            if variable.get("values"):
-                param_var = param_var.with_sample_values(variable["values"])
-
-            if variable.get("samples"):
-                param_var = param_var.with_samples(variable["samples"])
-            if variable.get("max_level"):
-                if run_cfg is not None:
-                    param_var = param_var.with_level(run_cfg.level, variable["max_level"])
-            variable = param_var
-        if not isinstance(variable, param.Parameter):
-            raise TypeError(
-                f"You need to use {var_type}_vars =[{self.worker_input_cfg}.param.your_variable], instead of {var_type}_vars =[{self.worker_input_cfg}.your_variable]"
-            )
-        return variable
+        """Convert various input formats (str, dict, tuple) to param.Parameter objects."""
+        return self._executor.convert_vars_to_params(
+            variable, var_type, run_cfg, self.worker_class_instance, self.worker_input_cfg
+        )
 
     def cache_results(self, bench_res: BenchResult, bench_cfg_hash: str) -> None:
-        """Cache benchmark results for future retrieval.
-
-        This method stores benchmark results in the disk cache using the benchmark
-        configuration hash as the key. It temporarily removes non-pickleable objects
-        from the benchmark result before caching.
-
-        Args:
-            bench_res (BenchResult): The benchmark result to cache
-            bench_cfg_hash (str): The hash value to use as the cache key
-        """
-        with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-            logging.info(f"saving results with key: {bench_cfg_hash}")
-            self.bench_cfg_hashes.append(bench_cfg_hash)
-            # object index may not be pickleable so remove before caching
-            obj_index_tmp = bench_res.object_index
-            bench_res.object_index = []
-
-            c[bench_cfg_hash] = bench_res
-
-            # restore object index
-            bench_res.object_index = obj_index_tmp
-
-            logging.info(f"saving benchmark: {self.bench_name}")
-            c[self.bench_name] = self.bench_cfg_hashes
+        """Cache benchmark results to disk using the config hash as key."""
+        self._collector.cache_results(bench_res, bench_cfg_hash, self.bench_cfg_hashes)
 
     # def show(self, run_cfg: BenchRunCfg | None = None, pane: pn.panel = None) -> None:
     #     """Launch a web server with plots of the benchmark results.
@@ -697,159 +567,24 @@ class Bench(BenchPlotServer):
     def load_history_cache(
         self, dataset: xr.Dataset, bench_cfg_hash: str, clear_history: bool
     ) -> xr.Dataset:
-        """Load historical data from a cache if over_time is enabled.
-
-        This method is used to retrieve and concatenate historical benchmark data from the cache
-        when tracking performance over time. If clear_history is True, it will clear any existing
-        historical data instead of loading it.
-
-        Args:
-            dataset (xr.Dataset): Freshly calculated benchmark data for the current run
-            bench_cfg_hash (str): Hash of the input variables used to identify cached data
-            clear_history (bool): If True, clears historical data instead of loading it
-
-        Returns:
-            xr.Dataset: Combined dataset with both historical and current benchmark data,
-                or just the current data if no history exists or history is cleared
-        """
-        with Cache("cachedir/history", size_limit=self.cache_size) as c:
-            if clear_history:
-                logging.info("clearing history")
-            else:
-                logging.info(f"checking historical key: {bench_cfg_hash}")
-                if bench_cfg_hash in c:
-                    logging.info("loading historical data from cache")
-                    ds_old = c[bench_cfg_hash]
-                    dataset = xr.concat([ds_old, dataset], "over_time")
-                else:
-                    logging.info("did not detect any historical data")
-
-            logging.info("saving data to history cache")
-            c[bench_cfg_hash] = dataset
-        return dataset
+        """Load and concatenate historical benchmark data from cache."""
+        return self._collector.load_history_cache(dataset, bench_cfg_hash, clear_history)
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
     ) -> tuple[BenchResult, List[tuple], List[str]]:
-        """Initialize an n-dimensional xarray dataset from benchmark configuration parameters.
-
-        This function creates the data structures needed to store benchmark results based on
-        the provided configuration. It sets up the xarray dimensions, coordinates, and variables
-        based on input variables and result variables.
-
-        Args:
-            bench_cfg (BenchCfg): Configuration defining the benchmark parameters, inputs, and results
-            time_src (datetime | str): Timestamp or event name for the benchmark run
-
-        Returns:
-            tuple[BenchResult, List[tuple], List[str]]:
-                - A BenchResult object with the initialized dataset
-                - A list of function input tuples (index, value pairs)
-                - A list of dimension names for the dataset
-        """
-        if time_src is None:
-            time_src = datetime.now()
-        bench_cfg.meta_vars = self.define_extra_vars(bench_cfg, bench_cfg.repeats, time_src)
-
-        bench_cfg.all_vars = bench_cfg.input_vars + bench_cfg.meta_vars
-        # bench_cfg.all_vars = bench_cfg.iv_time + bench_cfg.input_vars +[ bench_cfg.iv_repeat]
-        # bench_cfg.all_vars = [ bench_cfg.iv_repeat] +bench_cfg.input_vars + bench_cfg.iv_time
-
-        for i in bench_cfg.all_vars:
-            logging.info(i.sampling_str())
-
-        dims_cfg = DimsCfg(bench_cfg)
-        function_inputs = list(
-            zip(product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges))
-        )
-        # xarray stores K N-dimensional arrays of data.  Each array is named and in this case we have an ND array for each result variable
-        data_vars = {}
-        dataset_list = []
-
-        for rv in bench_cfg.result_vars:
-            if isinstance(rv, (ResultVar, ResultBool)):
-                result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(rv, (ResultReference, ResultDataSet)):
-                result_data = np.full(dims_cfg.dims_size, -1, dtype=int)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(
-                rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer)
-            ):
-                result_data = np.full(dims_cfg.dims_size, "NAN", dtype=object)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-
-            elif type(rv) is ResultVec:
-                for i in range(rv.size):
-                    result_data = np.full(dims_cfg.dims_size, np.nan)
-                    data_vars[rv.index_name(i)] = (dims_cfg.dims_name, result_data)
-
-        bench_res = BenchResult(bench_cfg)
-        bench_res.ds = xr.Dataset(data_vars=data_vars, coords=dims_cfg.coords)
-        bench_res.ds_dynamic = self.ds_dynamic
-        bench_res.dataset_list = dataset_list
-        bench_res.setup_object_index()
-
-        return bench_res, function_inputs, dims_cfg.dims_name
+        """Initialize n-dimensional xarray dataset for storing benchmark results."""
+        return self._collector.setup_dataset(bench_cfg, time_src)
 
     def define_const_inputs(self, const_vars: List[Tuple[param.Parameter, Any]]) -> Optional[dict]:
-        """Convert constant variable tuples into a dictionary of name-value pairs.
-
-        Args:
-            const_vars (List[Tuple[param.Parameter, Any]]): List of (parameter, value) tuples
-                representing constant parameters and their values
-
-        Returns:
-            Optional[dict]: Dictionary mapping parameter names to their constant values,
-                or None if const_vars is None
-        """
-        constant_inputs = None
-        if const_vars is not None:
-            const_vars, constant_values = [
-                [i for i, j in const_vars],
-                [j for i, j in const_vars],
-            ]
-
-            constant_names = [i.name for i in const_vars]
-            constant_inputs = dict(zip(constant_names, constant_values))
-        return constant_inputs
+        """Convert constant variable tuples into a name-value dictionary."""
+        return self._executor.define_const_inputs(const_vars)
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
     ) -> List[IntSweep]:
-        """Define extra meta variables for tracking benchmark execution details.
-
-        This function creates variables that aren't passed to the worker function but are stored
-        in the n-dimensional array to provide context about the benchmark, such as the number of
-        repeat measurements and timestamps.
-
-        Args:
-            bench_cfg (BenchCfg): The benchmark configuration to add variables to
-            repeats (int): The number of times each sample point should be measured
-            time_src (datetime | str): Either a timestamp or a string event name for temporal tracking
-
-        Returns:
-            List[IntSweep]: A list of additional parameter variables to include in the benchmark
-        """
-        bench_cfg.iv_repeat = IntSweep(
-            default=repeats,
-            bounds=[1, repeats],
-            samples=repeats,
-            units="repeats",
-            doc="The number of times a sample was measured",
-        )
-        bench_cfg.iv_repeat.name = "repeat"
-        extra_vars = [bench_cfg.iv_repeat]
-
-        if bench_cfg.over_time:
-            if isinstance(time_src, str):
-                iv_over_time = TimeEvent(time_src)
-            else:
-                iv_over_time = TimeSnapshot(time_src)
-            iv_over_time.name = "over_time"
-            extra_vars.append(iv_over_time)
-            bench_cfg.iv_time = [iv_over_time]
-        return extra_vars
+        """Define meta variables (repeat count, timestamps) for benchmark tracking."""
+        return self._collector.define_extra_vars(bench_cfg, repeats, time_src)
 
     def calculate_benchmark_results(
         self,
@@ -952,150 +687,26 @@ class Bench(BenchPlotServer):
         worker_job: WorkerJob,
         bench_run_cfg: BenchRunCfg,
     ) -> None:
-        """Store the results from a benchmark worker job into the benchmark result dataset.
-
-        This method handles unpacking the results from worker jobs and placing them
-        in the correct locations in the n-dimensional result dataset. It supports different
-        types of result variables including scalars, vectors, references, and media.
-
-        Args:
-            job_result (JobFuture): The future containing the worker function result
-            bench_res (BenchResult): The benchmark result object to store results in
-            worker_job (WorkerJob): The job metadata needed to index the result
-            bench_run_cfg (BenchRunCfg): Configuration for how results should be handled
-
-        Raises:
-            RuntimeError: If an unsupported result variable type is encountered
-        """
-        result = job_result.result()
-        if result is not None:
-            logging.info(f"{job_result.job.job_id}:")
-            if bench_res.bench_cfg.print_bench_inputs:
-                for k, v in worker_job.function_input.items():
-                    logging.info(f"\t {k}:{v}")
-
-            result_dict = result if isinstance(result, dict) else result.param.values()
-
-            for rv in bench_res.bench_cfg.result_vars:
-                result_value = result_dict[rv.name]
-                if bench_run_cfg.print_bench_results:
-                    logging.info(f"{rv.name}: {result_value}")
-
-                if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
-                    set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
-                elif isinstance(rv, ResultDataSet):
-                    bench_res.dataset_list.append(result_value)
-                    set_xarray_multidim(
-                        bench_res.ds[rv.name],
-                        worker_job.index_tuple,
-                        len(bench_res.dataset_list) - 1,
-                    )
-                elif isinstance(rv, ResultReference):
-                    bench_res.object_index.append(result_value)
-                    set_xarray_multidim(
-                        bench_res.ds[rv.name],
-                        worker_job.index_tuple,
-                        len(bench_res.object_index) - 1,
-                    )
-
-                elif isinstance(rv, ResultVec):
-                    if isinstance(result_value, (list, np.ndarray)):
-                        if len(result_value) == rv.size:
-                            for i in range(rv.size):
-                                set_xarray_multidim(
-                                    bench_res.ds[rv.index_name(i)],
-                                    worker_job.index_tuple,
-                                    result_value[i],
-                                )
-
-                else:
-                    raise RuntimeError("Unsupported result type")
-            for rv in bench_res.result_hmaps:
-                bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
-
-            # bench_cfg.hmap = bench_cfg.hmaps[bench_cfg.result_hmaps[0].name]
+        """Store worker job results into the n-dimensional result dataset."""
+        self._collector.store_results(job_result, bench_res, worker_job, bench_run_cfg)
 
     def init_sample_cache(self, run_cfg: BenchRunCfg) -> FutureCache:
-        """Initialize the sample cache for storing benchmark function results.
-
-        This method creates a FutureCache for storing and retrieving benchmark results
-        based on the run configuration settings.
-
-        Args:
-            run_cfg (BenchRunCfg): Configuration with cache settings such as overwrite policy,
-                executor type, and whether to cache results
-
-        Returns:
-            FutureCache: A configured cache for storing benchmark results
-        """
-        return FutureCache(
-            overwrite=run_cfg.overwrite_sample_cache,
-            executor=run_cfg.executor,
-            cache_name="sample_cache",
-            tag_index=True,
-            size_limit=self.cache_size,
-            cache_results=run_cfg.cache_samples,
-        )
+        """Initialize the FutureCache for storing benchmark function results."""
+        return self._executor.init_sample_cache(run_cfg)
 
     def clear_tag_from_sample_cache(self, tag: str, run_cfg: BenchRunCfg) -> None:
-        """Clear all samples from the cache that match a specific tag.
-
-        This method is useful when you want to rerun a benchmark with the same tag
-        but want fresh results instead of using cached data.
-
-        Args:
-            tag (str): The tag identifying samples to clear from the cache
-            run_cfg (BenchRunCfg): Run configuration used to initialize the sample cache if needed
-        """
-        if self.sample_cache is None:
-            self.sample_cache = self.init_sample_cache(run_cfg)
-        self.sample_cache.clear_tag(tag)
+        """Clear all cached samples matching a specific tag."""
+        self._executor.clear_tag_from_sample_cache(tag, run_cfg)
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: ParametrizedSweep) -> None:
-        """Add variable metadata to the xarray dataset for improved visualization.
-
-        This method adds metadata like units, long names, and descriptions to the xarray dataset
-        attributes, which helps visualization tools properly label axes and tooltips.
-
-        Args:
-            bench_res (BenchResult): The benchmark result object containing the dataset to display
-            input_var (ParametrizedSweep): The variable to extract metadata from
-        """
-        for rv in bench_res.bench_cfg.result_vars:
-            if type(rv) is ResultVar:
-                bench_res.ds[rv.name].attrs["units"] = rv.units
-                bench_res.ds[rv.name].attrs["long_name"] = rv.name
-            elif type(rv) is ResultVec:
-                for i in range(rv.size):
-                    bench_res.ds[rv.index_name(i)].attrs["units"] = rv.units
-                    bench_res.ds[rv.index_name(i)].attrs["long_name"] = rv.name
-            else:
-                pass  # todo
-
-        dsvar = bench_res.ds[input_var.name]
-        dsvar.attrs["long_name"] = input_var.name
-        if input_var.units is not None:
-            dsvar.attrs["units"] = input_var.units
-        if input_var.__doc__ is not None:
-            dsvar.attrs["description"] = input_var.__doc__
+        """Add units, long names, and descriptions to xarray dataset attributes."""
+        self._collector.add_metadata_to_dataset(bench_res, input_var)
 
     def report_results(
         self, bench_res: BenchResult, print_xarray: bool, print_pandas: bool
     ) -> None:
-        """Display the calculated benchmark data in various formats.
-
-        This method provides options to display the benchmark results as xarray data structures
-        or pandas DataFrames for debugging and inspection.
-
-        Args:
-            bench_res (BenchResult): The benchmark result containing the dataset to display
-            print_xarray (bool): If True, log the raw xarray Dataset structure
-            print_pandas (bool): If True, log the dataset converted to a pandas DataFrame
-        """
-        if print_xarray:
-            logging.info(bench_res.ds)
-        if print_pandas:
-            logging.info(bench_res.ds.to_dataframe())
+        """Log benchmark results as xarray or pandas DataFrame."""
+        self._collector.report_results(bench_res, print_xarray, print_pandas)
 
     def clear_call_counts(self) -> None:
         """Clear the worker and cache call counts, to help debug and assert caching is happening properly"""

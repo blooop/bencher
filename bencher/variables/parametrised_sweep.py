@@ -7,6 +7,7 @@ from copy import deepcopy
 
 from bencher.utils import make_namedtuple, hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
+from bencher.factories import create_bench, create_bench_runner
 
 
 class ParametrizedSweep(Parameterized):
@@ -206,30 +207,14 @@ class ParametrizedSweep(Parameterized):
     def plot_hmap(self, **kwargs):
         return self.__call__(**kwargs)["hmap"]
 
-    # TODO Add type hints here and fix the circular imports
-    def to_bench(self, run_cfg=None, report=None, name: str | None = None):
-        from bencher import Bench
+    def to_bench(self, run_cfg=None, report=None, name=None):
+        """Create a Bench instance from this ParametrizedSweep."""
+        return create_bench(self, run_cfg=run_cfg, report=report, name=name)
 
-        assert isinstance(self, ParametrizedSweep)
+    def to_bench_runner(self, run_cfg=None, name=None):
+        """Create a BenchRunner instance from this ParametrizedSweep.
 
-        if name is None:
-            name = self.name[:-5]  # param adds 5 digit number to the end, so remove it
-
-        return Bench(name, self, run_cfg=run_cfg, report=report)
-
-    def to_bench_runner(self, run_cfg=None, name: str | None = None):
-        # Create a BenchRunner instance from this ParametrizedSweep.
-        # Enables fluent chaining like:
-        # MyConfig().to_bench_runner().add_run(func).run(level=2, max_level=4)
-        from bencher.bench_runner import BenchRunner
-
-        if run_cfg is None:
-            from bencher.bench_cfg import BenchRunCfg  # pylint: disable=import-outside-toplevel,reimported,redefined-outer-name
-
-            run_cfg = BenchRunCfg()
-
-        if name is None:
-            # Create BenchRunner with auto-generated name
-            return BenchRunner(self, run_cfg=run_cfg)
-        # Create BenchRunner with specified name
-        return BenchRunner(name, self, run_cfg=run_cfg)
+        Enables fluent chaining like:
+            MyConfig().to_bench_runner().add_run(func).run(level=2, max_level=4)
+        """
+        return create_bench_runner(self, run_cfg=run_cfg, name=name)

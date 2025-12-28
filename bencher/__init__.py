@@ -93,3 +93,4 @@ from .bench_report import BenchReport, GithubPagesCfg
 from .job import Executors
 from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
+from .factories import create_bench, create_bench_runner
