@@ -437,6 +437,46 @@ class Bench(BenchPlotServer):
         )
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
+    @staticmethod
+    def filter_overridable_params(
+        bench_cfg: BenchCfg, run_cfg: BenchRunCfg
+    ) -> Tuple[dict, List[str], List[str]]:
+        """Filter run_cfg parameters to only those that can override bench_cfg.
+
+        Param 2.3 enforces constant Parameters (e.g. the implicit `name`), which cannot
+        be overridden. This helper identifies which parameters from run_cfg can be applied
+        to bench_cfg and reports any that must be skipped.
+
+        Args:
+            bench_cfg: The benchmark configuration to be updated
+            run_cfg: The run configuration providing override values
+
+        Returns:
+            A tuple of (valid_params, missing_keys, constant_keys) where:
+            - valid_params: dict of parameters that can be applied
+            - missing_keys: list of run_cfg keys not found on bench_cfg
+            - constant_keys: list of run_cfg keys that are constant on bench_cfg
+        """
+        bench_params = bench_cfg.param.objects()
+        run_cfg_param_values = run_cfg.param.values()
+
+        missing_keys = []
+        constant_keys = []
+        valid_params = {}
+
+        for key, value in run_cfg_param_values.items():
+            if key not in bench_params:
+                missing_keys.append(key)
+                continue
+
+            if bench_params[key].constant:
+                constant_keys.append(key)
+                continue
+
+            valid_params[key] = value
+
+        return valid_params, missing_keys, constant_keys
+
     def run_sweep(
         self,
         bench_cfg: BenchCfg,
@@ -466,14 +506,26 @@ class Bench(BenchPlotServer):
         """
         print("tag", bench_cfg.tag)
 
-        # param 2.3 enforces constant Parameters (e.g. the implicit `name`), so skip those
-        # when copying run configuration values onto the bench configuration
-        bench_params = bench_cfg.param.objects()
-        run_cfg_values = {
-            key: value
-            for key, value in run_cfg.param.values().items()
-            if key in bench_params and not bench_params[key].constant
-        }
+        # Filter run_cfg parameters to only those that can override bench_cfg
+        # (param 2.3 enforces constant parameters that cannot be overridden)
+        run_cfg_values, missing_keys, constant_keys = self.filter_overridable_params(
+            bench_cfg, run_cfg
+        )
+
+        if missing_keys:
+            logging.warning(
+                "Run configuration contains parameters that do not exist on "
+                "the bench configuration and were ignored: %s",
+                sorted(missing_keys),
+            )
+
+        if constant_keys:
+            logging.warning(
+                "Attempted to override constant bench parameters from run "
+                "configuration; these were ignored: %s",
+                sorted(constant_keys),
+            )
+
         bench_cfg.param.update(run_cfg_values)
         bench_cfg_hash = bench_cfg.hash_persistent(True)
         bench_cfg.hash_value = bench_cfg_hash
