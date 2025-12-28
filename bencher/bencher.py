@@ -466,7 +466,15 @@ class Bench(BenchPlotServer):
         """
         print("tag", bench_cfg.tag)
 
-        bench_cfg.param.update(run_cfg.param.values())
+        # param 2.3 enforces constant Parameters (e.g. the implicit `name`), so skip those
+        # when copying run configuration values onto the bench configuration
+        bench_params = bench_cfg.param.objects()
+        run_cfg_values = {
+            key: value
+            for key, value in run_cfg.param.values().items()
+            if key in bench_params and not bench_params[key].constant
+        }
+        bench_cfg.param.update(run_cfg_values)
         bench_cfg_hash = bench_cfg.hash_persistent(True)
         bench_cfg.hash_value = bench_cfg_hash
 

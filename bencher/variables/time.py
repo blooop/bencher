@@ -21,13 +21,13 @@ class TimeBase(SweepBase, Selector):
         **params,
     ):
         super().__init__(
-            objects,
-            default,
-            instantiate,
-            compute_default_fn,
-            check_on_set,
-            allow_None,
-            empty_default,
+            objects=objects,
+            default=default,
+            instantiate=instantiate,
+            compute_default_fn=compute_default_fn,
+            check_on_set=check_on_set,
+            allow_None=allow_None,
+            empty_default=empty_default,
             **params,
         )
 
