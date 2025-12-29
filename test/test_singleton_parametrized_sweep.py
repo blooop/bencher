@@ -133,7 +133,7 @@ def test_singleton_report_save_and_pickling():
     # Run and save report; also exercises diskcache pickling of results
     br.run(level=1, repeats=1, cache_results=False, save=True)
 
-    expected_filename = f"MySingletonSweep_benchable_singleton_fn_{run_cfg.run_tag}.html"
+    expected_filename = f"MySingletonSweep_benchable_singleton_fn_{run_cfg.time.run_tag}.html"
     expected_path = Path("reports") / expected_filename
     assert expected_path.exists(), f"Report not saved at {expected_path}"
     # Cleanup saved report to avoid polluting workspace

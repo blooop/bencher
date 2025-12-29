@@ -81,13 +81,13 @@ class TestBenchRunCfgComposition(unittest.TestCase):
         """Flat attribute access is no longer supported and raises AttributeError."""
         cfg = BenchRunCfg()
         with self.assertRaises(AttributeError):
-            _ = cfg.cache_results
+            _ = cfg.cache_results  # pylint: disable=no-member
         with self.assertRaises(AttributeError):
-            _ = cfg.repeats
+            _ = cfg.repeats  # pylint: disable=no-member
         with self.assertRaises(AttributeError):
-            _ = cfg.auto_plot
+            _ = cfg.auto_plot  # pylint: disable=no-member
         with self.assertRaises(AttributeError):
-            _ = cfg.over_time
+            _ = cfg.over_time  # pylint: disable=no-member
 
     def test_sub_config_init(self):
         """Sub-config parameters can be set via constructor."""

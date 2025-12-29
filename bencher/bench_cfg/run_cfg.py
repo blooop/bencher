@@ -25,7 +25,6 @@ _SUBCONFIG_CLASSES = {
 }
 
 
-
 class BenchRunCfg(param.Parameterized):
     """Benchmark run configuration composing cache, execution, display, visualization, and time.
 
@@ -74,6 +73,7 @@ class BenchRunCfg(param.Parameterized):
         """Initialize BenchRunCfg with composed sub-configurations.
 
         Sub-configs are automatically instantiated if not provided.
+        Nested parameters (e.g., run_tag, cache_results) are automatically routed to sub-configs.
         """
         # Extract sub-config objects if provided, otherwise create defaults
         server = params.pop("server", None) or BenchPlotSrvCfg()
@@ -83,15 +83,39 @@ class BenchRunCfg(param.Parameterized):
         visualization = params.pop("visualization", None) or VisualizationCfg()
         time_cfg = params.pop("time", None) or TimeCfg()
 
+        # Route nested parameters to appropriate sub-configs
+        subconfig_instances = {
+            "server": server,
+            "cache": cache,
+            "execution": execution,
+            "display": display,
+            "visualization": visualization,
+            "time": time_cfg,
+        }
+
+        # Distribute remaining params to sub-configs based on their parameter definitions
+        remaining_params = {}
+        for param_name, param_value in list(params.items()):
+            routed = False
+            for subconfig_name, subconfig_cls in _SUBCONFIG_CLASSES.items():
+                if hasattr(subconfig_cls.param, param_name):
+                    # This parameter belongs to this sub-config
+                    setattr(subconfig_instances[subconfig_name], param_name, param_value)
+                    routed = True
+                    break
+            if not routed:
+                # Keep unrouted params for the parent class
+                remaining_params[param_name] = param_value
+
         # Initialize with sub-configs
         super().__init__(
-            server=server,
-            cache=cache,
-            execution=execution,
-            display=display,
-            visualization=visualization,
-            time=time_cfg,
-            **params,
+            server=subconfig_instances["server"],
+            cache=subconfig_instances["cache"],
+            execution=subconfig_instances["execution"],
+            display=subconfig_instances["display"],
+            visualization=subconfig_instances["visualization"],
+            time=subconfig_instances["time"],
+            **remaining_params,
         )
 
     @staticmethod

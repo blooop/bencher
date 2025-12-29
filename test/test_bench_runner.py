@@ -9,9 +9,9 @@ class TestBenchRunner(unittest.TestCase):
     # Tests that bch.BenchRunner can be created with default configuration and the import statement in the bch.BenchRunner class is fixed
     def test_benchrunner_default_configuration_fixed(self):
         bench_runner = bch.BenchRunner("bench_runner_test")
-        self.assertEqual(bench_runner.run_cfg.cache_samples, True)
-        self.assertEqual(bench_runner.run_cfg.only_hash_tag, True)
-        self.assertEqual(bench_runner.run_cfg.level, 2)
+        self.assertEqual(bench_runner.run_cfg.cache.cache_samples, True)
+        self.assertEqual(bench_runner.run_cfg.cache.only_hash_tag, True)
+        self.assertEqual(bench_runner.run_cfg.execution.level, 2)
         self.assertEqual(bench_runner.publisher, None)
         self.assertEqual(bench_runner.bench_fns, [])
 
@@ -36,7 +36,7 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner.add_bench(SimpleBenchClass())
         results = bench_runner.run(run_cfg=bch.BenchRunCfg(run_tag="1"))
 
-        self.assertEqual(results[0].bench_cfg.run_tag, "1")
+        self.assertEqual(results[0].bench_cfg.time.run_tag, "1")
 
     def test_benchrunner_cache(self):
         from datetime import datetime
@@ -62,27 +62,27 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(results[0].sample_cache.worker_wrapper_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_fn_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
-        self.assertEqual(results[0].run_cfg.run_tag, run_tag)
+        self.assertEqual(results[0].run_cfg.time.run_tag, run_tag)
 
         # run again with the same tag, should hit cache because it was already run
         results = bench_runner.run()
         self.assertEqual(results[0].sample_cache.worker_wrapper_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_fn_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
-        self.assertEqual(results[0].run_cfg.run_tag, run_tag)
+        self.assertEqual(results[0].run_cfg.time.run_tag, run_tag)
 
         # run with the same tag but set use cache to false, should not hit cache because even tho the tag is the same, cache_results=false
         results = bench_runner.run(cache_results=False)
         self.assertEqual(results[0].sample_cache.worker_wrapper_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_fn_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
-        self.assertEqual(results[0].run_cfg.run_tag, run_tag)
+        self.assertEqual(results[0].run_cfg.time.run_tag, run_tag)
 
     def test_benchrunner_benchable_class_run_constructor(self):
         bench_runner = bch.BenchRunner("bench_runner_test", run_cfg=bch.BenchRunCfg(run_tag="1"))
         bench_runner.add_bench(SimpleBenchClass())
         results = bench_runner.run()
-        self.assertEqual(results[0].bench_cfg.run_tag, "1")
+        self.assertEqual(results[0].bench_cfg.time.run_tag, "1")
 
     # def test_benchrunner_level_1(self):
     #     results = bch.BenchRunner("bench_runner_test", AllSweepVars()).run(min_level=1)
@@ -109,7 +109,7 @@ class TestBenchRunner(unittest.TestCase):
         executed_configs = []
 
         def simple_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
-            executed_configs.append((run_cfg.level, run_cfg.repeats))
+            executed_configs.append((run_cfg.execution.level, run_cfg.execution.repeats))
             bench = bch.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
             return bench.plot_sweep("test")
 

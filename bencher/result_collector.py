@@ -101,7 +101,9 @@ class ResultCollector:
         """
         if time_src is None:
             time_src = datetime.now()
-        bench_cfg.meta_vars = self.define_extra_vars(bench_cfg, bench_cfg.execution.repeats, time_src)
+        bench_cfg.meta_vars = self.define_extra_vars(
+            bench_cfg, bench_cfg.execution.repeats, time_src
+        )
 
         bench_cfg.all_vars = bench_cfg.input_vars + bench_cfg.meta_vars
 

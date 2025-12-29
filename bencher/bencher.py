@@ -570,7 +570,9 @@ class Bench(BenchPlotServer):
                     bench_res.ds, bench_cfg_hash, run_cfg.time.clear_history
                 )
 
-            self.report_results(bench_res, run_cfg.display.print_xarray, run_cfg.display.print_pandas)
+            self.report_results(
+                bench_res, run_cfg.display.print_xarray, run_cfg.display.print_pandas
+            )
             self.cache_results(bench_res, bench_cfg_hash)
 
         logging.info(self.sample_cache.stats())

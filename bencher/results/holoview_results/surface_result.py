@@ -152,7 +152,7 @@ class SurfaceResult(HoloviewResult):
                 **kwargs,
             )
 
-            if self.bench_cfg.render_plotly:
+            if self.bench_cfg.visualization.render_plotly:
                 hv.extension("plotly")
                 out = surface
             else:

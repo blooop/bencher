@@ -1,4 +1,5 @@
 from .bencher import Bench, BenchCfg, BenchRunCfg
+from .bench_cfg.server_cfg import BenchPlotSrvCfg
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer

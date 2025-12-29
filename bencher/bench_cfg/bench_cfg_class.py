@@ -224,7 +224,7 @@ class BenchCfg(BenchRunCfg):
         for iv in self.input_vars:
             benchmark_sampling_str.extend(describe_variable(iv, True))
 
-        if self.const_vars and (self.summarise_constant_inputs):
+        if self.const_vars and (self.display.summarise_constant_inputs):
             benchmark_sampling_str.append("\nConstants:")
             for cv in self.const_vars:
                 benchmark_sampling_str.extend(describe_variable(cv[0], False, cv[1]))

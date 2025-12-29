@@ -201,7 +201,9 @@ class BenchResultBase:
             xr.Dataset: results in the form of an xarray dataset
         """
         if reduce == ReduceType.AUTO:
-            reduce = ReduceType.REDUCE if self.bench_cfg.execution.repeats > 1 else ReduceType.SQUEEZE
+            reduce = (
+                ReduceType.REDUCE if self.bench_cfg.execution.repeats > 1 else ReduceType.SQUEEZE
+            )
 
         ds_out = self.ds.copy()
 
