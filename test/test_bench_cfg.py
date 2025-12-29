@@ -211,7 +211,7 @@ class TestBenchCfgInheritance(unittest.TestCase):
         # Check sub-config fields appear in output
         self.assertIn("bench level: 5", description)
         self.assertIn("cache_results: True", description)
-        self.assertIn("cache_samples True", description)
+        self.assertIn("cache_samples: True", description)
 
 
 class TestBackwardCompatibility(unittest.TestCase):
