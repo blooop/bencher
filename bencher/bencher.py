@@ -535,7 +535,7 @@ class Bench(BenchPlotServer):
 
         if self.sample_cache is None:
             self.sample_cache = self.init_sample_cache(run_cfg)
-        if bench_cfg.clear_sample_cache:
+        if bench_cfg.cache.clear_sample_cache:
             self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
 
         calculate_results = True

@@ -77,6 +77,18 @@ class TestBenchRunCfgComposition(unittest.TestCase):
         _ = cfg.time.over_time
         _ = cfg.server.port
 
+    def test_flat_attribute_access_raises(self):
+        """Flat attribute access is no longer supported and raises AttributeError."""
+        cfg = BenchRunCfg()
+        with self.assertRaises(AttributeError):
+            _ = cfg.cache_results
+        with self.assertRaises(AttributeError):
+            _ = cfg.repeats
+        with self.assertRaises(AttributeError):
+            _ = cfg.auto_plot
+        with self.assertRaises(AttributeError):
+            _ = cfg.over_time
+
     def test_sub_config_init(self):
         """Sub-config parameters can be set via constructor."""
         cfg = BenchRunCfg(

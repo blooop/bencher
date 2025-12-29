@@ -240,7 +240,7 @@ class BenchCfg(BenchRunCfg):
         if self.execution.level is not None:
             benchmark_sampling_str.append(f"    bench level: {self.execution.level}")
         benchmark_sampling_str.append(f"    cache_results: {self.cache.cache_results}")
-        benchmark_sampling_str.append(f"    cache_samples {self.cache.cache_samples}")
+        benchmark_sampling_str.append(f"    cache_samples: {self.cache.cache_samples}")
         benchmark_sampling_str.append(f"    only_hash_tag: {self.cache.only_hash_tag}")
         benchmark_sampling_str.append(f"    executor: {self.execution.executor}")
 
