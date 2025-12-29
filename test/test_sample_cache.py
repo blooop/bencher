@@ -26,12 +26,14 @@ class TestSampleCache(unittest.TestCase):
 
     def sample_cache(self):
         run_cfg = bch.BenchRunCfg()
-        run_cfg.repeats = 1
-        run_cfg.executor = bch.Executors.SERIAL  # THE ASSERTS WILL ONLY WORK IF RUN SERIALLY!!!
+        run_cfg.execution.repeats = 1
+        run_cfg.execution.executor = (
+            bch.Executors.SERIAL
+        )  # THE ASSERTS WILL ONLY WORK IF RUN SERIALLY!!!
 
-        run_cfg.cache_samples = True  # this will store the result of every call
-        run_cfg.only_hash_tag = True
-        run_cfg.auto_plot = False
+        run_cfg.cache.cache_samples = True  # this will store the result of every call
+        run_cfg.cache.only_hash_tag = True
+        run_cfg.visualization.auto_plot = False
 
         instance = UnreliableClass()
         instance.trigger_crash = True
@@ -66,7 +68,7 @@ class TestSampleCache(unittest.TestCase):
         self.assertEqual(bencher.sample_cache.worker_cache_call_count, 2)
 
         # now increase the number of repeats to 2.  This will use the previously calculated values for repeat 1 and only calculate the new values for repeat=2
-        run_cfg.repeats = 2
+        run_cfg.execution.repeats = 2
         bencher.clear_call_counts()
         self.call_bencher(bencher, run_cfg)
 
@@ -78,7 +80,7 @@ class TestSampleCache(unittest.TestCase):
         self.assertEqual(bencher.sample_cache.worker_cache_call_count, 4)
 
         # create a new benchmark and clear the cache (for this new benchmark only)
-        run_cfg.clear_sample_cache = True
+        run_cfg.cache.clear_sample_cache = True
         bencher.clear_call_counts()
         bencher.plot_sweep(
             title="new benchmark", result_vars=[UnreliableClass.param.return_value], run_cfg=run_cfg
@@ -93,7 +95,7 @@ class TestSampleCache(unittest.TestCase):
 
         # check that the previous benchmark still has the cached values, and that they were not removed by clearing the sample cache of an unrelated benchmark
 
-        run_cfg.clear_sample_cache = False
+        run_cfg.cache.clear_sample_cache = False
         bencher.clear_call_counts()
         self.call_bencher(bencher, run_cfg)
 

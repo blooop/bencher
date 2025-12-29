@@ -90,8 +90,8 @@ class TestSweepExecutor(unittest.TestCase):
     def test_init_sample_cache(self):
         """Test FutureCache initialization with config."""
         run_cfg = BenchRunCfg()
-        run_cfg.cache_samples = True
-        run_cfg.executor = Executors.SERIAL
+        run_cfg.cache.cache_samples = True
+        run_cfg.execution.executor = Executors.SERIAL
 
         cache = self.executor.init_sample_cache(run_cfg)
 
@@ -101,8 +101,8 @@ class TestSweepExecutor(unittest.TestCase):
     def test_init_sample_cache_with_caching_disabled(self):
         """Test FutureCache when cache_samples=False."""
         run_cfg = BenchRunCfg()
-        run_cfg.cache_samples = False
-        run_cfg.executor = Executors.SERIAL
+        run_cfg.cache.cache_samples = False
+        run_cfg.execution.executor = Executors.SERIAL
 
         cache = self.executor.init_sample_cache(run_cfg)
 
@@ -113,8 +113,8 @@ class TestSweepExecutor(unittest.TestCase):
     def test_clear_call_counts(self):
         """Test clearing call counts."""
         run_cfg = BenchRunCfg()
-        run_cfg.cache_samples = True
-        run_cfg.executor = Executors.SERIAL
+        run_cfg.cache.cache_samples = True
+        run_cfg.execution.executor = Executors.SERIAL
 
         self.executor.init_sample_cache(run_cfg)
         self.executor.sample_cache.worker_wrapper_call_count = 5
@@ -131,8 +131,8 @@ class TestSweepExecutor(unittest.TestCase):
     def test_close_cache(self):
         """Test closing the cache."""
         run_cfg = BenchRunCfg()
-        run_cfg.cache_samples = True
-        run_cfg.executor = Executors.SERIAL
+        run_cfg.cache.cache_samples = True
+        run_cfg.execution.executor = Executors.SERIAL
 
         self.executor.init_sample_cache(run_cfg)
         self.executor.close_cache()
@@ -150,8 +150,8 @@ class TestSweepExecutor(unittest.TestCase):
     def test_get_cache_stats_with_cache(self):
         """Test getting stats when cache is present."""
         run_cfg = BenchRunCfg()
-        run_cfg.cache_samples = True
-        run_cfg.executor = Executors.SERIAL
+        run_cfg.cache.cache_samples = True
+        run_cfg.execution.executor = Executors.SERIAL
 
         self.executor.init_sample_cache(run_cfg)
         result = self.executor.get_cache_stats()
@@ -162,7 +162,7 @@ class TestSweepExecutor(unittest.TestCase):
     def test_convert_vars_to_params_with_max_level(self):
         """Test max_level handling when run_cfg.level is set."""
         run_cfg = BenchRunCfg()
-        run_cfg.level = 2
+        run_cfg.execution.level = 2
 
         result = self.executor.convert_vars_to_params(
             {"name": "theta", "max_level": 3},
@@ -181,8 +181,8 @@ class TestSweepExecutor(unittest.TestCase):
         self.assertIsNone(self.executor.sample_cache)
 
         run_cfg = BenchRunCfg()
-        run_cfg.cache_samples = True
-        run_cfg.executor = Executors.SERIAL
+        run_cfg.cache.cache_samples = True
+        run_cfg.execution.executor = Executors.SERIAL
 
         # This should initialize the cache lazily
         self.executor.clear_tag_from_sample_cache("test_tag", run_cfg)
@@ -198,8 +198,8 @@ class TestSweepExecutor(unittest.TestCase):
     def test_init_sample_cache_configs(self, cache_samples):
         """Property: cache initializes correctly with various configs."""
         run_cfg = BenchRunCfg()
-        run_cfg.cache_samples = cache_samples
-        run_cfg.executor = Executors.SERIAL
+        run_cfg.cache.cache_samples = cache_samples
+        run_cfg.execution.executor = Executors.SERIAL
 
         cache = self.executor.init_sample_cache(run_cfg)
 

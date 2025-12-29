@@ -35,26 +35,26 @@ def assert_call_counts(bencher, run_cfg, wrapper_calls=-1, fn_calls=-1, cache_ca
     print_assert_equal(
         "worker wrapper call count",
         bencher.sample_cache.worker_wrapper_call_count,
-        wrapper_calls * run_cfg.repeats,
+        wrapper_calls * run_cfg.execution.repeats,
     )
     print_assert_equal(
         "worker fn call count",
         bencher.sample_cache.worker_fn_call_count,
-        fn_calls * run_cfg.repeats,
+        fn_calls * run_cfg.execution.repeats,
     )
     print_assert_equal(
         "worker cache call count",
         bencher.sample_cache.worker_cache_call_count,
-        cache_calls * run_cfg.repeats,
+        cache_calls * run_cfg.execution.repeats,
     )
 
 
 def example_cache_context() -> bch.Bench:
     run_cfg = bch.BenchRunCfg()
-    run_cfg.cache_samples = True
-    run_cfg.only_hash_tag = True
-    run_cfg.repeats = 2
-    run_cfg.parallel = False
+    run_cfg.cache.cache_samples = True
+    run_cfg.cache.only_hash_tag = True
+    run_cfg.execution.repeats = 2
+    # run_cfg.parallel = False  # Deprecated - parallel execution is now controlled via executor parameter
 
     bencher = bch.Bench("bench_context", bench_function, Cfg, run_cfg=run_cfg)
 

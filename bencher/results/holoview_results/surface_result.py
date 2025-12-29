@@ -125,7 +125,7 @@ class SurfaceResult(HoloviewResult):
             except Exception as e:  # pylint: disable=broad-except
                 logging.warning(e)
 
-            if self.bench_cfg.repeats > 1:
+            if self.bench_cfg.execution.repeats > 1:
                 std_dev = dataset[f"{result_var.name}_std"]
 
                 upper = mean + std_dev
@@ -152,7 +152,7 @@ class SurfaceResult(HoloviewResult):
                 **kwargs,
             )
 
-            if self.bench_cfg.render_plotly:
+            if self.bench_cfg.visualization.render_plotly:
                 hv.extension("plotly")
                 out = surface
             else:

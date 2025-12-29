@@ -190,7 +190,7 @@ class OptunaResult(BenchResultBase):
 
         self.studies = [self.bench_result_to_study(True)]
         titles = ["# Analysis"]
-        if self.bench_cfg.repeats > 1:
+        if self.bench_cfg.execution.repeats > 1:
             self.studies.append(self.bench_result_to_study(False))
             titles = [
                 "# Parameter Importance With Repeats",

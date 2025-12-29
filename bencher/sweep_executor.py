@@ -114,7 +114,7 @@ class SweepExecutor:
                 param_var = param_var.with_samples(variable["samples"])
             if variable.get("max_level"):
                 if run_cfg is not None:
-                    param_var = param_var.with_level(run_cfg.level, variable["max_level"])
+                    param_var = param_var.with_level(run_cfg.execution.level, variable["max_level"])
             variable = param_var
         if not isinstance(variable, param.Parameter):
             raise TypeError(
@@ -159,12 +159,12 @@ class SweepExecutor:
             FutureCache: A configured cache for storing benchmark results
         """
         self.sample_cache = FutureCache(
-            overwrite=run_cfg.overwrite_sample_cache,
-            executor=run_cfg.executor,
+            overwrite=run_cfg.cache.overwrite_sample_cache,
+            executor=run_cfg.execution.executor,
             cache_name="sample_cache",
             tag_index=True,
             size_limit=self.cache_size,
-            cache_results=run_cfg.cache_samples,
+            cache_results=run_cfg.cache.cache_samples,
         )
         return self.sample_cache
 

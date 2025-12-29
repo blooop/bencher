@@ -76,7 +76,7 @@ class BenchRunner:
         self.run_cfg = BenchRunner.setup_run_cfg(run_cfg)
         # Override run_tag if provided as parameter
         if run_tag is not None:
-            self.run_cfg.run_tag = run_tag
+            self.run_cfg.time.run_tag = run_tag
         self.publisher = publisher
         if bench_class is not None:
             self.add_bench(bench_class)
@@ -123,9 +123,9 @@ class BenchRunner:
             BenchRunCfg: A new configuration object with the specified settings
         """
         run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
-        run_cfg_out.cache_samples = cache_results
-        run_cfg_out.only_hash_tag = cache_results
-        run_cfg_out.level = level
+        run_cfg_out.cache.cache_samples = cache_results
+        run_cfg_out.cache.only_hash_tag = cache_results
+        run_cfg_out.execution.level = level
         return run_cfg_out
 
     @staticmethod
@@ -317,11 +317,11 @@ class BenchRunner:
             for lvl in range(min_level, final_max_level + 1):
                 report_level = None
                 if grouped:
-                    report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
+                    report_level = BenchReport(f"{run_cfg.time.run_tag}_{self.name}")
                 for bch_fn in self.bench_fns:
                     run_lvl = deepcopy(run_cfg)
-                    run_lvl.level = lvl
-                    run_lvl.repeats = r
+                    run_lvl.execution.level = lvl
+                    run_lvl.execution.repeats = r
                     logging.info(f"Running {bch_fn} at level: {lvl} with repeats:{r}")
                     res, active_report = self._execute_bench_fn(bch_fn, run_lvl, report_level)
                     if grouped:
@@ -336,8 +336,8 @@ class BenchRunner:
                         report_to_publish = active_report or BenchReport()
                         if active_report is None:
                             res.report = report_to_publish
-                        if run_cfg.run_tag:
-                            tag_suffix = f"_{run_cfg.run_tag}"
+                        if run_cfg.time.run_tag:
+                            tag_suffix = f"_{run_cfg.time.run_tag}"
                         else:
                             current_date = datetime.now().strftime("%Y-%m-%d")
                             tag_suffix = f"_{current_date}"
