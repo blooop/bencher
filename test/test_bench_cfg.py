@@ -67,53 +67,50 @@ class TestBenchRunCfgComposition(unittest.TestCase):
         self.assertIsInstance(cfg.time, TimeCfg)
         self.assertIsInstance(cfg.server, BenchPlotSrvCfg)
 
-    def test_flat_parameter_access(self):
-        """Parameters accessible directly on BenchRunCfg."""
+    def test_grouped_parameter_access(self):
+        """Parameters accessible via sub-configs on BenchRunCfg."""
         cfg = BenchRunCfg()
         # Should not raise
-        _ = cfg.cache_results
-        _ = cfg.repeats
-        _ = cfg.auto_plot
-        _ = cfg.over_time
-        _ = cfg.port
+        _ = cfg.cache.cache_results
+        _ = cfg.execution.repeats
+        _ = cfg.visualization.auto_plot
+        _ = cfg.time.over_time
+        _ = cfg.server.port
 
-    def test_flat_parameter_init(self):
-        """Flat parameters can be set via constructor."""
-        cfg = BenchRunCfg(cache_results=True, repeats=5, auto_plot=False)
-        self.assertTrue(cfg.cache_results)
-        self.assertEqual(cfg.repeats, 5)
-        self.assertFalse(cfg.auto_plot)
+    def test_sub_config_init(self):
+        """Sub-config parameters can be set via constructor."""
+        cfg = BenchRunCfg(
+            cache=CacheCfg(cache_results=True),
+            execution=ExecutionCfg(repeats=5),
+            visualization=VisualizationCfg(auto_plot=False),
+        )
+        self.assertTrue(cfg.cache.cache_results)
+        self.assertEqual(cfg.execution.repeats, 5)
+        self.assertFalse(cfg.visualization.auto_plot)
 
-    def test_flat_parameter_setter(self):
-        """Flat parameters can be set via assignment."""
+    def test_sub_config_setter(self):
+        """Sub-config parameters can be set via assignment."""
         cfg = BenchRunCfg()
-        cfg.cache_results = True
-        cfg.repeats = 10
-        self.assertTrue(cfg.cache_results)
-        self.assertEqual(cfg.repeats, 10)
+        cfg.cache.cache_results = True
+        cfg.execution.repeats = 10
+        self.assertTrue(cfg.cache.cache_results)
+        self.assertEqual(cfg.execution.repeats, 10)
 
-    def test_grouped_access(self):
-        """Parameters accessible via sub-config."""
-        cfg = BenchRunCfg(cache_results=True, repeats=5)
+    def test_default_sub_config_init(self):
+        """Default sub-configs created when not explicitly provided."""
+        cfg = BenchRunCfg()
+        cfg.cache.cache_results = True
+        cfg.execution.repeats = 5
         self.assertTrue(cfg.cache.cache_results)
         self.assertEqual(cfg.execution.repeats, 5)
 
-    def test_flat_and_grouped_sync(self):
-        """Flat and grouped access point to same value."""
-        cfg = BenchRunCfg()
-        cfg.cache_results = True
-        self.assertTrue(cfg.cache.cache_results)
-
-        cfg.cache.cache_samples = True
-        self.assertTrue(cfg.cache_samples)
-
     def test_deep_copy(self):
         """deep() creates independent copy."""
-        cfg = BenchRunCfg(repeats=5)
+        cfg = BenchRunCfg(execution=ExecutionCfg(repeats=5))
         cfg_copy = cfg.deep()
-        cfg_copy.repeats = 10
-        self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(cfg_copy.repeats, 10)
+        cfg_copy.execution.repeats = 10
+        self.assertEqual(cfg.execution.repeats, 5)
+        self.assertEqual(cfg_copy.execution.repeats, 10)
 
     def test_deep_copy_sub_configs_not_shared(self):
         """deep() creates independent sub-config instances."""
@@ -135,21 +132,21 @@ class TestBenchRunCfgComposition(unittest.TestCase):
 
 
 class TestBenchCfgInheritance(unittest.TestCase):
-    """Test BenchCfg inherits delegation from BenchRunCfg."""
+    """Test BenchCfg inherits from BenchRunCfg."""
 
-    def test_inherits_flat_access(self):
-        """BenchCfg has flat parameter access."""
+    def test_inherits_sub_config_access(self):
+        """BenchCfg has sub-config parameter access."""
         cfg = BenchCfg(
             input_vars=[],
             result_vars=[],
             const_vars=[],
             bench_name="test",
             title="test",
-            cache_results=True,
-            repeats=3,
+            cache=CacheCfg(cache_results=True),
+            execution=ExecutionCfg(repeats=3),
         )
-        self.assertTrue(cfg.cache_results)
-        self.assertEqual(cfg.repeats, 3)
+        self.assertTrue(cfg.cache.cache_results)
+        self.assertEqual(cfg.execution.repeats, 3)
 
     def test_over_time_works(self):
         """over_time parameter works correctly."""
@@ -159,9 +156,9 @@ class TestBenchCfgInheritance(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            over_time=True,
+            time=TimeCfg(over_time=True),
         )
-        self.assertTrue(cfg.over_time)
+        self.assertTrue(cfg.time.over_time)
 
     def test_hash_persistent_varies_with_repeats(self):
         """hash_persistent changes when repeats differs."""
@@ -171,7 +168,7 @@ class TestBenchCfgInheritance(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
         cfg2 = BenchCfg(
             input_vars=[],
@@ -179,15 +176,15 @@ class TestBenchCfgInheritance(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=2,
+            execution=ExecutionCfg(repeats=2),
         )
         # With include_repeats=True, hashes should differ
         self.assertNotEqual(cfg1.hash_persistent(True), cfg2.hash_persistent(True))
         # With include_repeats=False, hashes should be equal
         self.assertEqual(cfg1.hash_persistent(False), cfg2.hash_persistent(False))
 
-    def test_describe_benchmark_includes_delegated_fields(self):
-        """describe_benchmark output includes delegated config values."""
+    def test_describe_benchmark_includes_sub_config_fields(self):
+        """describe_benchmark output includes sub-config values."""
         cfg = BenchCfg(
             input_vars=[],
             result_vars=[],
@@ -195,12 +192,11 @@ class TestBenchCfgInheritance(unittest.TestCase):
             meta_vars=[],
             bench_name="test",
             title="test",
-            level=5,
-            cache_results=True,
-            cache_samples=True,
+            execution=ExecutionCfg(level=5),
+            cache=CacheCfg(cache_results=True, cache_samples=True),
         )
         description = cfg.describe_benchmark()
-        # Check delegated fields appear in output
+        # Check sub-config fields appear in output
         self.assertIn("bench level: 5", description)
         self.assertIn("cache_results: True", description)
         self.assertIn("cache_samples True", description)

@@ -131,7 +131,7 @@ class BenchCfg(BenchRunCfg):
 
         if include_repeats:
             # needed so that the historical xarray arrays are the same size
-            repeats_hash = hash_sha1(self.repeats)
+            repeats_hash = hash_sha1(self.execution.repeats)
         else:
             repeats_hash = 0
 
@@ -139,7 +139,7 @@ class BenchCfg(BenchRunCfg):
             (
                 hash_sha1(str(self.bench_name)),
                 hash_sha1(str(self.title)),
-                hash_sha1(self.over_time),
+                hash_sha1(self.time.over_time),
                 repeats_hash,
                 hash_sha1(self.tag),
             )
@@ -234,15 +234,15 @@ class BenchCfg(BenchRunCfg):
             benchmark_sampling_str.extend(describe_variable(rv, False))
 
         benchmark_sampling_str.append("\nMeta Variables:")
-        benchmark_sampling_str.append(f"    run date: {self.run_date}")
-        if self.run_tag:
-            benchmark_sampling_str.append(f"    run tag: {self.run_tag}")
-        if self.level is not None:
-            benchmark_sampling_str.append(f"    bench level: {self.level}")
-        benchmark_sampling_str.append(f"    cache_results: {self.cache_results}")
-        benchmark_sampling_str.append(f"    cache_samples {self.cache_samples}")
-        benchmark_sampling_str.append(f"    only_hash_tag: {self.only_hash_tag}")
-        benchmark_sampling_str.append(f"    executor: {self.executor}")
+        benchmark_sampling_str.append(f"    run date: {self.time.run_date}")
+        if self.time.run_tag:
+            benchmark_sampling_str.append(f"    run tag: {self.time.run_tag}")
+        if self.execution.level is not None:
+            benchmark_sampling_str.append(f"    bench level: {self.execution.level}")
+        benchmark_sampling_str.append(f"    cache_results: {self.cache.cache_results}")
+        benchmark_sampling_str.append(f"    cache_samples {self.cache.cache_samples}")
+        benchmark_sampling_str.append(f"    only_hash_tag: {self.cache.only_hash_tag}")
+        benchmark_sampling_str.append(f"    executor: {self.execution.executor}")
 
         for mv in self.meta_vars:
             benchmark_sampling_str.extend(describe_variable(mv, True))

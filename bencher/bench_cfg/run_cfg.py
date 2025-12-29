@@ -24,28 +24,12 @@ _SUBCONFIG_CLASSES = {
     "time": TimeCfg,
 }
 
-# Param internals to skip when building delegation map
-_PARAM_INTERNALS = {"name"}
-
-
-def _build_delegation_map():
-    """Build delegation map from sub-config param definitions."""
-    delegation_map = {}
-    for sub_name, cfg_cls in _SUBCONFIG_CLASSES.items():
-        for pname in cfg_cls.param:
-            if pname in _PARAM_INTERNALS:
-                continue
-            delegation_map[pname] = sub_name
-    return delegation_map
-
-
-_DELEGATION_MAP = _build_delegation_map()
 
 
 class BenchRunCfg(param.Parameterized):
     """Benchmark run configuration composing cache, execution, display, visualization, and time.
 
-    Access parameters directly (cfg.cache_results) or via sub-config (cfg.cache.cache_results).
+    Access parameters via sub-configs (e.g., cfg.cache.cache_results, cfg.execution.repeats).
     """
 
     # Composed sub-configurations
@@ -89,30 +73,15 @@ class BenchRunCfg(param.Parameterized):
     def __init__(self, **params):
         """Initialize BenchRunCfg with composed sub-configurations.
 
-        Handles both new-style (sub-config objects) and legacy-style (flat parameters)
-        initialization for backward compatibility.
+        Sub-configs are automatically instantiated if not provided.
         """
-        # Extract sub-config objects if provided
+        # Extract sub-config objects if provided, otherwise create defaults
         server = params.pop("server", None) or BenchPlotSrvCfg()
         cache = params.pop("cache", None) or CacheCfg()
         execution = params.pop("execution", None) or ExecutionCfg()
         display = params.pop("display", None) or DisplayCfg()
         visualization = params.pop("visualization", None) or VisualizationCfg()
         time_cfg = params.pop("time", None) or TimeCfg()
-
-        # Route legacy flat parameters to appropriate sub-config
-        sub_configs = {
-            "server": server,
-            "cache": cache,
-            "execution": execution,
-            "display": display,
-            "visualization": visualization,
-            "time": time_cfg,
-        }
-        for key in list(params.keys()):
-            if key in _DELEGATION_MAP:
-                sub_name = _DELEGATION_MAP[key]
-                setattr(sub_configs[sub_name], key, params.pop(key))
 
         # Initialize with sub-configs
         super().__init__(
@@ -124,24 +93,6 @@ class BenchRunCfg(param.Parameterized):
             time=time_cfg,
             **params,
         )
-
-    def __getattr__(self, name):
-        """Delegate attribute access to sub-configs for backward compatibility."""
-        if name in _DELEGATION_MAP:
-            sub_name = _DELEGATION_MAP[name]
-            sub_cfg = object.__getattribute__(self, sub_name)
-            return getattr(sub_cfg, name)
-        # Delegate to parent to preserve Parameterized behavior
-        return super().__getattribute__(name)
-
-    def __setattr__(self, name, value):
-        """Delegate attribute setting to sub-configs for backward compatibility."""
-        if name in _DELEGATION_MAP:
-            sub_name = _DELEGATION_MAP[name]
-            sub_cfg = object.__getattribute__(self, sub_name)
-            setattr(sub_cfg, name, value)
-        else:
-            super().__setattr__(name, value)
 
     @staticmethod
     def from_cmd_line() -> BenchRunCfg:  # pragma: no cover
@@ -190,12 +141,10 @@ class BenchRunCfg(param.Parameterized):
         args = parser.parse_args()
 
         return BenchRunCfg(
-            cache_results=args.use_cache,
-            only_plot=args.only_plot,
-            port=args.port,
-            nightly=args.nightly,
-            time_event=args.time_event,
-            repeats=args.repeats,
+            cache=CacheCfg(cache_results=args.use_cache, only_plot=args.only_plot),
+            server=BenchPlotSrvCfg(port=args.port),
+            execution=ExecutionCfg(nightly=args.nightly, repeats=args.repeats),
+            time=TimeCfg(time_event=args.time_event),
         )
 
     def deep(self):

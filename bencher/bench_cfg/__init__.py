@@ -8,18 +8,22 @@ Configuration classes for benchmarking, organized by concern:
 - VisualizationCfg: Plotting (auto_plot, plot_size, use_holoview, ...)
 - TimeCfg: History (over_time, run_tag, run_date, ...)
 - BenchPlotSrvCfg: Server (port, show, allow_ws_origin)
-- BenchRunCfg: Composes all above with backward-compatible flat access
+- BenchRunCfg: Composes all above configurations
 - BenchCfg: Full benchmark config with variables and metadata
 - DimsCfg: Dimension info extraction
 
 Usage:
-    # Flat access (backward compatible)
-    cfg = BenchRunCfg(cache_results=True, repeats=5)
-    cfg.auto_plot = False
+    # Create with sub-config objects
+    cfg = BenchRunCfg(
+        cache=CacheCfg(cache_results=True),
+        execution=ExecutionCfg(repeats=5)
+    )
 
-    # Grouped access
+    # Or create with defaults and modify
+    cfg = BenchRunCfg()
     cfg.cache.cache_samples = True
     cfg.execution.level = 3
+    cfg.visualization.auto_plot = False
 """
 
 from bencher.bench_cfg.server_cfg import BenchPlotSrvCfg

@@ -333,8 +333,8 @@ class Bench(BenchPlotServer):
                 run_cfg = deepcopy(self.run_cfg)
                 logging.info("Copy run cfg from bench class")
 
-        if run_cfg.only_plot:
-            run_cfg.cache_results = True
+        if run_cfg.cache.only_plot:
+            run_cfg.cache.cache_results = True
 
         self.last_run_cfg = run_cfg
 
@@ -384,12 +384,12 @@ class Bench(BenchPlotServer):
                     [getattr(i, "name", str(i)) for i in result_vars_in]
                 )
 
-        if run_cfg.level > 0:
+        if run_cfg.execution.level > 0:
             inputs = []
             logging.debug("Input vars prior to level adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
-                    inputs.append(i.with_level(run_cfg.level))
+                    inputs.append(i.with_level(run_cfg.execution.level))
                 input_vars_in = inputs
 
         # if any of the inputs have been include as constants, remove those variables from the list of constants
@@ -432,7 +432,7 @@ class Bench(BenchPlotServer):
             post_description=post_description,
             title=title,
             pass_repeat=pass_repeat,
-            tag=run_cfg.run_tag + tag,
+            tag=run_cfg.time.run_tag + tag,
             plot_callbacks=plot_callbacks,
         )
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
@@ -540,10 +540,10 @@ class Bench(BenchPlotServer):
 
         calculate_results = True
         with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-            if run_cfg.clear_cache:
+            if run_cfg.cache.clear_cache:
                 c.delete(bench_cfg_hash)
                 logging.info("cleared cache")
-            elif run_cfg.cache_results:
+            elif run_cfg.cache.cache_results:
                 logging.info(
                     f"checking for previously calculated results with key: {bench_cfg_hash}"
                 )
@@ -554,23 +554,23 @@ class Bench(BenchPlotServer):
                     calculate_results = False
                 else:
                     logging.info("did not detect results in cache")
-                    if run_cfg.only_plot:
+                    if run_cfg.cache.only_plot:
                         raise FileNotFoundError("Was not able to load the results to plot!")
 
         if calculate_results:
-            if run_cfg.time_event is not None:
-                time_src = run_cfg.time_event
+            if run_cfg.time.time_event is not None:
+                time_src = run_cfg.time.time_event
             bench_res = self.calculate_benchmark_results(
                 bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
             )
 
             # use the hash of the inputs to look up historical values in the cache
-            if run_cfg.over_time:
+            if run_cfg.time.over_time:
                 bench_res.ds = self.load_history_cache(
-                    bench_res.ds, bench_cfg_hash, run_cfg.clear_history
+                    bench_res.ds, bench_cfg_hash, run_cfg.time.clear_history
                 )
 
-            self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
+            self.report_results(bench_res, run_cfg.display.print_xarray, run_cfg.display.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)
 
         logging.info(self.sample_cache.stats())
@@ -578,7 +578,7 @@ class Bench(BenchPlotServer):
 
         bench_res.post_setup()
 
-        if bench_cfg.auto_plot:
+        if bench_cfg.visualization.auto_plot:
             self.report.append_result(bench_res)
 
         self.results.append(bench_res)
@@ -728,10 +728,10 @@ class Bench(BenchPlotServer):
             results_list.append(result)
             callcount += 1
 
-            if bench_run_cfg.executor == Executors.SERIAL:
+            if bench_run_cfg.execution.executor == Executors.SERIAL:
                 self.store_results(result, bench_res, job, bench_run_cfg)
 
-        if bench_run_cfg.executor != Executors.SERIAL:
+        if bench_run_cfg.execution.executor != Executors.SERIAL:
             for job, res in zip(jobs, results_list):
                 self.store_results(res, bench_res, job, bench_run_cfg)
 
@@ -811,7 +811,7 @@ class Bench(BenchPlotServer):
         Returns:
             str: The URL where the report has been published
         """
-        branch_name = f"{self.bench_name}_{self.run_cfg.run_tag}"
+        branch_name = f"{self.bench_name}_{self.run_cfg.time.run_tag}"
         return self.report.publish(remote_callback, branch_name=branch_name)
 
     def get_result_vars(self, as_str: bool = True) -> List[str | ParametrizedSweep]:

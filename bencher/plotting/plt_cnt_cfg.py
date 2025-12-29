@@ -75,7 +75,7 @@ class PltCntCfg(param.Parameterized):
         plt_cnt_cfg.float_cnt = len(plt_cnt_cfg.float_vars)
         plt_cnt_cfg.cat_cnt = len(plt_cnt_cfg.cat_vars)
         plt_cnt_cfg.panel_cnt = len(plt_cnt_cfg.panel_vars)
-        plt_cnt_cfg.repeats = bench_cfg.repeats
+        plt_cnt_cfg.repeats = bench_cfg.execution.repeats
         plt_cnt_cfg.inputs_cnt = len(bench_cfg.input_vars)
         return plt_cnt_cfg
 

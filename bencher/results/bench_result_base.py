@@ -122,7 +122,7 @@ class BenchResultBase:
         Returns:
             BenchCfg: updated config with wrapped labels
         """
-        if bench_cfg.over_time:
+        if bench_cfg.time.over_time:
             if self.ds.coords["over_time"].dtype == np.datetime64:
                 # plotly catastrophically fails to plot anything with the default long string representation of time, so convert to a shorter time representation
                 self.ds.coords["over_time"] = [
@@ -130,7 +130,7 @@ class BenchResultBase:
                     for t in self.ds.coords["over_time"].values
                 ]
                 # wrap very long time event labels because otherwise the graphs are unreadable
-            if bench_cfg.time_event is not None:
+            if bench_cfg.time.time_event is not None:
                 self.ds.coords["over_time"] = [
                     "\n".join(wrap(t, 20)) for t in self.ds.coords["over_time"].values
                 ]
@@ -201,7 +201,7 @@ class BenchResultBase:
             xr.Dataset: results in the form of an xarray dataset
         """
         if reduce == ReduceType.AUTO:
-            reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+            reduce = ReduceType.REDUCE if self.bench_cfg.execution.repeats > 1 else ReduceType.SQUEEZE
 
         ds_out = self.ds.copy()
 
@@ -600,7 +600,7 @@ class BenchResultBase:
         dims = list(d for d in dataset.sizes)
 
         time_dim_delta = 0
-        if self.bench_cfg.over_time:
+        if self.bench_cfg.time.over_time:
             time_dim_delta = 0
 
         if num_dims > (target_dimension + time_dim_delta) and num_dims != 0:
@@ -737,16 +737,16 @@ class BenchResultBase:
 
     def set_plot_size(self, **kwargs) -> dict:
         if "width" not in kwargs:
-            if self.bench_cfg.plot_size is not None:
-                kwargs["width"] = self.bench_cfg.plot_size
+            if self.bench_cfg.visualization.plot_size is not None:
+                kwargs["width"] = self.bench_cfg.visualization.plot_size
             # specific width overrides general size
-            if self.bench_cfg.plot_width is not None:
-                kwargs["width"] = self.bench_cfg.plot_width
+            if self.bench_cfg.visualization.plot_width is not None:
+                kwargs["width"] = self.bench_cfg.visualization.plot_width
 
         if "height" not in kwargs:
-            if self.bench_cfg.plot_size is not None:
-                kwargs["height"] = self.bench_cfg.plot_size
+            if self.bench_cfg.visualization.plot_size is not None:
+                kwargs["height"] = self.bench_cfg.visualization.plot_size
             # specific height overrides general size
-            if self.bench_cfg.plot_height is not None:
-                kwargs["height"] = self.bench_cfg.plot_height
+            if self.bench_cfg.visualization.plot_height is not None:
+                kwargs["height"] = self.bench_cfg.visualization.plot_height
         return kwargs
