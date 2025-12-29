@@ -2,10 +2,7 @@
 	"name": "bencher",
 	"build": {
 		"dockerfile": "Dockerfile",
-		"context": "..",
-		"args": {
-			"PIXI_VERSION": "v0.62.2"
-		}
+		"context": ".."
 	},
 	"customizations": {
 		"vscode": {
@@ -21,7 +18,7 @@
 		}
 	},
 	"features": {
-		"ghcr.io/devcontainers/features/node:1": {},
+		"ghcr.io/devcontainers/features/node": {},
 		"./claude-code": {}
 		// "ghcr.io/devcontainers/features/docker-in-docker:2": {}
 		// "ghcr.io/devcontainers/features/common-utils:2": {},
@@ -38,7 +35,9 @@
 		"XDG_DATA_HOME": "/home/vscode/.local/share"
 	},
 	"mounts": [
-		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
+		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+		"source=${localEnv:HOME}/.ssh/known_hosts,target=/home/vscode/.ssh/known_hosts,type=bind,ro",
+		"source=${localEnv:HOME}/.ssh/config,target=/home/vscode/.ssh/config,type=bind,ro"
 	],
 	"postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }

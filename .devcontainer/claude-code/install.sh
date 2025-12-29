@@ -5,95 +5,27 @@ set -eu
 # Based on: https://github.com/anthropics/devcontainer-features/pull/25
 # Combines CLI installation with configuration directory setup
 
-# Function to detect the package manager and OS type
-detect_package_manager() {
-    for pm in apt-get apk dnf yum; do
-        if command -v $pm >/dev/null; then
-            case $pm in
-                apt-get) echo "apt" ;;
-                *) echo "$pm" ;;
-            esac
-            return 0
-        fi
-    done
-    echo "unknown"
-    return 1
-}
-
-# Function to install packages using the appropriate package manager
-install_packages() {
-    local pkg_manager="$1"
-    shift
-    local packages="$@"
-
-    case "$pkg_manager" in
-        apt)
-            apt-get update
-            apt-get install -y $packages
-            ;;
-        apk)
-            apk add --no-cache $packages
-            ;;
-        dnf|yum)
-            $pkg_manager install -y $packages
-            ;;
-        *)
-            echo "WARNING: Unsupported package manager. Cannot install packages: $packages"
-            return 1
-            ;;
-    esac
-
-    return 0
-}
-
-# Function to install Node.js
-install_nodejs() {
-    local pkg_manager="$1"
-
-    echo "Installing Node.js using $pkg_manager..."
-
-    case "$pkg_manager" in
-        apt)
-            # Debian/Ubuntu - install more recent Node.js LTS
-            install_packages apt "ca-certificates curl gnupg"
-            mkdir -p /etc/apt/keyrings
-            curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-            echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-            apt-get update
-            apt-get install -y nodejs
-            ;;
-        apk)
-            # Alpine
-            install_packages apk "nodejs npm"
-            ;;
-        dnf)
-            # Fedora/RHEL
-            install_packages dnf "nodejs npm"
-            ;;
-        yum)
-            # CentOS/RHEL
-            curl -sL https://rpm.nodesource.com/setup_18.x | bash -
-            yum install -y nodejs
-            ;;
-        *)
-            echo "ERROR: Unsupported package manager for Node.js installation"
-            return 1
-            ;;
-    esac
-
-    # Verify installation
-    if command -v node >/dev/null && command -v npm >/dev/null; then
-        echo "Successfully installed Node.js and npm"
-        return 0
-    else
-        echo "Failed to install Node.js and npm"
-        return 1
-    fi
-}
-
 # Function to install Claude Code CLI
 install_claude_code() {
     echo "Installing Claude Code CLI globally..."
+
+    # Verify Node.js and npm are available
+    if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
+        cat <<EOF
+
+ERROR: Node.js and npm are required but not found!
+
+This should not happen as the Node.js feature is automatically installed
+via the 'installsAfter' mechanism in devcontainer-feature.json.
+
+Please check:
+1. The devcontainer feature specification is correct
+2. The Node.js feature (ghcr.io/devcontainers/features/node) is available
+3. Your devcontainer build logs for errors
+
+EOF
+        exit 1
+    fi
 
     # Install with npm
     npm install -g @anthropic-ai/claude-code
@@ -116,9 +48,28 @@ create_claude_directories() {
     echo "Creating Claude configuration directories..."
 
     # Determine the target user's home directory
-    # $_REMOTE_USER is set by devcontainer, fallback to 'vscode' or current user
-    local target_home="${_REMOTE_USER_HOME:-/home/${_REMOTE_USER:-vscode}}"
+    # $_REMOTE_USER is set by devcontainer, fallback to 'vscode'
     local target_user="${_REMOTE_USER:-vscode}"
+    local target_home="${_REMOTE_USER_HOME:-/home/${target_user}}"
+
+    # Be defensive: if the resolved home does not exist, fall back to $HOME,
+    # then to /home/${target_user}. If neither is available, fail clearly.
+    if [ ! -d "$target_home" ]; then
+        if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then
+            echo "Warning: target_home '$target_home' does not exist, falling back to \$HOME: $HOME" >&2
+            target_home="$HOME"
+        elif [ -d "/home/${target_user}" ]; then
+            echo "Warning: target_home '$target_home' does not exist, falling back to /home/${target_user}" >&2
+            target_home="/home/${target_user}"
+        else
+            echo "Error: No suitable home directory found for '${target_user}'. Tried:" >&2
+            echo "  - _REMOTE_USER_HOME='${_REMOTE_USER_HOME:-}'" >&2
+            echo "  - \$HOME='${HOME:-}'" >&2
+            echo "  - /home/${target_user}" >&2
+            echo "Please set _REMOTE_USER_HOME to a valid, writable directory." >&2
+            exit 1
+        fi
+    fi
 
     echo "Target home directory: $target_home"
     echo "Target user: $target_user"
@@ -152,44 +103,13 @@ create_claude_directories() {
     echo "Claude directories created successfully"
 }
 
-# Print error message about requiring Node.js feature
-print_nodejs_requirement() {
-    cat <<EOF
-
-ERROR: Node.js and npm are required but could not be installed!
-Please add the Node.js feature to your devcontainer.json:
-
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {},
-    "./claude-code": {}
-  }
-
-EOF
-    exit 1
-}
-
 # Main script starts here
 main() {
     echo "========================================="
     echo "Activating feature 'claude-code' (local)"
     echo "========================================="
 
-    # Detect package manager
-    PKG_MANAGER=$(detect_package_manager)
-    echo "Detected package manager: $PKG_MANAGER"
-
-    # Check if Node.js and npm are available
-    if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
-        echo "Node.js or npm not found, attempting to install automatically..."
-        install_nodejs "$PKG_MANAGER" || print_nodejs_requirement
-    else
-        echo "Node.js and npm are already installed"
-        node --version
-        npm --version
-    fi
-
-    # Install Claude Code CLI
-    # Check if already installed to make this idempotent
+    # Install Claude Code CLI (or verify it's already installed)
     if command -v claude >/dev/null; then
         echo "Claude Code CLI is already installed"
         claude --version

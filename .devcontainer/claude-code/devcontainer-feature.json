@@ -16,6 +16,9 @@
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
     },
+    "dependsOn": [
+        "ghcr.io/devcontainers/features/node"
+    ],
     "installsAfter": [
         "ghcr.io/devcontainers/features/node"
     ],
