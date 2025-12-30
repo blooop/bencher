@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION
+ARG PIXI_VERSION=v0.62.2
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -11,3 +11,6 @@ USER vscode
 WORKDIR /home/vscode
 
 RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc
+
+# Create .ssh directory with proper permissions for SSH config mounts
+RUN mkdir -p /home/vscode/.ssh && chmod 700 /home/vscode/.ssh

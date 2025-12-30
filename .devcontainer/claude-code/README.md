@@ -50,7 +50,7 @@ These files **must be writable** to enable:
 
 ## Usage
 
-### Basic Setup
+### Setup
 
 Add this feature to your `devcontainer.json`:
 
@@ -63,19 +63,7 @@ Add this feature to your `devcontainer.json`:
 }
 ```
 
-### Recommended Setup (with Node.js)
-
-For better compatibility, include the Node.js feature:
-
-```json
-{
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {},
-    "./claude-code": {}
-  },
-  "runArgs": ["--network=host"]
-}
-```
+**Note**: Node.js is automatically installed via the `installsAfter` dependency mechanism - you don't need to explicitly add it to your features.
 
 ### Why `--network=host` is Required
 
@@ -140,14 +128,14 @@ touch ~/.claude/settings.json
 
 ### Container
 
-- **Node.js 18+** and **npm** must be available (will be auto-installed if possible)
-- Supported base images: Debian, Ubuntu, Alpine, Fedora, RHEL, CentOS
+- **Node.js 18+** and **npm** are automatically installed via the `installsAfter` dependency mechanism
+- No manual configuration required
 
 ## Assumptions
 
-1. **User**: The feature assumes the container user is `vscode` (standard for Dev Containers)
-   - Files are mounted to `/home/vscode/.claude/`
-   - If your container uses a different user, you may need to adjust the mount paths
+1. **Container User**: This feature assumes the container user is `vscode` (standard for Dev Containers)
+   - Configuration files are mounted to `/home/vscode/.claude/`
+   - If your container uses a different user (e.g., `root`, `codespace`), you'll need to customize the mounts in your `devcontainer.json`
 
 2. **HOME Environment Variable**: Must be set on the host machine (standard on Unix systems)
 
@@ -385,19 +373,6 @@ Then use both:
 
 ## Troubleshooting
 
-### "Node.js not found" error
-
-**Solution**: Add the Node.js feature explicitly:
-
-```json
-{
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {},
-    "./claude-code": {}
-  }
-}
-```
-
 ### OAuth callback hangs at "Paste code here"
 
 **Problem**: Browser clicks "Authorize" but container never receives the callback.
@@ -422,7 +397,7 @@ See "Why `--network=host` is Required" section above for details.
 
 ### VS Code extensions don't install with `--network=host`
 
-**Known Issue**: [Using runArg network=host prevents extensions from installing](https://github.com/microsoft/vscode-remote-release/issues/9212)
+**Known Issue**: [Using runArgs network=host prevents extensions from installing](https://github.com/microsoft/vscode-remote-release/issues/9212)
 
 **Workarounds:**
 1. **Rebuild without runArgs first**, let extensions install, then add runArgs (extensions persist)

@@ -1,11 +1,10 @@
 {
   "recommendations": [
+    "mhutchie.git-graph",
     "ms-python.python",
     "ms-python.vscode-pylance",
-    "ms-python.pylint",
+    "jjjermiah.pixi-vscode",
     "charliermarsh.ruff",
-    "mhutchie.git-graph",
     "tamasfe.even-better-toml",
-    "jjjermiah.pixi-vscode"
   ]
 }
