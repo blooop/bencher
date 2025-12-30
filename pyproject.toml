@@ -64,7 +64,7 @@ test = [
     "hypothesis>=6.104.2,<=6.148.8",
     "ruff>=0.5.0,<=0.14.10",
     "coverage>=7.5.4,<=7.13.1",
-    "ty",
+    "ty>=0.0.8,<=0.0.8",
     "nbformat",
     "ipykernel",
     "pip",
@@ -104,14 +104,15 @@ agent-iterate = { depends-on = [
     "fix-commit-push",
 ] }
 
+
 pre-commit = "pre-commit run -a"
 pre-commit-update = "pre-commit autoupdate"
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-ty-check = "ty check --respect-ignore-files ."
-lint = { depends-on = ["ruff-lint", "pylint", "ty-check"] }
+ty = "ty check --respect-ignore-files ."
+lint = { depends-on = ["ruff-lint", "pylint", "ty"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
@@ -127,7 +128,7 @@ ci = { depends-on = [
     "format",
     "ruff-lint",
     "pylint",
-    "ty-check",
+    "ty",
     "coverage",
     "coverage-report",
 ] }
