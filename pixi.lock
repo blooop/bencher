@@ -1383,7 +1383,7 @@ packages:
 - pypi: ./
   name: holobench
   version: 1.58.1
-  sha256: deb7548a001eb9e02cadf921d7d85e67b2ee8e205d18150c81efd91feb2b916d
+  sha256: 6b5948ab8912a0026d90d542c497e6330000d346d19dbbacebe758f637bcc08d
   requires_dist:
   - holoviews>=1.15,<=1.22.1
   - numpy>=1.0,<=2.2.6
@@ -1404,7 +1404,7 @@ packages:
   - hypothesis>=6.104.2,<=6.148.8 ; extra == 'test'
   - ruff>=0.5.0,<=0.14.10 ; extra == 'test'
   - coverage>=7.5.4,<=7.13.1 ; extra == 'test'
-  - ty ; extra == 'test'
+  - ty>=0.0.8,<=0.0.8 ; extra == 'test'
   - nbformat ; extra == 'test'
   - ipykernel ; extra == 'test'
   - pip ; extra == 'test'
