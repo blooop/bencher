@@ -120,7 +120,7 @@ format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-ty-check = "ty check --respect-ignore-files ."
+ty = "ty check --respect-ignore-files ."
 lint = { depends-on = ["ruff-lint", "pylint", "ty"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
