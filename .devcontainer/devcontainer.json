@@ -33,13 +33,12 @@
         "XDG_CONFIG_HOME": "/home/vscode/.config",
         "XDG_CACHE_HOME": "/home/vscode/.cache",
         "XDG_DATA_HOME": "/home/vscode/.local/share",
-        "SSH_AUTH_SOCK": "/ssh-agent"
+        "SSH_AUTH_SOCK": "/home/vscode/.ssh/agent.sock"
     },
     "mounts": [
         "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
-        "source=${localEnv:HOME}/.ssh/known_hosts,target=/home/vscode/.ssh/known_hosts,type=bind,ro",
-        "source=${localEnv:HOME}/.ssh/config,target=/home/vscode/.ssh/config,type=bind,ro",
-        "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind",
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
     ],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }
