@@ -14,7 +14,7 @@ Fix the GitHub issue: $ARGUMENTS
 
 ## Notes
 
-- Input can be a GitHub URL (e.g., `https://github.com/owner/repo/issues/123`) or issue number
+- Input can be a GitHub URL (e.g., `https://github.com/owner/repo/issues/123`) or an issue number
 - Keep changes minimal and focused on the issue
 - Add tests if fixing a bug
 - Run full CI before committing
