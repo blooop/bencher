@@ -104,17 +104,23 @@ agent-iterate = { depends-on = [
 ] }
 
 dev-add-docker = "devpod provider list | grep -qw docker || devpod provider add docker"
-dev = { cmd = "devpod up . --ide none && ssh pythontemplate.devpod", depends-on = ["dev-add-docker"] }
+dev = { cmd = "devpod up . --ide none && ssh pythontemplate.devpod", depends-on = [
+    "dev-add-docker",
+] }
 dev-vs = { cmd = "devpod up . --ide vscode", depends-on = ["dev-add-docker"] }
-dev-restart = { cmd = "devpod up . --recreate --ide none && ssh pythontemplate.devpod", depends-on = ["dev-add-docker"] }
-dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = ["dev-add-docker"] }
+dev-restart = { cmd = "devpod up . --recreate --ide none && ssh pythontemplate.devpod", depends-on = [
+    "dev-add-docker",
+] }
+dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = [
+    "dev-add-docker",
+] }
 prek = "prek run -a"
 prek-update = "prek autoupdate"
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-ty = "ty check"
+ty-check = "ty check --respect-ignore-files ."
 lint = { depends-on = ["ruff-lint", "pylint", "ty"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
@@ -128,12 +134,12 @@ fix = { depends-on = ["update-lock", "format", "ruff-lint", "prek"] }
 fix-commit-push = { depends-on = ["fix", "commit-format", "update-lock-push"] }
 ci-no-cover = { depends-on = ["style", "test"] }
 ci = { depends-on = [
-  "format",
-  "ruff-lint",
-  "pylint",
-  "ty",
-  "coverage",
-  "coverage-report",
+    "format",
+    "ruff-lint",
+    "pylint",
+    "ty",
+    "coverage",
+    "coverage-report",
 ] }
 git-commit-all = "git add -A && git commit -m 'Add all untracked files' || true"
 ci-push = { depends-on = ["format", "ruff-lint", "update-lock", "ci", "push"] }
