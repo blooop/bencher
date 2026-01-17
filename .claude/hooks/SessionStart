@@ -29,9 +29,9 @@ export PATH="$HOME/.pixi/bin:$PATH"
 echo "📦 Installing project dependencies..."
 pixi install
 
-# Run pre-commit installation
-echo "🔧 Setting up pre-commit hooks..."
-pixi run pre-commit install || echo "⚠️  Pre-commit installation skipped (optional)"
+# Run prek installation
+echo "🔧 Setting up prek hooks..."
+pixi run prek install || echo "⚠️  Prek installation skipped (optional)"
 
 # Set up git merge driver for lockfiles
 echo "🔧 Configuring git merge driver..."

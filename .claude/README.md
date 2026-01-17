@@ -8,7 +8,7 @@ The `hooks/SessionStart` script automatically runs when a new Claude Code sessio
 
 1. **Installs pixi** (if not already installed) - The package and environment manager
 2. **Installs project dependencies** - All Python packages and tools defined in `pyproject.toml`
-3. **Sets up pre-commit hooks** - For automatic code quality checks
+3. **Sets up prek hooks** - For automatic code quality checks
 4. **Configures git** - Sets up merge drivers for lockfiles
 
 ## Usage with Claude Code Online
@@ -29,9 +29,9 @@ Once setup is complete, Claude can use these pixi tasks:
 - `pixi run ci` - Run full CI pipeline (format, lint, test, coverage)
 - `pixi run fix` - Auto-fix common issues (update lock, format, lint)
 
-#### Pre-commit
-- `pixi run pre-commit` - Run all pre-commit hooks
-- `pixi run pre-commit-update` - Update pre-commit hook versions
+#### Prek Hooks
+- `pixi run prek` - Run all prek hooks
+- `pixi run prek-update` - Update prek hook versions
 
 ### How It Works
 
@@ -45,7 +45,7 @@ If you encounter issues:
 
 1. **Dependencies not found**: Run `pixi install` manually
 2. **Lockfile conflicts**: Run `pixi run update-lock`
-3. **Pre-commit issues**: Run `pixi run pre-commit-update`
+3. **Prek issues**: Run `pixi run prek-update`
 4. **Full reset**: Delete `.pixi` directory and restart session
 
 ### Customization

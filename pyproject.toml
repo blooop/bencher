@@ -31,7 +31,7 @@ Home = "https://github.com/blooop/bencher"
 Documentation = "https://bencher.readthedocs.io/en/latest/"
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "https://prefix.dev/blooop"]
 platforms = ["linux-64"]
 
 [tool.pixi.system-requirements]
@@ -41,7 +41,7 @@ libc = "2.31"
 python = ">=3.10"
 sqlite = "==3.48.0"
 shellcheck = ">=0.10.0,<0.11"
-pre-commit = "==4.3.0"
+devpod = ">=0.8.0,<0.9"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
@@ -51,7 +51,6 @@ python = "3.11.*"
 python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
-
 
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
@@ -64,11 +63,12 @@ test = [
     "hypothesis>=6.104.2,<=6.148.8",
     "ruff>=0.5.0,<=0.14.10",
     "coverage>=7.5.4,<=7.13.1",
-    "ty",
     "nbformat",
     "ipykernel",
     "pip",
     "jupyter_bokeh",
+    "prek>=0.2.28,<0.3.0",
+    "ty>=0.0.8,<=0.0.12",
 ]
 
 #adds support for embedding rerun windows (alpha)
@@ -92,7 +92,6 @@ py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
 py313 = ["py313", "test", "rerun"]
 
-
 [tool.pixi.tasks]
 #AI AGENT TASKS
 
@@ -104,14 +103,19 @@ agent-iterate = { depends-on = [
     "fix-commit-push",
 ] }
 
-pre-commit = "pre-commit run -a"
-pre-commit-update = "pre-commit autoupdate"
+dev-add-docker = "devpod provider list | grep -qw docker || devpod provider add docker"
+dev = { cmd = "devpod up . --ide none && ssh pythontemplate.devpod", depends-on = ["dev-add-docker"] }
+dev-vs = { cmd = "devpod up . --ide vscode", depends-on = ["dev-add-docker"] }
+dev-restart = { cmd = "devpod up . --recreate --ide none && ssh pythontemplate.devpod", depends-on = ["dev-add-docker"] }
+dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = ["dev-add-docker"] }
+prek = "prek run -a"
+prek-update = "prek autoupdate"
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-ty-check = "ty check --respect-ignore-files ."
-lint = { depends-on = ["ruff-lint", "pylint", "ty-check"] }
+ty = "ty check"
+lint = { depends-on = ["ruff-lint", "pylint", "ty"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
@@ -120,16 +124,16 @@ coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"
 push = "git push"
 update-lock-push = { depends-on = ["update-lock", "push"] }
-fix = { depends-on = ["update-lock", "format", "ruff-lint", "pre-commit"] }
+fix = { depends-on = ["update-lock", "format", "ruff-lint", "prek"] }
 fix-commit-push = { depends-on = ["fix", "commit-format", "update-lock-push"] }
 ci-no-cover = { depends-on = ["style", "test"] }
 ci = { depends-on = [
-    "format",
-    "ruff-lint",
-    "pylint",
-    "ty-check",
-    "coverage",
-    "coverage-report",
+  "format",
+  "ruff-lint",
+  "pylint",
+  "ty",
+  "coverage",
+  "coverage-report",
 ] }
 git-commit-all = "git add -A && git commit -m 'Add all untracked files' || true"
 ci-push = { depends-on = ["format", "ruff-lint", "update-lock", "ci", "push"] }

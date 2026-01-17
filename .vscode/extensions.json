@@ -1,11 +1,11 @@
 {
-  "recommendations": [
-    "ms-python.python",
-    "ms-python.vscode-pylance",
-    "ms-python.pylint",
-    "charliermarsh.ruff",
-    "mhutchie.git-graph",
-    "tamasfe.even-better-toml",
-    "jjjermiah.pixi-vscode"
-  ]
+    "recommendations": [
+        "mhutchie.git-graph",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.pylint",
+        "jjjermiah.pixi-vscode",
+        "charliermarsh.ruff",
+        "tamasfe.even-better-toml",
+    ]
 }

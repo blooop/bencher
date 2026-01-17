@@ -192,3 +192,4 @@ docs/autoapi/*
 docs/reference/
 
 .devpod/
+.devpod-internal/

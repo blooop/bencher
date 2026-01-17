@@ -14,7 +14,7 @@ updates:
         #try to group all development dependencies updates into a single pr
         patterns:
           - "check-manifest"
-          - "pre-commit"
+          - "prek"
           - "pylint"
           - "pytest"
           - "pytest-cov"
