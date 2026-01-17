@@ -1,44 +1,45 @@
 {
-	"name": "bencher",
-	"build": {
-		"dockerfile": "Dockerfile",
-		"context": "..",
-		"args": {
-			"PIXI_VERSION": "v0.62.2"
-		}
-	},
-	"customizations": {
-		"vscode": {
-			"settings": {},
-			"extensions": [
-				"ms-python.python",
-				"ms-python.vscode-pylance",
-				"jjjermiah.pixi-vscode",
-				"charliermarsh.ruff",
-				"tamasfe.even-better-toml",
-				"mhutchie.git-graph"
-			]
-		}
-	},
+    "name": "bencher",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "initializeCommand": ".devcontainer/claude-code/init-host.sh",
+    "customizations": {
+        "vscode": {
+            "settings": {},
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "jjjermiah.pixi-vscode",
+                "charliermarsh.ruff",
+                "tamasfe.even-better-toml",
+                "mhutchie.git-graph"
+              ]
+        }
+    },
 	"features": {
-		"ghcr.io/devcontainers/features/node:1": {},
 		"./claude-code": {}
-		// "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+        // "ghcr.io/devcontainers/features/docker-in-docker:2": {}
 		// "ghcr.io/devcontainers/features/common-utils:2": {},
 		// "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
-	},
-	"runArgs": [
-		"--network=host"
-	],
-	"containerEnv": {
-		"CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
-		"XDG_CONFIG_HOME": "/home/vscode/.config",
-		"XDG_CACHE_HOME": "/home/vscode/.cache",
-		"XDG_DATA_HOME": "/home/vscode/.local/share"
-	},
-	"mounts": [
-		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
-	],
-	"postCreateCommand": "sudo chown vscode .pixi && pixi install"
+    },
+    "runArgs": [
+        "--network=host"
+    ],
+    "containerEnv": {
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+        "XDG_CONFIG_HOME": "/home/vscode/.config",
+        "XDG_CACHE_HOME": "/home/vscode/.cache",
+        "XDG_DATA_HOME": "/home/vscode/.local/share",
+        "SSH_AUTH_SOCK": "/ssh-agent"
+    },
+    "mounts": [
+        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+        "source=${localEnv:HOME}/.ssh/known_hosts,target=/home/vscode/.ssh/known_hosts,type=bind,ro",
+        "source=${localEnv:HOME}/.ssh/config,target=/home/vscode/.ssh/config,type=bind,ro",
+        "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+    ],
+    "postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }

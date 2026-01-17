@@ -2,197 +2,165 @@
 set -eu
 
 # Claude Code CLI Local Feature Install Script
-# Based on: https://github.com/anthropics/devcontainer-features/pull/25
-# Combines CLI installation with configuration directory setup
+# Installs Claude Code via pixi and sets up configuration directories
 
-# Function to detect the package manager and OS type
-detect_package_manager() {
-    for pm in apt-get apk dnf yum; do
-        if command -v $pm >/dev/null; then
-            case $pm in
-                apt-get) echo "apt" ;;
-                *) echo "$pm" ;;
-            esac
-            return 0
+# Global variables set by resolve_target_home
+TARGET_USER=""
+TARGET_HOME=""
+
+# Function to resolve target user and home directory with validation
+# Sets TARGET_USER and TARGET_HOME global variables
+resolve_target_home() {
+    TARGET_USER="${_REMOTE_USER:-vscode}"
+    TARGET_HOME="${_REMOTE_USER_HOME:-}"
+
+    # If _REMOTE_USER_HOME is not set, try to infer from current user or /home/<user>
+    if [ -z "${TARGET_HOME}" ]; then
+        if [ "$(id -un 2>/dev/null)" = "${TARGET_USER}" ] && [ -n "${HOME:-}" ]; then
+            TARGET_HOME="${HOME}"
+        elif [ -d "/home/${TARGET_USER}" ]; then
+            TARGET_HOME="/home/${TARGET_USER}"
         fi
-    done
-    echo "unknown"
-    return 1
-}
+    fi
 
-# Function to install packages using the appropriate package manager
-install_packages() {
-    local pkg_manager="$1"
-    shift
-    local packages="$@"
+    # If TARGET_HOME is set but doesn't exist, try fallbacks
+    if [ -n "${TARGET_HOME}" ] && [ ! -d "${TARGET_HOME}" ]; then
+        if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then
+            echo "Warning: TARGET_HOME '${TARGET_HOME}' does not exist, falling back to \$HOME: $HOME" >&2
+            TARGET_HOME="$HOME"
+        elif [ -d "/home/${TARGET_USER}" ]; then
+            echo "Warning: TARGET_HOME '${TARGET_HOME}' does not exist, falling back to /home/${TARGET_USER}" >&2
+            TARGET_HOME="/home/${TARGET_USER}"
+        fi
+    fi
 
-    case "$pkg_manager" in
-        apt)
-            apt-get update
-            apt-get install -y $packages
-            ;;
-        apk)
-            apk add --no-cache $packages
-            ;;
-        dnf|yum)
-            $pkg_manager install -y $packages
-            ;;
-        *)
-            echo "WARNING: Unsupported package manager. Cannot install packages: $packages"
-            return 1
-            ;;
-    esac
-
-    return 0
-}
-
-# Function to install Node.js
-install_nodejs() {
-    local pkg_manager="$1"
-
-    echo "Installing Node.js using $pkg_manager..."
-
-    case "$pkg_manager" in
-        apt)
-            # Debian/Ubuntu - install more recent Node.js LTS
-            install_packages apt "ca-certificates curl gnupg"
-            mkdir -p /etc/apt/keyrings
-            curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-            echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-            apt-get update
-            apt-get install -y nodejs
-            ;;
-        apk)
-            # Alpine
-            install_packages apk "nodejs npm"
-            ;;
-        dnf)
-            # Fedora/RHEL
-            install_packages dnf "nodejs npm"
-            ;;
-        yum)
-            # CentOS/RHEL
-            curl -sL https://rpm.nodesource.com/setup_18.x | bash -
-            yum install -y nodejs
-            ;;
-        *)
-            echo "ERROR: Unsupported package manager for Node.js installation"
-            return 1
-            ;;
-    esac
-
-    # Verify installation
-    if command -v node >/dev/null && command -v npm >/dev/null; then
-        echo "Successfully installed Node.js and npm"
-        return 0
-    else
-        echo "Failed to install Node.js and npm"
-        return 1
+    # Ensure we ended up with a valid, existing home directory
+    if [ -z "${TARGET_HOME}" ] || [ ! -d "${TARGET_HOME}" ]; then
+        echo "Error: could not determine a valid home directory for user '${TARGET_USER}'." >&2
+        echo "Checked _REMOTE_USER_HOME ('${_REMOTE_USER_HOME:-}'), \$HOME ('${HOME:-}'), and /home/${TARGET_USER}." >&2
+        exit 1
     fi
 }
 
-# Function to install Claude Code CLI
+# Function to install pixi if not found
+install_pixi() {
+    echo "Installing pixi..."
+
+    # Detect architecture
+    case "$(uname -m)" in
+        x86_64|amd64) ARCH="x86_64" ;;
+        aarch64|arm64) ARCH="aarch64" ;;
+        *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+    esac
+
+    # Download and install pixi
+    curl -fsSL "https://github.com/prefix-dev/pixi/releases/latest/download/pixi-${ARCH}-unknown-linux-musl" -o /usr/local/bin/pixi
+    chmod +x /usr/local/bin/pixi
+
+    echo "pixi installed successfully"
+    pixi --version
+}
+
+# Function to install Claude Code CLI via pixi
 install_claude_code() {
-    echo "Installing Claude Code CLI globally..."
+    echo "Installing Claude Code CLI via pixi..."
 
-    # Install with npm
-    npm install -g @anthropic-ai/claude-code
+    # Install pixi if not available
+    if ! command -v pixi >/dev/null; then
+        install_pixi
+    fi
 
-    # Verify installation
-    if command -v claude >/dev/null; then
+    # Resolve target user and home (sets TARGET_USER and TARGET_HOME)
+    resolve_target_home
+
+    # Install with pixi global from blooop channel
+    # Run as target user so it installs to their home directory
+    if [ "$(id -u)" -eq 0 ] && [ "$TARGET_USER" != "root" ]; then
+        su - "$TARGET_USER" -c "pixi global install --channel https://prefix.dev/blooop claude-shim"
+    else
+        pixi global install --channel https://prefix.dev/blooop claude-shim
+    fi
+
+    # Add pixi bin path to user's profile if not already there
+    local profile="$TARGET_HOME/.profile"
+    local pixi_path_line='export PATH="$HOME/.pixi/bin:$PATH"'
+    if [ -f "$profile" ] && ! grep -q '\.pixi/bin' "$profile"; then
+        echo "$pixi_path_line" >> "$profile"
+    elif [ ! -f "$profile" ]; then
+        echo "$pixi_path_line" > "$profile"
+        chown "$TARGET_USER:$TARGET_USER" "$profile" 2>/dev/null || true
+    fi
+
+    # Workaround: pixi trampoline fails for bash scripts, so add env bin directly
+    # This conditionally adds the path only if the env exists
+    local env_path_line='[ -d "$HOME/.pixi/envs/claude-shim/bin" ] && export PATH="$HOME/.pixi/envs/claude-shim/bin:$PATH"'
+    if [ -f "$profile" ] && ! grep -q 'pixi/envs/claude-shim' "$profile"; then
+        echo "# Workaround: pixi trampoline fails for bash scripts" >> "$profile"
+        echo "$env_path_line" >> "$profile"
+    fi
+
+    # Verify installation by checking the trampoline exists (don't run it - that triggers download)
+    local pixi_bin_path="$TARGET_HOME/.pixi/bin"
+    local claude_bin="$pixi_bin_path/claude"
+    if [ -x "$claude_bin" ]; then
         echo "Claude Code CLI installed successfully!"
-        claude --version
+        echo "(Claude binary will be downloaded on first run)"
         return 0
     else
-        echo "ERROR: Claude Code CLI installation failed!"
+        echo "ERROR: Claude Code CLI installation failed! Binary not found at $claude_bin"
         return 1
     fi
 }
 
 # Function to create Claude configuration directories
-# These directories will be mounted from the host, but we create them
-# in the container to ensure they exist and have proper permissions
 create_claude_directories() {
     echo "Creating Claude configuration directories..."
 
-    # Determine the target user's home directory
-    # $_REMOTE_USER is set by devcontainer, fallback to 'vscode' or current user
-    local target_home="${_REMOTE_USER_HOME:-/home/${_REMOTE_USER:-vscode}}"
-    local target_user="${_REMOTE_USER:-vscode}"
+    # Resolve target user and home (sets TARGET_USER and TARGET_HOME)
+    resolve_target_home
 
-    echo "Target home directory: $target_home"
-    echo "Target user: $target_user"
+    echo "Target home directory: $TARGET_HOME"
+    echo "Target user: $TARGET_USER"
 
-    # Create the main .claude directory
-    mkdir -p "$target_home/.claude"
-    mkdir -p "$target_home/.claude/agents"
-    mkdir -p "$target_home/.claude/commands"
-    mkdir -p "$target_home/.claude/hooks"
+    # Create the main .claude directory and subdirectories
+    mkdir -p "$TARGET_HOME/.claude"
+    mkdir -p "$TARGET_HOME/.claude/agents"
+    mkdir -p "$TARGET_HOME/.claude/commands"
+    mkdir -p "$TARGET_HOME/.claude/hooks"
 
     # Create empty config files if they don't exist
-    # This ensures the bind mounts won't fail if files are missing on host
-    if [ ! -f "$target_home/.claude/.credentials.json" ]; then
-        echo "{}" > "$target_home/.claude/.credentials.json"
-        chmod 600 "$target_home/.claude/.credentials.json"
+    if [ ! -f "$TARGET_HOME/.claude/.credentials.json" ]; then
+        echo "{}" > "$TARGET_HOME/.claude/.credentials.json"
+        chmod 600 "$TARGET_HOME/.claude/.credentials.json"
     fi
 
-    if [ ! -f "$target_home/.claude/.claude.json" ]; then
-        echo "{}" > "$target_home/.claude/.claude.json"
-        chmod 600 "$target_home/.claude/.claude.json"
+    if [ ! -f "$TARGET_HOME/.claude/.claude.json" ]; then
+        echo "{}" > "$TARGET_HOME/.claude/.claude.json"
+        chmod 600 "$TARGET_HOME/.claude/.claude.json"
     fi
 
     # Set proper ownership
-    # Note: These will be overridden by bind mounts from the host,
-    # but this ensures the directories exist with correct permissions
-    # if the mounts fail or for non-mounted directories
     if [ "$(id -u)" -eq 0 ]; then
-        chown -R "$target_user:$target_user" "$target_home/.claude" || true
+        chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.claude" || true
     fi
 
     echo "Claude directories created successfully"
 }
 
-# Print error message about requiring Node.js feature
-print_nodejs_requirement() {
-    cat <<EOF
-
-ERROR: Node.js and npm are required but could not be installed!
-Please add the Node.js feature to your devcontainer.json:
-
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {},
-    "./claude-code": {}
-  }
-
-EOF
-    exit 1
-}
-
-# Main script starts here
+# Main script
 main() {
     echo "========================================="
     echo "Activating feature 'claude-code' (local)"
     echo "========================================="
 
-    # Detect package manager
-    PKG_MANAGER=$(detect_package_manager)
-    echo "Detected package manager: $PKG_MANAGER"
+    # Resolve target user and home (sets TARGET_USER and TARGET_HOME)
+    resolve_target_home
 
-    # Check if Node.js and npm are available
-    if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
-        echo "Node.js or npm not found, attempting to install automatically..."
-        install_nodejs "$PKG_MANAGER" || print_nodejs_requirement
-    else
-        echo "Node.js and npm are already installed"
-        node --version
-        npm --version
-    fi
+    local claude_bin="$TARGET_HOME/.pixi/bin/claude"
 
     # Install Claude Code CLI
-    # Check if already installed to make this idempotent
-    if command -v claude >/dev/null; then
+    if [ -x "$claude_bin" ]; then
         echo "Claude Code CLI is already installed"
-        claude --version
     else
         install_claude_code || exit 1
     fi
@@ -204,27 +172,11 @@ main() {
     echo "Claude Code feature activated successfully!"
     echo "========================================="
     echo ""
-    echo "Configuration files mounted from host:"
-    echo "  Read-Write (auth & state):"
-    echo "    - ~/.claude/.credentials.json (OAuth tokens)"
-    echo "    - ~/.claude/.claude.json (account, setup tracking)"
+    echo "Configuration is bind-mounted from the host (~/.claude)"
+    echo "and persists across container rebuilds."
     echo ""
-    echo "  Read-Only (security-protected):"
-    echo "    - ~/.claude/CLAUDE.md"
-    echo "    - ~/.claude/settings.json"
-    echo "    - ~/.claude/agents/"
-    echo "    - ~/.claude/commands/"
-    echo "    - ~/.claude/hooks/"
-    echo ""
-    echo "Authentication:"
-    echo "  - If you're already authenticated on your host, credentials are shared"
-    echo "  - Otherwise, run 'claude' and follow the OAuth flow"
-    echo "  - The OAuth callback may open in your host browser"
-    echo "  - Credentials are stored on your host at ~/.claude/.credentials.json"
-    echo ""
-    echo "To modify config files, edit on your host machine and rebuild the container."
+    echo "To authenticate, run 'claude' and follow the OAuth flow."
     echo ""
 }
 
-# Execute main function
 main
