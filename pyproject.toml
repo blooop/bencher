@@ -194,8 +194,8 @@ unresolved-attribute = "ignore"
 invalid-type-form = "ignore"
 # Ignore return type mismatches
 invalid-return-type = "ignore"
-# Ignore non-subscriptable errors
-non-subscriptable = "ignore"
+# Ignore not-subscriptable errors
+not-subscriptable = "ignore"
 # Ignore possibly missing attributes (Union type issues)
 possibly-missing-attribute = "ignore"
 # Ignore unsupported operator errors
