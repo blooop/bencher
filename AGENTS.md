@@ -55,7 +55,7 @@ Bencher is a benchmarking framework built around these core concepts:
 ### Data Flow
 1. Define parameter sweep configuration class inheriting from ParametrizedSweep
 2. Implement benchmark function that takes config instance, returns metrics dict
-3. Bench calculates cartesian product of all parameter combinations
+3. Bench calculates the Cartesian product of all parameter combinations
 4. Each combination executed (with caching), results stored in N-D tensor
 5. Automatic plot type deduction based on parameter/result types
 6. Results cached persistently for reuse
