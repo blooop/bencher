@@ -21,6 +21,11 @@ updates:
           - "hypothesis"
           - "ruff"
           - "coverage"
+          - "ty"
+          - "nbformat"
+          - "ipykernel"
+          - "pip"
+          - "jupyter_bokeh"
       lib-dependencies:
         #try to group all third party library updates into a single pr
         patterns:
@@ -29,10 +34,17 @@ updates:
           - "pre-commit"
           - "pylint"
           - "pytest"
-          - "pytest-cov"          
+          - "pytest-cov"
           - "hypothesis"
           - "ruff"
           - "coverage"
+          - "ty"
+          - "nbformat"
+          - "ipykernel"
+          - "pip"
+          - "jupyter_bokeh"
+          - "prek"
+          - "check-manifest"
   - package-ecosystem: github-actions
     directory: /
     schedule:
