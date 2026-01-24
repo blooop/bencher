@@ -21,6 +21,7 @@ updates:
           - "hypothesis"
           - "ruff"
           - "coverage"
+          - "ty"
       lib-dependencies:
         #try to group all third party library updates into a single pr
         patterns:
@@ -29,10 +30,11 @@ updates:
           - "pre-commit"
           - "pylint"
           - "pytest"
-          - "pytest-cov"          
+          - "pytest-cov"
           - "hypothesis"
           - "ruff"
           - "coverage"
+          - "ty"
   - package-ecosystem: github-actions
     directory: /
     schedule:
