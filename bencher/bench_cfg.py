@@ -89,18 +89,65 @@ class BenchRunCfg(BenchPlotSrvCfg):
     """
 
     # ==================== EXECUTION PARAMETERS ====================
+    # These parameters control how the benchmark function is executed
+
     repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
 
-    over_time: bool = param.Boolean(
+    level: int = param.Integer(
+        default=0,
+        bounds=[0, 12],
+        doc="The level parameter is a method of defining the number samples to sweep over in a variable agnostic way, i.e you don't need to specify the number of samples for each variable as they are calculated dynamically from the sampling level.  See example_level.py for more information.",
+    )
+
+    executor = param.Selector(
+        objects=list(Executors),
+        doc="The function can be run serially or in parallel with different futures executors",
+    )
+
+    nightly: bool = param.Boolean(
+        False, doc="Run a more extensive set of tests for a nightly benchmark"
+    )
+
+    headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")
+
+    # ==================== CACHE PARAMETERS ====================
+    # These parameters control caching behavior at both benchmark and sample level
+
+    cache_results: bool = param.Boolean(
         False,
-        doc="If true each time the function is called it will plot a timeseries of historical and the latest result.",
+        doc="This is a benchmark level cache that stores the results of a fully completed benchmark. At the end of a benchmark the values are added to the cache but are not if the benchmark does not complete.  If you want to cache values during the benchmark you need to use the cache_samples option. Beware that depending on how you change code in the objective function, the cache could provide values that are not correct.",
     )
 
-    use_optuna: bool = param.Boolean(False, doc="show optuna plots")
-
-    summarise_constant_inputs: bool = param.Boolean(
-        True, doc="Print the inputs that are kept constant when describing the sweep parameters"
+    cache_samples: bool = param.Boolean(
+        False,
+        doc="If true, every time the benchmark function is called, bencher will check if that value has been calculated before and if so load the from the cache.  Note that the sample level cache is different from the benchmark level cache which only caches the aggregate of all the results at the end of the benchmark. This cache lets you stop a benchmark halfway through and continue. However, beware that depending on how you change code in the objective function, the cache could provide values that are not correct.",
     )
+
+    clear_cache: bool = param.Boolean(
+        False, doc=" Clear the cache of saved input->output mappings."
+    )
+
+    clear_sample_cache: bool = param.Boolean(
+        False,
+        doc="Clears the per-sample cache.  Use this if you get unexpected behavior.  The per_sample cache is tagged by the specific benchmark it was sampled from. So clearing the cache of one benchmark will not clear the cache of other benchmarks.",
+    )
+
+    overwrite_sample_cache: bool = param.Boolean(
+        False,
+        doc="If True, recalculate the value and overwrite the value stored in the sample cache",
+    )
+
+    only_hash_tag: bool = param.Boolean(
+        False,
+        doc="By default when checking if a sample has been calculated before it includes the hash of the greater benchmarking context.  This is safer because it means that data generated from one benchmark will not affect data from another benchmark.  However, if you are careful it can be more flexible to ignore which benchmark generated the data and only use the tag hash to check if that data has been calculated before. ie, you can create two benchmarks that sample a subset of the problem during exploration and give them the same tag, and then afterwards create a larger benchmark that covers the cases you already explored.  If this value is true, the combined benchmark will use any data from other benchmarks with the same tag.",
+    )
+
+    only_plot: bool = param.Boolean(
+        False, doc="Do not attempt to calculate benchmarks if no results are found in the cache"
+    )
+
+    # ==================== DISPLAY PARAMETERS ====================
+    # These parameters control console output and reporting
 
     print_bench_inputs: bool = param.Boolean(
         True, doc="Print the inputs to the benchmark function every time it is called"
@@ -110,7 +157,9 @@ class BenchRunCfg(BenchPlotSrvCfg):
         True, doc="Print the results of the benchmark function every time it is called"
     )
 
-    clear_history: bool = param.Boolean(False, doc="Clear historical results")
+    summarise_constant_inputs: bool = param.Boolean(
+        True, doc="Print the inputs that are kept constant when describing the sweep parameters"
+    )
 
     print_pandas: bool = param.Boolean(
         False, doc="Print a pandas summary of the results to the console."
@@ -135,67 +184,50 @@ class BenchRunCfg(BenchPlotSrvCfg):
         doc="Serve an xarray summary on the results webpage. If you have a large dataset consider setting this to false if the page loading is slow",
     )
 
+    # ==================== VISUALIZATION PARAMETERS ====================
+    # These parameters control plotting and visualization
+
     auto_plot: bool = param.Boolean(
         True, doc=" Automatically dedeuce the best type of plot for the results."
     )
 
-    raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")
-
-    cache_results: bool = param.Boolean(
-        False,
-        doc="This is a benchmark level cache that stores the results of a fully completed benchmark. At the end of a benchmark the values are added to the cache but are not if the benchmark does not complete.  If you want to cache values during the benchmark you need to use the cache_samples option. Beware that depending on how you change code in the objective function, the cache could provide values that are not correct.",
-    )
-
-    clear_cache: bool = param.Boolean(
-        False, doc=" Clear the cache of saved input->output mappings."
-    )
-
-    cache_samples: bool = param.Boolean(
-        False,
-        doc="If true, every time the benchmark function is called, bencher will check if that value has been calculated before and if so load the from the cache.  Note that the sample level cache is different from the benchmark level cache which only caches the aggregate of all the results at the end of the benchmark. This cache lets you stop a benchmark halfway through and continue. However, beware that depending on how you change code in the objective function, the cache could provide values that are not correct.",
-    )
-
-    only_hash_tag: bool = param.Boolean(
-        False,
-        doc="By default when checking if a sample has been calculated before it includes the hash of the greater benchmarking context.  This is safer because it means that data generated from one benchmark will not affect data from another benchmark.  However, if you are careful it can be more flexible to ignore which benchmark generated the data and only use the tag hash to check if that data has been calculated before. ie, you can create two benchmarks that sample a subset of the problem during exploration and give them the same tag, and then afterwards create a larger benchmark that covers the cases you already explored.  If this value is true, the combined benchmark will use any data from other benchmarks with the same tag.",
-    )
-
-    clear_sample_cache: bool = param.Boolean(
-        False,
-        doc="Clears the per-sample cache.  Use this if you get unexpected behavior.  The per_sample cache is tagged by the specific benchmark it was sampled from. So clearing the cache of one benchmark will not clear the cache of other benchmarks.",
-    )
-
-    overwrite_sample_cache: bool = param.Boolean(
-        False,
-        doc="If True, recalculate the value and overwrite the value stored in the sample cache",
-    )
-
-    only_plot: bool = param.Boolean(
-        False, doc="Do not attempt to calculate benchmarks if no results are found in the cache"
-    )
-
     use_holoview: bool = param.Boolean(False, doc="Use holoview for plotting")
 
-    nightly: bool = param.Boolean(
-        False, doc="Run a more extensive set of tests for a nightly benchmark"
-    )
-
-    time_event: Optional[str] = param.String(
-        None,
-        doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",
-    )
-
-    headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")
+    use_optuna: bool = param.Boolean(False, doc="show optuna plots")
 
     render_plotly: bool = param.Boolean(
         True,
         doc="Plotly and Bokeh don't play nicely together, so by default pre-render plotly figures to a non dynamic version so that bokeh plots correctly.  If you want interactive 3D graphs, set this to true but be aware that your 2D interactive graphs will probably stop working.",
     )
 
-    level: int = param.Integer(
-        default=0,
-        bounds=[0, 12],
-        doc="The level parameter is a method of defining the number samples to sweep over in a variable agnostic way, i.e you don't need to specify the number of samples for each variable as they are calculated dynamically from the sampling level.  See example_level.py for more information.",
+    plot_size: Optional[int] = param.Integer(
+        default=None, doc="Sets the width and height of the plot"
+    )
+
+    plot_width: Optional[int] = param.Integer(
+        default=None,
+        doc="Sets with width of the plots, this will override the plot_size parameter",
+    )
+
+    plot_height: Optional[int] = param.Integer(
+        default=None, doc="Sets the height of the plot, this will override the plot_size parameter"
+    )
+
+    raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")
+
+    # ==================== TIME & HISTORY PARAMETERS ====================
+    # These parameters control time-based features and historical tracking
+
+    over_time: bool = param.Boolean(
+        False,
+        doc="If true each time the function is called it will plot a timeseries of historical and the latest result.",
+    )
+
+    clear_history: bool = param.Boolean(False, doc="Clear historical results")
+
+    time_event: Optional[str] = param.String(
+        None,
+        doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",
     )
 
     run_tag: str = param.String(
@@ -206,27 +238,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
     run_date: datetime = param.Date(
         default=datetime.now(),
         doc="The date the bench run was performed",
-    )
-
-    # parallel = param.Boolean(
-    #     default=False,
-    #     doc="Run the sweep in parallel.  Warning! You need to make sure your code is threadsafe before using this option",
-    # )
-
-    executor = param.Selector(
-        objects=list(Executors),
-        doc="The function can be run serially or in parallel with different futures executors",
-    )
-
-    plot_size: Optional[int] = param.Integer(
-        default=None, doc="Sets the width and height of the plot"
-    )
-    plot_width: Optional[int] = param.Integer(
-        default=None,
-        doc="Sets with width of the plots, this will override the plot_size parameter",
-    )
-    plot_height: Optional[int] = param.Integer(
-        default=None, doc="Sets the height of the plot, this will override the plot_size parameter"
     )
 
     @staticmethod
