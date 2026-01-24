@@ -236,9 +236,15 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     run_date: datetime = param.Date(
-        default=datetime.now(),
+        default=None,
         doc="The date the bench run was performed",
     )
+
+    def __init__(self, **params: Any) -> None:
+        """Initialize BenchRunCfg with current datetime if not provided."""
+        if "run_date" not in params:
+            params["run_date"] = datetime.now()
+        super().__init__(**params)
 
     @staticmethod
     def from_cmd_line() -> BenchRunCfg:  # pragma: no cover
@@ -367,9 +373,7 @@ class BenchCfg(BenchRunCfg):
         doc="A parameter to represent the sampling the same inputs over time as a discrete type",
     )
 
-    over_time: bool = param.Boolean(
-        False, doc="A parameter to control whether the function is sampled over time"
-    )
+    # Note: over_time is already inherited from BenchRunCfg
     name: Optional[str] = param.String(None, doc="The name of the benchmarkCfg")
     title: Optional[str] = param.String(None, doc="The title of the benchmark")
     raise_duplicate_exception: bool = param.Boolean(
@@ -453,11 +457,11 @@ class BenchCfg(BenchRunCfg):
                 hash_sha1(self.tag),
             )
         )
-        all_vars = self.input_vars + self.result_vars
+        all_vars = (self.input_vars or []) + (self.result_vars or [])
         for v in all_vars:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 
-        for v in self.const_vars:
+        for v in self.const_vars or []:
             hash_val = hash_sha1((v[0].hash_persistent(), hash_sha1(v[1])))
 
         return hash_val
@@ -582,7 +586,7 @@ class BenchCfg(BenchRunCfg):
         Returns:
             pn.pane.Markdown: A panel with the benchmark description
         """
-        return pn.pane.Markdown(f"{self.description}", width=width)
+        return pn.pane.Markdown(self.description or "", width=width)
 
     def to_post_description(self, width: int = 800) -> pn.pane.Markdown:
         """Create a markdown panel with the benchmark post-description.
@@ -593,7 +597,7 @@ class BenchCfg(BenchRunCfg):
         Returns:
             pn.pane.Markdown: A panel with the benchmark post-description
         """
-        return pn.pane.Markdown(f"{self.post_description}", width=width)
+        return pn.pane.Markdown(self.post_description or "", width=width)
 
     def to_sweep_summary(
         self,
@@ -679,8 +683,7 @@ class DimsCfg:
         """
         self.dims_name: List[str] = [i.name for i in bench_cfg.all_vars]
 
-        self.dim_ranges: List[List[Any]] = []
-        self.dim_ranges = [i.values() for i in bench_cfg.all_vars]
+        self.dim_ranges: List[List[Any]] = [i.values() for i in bench_cfg.all_vars]
         self.dims_size: List[int] = [len(p) for p in self.dim_ranges]
         self.dim_ranges_index: List[List[int]] = [list(range(i)) for i in self.dims_size]
         self.dim_ranges_str: List[str] = [f"{s}\n" for s in self.dim_ranges]
