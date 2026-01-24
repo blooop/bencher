@@ -22,6 +22,10 @@ updates:
           - "ruff"
           - "coverage"
           - "ty"
+          - "nbformat"
+          - "ipykernel"
+          - "pip"
+          - "jupyter_bokeh"
       lib-dependencies:
         #try to group all third party library updates into a single pr
         patterns:
@@ -35,6 +39,12 @@ updates:
           - "ruff"
           - "coverage"
           - "ty"
+          - "nbformat"
+          - "ipykernel"
+          - "pip"
+          - "jupyter_bokeh"
+          - "prek"
+          - "check-manifest"
   - package-ecosystem: github-actions
     directory: /
     schedule:
