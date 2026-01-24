@@ -196,7 +196,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
     use_optuna: bool = param.Boolean(False, doc="show optuna plots")
 
     render_plotly: bool = param.Boolean(
-        False,
+        True,
         doc="Plotly and Bokeh don't play nicely together, so by default pre-render plotly figures to a non dynamic version so that bokeh plots correctly.  If you want interactive 3D graphs, set this to true but be aware that your 2D interactive graphs will probably stop working.",
     )
 
