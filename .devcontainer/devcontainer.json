@@ -1,18 +1,18 @@
 {
     "name": "bencher",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "context": ".."
-    },
+    // Uses the template's prebuilt image by default for fast startup.
+    // To build locally: pixi run dev-use-local
+    // To use this repo's own prebuilt image: pixi run dev-use-prebuilt
+    // "build": {
+    //     "dockerfile": "Dockerfile",
+    //     "context": ".."
+    // },
+    "image": "ghcr.io/blooop/python_template/devcontainer:latest",
     "features": {
         "./claude-code": {},
         "ghcr.io/devcontainers/features/docker-in-docker:2": {},
         "ghcr.io/devcontainers/features/common-utils:2": {}
     },
-    // To use a prebuilt image instead of building locally (faster startup),
-    // comment out "build" and "features" above, uncomment "image" below,
-    // and ensure the GHCR package is public (see README).
-    // "image": "ghcr.io/blooop/python_template/devcontainer:latest",
     "initializeCommand": ".devcontainer/claude-code/init-host.sh",
     "customizations": {
         "vscode": {

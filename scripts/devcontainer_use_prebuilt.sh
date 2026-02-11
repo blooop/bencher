@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Migrate devcontainer.json from local builds to a prebuilt GHCR image.
+# Switch devcontainer.json to use this repo's own prebuilt GHCR image.
 # Also attempts to make the GHCR package public.
 
 DEVCONTAINER_JSON=".devcontainer/devcontainer.json"
@@ -20,7 +20,6 @@ REMOTE_URL=$(git remote get-url origin 2>/dev/null) || {
     exit 1
 }
 
-# Handle common GitHub remote URL formats
 REPO=$(echo "$REMOTE_URL" | sed -E 's#(ssh://git@github\.com/|git@github\.com:|https?://github\.com/|git://github\.com/)##; s/\.git$//')
 
 if [[ -z "$REPO" || "$REPO" != */* ]]; then
@@ -32,16 +31,15 @@ IMAGE="ghcr.io/${REPO}/devcontainer:latest"
 echo "Repository: $REPO"
 echo "Image:      $IMAGE"
 
-# --- Check current state: look for an uncommented "image": line ---
-if grep -q '^[[:space:]]*"image"[[:space:]]*:' "$DEVCONTAINER_JSON"; then
-    echo "Already using a prebuilt image. Nothing to do."
+# --- Check if already using this repo's prebuilt image (uncommented) ---
+if grep -q '^[[:space:]]*"image": "'"${IMAGE}"'"' "$DEVCONTAINER_JSON"; then
+    echo "Already using repo prebuilt image. Nothing to do."
     exit 0
 fi
 
-# --- Replace the file using awk for reliable block manipulation ---
+# --- Transform devcontainer.json ---
 awk -v image="$IMAGE" '
-    # Comment out uncommented "build" block (4-space indent open/close).
-    # NOTE: assumes no nested {} within these blocks.
+    # Comment out uncommented build block
     /^    "build": \{/ { in_build=1 }
     in_build {
         sub(/^    /, "    // ")
@@ -49,8 +47,7 @@ awk -v image="$IMAGE" '
         print; next
     }
 
-    # Comment out uncommented "features" block (4-space indent open/close).
-    # NOTE: assumes no nested {} within these blocks.
+    # Comment out uncommented features block
     /^    "features": \{/ { in_features=1 }
     in_features {
         sub(/^    /, "    // ")
@@ -58,8 +55,14 @@ awk -v image="$IMAGE" '
         print; next
     }
 
-    # Uncomment the image line and set the correct reference
+    # Uncomment commented image line and set repo URL
     /^    \/\/ "image":/ {
+        printf "    \"image\": \"%s\",\n", image
+        next
+    }
+
+    # Replace uncommented image line (e.g. template URL) with repo URL
+    /^    "image":/ {
         printf "    \"image\": \"%s\",\n", image
         next
     }
@@ -68,7 +71,7 @@ awk -v image="$IMAGE" '
 ' "$DEVCONTAINER_JSON" > "${DEVCONTAINER_JSON}.tmp" && mv "${DEVCONTAINER_JSON}.tmp" "$DEVCONTAINER_JSON"
 
 echo ""
-echo "Updated $DEVCONTAINER_JSON to use prebuilt image."
+echo "Updated $DEVCONTAINER_JSON to use repo prebuilt image."
 
 # --- Try to make the GHCR package public ---
 echo ""
