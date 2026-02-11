@@ -193,3 +193,20 @@ docs/reference/
 
 .devpod/
 .devpod-internal/
+
+# Claude Code local settings (personal, not shared)
+.claude/settings.local.json
+
+# Ralph autonomous agent state files
+.call_count
+.circuit_breaker_history
+.circuit_breaker_state
+.exit_signals
+.last_reset
+.ralph_session
+.ralph_session_history
+.response_analysis
+.claude_session_id
+progress.json
+status.json
+logs/

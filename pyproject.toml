@@ -42,7 +42,8 @@ python = ">=3.10"
 sqlite = "==3.48.0"
 shellcheck = ">=0.10.0,<0.11"
 devpod = ">=0.8.0,<0.9"
-gh = ">=2.63.0,<3.0"
+gh = ">=2.83.0,<3.0"
+ralph-claude-code = ">=0.1.0"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
@@ -58,18 +59,18 @@ holobench = { path = ".", editable = true }
 
 [project.optional-dependencies]
 test = [
-    "pylint>=3.2.5,<=4.0.4",
-    "pytest-cov>=4.1,<=7.0.0",
-    "pytest>=7.4,<=9.0.2",
-    "hypothesis>=6.104.2,<=6.150.3",
-    "ruff>=0.5.0,<=0.14.14",
-    "coverage>=7.5.4,<=7.13.1",
     "nbformat",
     "ipykernel",
     "pip",
     "jupyter_bokeh",
+    "pylint>=3.2.5,<=4.0.4",
+    "pytest-cov>=4.1,<=7.0.0",
+    "pytest>=7.4,<=9.0.2",
+    "hypothesis>=6.104.2,<=6.151.5",
+    "ruff>=0.5.0,<=0.15.0",
+    "coverage>=7.5.4,<=7.13.4",
     "prek>=0.2.28,<0.4.0",
-    "ty>=0.0.13,<=0.0.13",
+    "ty>=0.0.12,<=0.0.15",
 ]
 
 #adds support for embedding rerun windows (alpha)
@@ -147,6 +148,7 @@ ci-push = { depends-on = ["format", "ruff-lint", "update-lock", "ci", "push"] }
 clear-pixi = "rm -rf .pixi pixi.lock"
 setup-git-merge-driver = "git config merge.ours.driver true"
 update-from-template-repo = "./scripts/update_from_template.sh"
+dev-use-prebuilt = "./scripts/devcontainer_use_prebuilt.sh"
 
 generate-docs = "python bencher/example/meta/generate_examples.py"
 docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html docs docs/builtdocs"

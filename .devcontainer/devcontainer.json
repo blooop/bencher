@@ -4,6 +4,15 @@
         "dockerfile": "Dockerfile",
         "context": ".."
     },
+    "features": {
+        "./claude-code": {},
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/common-utils:2": {}
+    },
+    // To use a prebuilt image instead of building locally (faster startup),
+    // comment out "build" and "features" above, uncomment "image" below,
+    // and ensure the GHCR package is public (see README).
+    // "image": "ghcr.io/blooop/python_template/devcontainer:latest",
     "initializeCommand": ".devcontainer/claude-code/init-host.sh",
     "customizations": {
         "vscode": {
@@ -14,16 +23,10 @@
                 "jjjermiah.pixi-vscode",
                 "charliermarsh.ruff",
                 "tamasfe.even-better-toml",
-                "mhutchie.git-graph"
-              ]
+                "mhutchie.git-graph",
+                "anthropic.claude-code"
+            ]
         }
-    },
-	"features": {
-		"./claude-code": {}
-        // "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-		// "ghcr.io/devcontainers/features/common-utils:2": {},
-		// "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
-		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
     },
     "runArgs": [
         "--network=host"
@@ -38,7 +41,8 @@
     "mounts": [
         "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
         "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind",
-        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
+        "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
     ],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }

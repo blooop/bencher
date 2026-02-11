@@ -1,0 +1,10 @@
+{
+    "name": "python_template-build",
+    "build": {
+        "dockerfile": "../Dockerfile",
+        "context": "../.."
+    },
+    "features": {
+        "../claude-code": {}
+    }
+}
