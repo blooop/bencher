@@ -215,3 +215,10 @@ invalid-method-override = "ignore"
 # Ignore import/reference resolution errors
 unresolved-import = "ignore"
 unresolved-reference = "ignore"
+# Ignore parameter default errors (param library StrEnum/enum descriptors resolve as Unknown)
+invalid-parameter-default = "ignore"
+# Ignore MRO errors (param base classes resolve as Unknown)
+inconsistent-mro = "ignore"
+# Ignore unused type: ignore comments (needed for other type checkers)
+unused-ignore-comment = "ignore"
+unused-type-ignore-comment = "ignore"  # same rule, renamed in ty >= 0.0.14
