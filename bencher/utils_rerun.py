@@ -1,6 +1,10 @@
 import logging
 from importlib.metadata import version as get_package_version, PackageNotFoundError
-from rerun.legacy_notebook import as_html
+
+try:
+    from rerun.legacy_notebook import as_html
+except ImportError:
+    from rerun._legacy_notebook import as_html
 import rerun as rr
 import panel as pn
 from .utils import publish_file, gen_rerun_data_path
