@@ -1,10 +1,6 @@
 import logging
 from importlib.metadata import version as get_package_version, PackageNotFoundError
 
-try:
-    from rerun.legacy_notebook import as_html
-except ImportError:
-    from rerun._legacy_notebook import as_html
 import rerun as rr
 import panel as pn
 from .utils import publish_file, gen_rerun_data_path
@@ -28,11 +24,6 @@ def rrd_to_pane(
     )
 
 
-def to_pane(path: str):
-    as_html()
-    return rrd_to_pane(path)
-
-
 def publish_and_view_rrd(
     file_path: str,
     remote: str,
@@ -40,7 +31,6 @@ def publish_and_view_rrd(
     content_callback: callable,
     version: str | None = None,
 ):  # pragma: no cover
-    as_html()
     publish_file(file_path, remote=remote, branch_name="test_rrd")
     publish_path = content_callback(remote, branch_name, file_path)
     logging.info(publish_path)
