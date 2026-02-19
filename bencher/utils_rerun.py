@@ -1,10 +1,6 @@
 import logging
 from importlib.metadata import version as get_package_version, PackageNotFoundError
 
-try:
-    from rerun.legacy_notebook import as_html
-except ImportError:
-    from rerun._legacy_notebook import as_html
 import rerun as rr
 import panel as pn
 from .utils import publish_file, gen_rerun_data_path
@@ -18,6 +14,21 @@ def _get_rerun_version() -> str:
         return "0.20.1"  # Fallback version
 
 
+def _as_html(**kwargs) -> str:
+    """Get rerun recording as an inline HTML string, compatible with rerun 0.28+."""
+    try:
+        from rerun.legacy_notebook import as_html  # rerun < 0.29
+    except ImportError:
+        from rerun._legacy_notebook import as_html  # rerun >= 0.29
+
+    return as_html(**kwargs)
+
+
+def rerun_to_pane(width: int = 950, height: int = 712, **kwargs):  # pragma: no cover
+    """Render the current rerun recording as an inline Panel HTML pane."""
+    return pn.pane.HTML(_as_html(width=width, height=height, **kwargs))
+
+
 def rrd_to_pane(
     url: str, width: int = 500, height: int = 600, version: str | None = None
 ):  # pragma: no cover
@@ -28,11 +39,6 @@ def rrd_to_pane(
     )
 
 
-def to_pane(path: str):
-    as_html()
-    return rrd_to_pane(path)
-
-
 def publish_and_view_rrd(
     file_path: str,
     remote: str,
@@ -40,7 +46,6 @@ def publish_and_view_rrd(
     content_callback: callable,
     version: str | None = None,
 ):  # pragma: no cover
-    as_html()
     publish_file(file_path, remote=remote, branch_name="test_rrd")
     publish_path = content_callback(remote, branch_name, file_path)
     logging.info(publish_path)
