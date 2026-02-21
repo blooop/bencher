@@ -73,7 +73,7 @@ test = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.24.0", "rerun-notebook", "flask", "flask-cors"]
+rerun = ["rerun-sdk>=0.29.2", "rerun-notebook", "flask", "flask-cors"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
@@ -221,4 +221,4 @@ invalid-parameter-default = "ignore"
 inconsistent-mro = "ignore"
 # Ignore unused type: ignore comments (needed for other type checkers)
 unused-ignore-comment = "ignore"
-unused-type-ignore-comment = "ignore"  # same rule, renamed in ty >= 0.0.14
+unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14
