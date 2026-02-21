@@ -80,6 +80,11 @@ try:
 except ModuleNotFoundError as e:
     pass
 
+try:
+    from .results.rerun_result import RerunResult
+except ModuleNotFoundError:
+    pass
+
 
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
