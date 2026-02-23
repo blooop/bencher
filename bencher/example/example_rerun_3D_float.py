@@ -1,8 +1,8 @@
 """Rerun backend: 3D float sweep example.
 
-Demonstrates three FloatSweep dimensions mapped to three independent rerun
-timelines. Each axis can be scrubbed independently, slicing through the
-3D scalar field.
+Demonstrates three FloatSweep dimensions logged as a 3D Tensor, displayed
+as interactive volume slices.  The blueprint arranges one TensorView per
+result variable in a Vertical container.
 """
 
 import numpy as np
@@ -25,7 +25,7 @@ class Rerun3DFloat(bch.ParametrizedSweep):
 
 
 def example_rerun_3D_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """3D float sweep → rerun: x, y, z become three independent timelines."""
+    """3D float sweep → rerun: logged as a 3D Tensor, displayed as interactive volume slices."""
     bench = Rerun3DFloat().to_bench(run_cfg)
     bench.plot_sweep(
         title="Rerun 3D Float Example",
@@ -36,5 +36,9 @@ def example_rerun_3D_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     bch.run_flask_in_thread()
-    bench = example_rerun_3D_float(bch.BenchRunCfg(level=3))
+    bench = example_rerun_3D_float(bch.BenchRunCfg(level=5))
     bench.get_result().to_rerun().show()
+
+    bench.report.show()
+
+    # bench.get_result().to_rerun().show()

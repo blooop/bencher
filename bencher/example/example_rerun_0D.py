@@ -1,7 +1,8 @@
 """Rerun backend: 0D example (no inputs, scalar outputs only).
 
 Demonstrates logging scalar results with no sweep dimensions.
-The rerun viewer shows the raw scalar values as static entities.
+The blueprint arranges one TimeSeriesView per result variable in a
+Vertical container.
 """
 
 import random

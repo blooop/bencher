@@ -1,8 +1,7 @@
 """Rerun backend: 2D float sweep example.
 
-Demonstrates two FloatSweep dimensions mapped to two independent rerun
-timelines. The viewer lets you scrub each axis independently to slice
-through the 2D parameter space.
+Demonstrates two FloatSweep dimensions logged as a 2D Tensor, displayed
+as a heatmap.  The blueprint creates a TensorView for each result variable.
 """
 
 import math
@@ -23,7 +22,7 @@ class Rerun2DFloat(bch.ParametrizedSweep):
 
 
 def example_rerun_2D_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """2D float sweep → rerun: theta and offset become independent timelines."""
+    """2D float sweep → rerun: logged as a 2D Tensor, displayed as a heatmap."""
     bench = Rerun2DFloat().to_bench(run_cfg)
     bench.plot_sweep(title="Rerun 2D Float Example")
     return bench
@@ -31,5 +30,5 @@ def example_rerun_2D_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     bch.run_flask_in_thread()
-    bench = example_rerun_2D_float(bch.BenchRunCfg(level=3))
+    bench = example_rerun_2D_float(bch.BenchRunCfg(level=5))
     bench.get_result().to_rerun().show()

@@ -1,10 +1,12 @@
 """Demonstrate the rerun rendering backend for N-dimensional benchmark data.
 
 This example shows how benchmark sweep results are automatically mapped into rerun's
-entity hierarchy and timeline system:
+entity hierarchy and native archetypes with blueprint-controlled layout:
 - Categorical dimensions become entity path branches in the tree
-- Float dimensions become rerun timelines (scrubable)
-- Result variables become scalar leaf entities (rendered as time series)
+- A single float dimension becomes a line graph (TimeSeriesView)
+- Multiple float dimensions become a Tensor (heatmap / volume slices)
+- Cat-only dimensions become BarChart archetypes
+- Blueprint arranges views in Grid/Vertical containers with typed views
 """
 
 import math
@@ -37,8 +39,8 @@ def example_rerun_backend(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     The rerun viewer will show:
     - Entity tree: /category/sin/ and /category/cos/ branches
-    - Timeline scrubber for theta
-    - Scalar line plots for result and abs_result under each branch
+    - Line graphs per category branch via blueprint Grid
+    - TimeSeriesView for result and abs_result under each branch
 
     Args:
         run_cfg: Optional benchmark run configuration.
@@ -49,7 +51,7 @@ def example_rerun_backend(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = RerunBackendSweep().to_bench(run_cfg)
     bench.plot_sweep(
         title="Rerun Backend Demo",
-        description="Mapping N-dimensional sweep results to rerun entity hierarchy and timelines",
+        description="Mapping N-dimensional sweep results to rerun entity hierarchy",
     )
     return bench
 

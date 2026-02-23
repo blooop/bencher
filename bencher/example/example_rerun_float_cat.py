@@ -1,13 +1,14 @@
 """Rerun backend: 2D float + 2 categorical sweep example.
 
 Demonstrates a higher-dimensional sweep with both float and categorical
-dimensions. Categories become entity tree branches, floats become
-independent timelines. The entity tree looks like:
+dimensions. Categories become entity tree branches, and the remaining
+float dimensions are logged as a 2D Tensor heatmap per category
+combination. The blueprint creates nested Grid containers for each
+categorical dimension with TensorView leaves:
 
-    /algorithm_type/recursive/opt_level/O0/theta/result
-    /algorithm_type/recursive/opt_level/O2/theta/result
-    /algorithm_type/iterative/opt_level/O0/theta/result
-    /algorithm_type/iterative/opt_level/O2/theta/result
+    /algorithm_type/recursive/opt_level/O0/result   (TensorView)
+    /algorithm_type/iterative/opt_level/O2/result   (TensorView)
+    ...
 """
 
 import math
@@ -36,7 +37,7 @@ class RerunFloatCat(bch.ParametrizedSweep):
 
 
 def example_rerun_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """2D float + 2 categorical → rerun: rich entity tree with multi-timeline."""
+    """2D float + 2 cat → rerun: cats become entity branches, float dims logged as 2D Tensor heatmap."""
     bench = RerunFloatCat().to_bench(run_cfg)
     bench.plot_sweep(title="Rerun Float+Cat Example")
     return bench

@@ -1,7 +1,8 @@
-"""Rerun backend: 1D float sweep example.
+"""Rerun backend: 1D float sweep displayed as a line graph in TimeSeriesView.
 
-Demonstrates a single FloatSweep mapped to a rerun timeline.
-The rerun viewer shows a time-series line plot that you can scrub through.
+The single FloatSweep dimension is iterated as the ``log_tick`` timeline with
+``rr.Scalars`` at each step, producing a line graph.  The blueprint arranges
+one TimeSeriesView per result variable in a Vertical container.
 """
 
 import math
@@ -23,7 +24,7 @@ class Rerun1DFloat(bch.ParametrizedSweep):
 
 
 def example_rerun_1D_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """1D float sweep → rerun: theta becomes a timeline, results are line plots."""
+    """1D float sweep → rerun: displayed as line graphs via TimeSeriesView."""
     bench = Rerun1DFloat().to_bench(run_cfg)
     bench.plot_sweep(title="Rerun 1D Float Example")
     return bench
@@ -31,5 +32,5 @@ def example_rerun_1D_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     bch.run_flask_in_thread()
-    bench = example_rerun_1D_float(bch.BenchRunCfg(level=3))
+    bench = example_rerun_1D_float(bch.BenchRunCfg(level=5))
     bench.get_result().to_rerun().show()

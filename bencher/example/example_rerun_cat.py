@@ -1,8 +1,8 @@
 """Rerun backend: categorical-only example.
 
-Demonstrates categorical dimensions mapped to rerun entity path branches.
-Each category value becomes a branch in the entity tree, with scalar
-results as leaf entities.
+Demonstrates a single categorical dimension logged as a BarChart.
+The blueprint arranges one BarChartView per result variable in a
+Vertical container.
 """
 
 import random
@@ -26,7 +26,7 @@ class RerunCat(bch.ParametrizedSweep):
 
 
 def example_rerun_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Categorical sweep → rerun: categories become entity tree branches."""
+    """Categorical sweep → rerun: logged as BarChart."""
     bench = RerunCat().to_bench(run_cfg)
     bench.plot_sweep(title="Rerun Categorical Example")
     return bench
