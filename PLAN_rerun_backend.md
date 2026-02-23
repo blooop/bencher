@@ -39,11 +39,11 @@ BenchResult (MRO)
 ComposableContainerRerun          (new composable container)
   -> uses rerun.blueprint (rrb)   (programmatic layout)
   -> uses rr.log()                (data logging)
-  -> maps to RerunResult views    (TimeSeriesView, BarChartView, etc.)
+  -> maps to RerunResult views    (Spatial2DView, BarChartView, TimeSeriesView for over_time, etc.)
 
 RerunBackendResult                (new result class - mirrors BenchResult methods)
-  -> RerunLineResult              (TimeSeriesView with entity paths per category)
-  -> RerunCurveResult             (TimeSeriesView with mean + std band entities)
+  -> RerunLineResult              (Spatial2DView with LineStrips2D, X=float param, Y=result)
+  -> RerunCurveResult             (Spatial2DView with LineStrips2D for mean + upper/lower bounds)
   -> RerunBarResult               (BarChartView)
   -> RerunHeatmapResult           (Spatial2DView with Tensor archetype or custom)
   -> RerunScatterResult           (Spatial2DView with Points2D)
@@ -97,17 +97,26 @@ based on this setting. Users swap with:
 bench = MySweep().to_bench(bch.BenchRunCfg(backend="rerun"))
 ```
 
-### 2.3 Timeline Mapping (over_time)
+### 2.3 Timeline Mapping (over_time ONLY)
+
+The Rerun time slider maps **exclusively** to bencher's `over_time` dimension. No other
+dimension should use the time slider.
 
 | Bencher Concept | Rerun Mapping |
 |-----------------|---------------|
-| `over_time` (datetime) | `rr.set_time("over_time", timestamp=epoch_seconds)` |
-| `over_time` (event string) | `rr.set_time("over_time", sequence=index)` |
-| Float sweep dims | `rr.set_time(dim_name, sequence=index)` -- each becomes an independent timeline scrubber |
-| Categorical dims | Entity path segments: `/{dim_name}/{value}/` |
-| Repeat dim | `rr.set_time("repeat", sequence=repeat_idx)` OR aggregated away via ReduceType |
+| `over_time` (datetime) | `rr.set_time("over_time", timestamp=epoch_seconds)` -- drives the time slider |
+| `over_time` (event string) | `rr.set_time("over_time", sequence=index)` -- drives the time slider |
+| Float sweep dims | X-axis of a line chart (`LineStrips2D` in `Spatial2DView`) -- NOT a timeline |
+| Categorical dims | Bar chart positions / grouped bars (`BarChartView`) or line groupings -- NOT entity path segments |
+| Repeat dim | Aggregated away via ReduceType (mean, std, etc.) before plotting |
 
-This extends the existing `RerunResult._set_time()` and `_log_to_rerun()` approach.
+**Rationale:** Float sweep parameters are independent variables that define the X-axis of
+line charts, not a time dimension to scrub through. Categorical parameters define discrete
+groupings within a plot (bars, grouped lines, etc.), just as they do in the holoviews
+backend. Only `over_time` represents actual temporal progression and maps to the time slider.
+
+This extends the existing `RerunResult._set_time()` and `_log_to_rerun()` approach, but
+restricts timeline usage to `over_time` only.
 
 ---
 
@@ -117,71 +126,113 @@ This extends the existing `RerunResult._set_time()` and `_log_to_rerun()` approa
 
 | Panel | Rerun |
 |-------|-------|
-| `hvplot.line(x=float_var, by=cat_var)` | `rr.log(entity, rr.Scalars(val))` on a `TimeSeriesView` |
-| X-axis: float sweep variable | Timeline: float sweep dim (sequence index) |
-| Grouping by categorical | Separate entity paths per category value |
-| Multiple result vars | Separate entities, all in same TimeSeriesView |
+| `hvplot.line(x=float_var, by=cat_var)` | `rr.LineStrips2D` in a `Spatial2DView` |
+| X-axis: float sweep variable | X-coordinates of LineStrips2D points |
+| Y-axis: result variable | Y-coordinates of LineStrips2D points |
+| Grouping by categorical | Separate `LineStrips2D` entities per category, each with distinct color |
+| Multiple result vars | Separate views (one per result var) |
+
+**Key design:** Float sweep line charts use `Spatial2DView` with `LineStrips2D`, NOT
+`TimeSeriesView`. The float parameter values are the X-coordinates and result values are
+the Y-coordinates. This produces a standard X-Y line chart without involving the time slider.
 
 **Blueprint:**
 ```python
-rrb.TimeSeriesView(
+rrb.Spatial2DView(
     name=f"{result_var.name} vs {float_var.name}",
-    origin=f"/{result_var.name}",
+    origin=f"/{result_var.name}/line",
 )
 ```
 
 **Data logging:**
 ```python
 for cat_val in cat_values:
-    for i, float_val in enumerate(float_values):
-        rr.set_time(float_var.name, sequence=i)
-        rr.log(f"/{rv.name}/{cat_var.name}/{cat_val}", rr.Scalars(value))
+    # Build XY points: [(float_val_0, result_0), (float_val_1, result_1), ...]
+    points = [[float_val, result_val] for float_val, result_val in zip(float_values, results)]
+    color = color_for_category(cat_val)
+    rr.log(
+        f"/{rv.name}/line/{cat_var.name}/{cat_val}",
+        rr.LineStrips2D([points], colors=[color], labels=[str(cat_val)]),
+    )
+
+# If no categorical variable, single line:
+points = [[float_val, result_val] for float_val, result_val in zip(float_values, results)]
+rr.log(f"/{rv.name}/line", rr.LineStrips2D([points]))
 ```
+
+**Axis labels:** Use `rr.TextDocument` entities at axis endpoints or a companion
+`TextDocumentView` to label axes, since Spatial2DView doesn't have built-in axis labels.
 
 ### 3.2 CurveResult -> RerunCurveResult
 
 | Panel | Rerun |
 |-------|-------|
-| `hv.Curve + hv.Spread(mean +/- std)` | `rr.Scalars` for mean + additional entities for upper/lower bounds |
-| Mean line + shaded std band | 3 scalar series: mean, mean+std, mean-std in same view |
+| `hv.Curve + hv.Spread(mean +/- std)` | `rr.LineStrips2D` for mean + upper/lower bounds in `Spatial2DView` |
+| Mean line + shaded std band | 3 line strips: mean, mean+std, mean-std (bounds with lower alpha) |
 
-**Blueprint:** Same as LineResult (`TimeSeriesView`), but with 3 entities per result var.
+**Blueprint:** Same as LineResult (`Spatial2DView`), but with 3 line strip entities per
+result var.
 
 **Data logging:**
 ```python
-rr.log(f"/{rv.name}/mean", rr.Scalars(mean_val))
-rr.log(f"/{rv.name}/upper", rr.Scalars(mean_val + std_val))
-rr.log(f"/{rv.name}/lower", rr.Scalars(mean_val - std_val))
+# Build XY points for mean line and error bounds
+mean_points = [[fv, mean] for fv, mean in zip(float_values, mean_values)]
+upper_points = [[fv, mean + std] for fv, mean, std in zip(float_values, mean_values, std_values)]
+lower_points = [[fv, mean - std] for fv, mean, std in zip(float_values, mean_values, std_values)]
+
+rr.log(f"/{rv.name}/curve/mean", rr.LineStrips2D([mean_points], colors=[[0, 0, 255, 255]]))
+rr.log(f"/{rv.name}/curve/upper", rr.LineStrips2D([upper_points], colors=[[0, 0, 255, 80]]))
+rr.log(f"/{rv.name}/curve/lower", rr.LineStrips2D([lower_points], colors=[[0, 0, 255, 80]]))
 ```
 
-Use `SeriesLines` archetype to style bounds differently (dashed, alpha).
+Style bounds with lower alpha to visually distinguish from the mean line.
 
 ### 3.3 BarResult -> RerunBarResult
 
 | Panel | Rerun |
 |-------|-------|
 | `hvplot.bar(x=cat_var)` | `rr.BarChart(values)` in a `BarChartView` |
-| Grouped bars (multiple cats) | Multiple BarChart entities or stacked values |
-| Error bars (repeats > 1) | Not natively supported -> log as separate annotation or TextDocument |
+| X-axis: categorical variable | Bar positions indexed by category |
+| Grouped bars (by=secondary cat) | Multiple `BarChart` entities (one per group value) in same view |
+| Error bars (repeats > 1) | TextDocument companion with statistics |
+
+**Key design:** Categorical dimensions map to bar positions within the chart, just like
+in holoviews. Categories are NOT entity path segments -- they are data values that define
+where bars appear. Secondary categorical grouping produces multiple BarChart entities in
+the same view.
 
 **Blueprint:**
 ```python
 rrb.BarChartView(
-    name=f"{result_var.name}",
-    origin=f"/{result_var.name}",
+    name=f"{result_var.name} by {cat_var.name}",
+    origin=f"/{result_var.name}/bar",
 )
 ```
 
-**Data logging:**
+**Data logging (single categorical):**
 ```python
-# Collect values across categories into an array
-values = [dataset[rv.name].sel({cat: c}).item() for c in cat_values]
-rr.log(f"/{rv.name}", rr.BarChart(values))
+# Bars indexed by primary categorical variable
+values = [dataset[rv.name].sel({cat_var.name: c}).item() for c in cat_values]
+rr.log(f"/{rv.name}/bar", rr.BarChart(values))
+# Log category labels as companion text
+labels = ", ".join([f"{i}: {c}" for i, c in enumerate(cat_values)])
+rr.log(f"/{rv.name}/bar/labels", rr.TextDocument(f"Categories: {labels}"))
 ```
 
-**Limitation:** Rerun's BarChart is simpler than HoloViews bars. For grouped bars with
-multiple categoricals, generate multiple BarChart entities or fall back to a single
-flattened bar chart with labels logged as `AnnotationContext`.
+**Data logging (grouped -- multiple categoricals):**
+```python
+# One BarChart entity per secondary category value
+for group_val in secondary_cat_values:
+    values = [
+        dataset[rv.name].sel({primary_cat: c, secondary_cat: group_val}).item()
+        for c in primary_cat_values
+    ]
+    rr.log(f"/{rv.name}/bar/{group_val}", rr.BarChart(values))
+```
+
+**Limitation:** Rerun's BarChart is simpler than HoloViews bars. For complex multi-level
+grouping, we flatten to a single bar chart with composite labels, or use multiple
+BarChart entities within the same BarChartView.
 
 ### 3.4 HeatmapResult -> RerunHeatmapResult
 
@@ -218,7 +269,13 @@ rr.log(f"/{rv.name}/heatmap", rr.Tensor(arr))
 | Panel | Rerun |
 |-------|-------|
 | `hvplot.scatter(by=cat_var)` | `rr.Points2D` in a `Spatial2DView` |
-| Grouped scatter | Separate entity paths per category, colored differently |
+| X-axis: category index or value | X-coordinates of Points2D |
+| Y-axis: result value | Y-coordinates of Points2D |
+| Grouped scatter (by=cat_var) | Multiple `Points2D` entities with distinct colors per group |
+
+**Key design:** Categories define the X-axis positions of scatter points (like holoviews),
+not entity path segments. Grouping by a secondary categorical produces color-coded point
+groups within the same view.
 
 **Blueprint:**
 ```python
@@ -230,9 +287,15 @@ rrb.Spatial2DView(
 
 **Data logging:**
 ```python
+# Map category values to X positions
+cat_to_x = {cat: i for i, cat in enumerate(cat_values)}
 for cat_val in cat_values:
-    positions = [[i, val] for i, val in enumerate(values_for_cat)]
-    rr.log(f"/{rv.name}/scatter/{cat_val}", rr.Points2D(positions, colors=[color]))
+    positions = [[cat_to_x[cat_val], val] for val in values_for_cat]
+    color = color_for_category(cat_val)
+    rr.log(
+        f"/{rv.name}/scatter/{cat_val}",
+        rr.Points2D(positions, colors=[color], labels=[str(cat_val)]),
+    )
 ```
 
 ### 3.6 BoxWhiskerResult -> RerunBoxWhiskerResult
@@ -418,12 +481,13 @@ mixin class). Implementation order by priority:
 
 | Priority | Plot Type | Rerun View | Complexity |
 |----------|-----------|------------|------------|
-| P0 | Line (scalar time series) | TimeSeriesView | Low (extends existing) |
+| P0 | Line (XY float sweep) | Spatial2DView + LineStrips2D | Medium |
 | P0 | Bar chart | BarChartView | Low |
 | P0 | Image | Spatial2DView | Low (exists) |
 | P0 | Video | AssetVideo | Low (exists) |
 | P0 | Text | TextDocumentView | Low (exists) |
-| P1 | Curve (mean +/- std) | TimeSeriesView | Medium |
+| P0 | Over-time series | TimeSeriesView (rr.Scalar + over_time timeline) | Low |
+| P1 | Curve (mean +/- std) | Spatial2DView + LineStrips2D | Medium |
 | P1 | Heatmap | TensorView | Medium |
 | P1 | Histogram | BarChartView | Low |
 | P1 | Scatter | Spatial2DView + Points2D | Medium |
@@ -451,10 +515,12 @@ mixin class). Implementation order by priority:
    - The Panel backend recursively slices N-D data and creates nested
      `ComposableContainerPanel` with labels.
    - The Rerun backend should:
-     - Map extra categorical dims to entity path branches (already done)
-     - Map extra float dims to additional timelines (already done)
-     - Use `rrb.Tabs` for high-cardinality categorical dims
-     - Use `rrb.Grid` for 2-way categorical slicing
+     - Map the first float dim to the X-axis of line charts
+     - Map the first categorical dim to bar positions or line groupings (color)
+     - Use `rrb.Tabs` for extra dimensions beyond what a single plot can show
+     - Use `rrb.Grid` for 2-way categorical slicing (one plot per combination)
+     - Map `over_time` exclusively to `rr.set_time()` for the time slider
+     - Aggregate repeats via ReduceType before plotting
 
 ### Phase 5: Integration and Testing
 
@@ -533,26 +599,38 @@ class ComposableContainerRerun(ComposableContainerBase):
 
 ## 6. Rerun-Specific Enhancements
 
-### 6.1 Multi-Timeline Scrubbing
+### 6.1 Over-Time Timeline Scrubbing
 
-Rerun's key advantage: each float sweep dimension becomes an independent
-timeline. The viewer provides separate scrubbers for each, enabling users to
-explore the parameter space interactively. This is superior to Panel's widget
-sliders because:
-- All timelines are visible simultaneously
-- Frame-based navigation
-- Keyboard shortcuts for stepping
+The Rerun time slider maps exclusively to bencher's `over_time` dimension. When
+`over_time=True`, historical benchmark runs are logged at different time steps,
+and the user can scrub through them with the time slider to see how results
+evolved across runs. This is the ONLY use of Rerun's timeline system.
 
-### 6.2 Entity Hierarchy Browser
+Float sweep dimensions are NOT timelines -- they are X-axis values in line
+charts rendered via `Spatial2DView` + `LineStrips2D`.
 
-Categorical dimensions create a browsable entity tree in the Rerun viewer's
-Blueprint panel. Users can toggle visibility of individual categories.
+### 6.2 Plot Type Parity with HoloViews
 
-### 6.3 View Linking
+The Rerun backend reproduces the same plot semantics as the HoloViews backend:
+- **Float sweeps** -> X-Y line charts (X = parameter, Y = result)
+- **Categorical sweeps** -> bar charts, grouped bars, scatter plots
+- **Mixed float + categorical** -> multiple colored lines (one per category)
+- **Repeats** -> aggregated (mean/std) before plotting, shown as curve with bounds
 
-Multiple views in the same blueprint share timeline state. Scrubbing one
-timeline updates all views simultaneously -- equivalent to Panel's linked
-widgets but built into the viewer.
+Categories appear as visual groupings within plots (different bar colors,
+different line colors) rather than as entity path segments.
+
+### 6.3 View Linking via Over-Time
+
+When `over_time=True`, multiple views in the same blueprint share the `over_time`
+timeline state. Scrubbing the time slider updates all views simultaneously --
+showing how all metrics evolved together across benchmark runs.
+
+### 6.4 Blueprint Entity Browser
+
+The Rerun viewer's Blueprint panel allows users to toggle visibility of
+individual plot elements (lines, bars, etc.) within each view. This provides
+interactive filtering without needing Panel widget callbacks.
 
 ---
 
@@ -560,9 +638,9 @@ widgets but built into the viewer.
 
 | ResultType | Panel Container | Rerun Archetype | Rerun View |
 |------------|----------------|-----------------|------------|
-| ResultVar | hvplot / hv.* | rr.Scalars | TimeSeriesView |
-| ResultBool | hvplot.bar | rr.Scalars (0/1) | TimeSeriesView / BarChartView |
-| ResultVec | multi-line | rr.Scalars (per component) | TimeSeriesView |
+| ResultVar | hvplot / hv.* | rr.LineStrips2D / rr.BarChart | Spatial2DView / BarChartView |
+| ResultBool | hvplot.bar | rr.BarChart (0/1 values) | BarChartView |
+| ResultVec | multi-line | rr.LineStrips2D (per component) | Spatial2DView |
 | ResultImage | pn.pane.PNG | rr.EncodedImage | Spatial2DView |
 | ResultVideo | pn.pane.Video | rr.AssetVideo | Spatial2DView |
 | ResultString | pn.pane.Markdown | rr.TextDocument | TextDocumentView |
@@ -570,7 +648,7 @@ widgets but built into the viewer.
 | ResultContainer | pn.Column | N/A (skip) | N/A |
 | ResultReference | custom callback | N/A (skip) | N/A |
 | ResultDataSet | raw display | rr.log columns | DataframeView |
-| ResultHmap | hv.HoloMap | timeline animation | TimeSeriesView |
+| ResultHmap | hv.HoloMap | `rrb.Tabs` or `rrb.Grid` with multiple views | Spatial2DView / BarChartView |
 
 ---
 
