@@ -77,3 +77,71 @@ Bencher is a benchmarking framework built around these core concepts:
 - Coverage reporting with coverage.py
 - Examples serve as integration tests
 - Meta-generated examples in `bencher/example/meta/`
+
+## Ralph Orchestrator
+
+This repo supports [ralph-orchestrator](https://github.com/blooop/ralph) for autonomous multi-step agent workflows.
+
+### How It Works
+- **`ralph.yml`**: Configuration file in the repo root. Defines the event loop, backend (`claude`), hats (agent roles), completion promise, and iteration limits.
+- **`PROMPT.md`**: The task prompt file. Ralph reads this to know what to do. Write your full task here.
+- **`/specs/`**: Default output directory for research/analysis results (configured via `core.specs_dir` in `ralph.yml`).
+- **`.ralph/`**: Runtime directory (agent scratchpad, logs, lock files). Gitignored.
+
+### Writing a Ralph Prompt (`PROMPT.md`)
+
+When creating a `PROMPT.md` for ralph:
+
+1. **Start with a clear task title** as an H1 heading (e.g., `# Task: Analyze Authentication Flow`).
+2. **Provide context** about the codebase/area being targeted so the agent can orient quickly.
+3. **Break the work into numbered steps**, each with:
+   - A specific action (read, analyze, document, etc.)
+   - Which files/directories to examine
+   - An explicit output file path (e.g., `→ write /specs/01_overview.md`)
+4. **Specify output format expectations**: Mermaid diagrams, tables, file path + line number references, etc.
+5. **Include rules/constraints**: e.g., "Do NOT modify source code", "Include line numbers for all references".
+6. **End with the completion promise** that matches `ralph.yml` (e.g., `RESEARCH_COMPLETE`). The agent outputs this string when done.
+
+### Useful Presets
+
+Initialize `ralph.yml` from a preset: `ralph init --preset <name> [--force]`
+
+| Preset | Use Case |
+|--------|----------|
+| `research` | Codebase analysis, architecture review, read-only exploration |
+| `spec-driven` | Write specs first, then implement |
+| `code-assist` | TDD implementation from specs or descriptions |
+| `feature` | Feature development with integrated review |
+| `bugfix` | Bug reproduction, fix, and verification |
+| `refactor` | Code refactoring workflows |
+| `docs` | Documentation generation |
+| `gap-analysis` | Gap analysis and planning |
+
+List all presets: `ralph init --list-presets`
+
+### Running Ralph
+
+```bash
+ralph clean                        # Clean stale artifacts from previous runs
+ralph preflight                    # Validate config and environment
+ralph run --autonomous             # Run headless/autonomous (for CI or background use)
+ralph run                          # Run with TUI observation mode
+```
+
+**Important**: Ralph spawns `claude` CLI as a subprocess. It cannot run from inside an existing Claude Code session (nested sessions are blocked). Run `ralph` from a **separate terminal**, not from within Claude Code.
+
+### Key Config Options (`ralph.yml`)
+
+```yaml
+event_loop:
+  prompt_file: "PROMPT.md"           # Task prompt file
+  completion_promise: "RESEARCH_COMPLETE"  # String agent outputs when done
+  max_iterations: 30                 # Max agent loop iterations
+  max_runtime_seconds: 3600          # Timeout
+
+cli:
+  backend: "claude"                  # Agent backend
+
+core:
+  specs_dir: "./specs/"              # Output directory for specs
+```
