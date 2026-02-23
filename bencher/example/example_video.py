@@ -129,4 +129,5 @@ if __name__ == "__main__":
     # run_cfg_ex.only_hash_tag = True
 
     # example_video(run_cfg_ex).report.show()
-    example_video_tap(run_cfg_ex).report.show()
+    # example_video_tap(run_cfg_ex).report.show()
+    example_video_tap(run_cfg_ex).get_result().to_rerun().show()

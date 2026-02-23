@@ -36,5 +36,5 @@ def example_rerun_3D_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     bch.run_flask_in_thread()
-    bench = example_rerun_3D_float(bch.BenchRunCfg(level=3))
+    bench = example_rerun_3D_float(bch.BenchRunCfg(level=5))
     bench.get_result().to_rerun().show()

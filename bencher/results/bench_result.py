@@ -3,6 +3,7 @@ from typing import List, Optional, Any, Literal
 import panel as pn
 from param import Parameter
 
+from bencher.bench_cfg import RenderBackend
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
 from bencher.results.rerun_result import RerunResult
 from bencher.results.video_summary import VideoSummaryResult
@@ -136,11 +137,14 @@ class BenchResult(
         """Plots the benchresult using the plot callbacks defined by the bench run.
 
         This method uses the plot_callbacks defined in the bench_cfg to generate
-        plots for the benchmark results.
+        plots for the benchmark results. When backend is 'rerun', delegates to
+        to_auto_rerun() instead.
 
         Returns:
              pn.panel: A panel representation of the results, or None if no plot_callbacks defined
         """
+        if getattr(self.bench_cfg, "backend", RenderBackend.panel) == RenderBackend.rerun:
+            return self.to_auto_rerun()
         if self.bench_cfg.plot_callbacks is not None:
             return pn.Column(*[cb(self) for cb in self.bench_cfg.plot_callbacks])
         return None
@@ -155,6 +159,8 @@ class BenchResult(
     ) -> List[pn.panel]:
         """Automatically generate plots based on the provided plot callbacks.
 
+        When backend is 'rerun', delegates to to_auto_rerun() instead.
+
         Args:
             plot_list (List[callable], optional): List of plot callback functions to use. Defaults to None.
             remove_plots (List[callable], optional): List of plot callback functions to exclude. Defaults to None.
@@ -165,6 +171,8 @@ class BenchResult(
         Returns:
             List[pn.panel]: A list of panel objects containing the generated plots.
         """
+        if getattr(self.bench_cfg, "backend", RenderBackend.panel) == RenderBackend.rerun:
+            return self.to_auto_rerun(**kwargs)
         self.plt_cnt_cfg.print_debug = False
         plot_list = listify(plot_list)
         remove_plots = listify(remove_plots)

@@ -15,7 +15,29 @@ from bencher.variables.results import (
     ResultImage,
     ResultVideo,
     ResultString,
+    ResultVar,
+    ResultBool,
 )
+from bencher.plotting.plot_filter import VarRange
+
+# matplotlib tab10 palette as RGBA tuples (0-255)
+_TAB10_COLORS = [
+    (31, 119, 180, 255),
+    (255, 127, 14, 255),
+    (44, 160, 44, 255),
+    (214, 39, 40, 255),
+    (148, 103, 189, 255),
+    (140, 86, 75, 255),
+    (227, 119, 194, 255),
+    (127, 127, 127, 255),
+    (188, 189, 34, 255),
+    (23, 190, 207, 255),
+]
+
+
+def _category_color(index: int) -> tuple[int, int, int, int]:
+    """Return an RGBA color tuple for a categorical index from a 10-color palette."""
+    return _TAB10_COLORS[index % len(_TAB10_COLORS)]
 
 
 class RerunResult(BenchResultBase):
@@ -24,6 +46,9 @@ class RerunResult(BenchResultBase):
     Categorical dimensions become entity path segments (tree branches).
     Float dimensions and over_time become rerun timelines (independently scrubable).
     Result variables become leaf entities with appropriate rerun archetypes.
+
+    New blueprint-aware methods (to_auto_rerun, to_rerun_line, etc.) render data
+    using proper rerun archetypes and blueprint layout instead of timelines.
     """
 
     def to_rerun(
@@ -32,7 +57,7 @@ class RerunResult(BenchResultBase):
         width: int = 950,
         height: int = 712,
     ) -> pn.pane.panel:  # pragma: no cover
-        """Convert N-dimensional benchmark results to a rerun viewer.
+        """Convert N-dimensional benchmark results to a rerun viewer (legacy timeline-based).
 
         Saves the recording to an .rrd file and returns a Panel pane with
         the rerun web viewer embedded as an iframe. Requires the Flask file
@@ -89,8 +114,6 @@ class RerunResult(BenchResultBase):
         )
 
         # Write the recording to an .rrd file and serve via iframe.
-        # This avoids the ipywidgets_bokeh dependency that
-        # pn.pane.IPyWidget requires in a Panel/Bokeh server context.
         rrd_path = gen_rerun_data_path(bench_name)
         rrd_data = recording.memory_recording().drain_as_bytes()
         with open(rrd_path, "wb") as f:
@@ -98,6 +121,401 @@ class RerunResult(BenchResultBase):
         # Build a URL relative to the local Flask file server (port 8001)
         url_path = rrd_path.split("cachedir")[1]
         return rrd_to_pane(f"http://127.0.0.1:8001/{url_path}", width=width, height=height)
+
+    # ==================== BLUEPRINT-BASED PLOT METHODS ====================
+
+    def to_auto_rerun(
+        self,
+        result_var: Optional[Parameter] = None,
+        width: int = 950,
+        height: int = 712,
+    ) -> pn.pane.panel:  # pragma: no cover
+        """Automatically generate blueprint-based rerun views for all applicable plot types.
+
+        Iterates over rerun_plot_callbacks(), collects views, builds a blueprint,
+        writes an .rrd file, and returns a Panel iframe pane.
+
+        Args:
+            result_var: Optional specific result variable to display.
+            width: Width of the rerun viewer widget.
+            height: Height of the rerun viewer widget.
+
+        Returns:
+            A panel pane containing the rerun viewer with blueprint layout.
+        """
+        import rerun as rr
+        from bencher.utils import gen_rerun_data_path
+        from bencher.utils_rerun import rrd_to_pane
+        from bencher.results.rerun_blueprint_builder import RerunBlueprintBuilder
+
+        bench_name = self.bench_cfg.bench_name or "bencher"
+        recording = rr.RecordingStream(
+            f"bencher/{bench_name}", make_default=False, make_thread_default=False
+        )
+
+        builder = RerunBlueprintBuilder()
+
+        for plot_cb in self.rerun_plot_callbacks():
+            try:
+                views = plot_cb(self, recording=recording, result_var=result_var)
+                if views is not None:
+                    if isinstance(views, list):
+                        builder.add_views(views)
+                    else:
+                        builder.add_view(views)
+            except (KeyError, ValueError, TypeError, AttributeError) as e:
+                logging.debug("Rerun plot callback %s failed: %s", plot_cb.__name__, e)
+
+        blueprint = builder.build(include_time_panel=self.bench_cfg.over_time)
+        rr.send_blueprint(blueprint, recording=recording)
+
+        rrd_path = gen_rerun_data_path(bench_name)
+        rrd_data = recording.memory_recording().drain_as_bytes()
+        with open(rrd_path, "wb") as f:
+            f.write(rrd_data)
+        url_path = rrd_path.split("cachedir")[1]
+        return rrd_to_pane(f"http://127.0.0.1:8001/{url_path}", width=width, height=height)
+
+    def to_rerun_line(
+        self,
+        recording=None,
+        result_var: Optional[Parameter] = None,
+    ) -> list | None:  # pragma: no cover
+        """Render line plots using rr.LineStrips2D in rrb.Spatial2DView.
+
+        Filter: float_range=(1,1), cat_range=(0,None), repeats=(1,1)
+        Float var values -> X coords, result values -> Y coords.
+        Categorical var -> separate colored LineStrips2D per cat value.
+        """
+        import rerun as rr
+        import rerun.blueprint as rrb
+
+        # Check filter match
+        if not self._rerun_filter_matches(
+            float_range=VarRange(1, 1),
+            cat_range=VarRange(0, None),
+            repeats_range=VarRange(1, 1),
+        ):
+            return None
+
+        dataset = self.to_dataset(reduce=ReduceType.SQUEEZE, result_var=result_var)
+        rv_list = self.get_results_var_list(result_var)
+        float_var = self.plt_cnt_cfg.float_vars[0]
+        x_values = dataset.coords[float_var.name].values.astype(float)
+        cat_vars = self.plt_cnt_cfg.cat_vars
+
+        views = []
+        for rv in rv_list:
+            if not isinstance(rv, (ResultVar, ResultBool)):
+                continue
+            rv_name = rv.name
+
+            if len(cat_vars) > 0:
+                cat_var = cat_vars[0]
+                cat_values = dataset.coords[cat_var.name].values
+                for ci, cat_val in enumerate(cat_values):
+                    sliced = dataset.sel({cat_var.name: cat_val})
+                    y_values = sliced[rv_name].values.astype(float)
+                    points = np.column_stack([x_values, y_values])
+                    entity = f"{rv_name}/line/{cat_var.name}/{cat_val}"
+                    color = _category_color(ci)
+                    recording.log(
+                        entity,
+                        rr.LineStrips2D([points], colors=[color]),
+                    )
+            else:
+                y_values = dataset[rv_name].values.astype(float)
+                points = np.column_stack([x_values, y_values])
+                entity = f"{rv_name}/line"
+                recording.log(entity, rr.LineStrips2D([points]))
+
+            view = rrb.Spatial2DView(
+                name=f"{rv_name} line",
+                origin=f"{rv_name}/line",
+            )
+            views.append(view)
+
+        return views if views else None
+
+    def to_rerun_bar(
+        self,
+        recording=None,
+        result_var: Optional[Parameter] = None,
+    ) -> list | None:  # pragma: no cover
+        """Render bar charts using rr.BarChart in rrb.BarChartView.
+
+        Filter: float_range=(0,0), cat_range=(1,None), repeats=(1,1)
+        Category labels logged as companion rr.TextDocument.
+        """
+        import rerun as rr
+        import rerun.blueprint as rrb
+
+        if not self._rerun_filter_matches(
+            float_range=VarRange(0, 0),
+            cat_range=VarRange(1, None),
+            repeats_range=VarRange(1, 1),
+        ):
+            return None
+
+        dataset = self.to_dataset(reduce=ReduceType.SQUEEZE, result_var=result_var)
+        rv_list = self.get_results_var_list(result_var)
+
+        views = []
+        for rv in rv_list:
+            if not isinstance(rv, (ResultVar, ResultBool)):
+                continue
+            rv_name = rv.name
+            values = dataset[rv_name].values.flatten().astype(float)
+            entity = f"{rv_name}/bar"
+            recording.log(entity, rr.BarChart(values))
+
+            # Log category labels as text document
+            cat_labels = []
+            for cv in self.plt_cnt_cfg.cat_vars:
+                cat_labels.extend([str(v) for v in dataset.coords[cv.name].values])
+            if cat_labels:
+                label_text = ", ".join(cat_labels)
+                recording.log(f"{rv_name}/bar_labels", rr.TextDocument(label_text))
+
+            view = rrb.BarChartView(
+                name=f"{rv_name} bar",
+                origin=f"{rv_name}/bar",
+            )
+            views.append(view)
+
+        return views if views else None
+
+    def to_rerun_curve(
+        self,
+        recording=None,
+        result_var: Optional[Parameter] = None,
+    ) -> list | None:  # pragma: no cover
+        """Render curve plots (mean +/- std) using rr.LineStrips2D in rrb.Spatial2DView.
+
+        Filter: float_range=(1,1), cat_range=(0,None), repeats=(2,None)
+        Logs 3 line strips: mean, upper (mean+std), lower (mean-std).
+        """
+        import rerun as rr
+        import rerun.blueprint as rrb
+
+        if not self._rerun_filter_matches(
+            float_range=VarRange(1, 1),
+            cat_range=VarRange(0, None),
+            repeats_range=VarRange(2, None),
+        ):
+            return None
+
+        dataset = self.to_dataset(reduce=ReduceType.REDUCE, result_var=result_var)
+        rv_list = self.get_results_var_list(result_var)
+        float_var = self.plt_cnt_cfg.float_vars[0]
+        x_values = dataset.coords[float_var.name].values.astype(float)
+
+        views = []
+        for rv in rv_list:
+            if not isinstance(rv, (ResultVar, ResultBool)):
+                continue
+            rv_name = rv.name
+            std_name = f"{rv_name}_std"
+
+            if rv_name not in dataset.data_vars:
+                continue
+            mean_values = dataset[rv_name].values.flatten().astype(float)
+            if std_name in dataset.data_vars:
+                std_values = dataset[std_name].values.flatten().astype(float)
+            else:
+                std_values = np.zeros_like(mean_values)
+
+            upper_values = mean_values + std_values
+            lower_values = mean_values - std_values
+
+            mean_pts = np.column_stack([x_values, mean_values])
+            upper_pts = np.column_stack([x_values, upper_values])
+            lower_pts = np.column_stack([x_values, lower_values])
+
+            recording.log(
+                f"{rv_name}/curve/mean",
+                rr.LineStrips2D([mean_pts], colors=[(31, 119, 180, 255)]),
+            )
+            recording.log(
+                f"{rv_name}/curve/upper",
+                rr.LineStrips2D([upper_pts], colors=[(31, 119, 180, 100)]),
+            )
+            recording.log(
+                f"{rv_name}/curve/lower",
+                rr.LineStrips2D([lower_pts], colors=[(31, 119, 180, 100)]),
+            )
+
+            view = rrb.Spatial2DView(
+                name=f"{rv_name} curve",
+                origin=f"{rv_name}/curve",
+            )
+            views.append(view)
+
+        return views if views else None
+
+    def to_rerun_heatmap(
+        self,
+        recording=None,
+        result_var: Optional[Parameter] = None,
+    ) -> list | None:  # pragma: no cover
+        """Render heatmaps using rr.Tensor in rrb.TensorView.
+
+        Filter: input_range=(2,None)
+        """
+        import rerun as rr
+        import rerun.blueprint as rrb
+
+        if not self._rerun_filter_matches(input_range=VarRange(2, None)):
+            return None
+
+        dataset = self.to_dataset(reduce=ReduceType.SQUEEZE, result_var=result_var)
+        rv_list = self.get_results_var_list(result_var)
+
+        views = []
+        for rv in rv_list:
+            if not isinstance(rv, (ResultVar, ResultBool)):
+                continue
+            rv_name = rv.name
+            data = dataset[rv_name].values
+            if data.ndim < 2:
+                continue
+            # Take 2D slice (first two dims)
+            while data.ndim > 2:
+                data = data[0]
+            entity = f"{rv_name}/heatmap"
+            recording.log(entity, rr.Tensor(data.astype(float)))
+
+            view = rrb.TensorView(
+                name=f"{rv_name} heatmap",
+                origin=entity,
+            )
+            views.append(view)
+
+        return views if views else None
+
+    def to_rerun_histogram(
+        self,
+        recording=None,
+        result_var: Optional[Parameter] = None,
+    ) -> list | None:  # pragma: no cover
+        """Render histograms using np.histogram -> rr.BarChart in rrb.BarChartView.
+
+        Filter: input_range=(0,0), repeats=(2,None)
+        """
+        import rerun as rr
+        import rerun.blueprint as rrb
+
+        if not self._rerun_filter_matches(
+            input_range=VarRange(0, 0),
+            repeats_range=VarRange(2, None),
+        ):
+            return None
+
+        dataset = self.to_dataset(reduce=ReduceType.NONE, result_var=result_var)
+        rv_list = self.get_results_var_list(result_var)
+
+        views = []
+        for rv in rv_list:
+            if not isinstance(rv, (ResultVar,)):
+                continue
+            rv_name = rv.name
+            data = dataset[rv_name].values.flatten()
+            data = data[~np.isnan(data)]
+            if len(data) == 0:
+                continue
+            counts, _ = np.histogram(data, bins="auto")
+            entity = f"{rv_name}/histogram"
+            recording.log(entity, rr.BarChart(counts.astype(float)))
+
+            view = rrb.BarChartView(
+                name=f"{rv_name} histogram",
+                origin=entity,
+            )
+            views.append(view)
+
+        return views if views else None
+
+    def to_rerun_scatter(
+        self,
+        recording=None,
+        result_var: Optional[Parameter] = None,
+    ) -> list | None:  # pragma: no cover
+        """Render scatter plots using rr.Points2D in rrb.Spatial2DView.
+
+        Filter: float_range=(0,0), cat_range=(1,None), repeats=(2,None)
+        """
+        import rerun as rr
+        import rerun.blueprint as rrb
+
+        if not self._rerun_filter_matches(
+            float_range=VarRange(0, 0),
+            cat_range=VarRange(1, None),
+            repeats_range=VarRange(2, None),
+        ):
+            return None
+
+        dataset = self.to_dataset(reduce=ReduceType.NONE, result_var=result_var)
+        rv_list = self.get_results_var_list(result_var)
+
+        views = []
+        for rv in rv_list:
+            if not isinstance(rv, (ResultVar, ResultBool)):
+                continue
+            rv_name = rv.name
+            data = dataset[rv_name].values.flatten()
+            data = data[~np.isnan(data.astype(float))]
+            if len(data) == 0:
+                continue
+
+            # X axis is the sample index, Y axis is the value
+            x = np.arange(len(data), dtype=float)
+            y = data.astype(float)
+            positions = np.column_stack([x, y])
+
+            entity = f"{rv_name}/scatter"
+            recording.log(entity, rr.Points2D(positions))
+
+            view = rrb.Spatial2DView(
+                name=f"{rv_name} scatter",
+                origin=entity,
+            )
+            views.append(view)
+
+        return views if views else None
+
+    def _rerun_filter_matches(
+        self,
+        float_range: VarRange | None = None,
+        cat_range: VarRange | None = None,
+        repeats_range: VarRange | None = None,
+        input_range: VarRange | None = None,
+    ) -> bool:
+        """Check if the current data dimensions match the given filter criteria."""
+        cfg = self.plt_cnt_cfg
+        if float_range is not None and not float_range.matches(cfg.float_cnt):
+            return False
+        if cat_range is not None and not cat_range.matches(cfg.cat_cnt):
+            return False
+        if repeats_range is not None and not repeats_range.matches(cfg.repeats):
+            return False
+        if input_range is not None and not input_range.matches(cfg.inputs_cnt):
+            return False
+        return True
+
+    @staticmethod
+    def rerun_plot_callbacks() -> list:
+        """Return the list of rerun plot callback methods to iterate in to_auto_rerun."""
+        return [
+            RerunResult.to_rerun_line,
+            RerunResult.to_rerun_bar,
+            RerunResult.to_rerun_curve,
+            RerunResult.to_rerun_heatmap,
+            RerunResult.to_rerun_histogram,
+            RerunResult.to_rerun_scatter,
+        ]
+
+
+# ==================== LEGACY TIMELINE-BASED HELPERS ====================
 
 
 def _get_time_value(dataset, dim, coord_val):

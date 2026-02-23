@@ -1,4 +1,5 @@
 from .bencher import Bench, BenchCfg, BenchRunCfg
+from .bench_cfg import RenderBackend
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
@@ -82,6 +83,13 @@ except ModuleNotFoundError as e:
 
 try:
     from .results.rerun_result import RerunResult
+except ModuleNotFoundError:
+    pass
+
+try:
+    from .results.composable_container.composable_container_rerun import (
+        ComposableContainerRerun,
+    )
 except ModuleNotFoundError:
     pass
 
