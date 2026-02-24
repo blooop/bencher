@@ -56,7 +56,4 @@ def example_rerun_backend(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     bch.run_flask_in_thread()
-    bench = example_rerun_backend(bch.BenchRunCfg(level=3))
-    result = bench.get_result()
-    pane = result.to_rerun()
-    pane.show()
+    example_rerun_backend(bch.BenchRunCfg(level=3, backend=bch.RenderBackend.rerun)).report.show()

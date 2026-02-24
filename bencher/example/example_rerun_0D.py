@@ -30,5 +30,4 @@ def example_rerun_0D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     bch.run_flask_in_thread()
-    bench = example_rerun_0D(bch.BenchRunCfg(repeats=1))
-    bench.get_result().to_rerun().show()
+    example_rerun_0D(bch.BenchRunCfg(repeats=1, backend=bch.RenderBackend.rerun)).report.show()

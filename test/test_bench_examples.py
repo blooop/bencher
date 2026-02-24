@@ -37,6 +37,13 @@ from bencher.example.example_image_vid import example_image_vid
 from bencher.example.example_video import example_video
 from bencher.example.example_filepath import example_filepath
 from bencher.example.meta.example_meta import example_meta
+from bencher.example.example_rerun_0D import example_rerun_0D
+from bencher.example.example_rerun_1D_float import example_rerun_1D_float
+from bencher.example.example_rerun_2D_float import example_rerun_2D_float
+from bencher.example.example_rerun_3D_float import example_rerun_3D_float
+from bencher.example.example_rerun_cat import example_rerun_cat
+from bencher.example.example_rerun_float_cat import example_rerun_float_cat
+from bencher.example.example_rerun_backend import example_rerun_backend
 
 import os
 
@@ -161,6 +168,34 @@ class TestBenchExamples(unittest.TestCase):
 
     def test_example_meta(self) -> None:
         self.examples_asserts(example_meta(self.create_run_cfg()))
+
+    # --- Rerun backend tests ---
+
+    def create_rerun_run_cfg(self) -> bch.BenchRunCfg:
+        cfg = self.create_run_cfg()
+        cfg.backend = bch.RenderBackend.rerun
+        return cfg
+
+    def test_example_rerun_0D(self) -> None:
+        self.examples_asserts(example_rerun_0D(self.create_rerun_run_cfg()))
+
+    def test_example_rerun_1D_float(self) -> None:
+        self.examples_asserts(example_rerun_1D_float(self.create_rerun_run_cfg()))
+
+    def test_example_rerun_2D_float(self) -> None:
+        self.examples_asserts(example_rerun_2D_float(self.create_rerun_run_cfg()))
+
+    def test_example_rerun_3D_float(self) -> None:
+        self.examples_asserts(example_rerun_3D_float(self.create_rerun_run_cfg()))
+
+    def test_example_rerun_cat(self) -> None:
+        self.examples_asserts(example_rerun_cat(self.create_rerun_run_cfg()))
+
+    def test_example_rerun_float_cat(self) -> None:
+        self.examples_asserts(example_rerun_float_cat(self.create_rerun_run_cfg()))
+
+    def test_example_rerun_backend(self) -> None:
+        self.examples_asserts(example_rerun_backend(self.create_rerun_run_cfg()))
 
     # def test_example_meta_scatter(self) -> None:
     # self.examples_asserts(example_meta_scatter(self.create_run_cfg()))

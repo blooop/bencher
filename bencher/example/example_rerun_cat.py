@@ -34,5 +34,4 @@ def example_rerun_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     bch.run_flask_in_thread()
-    bench = example_rerun_cat()
-    bench.get_result().to_rerun().show()
+    example_rerun_cat(bch.BenchRunCfg(backend=bch.RenderBackend.rerun)).report.show()
