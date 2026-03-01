@@ -1,4 +1,6 @@
 import hashlib
+import subprocess
+
 import nbformat as nbf
 from pathlib import Path
 
@@ -45,6 +47,7 @@ bench.get_result().to_auto_plots()"""
     # Add a newline character at the end to ensure proper end-of-file
     notebook_content = nbf.writes(nb) + "\n"
     output_path.write_text(notebook_content, encoding="utf-8")
+    subprocess.run(["ruff", "format", str(output_path)], check=False)
 
 
 if __name__ == "__main__":

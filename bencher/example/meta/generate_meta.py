@@ -1,3 +1,5 @@
+import subprocess
+
 import nbformat as nbf
 from typing import Any
 import bencher as bch
@@ -123,6 +125,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
 run_cfg = bch.BenchRunCfg()
 run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
+run_cfg.over_time = {self.sample_over_time}
 bench = {self.benchable_obj.__class__.__name__}().to_bench(run_cfg)
 res=bench.plot_sweep(input_vars={input_vars},
                     result_vars={self.result_var_names})
@@ -146,6 +149,7 @@ res.to_auto_plots()
         fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
         fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
+        subprocess.run(["ruff", "format", str(fname)], check=False)
 
         return super().__call__()
 
