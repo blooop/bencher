@@ -69,16 +69,27 @@ nbsite_gallery_conf = {
                     "path": "inputs_2_float",
                     "title": "2 Continuous Variables, 0-3 Categorical Variables",
                 },
-                {
-                    "path": "inputs_3_float",
-                    "title": "3 Continuous Variables, 0-3 Categorical Variables",
-                },
                 {"path": "1D", "title": "1D"},
-                {"path": "pareto", "title": "Pareto"},
                 {"path": "2D", "title": "2D"},
+                {"path": "pareto", "title": "Pareto"},
                 {"path": "levels", "title": "Levels"},
                 {"path": "examples", "title": "Examples"},
-                {"path": "meta", "title": "Meta"},
+                {
+                    "path": "meta_float_0",
+                    "title": "Meta: Categorical Only (0 Float, 0-3 Cat, 1-20 Repeats)",
+                },
+                {
+                    "path": "meta_float_1",
+                    "title": "Meta: 1 Float + Categorical (0-3 Cat, 1-20 Repeats)",
+                },
+                {
+                    "path": "meta_float_2",
+                    "title": "Meta: 2 Float + Categorical (0-3 Cat)",
+                },
+                {
+                    "path": "meta_float_3",
+                    "title": "Meta: 3 Float + Categorical (0-3 Cat)",
+                },
                 {"path": "yaml", "title": "YAML"},
                 {"path": "media", "title": "Media"},
             ],

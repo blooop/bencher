@@ -153,7 +153,7 @@ update-from-template-repo = "./scripts/update_from_template.sh"
 dev-use-prebuilt = "./scripts/devcontainer_use_prebuilt.sh"
 dev-use-local = "./scripts/devcontainer_use_local.sh"
 
-generate-docs = "python bencher/example/meta/generate_examples.py"
+generate-docs = "python bencher/example/meta/generate_examples.py "
 docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html docs docs/builtdocs"
 
 

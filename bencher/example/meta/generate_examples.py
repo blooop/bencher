@@ -127,31 +127,6 @@ if __name__ == "__main__":
         repeats=3,
     )
 
-    # Examples with 3 float inputs plus categorical inputs
-    convert_example_to_jupyter_notebook(
-        str(ex / "inputs_3_float/example_3_float_3_cat_in_2_out.py"),
-        "inputs_3_float",
-        repeats=1,
-    )
-
-    convert_example_to_jupyter_notebook(
-        str(ex / "inputs_3_float/example_3_float_2_cat_in_2_out.py"),
-        "inputs_3_float",
-        repeats=1,
-    )
-
-    convert_example_to_jupyter_notebook(
-        str(ex / "inputs_3_float/example_3_float_1_cat_in_2_out.py"),
-        "inputs_3_float",
-        repeats=1,
-    )
-
-    convert_example_to_jupyter_notebook(
-        str(ex / "inputs_3_float/example_3_float_0_cat_in_2_out.py"),
-        "inputs_3_float",
-        repeats=1,
-    )
-
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_0D/example_0_in_1_out.py"), "0D", repeats=100
     )

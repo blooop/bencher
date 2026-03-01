@@ -105,10 +105,31 @@ class BenchMetaGen(bch.ParametrizedSweep):
             self.plots = bch.ResultReference()
             self.plots.obj = res.to_auto()
 
-        title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
+        title = f"float_{self.float_vars_count}_cat_{self.categorical_vars_count}_repeats_{self.sample_with_repeats}_over_time_{self.sample_over_time}"
 
         nb = nbf.v4.new_notebook()
-        text = f"""# {title}"""
+
+        # Build a descriptive heading for the notebook
+        float_label = f"{self.float_vars_count} Float"
+        cat_label = f"{self.categorical_vars_count} Categorical"
+        heading = f"# Meta: {float_label}, {cat_label}\n"
+
+        heading += "\n## Input Variables\n"
+        if self.float_vars_count > 0:
+            names = ", ".join(f"`{n}`" for n in self.float_var_names[: self.float_vars_count])
+            heading += f"- **Float (continuous):** {names}\n"
+        if self.categorical_vars_count > 0:
+            names = ", ".join(
+                f"`{n}`" for n in self.categorical_var_names[: self.categorical_vars_count]
+            )
+            heading += f"- **Categorical:** {names}\n"
+        if self.float_vars_count == 0 and self.categorical_vars_count == 0:
+            heading += "- *(none)*\n"
+
+        heading += "\n## Configuration\n"
+        heading += f"- **Repeats:** {self.sample_with_repeats}\n"
+
+        text = heading
 
         # Customize notebook generation to use the actual benchmark object and variables
         module_import = "import bencher as bch\n"
@@ -125,7 +146,6 @@ class BenchMetaGen(bch.ParametrizedSweep):
 run_cfg = bch.BenchRunCfg()
 run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
-run_cfg.over_time = {self.sample_over_time}
 bench = {self.benchable_obj.__class__.__name__}().to_bench(run_cfg)
 res=bench.plot_sweep(input_vars={input_vars},
                     result_vars={self.result_var_names})
@@ -146,7 +166,7 @@ res.to_auto_plots()
         nb["cells"] = cells
         from pathlib import Path
 
-        fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
+        fname = Path(f"docs/reference/meta_float_{self.float_vars_count}/ex_{title}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
         fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
         subprocess.run(["ruff", "format", str(fname)], check=False)
