@@ -1,5 +1,5 @@
-#!/bin/sh
-set -eu
+#!/bin/bash
+set -euo pipefail
 
 # Claude Code CLI Local Feature Install Script
 # Installs Claude Code via pixi and sets up configuration directories
@@ -83,6 +83,7 @@ install_claude_code() {
 
     # Add pixi bin path to user's profile if not already there
     local profile="$TARGET_HOME/.profile"
+    # shellcheck disable=SC2016
     local pixi_path_line='export PATH="$HOME/.pixi/bin:$PATH"'
     if [ -f "$profile" ] && ! grep -q '\.pixi/bin' "$profile"; then
         echo "$pixi_path_line" >> "$profile"
@@ -93,6 +94,7 @@ install_claude_code() {
 
     # Workaround: pixi trampoline fails for bash scripts, so add env bin directly
     # This conditionally adds the path only if the env exists
+    # shellcheck disable=SC2016
     local env_path_line='[ -d "$HOME/.pixi/envs/claude-shim/bin" ] && export PATH="$HOME/.pixi/envs/claude-shim/bin:$PATH"'
     if [ -f "$profile" ] && ! grep -q 'pixi/envs/claude-shim' "$profile"; then
         echo "# Workaround: pixi trampoline fails for bash scripts" >> "$profile"
