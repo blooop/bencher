@@ -56,24 +56,23 @@ class TestBenchMeta(unittest.TestCase):
         """Verify different category combinations produce different output values."""
         obj = BenchableObject()
 
-        for dims in range(4):
-            obj.active_dims = dims
-            values = set()
-            for wave_val in [True, False]:
-                for variant_val in FunctionVariant:
-                    for transform_val in ["normal", "inverted"]:
-                        obj.wave = wave_val
-                        obj.variant = variant_val
-                        obj.transform = transform_val
-                        obj.float1 = 0.3
-                        obj.float2 = 0.4
-                        obj.float3 = 0.6
-                        obj()
-                        values.add(round(obj.distance, 6))
-            # All 8 combinations (2 wave * 2 variant * 2 transform) should produce
-            # at least 4 distinct values (inverted pairs share magnitude but differ in sign)
-            self.assertGreaterEqual(
-                len(values),
-                4,
-                f"Expected at least 4 distinct values for {dims}D, got {len(values)}: {values}",
-            )
+        # Test at a non-default point so freq differences show up
+        obj.float1 = 0.3
+        obj.float2 = 0.4
+        obj.float3 = 0.6
+
+        values = set()
+        for wave_val in [True, False]:
+            for variant_val in FunctionVariant:
+                for transform_val in ["normal", "inverted"]:
+                    obj.wave = wave_val
+                    obj.variant = variant_val
+                    obj.transform = transform_val
+                    obj()
+                    values.add(round(obj.distance, 6))
+        # All 8 combinations (2 wave * 2 variant * 2 transform) should produce distinct values
+        self.assertEqual(
+            len(values),
+            8,
+            f"Expected 8 distinct values, got {len(values)}: {values}",
+        )

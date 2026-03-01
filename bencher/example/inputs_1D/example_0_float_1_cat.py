@@ -7,7 +7,6 @@ run_cfg = bch.BenchRunCfg()
 run_cfg.repeats = 2  # only shows distance
 run_cfg.level = 4
 benchable = BenchableObject()
-benchable.active_dims = 1
 bench = benchable.to_bench(run_cfg)
 run_cfg.repeats = 1
 # shows both distance and sample_noise

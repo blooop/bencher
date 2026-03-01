@@ -16,7 +16,12 @@ class FunctionVariant(StrEnum):
 
 
 class BenchableObject(bch.ParametrizedSweep):
-    """A benchable object with dimension-aware math functions that produce visually distinct plots."""
+    """A benchable object with a single parametric function that produces visually distinct plots.
+
+    Categories control the function's frequency and phase. The same formula is evaluated regardless
+    of how many float dimensions are swept - unused dimensions stay at their defaults, naturally
+    slicing the function at different dimensionalities.
+    """
 
     # floating point variables
     float1 = bch.FloatSweep(default=0, bounds=[0, 1.0], doc="x coordinate of the sample volume")
@@ -25,7 +30,7 @@ class BenchableObject(bch.ParametrizedSweep):
 
     # categorical variables
     wave = bch.BoolSweep(
-        default=True, doc="Toggle between wave (trig) and peak (polynomial) function families"
+        default=True, doc="High frequency oscillation (True) vs low frequency smooth (False)"
     )
     variant = bch.EnumSweep(FunctionVariant, doc=FunctionVariant.__doc__)
 
@@ -37,77 +42,30 @@ class BenchableObject(bch.ParametrizedSweep):
     result_hmap = bch.ResultHmap()
 
     # Class attributes set by BenchMeta/BenchMetaGen before sweep
-    active_dims = 0  # number of active float dimensions
     noise_scale = 0.0  # signal-proportional noise scale (0.0 = deterministic)
     _time_offset = 0.0  # offset added to output for over-time support
-
-    def _compute_0d(self):
-        """0D: distinct scalar values per category combination."""
-        if self.wave:
-            return 3.0 if self.variant == FunctionVariant.alpha else 7.0
-        return 5.0 if self.variant == FunctionVariant.alpha else 2.0
-
-    def _compute_1d(self):
-        """1D functions of float1 (x in [0,1])."""
-        x = self.float1
-        if self.wave:
-            if self.variant == FunctionVariant.alpha:
-                return math.sin(2 * math.pi * x)
-            return math.sin(2 * math.pi * x) + 0.5 * math.sin(6 * math.pi * x)
-        if self.variant == FunctionVariant.alpha:
-            return math.exp(-((x - 0.5) ** 2) / 0.02)
-        return 4 * x * (1 - x)
-
-    def _compute_2d(self):
-        """2D functions of float1, float2 (x,y in [0,1])."""
-        x, y = self.float1, self.float2
-        if self.wave:
-            if self.variant == FunctionVariant.alpha:
-                return math.sin(2 * math.pi * x) * math.cos(2 * math.pi * y)
-            return math.sin(math.pi * (x + y)) * math.cos(math.pi * (x - y))
-        if self.variant == FunctionVariant.alpha:
-            return math.exp(-((x - 0.5) ** 2 + (y - 0.5) ** 2) / 0.04)
-        return (x - 0.5) ** 2 - (y - 0.5) ** 2
-
-    def _compute_3d(self):
-        """3D functions of float1, float2, float3 (x,y,z in [0,1])."""
-        x, y, z = self.float1, self.float2, self.float3
-        if self.wave:
-            if self.variant == FunctionVariant.alpha:
-                return (
-                    math.sin(2 * math.pi * x)
-                    * math.sin(2 * math.pi * y)
-                    * math.sin(2 * math.pi * z)
-                )
-            return math.sin(math.pi * (x + y + z)) * math.cos(math.pi * (x - y))
-        if self.variant == FunctionVariant.alpha:
-            # Spherical shell at r=0.3 from center
-            r = math.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2 + (z - 0.5) ** 2)
-            return math.exp(-((r - 0.3) ** 2) / 0.01)
-        # Two Gaussian blobs
-        d1 = (x - 0.3) ** 2 + (y - 0.3) ** 2 + (z - 0.3) ** 2
-        d2 = (x - 0.7) ** 2 + (y - 0.7) ** 2 + (z - 0.7) ** 2
-        return math.exp(-d1 / 0.03) + math.exp(-d2 / 0.03)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
 
-        dims = self.active_dims
-        if dims == 0:
-            self.distance = self._compute_0d()
-        elif dims == 1:
-            self.distance = self._compute_1d()
-        elif dims == 2:
-            self.distance = self._compute_2d()
-        else:
-            self.distance = self._compute_3d()
+        x, y, z = self.float1, self.float2, self.float3
 
-        # Apply transform
+        # Map categoricals to continuous parameters that shape the function
+        freq = 3.0 if self.wave else 1.0
+        phase = 0.0 if self.variant == FunctionVariant.alpha else math.pi / 2
+
+        # Single parametric function - categories control freq and phase,
+        # dimensionality is just which floats get swept vs held at default.
+        # The freq coefficient on the first term ensures distinct values even at (0,0,0).
+        self.distance = (
+            freq * math.sin(freq * math.pi * x + phase + 0.5)
+            + math.cos(freq * 0.7 * math.pi * y + phase * 1.3 + 0.3)
+            + 0.7 * math.sin(freq * 0.5 * math.pi * z + phase * 0.7 + 0.7)
+            + 0.3 * math.sin(freq * math.pi * (x * y + z * 0.5) + phase * 0.5)
+        )
+
         if self.transform == "inverted":
-            if dims == 0:
-                self.distance = 10.0 - self.distance
-            else:
-                self.distance *= -1
+            self.distance *= -1
 
         # Apply noise
         self.sample_noise = 0.0
@@ -152,7 +110,6 @@ class BenchMeta(bch.ParametrizedSweep):
         run_cfg.plot_size = 500
 
         benchable = BenchableObject()
-        benchable.active_dims = self.float_vars
         if self.sample_with_repeats > 1:
             benchable.noise_scale = 0.15
 
@@ -212,16 +169,53 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = BenchMeta().to_bench(run_cfg)
 
     bench.plot_sweep(
-        title="Meta Bench",
-        description="""## All Combinations of Variable Sweeps and Resulting Plots
-This uses bencher to display all the combinations of plots bencher is able to produce""",
+        title="0 Float Inputs",
+        description="""Categorical-only sweeps with 0 float variables.
+Each category combination produces a distinct scalar value from the unified function evaluated at
+the default float point (0,0,0).""",
         input_vars=[
-            bch.p("float_vars", [0, 1, 2, 3]),
             "categorical_vars",
-            bch.p("sample_with_repeats", [1, 2]),
-            "sample_over_time",
+            bch.p("sample_with_repeats", [1, 10]),
+            # "sample_over_time",
         ],
-        const_vars=[],
+        const_vars=dict(float_vars=0),
+    )
+
+    bench.plot_sweep(
+        title="1 Float Input",
+        description="""Sweeps over float1, producing 1D line/curve plots.
+Categories shift the frequency and phase of the underlying function, producing visually distinct
+curves.""",
+        input_vars=[
+            "categorical_vars",
+            bch.p("sample_with_repeats", [1, 10]),
+            # "sample_over_time",
+        ],
+        const_vars=dict(float_vars=1),
+    )
+
+    bench.plot_sweep(
+        title="2 Float Inputs",
+        description="""Sweeps over float1 and float2, producing 2D heatmap/surface plots.
+The unified function creates interesting 2D patterns that vary with category selection.""",
+        input_vars=[
+            "categorical_vars",
+            bch.p("sample_with_repeats", [1, 10]),
+            # "sample_over_time",
+        ],
+        const_vars=dict(float_vars=2),
+    )
+
+    bench.plot_sweep(
+        title="3 Float Inputs",
+        description="""Sweeps over all three float variables, producing 3D volume plots.
+The full 3D function with all cross-coupling terms active.""",
+        input_vars=[
+            "categorical_vars",
+            bch.p("sample_with_repeats", [1, 10]),
+            # "sample_over_time",
+        ],
+        const_vars=dict(float_vars=3),
     )
 
     return bench

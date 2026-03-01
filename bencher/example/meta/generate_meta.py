@@ -76,9 +76,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        # Set active_dims and noise_scale on the benchable object
-        if hasattr(self.benchable_obj, "active_dims"):
-            self.benchable_obj.active_dims = self.float_vars_count
+        # Set noise_scale on the benchable object when using repeats
         if hasattr(self.benchable_obj, "noise_scale") and self.sample_with_repeats > 1:
             self.benchable_obj.noise_scale = 0.15
 
@@ -139,15 +137,17 @@ run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
 run_cfg.over_time = True
 benchable = {obj_class}()
-benchable.active_dims = {self.float_vars_count}
 benchable.noise_scale = max(0.1, {0.15 if self.sample_with_repeats > 1 else 0.0})
 bench = benchable.to_bench(run_cfg)
 time_events = [("t0", 0.0), ("t1", 0.3), ("t2", 0.7), ("t3", 1.0)]
 for i, (event, offset) in enumerate(time_events):
     benchable._time_offset = offset
+    run_cfg.time_event = event
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
     res = bench.plot_sweep(event, input_vars={input_vars},
                     result_vars={self.result_var_names},
-                    clear_history=i == 0, clear_cache=True)
+                    run_cfg=run_cfg)
 """
         else:
             code_gen = f"""
@@ -159,7 +159,6 @@ run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
 run_cfg.over_time = False
 benchable = {obj_class}()
-benchable.active_dims = {self.float_vars_count}
 {noise_line}bench = benchable.to_bench(run_cfg)
 res=bench.plot_sweep(input_vars={input_vars},
                     result_vars={self.result_var_names})
