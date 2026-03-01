@@ -12,7 +12,7 @@ def _get_rerun_version() -> str:
     try:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
-        return "0.29.2"
+        return "0.30.0"
 
 
 def rerun_to_pane(
