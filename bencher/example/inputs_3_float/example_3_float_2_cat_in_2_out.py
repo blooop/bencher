@@ -96,7 +96,6 @@ def example_3_float_2_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bc
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
         run_cfg.level = 5
-    run_cfg.repeats = 1  # Fewer repeats for a quicker benchmark
 
     hv.opts.defaults(hv.opts.HeatMap(cmap="plasma", width=300, height=300, colorbar=True))
 

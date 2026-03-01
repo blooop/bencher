@@ -94,42 +94,50 @@ if __name__ == "__main__":
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_2_float/example_2_float_3_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=3,
     )
 
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_2_float/example_2_float_2_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=3,
     )
 
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_2_float/example_2_float_1_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_2_float/example_2_float_0_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=3,
     )
 
     # Examples with 3 float inputs plus categorical inputs
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_3_float/example_3_float_3_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_3_float/example_3_float_2_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_3_float/example_3_float_1_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_3_float/example_3_float_0_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
@@ -146,15 +154,15 @@ if __name__ == "__main__":
     convert_example_to_jupyter_notebook(str(ex / "inputs_1D/example_1_int_in_2_out.py"), "1D")
 
     convert_example_to_jupyter_notebook(
-        str(ex / "inputs_1D/example_1_int_in_2_out_repeats.py"), "1D"
+        str(ex / "inputs_1D/example_1_int_in_2_out_repeats.py"), "1D", repeats=4
     )
 
     convert_example_to_jupyter_notebook(
-        str(ex / "inputs_1D/example_1_cat_in_2_out_repeats.py"), "1D"
+        str(ex / "inputs_1D/example_1_cat_in_2_out_repeats.py"), "1D", repeats=30
     )
 
     convert_example_to_jupyter_notebook(
-        str(ex / "inputs_2D/example_2_cat_in_4_out_repeats.py"), "1D"
+        str(ex / "inputs_2D/example_2_cat_in_4_out_repeats.py"), "1D", repeats=15
     )
 
     convert_example_to_jupyter_notebook(str(ex / "example_levels.py"), "levels")
