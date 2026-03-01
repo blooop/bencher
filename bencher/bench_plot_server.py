@@ -14,6 +14,9 @@ from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
 
 logging.basicConfig(level=logging.INFO)
 
+RRD_CACHE_DIR = Path("cachedir/rrd").resolve()
+RRD_STATIC_ROUTE = r"/rrd_static/(.*)"
+
 
 class CorsStaticHandler(StaticFileHandler):
     """A Tornado static file handler that adds CORS headers."""
@@ -23,7 +26,7 @@ class CorsStaticHandler(StaticFileHandler):
         self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.set_header("Access-Control-Allow-Headers", "*")
 
-    def options(self, *args):
+    def options(self, *args, **kwargs):
         self.set_status(204)
         self.finish()
 
@@ -31,8 +34,15 @@ class CorsStaticHandler(StaticFileHandler):
 class BenchPlotServer:
     """A server for display plots of benchmark results"""
 
-    def __init__(self) -> None:
-        """Create a new BenchPlotServer object"""
+    def __init__(self, default_rrd_port: int | None = None) -> None:
+        """Create a new BenchPlotServer object.
+
+        Args:
+            default_rrd_port: Port to use when serving .rrd files and no port
+                is explicitly provided. If None and .rrd files are present,
+                the port from utils_rerun.PANEL_PORT is used.
+        """
+        self.default_rrd_port = default_rrd_port
 
     def plot_server(
         self, bench_name: str, plot_cfg: BenchPlotSrvCfg | None = None, plots_instance=None
@@ -93,20 +103,6 @@ class BenchPlotServer:
             "This benchmark name does not exist in the results cache. Was not able to load the results to plot!  Make sure to run the bencher to generate and save results to the cache"
         )
 
-    @staticmethod
-    def _rrd_extra_patterns() -> list:
-        """Return Tornado route patterns for serving .rrd files with CORS headers."""
-        rrd_dir = Path("cachedir/rrd").resolve()
-        if rrd_dir.is_dir():
-            return [
-                (
-                    r"/rrd_static/(.*)",
-                    CorsStaticHandler,
-                    {"path": str(rrd_dir)},
-                )
-            ]
-        return []
-
     def serve(
         self,
         bench_name: str,
@@ -127,13 +123,20 @@ class BenchPlotServer:
         for logger in ["tornado", "bokeh"]:
             logging.getLogger(logger).setLevel(logging.WARNING)
 
-        extra = self._rrd_extra_patterns()
+        extra_patterns: list = []
+        if RRD_CACHE_DIR.is_dir():
+            extra_patterns.append(
+                (RRD_STATIC_ROUTE, CorsStaticHandler, {"path": str(RRD_CACHE_DIR)})
+            )
 
         # When serving .rrd files, use a known port so rerun iframe URLs work.
-        if port is None and extra:
-            from bencher.utils_rerun import PANEL_PORT
+        if port is None and extra_patterns:
+            if self.default_rrd_port is not None:
+                port = self.default_rrd_port
+            else:
+                from bencher.utils_rerun import PANEL_PORT
 
-            port = PANEL_PORT
+                port = PANEL_PORT
 
         if port is not None:
             return pn.serve(
@@ -143,7 +146,7 @@ class BenchPlotServer:
                 port=port,
                 threaded=True,
                 show=show,
-                extra_patterns=extra,
+                extra_patterns=extra_patterns,
             )
 
         return pn.serve(
@@ -151,5 +154,5 @@ class BenchPlotServer:
             title=bench_name,
             threaded=True,
             show=show,
-            extra_patterns=extra,
+            extra_patterns=extra_patterns,
         )
