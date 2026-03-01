@@ -53,46 +53,25 @@ nbsite_gallery_conf = {
     "default_extensions": ["*.ipynb", "*.py"],
     "examples_dir": ".",
     "galleries": {
-        "reference/meta/0_float": {
-            "title": "0 Continuous Variables",
-            "intro": "Sweeps with 0 continuous (float) variables and 0-3 categorical variables.",
+        "reference": {
+            "title": "Reference Gallery",
+            "intro": "This shows examples of what various dimensionalities of sweep look like.",
             "sections": [
-                {"path": "no_repeats", "title": "No Repeats"},
-                {"path": "with_repeats", "title": "With Repeats"},
-                {"path": "over_time", "title": "Over Time"},
+                {"path": "meta/0_float/no_repeats", "title": "0 Float - No Repeats"},
+                {"path": "meta/0_float/with_repeats", "title": "0 Float - With Repeats"},
+                {"path": "meta/0_float/over_time", "title": "0 Float - Over Time"},
+                {"path": "meta/1_float/no_repeats", "title": "1 Float - No Repeats"},
+                {"path": "meta/1_float/with_repeats", "title": "1 Float - With Repeats"},
+                {"path": "meta/1_float/over_time", "title": "1 Float - Over Time"},
+                {"path": "meta/2_float/no_repeats", "title": "2 Float - No Repeats"},
+                {"path": "meta/2_float/with_repeats", "title": "2 Float - With Repeats"},
+                {"path": "meta/2_float/over_time", "title": "2 Float - Over Time"},
+                {"path": "meta/3_float/no_repeats", "title": "3 Float - No Repeats"},
+                {"path": "meta/3_float/with_repeats", "title": "3 Float - With Repeats"},
+                {"path": "meta/3_float/over_time", "title": "3 Float - Over Time"},
             ],
             "skip_rst_notebook_directive": True,
-        },
-        "reference/meta/1_float": {
-            "title": "1 Continuous Variable",
-            "intro": "Sweeps with 1 continuous (float) variable and 0-3 categorical variables.",
-            "sections": [
-                {"path": "no_repeats", "title": "No Repeats"},
-                {"path": "with_repeats", "title": "With Repeats"},
-                {"path": "over_time", "title": "Over Time"},
-            ],
-            "skip_rst_notebook_directive": True,
-        },
-        "reference/meta/2_float": {
-            "title": "2 Continuous Variables",
-            "intro": "Sweeps with 2 continuous (float) variables and 0-3 categorical variables.",
-            "sections": [
-                {"path": "no_repeats", "title": "No Repeats"},
-                {"path": "with_repeats", "title": "With Repeats"},
-                {"path": "over_time", "title": "Over Time"},
-            ],
-            "skip_rst_notebook_directive": True,
-        },
-        "reference/meta/3_float": {
-            "title": "3 Continuous Variables",
-            "intro": "Sweeps with 3 continuous (float) variables and 0-3 categorical variables.",
-            "sections": [
-                {"path": "no_repeats", "title": "No Repeats"},
-                {"path": "with_repeats", "title": "With Repeats"},
-                {"path": "over_time", "title": "Over Time"},
-            ],
-            "skip_rst_notebook_directive": True,
-        },
+        }
     },
 }
 
