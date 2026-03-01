@@ -141,13 +141,9 @@ if __name__ == "__main__":
     )
 
     # Other 1D examples
-    convert_example_to_jupyter_notebook(
-        str(ex / "inputs_1D/example_1_int_in_1_out.py"), "1D"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "inputs_1D/example_1_int_in_1_out.py"), "1D")
 
-    convert_example_to_jupyter_notebook(
-        str(ex / "inputs_1D/example_1_int_in_2_out.py"), "1D"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "inputs_1D/example_1_int_in_2_out.py"), "1D")
 
     convert_example_to_jupyter_notebook(
         str(ex / "inputs_1D/example_1_int_in_2_out_repeats.py"), "1D"
@@ -161,18 +157,12 @@ if __name__ == "__main__":
         str(ex / "inputs_2D/example_2_cat_in_4_out_repeats.py"), "1D"
     )
 
-    convert_example_to_jupyter_notebook(
-        str(ex / "example_levels.py"), "levels"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "example_levels.py"), "levels")
 
     # YAML driven sweeps
-    convert_example_to_jupyter_notebook(
-        str(ex / "example_yaml_sweep_list.py"), "yaml"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "example_yaml_sweep_list.py"), "yaml")
 
-    convert_example_to_jupyter_notebook(
-        str(ex / "example_yaml_sweep_dict.py"), "yaml"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "example_yaml_sweep_dict.py"), "yaml")
 
     # todo, enable
     # convert_example_to_jupyter_notebook(
