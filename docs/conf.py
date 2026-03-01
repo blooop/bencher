@@ -53,52 +53,46 @@ nbsite_gallery_conf = {
     "default_extensions": ["*.ipynb", "*.py"],
     "examples_dir": ".",
     "galleries": {
-        "reference": {
-            "title": "Reference Gallery",
-            "intro": ("This shows examples of what various dimensionalities of sweep look like."),
+        "reference/meta/0_float": {
+            "title": "0 Continuous Variables",
+            "intro": "Sweeps with 0 continuous (float) variables and 0-3 categorical variables.",
             "sections": [
-                # {
-                #     "path": "inputs_0_float",
-                #     "title": "0 Continuous Variables, 0-3 Categorical Variables",
-                # },
-                # {
-                #     "path": "inputs_1_float",
-                #     "title": "1 Continuous Variable, 0-3 Categorical Variables",
-                # },
-                # {
-                #     "path": "inputs_2_float",
-                #     "title": "2 Continuous Variables, 0-3 Categorical Variables",
-                # },
-                # {
-                #     "path": "inputs_3_float",
-                #     "title": "3 Continuous Variables, 0-3 Categorical Variables",
-                # },
-                # {"path": "1D", "title": "1D"},
-                # {"path": "pareto", "title": "Pareto"},
-                # {"path": "2D", "title": "2D"},
-                # {"path": "levels", "title": "Levels"},
-                # {"path": "examples", "title": "Examples"},
-                {
-                    "path": "meta/0_float",
-                    "title": "0 Continuous Variables, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "meta/1_float",
-                    "title": "1 Continuous Variable, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "meta/2_float",
-                    "title": "2 Continuous Variables, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "meta/3_float",
-                    "title": "3 Continuous Variables, 0-3 Categorical Variables",
-                },
-                # {"path": "yaml", "title": "YAML"},
-                # {"path": "media", "title": "Media"},
+                {"path": "no_repeats", "title": "No Repeats"},
+                {"path": "with_repeats", "title": "With Repeats"},
+                {"path": "over_time", "title": "Over Time"},
             ],
             "skip_rst_notebook_directive": True,
-        }
+        },
+        "reference/meta/1_float": {
+            "title": "1 Continuous Variable",
+            "intro": "Sweeps with 1 continuous (float) variable and 0-3 categorical variables.",
+            "sections": [
+                {"path": "no_repeats", "title": "No Repeats"},
+                {"path": "with_repeats", "title": "With Repeats"},
+                {"path": "over_time", "title": "Over Time"},
+            ],
+            "skip_rst_notebook_directive": True,
+        },
+        "reference/meta/2_float": {
+            "title": "2 Continuous Variables",
+            "intro": "Sweeps with 2 continuous (float) variables and 0-3 categorical variables.",
+            "sections": [
+                {"path": "no_repeats", "title": "No Repeats"},
+                {"path": "with_repeats", "title": "With Repeats"},
+                {"path": "over_time", "title": "Over Time"},
+            ],
+            "skip_rst_notebook_directive": True,
+        },
+        "reference/meta/3_float": {
+            "title": "3 Continuous Variables",
+            "intro": "Sweeps with 3 continuous (float) variables and 0-3 categorical variables.",
+            "sections": [
+                {"path": "no_repeats", "title": "No Repeats"},
+                {"path": "with_repeats", "title": "With Repeats"},
+                {"path": "over_time", "title": "Over Time"},
+            ],
+            "skip_rst_notebook_directive": True,
+        },
     },
 }
 

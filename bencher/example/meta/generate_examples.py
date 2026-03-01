@@ -1,4 +1,5 @@
 import hashlib
+import shutil
 import subprocess
 
 import nbformat as nbf
@@ -52,6 +53,11 @@ bench.get_result().to_auto_plots()"""
 
 if __name__ == "__main__":
     # Meta examples only (generated programmatically via BenchMetaGen sweeps)
+    meta_dir = Path("docs/reference/meta")
+    if meta_dir.exists():
+        shutil.rmtree(meta_dir)
+    meta_dir.mkdir(parents=True, exist_ok=True)
+
     from bencher.example.meta.generate_meta import example_meta
 
     example_meta()
