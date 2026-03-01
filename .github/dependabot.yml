@@ -45,6 +45,10 @@ updates:
           - "jupyter_bokeh"
           - "prek"
           - "check-manifest"
+  - package-ecosystem: "docker"
+    directory: "/.devcontainer"
+    schedule:
+      interval: "monthly"
   - package-ecosystem: github-actions
     directory: /
     schedule:
