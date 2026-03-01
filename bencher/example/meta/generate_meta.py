@@ -1,10 +1,9 @@
-import hashlib
 import nbformat as nbf
 from typing import Any
 import bencher as bch
 
-
 from bencher.example.meta.example_meta import BenchableObject
+from bencher.example.meta.generate_examples import _deterministic_id
 
 
 class BenchMetaGen(bch.ParametrizedSweep):
@@ -144,7 +143,7 @@ res.to_auto_plots()
             nbf.v4.new_code_cell(code_results),
         ]
         for i, cell in enumerate(cells):
-            cell.id = hashlib.sha256(f"{title}:{i}".encode()).hexdigest()[:8]
+            cell.id = _deterministic_id(title, i)
         nb["cells"] = cells
         from pathlib import Path
 
