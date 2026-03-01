@@ -40,141 +40,140 @@ bench.get_result().to_auto_plots()"""
 
 if __name__ == "__main__":
     # Examples with different numbers of categorical variables in increasing order
+    ex = Path(__file__).resolve().parent.parent
 
     # convert_example_to_jupyter_notebook(
-    #     "/workspaces/bencher/bencher/example/example_image.py",
+    #     str(ex / "example_image.py"),
     #     "media",
     #     repeats=1,
     # )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_0_float/example_0_cat_in_2_out.py",
+        str(ex / "inputs_0_float/example_0_cat_in_2_out.py"),
         "inputs_0_float",
         repeats=100,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_0_float/example_1_cat_in_2_out.py",
+        str(ex / "inputs_0_float/example_1_cat_in_2_out.py"),
         "inputs_0_float",
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_0_float/example_2_cat_in_2_out.py",
+        str(ex / "inputs_0_float/example_2_cat_in_2_out.py"),
         "inputs_0_float",
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_0_float/example_3_cat_in_2_out.py",
+        str(ex / "inputs_0_float/example_3_cat_in_2_out.py"),
         "inputs_0_float",
     )
 
     # Examples with 1 float input plus varying categorical inputs
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1_float/example_1_float_0_cat_in_2_out.py",
+        str(ex / "inputs_1_float/example_1_float_0_cat_in_2_out.py"),
         "inputs_1_float",
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1_float/example_1_float_1_cat_in_2_out.py",
+        str(ex / "inputs_1_float/example_1_float_1_cat_in_2_out.py"),
         "inputs_1_float",
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1_float/example_1_float_2_cat_in_2_out.py",
+        str(ex / "inputs_1_float/example_1_float_2_cat_in_2_out.py"),
         "inputs_1_float",
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1_float/example_1_float_3_cat_in_2_out.py",
+        str(ex / "inputs_1_float/example_1_float_3_cat_in_2_out.py"),
         "inputs_1_float",
     )
 
     # Example with 2 float inputs plus categorical inputs
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_2_float/example_2_float_3_cat_in_2_out.py",
+        str(ex / "inputs_2_float/example_2_float_3_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=3,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_2_float/example_2_float_2_cat_in_2_out.py",
+        str(ex / "inputs_2_float/example_2_float_2_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=3,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_2_float/example_2_float_1_cat_in_2_out.py",
+        str(ex / "inputs_2_float/example_2_float_1_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_2_float/example_2_float_0_cat_in_2_out.py",
+        str(ex / "inputs_2_float/example_2_float_0_cat_in_2_out.py"),
         "inputs_2_float",
+        repeats=3,
     )
 
     # Examples with 3 float inputs plus categorical inputs
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_3_float/example_3_float_3_cat_in_2_out.py",
+        str(ex / "inputs_3_float/example_3_float_3_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_3_float/example_3_float_2_cat_in_2_out.py",
+        str(ex / "inputs_3_float/example_3_float_2_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_3_float/example_3_float_1_cat_in_2_out.py",
+        str(ex / "inputs_3_float/example_3_float_1_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_3_float/example_3_float_0_cat_in_2_out.py",
+        str(ex / "inputs_3_float/example_3_float_0_cat_in_2_out.py"),
         "inputs_3_float",
+        repeats=1,
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_0D/example_0_in_1_out.py", "0D", repeats=100
+        str(ex / "inputs_0D/example_0_in_1_out.py"), "0D", repeats=100
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_0D/example_0_in_2_out.py", "0D", repeats=100
+        str(ex / "inputs_0D/example_0_in_2_out.py"), "0D", repeats=100
     )
 
     # Other 1D examples
+    convert_example_to_jupyter_notebook(str(ex / "inputs_1D/example_1_int_in_1_out.py"), "1D")
+
+    convert_example_to_jupyter_notebook(str(ex / "inputs_1D/example_1_int_in_2_out.py"), "1D")
+
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1D/example_1_int_in_1_out.py", "1D"
+        str(ex / "inputs_1D/example_1_int_in_2_out_repeats.py"), "1D", repeats=4
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1D/example_1_int_in_2_out.py", "1D"
+        str(ex / "inputs_1D/example_1_cat_in_2_out_repeats.py"), "1D", repeats=30
     )
 
     convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1D/example_1_int_in_2_out_repeats.py", "1D"
+        str(ex / "inputs_2D/example_2_cat_in_4_out_repeats.py"), "1D", repeats=15
     )
 
-    convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_1D/example_1_cat_in_2_out_repeats.py", "1D"
-    )
-
-    convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/inputs_2D/example_2_cat_in_4_out_repeats.py", "1D"
-    )
-
-    convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/example_levels.py", "levels"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "example_levels.py"), "levels")
 
     # YAML driven sweeps
-    convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/example_yaml_sweep_list.py", "yaml"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "example_yaml_sweep_list.py"), "yaml")
 
-    convert_example_to_jupyter_notebook(
-        "/workspaces/bencher/bencher/example/example_yaml_sweep_dict.py", "yaml"
-    )
+    convert_example_to_jupyter_notebook(str(ex / "example_yaml_sweep_dict.py"), "yaml")
 
     # todo, enable
     # convert_example_to_jupyter_notebook(
-    #     "/workspaces/bencher/bencher/example/example_composable_container_video.py",
+    #     str(ex / "example_composable_container_video.py"),
     #     "Media",
     # )

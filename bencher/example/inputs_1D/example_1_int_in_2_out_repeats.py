@@ -78,15 +78,10 @@ def example_1_int_in_2_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
         bch.Bench: The benchmark object
     """
 
-    from importlib.metadata import version
-
-    print(version("holobench"))
-    run_cfg.repeats = 4
     bench = Example1D().to_bench(run_cfg)
     bench.plot_sweep()
     return bench
 
 
 if __name__ == "__main__":
-    run_config = bch.BenchRunCfg()
-    example_1_int_in_2_out_repeats(run_config).report.show()
+    example_1_int_in_2_out_repeats(bch.BenchRunCfg(repeats=4)).report.show()

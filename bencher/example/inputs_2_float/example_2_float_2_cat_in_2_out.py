@@ -96,8 +96,6 @@ def example_2_float_2_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bc
     Returns:
         bch.Bench: The benchmark object
     """
-    run_cfg.repeats = 3  # Fewer repeats for a quicker benchmark
-
     bench = Pattern2CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Pattern Visualization (2 Float, 2 Categorical Variables)",
@@ -114,4 +112,4 @@ def example_2_float_2_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    example_2_float_2_cat_in_2_out().report.show()
+    example_2_float_2_cat_in_2_out(bch.BenchRunCfg(repeats=3)).report.show()

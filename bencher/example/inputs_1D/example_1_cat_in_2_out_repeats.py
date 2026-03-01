@@ -53,11 +53,10 @@ def example_1_cat_in_2_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
         bch.Bench: The benchmark object
     """
 
-    run_cfg.repeats = 30  # Increased repeats for better statistical significance
     bench = DataStructureBenchmark().to_bench(run_cfg)
     bench.plot_sweep()
     return bench
 
 
 if __name__ == "__main__":
-    example_1_cat_in_2_out_repeats().report.show()
+    example_1_cat_in_2_out_repeats(bch.BenchRunCfg(repeats=30)).report.show()
