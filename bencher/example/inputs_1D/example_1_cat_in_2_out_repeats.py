@@ -59,4 +59,4 @@ def example_1_cat_in_2_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    example_1_cat_in_2_out_repeats().report.show()
+    example_1_cat_in_2_out_repeats(bch.BenchRunCfg(repeats=30)).report.show()
