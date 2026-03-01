@@ -1,10 +1,29 @@
 import logging
 from importlib.metadata import version as get_package_version, PackageNotFoundError
+from pathlib import Path
 
 import rerun as rr
 import panel as pn
-from rerun_notebook import Viewer
 from .utils import publish_file
+
+
+# Directory where .rrd files are stored, served at /rrd_static/ by the Panel server.
+RRD_CACHE_DIR = str(Path("cachedir/rrd").resolve())
+
+# Port for the local rerun web viewer server.
+_RERUN_VIEWER_PORT = 9090
+_viewer_started = False
+
+# Port for the Panel server (must be known at render time so iframe URLs can be built).
+PANEL_PORT = 8051
+
+
+def _ensure_rerun_viewer():  # pragma: no cover
+    """Start the local rerun web viewer server if not already running."""
+    global _viewer_started  # noqa: PLW0603
+    if not _viewer_started:
+        rr.start_web_viewer_server(port=_RERUN_VIEWER_PORT)
+        _viewer_started = True
 
 
 def _get_rerun_version() -> str:
@@ -13,17 +32,6 @@ def _get_rerun_version() -> str:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
         return "0.30.0"
-
-
-def rerun_to_pane(
-    width: int = 950, height: int = 712, recording: rr.RecordingStream | None = None
-):  # pragma: no cover
-    """Render the current rerun recording as an inline Panel widget."""
-    if recording is None:
-        recording = rr.get_global_data_recording()
-    viewer = Viewer(width=width, height=height)
-    viewer.send_rrd(recording.memory_recording().drain_as_bytes())
-    return pn.pane.IPyWidget(viewer)
 
 
 def rrd_to_pane(
@@ -73,19 +81,45 @@ def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pr
     return file_path
 
 
-def rrd_file_to_pane(file_path, **kwargs):  # pragma: no cover  # pylint: disable=unused-argument
-    """Create a rerun Viewer widget from an .rrd file path.
+def rrd_file_to_pane(
+    file_path, width: int = 300, height: int = 300, **kwargs
+):  # pragma: no cover  # pylint: disable=unused-argument
+    """Create a rerun viewer pane from an .rrd file path.
+
+    Uses an HTML iframe with the local rerun web viewer. The .rrd file is
+    served via the Panel server's CORS-enabled /rrd_static/ route.
 
     Args:
         file_path: Path to the .rrd file.
+        width: Viewer width in pixels.
+        height: Viewer height in pixels.
 
     Returns:
-        pn.pane.IPyWidget: A Panel widget wrapping the rerun Viewer.
+        pn.pane.HTML: An HTML pane with an embedded rerun viewer iframe.
     """
-    viewer = Viewer()
-    with open(file_path, "rb") as f:
-        viewer.send_rrd(f.read())
-    return pn.pane.IPyWidget(viewer)
+    _ensure_rerun_viewer()
+    rrd_path = Path(file_path).resolve()
+    cache_root = Path(RRD_CACHE_DIR)
+    relative = rrd_path.relative_to(cache_root)
+    rrd_url = f"http://localhost:{PANEL_PORT}/rrd_static/{relative}"
+    viewer_url = f"http://localhost:{_RERUN_VIEWER_PORT}/?url={rrd_url}"
+    return pn.pane.HTML(
+        f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
+        f' frameborder="0" allowfullscreen></iframe>',
+        width=width,
+        height=height,
+    )
+
+
+def rerun_to_pane(
+    width: int = 950, height: int = 712, recording: rr.RecordingStream | None = None
+):  # pragma: no cover
+    """Render the current rerun recording as an inline HTML pane.
+
+    Saves the recording to an .rrd file and displays it via the rerun web viewer.
+    """
+    file_path = capture_rerun_rrd(recording=recording)
+    return rrd_file_to_pane(file_path, width=width, height=height)
 
 
 def capture_rerun_window(

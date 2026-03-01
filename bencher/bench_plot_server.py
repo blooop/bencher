@@ -2,15 +2,30 @@
 
 import logging
 import os
+from pathlib import Path
 from typing import List, Tuple
 from threading import Thread
 
 import panel as pn
 from diskcache import Cache
+from tornado.web import StaticFileHandler
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
 
 logging.basicConfig(level=logging.INFO)
+
+
+class CorsStaticHandler(StaticFileHandler):
+    """A Tornado static file handler that adds CORS headers."""
+
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "*")
+
+    def options(self, *args):
+        self.set_status(204)
+        self.finish()
 
 
 class BenchPlotServer:
@@ -78,6 +93,20 @@ class BenchPlotServer:
             "This benchmark name does not exist in the results cache. Was not able to load the results to plot!  Make sure to run the bencher to generate and save results to the cache"
         )
 
+    @staticmethod
+    def _rrd_extra_patterns() -> list:
+        """Return Tornado route patterns for serving .rrd files with CORS headers."""
+        rrd_dir = Path("cachedir/rrd").resolve()
+        if rrd_dir.is_dir():
+            return [
+                (
+                    r"/rrd_static/(.*)",
+                    CorsStaticHandler,
+                    {"path": str(rrd_dir)},
+                )
+            ]
+        return []
+
     def serve(
         self,
         bench_name: str,
@@ -98,6 +127,14 @@ class BenchPlotServer:
         for logger in ["tornado", "bokeh"]:
             logging.getLogger(logger).setLevel(logging.WARNING)
 
+        extra = self._rrd_extra_patterns()
+
+        # When serving .rrd files, use a known port so rerun iframe URLs work.
+        if port is None and extra:
+            from bencher.utils_rerun import PANEL_PORT
+
+            port = PANEL_PORT
+
         if port is not None:
             return pn.serve(
                 plots_instance,
@@ -106,6 +143,13 @@ class BenchPlotServer:
                 port=port,
                 threaded=True,
                 show=show,
+                extra_patterns=extra,
             )
 
-        return pn.serve(plots_instance, title=bench_name, threaded=True, show=show)
+        return pn.serve(
+            plots_instance,
+            title=bench_name,
+            threaded=True,
+            show=show,
+            extra_patterns=extra,
+        )
