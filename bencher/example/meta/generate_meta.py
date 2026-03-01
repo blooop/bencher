@@ -108,7 +108,30 @@ class BenchMetaGen(bch.ParametrizedSweep):
         title = f"float_{self.float_vars_count}_cat_{self.categorical_vars_count}_repeats_{self.sample_with_repeats}_over_time_{self.sample_over_time}"
 
         nb = nbf.v4.new_notebook()
-        text = f"""# {title}"""
+
+        # Build a descriptive heading for the notebook
+        float_label = f"{self.float_vars_count} Float"
+        cat_label = f"{self.categorical_vars_count} Categorical"
+        heading = f"# Meta: {float_label}, {cat_label}\n"
+
+        heading += "\n## Input Variables\n"
+        if self.float_vars_count > 0:
+            names = ", ".join(f"`{n}`" for n in self.float_var_names[: self.float_vars_count])
+            heading += f"- **Float (continuous):** {names}\n"
+        if self.categorical_vars_count > 0:
+            names = ", ".join(
+                f"`{n}`" for n in self.categorical_var_names[: self.categorical_vars_count]
+            )
+            heading += f"- **Categorical:** {names}\n"
+        if self.float_vars_count == 0 and self.categorical_vars_count == 0:
+            heading += "- *(none)*\n"
+
+        over_time_str = "Yes" if self.sample_over_time else "No"
+        heading += "\n## Configuration\n"
+        heading += f"- **Repeats:** {self.sample_with_repeats}\n"
+        heading += f"- **Over time:** {over_time_str}\n"
+
+        text = heading
 
         # Customize notebook generation to use the actual benchmark object and variables
         module_import = "import bencher as bch\n"
@@ -117,6 +140,15 @@ class BenchMetaGen(bch.ParametrizedSweep):
         else:
             # If it's from main, use BenchableObject as fallback
             benchmark_import = "from bencher.example.meta.example_meta import BenchableObject\n"
+
+        plot_sweep_call = (
+            f"res=bench.plot_sweep(input_vars={input_vars},\n"
+            f"                    result_vars={self.result_var_names})"
+        )
+        if self.sample_over_time:
+            plot_sweep_code = f"for i in range(3):\n    {plot_sweep_call}"
+        else:
+            plot_sweep_code = plot_sweep_call
 
         code_gen = f"""
 %%capture
@@ -127,8 +159,7 @@ run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
 run_cfg.over_time = {self.sample_over_time}
 bench = {self.benchable_obj.__class__.__name__}().to_bench(run_cfg)
-res=bench.plot_sweep(input_vars={input_vars},
-                    result_vars={self.result_var_names})
+{plot_sweep_code}
 """
         code_results = """
 from bokeh.io import output_notebook

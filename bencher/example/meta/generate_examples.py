@@ -61,6 +61,73 @@ if __name__ == "__main__":
     # )
 
     convert_example_to_jupyter_notebook(
+        str(ex / "inputs_0_float/example_0_cat_in_2_out.py"),
+        "inputs_0_float",
+        repeats=100,
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_0_float/example_1_cat_in_2_out.py"),
+        "inputs_0_float",
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_0_float/example_2_cat_in_2_out.py"),
+        "inputs_0_float",
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_0_float/example_3_cat_in_2_out.py"),
+        "inputs_0_float",
+    )
+
+    # Examples with 1 float input plus varying categorical inputs
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_1_float/example_1_float_0_cat_in_2_out.py"),
+        "inputs_1_float",
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_1_float/example_1_float_1_cat_in_2_out.py"),
+        "inputs_1_float",
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_1_float/example_1_float_2_cat_in_2_out.py"),
+        "inputs_1_float",
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_1_float/example_1_float_3_cat_in_2_out.py"),
+        "inputs_1_float",
+    )
+
+    # Example with 2 float inputs plus categorical inputs
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_2_float/example_2_float_3_cat_in_2_out.py"),
+        "inputs_2_float",
+        repeats=3,
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_2_float/example_2_float_2_cat_in_2_out.py"),
+        "inputs_2_float",
+        repeats=3,
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_2_float/example_2_float_1_cat_in_2_out.py"),
+        "inputs_2_float",
+        repeats=1,
+    )
+
+    convert_example_to_jupyter_notebook(
+        str(ex / "inputs_2_float/example_2_float_0_cat_in_2_out.py"),
+        "inputs_2_float",
+        repeats=3,
+    )
+
+    convert_example_to_jupyter_notebook(
         str(ex / "inputs_0D/example_0_in_1_out.py"), "0D", repeats=100
     )
 
