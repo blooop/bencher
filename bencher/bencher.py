@@ -504,8 +504,6 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
-        print("tag", bench_cfg.tag)
-
         # Filter run_cfg parameters to only those that can override bench_cfg
         # (param 2.3 enforces constant parameters that cannot be overridden)
         run_cfg_values, missing_keys, constant_keys = self.filter_overridable_params(
