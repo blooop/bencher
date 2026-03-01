@@ -1,3 +1,4 @@
+import hashlib
 import nbformat as nbf
 from typing import Any
 import bencher as bch
@@ -137,16 +138,19 @@ output_notebook()
 res.to_auto_plots()
 """
 
-        nb["cells"] = [
+        cells = [
             nbf.v4.new_markdown_cell(text),
             nbf.v4.new_code_cell(code_gen),
             nbf.v4.new_code_cell(code_results),
         ]
+        for i, cell in enumerate(cells):
+            cell.id = hashlib.sha256(f"{title}:{i}".encode()).hexdigest()[:8]
+        nb["cells"] = cells
         from pathlib import Path
 
         fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
-        fname.write_text(nbf.writes(nb), encoding="utf-8")
+        fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
 
         return super().__call__()
 

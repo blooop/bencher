@@ -1,5 +1,11 @@
+import hashlib
 import nbformat as nbf
 from pathlib import Path
+
+
+def _deterministic_id(name: str, index: int) -> str:
+    """Generate a deterministic 8-char hex cell ID from a name and cell index."""
+    return hashlib.sha256(f"{name}:{index}".encode()).hexdigest()[:8]
 
 
 def convert_example_to_jupyter_notebook(
@@ -26,11 +32,14 @@ def convert_example_to_jupyter_notebook(
 output_notebook()
 bench.get_result().to_auto_plots()"""
 
-    nb["cells"] = [
+    cells = [
         nbf.v4.new_markdown_cell(text),
         nbf.v4.new_code_cell(code),
         nbf.v4.new_code_cell(code_results),
     ]
+    for i, cell in enumerate(cells):
+        cell.id = _deterministic_id(title, i)
+    nb["cells"] = cells
     output_path = Path(f"docs/reference/{output_path}/ex_{title}.ipynb")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # Add a newline character at the end to ensure proper end-of-file
@@ -171,6 +180,12 @@ if __name__ == "__main__":
     convert_example_to_jupyter_notebook(str(ex / "example_yaml_sweep_list.py"), "yaml")
 
     convert_example_to_jupyter_notebook(str(ex / "example_yaml_sweep_dict.py"), "yaml")
+
+    # Meta examples (generated programmatically via BenchMetaGen sweeps)
+    from bencher.example.meta.generate_meta import example_meta, example_meta_over_time
+
+    example_meta()
+    example_meta_over_time()
 
     # todo, enable
     # convert_example_to_jupyter_notebook(
