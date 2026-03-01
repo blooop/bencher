@@ -191,3 +191,7 @@ docs/autoapi/*
 
 .devpod/
 .devpod-internal/
+.ralph/
+
+# Claude Code local settings (personal, not shared)
+.claude/settings.local.json
