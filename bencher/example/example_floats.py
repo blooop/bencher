@@ -4,10 +4,10 @@
 import bencher as bch
 
 # All the examples will be using the data structures and benchmark function defined in this file
-from bencher.example.benchmark_data import ExampleBenchCfgIn, ExampleBenchCfgOut, ExampleBenchCfg
+from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_floats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Example of how to perform a parameter sweep for floating point variables
 
     Args:
@@ -16,7 +16,7 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     Returns:
         Bench: results of the parameter sweep
     """
-    bench = bch.Bench("Bencher_Example_Floats", ExampleBenchCfg(), report=report, run_cfg=run_cfg)
+    bench = bch.Bench("Bencher_Example_Floats", ExampleBenchCfg(), run_cfg=run_cfg)
 
     with open("README.md", "r", encoding="utf-8") as file:
         readme = file.read()
@@ -24,15 +24,15 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     bench.report.append(readme, "Intro")
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfgIn.param.theta],
-        result_vars=[ExampleBenchCfgOut.param.out_sin],
+        input_vars=["theta"],
+        result_vars=["out_sin"],
         title="Float 1D Example",
         description="""Bencher is a tool to make it easy to explore how input parameter affect a range of output metrics.  In these examples we are going to benchmark an example function which has been selected to show the features of bencher.
         The example function takes an input theta and returns the absolute value of sin(theta) and cos(theta) +- various types of noise.
 
-        def bench_function(cfg: ExampleBenchCfgIn) -> ExampleBenchCfgOut:
-            "Takes an ExampleBenchCfgIn and returns a ExampleBenchCfgOut output"
-            out = ExampleBenchCfgOut()
+        def bench_function(cfg: ExampleBenchCfg) -> dict:
+            "Takes an ExampleBenchCfg and returns a dict output"
+            return cfg()
             noise = calculate_noise(cfg)
             offset = 0.0
 
@@ -48,16 +48,16 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     )
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.noisy],
-        result_vars=[ExampleBenchCfgOut.param.out_sin],
+        input_vars=["theta", "noisy"],
+        result_vars=["out_sin"],
         title="Float 1D and Bool Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We pass the boolean  'noisy' and keep the other parameters the same""",
         post_description="Now the plot has two lines, one for each of the boolean values where noisy=true and noisy=false.",
     )
 
     bench.plot_sweep(
-        input_vars=[ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.noisy],
-        result_vars=[ExampleBenchCfgOut.param.out_sin, ExampleBenchCfgOut.param.out_cos],
+        input_vars=["theta", "noisy"],
+        result_vars=["out_sin", "out_cos"],
         title="Float 1D and Bool Example with multiple outputs",
         description="""Following from the previous example here the second output is added to the result variables""",
         post_description="Another column is added for the result variable that shows cos(theta)",
@@ -65,13 +65,13 @@ def example_floats(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
 
     bench.plot_sweep(
         input_vars=[
-            ExampleBenchCfgIn.param.theta,
-            ExampleBenchCfgIn.param.noisy,
-            ExampleBenchCfgIn.param.postprocess_fn,
+            "theta",
+            "noisy",
+            "postprocess_fn",
         ],
         result_vars=[
-            ExampleBenchCfgOut.param.out_sin,
-            ExampleBenchCfgOut.param.out_cos,
+            "out_sin",
+            "out_cos",
         ],
         title="Float 1D, Bool and Categorical Example",
         description="""Following from the previous example lets add another input parameter to see how that affects the output.  We add the 'postprocess_fn' categorical enum value which either takes the absolute value or negates the output of the function.""",

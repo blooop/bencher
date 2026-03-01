@@ -28,7 +28,12 @@ class Job:
     """
 
     def __init__(
-        self, job_id: str, function: Callable, job_args: dict, job_key: str = None, tag: str = ""
+        self,
+        job_id: str,
+        function: Callable,
+        job_args: dict,
+        job_key: str | None = None,
+        tag: str = "",
     ) -> None:
         """Initialize a Job with function and arguments.
 
@@ -64,7 +69,13 @@ class JobFuture:
         cache: The cache to store results in when they become available
     """
 
-    def __init__(self, job: Job, res: dict = None, future: Future = None, cache=None) -> None:
+    def __init__(
+        self,
+        job: Job,
+        res: dict | None = None,
+        future: Future | None = None,
+        cache: Cache | None = None,
+    ) -> None:
         """Initialize a JobFuture with either an immediate result or a future.
 
         Args:
@@ -140,12 +151,19 @@ class Executors(StrEnum):
         Returns:
             Future | None: The executor instance, or None for serial execution
         """
-        providers = {
-            Executors.SERIAL: None,
-            Executors.MULTIPROCESSING: ProcessPoolExecutor(),
-            Executors.SCOOP: scoop_future_executor,
-        }
-        return providers[provider]
+        if provider == Executors.SERIAL:
+            return None
+        if provider == Executors.MULTIPROCESSING:
+            try:
+                return ProcessPoolExecutor()
+            except (OSError, PermissionError) as exc:  # pragma: no cover - env specific
+                logging.warning(
+                    "Falling back to serial execution; multiprocessing unavailable: %s", exc
+                )
+                return None
+        if provider == Executors.SCOOP:
+            return scoop_future_executor
+        raise ValueError(f"Unknown executor provider: {provider}")
 
 
 class FutureCache:

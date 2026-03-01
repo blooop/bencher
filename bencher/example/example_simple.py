@@ -56,7 +56,7 @@ class InputCfg(bch.ParametrizedSweep):
     # define the objective function you want to benchmark. It must be static and have no side effects. It should accept 1 input of type InputCfg (or whatever your input config class is called) and return the OutputCfg class you have defined
     @staticmethod
     def bench_function(cfg: InputCfg) -> OutputCfg:
-        """Takes an ExampleBenchCfgIn and returns a ExampleBenchCfgOut output.  This is just a dummy example so the behavior of the function is rather transparent, but in a real use case the function would be a black box you want to characterise."""
+        """Takes an InputCfg and returns an OutputCfg output.  This is just a dummy example so the behavior of the function is rather transparent, but in a real use case the function would be a black box you want to characterise."""
         output = OutputCfg()
 
         output.accuracy = 50 + math.sin(cfg.algo_setting_float) * 5

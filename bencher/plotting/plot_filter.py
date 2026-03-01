@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from bencher.plotting.plt_cnt_cfg import PltCntCfg
 import logging
 import panel as pn
@@ -68,13 +68,13 @@ class VarRange:
 class PlotFilter:
     """A class for representing the types of results a plot is able to represent."""
 
-    float_range: VarRange = VarRange()
-    cat_range: VarRange = VarRange()
-    vector_len: VarRange = VarRange(1, 1)
-    result_vars: VarRange = VarRange(1, 1)
-    panel_range: VarRange = VarRange(0, 0)
-    repeats_range: VarRange = VarRange(1, None)
-    input_range: VarRange = VarRange(1, None)
+    float_range: VarRange = field(default_factory=VarRange)
+    cat_range: VarRange = field(default_factory=VarRange)
+    vector_len: VarRange = field(default_factory=lambda: VarRange(1, 1))
+    result_vars: VarRange = field(default_factory=lambda: VarRange(1, 1))
+    panel_range: VarRange = field(default_factory=lambda: VarRange(0, 0))
+    repeats_range: VarRange = field(default_factory=lambda: VarRange(1, None))
+    input_range: VarRange = field(default_factory=lambda: VarRange(1, None))
 
     def matches_result(
         self, plt_cnt_cfg: PltCntCfg, plot_name: str, override: bool

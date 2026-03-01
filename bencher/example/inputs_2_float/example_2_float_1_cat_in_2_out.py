@@ -74,9 +74,7 @@ class Pattern1CatBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_2_float_1_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_2_float_1_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark demonstrating visually distinct patterns based on pattern type.
 
     This example is simplified from the 2-category version by fixing the symmetry_type
@@ -84,16 +82,13 @@ def example_2_float_1_cat_in_2_out(
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
     """
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 3  # Fewer repeats for a quicker benchmark
+    run_cfg.repeats = 1  # Fewer repeats for a quicker benchmark
 
-    bench = Pattern1CatBenchmark().to_bench(run_cfg, report)
+    bench = Pattern1CatBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Pattern Visualization (2 Float, 1 Categorical Variable)",
         description="Response patterns with distinctive shapes based on pattern type",
@@ -105,6 +100,24 @@ def example_2_float_1_cat_in_2_out(
         and "smooth" feature settings.
         """,
     )
+    res = bench.get_result()
+
+    bench.report.append(res.to(bch.HeatmapResult, agg_over_dims=["pattern_type"]))
+    # bench.report.append(res.to(bch.TabulatorResult, agg_over_dims=["pattern_type", "x_value"]))
+    # bench.report.append(res.to(bch.TableResult, agg_over_dims=["pattern_type", "x_value", "y_value"]))
+
+    bench.report.append(
+        res.to(bch.TabulatorResult, agg_over_dims=["pattern_type", "x_value", "y_value"])
+    )
+    bench.report.append(
+        res.to(
+            bch.TabulatorResult,
+            agg_over_dims=["pattern_type", "x_value"],
+        )
+    )
+    bench.report.append(res.to(bch.TabulatorResult, agg_over_dims=["pattern_type"]))
+    bench.report.append(res.to(bch.TabulatorResult))
+
     return bench
 
 

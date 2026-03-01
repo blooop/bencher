@@ -70,14 +70,11 @@ class Pattern3DModel0Cat(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_3_float_0_cat_in_2_out(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
+def example_3_float_0_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark demonstrating 3D visual patterns with no categorical settings.
 
     Args:
         run_cfg: Configuration for the benchmark run
-        report: Report to append the results to
 
     Returns:
         bch.Bench: The benchmark object
@@ -89,7 +86,7 @@ def example_3_float_0_cat_in_2_out(
 
     hv.opts.defaults(hv.opts.HeatMap(cmap="plasma", width=300, height=300, colorbar=True))
 
-    bench = Pattern3DModel0Cat().to_bench(run_cfg, report)
+    bench = Pattern3DModel0Cat().to_bench(run_cfg)
     bench.plot_sweep(
         title="3D Pattern Visualization (3 Float Variables, No Categorical Variables)",
         description="Response patterns based purely on 3D coordinates with no categorical settings",

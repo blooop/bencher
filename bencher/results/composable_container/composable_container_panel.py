@@ -5,11 +5,11 @@ from dataclasses import dataclass
 
 @dataclass(kw_only=True)
 class ComposableContainerPanel(ComposableContainerBase):
-    name: str = None
-    var_name: str = None
-    var_value: str = None
-    width: int = None
-    background_col: str = None
+    name: str | None = None
+    var_name: str | None = None
+    var_value: str | None = None
+    width: int | None = None
+    background_col: str | None = None
     horizontal: bool = True
 
     def __post_init__(

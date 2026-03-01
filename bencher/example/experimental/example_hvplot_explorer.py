@@ -1,22 +1,22 @@
 # THIS IS NOT A WORKING EXAMPLE YET
 # pylint: disable=duplicate-code
 import bencher as bch
-from bencher import ExampleBenchCfgIn, ExampleBenchCfgOut, bench_function
+from bencher.example.benchmark_data import ExampleBenchCfg
 
-bench = bch.Bench("Bencher_Example_Simple", bench_function, ExampleBenchCfgIn)
+bench = bch.Bench("Bencher_Example_Simple", ExampleBenchCfg())
 
 
 if __name__ == "__main__":
     res = bench.plot_sweep(
-        input_vars=[ExampleBenchCfgIn.param.theta, ExampleBenchCfgIn.param.offset],
-        result_vars=[ExampleBenchCfgOut.param.out_sin],
+        input_vars=["theta", "offset"],
+        result_vars=["out_sin"],
         title="Float 1D Example",
         description="""Bencher is a tool to make it easy to explore how input parameter affect a range of output metrics.  In these examples we are going to benchmark an example function which has been selected to show the features of bencher.
         The example function takes an input theta and returns the absolute value of sin(theta) and cos(theta) +- various types of noise.
 
-        def bench_function(cfg: ExampleBenchCfgIn) -> ExampleBenchCfgOut:
-            "Takes an ExampleBenchCfgIn and returns a ExampleBenchCfgOut output"
-            out = ExampleBenchCfgOut()
+        def bench_function(cfg: ExampleBenchCfg) -> dict:
+            "Takes an ExampleBenchCfg and returns a dict output"
+            return cfg()
             noise = calculate_noise(cfg)
             offset = 0.0
 

@@ -1,0 +1,22 @@
+{
+    "name": "Claude Code CLI",
+    "id": "claude-code",
+    "version": "0.2.0",
+    "description": "Installs Claude Code CLI via pixi with persistent configuration",
+    "options": {},
+    "documentationURL": "https://github.com/anthropics/devcontainer-features",
+    "licenseURL": "https://github.com/anthropics/devcontainer-features/blob/main/LICENSE",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "anthropic.claude-code"
+            ]
+        }
+    },
+    "containerEnv": {
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+    },
+    "mounts": [
+        "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
+    ]
+}

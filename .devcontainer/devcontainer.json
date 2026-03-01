@@ -1,32 +1,44 @@
 {
-	"name": "bencher",
-	"build": {
-		"dockerfile": "Dockerfile",
-		"context": "..",
-		"args": {
-			"PIXI_VERSION": "v0.41.4"
-		}
-	},
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"ms-python.python",
-				"ms-python.vscode-pylance",
-				"ms-python.pylint",
-				"njpwerner.autodocstring",
-				"charliermarsh.ruff",
-				"mhutchie.git-graph",
-				"tamasfe.even-better-toml",
-				"ryanluker.vscode-coverage-gutters"
-			]
-		}
-	},
-	//docker in docker is included in the pixi devcontainer example, but disabling for the moment due to security issues
-	// "features": {
-	//   "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-	// },
-	"mounts": [
-		"source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
-	],
-	"postCreateCommand": "sudo chown vscode .pixi && pixi install"
+    "name": "bencher",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "initializeCommand": ".devcontainer/claude-code/init-host.sh",
+    "customizations": {
+        "vscode": {
+            "settings": {},
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "jjjermiah.pixi-vscode",
+                "charliermarsh.ruff",
+                "tamasfe.even-better-toml",
+                "mhutchie.git-graph"
+              ]
+        }
+    },
+	"features": {
+		"./claude-code": {}
+        // "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+		// "ghcr.io/devcontainers/features/common-utils:2": {},
+		// "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
+    },
+    "runArgs": [
+        "--network=host"
+    ],
+    "containerEnv": {
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+        "XDG_CONFIG_HOME": "/home/vscode/.config",
+        "XDG_CACHE_HOME": "/home/vscode/.cache",
+        "XDG_DATA_HOME": "/home/vscode/.local/share",
+        "SSH_AUTH_SOCK": "/home/vscode/.ssh/agent.sock"
+    },
+    "mounts": [
+        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind",
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
+    ],
+    "postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }

@@ -73,7 +73,7 @@ class ScatterResult(HoloviewResult):
         return match_res.to_panel(**kwargs)
 
     # def to_scatter_jitter(
-    #     self, result_var: Parameter = None, override: bool = True, **kwargs
+    #     self, result_var: Parameter | None = None, override: bool = True, **kwargs
     # ) -> Optional[pn.panel]:
     #     return self.filter(
     #         self.to_scatter_ds,

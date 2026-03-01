@@ -29,8 +29,8 @@ class EngineeringDesignProblem(bch.ParametrizedSweep):
     """
 
     # Input design parameters - reduced to just 2
-    material_quality = bch.FloatSweep(
-        default=0.5, bounds=[0.1, 1.0], doc="Quality of the material (dimensionless)", samples=20
+    material_quality = bch.BoolSweep(
+        default=True, doc="Quality of the material (True = high, False = low)"
     )
     thickness = bch.FloatSweep(
         default=0.05, bounds=[0.01, 0.2], doc="Component thickness (m)", samples=20
@@ -79,7 +79,7 @@ class EngineeringDesignProblem(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_pareto(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None) -> bch.Bench:
+def example_pareto(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """
     Advanced example of multi-objective Pareto optimization using Optuna.
 
@@ -96,10 +96,8 @@ def example_pareto(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     Returns:
         Bench: Benchmark object with results
     """
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-        run_cfg.repeats = 5  # Multiple repeats to demonstrate randomness effects
-        run_cfg.level = 4
+    run_cfg.repeats = 5  # Multiple repeats to demonstrate randomness effects
+    run_cfg.level = 4
 
     # Set up Optuna for multi-objective optimization
     run_cfg.use_optuna = True
@@ -109,7 +107,7 @@ def example_pareto(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = No
     run_cfg.repeats = 5
 
     # Create problem definition and benchmark
-    bench = EngineeringDesignProblem().to_bench(run_cfg, report)
+    bench = EngineeringDesignProblem().to_bench(run_cfg)
 
     # Perform grid search on our two input variables
     grid_result = bench.plot_sweep(

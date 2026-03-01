@@ -78,8 +78,9 @@ nbsite_gallery_conf = {
                 {"path": "2D", "title": "2D"},
                 {"path": "levels", "title": "Levels"},
                 {"path": "examples", "title": "Examples"},
-                {"path": "Meta", "title": "Meta"},
-                {"path": "Media", "title": "Media"},
+                {"path": "meta", "title": "Meta"},
+                {"path": "yaml", "title": "YAML"},
+                {"path": "media", "title": "Media"},
             ],
             "skip_rst_notebook_directive": True,
         }

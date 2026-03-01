@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.46.0"
+version = "1.61.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -10,18 +10,18 @@ license = "MIT"
 requires-python = ">=3.10,<3.14"
 
 dependencies = [
-    "holoviews>=1.15,<=1.21.0",
-    "numpy>=1.0,<=2.2.6",
-    "param>=1.13.0,<=2.2.1",
-    "hvplot>=0.11.3,<=0.11.3",
-    "panel>=1.3.6,<=1.7.2",
+    "holoviews>=1.15,<=1.22.1",
+    "numpy>=1.0,<=2.4.1",
+    "param>=1.13.0,<=2.3.2",
+    "hvplot>=0.12.0,<=0.12.2",
+    "panel>=1.3.6,<=1.8.7",
     "diskcache>=5.6,<=5.6.3",
-    "optuna>=3.2,<=4.4.0",
+    "optuna>=3.2,<=4.7.0",
     "xarray>=2023.7,<=2025.6.1",
-    "plotly>=5.15,<=6.2.0",
-    "pandas>=2.0,<=2.3.1",
+    "plotly>=5.15,<=6.5.2",
+    "pandas>=2.0,<=3.0.0",
     "strenum>=0.4.0,<=0.4.15",
-    "scikit-learn>=1.2,<=1.7.0",
+    "scikit-learn>=1.2,<=1.7.2",
     "moviepy>=2.1.2,<=2.2.1",
 ]
 
@@ -30,12 +30,19 @@ Repository = "https://github.com/blooop/bencher"
 Home = "https://github.com/blooop/bencher"
 Documentation = "https://bencher.readthedocs.io/en/latest/"
 
-[tool.pixi.project]
-channels = ["conda-forge"]
+[tool.pixi.workspace]
+channels = ["conda-forge", "https://prefix.dev/blooop"]
 platforms = ["linux-64"]
 
 [tool.pixi.system-requirements]
 libc = "2.31"
+
+[tool.pixi.dependencies]
+python = ">=3.10"
+sqlite = "==3.48.0"
+shellcheck = ">=0.10.0,<0.11"
+devpod = ">=0.8.0,<0.9"
+gh = ">=2.63.0,<3.0"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
@@ -46,27 +53,27 @@ python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
 
-
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
 
 [project.optional-dependencies]
 test = [
-    "pylint>=3.2.5,<=3.3.7",
-    "pytest-cov>=4.1,<=6.2.1",
-    "pytest>=7.4,<=8.4.1",
-    "hypothesis>=6.104.2,<=6.135.26",
-    "ruff>=0.5.0,<=0.12.2",
-    "coverage>=7.5.4,<=7.9.2",
-    "pre-commit<=4.2.0",
+    "pylint>=3.2.5,<=4.0.4",
+    "pytest-cov>=4.1,<=7.0.0",
+    "pytest>=7.4,<=9.0.2",
+    "hypothesis>=6.104.2,<=6.151.9",
+    "ruff>=0.5.0,<=0.15.1",
+    "coverage>=7.5.4,<=7.13.4",
     "nbformat",
     "ipykernel",
     "pip",
     "jupyter_bokeh",
+    "prek>=0.2.28,<0.4.0",
+    "ty>=0.0.13,<=0.0.17",
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.22.1", "rerun-notebook", "flask", "flask-cors"]
+rerun = ["rerun-sdk>=0.29.2", "rerun-notebook>=0.29.2", "flask", "flask-cors"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
@@ -86,7 +93,6 @@ py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
 py313 = ["py313", "test", "rerun"]
 
-
 [tool.pixi.tasks]
 #AI AGENT TASKS
 
@@ -96,16 +102,27 @@ agent-iterate = { depends-on = [
     "ci",
     "git-commit-all",
     "fix-commit-push",
-    "fix-commit-push",
 ] }
 
-pre-commit = "pre-commit run -a"
-pre-commit-update = "pre-commit autoupdate"
+dev-add-docker = "devpod provider list | grep -qw docker || devpod provider add docker"
+dev = { cmd = "devpod up . --ide none && ssh pythontemplate.devpod", depends-on = [
+    "dev-add-docker",
+] }
+dev-vs = { cmd = "devpod up . --ide vscode", depends-on = ["dev-add-docker"] }
+dev-restart = { cmd = "devpod up . --recreate --ide none && ssh pythontemplate.devpod", depends-on = [
+    "dev-add-docker",
+] }
+dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = [
+    "dev-add-docker",
+] }
+prek = "prek run -a"
+prek-update = "prek autoupdate"
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-lint = { depends-on = ["ruff-lint", "pylint"] }
+ty = "ty check --respect-ignore-files ."
+lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
@@ -114,13 +131,14 @@ coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"
 push = "git push"
 update-lock-push = { depends-on = ["update-lock", "push"] }
-fix = { depends-on = ["update-lock", "format", "ruff-lint", "pre-commit"] }
+fix = { depends-on = ["update-lock", "format", "ruff-lint", "prek"] }
 fix-commit-push = { depends-on = ["fix", "commit-format", "update-lock-push"] }
 ci-no-cover = { depends-on = ["style", "test"] }
 ci = { depends-on = [
     "format",
     "ruff-lint",
     "pylint",
+    "ty",
     "coverage",
     "coverage-report",
 ] }
@@ -130,16 +148,13 @@ clear-pixi = "rm -rf .pixi pixi.lock"
 setup-git-merge-driver = "git config merge.ours.driver true"
 update-from-template-repo = "./scripts/update_from_template.sh"
 
-generate-docs = "python /workspaces/bencher/bencher/example/meta/generate_examples.py"
+generate-docs = "python bencher/example/meta/generate_examples.py"
 docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html docs docs/builtdocs"
 
 
 #demos
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
-
-[tool.pixi.dependencies]
-sqlite = "==3.48.0"
 
 
 [tool.pylint]
@@ -168,3 +183,42 @@ exclude_also = [
 
 [tool.pytest.ini_options]
 tmp_path_retention_count = 0
+
+[tool.ty.rules]
+# Ignore type errors related to param library descriptors
+invalid-assignment = "ignore"
+# Ignore argument type mismatches (many false positives with param library)
+invalid-argument-type = "ignore"
+# Ignore unresolved attributes (param descriptors create dynamic attributes)
+unresolved-attribute = "ignore"
+# Ignore invalid type forms (pn.panel is a function, not a type)
+invalid-type-form = "ignore"
+# Ignore return type mismatches
+invalid-return-type = "ignore"
+# Ignore not-subscriptable errors
+not-subscriptable = "ignore"
+# Ignore possibly missing attributes (Union type issues)
+possibly-missing-attribute = "ignore"
+# Ignore unsupported operator errors
+unsupported-operator = "ignore"
+# Ignore positional argument count errors
+too-many-positional-arguments = "ignore"
+missing-argument = "ignore"
+# Ignore not-iterable errors (Union types)
+not-iterable = "ignore"
+# Ignore overload matching errors
+no-matching-overload = "ignore"
+# Ignore call-non-callable errors
+call-non-callable = "ignore"
+# Ignore method override errors
+invalid-method-override = "ignore"
+# Ignore import/reference resolution errors
+unresolved-import = "ignore"
+unresolved-reference = "ignore"
+# Ignore parameter default errors (param library StrEnum/enum descriptors resolve as Unknown)
+invalid-parameter-default = "ignore"
+# Ignore MRO errors (param base classes resolve as Unknown)
+inconsistent-mro = "ignore"
+# Ignore unused type: ignore comments (needed for other type checkers)
+unused-ignore-comment = "ignore"
+unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14

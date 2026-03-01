@@ -1,5 +1,5 @@
 import logging
-from typing import List, Any, Tuple, Optional
+from typing import List, Any, Tuple, Optional, Literal, Callable
 from enum import Enum, auto
 import xarray as xr
 from param import Parameter
@@ -148,8 +148,10 @@ class BenchResultBase:
     def to_hv_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar = None,
-        level: int = None,
+        result_var: ResultVar | None = None,
+        level: int | None = None,
+        agg_over_dims: list[str] | None = None,
+        agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
     ) -> hv.Dataset:
         """Generate a holoviews dataset from the xarray dataset.
 
@@ -162,14 +164,33 @@ class BenchResultBase:
 
         if reduce == ReduceType.NONE:
             kdims = [i.name for i in self.bench_cfg.all_vars]
-            return hv.Dataset(self.to_dataset(reduce, result_var, level), kdims=kdims)
-        return hv.Dataset(self.to_dataset(reduce, result_var, level))
+            return hv.Dataset(
+                self.to_dataset(
+                    reduce,
+                    result_var=result_var,
+                    level=level,
+                    agg_over_dims=agg_over_dims,
+                    agg_fn=agg_fn,
+                ),
+                kdims=kdims,
+            )
+        return hv.Dataset(
+            self.to_dataset(
+                reduce,
+                result_var=result_var,
+                level=level,
+                agg_over_dims=agg_over_dims,
+                agg_fn=agg_fn,
+            )
+        )
 
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | str = None,
-        level: int = None,
+        result_var: ResultVar | str | None = None,
+        level: int | None = None,
+        agg_over_dims: list[str] | None = None,
+        agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
 
@@ -221,6 +242,43 @@ class BenchResultBase:
                 ds_out = xr.merge([ds_reduce_mean, ds_reduce_range])
             case ReduceType.SQUEEZE:
                 ds_out = ds_out.squeeze(drop=True)
+
+        # Optional aggregation across non-repeat dimensions (e.g., categorical)
+        if agg_over_dims:
+            # Only aggregate over dims that actually exist in the dataset
+            dims_present = [d for d in agg_over_dims if d in ds_out.dims]
+            if dims_present:
+                # If some requested dims are missing, log an info for visibility
+                missing = [d for d in agg_over_dims if d not in dims_present]
+                if missing:
+                    logging.info(
+                        "Aggregation requested for dims %s but only found %s in dataset dims %s",
+                        agg_over_dims,
+                        dims_present,
+                        list(ds_out.dims),
+                    )
+
+                # Support basic aggregations; default to mean
+                fn = (agg_fn or "mean").lower()
+                if fn == "sum":
+                    ds_out = ds_out.sum(dim=dims_present, skipna=True)
+                elif fn == "mean":
+                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+                elif fn == "max":
+                    ds_out = ds_out.max(dim=dims_present, skipna=True)
+                elif fn == "min":
+                    ds_out = ds_out.min(dim=dims_present, skipna=True)
+                elif fn == "median":
+                    ds_out = ds_out.median(dim=dims_present, skipna=True)
+                else:
+                    # Fall back to mean if unknown string provided
+                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+            else:
+                logging.warning(
+                    "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
+                    agg_over_dims,
+                    list(ds_out.dims),
+                )
         if level is not None:
             coords_no_repeat = {}
             for c, v in ds_out.coords.items():
@@ -315,7 +373,7 @@ class BenchResultBase:
     def describe_sweep(self):
         return self.bench_cfg.describe_sweep()
 
-    def get_hmap(self, name: str = None):
+    def get_hmap(self, name: str | None = None):
         try:
             if name is None:
                 name = self.result_hmaps[0].name
@@ -346,14 +404,14 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(self, result_var: ParametrizedSweep = None) -> List[ResultVar]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> List[ResultVar]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(
         self,
-        plot_callback: callable,
-        result_var: ParametrizedSweep = None,
-        row: EmptyContainer = None,
+        plot_callback: Callable,
+        result_var: ParametrizedSweep | None = None,
+        row: EmptyContainer | None = None,
     ) -> Optional[pn.Row]:
         if row is None:
             row = EmptyContainer(pn.Row(name=self.to_plot_title()))
@@ -403,14 +461,14 @@ class BenchResultBase:
 
     def map_plot_panes(
         self,
-        plot_callback: callable,
+        plot_callback: Callable,
         hv_dataset: hv.Dataset = None,
         target_dimension: int = 2,
-        result_var: ResultVar = None,
+        result_var: ResultVar | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         zip_results=False,
-        reduce: ReduceType = None,
+        reduce: ReduceType | None = None,
         **kwargs,
     ) -> Optional[pn.Row]:
         if hv_dataset is None:
@@ -439,23 +497,41 @@ class BenchResultBase:
 
     def filter(
         self,
-        plot_callback: callable,
+        plot_callback: Callable,
         plot_filter=None,
-        float_range: VarRange = VarRange(0, None),
-        cat_range: VarRange = VarRange(0, None),
-        vector_len: VarRange = VarRange(1, 1),
-        result_vars: VarRange = VarRange(1, 1),
-        panel_range: VarRange = VarRange(0, 0),
-        repeats_range: VarRange = VarRange(1, None),
-        input_range: VarRange = VarRange(1, None),
+        float_range: VarRange | None = None,
+        cat_range: VarRange | None = None,
+        vector_len: VarRange | None = None,
+        result_vars: VarRange | None = None,
+        panel_range: VarRange | None = None,
+        repeats_range: VarRange | None = None,
+        input_range: VarRange | None = None,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
-        result_var: ResultVar = None,
+        result_var: ResultVar | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         override=False,
+        hv_dataset: hv.Dataset | None = None,
+        agg_over_dims: list[str] | None = None,
+        agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
         **kwargs,
     ) -> Optional[pn.panel]:
+        # Initialize default filters if not provided to avoid shared mutable defaults
+        if float_range is None:
+            float_range = VarRange(0, None)
+        if cat_range is None:
+            cat_range = VarRange(0, None)
+        if vector_len is None:
+            vector_len = VarRange(1, 1)
+        if result_vars is None:
+            result_vars = VarRange(1, 1)
+        if panel_range is None:
+            panel_range = VarRange(0, 0)
+        if repeats_range is None:
+            repeats_range = VarRange(1, None)
+        if input_range is None:
+            input_range = VarRange(1, None)
         plot_filter = PlotFilter(
             float_range=float_range,
             cat_range=cat_range,
@@ -469,9 +545,16 @@ class BenchResultBase:
             self.plt_cnt_cfg, callable_name(plot_callback), override
         )
         if matches_res.overall:
+            # Compute aggregated dataset once (if requested) so all plotters benefit
+            if hv_dataset is None:
+                agg_dims = list(dict.fromkeys(agg_over_dims)) if agg_over_dims else None
+                if agg_dims:
+                    hv_dataset = self.to_hv_dataset(
+                        reduce=reduce, agg_over_dims=agg_dims, agg_fn=agg_fn
+                    )
             return self.map_plot_panes(
                 plot_callback=plot_callback,
-                hv_dataset=None,
+                hv_dataset=hv_dataset,
                 target_dimension=target_dimension,
                 result_var=result_var,
                 result_types=result_types,
@@ -485,7 +568,7 @@ class BenchResultBase:
         self,
         hv_dataset: hv.Dataset,
         result_var: ResultVar,
-        plot_callback: callable = None,
+        plot_callback: Callable | None = None,
         target_dimension: int = 1,
         **kwargs,
     ):
@@ -504,7 +587,7 @@ class BenchResultBase:
     def _to_panes_da(
         self,
         dataset: xr.Dataset,
-        plot_callback: callable = None,
+        plot_callback: Callable | None = None,
         target_dimension=1,
         horizontal=False,
         result_var=None,
@@ -607,8 +690,8 @@ class BenchResultBase:
     def select_level(
         dataset: xr.Dataset,
         level: int,
-        include_types: List[type] = None,
-        exclude_names: List[str] = None,
+        include_types: List[type] | None = None,
+        exclude_names: List[str] | None = None,
     ) -> xr.Dataset:
         """Given a dataset, return a reduced dataset that only contains data from a specified level.  By default all types of variables are filtered at the specified level.  If you only want to get a reduced level for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
@@ -646,7 +729,7 @@ class BenchResultBase:
     def to_sweep_summary(self, **kwargs):
         return self.bench_cfg.to_sweep_summary(**kwargs)
 
-    def to_title(self, panel_name: str = None) -> pn.pane.Markdown:
+    def to_title(self, panel_name: str | None = None) -> pn.pane.Markdown:
         return self.bench_cfg.to_title(panel_name)
 
     def to_description(self, width: int = 800) -> pn.pane.Markdown:

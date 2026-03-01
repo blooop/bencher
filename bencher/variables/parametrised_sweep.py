@@ -7,7 +7,7 @@ from copy import deepcopy
 
 from bencher.utils import make_namedtuple, hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
-from bencher.bench_cfg import BenchRunCfg
+from bencher.factories import create_bench, create_bench_runner
 
 
 class ParametrizedSweep(Parameterized):
@@ -110,7 +110,7 @@ class ParametrizedSweep(Parameterized):
     @classmethod
     def get_input_defaults(
         cls,
-        override_defaults: List = None,
+        override_defaults: List | None = None,
     ) -> List[Tuple[Parameter, Any]]:
         inp = cls.get_inputs_only()
         if override_defaults is None:
@@ -145,7 +145,7 @@ class ParametrizedSweep(Parameterized):
 
     @classmethod
     def get_inputs_as_dims(
-        self, compute_values=False, remove_dims: str | List[str] = None
+        self, compute_values=False, remove_dims: str | List[str] | None = None
     ) -> List[hv.Dimension]:
         inputs = self.get_inputs_only()
 
@@ -158,7 +158,11 @@ class ParametrizedSweep(Parameterized):
         return [iv.as_dim(compute_values) for iv in inputs]
 
     def to_dynamic_map(
-        self, callback=None, name=None, remove_dims: str | List[str] = None, result_var: str = None
+        self,
+        callback=None,
+        name=None,
+        remove_dims: str | List[str] | None = None,
+        result_var: str | None = None,
     ) -> hv.DynamicMap:
         if callback is None:
             callback = self.__call__
@@ -178,13 +182,13 @@ class ParametrizedSweep(Parameterized):
             name=name,
         ).opts(shared_axes=False, framewise=True, width=1000, height=1000)
 
-    def to_gui(self, result_var: str = None, **kwargs):  # pragma: no cover
+    def to_gui(self, result_var: str | None = None, **kwargs):  # pragma: no cover
         main = pn.Row(
             self.to_dynamic_map(result_var=result_var, **kwargs),
         )
         main.show()
 
-    def to_holomap(self, callback, remove_dims: str | List[str] = None) -> hv.DynamicMap:
+    def to_holomap(self, callback, remove_dims: str | List[str] | None = None) -> hv.DynamicMap:
         return hv.HoloMap(
             hv.DynamicMap(
                 callback=callback,
@@ -203,13 +207,14 @@ class ParametrizedSweep(Parameterized):
     def plot_hmap(self, **kwargs):
         return self.__call__(**kwargs)["hmap"]
 
-    # TODO Add type hints here and fix the circular imports
-    def to_bench(self, run_cfg: BenchRunCfg = None, report=None, name: str = None):
-        from bencher import Bench
+    def to_bench(self, run_cfg=None, report=None, name=None):
+        """Create a Bench instance from this ParametrizedSweep."""
+        return create_bench(self, run_cfg=run_cfg, report=report, name=name)
 
-        assert isinstance(self, ParametrizedSweep)
+    def to_bench_runner(self, run_cfg=None, name=None):
+        """Create a BenchRunner instance from this ParametrizedSweep.
 
-        if name is None:
-            name = self.name[:-5]  # param adds 5 digit number to the end, so remove it
-
-        return Bench(name, self, run_cfg=run_cfg, report=report)
+        Enables fluent chaining like:
+            MyConfig().to_bench_runner().add_run(func).run(level=2, max_level=4)
+        """
+        return create_bench_runner(self, run_cfg=run_cfg, name=name)
