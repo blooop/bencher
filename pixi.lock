@@ -29,7 +29,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.13.2-hf636f53_101_cp313.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python_abi-3.13-8_cp313.conda
-      - conda: https://prefix.dev/blooop/linux-64/ralph-orchestrator-2.6.0-hb0f4dca_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/shellcheck-0.10.0-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sqlite-3.48.0-h9eae976_1.conda
@@ -185,7 +184,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.5-h2d0b736_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.10.16-he725a3c_1_cpython.conda
-      - conda: https://prefix.dev/blooop/linux-64/ralph-orchestrator-2.6.0-hb0f4dca_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/shellcheck-0.10.0-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sqlite-3.48.0-h9eae976_1.conda
@@ -345,7 +343,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.5-h2d0b736_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.11.11-h9e4cc4f_1_cpython.conda
-      - conda: https://prefix.dev/blooop/linux-64/ralph-orchestrator-2.6.0-hb0f4dca_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/shellcheck-0.10.0-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sqlite-3.48.0-h9eae976_1.conda
@@ -502,7 +499,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.5-h2d0b736_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.9-h9e4cc4f_0_cpython.conda
-      - conda: https://prefix.dev/blooop/linux-64/ralph-orchestrator-2.6.0-hb0f4dca_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/shellcheck-0.10.0-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sqlite-3.48.0-h9eae976_1.conda
@@ -658,7 +654,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.13.2-hf636f53_101_cp313.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python_abi-3.13-8_cp313.conda
-      - conda: https://prefix.dev/blooop/linux-64/ralph-orchestrator-2.6.0-hb0f4dca_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/shellcheck-0.10.0-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sqlite-3.48.0-h9eae976_1.conda
@@ -1240,7 +1235,7 @@ packages:
 - pypi: ./
   name: holobench
   version: 1.61.0
-  sha256: 782c4ccd8f8ea64695b17ed58a2b2f728de0fb5c02845dd7bbd16f96ce12cb95
+  sha256: 19c1d4880771da75b2f1fe0f895c23d5726f90b32244120e4eb400ad492e4247
   requires_dist:
   - holoviews>=1.15,<=1.22.1
   - numpy>=1.0,<=2.4.1
@@ -1255,16 +1250,16 @@ packages:
   - strenum>=0.4.0,<=0.4.15
   - scikit-learn>=1.2,<=1.7.2
   - moviepy>=2.1.2,<=2.2.1
-  - nbformat ; extra == 'test'
-  - ipykernel ; extra == 'test'
-  - pip ; extra == 'test'
-  - jupyter-bokeh ; extra == 'test'
   - pylint>=3.2.5,<=4.0.5 ; extra == 'test'
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
   - pytest>=7.4,<=9.0.2 ; extra == 'test'
   - hypothesis>=6.104.2,<=6.151.9 ; extra == 'test'
   - ruff>=0.5.0,<=0.15.4 ; extra == 'test'
   - coverage>=7.5.4,<=7.13.4 ; extra == 'test'
+  - nbformat ; extra == 'test'
+  - ipykernel ; extra == 'test'
+  - pip ; extra == 'test'
+  - jupyter-bokeh ; extra == 'test'
   - prek>=0.2.28,<0.4.0 ; extra == 'test'
   - ty>=0.0.13,<=0.0.19 ; extra == 'test'
   - rerun-sdk>=0.29.2 ; extra == 'rerun'
@@ -3452,13 +3447,6 @@ packages:
   requires_dist:
   - cffi ; implementation_name == 'pypy'
   requires_python: '>=3.8'
-- conda: https://prefix.dev/blooop/linux-64/ralph-orchestrator-2.6.0-hb0f4dca_0.conda
-  sha256: 701849bf71dce7e5225a2cb0714a079f25ce17763c8b751f6f1c36e1434dcd5a
-  md5: 3d23dee3d7a5cefb136c26c9dd2d8d21
-  license: MIT
-  license_family: MIT
-  size: 6527009
-  timestamp: 1771993517565
 - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
   sha256: 12ffde5a6f958e285aa22c191ca01bbd3d6e710aa852e00618fa6ddc59149002
   md5: d7d95fc8287ea7bf33e0e7116d2b95ec
