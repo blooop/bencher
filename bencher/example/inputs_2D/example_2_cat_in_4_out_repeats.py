@@ -86,7 +86,6 @@ def example_2_cat_in_4_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
         bch.Bench: The benchmark object
     """
 
-    run_cfg.repeats = 15  # Run multiple times to get statistical significance
     bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         title="Programming Language and Environment Performance Metrics",
@@ -96,4 +95,4 @@ def example_2_cat_in_4_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    example_2_cat_in_4_out_repeats().report.show()
+    example_2_cat_in_4_out_repeats(bch.BenchRunCfg(repeats=15)).report.show()
