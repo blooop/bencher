@@ -105,9 +105,6 @@ class BenchMetaGen(bch.ParametrizedSweep):
 
         title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat_{self.sample_with_repeats}_repeats"
 
-        if self.sample_over_time:
-            title += "_over_time"
-
         nb = nbf.v4.new_notebook()
         text = f"""# {title}"""
 
@@ -126,7 +123,6 @@ class BenchMetaGen(bch.ParametrizedSweep):
 run_cfg = bch.BenchRunCfg()
 run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
-run_cfg.over_time = {self.sample_over_time}
 bench = {self.benchable_obj.__class__.__name__}().to_bench(run_cfg)
 res=bench.plot_sweep(input_vars={input_vars},
                     result_vars={self.result_var_names})
