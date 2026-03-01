@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eo pipefail
 
 # Escape characters special in sed replacement strings (\, &, /)
 escape_sed() { printf '%s\n' "$1" | sed 's/[\\&/]/\\&/g'; }

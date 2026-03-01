@@ -2,7 +2,7 @@
 # SessionStart hook for Claude Code online environment
 # This script sets up the Python development environment using pixi
 
-set -e
+set -eo pipefail
 
 echo "🚀 Setting up Python Template environment..."
 
@@ -15,6 +15,7 @@ if ! command -v pixi &> /dev/null; then
     export PATH="$HOME/.pixi/bin:$PATH"
 
     # Source bashrc to get pixi in PATH (if bashrc was updated)
+    # shellcheck disable=SC1091
     [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
 
     echo "✅ Pixi installed successfully"
