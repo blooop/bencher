@@ -53,7 +53,8 @@ docker run hello-world
 echo "you may need to restart your machine"
 
 echo "you may need to add this to /etc/docker/daemon.json"
-echo "cat /etc/docker/daemon.json 
+cat <<'EOF'
+cat /etc/docker/daemon.json
 {
     "runtimes": {
         "nvidia": {
@@ -61,7 +62,8 @@ echo "cat /etc/docker/daemon.json
             "path": "nvidia-container-runtime"
         }
     }
-"
+}
+EOF
 
 
 #INSTALL PIXI
