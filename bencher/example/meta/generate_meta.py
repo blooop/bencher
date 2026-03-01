@@ -105,7 +105,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
             self.plots = bch.ResultReference()
             self.plots.obj = res.to_auto()
 
-        title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat_{self.sample_with_repeats}_repeats"
+        title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
 
         nb = nbf.v4.new_notebook()
         text = f"""# {title}"""
