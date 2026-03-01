@@ -160,6 +160,22 @@ class ResultImage(param.Filename):
         return hash_sha1(self)
 
 
+class ResultRRD(param.Filename):
+    __slots__ = ["units"]
+
+    def __init__(self, default=None, units="path", **params):
+        super().__init__(default=default, check_exists=False, **params)
+        self.units = units
+
+    def hash_persistent(self) -> str:
+        return hash_sha1(self)
+
+    def to_container(self):
+        from bencher.utils_rerun import rrd_file_to_pane
+
+        return rrd_file_to_pane
+
+
 class ResultString(param.String):
     __slots__ = ["units"]
 
@@ -243,6 +259,7 @@ PANEL_TYPES = (
     ResultPath,
     ResultImage,
     ResultVideo,
+    ResultRRD,
     ResultContainer,
     ResultString,
     ResultReference,
@@ -255,6 +272,7 @@ XARRAY_MULTIDIM_RESULT_TYPES = (
     ResultBool,
     ResultVideo,
     ResultImage,
+    ResultRRD,
     ResultString,
     ResultContainer,
     ResultPath,
@@ -268,6 +286,7 @@ ALL_RESULT_TYPES = (
     ResultPath,
     ResultVideo,
     ResultImage,
+    ResultRRD,
     ResultString,
     ResultContainer,
     ResultDataSet,

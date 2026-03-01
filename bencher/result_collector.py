@@ -25,6 +25,7 @@ from bencher.variables.results import (
     ResultPath,
     ResultVideo,
     ResultImage,
+    ResultRRD,
     ResultString,
     ResultContainer,
     ResultReference,
@@ -125,7 +126,8 @@ class ResultCollector:
                 result_data = np.full(dims_cfg.dims_size, -1, dtype=int)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(
-                rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer)
+                rv,
+                (ResultPath, ResultVideo, ResultImage, ResultRRD, ResultString, ResultContainer),
             ):
                 result_data = np.full(dims_cfg.dims_size, "NAN", dtype=object)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)

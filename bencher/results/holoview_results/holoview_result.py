@@ -16,7 +16,7 @@ from bencher.utils import (
 from bencher.results.video_result import VideoResult
 from bencher.results.bench_result_base import ReduceType
 
-from bencher.variables.results import ResultVar, ResultImage, ResultVideo
+from bencher.variables.results import ResultVar, ResultImage, ResultVideo, ResultRRD
 
 hv.extension("bokeh", "plotly")
 
@@ -191,7 +191,11 @@ class HoloviewResult(VideoResult):
         """
         if isinstance(result_var, ResultImage):
             return pn.pane.PNG
-        return pn.pane.Video if isinstance(result_var, ResultVideo) else pn.Column
+        if isinstance(result_var, ResultVideo):
+            return pn.pane.Video
+        if isinstance(result_var, ResultRRD):
+            return result_var.to_container()
+        return pn.Column
 
     def setup_results_and_containers(
         self,

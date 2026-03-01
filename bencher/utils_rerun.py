@@ -4,7 +4,7 @@ from importlib.metadata import version as get_package_version, PackageNotFoundEr
 import rerun as rr
 import panel as pn
 from rerun_notebook import Viewer
-from .utils import publish_file, gen_rerun_data_path
+from .utils import publish_file
 
 
 def _get_rerun_version() -> str:
@@ -51,8 +51,49 @@ def publish_and_view_rrd(
     return rrd_to_pane(publish_path, version=version)
 
 
-def capture_rerun_window(width: int = 500, height: int = 500):
-    rrd_path = gen_rerun_data_path()
-    rr.save(rrd_path)
-    path = rrd_path.split("cachedir")[1]
-    return rrd_to_pane(f"http://127.0.0.1:8001/{path}", width=width, height=height)
+def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pragma: no cover
+    """Save the current rerun recording to an .rrd file and return the path.
+
+    Data must be logged BEFORE calling this function so that the in-memory
+    recording has content to drain.
+
+    Args:
+        recording: Optional recording stream. Uses global recording if None.
+
+    Returns:
+        str: Path to the saved .rrd file.
+    """
+    from bencher.utils import gen_rerun_data_path
+
+    rec = recording or rr.get_global_data_recording()
+    rrd_bytes = rec.memory_recording().drain_as_bytes()
+    file_path = gen_rerun_data_path()
+    with open(file_path, "wb") as f:
+        f.write(rrd_bytes)
+    return file_path
+
+
+def rrd_file_to_pane(file_path, **kwargs):  # pragma: no cover  # pylint: disable=unused-argument
+    """Create a rerun Viewer widget from an .rrd file path.
+
+    Args:
+        file_path: Path to the .rrd file.
+
+    Returns:
+        pn.pane.IPyWidget: A Panel widget wrapping the rerun Viewer.
+    """
+    viewer = Viewer()
+    with open(file_path, "rb") as f:
+        viewer.send_rrd(f.read())
+    return pn.pane.IPyWidget(viewer)
+
+
+def capture_rerun_window(
+    width: int = 500, height: int = 500, recording: rr.RecordingStream | None = None
+):  # pragma: no cover
+    """Capture the current rerun recording as an inline Panel widget.
+
+    Data must be logged BEFORE calling this function so that the in-memory
+    recording has content to drain.
+    """
+    return rerun_to_pane(width=width, height=height, recording=recording)
