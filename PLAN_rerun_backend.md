@@ -273,7 +273,7 @@ rr.log(f"/{rv.name}/heatmap", rr.Tensor(arr))
 | Y-axis: result value | Y-coordinates of Points2D |
 | Grouped scatter (by=cat_var) | Multiple `Points2D` entities with distinct colors per group |
 
-**Key design:** Categories define the X-axis positions of scatter points (like holoviews),
+**Key design:** Categories define the X-axis positions of scatter points (like HoloViews),
 not entity path segments. Grouping by a secondary categorical produces color-coded point
 groups within the same view.
 
