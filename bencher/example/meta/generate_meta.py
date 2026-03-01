@@ -126,10 +126,8 @@ class BenchMetaGen(bch.ParametrizedSweep):
         if self.float_vars_count == 0 and self.categorical_vars_count == 0:
             heading += "- *(none)*\n"
 
-        over_time_str = "Yes" if self.sample_over_time else "No"
         heading += "\n## Configuration\n"
         heading += f"- **Repeats:** {self.sample_with_repeats}\n"
-        heading += f"- **Over time:** {over_time_str}\n"
 
         text = heading
 
@@ -141,15 +139,6 @@ class BenchMetaGen(bch.ParametrizedSweep):
             # If it's from main, use BenchableObject as fallback
             benchmark_import = "from bencher.example.meta.example_meta import BenchableObject\n"
 
-        plot_sweep_call = (
-            f"res=bench.plot_sweep(input_vars={input_vars},\n"
-            f"                    result_vars={self.result_var_names})"
-        )
-        if self.sample_over_time:
-            plot_sweep_code = f"for i in range(3):\n    {plot_sweep_call}"
-        else:
-            plot_sweep_code = plot_sweep_call
-
         code_gen = f"""
 %%capture
 {module_import}
@@ -157,9 +146,9 @@ class BenchMetaGen(bch.ParametrizedSweep):
 run_cfg = bch.BenchRunCfg()
 run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
-run_cfg.over_time = {self.sample_over_time}
 bench = {self.benchable_obj.__class__.__name__}().to_bench(run_cfg)
-{plot_sweep_code}
+res=bench.plot_sweep(input_vars={input_vars},
+                    result_vars={self.result_var_names})
 """
         code_results = """
 from bokeh.io import output_notebook
@@ -233,25 +222,5 @@ This uses bencher to display all the combinations of plots bencher is able to pr
     return bench
 
 
-def example_meta_over_time(
-    run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None
-) -> bch.Bench:
-    bench = BenchMetaGen().to_bench(run_cfg, report)
-
-    bench.plot_sweep(
-        title="Meta Bench Over Time",
-        input_vars=[
-            bch.p("float_vars_count", [0, 1]),
-            bch.p("categorical_vars_count", [0, 1]),
-        ],
-        const_vars=[
-            ("sample_with_repeats", 1),
-            ("sample_over_time", True),
-        ],
-    )
-    return bench
-
-
 if __name__ == "__main__":
     example_meta().report.show()
-    example_meta_over_time().report.show()

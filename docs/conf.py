@@ -76,19 +76,19 @@ nbsite_gallery_conf = {
                 {"path": "examples", "title": "Examples"},
                 {
                     "path": "meta_float_0",
-                    "title": "Meta: 0 Float Variables",
+                    "title": "Meta: Categorical Only (0 Float, 0-3 Cat, 1-20 Repeats)",
                 },
                 {
                     "path": "meta_float_1",
-                    "title": "Meta: 1 Float Variable",
+                    "title": "Meta: 1 Float + Categorical (0-3 Cat, 1-20 Repeats)",
                 },
                 {
                     "path": "meta_float_2",
-                    "title": "Meta: 2 Float Variables",
+                    "title": "Meta: 2 Float + Categorical (0-3 Cat)",
                 },
                 {
                     "path": "meta_float_3",
-                    "title": "Meta: 3 Float Variables",
+                    "title": "Meta: 3 Float + Categorical (0-3 Cat)",
                 },
                 {"path": "yaml", "title": "YAML"},
                 {"path": "media", "title": "Media"},

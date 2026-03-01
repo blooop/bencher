@@ -160,10 +160,9 @@ if __name__ == "__main__":
     convert_example_to_jupyter_notebook(str(ex / "example_yaml_sweep_dict.py"), "yaml")
 
     # Meta examples (generated programmatically via BenchMetaGen sweeps)
-    from bencher.example.meta.generate_meta import example_meta, example_meta_over_time
+    from bencher.example.meta.generate_meta import example_meta
 
     example_meta()
-    example_meta_over_time()
 
     # todo, enable
     # convert_example_to_jupyter_notebook(
