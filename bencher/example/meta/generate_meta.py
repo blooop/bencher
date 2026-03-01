@@ -216,7 +216,7 @@ This uses bencher to display all the combinations of plots bencher is able to pr
         title="Meta Bench - With Repeats",
         description=sweep_desc,
         input_vars=["float_vars_count", "categorical_vars_count"],
-        const_vars=dict(sample_with_repeats=20, sample_over_time=False),
+        const_vars=dict(sample_with_repeats=10, sample_over_time=False),
     )
     # Sweep 3: Over Time
     bench.plot_sweep(
