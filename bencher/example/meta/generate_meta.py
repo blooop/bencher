@@ -1,3 +1,4 @@
+import hashlib
 import nbformat as nbf
 from typing import Any
 import bencher as bch
@@ -103,7 +104,10 @@ class BenchMetaGen(bch.ParametrizedSweep):
             self.plots = bch.ResultReference()
             self.plots.obj = res.to_auto()
 
-        title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
+        title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat_{self.sample_with_repeats}_repeats"
+
+        if self.sample_over_time:
+            title += "_over_time"
 
         nb = nbf.v4.new_notebook()
         text = f"""# {title}"""
@@ -122,7 +126,8 @@ class BenchMetaGen(bch.ParametrizedSweep):
 {benchmark_import}
 run_cfg = bch.BenchRunCfg()
 run_cfg.repeats = {self.sample_with_repeats}
-run_cfg.level = 4 
+run_cfg.level = 4
+run_cfg.over_time = {self.sample_over_time}
 bench = {self.benchable_obj.__class__.__name__}().to_bench(run_cfg)
 res=bench.plot_sweep(input_vars={input_vars},
                     result_vars={self.result_var_names})
@@ -133,16 +138,19 @@ output_notebook()
 res.to_auto_plots()
 """
 
-        nb["cells"] = [
+        cells = [
             nbf.v4.new_markdown_cell(text),
             nbf.v4.new_code_cell(code_gen),
             nbf.v4.new_code_cell(code_results),
         ]
+        for i, cell in enumerate(cells):
+            cell.id = hashlib.sha256(f"{title}:{i}".encode()).hexdigest()[:8]
+        nb["cells"] = cells
         from pathlib import Path
 
-        fname = Path(f"docs/reference/Meta/ex_{title}.ipynb")
+        fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
-        fname.write_text(nbf.writes(nb), encoding="utf-8")
+        fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
 
         return super().__call__()
 
