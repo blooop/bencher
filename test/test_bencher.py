@@ -355,6 +355,33 @@ class TestBencher(unittest.TestCase):
             "the worker should not be sampled as it should be loaded from the cache",
         )
 
+    def test_const_vars_hash_chains_accumulated_hash(self) -> None:
+        """Const vars hashing must chain the accumulated hash_val, not overwrite it.
+
+        Two configs that differ only in input_vars but share the same const_vars must
+        produce different hashes. Without chaining, the const_vars loop overwrites hash_val
+        and the difference in input_vars is lost.
+        """
+        cfg_a = BenchCfg(
+            title="test_chain",
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            const_vars=[(ExampleBenchCfg.param.noisy, True)],
+            auto_plot=False,
+        )
+        cfg_b = BenchCfg(
+            title="test_chain",
+            input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            const_vars=[(ExampleBenchCfg.param.noisy, True)],
+            auto_plot=False,
+        )
+        self.assertNotEqual(
+            cfg_a.hash_persistent(include_repeats=True),
+            cfg_b.hash_persistent(include_repeats=True),
+            "Configs with different input_vars but same const_vars must have different hashes",
+        )
+
     def test_forgetting_to_use_param(self) -> None:
         bench = self.create_bench()
 
