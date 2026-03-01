@@ -57,28 +57,27 @@ nbsite_gallery_conf = {
             "title": "Reference Gallery",
             "intro": ("This shows examples of what various dimensionalities of sweep look like."),
             "sections": [
-                {
-                    "path": "inputs_0_float",
-                    "title": "0 Continuous Variables, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "inputs_1_float",
-                    "title": "1 Continuous Variable, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "inputs_2_float",
-                    "title": "2 Continuous Variables, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "inputs_3_float",
-                    "title": "3 Continuous Variables, 0-3 Categorical Variables",
-                },
                 {"path": "1D", "title": "1D"},
-                {"path": "pareto", "title": "Pareto"},
                 {"path": "2D", "title": "2D"},
+                {"path": "pareto", "title": "Pareto"},
                 {"path": "levels", "title": "Levels"},
                 {"path": "examples", "title": "Examples"},
-                {"path": "meta", "title": "Meta"},
+                {
+                    "path": "meta_float_0",
+                    "title": "Meta: 0 Float Variables",
+                },
+                {
+                    "path": "meta_float_1",
+                    "title": "Meta: 1 Float Variable",
+                },
+                {
+                    "path": "meta_float_2",
+                    "title": "Meta: 2 Float Variables",
+                },
+                {
+                    "path": "meta_float_3",
+                    "title": "Meta: 3 Float Variables",
+                },
                 {"path": "yaml", "title": "YAML"},
                 {"path": "media", "title": "Media"},
             ],

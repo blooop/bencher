@@ -105,10 +105,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
             self.plots = bch.ResultReference()
             self.plots.obj = res.to_auto()
 
-        title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat_{self.sample_with_repeats}_repeats"
-
-        if self.sample_over_time:
-            title += "_over_time"
+        title = f"float_{self.float_vars_count}_cat_{self.categorical_vars_count}_repeats_{self.sample_with_repeats}_over_time_{self.sample_over_time}"
 
         nb = nbf.v4.new_notebook()
         text = f"""# {title}"""
@@ -149,7 +146,7 @@ res.to_auto_plots()
         nb["cells"] = cells
         from pathlib import Path
 
-        fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
+        fname = Path(f"docs/reference/meta_float_{self.float_vars_count}/ex_{title}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
         fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
         subprocess.run(["ruff", "format", str(fname)], check=False)
@@ -211,14 +208,14 @@ def example_meta_over_time(
     bench = BenchMetaGen().to_bench(run_cfg, report)
 
     bench.plot_sweep(
-        title="Meta Bench",
-        description="""## All Combinations of Variable Sweeps and Resulting Plots
-This uses bencher to display all the combinations of plots bencher is able to produce""",
+        title="Meta Bench Over Time",
         input_vars=[
             bch.p("float_vars_count", [0, 1]),
-            bch.p("categorical_vars_count", [0, 1, 2]),
-            bch.p("sample_with_repeats", [1, 20]),
-            "sample_over_time",
+            bch.p("categorical_vars_count", [0, 1]),
+        ],
+        const_vars=[
+            ("sample_with_repeats", 1),
+            ("sample_over_time", True),
         ],
     )
     return bench
