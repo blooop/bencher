@@ -179,7 +179,7 @@ res.to_auto_plots()
         nb["cells"] = cells
         from pathlib import Path
 
-        fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
+        fname = Path(f"docs/reference/meta/{self.float_vars_count}_float/ex_{title}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
         fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
         subprocess.run(["ruff", "format", str(fname)], check=False)
