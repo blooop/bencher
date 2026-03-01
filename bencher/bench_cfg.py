@@ -10,11 +10,21 @@ import panel as pn
 from datetime import datetime
 from copy import deepcopy
 
+from strenum import StrEnum
+
 from bencher.variables.sweep_base import hash_sha1, describe_variable
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
 from bencher.job import Executors
 from bencher.results.laxtex_result import to_latex
+
+
+class RenderBackend(StrEnum):
+    """Enumeration of available rendering backends for benchmark visualization."""
+
+    panel = "panel"
+    rerun = "rerun"
+
 
 T = TypeVar("T")  # Generic type variable
 
@@ -186,6 +196,12 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     # ==================== VISUALIZATION PARAMETERS ====================
     # These parameters control plotting and visualization
+
+    backend = param.Selector(
+        objects=list(RenderBackend),
+        default=RenderBackend.panel,
+        doc="Rendering backend for benchmark visualization ('panel' or 'rerun')",
+    )
 
     auto_plot: bool = param.Boolean(
         True, doc=" Automatically dedeuce the best type of plot for the results."

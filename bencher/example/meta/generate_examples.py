@@ -173,6 +173,42 @@ if __name__ == "__main__":
         "/workspaces/bencher/bencher/example/example_yaml_sweep_dict.py", "yaml"
     )
 
+    # Rerun backend examples
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_rerun_0D.py",
+        "rerun",
+    )
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_rerun_1D_float.py",
+        "rerun",
+    )
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_rerun_cat.py",
+        "rerun",
+    )
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_rerun_2D_float.py",
+        "rerun",
+    )
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_rerun_3D_float.py",
+        "rerun",
+    )
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_rerun_float_cat.py",
+        "rerun",
+    )
+
+    convert_example_to_jupyter_notebook(
+        "/workspaces/bencher/bencher/example/example_rerun_backend.py",
+        "rerun",
+    )
+
     # todo, enable
     # convert_example_to_jupyter_notebook(
     #     "/workspaces/bencher/bencher/example/example_composable_container_video.py",

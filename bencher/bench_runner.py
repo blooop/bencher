@@ -3,7 +3,7 @@ import logging
 import warnings
 import inspect
 from datetime import datetime
-from bencher.bench_cfg import BenchRunCfg, BenchCfg
+from bencher.bench_cfg import BenchRunCfg, BenchCfg, RenderBackend
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg
@@ -249,6 +249,7 @@ class BenchRunner:
         start_repeats: int | None = None,
         # Other parameters
         run_cfg: BenchRunCfg | None = None,
+        backend: RenderBackend | None = None,
         publish: bool = False,
         debug: bool = False,
         show: bool = False,
@@ -274,6 +275,8 @@ class BenchRunner:
             start_repeats (int, optional): DEPRECATED - use 'repeats' parameter instead.
 
             run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
+            backend (RenderBackend, optional): Rendering backend to use (e.g. panel or rerun).
+                Overrides run_cfg.backend if provided. Defaults to None.
             publish (bool, optional): Publish the results to git, requires a publish url to be set up. Defaults to False.
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
             show (bool, optional): show the results in the local web browser. Defaults to False.
@@ -306,6 +309,9 @@ class BenchRunner:
         if run_cfg is None:
             run_cfg = deepcopy(self.run_cfg)
         run_cfg = BenchRunner.setup_run_cfg(run_cfg, cache_results=cache_results)
+
+        if backend is not None:
+            run_cfg.backend = backend
 
         # Set up level and repeat ranges
         min_level = level
