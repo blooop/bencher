@@ -120,7 +120,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
             variant = "no_repeats"
 
         nb = nbf.v4.new_notebook()
-        text = f"""# {base_title}"""
+        text = f"""# {self.float_vars_count} Float, {self.categorical_vars_count} Categorical"""
 
         # Customize notebook generation to use the actual benchmark object and variables
         module_import = "import bencher as bch\n"
@@ -200,26 +200,24 @@ res.to_auto_plots()
 def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = BenchMetaGen().to_bench(run_cfg)
 
-    sweep_desc = """## All Combinations of Variable Sweeps and Resulting Plots
-This uses bencher to display all the combinations of plots bencher is able to produce"""
+    sweep_desc = (
+        """Plot gallery showing all combinations of float and categorical input variables"""
+    )
 
-    # Sweep 1: No Repeats
     bench.plot_sweep(
-        title="Meta Bench - No Repeats",
+        title="Single Sample",
         description=sweep_desc,
         input_vars=["float_vars_count", "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=1, sample_over_time=False),
     )
-    # Sweep 2: With Repeats
     bench.plot_sweep(
-        title="Meta Bench - With Repeats",
+        title="Repeated Samples (10x)",
         description=sweep_desc,
         input_vars=["float_vars_count", "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=10, sample_over_time=False),
     )
-    # Sweep 3: Over Time
     bench.plot_sweep(
-        title="Meta Bench - Over Time",
+        title="Over Time (4 Snapshots)",
         description=sweep_desc,
         input_vars=["float_vars_count", "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
