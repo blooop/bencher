@@ -63,13 +63,26 @@ def execute_notebook(notebook_path: str | Path, timeout: int = 600) -> None:
     nbf.write(nb, notebook_path)
 
 
-def execute_all_notebooks(directory: str | Path, timeout: int = 600) -> None:
-    """Execute all .ipynb files under a directory tree in-place."""
-    directory = Path(directory)
-    notebooks = sorted(directory.rglob("*.ipynb"))
-    print(f"Found {len(notebooks)} notebooks to execute in {directory}")
-    for notebook in notebooks:
-        execute_notebook(notebook, timeout=timeout)
+def execute_all_notebooks(
+    notebooks: list[Path], timeout: int = 600, max_workers: int | None = None
+) -> None:
+    """Execute notebooks in parallel using a process pool."""
+    import os
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    if max_workers is None:
+        max_workers = min(os.cpu_count() or 4, len(notebooks))
+
+    print(f"Executing {len(notebooks)} notebooks with {max_workers} workers...")
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(execute_notebook, nb, timeout): nb for nb in notebooks}
+        for future in as_completed(futures):
+            nb_path = futures[future]
+            try:
+                future.result()
+            except Exception as exc:
+                print(f"FAILED {nb_path}: {exc}")
+                raise
 
 
 if __name__ == "__main__":
@@ -83,14 +96,13 @@ if __name__ == "__main__":
 
     example_meta()
 
-    # Execute all generated meta notebooks in-place so they contain outputs.
-    # This allows RTD to render them without re-running the benchmarks.
-    execute_all_notebooks(meta_dir)
+    # Collect all notebooks to execute
+    all_notebooks = sorted(meta_dir.rglob("*.ipynb"))
 
-    # Also execute non-meta gallery notebooks (levels, pareto, yaml)
+    # Also include non-meta gallery notebooks (levels, pareto, yaml, etc.)
     gallery_notebooks = sorted(Path("docs/reference").glob("*/*.ipynb"))
-    # Filter out meta notebooks (already executed above)
     gallery_notebooks = [nb for nb in gallery_notebooks if "meta" not in nb.parts]
-    print(f"Found {len(gallery_notebooks)} non-meta gallery notebooks to execute")
-    for nb_path in gallery_notebooks:
-        execute_notebook(nb_path)
+    all_notebooks.extend(gallery_notebooks)
+
+    # Execute all notebooks in parallel so RTD only renders pre-computed results
+    execute_all_notebooks(all_notebooks)
