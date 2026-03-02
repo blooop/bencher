@@ -60,6 +60,7 @@ holobench = { path = ".", editable = true }
 [project.optional-dependencies]
 test = [
     "nbformat",
+    "nbclient>=0.7,<=0.10.2",
     "ipykernel",
     "pip",
     "jupyter_bokeh",
