@@ -567,6 +567,10 @@ class Bench(BenchPlotServer):
                 bench_res.ds = self.load_history_cache(
                     bench_res.ds, bench_cfg_hash, run_cfg.clear_history
                 )
+                # sync the over_time meta variable with the actual accumulated values
+                if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
+                    bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
+                    bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
 
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)

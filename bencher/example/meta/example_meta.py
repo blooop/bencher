@@ -1,6 +1,5 @@
 from typing import Any
 import bencher as bch
-import numpy as np
 
 from enum import auto
 from strenum import StrEnum
@@ -9,63 +8,73 @@ import holoviews as hv
 import math
 
 
-class NoiseDistribution(StrEnum):
-    """A categorical variable describing the types of random noise"""
+class FunctionVariant(StrEnum):
+    """A categorical variable selecting sub-function within a family"""
 
-    uniform = auto()  # uniform random noiase
-    gaussian = auto()  # gaussian noise
-
-    @staticmethod
-    def calculate_noise(noisy, noise_distribution, sigma) -> float:
-        if noisy:
-            match noise_distribution:
-                case NoiseDistribution.uniform:
-                    return random.uniform(-sigma / 2.0, sigma / 2)
-                case NoiseDistribution.gaussian:
-                    return random.gauss(0, sigma)
-        return 0.0
+    alpha = auto()  # first function variant
+    beta = auto()  # second function variant
 
 
 class BenchableObject(bch.ParametrizedSweep):
-    """A class to represent a 3D point in space."""
+    """A benchable object with a single parametric function that produces visually distinct plots.
+
+    Categories control the function's frequency and phase. The same formula is evaluated regardless
+    of how many float dimensions are swept - unused dimensions stay at their defaults, naturally
+    slicing the function at different dimensionalities.
+    """
 
     # floating point variables
     float1 = bch.FloatSweep(default=0, bounds=[0, 1.0], doc="x coordinate of the sample volume")
     float2 = bch.FloatSweep(default=0, bounds=[0, 1.0], doc="y coordinate of the sample volume")
     float3 = bch.FloatSweep(default=0, bounds=[0, 1.0], doc="z coordinate of the sample volume")
 
-    sigma = bch.FloatSweep(default=0.2, bounds=[0, 10], doc="standard deviation of the added noise")
-
-    # categorial variables
-    noisy = bch.BoolSweep(
-        default=False, doc="Optionally add random noise to the output of the function"
+    # categorical variables
+    wave = bch.BoolSweep(
+        default=True, doc="High frequency oscillation (True) vs low frequency smooth (False)"
     )
-    noise_distribution = bch.EnumSweep(NoiseDistribution, doc=NoiseDistribution.__doc__)
+    variant = bch.EnumSweep(FunctionVariant, doc=FunctionVariant.__doc__)
 
-    negate_output = bch.StringSweep(["positive", "negative"])
+    transform = bch.StringSweep(["normal", "inverted"])
 
     distance = bch.ResultVar("m", doc="The distance from the sample point to the origin")
     sample_noise = bch.ResultVar("m", doc="The amount of noise added to the distance sample")
 
     result_hmap = bch.ResultHmap()
-    # result_im
-    ##todo all var types
+
+    # Class attributes set by BenchMeta/BenchMetaGen before sweep
+    noise_scale = 0.0  # signal-proportional noise scale (0.0 = deterministic)
+    _time_offset = 0.0  # offset added to output for over-time support
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
 
-        # distance to origin
-        self.distance = math.pow(
-            np.linalg.norm(np.array([self.float1, self.float2, self.float3])), 2
-        )
-        self.sample_noise = NoiseDistribution.calculate_noise(
-            self.noisy, self.noise_distribution, self.sigma
+        x, y, z = self.float1, self.float2, self.float3
+
+        # Map categoricals to continuous parameters that shape the function
+        freq = 3.0 if self.wave else 1.0
+        phase = 0.0 if self.variant == FunctionVariant.alpha else math.pi / 2
+
+        # Single parametric function - categories control freq and phase,
+        # dimensionality is just which floats get swept vs held at default.
+        # The freq coefficient on the first term ensures distinct values even at (0,0,0).
+        self.distance = (
+            freq * math.sin(freq * math.pi * x + phase + 0.5)
+            + math.cos(freq * 0.7 * math.pi * y + phase * 1.3 + 0.3)
+            + 0.7 * math.sin(freq * 0.5 * math.pi * z + phase * 0.7 + 0.7)
+            + 0.3 * math.sin(freq * math.pi * (x * y + z * 0.5) + phase * 0.5)
         )
 
-        self.distance += self.sample_noise
-
-        if self.negate_output == "negative":
+        if self.transform == "inverted":
             self.distance *= -1
+
+        # Apply noise
+        self.sample_noise = 0.0
+        if self.noise_scale > 0:
+            self.sample_noise = random.gauss(0, self.noise_scale * max(abs(self.distance), 0.1))
+            self.distance += self.sample_noise
+
+        # Apply time offset
+        self.distance += self._time_offset
 
         self.result_hmap = hv.Text(
             x=0, y=0, text=f"distance:{self.distance}\nnoise:{self.sample_noise}"
@@ -78,7 +87,7 @@ class BenchMeta(bch.ParametrizedSweep):
     """This class uses bencher to display the multidimensional types bencher can represent"""
 
     float_vars = bch.IntSweep(
-        default=0, bounds=(0, 4), doc="The number of floating point variables that are swept"
+        default=0, bounds=(0, 3), doc="The number of floating point variables that are swept"
     )
     categorical_vars = bch.IntSweep(
         default=0, bounds=(0, 3), doc="The number of categorical variables that are swept"
@@ -89,8 +98,6 @@ class BenchMeta(bch.ParametrizedSweep):
 
     level = bch.IntSweep(default=2, units="level", bounds=(2, 5))
 
-    # plots = bch.ResultHmap()
-    # plots = bch.ResultContainer()
     plots = bch.ResultReference(units="int")
 
     def __call__(self, **kwargs: Any) -> Any:
@@ -102,41 +109,52 @@ class BenchMeta(bch.ParametrizedSweep):
         run_cfg.over_time = self.sample_over_time
         run_cfg.plot_size = 500
 
-        bench = bch.Bench("benchable", BenchableObject(), run_cfg=run_cfg)
+        benchable = BenchableObject()
+        if self.sample_with_repeats > 1:
+            benchable.noise_scale = 0.15
+
+        bench = bch.Bench("benchable", benchable, run_cfg=run_cfg)
 
         inputs_vars_float = [
             "float1",
             "float2",
             "float3",
-            "sigma",
         ]
 
         inputs_vars_cat = [
-            "noisy",
-            "noise_distribution",
-            "negate_output",
+            "wave",
+            "variant",
+            "transform",
         ]
 
         input_vars = (
             inputs_vars_float[0 : self.float_vars] + inputs_vars_cat[0 : self.categorical_vars]
         )
 
-        res = bench.plot_sweep(
-            "test",
-            input_vars=input_vars,
-            result_vars=["distance"],
-            # result_vars=["distance", "sample_noise"],
-            # result_vars=["sample_noise"],
-            # result_vars=["result_hmap"],
-            plot_callbacks=False,
-        )
+        if self.sample_over_time:
+            benchable.noise_scale = max(benchable.noise_scale, 0.1)
+            time_offsets = [0.0, 0.3, 0.7, 1.0]
+            for i, offset in enumerate(time_offsets):
+                benchable._time_offset = offset
+                run_cfg.clear_cache = True
+                run_cfg.clear_history = i == 0
+                res = bench.plot_sweep(
+                    "over_time",
+                    input_vars=input_vars,
+                    result_vars=["distance"],
+                    plot_callbacks=False,
+                    run_cfg=run_cfg,
+                )
+        else:
+            res = bench.plot_sweep(
+                "test",
+                input_vars=input_vars,
+                result_vars=["distance"],
+                plot_callbacks=False,
+            )
 
         self.plots = bch.ResultReference()
         self.plots.obj = res.to_auto()
-
-        # self.plots.obj = res.to_heatmap_multi()
-
-        # self.plots.obj = res.to_line_multi(width=500, height=300)
 
         return super().__call__()
 
@@ -145,21 +163,53 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = BenchMeta().to_bench(run_cfg)
 
     bench.plot_sweep(
-        title="Meta Bench",
-        description="""## All Combinations of Variable Sweeps and Resulting Plots
-This uses bencher to display all the combinations of plots bencher is able to produce""",
+        title="0 Float Inputs",
+        description="""Categorical-only sweeps with 0 float variables.
+Each category combination produces a distinct scalar value from the unified function evaluated at
+the default float point (0,0,0).""",
         input_vars=[
-            bch.p("float_vars", [0, 1, 2, 3]),
             "categorical_vars",
-            bch.p("sample_with_repeats", [1, 2]),
+            bch.p("sample_with_repeats", [1, 10]),
             # "sample_over_time",
         ],
-        const_vars=[
-            # ("float_vars", 1),
-            # ("sample_with_repeats", 2),
-            # ("categorical_vars", 2),
-            # ("sample_over_time", True),
+        const_vars=dict(float_vars=0),
+    )
+
+    bench.plot_sweep(
+        title="1 Float Input",
+        description="""Sweeps over float1, producing 1D line/curve plots.
+Categories shift the frequency and phase of the underlying function, producing visually distinct
+curves.""",
+        input_vars=[
+            "categorical_vars",
+            bch.p("sample_with_repeats", [1, 10]),
+            # "sample_over_time",
         ],
+        const_vars=dict(float_vars=1),
+    )
+
+    bench.plot_sweep(
+        title="2 Float Inputs",
+        description="""Sweeps over float1 and float2, producing 2D heatmap/surface plots.
+The unified function creates interesting 2D patterns that vary with category selection.""",
+        input_vars=[
+            "categorical_vars",
+            bch.p("sample_with_repeats", [1, 10]),
+            # "sample_over_time",
+        ],
+        const_vars=dict(float_vars=2),
+    )
+
+    bench.plot_sweep(
+        title="3 Float Inputs",
+        description="""Sweeps over all three float variables, producing 3D volume plots.
+The full 3D function with all cross-coupling terms active.""",
+        input_vars=[
+            "categorical_vars",
+            bch.p("sample_with_repeats", [1, 10]),
+            # "sample_over_time",
+        ],
+        const_vars=dict(float_vars=3),
     )
 
     return bench

@@ -76,6 +76,10 @@ class BenchMetaGen(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
+        # Set noise_scale on the benchable object when using repeats
+        if hasattr(self.benchable_obj, "noise_scale") and self.sample_with_repeats > 1:
+            self.benchable_obj.noise_scale = 0.15
+
         run_cfg = bch.BenchRunCfg()
         run_cfg.level = self.level
         run_cfg.repeats = self.sample_with_repeats
@@ -105,10 +109,18 @@ class BenchMetaGen(bch.ParametrizedSweep):
             self.plots = bch.ResultReference()
             self.plots.obj = res.to_auto()
 
-        title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
+        base_title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
+
+        # Determine variant subdirectory
+        if self.sample_over_time:
+            variant = "over_time"
+        elif self.sample_with_repeats > 1:
+            variant = "with_repeats"
+        else:
+            variant = "no_repeats"
 
         nb = nbf.v4.new_notebook()
-        text = f"""# {title}"""
+        text = f"""# {self.float_vars_count} Float, {self.categorical_vars_count} Categorical"""
 
         # Customize notebook generation to use the actual benchmark object and variables
         module_import = "import bencher as bch\n"
@@ -118,15 +130,43 @@ class BenchMetaGen(bch.ParametrizedSweep):
             # If it's from main, use BenchableObject as fallback
             benchmark_import = "from bencher.example.meta.example_meta import BenchableObject\n"
 
-        code_gen = f"""
+        obj_class = self.benchable_obj.__class__.__name__
+        noise_line = ""
+        if self.sample_with_repeats > 1:
+            noise_line = "benchable.noise_scale = 0.15\n"
+
+        if self.sample_over_time:
+            code_gen = f"""
 %%capture
 {module_import}
 {benchmark_import}
 run_cfg = bch.BenchRunCfg()
 run_cfg.repeats = {self.sample_with_repeats}
 run_cfg.level = 4
-run_cfg.over_time = {self.sample_over_time}
-bench = {self.benchable_obj.__class__.__name__}().to_bench(run_cfg)
+run_cfg.over_time = True
+benchable = {obj_class}()
+benchable.noise_scale = max(0.1, {0.15 if self.sample_with_repeats > 1 else 0.0})
+bench = benchable.to_bench(run_cfg)
+time_offsets = [0.0, 0.3, 0.7, 1.0]
+for i, offset in enumerate(time_offsets):
+    benchable._time_offset = offset
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    res = bench.plot_sweep("over_time", input_vars={input_vars},
+                    result_vars={self.result_var_names},
+                    run_cfg=run_cfg)
+"""
+        else:
+            code_gen = f"""
+%%capture
+{module_import}
+{benchmark_import}
+run_cfg = bch.BenchRunCfg()
+run_cfg.repeats = {self.sample_with_repeats}
+run_cfg.level = 4
+run_cfg.over_time = False
+benchable = {obj_class}()
+{noise_line}bench = benchable.to_bench(run_cfg)
 res=bench.plot_sweep(input_vars={input_vars},
                     result_vars={self.result_var_names})
 """
@@ -141,12 +181,15 @@ res.to_auto_plots()
             nbf.v4.new_code_cell(code_gen),
             nbf.v4.new_code_cell(code_results),
         ]
+        id_key = f"{variant}/{base_title}"
         for i, cell in enumerate(cells):
-            cell.id = _deterministic_id(title, i)
+            cell.id = _deterministic_id(id_key, i)
         nb["cells"] = cells
         from pathlib import Path
 
-        fname = Path(f"docs/reference/meta/ex_{title}.ipynb")
+        fname = Path(
+            f"docs/reference/meta/{self.float_vars_count}_float/{variant}/ex_{base_title}.ipynb"
+        )
         fname.parent.mkdir(parents=True, exist_ok=True)
         fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
         subprocess.run(["ruff", "format", str(fname)], check=False)
@@ -157,47 +200,28 @@ res.to_auto_plots()
 def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = BenchMetaGen().to_bench(run_cfg)
 
-    bench.plot_sweep(
-        title="Meta Bench",
-        description="""## All Combinations of Variable Sweeps and Resulting Plots
-This uses bencher to display all the combinations of plots bencher is able to produce""",
-        input_vars=[
-            bch.p("float_vars_count", [0, 1]),
-            "categorical_vars_count",
-            bch.p("sample_with_repeats", [1, 20]),
-        ],
-        const_vars=[
-            # ("float_vars_count", 1),
-            # ("sample_with_repeats", 2),
-            # ("categorical_vars_count", 2),
-            # ("sample_over_time", True),
-        ],
-    )
-    bench.plot_sweep(
-        title="Meta Bench",
-        description="""## All Combinations of Variable Sweeps and Resulting Plots
-This uses bencher to display all the combinations of plots bencher is able to produce""",
-        input_vars=[
-            bch.p("float_vars_count", [2, 3]),
-            "categorical_vars_count",
-        ],
+    sweep_desc = (
+        """Plot gallery showing all combinations of float and categorical input variables"""
     )
 
-    #     bench.plot_sweep(
-    #         title="Meta Bench",
-    #         description="""## All Combinations of Variable Sweeps and Resulting Plots
-    # This uses bencher to display all the combinations of plots bencher is able to produce""",
-    #         input_vars=[
-    #             bch.p("float_vars_count", [2, 3]),
-    #             "categorical_vars_count",
-    #         ],
-    #         const_vars=[
-    #             dict(level=3)
-    #             # ("sample_with_repeats", 2),
-    #             # ("categorical_vars_count", 2),
-    #             # ("sample_over_time", True),
-    #         ],
-    #     )
+    bench.plot_sweep(
+        title="Single Sample",
+        description=sweep_desc,
+        input_vars=["float_vars_count", "categorical_vars_count"],
+        const_vars=dict(sample_with_repeats=1, sample_over_time=False),
+    )
+    bench.plot_sweep(
+        title="Repeated Samples (10x)",
+        description=sweep_desc,
+        input_vars=["float_vars_count", "categorical_vars_count"],
+        const_vars=dict(sample_with_repeats=10, sample_over_time=False),
+    )
+    bench.plot_sweep(
+        title="Over Time (4 Snapshots)",
+        description=sweep_desc,
+        input_vars=["float_vars_count", "categorical_vars_count"],
+        const_vars=dict(sample_with_repeats=1, sample_over_time=True),
+    )
 
     return bench
 

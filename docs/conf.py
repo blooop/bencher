@@ -55,32 +55,23 @@ nbsite_gallery_conf = {
     "galleries": {
         "reference": {
             "title": "Reference Gallery",
-            "intro": ("This shows examples of what various dimensionalities of sweep look like."),
+            "intro": "This shows examples of what various dimensionalities of sweep look like.",
             "sections": [
-                {
-                    "path": "inputs_0_float",
-                    "title": "0 Continuous Variables, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "inputs_1_float",
-                    "title": "1 Continuous Variable, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "inputs_2_float",
-                    "title": "2 Continuous Variables, 0-3 Categorical Variables",
-                },
-                {
-                    "path": "inputs_3_float",
-                    "title": "3 Continuous Variables, 0-3 Categorical Variables",
-                },
-                {"path": "1D", "title": "1D"},
-                {"path": "pareto", "title": "Pareto"},
-                {"path": "2D", "title": "2D"},
+                {"path": "meta/0_float/no_repeats", "title": "0 Float Inputs"},
+                {"path": "meta/0_float/with_repeats", "title": "0 Float Inputs (Repeated)"},
+                {"path": "meta/0_float/over_time", "title": "0 Float Inputs (Over Time)"},
+                {"path": "meta/1_float/no_repeats", "title": "1 Float Input"},
+                {"path": "meta/1_float/with_repeats", "title": "1 Float Input (Repeated)"},
+                {"path": "meta/1_float/over_time", "title": "1 Float Input (Over Time)"},
+                {"path": "meta/2_float/no_repeats", "title": "2 Float Inputs"},
+                {"path": "meta/2_float/with_repeats", "title": "2 Float Inputs (Repeated)"},
+                {"path": "meta/2_float/over_time", "title": "2 Float Inputs (Over Time)"},
+                {"path": "meta/3_float/no_repeats", "title": "3 Float Inputs"},
+                {"path": "meta/3_float/with_repeats", "title": "3 Float Inputs (Repeated)"},
+                {"path": "meta/3_float/over_time", "title": "3 Float Inputs (Over Time)"},
                 {"path": "levels", "title": "Levels"},
-                {"path": "examples", "title": "Examples"},
-                {"path": "meta", "title": "Meta"},
+                {"path": "pareto", "title": "Pareto"},
                 {"path": "yaml", "title": "YAML"},
-                {"path": "media", "title": "Media"},
             ],
             "skip_rst_notebook_directive": True,
         }
