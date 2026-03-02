@@ -145,7 +145,7 @@ class BenchMeta(bch.ParametrizedSweep):
                 run_cfg.clear_cache = True
                 run_cfg.clear_history = i == 0
                 res = bench.plot_sweep(
-                    event,
+                    "over_time",
                     input_vars=input_vars,
                     result_vars=["distance"],
                     plot_callbacks=False,

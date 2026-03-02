@@ -69,6 +69,9 @@ nbsite_gallery_conf = {
                 {"path": "meta/3_float/no_repeats", "title": "3 Float - No Repeats"},
                 {"path": "meta/3_float/with_repeats", "title": "3 Float - With Repeats"},
                 {"path": "meta/3_float/over_time", "title": "3 Float - Over Time"},
+                {"path": "levels", "title": "Levels"},
+                {"path": "pareto", "title": "Pareto"},
+                {"path": "yaml", "title": "YAML"},
             ],
             "skip_rst_notebook_directive": True,
         }

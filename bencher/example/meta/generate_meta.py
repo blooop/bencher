@@ -153,7 +153,7 @@ for i, (event, offset) in enumerate(time_events):
     run_cfg.time_event = event
     run_cfg.clear_cache = True
     run_cfg.clear_history = i == 0
-    res = bench.plot_sweep(event, input_vars={input_vars},
+    res = bench.plot_sweep("over_time", input_vars={input_vars},
                     result_vars={self.result_var_names},
                     run_cfg=run_cfg)
 """
