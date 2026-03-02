@@ -79,3 +79,7 @@ nbsite_gallery_conf = {
 }
 
 nbsite_nbbuild_exclude_patterns = ["jupyter_execute/**"]
+
+# Disable notebook execution during Sphinx builds — notebooks are pre-executed
+# during generate-docs so RTD only renders pre-computed results.
+nb_execution_mode = "off"

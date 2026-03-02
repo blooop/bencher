@@ -22,10 +22,8 @@ conda:
 sphinx:
    configuration: docs/conf.py
 
-# Optionally build your docs in additional formats such as PDF and ePub
-# formats:
-#    - pdf
-#    - epub
+# Disable additional formats (htmlzip is built by default and adds overhead)
+formats: []
 
 # Optional but recommended, declare the Python requirements required
 # to build your documentation

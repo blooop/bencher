@@ -60,7 +60,7 @@ repos:
     hooks:
       - id: codespell
         args: ['--write-changes','--skip=index.html',"--ignore-words=./codespell-ignore.txt"]
-        exclude: \.(svg|pyc|lock|json)$
+        exclude: \.(svg|pyc|lock|json|ipynb)$
         
   # - repo: https://github.com/compilerla/conventional-pre-commit
   #   rev: v3.0.0
