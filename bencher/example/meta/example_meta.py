@@ -133,15 +133,9 @@ class BenchMeta(bch.ParametrizedSweep):
 
         if self.sample_over_time:
             benchable.noise_scale = max(benchable.noise_scale, 0.1)
-            time_events = [
-                ("t0", 0.0),
-                ("t1", 0.3),
-                ("t2", 0.7),
-                ("t3", 1.0),
-            ]
-            for i, (event, offset) in enumerate(time_events):
+            time_offsets = [0.0, 0.3, 0.7, 1.0]
+            for i, offset in enumerate(time_offsets):
                 benchable._time_offset = offset
-                run_cfg.time_event = event
                 run_cfg.clear_cache = True
                 run_cfg.clear_history = i == 0
                 res = bench.plot_sweep(

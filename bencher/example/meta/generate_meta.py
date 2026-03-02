@@ -147,10 +147,9 @@ run_cfg.over_time = True
 benchable = {obj_class}()
 benchable.noise_scale = max(0.1, {0.15 if self.sample_with_repeats > 1 else 0.0})
 bench = benchable.to_bench(run_cfg)
-time_events = [("t0", 0.0), ("t1", 0.3), ("t2", 0.7), ("t3", 1.0)]
-for i, (event, offset) in enumerate(time_events):
+time_offsets = [0.0, 0.3, 0.7, 1.0]
+for i, offset in enumerate(time_offsets):
     benchable._time_offset = offset
-    run_cfg.time_event = event
     run_cfg.clear_cache = True
     run_cfg.clear_history = i == 0
     res = bench.plot_sweep("over_time", input_vars={input_vars},
