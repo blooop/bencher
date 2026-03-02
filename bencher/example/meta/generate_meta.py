@@ -76,10 +76,6 @@ class BenchMetaGen(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        # Skip 3-categorical combinations for 2+ float variables to reduce build time
-        if self.float_vars_count >= 2 and self.categorical_vars_count >= 3:
-            return super().__call__()
-
         # Set noise_scale on the benchable object when using repeats
         if hasattr(self.benchable_obj, "noise_scale") and self.sample_with_repeats > 1:
             self.benchable_obj.noise_scale = 0.15
@@ -208,10 +204,20 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         """Plot gallery showing all combinations of float and categorical input variables"""
     )
 
+    # Limit categorical variables to [0,1,2] for 2+ float variables to reduce build time.
+    # The full [0,1,2,3] range is only used with fewer float variables.
+    few_cats = bch.p("categorical_vars_count", [0, 1, 2])
+
     bench.plot_sweep(
-        title="Single Sample",
+        title="Single Sample (0-1 float vars)",
         description=sweep_desc,
-        input_vars=["float_vars_count", "categorical_vars_count"],
+        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        const_vars=dict(sample_with_repeats=1, sample_over_time=False),
+    )
+    bench.plot_sweep(
+        title="Single Sample (2-3 float vars)",
+        description=sweep_desc,
+        input_vars=[bch.p("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=1, sample_over_time=False),
     )
     bench.plot_sweep(
@@ -223,13 +229,19 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench.plot_sweep(
         title="Repeated Samples (3x)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [2, 3]), "categorical_vars_count"],
+        input_vars=[bch.p("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=3, sample_over_time=False),
     )
     bench.plot_sweep(
-        title="Over Time (3 Snapshots)",
+        title="Over Time 0-1 float (3 Snapshots)",
         description=sweep_desc,
-        input_vars=["float_vars_count", "categorical_vars_count"],
+        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        const_vars=dict(sample_with_repeats=1, sample_over_time=True),
+    )
+    bench.plot_sweep(
+        title="Over Time 2-3 float (3 Snapshots)",
+        description=sweep_desc,
+        input_vars=[bch.p("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
     )
 
