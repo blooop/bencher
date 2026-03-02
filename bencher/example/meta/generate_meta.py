@@ -76,6 +76,10 @@ class BenchMetaGen(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
+        # Skip 3-categorical combinations for 2+ float variables to reduce build time
+        if self.float_vars_count >= 2 and self.categorical_vars_count >= 3:
+            return super().__call__()
+
         # Set noise_scale on the benchable object when using repeats
         if hasattr(self.benchable_obj, "noise_scale") and self.sample_with_repeats > 1:
             self.benchable_obj.noise_scale = 0.15
@@ -147,7 +151,7 @@ run_cfg.over_time = True
 benchable = {obj_class}()
 benchable.noise_scale = max(0.1, {0.15 if self.sample_with_repeats > 1 else 0.0})
 bench = benchable.to_bench(run_cfg)
-time_offsets = [0.0, 0.3, 0.7, 1.0]
+time_offsets = [0.0, 0.5, 1.0]
 for i, offset in enumerate(time_offsets):
     benchable._time_offset = offset
     run_cfg.clear_cache = True
@@ -217,7 +221,7 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         const_vars=dict(sample_with_repeats=10, sample_over_time=False),
     )
     bench.plot_sweep(
-        title="Over Time (4 Snapshots)",
+        title="Over Time (3 Snapshots)",
         description=sweep_desc,
         input_vars=["float_vars_count", "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
