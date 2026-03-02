@@ -217,8 +217,14 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench.plot_sweep(
         title="Repeated Samples (10x)",
         description=sweep_desc,
-        input_vars=["float_vars_count", "categorical_vars_count"],
+        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=10, sample_over_time=False),
+    )
+    bench.plot_sweep(
+        title="Repeated Samples (3x)",
+        description=sweep_desc,
+        input_vars=[bch.p("float_vars_count", [2, 3]), "categorical_vars_count"],
+        const_vars=dict(sample_with_repeats=3, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Over Time (3 Snapshots)",
