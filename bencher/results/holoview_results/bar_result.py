@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional
 import panel as pn
+import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -93,36 +94,49 @@ class BarResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the bar chart options.
 
         Returns:
-            hvplot.element.Bars: A bar chart visualization of the benchmark data.
+            hvplot.element.Bars | hv.HoloMap: A bar chart visualization of the benchmark data.
         """
-        # Determine grouping ('by') dynamically based on dims that still exist
         da = dataset[result_var.name]
+        use_holomap = self._use_holomap_for_time(dataset)
 
         # Allow explicit override via kwargs
         by = kwargs.pop("by", None)
+
+        # Determine x-axis and by grouping from non-over_time dims
+        non_time_dims = [d for d in da.dims if d not in ("repeat", "over_time")]
         if by is None:
-            # Candidate categorical dims from the original config, filtered to those still present
             cat_dim_names = [cv.name for cv in self.plt_cnt_cfg.cat_vars]
-            dims_present = [d for d in da.dims if d not in ("repeat", "over_time")]
-            # Prefer categorical dims that are not the primary x-axis
-            candidates = [d for d in dims_present if d != da.dims[0] and d in cat_dim_names]
+            x_dim = non_time_dims[0] if non_time_dims else "over_time"
+            candidates = [d for d in non_time_dims if d != x_dim and d in cat_dim_names]
 
             if len(candidates) == 1:
                 by = candidates[0]
             elif len(candidates) > 1:
-                # Preserve multi-level grouping when multiple categorical dims remain
                 by = candidates
             else:
                 by = None
+        else:
+            x_dim = non_time_dims[0] if non_time_dims else "over_time"
+
         title = self.title_from_ds(da, result_var, **kwargs)
-        time_args = self.time_widget(title)
+        opts_kwargs = dict(
+            title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
+        )
 
-        # Explicitly pass x and y on the DataArray to prevent unwanted grouping
-        plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs)
-        # hvplot with groupby returns a Panel layout; .opts() only works on HV elements
+        if use_holomap and non_time_dims:
+            # Build individual bar plots per time point → HoloMap with Bokeh slider
+            hmap = {}
+            for t in dataset.coords["over_time"].values:
+                da_t = da.sel(over_time=t)
+                bar = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
+                if hasattr(bar, "opts"):
+                    bar = bar.opts(**opts_kwargs)
+                hmap[t] = bar
+            return hv.HoloMap(hmap, kdims=["over_time"])
+
+        # No over_time slider needed: either no over_time, single time point,
+        # or over_time is the only dim (used as x-axis directly).
+        plot = da.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
         if hasattr(plot, "opts"):
-            plot = plot.opts(
-                title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
-            )
-
+            plot = plot.opts(**opts_kwargs)
         return plot

@@ -113,27 +113,24 @@ class HoloviewResult(VideoResult):
     def time_widget(self, title: str) -> dict:
         """Create widget configuration for time-based visualizations.
 
-        When over_time is active, returns hvplot groupby/scrubber kwargs so the
-        time dimension is navigated via a client-side slider widget instead of
-        being sliced into separate panes.
-
         Args:
             title (str): Title for the widget.
 
         Returns:
-            dict: Widget configuration dictionary.
+            dict: Widget configuration dictionary with title.
         """
-        if (
-            self.bench_cfg.over_time
-            and "over_time" in self.ds.dims
-            and self.ds.sizes["over_time"] > 1
-        ):
-            return {
-                "groupby": "over_time",
-                "widget_type": "scrubber",
-                "widget_location": "bottom",
-            }
         return {"title": title}
+
+    def _use_holomap_for_time(self, dataset: xr.Dataset) -> bool:
+        """Check whether over_time should be rendered via an hv.HoloMap slider.
+
+        Returns True when over_time is active and the dataset has >1 time points.
+        """
+        return (
+            self.bench_cfg.over_time
+            and "over_time" in dataset.dims
+            and dataset.sizes["over_time"] > 1
+        )
 
     def hv_container_ds(
         self,

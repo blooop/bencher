@@ -3,7 +3,6 @@ from typing import Optional
 import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import panel as pn
 import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
@@ -115,13 +114,7 @@ class CurveResult(HoloviewResult):
         #             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
 
         result = pt.opts(legend_position="right")
-        # Curve uses hv.Dataset.to(hv.Curve) directly (not hvplot), so it doesn't
-        # receive time_widget groupby args. When over_time is present, hvds.to()
-        # auto-creates a HoloMap keyed by over_time. Wrap with pn.HoloViews for scrubber.
-        if (
-            self.bench_cfg.over_time
-            and "over_time" in dataset.dims
-            and dataset.sizes["over_time"] > 1
-        ):
-            return pn.pane.HoloViews(result, widget_type="scrubber", widget_location="bottom")
+        # hv.Dataset.to(hv.Curve) auto-creates a HoloMap keyed by over_time when
+        # that dimension is present. The native HoloMap renders with a Bokeh slider
+        # that works in static HTML docs (unlike Panel scrubber widgets).
         return result
