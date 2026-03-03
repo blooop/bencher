@@ -132,21 +132,10 @@ class HoloviewResult(VideoResult):
             and dataset.sizes["over_time"] > 1
         )
 
-    def _time_slider_panel(self, dataset, build_plot_fn):
-        """Build a Panel layout with an independent DiscreteSlider for over_time.
-
-        Uses pn.bind instead of hv.HoloMap so that multiple over_time plots
-        in the same HTML document get fully independent slider widgets.
-        """
-        time_vals = list(dataset.coords["over_time"].values)
-        plot_list = [build_plot_fn(t) for t in time_vals]
-        options = dict(zip([str(t) for t in time_vals], range(len(time_vals))))
-        slider = pn.widgets.DiscreteSlider(name="over_time", options=options, value=0)
-
-        def _select(idx):
-            return plot_list[idx]
-
-        return pn.Column(slider, pn.bind(_select, slider))
+    @staticmethod
+    def _over_time_kdims() -> list:
+        """Return the kdim list for over_time HoloMaps."""
+        return ["over_time"]
 
     def hv_container_ds(
         self,
