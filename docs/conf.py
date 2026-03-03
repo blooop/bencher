@@ -43,6 +43,7 @@ html_css_files = ["custom.css"]
 
 autoapi_dirs = ["../bencher"]
 autoapi_ignore = ["*example_*", "*example*", "*experimental*"]
+autoapi_keep_files = True
 
 
 numpydoc_show_class_members = False
@@ -72,6 +73,13 @@ nbsite_gallery_conf = {
                 {"path": "levels", "title": "Levels"},
                 {"path": "pareto", "title": "Pareto"},
                 {"path": "yaml", "title": "YAML"},
+                {"path": "0D", "title": "0D Examples"},
+                {"path": "1D", "title": "1D Examples"},
+                {"path": "2D", "title": "2D Examples"},
+                {"path": "inputs_0_float", "title": "Inputs 0 Float"},
+                {"path": "inputs_1_float", "title": "Inputs 1 Float"},
+                {"path": "inputs_2_float", "title": "Inputs 2 Float"},
+                {"path": "inputs_3_float", "title": "Inputs 3 Float"},
             ],
             "skip_rst_notebook_directive": True,
         }

@@ -74,6 +74,16 @@ test = [
     "ty>=0.0.13,<=0.0.19",
 ]
 
+docs = [
+    "sphinx>=7,<8",
+    "sphinx-rtd-theme",
+    "sphinx-autoapi",
+    "sphinx-copybutton",
+    "nbsite==0.8.7",
+    "matplotlib",
+    "selenium",
+]
+
 #adds support for embedding rerun windows (alpha)
 rerun = ["rerun-sdk>=0.30.0", "rerun-notebook>=0.30.0", "flask", "flask-cors"]
 
@@ -94,6 +104,7 @@ py310 = ["py310", "test", "rerun"]
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
 py313 = ["py313", "test", "rerun"]
+docs = ["test", "rerun", "docs"]
 
 [tool.pixi.tasks]
 #AI AGENT TASKS
@@ -155,12 +166,19 @@ dev-use-prebuilt = "./scripts/devcontainer_use_prebuilt.sh"
 dev-use-local = "./scripts/devcontainer_use_local.sh"
 
 generate-docs = "python bencher/example/meta/generate_examples.py"
-docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html docs docs/builtdocs"
-
 
 #demos
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
+
+[tool.pixi.feature.docs.dependencies]
+firefox = "*"
+geckodriver = "*"
+
+[tool.pixi.feature.docs.tasks]
+generate-docs = "python bencher/example/meta/generate_examples.py"
+docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html docs docs/builtdocs"
+docs-preview = { cmd = "xdg-open docs/builtdocs/index.html", depends-on = ["generate-docs", "docs"] }
 
 
 [tool.pylint]
