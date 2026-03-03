@@ -8,6 +8,7 @@ import xarray as xr
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.time import TimeSnapshot
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -47,8 +48,16 @@ class BarResult(HoloviewResult):
             Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
+        # Allow bar to match when the only floats are from over_time (TimeSnapshot),
+        # since those get sliced away by pane recursion before the bar callback sees them.
+        # Only allow this when there are actual categorical input vars (otherwise line is better).
+        max_time_floats = 0
+        if self.bench_cfg.over_time and self.bench_cfg.iv_time and self.bench_cfg.input_vars:
+            max_time_floats = sum(
+                1 for tv in self.bench_cfg.iv_time if isinstance(tv, TimeSnapshot)
+            )
         common = {
-            "float_range": VarRange(0, 0),
+            "float_range": VarRange(0, max_time_floats),
             "cat_range": VarRange(0, None),
             "panel_range": VarRange(0, None),
             "target_dimension": target_dimension,
@@ -103,7 +112,7 @@ class BarResult(HoloviewResult):
         if by is None:
             # Candidate categorical dims from the original config, filtered to those still present
             cat_dim_names = [cv.name for cv in self.plt_cnt_cfg.cat_vars]
-            dims_present = [d for d in da.dims if d not in ("repeat", "over_time")]
+            dims_present = [d for d in da.dims if d != "repeat"]
             # Prefer categorical dims that are not the primary x-axis
             candidates = [d for d in dims_present if d != da.dims[0] and d in cat_dim_names]
 

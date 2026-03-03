@@ -57,11 +57,13 @@ class BenchableObject(bch.ParametrizedSweep):
         # Single parametric function - categories control freq and phase,
         # dimensionality is just which floats get swept vs held at default.
         # The freq coefficient on the first term ensures distinct values even at (0,0,0).
+        # _time_offset acts as a phase shift so each time snapshot produces distinct patterns.
+        time_phase = self._time_offset * math.pi
         self.distance = (
-            freq * math.sin(freq * math.pi * x + phase + 0.5)
-            + math.cos(freq * 0.7 * math.pi * y + phase * 1.3 + 0.3)
-            + 0.7 * math.sin(freq * 0.5 * math.pi * z + phase * 0.7 + 0.7)
-            + 0.3 * math.sin(freq * math.pi * (x * y + z * 0.5) + phase * 0.5)
+            freq * math.sin(freq * math.pi * x + phase + time_phase + 0.5)
+            + math.cos(freq * 0.7 * math.pi * y + phase * 1.3 + time_phase * 0.5 + 0.3)
+            + 0.7 * math.sin(freq * 0.5 * math.pi * z + phase * 0.7 + time_phase * 0.3 + 0.7)
+            + 0.3 * math.sin(freq * math.pi * (x * y + z * 0.5) + phase * 0.5 + time_phase * 0.7)
         )
 
         if self.transform == "inverted":
@@ -72,9 +74,6 @@ class BenchableObject(bch.ParametrizedSweep):
         if self.noise_scale > 0:
             self.sample_noise = random.gauss(0, self.noise_scale * max(abs(self.distance), 0.1))
             self.distance += self.sample_noise
-
-        # Apply time offset
-        self.distance += self._time_offset
 
         self.result_hmap = hv.Text(
             x=0, y=0, text=f"distance:{self.distance}\nnoise:{self.sample_noise}"

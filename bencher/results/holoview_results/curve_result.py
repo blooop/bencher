@@ -92,14 +92,19 @@ class CurveResult(HoloviewResult):
             Optional[hv.Curve]: A curve plot with optional standard deviation spread.
         """
         hvds = hv.Dataset(dataset)
+
+        # Find a suitable continuous kdim from the dataset
+        float_dim_names = {fv.name for fv in self.plt_cnt_cfg.float_vars}
+        kdims = [d for d in dataset.dims if d in float_dim_names]
+        if not kdims:
+            return None
+
         title = self.title_from_ds(dataset, result_var, **kwargs)
-        # print(result_var.name)
-        # print( dataset)
         pt = hv.Overlay()
         # find pairs of {var_name} {var_name}_std to plot the line and their spreads.
         var = result_var.name
         std_var = f"{var}_std"
-        pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
+        pt *= hvds.to(hv.Curve, kdims=kdims, vdims=var, label=var).opts(title=title, **kwargs)
         # Only create a Spread if the matching _std variable exists
         if std_var in dataset.data_vars:
             pt *= hvds.to(hv.Spread, vdims=[var, std_var])

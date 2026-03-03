@@ -6,7 +6,6 @@ from param import Parameter
 import holoviews as hv
 from functools import partial
 import panel as pn
-import numpy as np
 from textwrap import wrap
 
 from bencher.utils import int_to_col, color_tuple_to_css, callable_name
@@ -122,17 +121,10 @@ class BenchResultBase:
         Returns:
             BenchCfg: updated config with wrapped labels
         """
-        if bench_cfg.over_time:
-            if self.ds.coords["over_time"].dtype == np.datetime64:
-                # plotly catastrophically fails to plot anything with the default long string representation of time, so convert to a shorter time representation
-                self.ds.coords["over_time"] = [
-                    pd.to_datetime(t).strftime("%d-%m-%y %H-%M-%S")
-                    for t in self.ds.coords["over_time"].values
-                ]
-                # wrap very long time event labels because otherwise the graphs are unreadable
+        if bench_cfg.over_time and "over_time" in self.ds.coords:
             if bench_cfg.time_event is not None:
                 self.ds.coords["over_time"] = [
-                    "\n".join(wrap(t, 20)) for t in self.ds.coords["over_time"].values
+                    "\n".join(wrap(str(t), 20)) for t in self.ds.coords["over_time"].values
                 ]
         return bench_cfg
 
@@ -599,11 +591,7 @@ class BenchResultBase:
         # print(f"num_dims: {num_dims}, horizontal: {horizontal}, target: {target_dimension}")
         dims = list(d for d in dataset.sizes)
 
-        time_dim_delta = 0
-        if self.bench_cfg.over_time:
-            time_dim_delta = 0
-
-        if num_dims > (target_dimension + time_dim_delta) and num_dims != 0:
+        if num_dims > target_dimension and num_dims != 0:
             selected_dim = dims[-1]
             # print(f"selected dim {dim_sel}")
             dim_color = color_tuple_to_css(int_to_col(num_dims - 2, 0.05, 1.0))

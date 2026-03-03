@@ -143,8 +143,9 @@ class HeatmapResult(HoloviewResult):
                                  otherwise returns None.
         """
         if len(dataset.dims) >= 2:
-            x = self.bench_cfg.input_vars[0].name
-            y = self.bench_cfg.input_vars[1].name
+            dims = list(dataset.dims)
+            x = dims[0]
+            y = dims[1]
             C = result_var.name
             title = f"Heatmap of {result_var.name}"
             time_args = self.time_widget(title)

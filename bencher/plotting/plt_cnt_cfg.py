@@ -11,7 +11,7 @@ from bencher.variables.inputs import (
     StringSweep,
     YamlSweep,
 )
-from bencher.variables.time import TimeSnapshot
+from bencher.variables.time import TimeSnapshot, TimeEvent
 
 
 class PltCntCfg(param.Parameterized):
@@ -72,11 +72,20 @@ class PltCntCfg(param.Parameterized):
             if isinstance(rv, PANEL_TYPES):
                 plt_cnt_cfg.panel_vars.append(rv)
 
+        if bench_cfg.over_time and bench_cfg.iv_time:
+            for tv in bench_cfg.iv_time:
+                if isinstance(tv, TimeSnapshot):
+                    plt_cnt_cfg.float_vars.append(tv)
+                elif isinstance(tv, TimeEvent):
+                    plt_cnt_cfg.cat_vars.append(tv)
+
         plt_cnt_cfg.float_cnt = len(plt_cnt_cfg.float_vars)
         plt_cnt_cfg.cat_cnt = len(plt_cnt_cfg.cat_vars)
         plt_cnt_cfg.panel_cnt = len(plt_cnt_cfg.panel_vars)
         plt_cnt_cfg.repeats = bench_cfg.repeats
-        plt_cnt_cfg.inputs_cnt = len(bench_cfg.input_vars)
+        plt_cnt_cfg.inputs_cnt = len(bench_cfg.input_vars) + (
+            len(bench_cfg.iv_time) if bench_cfg.over_time and bench_cfg.iv_time else 0
+        )
         return plt_cnt_cfg
 
     def __str__(self):

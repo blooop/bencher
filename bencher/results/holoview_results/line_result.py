@@ -132,10 +132,18 @@ class LineResult(HoloviewResult):
         Returns:
             hvplot.element.Curve: A line plot visualization of the benchmark data.
         """
-        x = self.plt_cnt_cfg.float_vars[0].name
+        x = None
+        for fv in self.plt_cnt_cfg.float_vars:
+            if fv.name in dataset.dims:
+                x = fv.name
+                break
+        if x is None:
+            return None
         by = None
         if self.plt_cnt_cfg.cat_cnt >= 1:
-            by = self.plt_cnt_cfg.cat_vars[0].name
+            by_name = self.plt_cnt_cfg.cat_vars[0].name
+            if by_name in dataset.dims:
+                by = by_name
         da_plot = dataset[result_var.name]
         title = self.title_from_ds(da_plot, result_var, **kwargs)
         time_widget_args = self.time_widget(title)
