@@ -152,9 +152,7 @@ class HeatmapResult(HoloviewResult):
                 hmap = {}
                 for t in dataset.coords["over_time"].values:
                     ds_t = dataset.sel(over_time=t)
-                    h = ds_t.hvplot.heatmap(
-                        x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
-                    )
+                    h = ds_t.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", title=title, **kwargs)
                     if hasattr(h, "opts"):
                         h = h.opts(xrotation=30)
                     hmap[t] = h

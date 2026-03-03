@@ -140,6 +140,7 @@ class BenchResultBase:
                     # slider shows fewer positions than time points.  Fix by spacing
                     # timestamps at least 1 second apart when collisions are detected.
                     import numpy as np
+
                     sec_labels = [
                         pd.Timestamp(t).strftime("%Y-%m-%d %H:%M:%S") for t in time_values
                     ]
