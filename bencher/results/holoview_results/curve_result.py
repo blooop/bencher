@@ -91,30 +91,26 @@ class CurveResult(HoloviewResult):
         Returns:
             Optional[hv.Curve]: A curve plot with optional standard deviation spread.
         """
-        hvds = hv.Dataset(dataset)
-        title = self.title_from_ds(dataset, result_var, **kwargs)
-        # print(result_var.name)
-        # print( dataset)
-        pt = hv.Overlay()
-        # find pairs of {var_name} {var_name}_std to plot the line and their spreads.
         var = result_var.name
         std_var = f"{var}_std"
+        title = self.title_from_ds(dataset, result_var, **kwargs)
+
+        if self._use_holomap_for_time(dataset):
+
+            def _build_curve(t):
+                ds_t = dataset.sel(over_time=t)
+                hvds_t = hv.Dataset(ds_t)
+                pt = hv.Overlay()
+                pt *= hvds_t.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
+                if std_var in ds_t.data_vars:
+                    pt *= hvds_t.to(hv.Spread, vdims=[var, std_var])
+                return pt.opts(legend_position="right")
+
+            return self._time_slider_panel(dataset, _build_curve)
+
+        hvds = hv.Dataset(dataset)
+        pt = hv.Overlay()
         pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
-        # Only create a Spread if the matching _std variable exists
         if std_var in dataset.data_vars:
             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
-
-        # for var in dataset.data_vars:
-        #     print(var)
-        #     if not var.endswith("_std"):
-        #         std_var = f"{var}_std"
-        #         pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
-        #         #Only create a Spread if the matching _std variable exists
-        #         if std_var in dataset.data_vars:
-        #             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
-
-        result = pt.opts(legend_position="right")
-        # hv.Dataset.to(hv.Curve) auto-creates a HoloMap keyed by over_time when
-        # that dimension is present. The native HoloMap renders with a Bokeh slider
-        # that works in static HTML docs (unlike Panel scrubber widgets).
-        return result
+        return pt.opts(legend_position="right")

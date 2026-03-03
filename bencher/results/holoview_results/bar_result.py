@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Optional
 import panel as pn
-import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -128,15 +127,15 @@ class BarResult(HoloviewResult):
         )
 
         if use_holomap and non_time_dims:
-            # Build individual bar plots per time point → HoloMap with Bokeh slider
-            hmap = {}
-            for t in dataset.coords["over_time"].values:
+
+            def _build_bar(t):
                 da_t = da.sel(over_time=t)
                 bar = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
                 if hasattr(bar, "opts"):
                     bar = bar.opts(**opts_kwargs)
-                hmap[t] = bar
-            return hv.HoloMap(hmap, kdims=["over_time"])
+                return bar
+
+            return self._time_slider_panel(dataset, _build_bar)
 
         if not non_time_dims and "over_time" in da.dims:
             if use_holomap:

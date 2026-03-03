@@ -149,15 +149,17 @@ class HeatmapResult(HoloviewResult):
             title = f"Heatmap of {result_var.name}"
 
             if self._use_holomap_for_time(dataset):
-                # Build individual heatmaps per time point → HoloMap with Bokeh slider
-                hmap = {}
-                for t in dataset.coords["over_time"].values:
+
+                def _build_heatmap(t):
                     ds_t = dataset.sel(over_time=t)
-                    h = ds_t.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", title=title, **kwargs)
+                    h = ds_t.hvplot.heatmap(
+                        x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
+                    )
                     if hasattr(h, "opts"):
                         h = h.opts(xrotation=30)
-                    hmap[t] = h
-                return hv.HoloMap(hmap, kdims=["over_time"])
+                    return h
+
+                return self._time_slider_panel(dataset, _build_heatmap)
 
             plot = dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", title=title, **kwargs)
             if hasattr(plot, "opts"):

@@ -130,7 +130,7 @@ class LineResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the line plot options.
 
         Returns:
-            hvplot.element.Curve: A line plot visualization of the benchmark data.
+            hvplot.element.Curve | hv.HoloMap: A line plot visualization of the benchmark data.
         """
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None
@@ -138,6 +138,14 @@ class LineResult(HoloviewResult):
             by = self.plt_cnt_cfg.cat_vars[0].name
         da_plot = dataset[result_var.name]
         title = self.title_from_ds(da_plot, result_var, **kwargs)
+
+        if self._use_holomap_for_time(dataset):
+
+            def _build_line(t):
+                return da_plot.sel(over_time=t).hvplot.line(x=x, by=by, title=title, **kwargs)
+
+            return self._time_slider_panel(dataset, _build_line)
+
         time_widget_args = self.time_widget(title)
         return da_plot.hvplot.line(x=x, by=by, **time_widget_args, **kwargs)
 
