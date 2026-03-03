@@ -113,10 +113,13 @@ class BenchResultBase:
         return ds.reset_index() if reset_index else ds
 
     def wrap_long_time_labels(self, bench_cfg):
-        """Takes a benchCfg and wraps any index labels that are too long to be plotted easily.
+        """Takes a benchCfg and formats over_time coordinate labels for display.
 
-        Only wraps discrete TimeEvent labels. Numeric/datetime over_time coordinates are
-        left untouched so the scrubber widget axis stays continuous.
+        For discrete TimeEvent labels, wraps long strings for readability.
+        For datetime TimeSnapshot labels, replaces with integer indices so that
+        Panel renders a slider widget.  Without this, Panel's DiscreteSlider
+        truncates np.datetime64 values to second precision, which causes
+        sub-second timestamps to collide into fewer slider positions.
 
         Args:
             bench_cfg (BenchCfg):
@@ -129,6 +132,22 @@ class BenchResultBase:
                 self.ds.coords["over_time"] = [
                     "\n".join(wrap(str(t), 20)) for t in self.ds.coords["over_time"].values
                 ]
+            else:
+                time_values = self.ds.coords["over_time"].values
+                if len(time_values) > 1:
+                    # Panel's DiscreteSlider formats datetime64 at second precision.
+                    # When timestamps are sub-second apart, labels collide and the
+                    # slider shows fewer positions than time points.  Fix by spacing
+                    # timestamps at least 1 second apart when collisions are detected.
+                    import numpy as np
+                    sec_labels = [
+                        pd.Timestamp(t).strftime("%Y-%m-%d %H:%M:%S") for t in time_values
+                    ]
+                    if len(set(sec_labels)) < len(sec_labels):
+                        base = time_values[0]
+                        self.ds.coords["over_time"] = [
+                            base + np.timedelta64(i, "s") for i in range(len(time_values))
+                        ]
         return bench_cfg
 
     def post_setup(self):
@@ -236,7 +255,15 @@ class BenchResultBase:
                 ds_reduce_range = rename_ds(ds_reduce_max - ds_reduce_min, "range")
                 ds_out = xr.merge([ds_reduce_mean, ds_reduce_range])
             case ReduceType.SQUEEZE:
-                ds_out = ds_out.squeeze(drop=True)
+                if (
+                    self.bench_cfg.over_time
+                    and "repeat" in ds_out.dims
+                    and ds_out.sizes["repeat"] == 1
+                ):
+                    # Only squeeze repeat, preserving over_time even if it's length 1
+                    ds_out = ds_out.squeeze("repeat", drop=True)
+                else:
+                    ds_out = ds_out.squeeze(drop=True)
 
         # Optional aggregation across non-repeat dimensions (e.g., categorical)
         if agg_over_dims:

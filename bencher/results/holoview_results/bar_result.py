@@ -138,13 +138,15 @@ class BarResult(HoloviewResult):
                 hmap[t] = bar
             return hv.HoloMap(hmap, kdims=["over_time"])
 
-        if use_holomap and not non_time_dims:
-            # 0D + 0cat + over_time: line chart with time on x-axis.
-            # No categorical grouping exists, so a line is the natural time-series view.
-            plot = da.hvplot.line(x="over_time", y=da.name, title=title, **kwargs)
-            if hasattr(plot, "opts"):
-                plot = plot.opts(**opts_kwargs)
-            return plot
+        if not non_time_dims and "over_time" in da.dims:
+            if use_holomap:
+                # 0D + 0cat + over_time (multiple time points): line chart with time on x-axis.
+                plot = da.hvplot.line(x="over_time", y=da.name, title=title, **kwargs)
+                if hasattr(plot, "opts"):
+                    plot = plot.opts(**opts_kwargs)
+                return plot
+            # 0D + single time point: nothing meaningful to bar-chart.
+            return None
 
         # No over_time slider needed: either no over_time, single time point,
         # or over_time is the only dim (used as x-axis directly).
