@@ -81,6 +81,19 @@ def example_over_time_2D(run_cfg: bch.BenchRunCfg | None = None, report=None) ->
     )
     return bench
 
+def example_over_time_3D(run_cfg: bch.BenchRunCfg | None = None, report=None) -> bch.Bench:
+    """Demo: over_time with 3 float inputs — slider scrubs through 3D heatmaps."""
+    if run_cfg is None:
+        run_cfg = bch.BenchRunCfg()
+    run_cfg.over_time = True
+    run_cfg.level = 4
+
+    benchable = BenchableObject()
+    bench = benchable.to_bench(run_cfg, report=report)
+    _run_over_time(
+        bench, benchable, run_cfg, input_vars=["float1", "float2","float3"], title="over_time 3D"
+    )
+    return bench
 
 def example_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Run all over_time dimensionalities (0D, 1D, 2D) and combine into one report."""
@@ -88,6 +101,7 @@ def example_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     report = bench.report
     example_over_time_1D(run_cfg, report=report)
     example_over_time_2D(run_cfg, report=report)
+    example_over_time_3D(run_cfg, report=report)
     return bench
 
 
