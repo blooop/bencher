@@ -48,10 +48,14 @@ class BarResult(HoloviewResult):
             Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
+        # When over_time is active, allow 0 inputs so 0D+0cat+over_time can produce
+        # a line chart.  Without over_time, require at least 1 input (the default).
+        input_range = VarRange(0, None) if self.bench_cfg.over_time else None
         common = {
             "float_range": VarRange(0, 0),
             "cat_range": VarRange(0, None),
             "panel_range": VarRange(0, None),
+            "input_range": input_range,
             "target_dimension": target_dimension,
             "result_var": result_var,
             "override": override,
@@ -133,6 +137,14 @@ class BarResult(HoloviewResult):
                     bar = bar.opts(**opts_kwargs)
                 hmap[t] = bar
             return hv.HoloMap(hmap, kdims=["over_time"])
+
+        if use_holomap and not non_time_dims:
+            # 0D + 0cat + over_time: line chart with time on x-axis.
+            # No categorical grouping exists, so a line is the natural time-series view.
+            plot = da.hvplot.line(x="over_time", y=da.name, title=title, **kwargs)
+            if hasattr(plot, "opts"):
+                plot = plot.opts(**opts_kwargs)
+            return plot
 
         # No over_time slider needed: either no over_time, single time point,
         # or over_time is the only dim (used as x-axis directly).
