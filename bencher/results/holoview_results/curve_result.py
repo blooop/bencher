@@ -107,7 +107,7 @@ class CurveResult(HoloviewResult):
         pt *= hvds.to(hv.Curve, kdims=kdims, vdims=var, label=var).opts(title=title, **kwargs)
         # Only create a Spread if the matching _std variable exists
         if std_var in dataset.data_vars:
-            pt *= hvds.to(hv.Spread, vdims=[var, std_var])
+            pt *= hvds.to(hv.Spread, kdims=kdims, vdims=[var, std_var])
 
         # for var in dataset.data_vars:
         #     print(var)
