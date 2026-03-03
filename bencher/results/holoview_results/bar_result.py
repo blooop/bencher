@@ -118,8 +118,11 @@ class BarResult(HoloviewResult):
         time_args = self.time_widget(title)
 
         # Explicitly pass x and y on the DataArray to prevent unwanted grouping
-        plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs).opts(
-            title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
-        )
+        plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs)
+        # hvplot with groupby returns a Panel layout; .opts() only works on HV elements
+        if hasattr(plot, "opts"):
+            plot = plot.opts(
+                title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
+            )
 
         return plot

@@ -148,9 +148,11 @@ class HeatmapResult(HoloviewResult):
             C = result_var.name
             title = f"Heatmap of {result_var.name}"
             time_args = self.time_widget(title)
-            return dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", **time_args, **kwargs).opts(
-                xrotation=30
-            )
+            plot = dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", **time_args, **kwargs)
+            # hvplot with groupby returns a Panel layout; .opts() only works on HV elements
+            if hasattr(plot, "opts"):
+                plot = plot.opts(xrotation=30)
+            return plot
         return None
 
     def to_heatmap_container_tap_ds(
