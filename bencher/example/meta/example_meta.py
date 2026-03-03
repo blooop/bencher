@@ -1,4 +1,6 @@
 from typing import Any
+from datetime import datetime, timedelta
+
 import bencher as bch
 
 from enum import auto
@@ -133,6 +135,7 @@ class BenchMeta(bch.ParametrizedSweep):
         if self.sample_over_time:
             benchable.noise_scale = max(benchable.noise_scale, 0.1)
             time_offsets = [0.0, 0.3, 0.7, 1.0]
+            base_time = datetime.now()
             for i, offset in enumerate(time_offsets):
                 benchable._time_offset = offset
                 run_cfg.clear_cache = True
@@ -143,6 +146,7 @@ class BenchMeta(bch.ParametrizedSweep):
                     result_vars=["distance"],
                     plot_callbacks=False,
                     run_cfg=run_cfg,
+                    time_src=base_time + timedelta(seconds=i),
                 )
         else:
             res = bench.plot_sweep(

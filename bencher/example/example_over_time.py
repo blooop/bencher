@@ -7,6 +7,8 @@ Each time snapshot shifts the sine wave by a different phase, so the plots shoul
 visibly change when moving the slider.
 """
 
+from datetime import datetime, timedelta
+
 import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
@@ -16,10 +18,14 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
 
     All intermediate snapshots disable plotting. Only the final result (which
     has the full accumulated history) is manually added to the report.
+
+    Explicit time_src values are passed to simulate realistic usage where
+    plot_sweep calls are naturally spaced apart in time.
     """
     if result_vars is None:
         result_vars = ["distance"]
     time_offsets = [0.0, 0.5, 1.0, 1.5, 2.0]
+    base_time = datetime.now()
     for i, offset in enumerate(time_offsets):
         benchable._time_offset = offset
         run_cfg.clear_cache = True
@@ -30,6 +36,7 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
             input_vars=input_vars,
             result_vars=result_vars,
             run_cfg=run_cfg,
+            time_src=base_time + timedelta(seconds=i),
         )
     bench.report.append_result(bench.results[-1])
 
