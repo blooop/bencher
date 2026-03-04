@@ -132,6 +132,8 @@ class HeatmapResult(HoloviewResult):
 
         Given a filtered dataset, this method generates a heatmap visualization showing
         the relationship between two input variables and a result variable using color intensity.
+        When over_time is active with multiple time points, creates an hv.HoloMap with a
+        slider by building per-time-point heatmaps (avoids hvplot crash with extra dims).
 
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
@@ -147,6 +149,19 @@ class HeatmapResult(HoloviewResult):
             y = self.bench_cfg.input_vars[1].name
             C = result_var.name
             title = f"Heatmap of {result_var.name}"
+
+            if self._use_holomap_for_time(dataset):
+                da = dataset[C]
+                holomap = hv.HoloMap(kdims=self._over_time_kdims())
+                for t in da.coords["over_time"].values:
+                    da_t = da.sel(over_time=t)
+                    plot_t = da_t.hvplot.heatmap(
+                        x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
+                    )
+                    if hasattr(plot_t, "opts"):
+                        plot_t = plot_t.opts(xrotation=30)
+                    holomap[t] = plot_t
+                return holomap
 
             plot = dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", title=title, **kwargs)
             if hasattr(plot, "opts"):

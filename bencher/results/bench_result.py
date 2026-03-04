@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Optional, Any, Literal
+import logging
 import panel as pn
 from param import Parameter
 
@@ -179,8 +180,12 @@ class BenchResult(
         for plot_callback in plot_list:
             if self.plt_cnt_cfg.print_debug:
                 print(f"checking: {plot_callback.__name__}")
-            # the callbacks are passed from the static class definition, so self needs to be passed before the plotting callback can be called
-            row.append(plot_callback(self, override=override, **kwargs))
+            # the callbacks are passed from the static class definition, so self needs to be
+            # passed before the plotting callback can be called
+            try:
+                row.append(plot_callback(self, override=override, **kwargs))
+            except Exception:  # pylint: disable=broad-except
+                logging.warning("Plot callback %s failed", plot_callback.__name__, exc_info=True)
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
