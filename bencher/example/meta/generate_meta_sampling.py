@@ -95,4 +95,4 @@ def example_meta_sampling(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    example_meta_sampling()
+    bch.run(example_meta_sampling)

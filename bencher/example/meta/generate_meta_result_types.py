@@ -132,4 +132,4 @@ def example_meta_result_types(run_cfg: bch.BenchRunCfg | None = None) -> bch.Ben
 
 
 if __name__ == "__main__":
-    example_meta_result_types()
+    bch.run(example_meta_result_types)

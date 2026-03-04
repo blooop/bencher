@@ -82,4 +82,4 @@ def example_meta_optimization(run_cfg: bch.BenchRunCfg | None = None) -> bch.Ben
 
 
 if __name__ == "__main__":
-    example_meta_optimization()
+    bch.run(example_meta_optimization)

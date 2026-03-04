@@ -71,4 +71,4 @@ def example_meta_statistics(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench
 
 
 if __name__ == "__main__":
-    example_meta_statistics()
+    bch.run(example_meta_statistics)
