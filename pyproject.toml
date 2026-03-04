@@ -170,7 +170,7 @@ demo_rerun = "python3 bencher/example/example_rerun.py"
 [tool.pylint]
 extension-pkg-whitelist = ["numpy", "scipy"]
 jobs = 16                                    #detect number of cores
-ignore-paths = "docs/*"
+ignore-paths = ["docs/.*", "bencher/example/meta/generated/.*"]
 
 [tool.pylint.'MESSAGES CONTROL']
 disable = "C,logging-fstring-interpolation,line-too-long,fixme,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,duplicate-code,too-many-public-methods,too-many-nested-blocks,cyclic-import,too-many-positional-arguments"

@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Callable, List
+from typing import Callable, List, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+
+if TYPE_CHECKING:
+    from bencher.bencher import Bench
+
+# Keep references to BenchRunners with active servers so that __del__ doesn't
+# kill the panel servers while the process is still running.
+_active_runners: list = []
 
 
 def run(
@@ -57,7 +64,7 @@ def run(
     if isinstance(target, ParametrizedSweep):
         instance = target
 
-        def _sweep_fn(run_cfg: BenchRunCfg | None = None) -> "Bench":  # noqa: F821
+        def _sweep_fn(run_cfg: BenchRunCfg | None = None) -> Bench:
             bench = instance.to_bench(run_cfg)
             bench.plot_sweep()
             return bench
@@ -67,7 +74,7 @@ def run(
 
     # Case 1: Callable — wrap in BenchRunner
     br = BenchRunner(target)
-    return br.run(
+    results = br.run(
         level=level,
         repeats=repeats,
         max_level=max_level,
@@ -79,3 +86,7 @@ def run(
         grouped=grouped,
         cache_results=cache_results,
     )
+    # Prevent garbage collection from killing the panel servers
+    if show and br.servers:
+        _active_runners.append(br)
+    return results
