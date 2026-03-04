@@ -185,7 +185,7 @@ class BenchResult(
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
             except Exception:  # pylint: disable=broad-except
-                logging.warning("Plot callback %s failed", plot_callback.__name__, exc_info=True)
+                logging.error("Plot callback %s failed", plot_callback.__name__, exc_info=True)
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:

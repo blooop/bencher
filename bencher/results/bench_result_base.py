@@ -1,6 +1,7 @@
 import logging
 from typing import List, Any, Tuple, Optional, Literal, Callable
 from enum import Enum, auto
+import numpy as np
 import xarray as xr
 from param import Parameter
 import holoviews as hv
@@ -139,8 +140,6 @@ class BenchResultBase:
                     # When timestamps are sub-second apart, labels collide and the
                     # slider shows fewer positions than time points.  Fix by spacing
                     # timestamps at least 1 second apart when collisions are detected.
-                    import numpy as np
-
                     sec_labels = [
                         pd.Timestamp(t).strftime("%Y-%m-%d %H:%M:%S") for t in time_values
                     ]

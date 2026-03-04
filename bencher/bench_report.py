@@ -1,3 +1,4 @@
+import html
 import logging
 from typing import Callable
 import os
@@ -118,9 +119,13 @@ class BenchReport(BenchPlotServer):
         tab_dir = base_path / "_tabs"
         os.makedirs(tab_dir, exist_ok=True)
         tab_files = []
+        seen_names = set()
         for i, tab in enumerate(self.pane):
             tab_name = getattr(tab, "name", None) or f"tab_{i}"
             safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tab_name)
+            if safe_name in seen_names:
+                safe_name = f"{safe_name}_{i}"
+            seen_names.add(safe_name)
             tab_file = f"{safe_name}.html"
             tab_path = tab_dir / tab_file
             logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
@@ -138,12 +143,13 @@ class BenchReport(BenchPlotServer):
         buttons = ""
         for i, (name, path) in enumerate(tab_files):
             active = " active" if i == 0 else ""
+            escaped_name = html.escape(name)
             buttons += (
                 f'<button class="tab-btn{active}" '
-                f"onclick=\"switchTab(this, '{path}')\">{name}</button>\n"
+                f"onclick=\"switchTab(this, '{path}')\">{escaped_name}</button>\n"
             )
         first_src = tab_files[0][1] if tab_files else ""
-        html = f"""\
+        page = f"""\
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Report</title>
 <style>
@@ -170,7 +176,7 @@ document.getElementById('content').addEventListener('load', resizeIframe);
 resizeIframe();
 </script></body></html>"""
         with open(index_path, "w", encoding="utf-8") as f:
-            f.write(html)
+            f.write(page)
 
     def show(self, run_cfg: BenchRunCfg | None = None) -> Thread:  # pragma: no cover
         """Launches a webserver with plots of the benchmark results, blocking
