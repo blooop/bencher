@@ -27,7 +27,7 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
     time_offsets = [0.0, 0.5, 1.0, 1.5, 2.0]
     base_time = datetime.now()
     for i, offset in enumerate(time_offsets):
-        benchable._time_offset = offset
+        benchable._time_offset = offset  # pylint: disable=protected-access
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         run_cfg.auto_plot = False
@@ -106,6 +106,6 @@ def example_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bench = example_over_time()
-    bench.report.save_index()
-    # bench.report.show()
+    main_bench = example_over_time()
+    main_bench.report.save_index()
+    # main_bench.report.show()

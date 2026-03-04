@@ -169,7 +169,7 @@ window.addEventListener('resize', resizeIframe);
 document.getElementById('content').addEventListener('load', resizeIframe);
 resizeIframe();
 </script></body></html>"""
-        with open(index_path, "w") as f:
+        with open(index_path, "w", encoding="utf-8") as f:
             f.write(html)
 
     def show(self, run_cfg: BenchRunCfg | None = None) -> Thread:  # pragma: no cover

@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Optional
 import panel as pn
-import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -126,16 +125,6 @@ class BarResult(HoloviewResult):
         opts_kwargs = dict(
             title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
         )
-
-        if use_holomap and non_time_dims:
-            hmap = {}
-            for t in dataset.coords["over_time"].values:
-                da_t = da.sel(over_time=t)
-                bar = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
-                if hasattr(bar, "opts"):
-                    bar = bar.opts(**opts_kwargs)
-                hmap[t] = bar
-            return hv.HoloMap(hmap, kdims=self._over_time_kdims())
 
         if not non_time_dims and "over_time" in da.dims:
             if use_holomap:
