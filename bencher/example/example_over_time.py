@@ -25,7 +25,7 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
     if result_vars is None:
         result_vars = ["distance"]
     time_offsets = [0.0, 0.5, 1.0, 1.5, 2.0]
-    base_time = datetime.now()
+    base_time = datetime(2000, 1, 1)
     for i, offset in enumerate(time_offsets):
         benchable._time_offset = offset  # pylint: disable=protected-access
         run_cfg.clear_cache = True

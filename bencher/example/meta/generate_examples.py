@@ -83,6 +83,10 @@ def scrub_notebook(nb, notebook_name: str) -> None:
                 for key, val in output["metadata"].items():
                     if isinstance(val, str):
                         output["metadata"][key] = _scrub_string(val, replacer)
+                    elif isinstance(val, dict):
+                        for k2, v2 in val.items():
+                            if isinstance(v2, str):
+                                val[k2] = _scrub_string(v2, replacer)
 
 
 def convert_example_to_jupyter_notebook(

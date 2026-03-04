@@ -135,7 +135,7 @@ class BenchMeta(bch.ParametrizedSweep):
         if self.sample_over_time:
             benchable.noise_scale = max(benchable.noise_scale, 0.1)
             time_offsets = [0.0, 0.3, 0.7, 1.0]
-            base_time = datetime.now()
+            base_time = datetime(2000, 1, 1)
             for i, offset in enumerate(time_offsets):
                 benchable._time_offset = offset
                 run_cfg.clear_cache = True
