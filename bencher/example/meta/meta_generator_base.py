@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -48,5 +49,6 @@ if __name__ == "__main__":
         fpath = Path(f"bencher/example/meta/generated/{output_dir}/{filename}.py")
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fpath.write_text(content, encoding="utf-8")
-        subprocess.run(["ruff", "format", str(fpath)], check=False)
+        if shutil.which("ruff"):
+            subprocess.run(["ruff", "format", str(fpath)], check=False)
         return fpath
