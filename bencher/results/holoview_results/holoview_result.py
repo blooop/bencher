@@ -137,6 +137,21 @@ class HoloviewResult(VideoResult):
         """Return the kdim list for over_time HoloMaps."""
         return ["over_time"]
 
+    @staticmethod
+    def _holomap_with_slider_bottom(holomap: hv.HoloMap) -> pn.Column:
+        """Wrap a HoloMap so the scrubber/slider appears below the plot.
+
+        ``pn.pane.HoloViews(holomap, widget_location="bottom")`` does not
+        embed correctly in static HTML (the widget is lost).  Instead we
+        let Panel auto-create the widget via ``pn.panel(holomap)`` (which
+        produces a ``Row(plot, widget_box)``), then rearrange into a
+        ``Column(plot, widget_box)`` so the slider sits underneath.
+        """
+        row = pn.panel(holomap)
+        widget_box = row[1]
+        widget_box.align = ("start", "start")
+        return pn.Column(row[0], widget_box)
+
     def hv_container_ds(
         self,
         dataset: xr.Dataset,

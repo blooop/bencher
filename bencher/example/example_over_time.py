@@ -101,7 +101,7 @@ def example_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     report = bench.report
     example_over_time_1D(run_cfg, report=report)
     example_over_time_2D(run_cfg, report=report)
-    example_over_time_3D(run_cfg, report=report)
+    # example_over_time_3D(run_cfg, report=report)
     return bench
 
 
