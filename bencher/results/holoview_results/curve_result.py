@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Optional
+import panel as pn
 import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -102,5 +103,5 @@ class CurveResult(HoloviewResult):
             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
         pt = pt.opts(legend_position="right")
         if self._use_holomap_for_time(dataset):
-            pt = pt.opts(widget_location="bottom")
+            pt = pn.pane.HoloViews(pt, widget_location="bottom")
         return pt
