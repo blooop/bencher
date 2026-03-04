@@ -148,7 +148,7 @@ class LineResult(HoloviewResult):
                 da_t = da_plot.sel(over_time=t)
                 plot_t = da_t.hvplot.line(x=x, by=by, title=title, **kwargs)
                 holomap[t] = plot_t
-            return holomap
+            return holomap.opts(widget_location="bottom")
 
         time_widget_args = self.time_widget(title)
         return da_plot.hvplot.line(x=x, by=by, **time_widget_args, **kwargs)
