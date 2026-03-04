@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-
+import os
 from importlib import metadata
 
 copyright = "2025, Austin Gregg-Smith"  # pylint:disable=redefined-builtin
@@ -19,6 +19,7 @@ project = f"bencher {release}"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
+    "myst_parser",
     "sphinx.ext.napoleon",
     "autoapi.extension",
     "sphinx_copybutton",
@@ -35,13 +36,9 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
-# Copy HTML report directories into the build so iframes resolve
-html_extra_path = ["reference/meta"]
+# Copy HTML report directories into the build so iframes resolve (only if generated)
+_meta_dir = os.path.join(os.path.dirname(__file__), "reference", "meta")
+html_extra_path = ["reference/meta"] if os.path.isdir(_meta_dir) else []
 
 autoapi_dirs = ["../bencher"]
 autoapi_ignore = ["*example_*", "*example*", "*experimental*"]
-
-
-numpydoc_show_class_members = False
-
-autosummary_generate = True
