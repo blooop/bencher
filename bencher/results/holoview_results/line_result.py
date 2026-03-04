@@ -123,6 +123,9 @@ class LineResult(HoloviewResult):
 
         Given a filtered dataset, this method generates a line plot visualization showing
         the relationship between a continuous input variable and the result variable.
+        When over_time is active with multiple time points, creates an hv.HoloMap with a
+        slider by building per-time-point line plots (avoids DynamicMap that requires a
+        live server and won't render in static HTML).
 
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
@@ -130,7 +133,7 @@ class LineResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the line plot options.
 
         Returns:
-            hvplot.element.Curve: A line plot visualization of the benchmark data.
+            hvplot.element.Curve | hv.HoloMap: A line plot visualization of the benchmark data.
         """
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None
@@ -138,6 +141,15 @@ class LineResult(HoloviewResult):
             by = self.plt_cnt_cfg.cat_vars[0].name
         da_plot = dataset[result_var.name]
         title = self.title_from_ds(da_plot, result_var, **kwargs)
+
+        if self._use_holomap_for_time(dataset):
+            holomap = hv.HoloMap(kdims=self._over_time_kdims())
+            for t in da_plot.coords["over_time"].values:
+                da_t = da_plot.sel(over_time=t)
+                plot_t = da_t.hvplot.line(x=x, by=by, title=title, **kwargs)
+                holomap[t] = plot_t
+            return holomap
+
         time_widget_args = self.time_widget(title)
         return da_plot.hvplot.line(x=x, by=by, **time_widget_args, **kwargs)
 

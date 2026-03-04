@@ -47,10 +47,14 @@ class BarResult(HoloviewResult):
             Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
+        # When over_time is active, allow 0 inputs so 0D+0cat+over_time can produce
+        # a line chart.  Without over_time, require at least 1 input (the default).
+        input_range = VarRange(0, None) if self.bench_cfg.over_time else None
         common = {
             "float_range": VarRange(0, 0),
             "cat_range": VarRange(0, None),
             "panel_range": VarRange(0, None),
+            "input_range": input_range,
             "target_dimension": target_dimension,
             "result_var": result_var,
             "override": override,
@@ -93,33 +97,48 @@ class BarResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the bar chart options.
 
         Returns:
-            hvplot.element.Bars: A bar chart visualization of the benchmark data.
+            hvplot.element.Bars | hv.HoloMap: A bar chart visualization of the benchmark data.
         """
-        # Determine grouping ('by') dynamically based on dims that still exist
         da = dataset[result_var.name]
+        use_holomap = self._use_holomap_for_time(dataset)
 
         # Allow explicit override via kwargs
         by = kwargs.pop("by", None)
+
+        # Determine x-axis and by grouping from non-over_time dims
+        non_time_dims = [d for d in da.dims if d not in ("repeat", "over_time")]
         if by is None:
-            # Candidate categorical dims from the original config, filtered to those still present
             cat_dim_names = [cv.name for cv in self.plt_cnt_cfg.cat_vars]
-            dims_present = [d for d in da.dims if d not in ("repeat", "over_time")]
-            # Prefer categorical dims that are not the primary x-axis
-            candidates = [d for d in dims_present if d != da.dims[0] and d in cat_dim_names]
+            x_dim = non_time_dims[0] if non_time_dims else "over_time"
+            candidates = [d for d in non_time_dims if d != x_dim and d in cat_dim_names]
 
             if len(candidates) == 1:
                 by = candidates[0]
             elif len(candidates) > 1:
-                # Preserve multi-level grouping when multiple categorical dims remain
                 by = candidates
             else:
                 by = None
-        title = self.title_from_ds(da, result_var, **kwargs)
-        time_args = self.time_widget(title)
+        else:
+            x_dim = non_time_dims[0] if non_time_dims else "over_time"
 
-        # Explicitly pass x and y on the DataArray to prevent unwanted grouping
-        plot = da.hvplot.bar(x=da.dims[0], y=da.name, by=by, **time_args, **kwargs).opts(
+        title = self.title_from_ds(da, result_var, **kwargs)
+        opts_kwargs = dict(
             title=title, ylabel=f"{da.name} [{result_var.units}]", xrotation=30, **kwargs
         )
 
+        if not non_time_dims and "over_time" in da.dims:
+            if use_holomap:
+                # 0D + 0cat + over_time (multiple time points): line chart with time on x-axis.
+                plot = da.hvplot.line(x="over_time", y=da.name, title=title, **kwargs)
+                if hasattr(plot, "opts"):
+                    plot = plot.opts(**opts_kwargs)
+                return plot
+            # 0D + single time point: nothing meaningful to bar-chart.
+            return None
+
+        # No over_time slider needed: either no over_time, single time point,
+        # or over_time is the only dim (used as x-axis directly).
+        plot = da.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
+        if hasattr(plot, "opts"):
+            plot = plot.opts(**opts_kwargs)
         return plot

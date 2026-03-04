@@ -127,11 +127,13 @@ class HeatmapResult(HoloviewResult):
 
     def to_heatmap_ds(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> Optional[hv.HeatMap]:
+    ) -> Optional[hv.HeatMap | hv.HoloMap]:
         """Creates a basic heatmap from the provided dataset.
 
         Given a filtered dataset, this method generates a heatmap visualization showing
         the relationship between two input variables and a result variable using color intensity.
+        When over_time is active with multiple time points, creates an hv.HoloMap with a
+        slider by building per-time-point heatmaps (avoids hvplot crash with extra dims).
 
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
@@ -139,18 +141,32 @@ class HeatmapResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the heatmap options.
 
         Returns:
-            Optional[hv.HeatMap]: A heatmap visualization if the dataset has at least 2 dimensions,
-                                 otherwise returns None.
+            Optional[hv.HeatMap | hv.HoloMap]: A heatmap visualization if the dataset has
+                at least 2 dimensions, otherwise returns None.
         """
         if len(dataset.dims) >= 2:
             x = self.bench_cfg.input_vars[0].name
             y = self.bench_cfg.input_vars[1].name
             C = result_var.name
             title = f"Heatmap of {result_var.name}"
-            time_args = self.time_widget(title)
-            return dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", **time_args, **kwargs).opts(
-                xrotation=30
-            )
+
+            if self._use_holomap_for_time(dataset):
+                da = dataset[C]
+                holomap = hv.HoloMap(kdims=self._over_time_kdims())
+                for t in da.coords["over_time"].values:
+                    da_t = da.sel(over_time=t)
+                    plot_t = da_t.hvplot.heatmap(
+                        x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
+                    )
+                    if hasattr(plot_t, "opts"):
+                        plot_t = plot_t.opts(xrotation=30)
+                    holomap[t] = plot_t
+                return holomap
+
+            plot = dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", title=title, **kwargs)
+            if hasattr(plot, "opts"):
+                plot = plot.opts(xrotation=30)
+            return plot
         return None
 
     def to_heatmap_container_tap_ds(

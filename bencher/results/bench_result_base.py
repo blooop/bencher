@@ -1,12 +1,12 @@
 import logging
 from typing import List, Any, Tuple, Optional, Literal, Callable
 from enum import Enum, auto
+import numpy as np
 import xarray as xr
 from param import Parameter
 import holoviews as hv
 from functools import partial
 import panel as pn
-import numpy as np
 from textwrap import wrap
 
 from bencher.utils import int_to_col, color_tuple_to_css, callable_name
@@ -114,7 +114,13 @@ class BenchResultBase:
         return ds.reset_index() if reset_index else ds
 
     def wrap_long_time_labels(self, bench_cfg):
-        """Takes a benchCfg and wraps any index labels that are too long to be plotted easily
+        """Takes a benchCfg and formats over_time coordinate labels for display.
+
+        For discrete TimeEvent labels, wraps long strings for readability.
+        For datetime TimeSnapshot labels, replaces with integer indices so that
+        Panel renders a slider widget.  Without this, Panel's DiscreteSlider
+        truncates np.datetime64 values to second precision, which causes
+        sub-second timestamps to collide into fewer slider positions.
 
         Args:
             bench_cfg (BenchCfg):
@@ -122,18 +128,26 @@ class BenchResultBase:
         Returns:
             BenchCfg: updated config with wrapped labels
         """
-        if bench_cfg.over_time:
-            if self.ds.coords["over_time"].dtype == np.datetime64:
-                # plotly catastrophically fails to plot anything with the default long string representation of time, so convert to a shorter time representation
-                self.ds.coords["over_time"] = [
-                    pd.to_datetime(t).strftime("%d-%m-%y %H-%M-%S")
-                    for t in self.ds.coords["over_time"].values
-                ]
-                # wrap very long time event labels because otherwise the graphs are unreadable
+        if bench_cfg.over_time and "over_time" in self.ds.coords:
             if bench_cfg.time_event is not None:
                 self.ds.coords["over_time"] = [
-                    "\n".join(wrap(t, 20)) for t in self.ds.coords["over_time"].values
+                    "\n".join(wrap(str(t), 20)) for t in self.ds.coords["over_time"].values
                 ]
+            else:
+                time_values = self.ds.coords["over_time"].values
+                if len(time_values) > 1:
+                    # Panel's DiscreteSlider formats datetime64 at second precision.
+                    # When timestamps are sub-second apart, labels collide and the
+                    # slider shows fewer positions than time points.  Fix by spacing
+                    # timestamps at least 1 second apart when collisions are detected.
+                    sec_labels = [
+                        pd.Timestamp(t).strftime("%Y-%m-%d %H:%M:%S") for t in time_values
+                    ]
+                    if len(set(sec_labels)) < len(sec_labels):
+                        base = time_values[0]
+                        self.ds.coords["over_time"] = [
+                            base + np.timedelta64(i, "s") for i in range(len(time_values))
+                        ]
         return bench_cfg
 
     def post_setup(self):
@@ -241,7 +255,15 @@ class BenchResultBase:
                 ds_reduce_range = rename_ds(ds_reduce_max - ds_reduce_min, "range")
                 ds_out = xr.merge([ds_reduce_mean, ds_reduce_range])
             case ReduceType.SQUEEZE:
-                ds_out = ds_out.squeeze(drop=True)
+                if (
+                    self.bench_cfg.over_time
+                    and "repeat" in ds_out.dims
+                    and ds_out.sizes["repeat"] == 1
+                ):
+                    # Only squeeze repeat, preserving over_time even if it's length 1
+                    ds_out = ds_out.squeeze("repeat", drop=True)
+                else:
+                    ds_out = ds_out.squeeze(drop=True)
 
         # Optional aggregation across non-repeat dimensions (e.g., categorical)
         if agg_over_dims:
@@ -573,13 +595,21 @@ class BenchResultBase:
         **kwargs,
     ):
         dims = len(hv_dataset.dimensions())
+        # Exclude over_time from the dimension count used for layout decisions
+        pane_dims = dims
+        if (
+            self.bench_cfg.over_time
+            and "over_time" in list(hv_dataset.data.sizes)
+            and hv_dataset.data.sizes["over_time"] > 1
+        ):
+            pane_dims = dims - 1
         if target_dimension is None:
-            target_dimension = dims
+            target_dimension = pane_dims
         return self._to_panes_da(
             hv_dataset.data,
             plot_callback=plot_callback,
             target_dimension=target_dimension,
-            horizontal=dims <= target_dimension + 1,
+            horizontal=pane_dims <= target_dimension + 1,
             result_var=result_var,
             **kwargs,
         )
@@ -593,23 +623,22 @@ class BenchResultBase:
         result_var=None,
         **kwargs,
     ) -> pn.panel:
-        # todo, when dealing with time and repeats, add feature to allow custom order of dimension recursion
-        ##todo remove recursion
-        num_dims = len(dataset.sizes)
-        # print(f"num_dims: {num_dims}, horizontal: {horizontal}, target: {target_dimension}")
         dims = list(d for d in dataset.sizes)
 
-        time_dim_delta = 0
-        if self.bench_cfg.over_time:
-            time_dim_delta = 0
+        # over_time is handled by hvplot's groupby widget, not pane recursion
+        if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
+            pane_dims = [d for d in dims if d != "over_time"]
+        else:
+            pane_dims = dims
+        num_pane_dims = len(pane_dims)
 
-        if num_dims > (target_dimension + time_dim_delta) and num_dims != 0:
-            selected_dim = dims[-1]
+        if num_pane_dims > target_dimension and num_pane_dims != 0:
+            selected_dim = pane_dims[-1]
             # print(f"selected dim {dim_sel}")
-            dim_color = color_tuple_to_css(int_to_col(num_dims - 2, 0.05, 1.0))
+            dim_color = color_tuple_to_css(int_to_col(num_pane_dims - 2, 0.05, 1.0))
 
             outer_container = ComposableContainerPanel(
-                name=" vs ".join(dims),
+                name=" vs ".join(pane_dims),
                 background_col=dim_color,
                 horizontal=not horizontal,
             )
@@ -619,7 +648,7 @@ class BenchResultBase:
                 label_val = sliced.coords[selected_dim].values.item()
                 inner_container = ComposableContainerPanel(
                     name=outer_container.name,
-                    width=num_dims - target_dimension,
+                    width=num_pane_dims - target_dimension,
                     var_name=selected_dim,
                     var_value=label_val,
                     horizontal=horizontal,

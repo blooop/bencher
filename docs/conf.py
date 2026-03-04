@@ -71,7 +71,6 @@ nbsite_gallery_conf = {
                 {"path": "meta/3_float/over_time", "title": "3 Float Inputs (Over Time)"},
                 {"path": "levels", "title": "Levels"},
                 {"path": "pareto", "title": "Pareto"},
-                {"path": "yaml", "title": "YAML"},
             ],
             "skip_rst_notebook_directive": True,
         }

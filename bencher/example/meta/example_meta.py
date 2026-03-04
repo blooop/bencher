@@ -1,4 +1,6 @@
 from typing import Any
+from datetime import datetime, timedelta
+
 import bencher as bch
 
 from enum import auto
@@ -50,9 +52,11 @@ class BenchableObject(bch.ParametrizedSweep):
 
         x, y, z = self.float1, self.float2, self.float3
 
-        # Map categoricals to continuous parameters that shape the function
+        # Map categoricals to continuous parameters that shape the function.
+        # _time_offset acts as a phase shift so over-time plots show genuinely
+        # different patterns rather than a constant vertical offset.
         freq = 3.0 if self.wave else 1.0
-        phase = 0.0 if self.variant == FunctionVariant.alpha else math.pi / 2
+        phase = (0.0 if self.variant == FunctionVariant.alpha else math.pi / 2) + self._time_offset
 
         # Single parametric function - categories control freq and phase,
         # dimensionality is just which floats get swept vs held at default.
@@ -72,9 +76,6 @@ class BenchableObject(bch.ParametrizedSweep):
         if self.noise_scale > 0:
             self.sample_noise = random.gauss(0, self.noise_scale * max(abs(self.distance), 0.1))
             self.distance += self.sample_noise
-
-        # Apply time offset
-        self.distance += self._time_offset
 
         self.result_hmap = hv.Text(
             x=0, y=0, text=f"distance:{self.distance}\nnoise:{self.sample_noise}"
@@ -134,6 +135,7 @@ class BenchMeta(bch.ParametrizedSweep):
         if self.sample_over_time:
             benchable.noise_scale = max(benchable.noise_scale, 0.1)
             time_offsets = [0.0, 0.3, 0.7, 1.0]
+            base_time = datetime.now()
             for i, offset in enumerate(time_offsets):
                 benchable._time_offset = offset
                 run_cfg.clear_cache = True
@@ -144,6 +146,7 @@ class BenchMeta(bch.ParametrizedSweep):
                     result_vars=["distance"],
                     plot_callbacks=False,
                     run_cfg=run_cfg,
+                    time_src=base_time + timedelta(seconds=i),
                 )
         else:
             res = bench.plot_sweep(
@@ -170,7 +173,7 @@ the default float point (0,0,0).""",
         input_vars=[
             "categorical_vars",
             bch.p("sample_with_repeats", [1, 10]),
-            # "sample_over_time",
+            "sample_over_time",
         ],
         const_vars=dict(float_vars=0),
     )
@@ -183,7 +186,7 @@ curves.""",
         input_vars=[
             "categorical_vars",
             bch.p("sample_with_repeats", [1, 10]),
-            # "sample_over_time",
+            "sample_over_time",
         ],
         const_vars=dict(float_vars=1),
     )
@@ -195,7 +198,7 @@ The unified function creates interesting 2D patterns that vary with category sel
         input_vars=[
             "categorical_vars",
             bch.p("sample_with_repeats", [1, 10]),
-            # "sample_over_time",
+            "sample_over_time",
         ],
         const_vars=dict(float_vars=2),
     )
@@ -207,7 +210,7 @@ The full 3D function with all cross-coupling terms active.""",
         input_vars=[
             "categorical_vars",
             bch.p("sample_with_repeats", [1, 10]),
-            # "sample_over_time",
+            "sample_over_time",
         ],
         const_vars=dict(float_vars=3),
     )

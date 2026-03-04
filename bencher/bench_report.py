@@ -1,3 +1,4 @@
+import html
 import logging
 from typing import Callable
 import os
@@ -81,7 +82,11 @@ class BenchReport(BenchPlotServer):
         in_html_folder: bool = True,
         **kwargs,
     ) -> Path:
-        """Save the result to a html file.  Note that dynamic content will not work.  by passing save(__file__) the html output will be saved in the same folder as the source code in a html subfolder.
+        """Save the result to a html file.
+
+        When the report contains multiple tabs, each tab is saved to its own
+        embedded HTML file and the index page uses iframes to display them.
+        This prevents HoloMap slider widgets from colliding across tabs.
 
         Args:
             directory (str | Path, optional): base folder to save to. Defaults to "cachedir" which should be ignored by git.
@@ -103,12 +108,75 @@ class BenchReport(BenchPlotServer):
         logging.info(f"creating dir {base_path.absolute()}")
         os.makedirs(base_path.absolute(), exist_ok=True)
 
-        base_path = base_path / filename
+        index_path = base_path / filename
 
-        logging.info(f"saving html output to: {base_path.absolute()}")
+        if len(self.pane) <= 1:
+            logging.info(f"saving html output to: {index_path.absolute()}")
+            self.pane.save(filename=index_path, progress=True, embed=True, **kwargs)
+            return index_path
 
-        self.pane.save(filename=base_path, progress=True, embed=True, **kwargs)
-        return base_path
+        # Save each tab to its own HTML so HoloMap sliders don't collide.
+        tab_dir = base_path / "_tabs"
+        os.makedirs(tab_dir, exist_ok=True)
+        tab_files = []
+        seen_names = set()
+        for i, tab in enumerate(self.pane):
+            tab_name = getattr(tab, "name", None) or f"tab_{i}"
+            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tab_name)
+            if safe_name in seen_names:
+                safe_name = f"{safe_name}_{i}"
+            seen_names.add(safe_name)
+            tab_file = f"{safe_name}.html"
+            tab_path = tab_dir / tab_file
+            logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
+            pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
+            tab_files.append((tab_name, f"_tabs/{tab_file}"))
+
+        # Generate an index page with tab buttons and an iframe.
+        self._write_iframe_index(index_path, tab_files)
+        logging.info(f"saving index to: {index_path.absolute()}")
+        return index_path
+
+    @staticmethod
+    def _write_iframe_index(index_path: Path, tab_files: list) -> None:
+        """Write a lightweight HTML index with tab buttons and an iframe."""
+        buttons = ""
+        for i, (name, path) in enumerate(tab_files):
+            active = " active" if i == 0 else ""
+            escaped_name = html.escape(name)
+            buttons += (
+                f'<button class="tab-btn{active}" '
+                f"onclick=\"switchTab(this, '{path}')\">{escaped_name}</button>\n"
+            )
+        first_src = tab_files[0][1] if tab_files else ""
+        page = f"""\
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Report</title>
+<style>
+body {{ margin:0; font-family:sans-serif; }}
+.tab-bar {{ display:flex; gap:2px; background:#e0e0e0; padding:4px; }}
+.tab-btn {{ padding:8px 16px; border:none; cursor:pointer; background:#ccc; font-size:14px; }}
+.tab-btn.active {{ background:#fff; font-weight:bold; }}
+iframe {{ width:100%; border:none; }}
+</style></head><body>
+<div class="tab-bar">{buttons}</div>
+<iframe id="content" src="{first_src}"></iframe>
+<script>
+function switchTab(btn, src) {{
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('content').src = src;
+}}
+function resizeIframe() {{
+  var f = document.getElementById('content');
+  f.style.height = (window.innerHeight - f.getBoundingClientRect().top) + 'px';
+}}
+window.addEventListener('resize', resizeIframe);
+document.getElementById('content').addEventListener('load', resizeIframe);
+resizeIframe();
+</script></body></html>"""
+        with open(index_path, "w", encoding="utf-8") as f:
+            f.write(page)
 
     def show(self, run_cfg: BenchRunCfg | None = None) -> Thread:  # pragma: no cover
         """Launches a webserver with plots of the benchmark results, blocking

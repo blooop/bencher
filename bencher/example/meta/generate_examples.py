@@ -99,9 +99,11 @@ if __name__ == "__main__":
     # Collect all notebooks to execute
     all_notebooks = sorted(meta_dir.rglob("*.ipynb"))
 
-    # Also include non-meta gallery notebooks (levels, pareto, yaml, etc.)
+    # Also include non-meta gallery notebooks (levels, pareto, etc.)
     gallery_notebooks = sorted(Path("docs/reference").glob("*/*.ipynb"))
-    gallery_notebooks = [nb for nb in gallery_notebooks if "meta" not in nb.parts]
+    gallery_notebooks = [
+        nb for nb in gallery_notebooks if "meta" not in nb.parts and "yaml" not in nb.parts
+    ]
     all_notebooks.extend(gallery_notebooks)
 
     # Execute all notebooks in parallel so RTD only renders pre-computed results

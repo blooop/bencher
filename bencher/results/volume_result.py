@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Any
 
 import xarray as xr
@@ -53,6 +54,9 @@ class VolumeResult(BenchResultBase):
             Optional[pn.pane.Plotly]: A panel containing the volume plot if data is appropriate,
                                     otherwise returns filter match results.
         """
+        if self.bench_cfg.over_time:
+            logging.info("Volume plots are not supported with over_time; skipping")
+            return None
         return self.filter(
             self.to_volume_ds,
             float_range=VarRange(3, 3),
