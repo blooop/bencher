@@ -36,9 +36,10 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
-# Copy HTML report directories into the build so iframes resolve (only if generated)
-_meta_dir = os.path.join(os.path.dirname(__file__), "reference", "meta")
-html_extra_path = ["reference/meta"] if os.path.isdir(_meta_dir) else []
+# Copy HTML reports into the build so iframes resolve (only if generated)
+# Reports live in docs/_extra/reference/meta/ to mirror the built output structure
+_extra_dir = os.path.join(os.path.dirname(__file__), "_extra")
+html_extra_path = ["_extra"] if os.path.isdir(_extra_dir) else []
 
 autoapi_dirs = ["../bencher"]
 autoapi_ignore = ["*example_*", "*example*", "*experimental*"]

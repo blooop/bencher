@@ -2,6 +2,7 @@
 
 import importlib
 import importlib.util
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -11,6 +12,8 @@ import bencher as bch
 
 GENERATED_DIR = Path("bencher/example/meta/generated")
 META_DOCS_DIR = Path("docs/reference/meta")
+# Reports go under docs/_extra/ so html_extra_path copies them to match the built output structure
+REPORTS_EXTRA_DIR = Path("docs/_extra/reference/meta")
 
 
 def generate_python_files():
@@ -37,7 +40,7 @@ def generate_python_files():
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
-        if d.is_dir():
+        if d.is_dir() and d.name != "__pycache__":
             init = d / "__init__.py"
             if not init.exists():
                 init.touch()
@@ -48,8 +51,12 @@ def generate_python_files():
 
 def _import_example_module(py_file: Path):
     """Dynamically import a Python example file and return its module."""
-    module_name = f"generated_example.{py_file.stem}"
+    rel = py_file.relative_to(GENERATED_DIR)
+    module_name = f"generated_example.{rel.with_suffix('').as_posix().replace('/', '.')}"
     spec = importlib.util.spec_from_file_location(module_name, py_file)
+    if spec is None or spec.loader is None:
+        print(f"ERROR: Could not load module from {py_file}, skipping")
+        return None
     mod = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = mod
     spec.loader.exec_module(mod)
@@ -72,6 +79,8 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
     stem = py_file.stem
 
     mod = _import_example_module(py_file)
+    if mod is None:
+        return
     example_fn = _find_example_function(mod)
     if example_fn is None:
         print(f"WARNING: No example_* function found in {py_file}, skipping")
@@ -82,7 +91,10 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
     print(f"Running {py_file}...")
     bench = example_fn(run_cfg)
 
-    report_dir = output_dir / f"_reports/{stem}"
+    # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
+    reports_output_dir = REPORTS_EXTRA_DIR / rel.parent
+    reports_output_dir.mkdir(parents=True, exist_ok=True)
+    report_dir = reports_output_dir / f"_reports/{stem}"
     report_path = bench.report.save(
         directory=str(report_dir),
         in_html_folder=False,
@@ -94,7 +106,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
     underline = "=" * len(title_text)
     # Compute relative path from RST location to the Python source
     rst_path = output_dir / f"{stem}.rst"
-    py_rel = Path("../../../..") / py_file
+    py_rel = os.path.relpath(py_file, rst_path.parent)
 
     rst_content = f"""{title_text}
 {underline}
@@ -125,16 +137,44 @@ def generate_section_index(section_path: Path, section_title: str):
         entries.append(f"   {rel}")
 
     underline = "=" * len(section_title)
+    entries_str = "\n".join(entries)
     content = f"""{section_title}
 {underline}
 
 .. toctree::
    :maxdepth: 1
 
-{chr(10).join(entries)}
+{entries_str}
 """
     index_path = section_path / "index.rst"
     index_path.write_text(content, encoding="utf-8")
+
+
+SECTIONS = {
+    "0 Float Inputs": "0_float/no_repeats",
+    "0 Float Inputs (Repeated)": "0_float/with_repeats",
+    "0 Float Inputs (Over Time)": "0_float/over_time",
+    "1 Float Input": "1_float/no_repeats",
+    "1 Float Input (Repeated)": "1_float/with_repeats",
+    "1 Float Input (Over Time)": "1_float/over_time",
+    "2 Float Inputs": "2_float/no_repeats",
+    "2 Float Inputs (Repeated)": "2_float/with_repeats",
+    "2 Float Inputs (Over Time)": "2_float/over_time",
+    "3 Float Inputs": "3_float/no_repeats",
+    "3 Float Inputs (Repeated)": "3_float/with_repeats",
+    "3 Float Inputs (Over Time)": "3_float/over_time",
+    "Result Types: ResultVar": "result_types/result_var",
+    "Result Types: ResultBool": "result_types/result_bool",
+    "Result Types: ResultVec": "result_types/result_vec",
+    "Result Types: ResultString": "result_types/result_string",
+    "Result Types: ResultPath": "result_types/result_path",
+    "Result Types: ResultDataSet": "result_types/result_dataset",
+    "Plot Types": "plot_types",
+    "Optimization": "optimization",
+    "Sampling Strategies": "sampling",
+    "Constant Variables": "const_vars",
+    "Statistics": "statistics",
+}
 
 
 def generate_all() -> list[Path]:
@@ -143,6 +183,10 @@ def generate_all() -> list[Path]:
     if META_DOCS_DIR.exists():
         shutil.rmtree(META_DOCS_DIR)
     META_DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if REPORTS_EXTRA_DIR.exists():
+        shutil.rmtree(REPORTS_EXTRA_DIR)
+    REPORTS_EXTRA_DIR.mkdir(parents=True, exist_ok=True)
 
     # Phase 1: Generate Python example files
     generate_python_files()
@@ -155,51 +199,26 @@ def generate_all() -> list[Path]:
         run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR)
 
     # Phase 3: Generate section index files
-    sections = {
-        "0 Float Inputs": "0_float/no_repeats",
-        "0 Float Inputs (Repeated)": "0_float/with_repeats",
-        "0 Float Inputs (Over Time)": "0_float/over_time",
-        "1 Float Input": "1_float/no_repeats",
-        "1 Float Input (Repeated)": "1_float/with_repeats",
-        "1 Float Input (Over Time)": "1_float/over_time",
-        "2 Float Inputs": "2_float/no_repeats",
-        "2 Float Inputs (Repeated)": "2_float/with_repeats",
-        "2 Float Inputs (Over Time)": "2_float/over_time",
-        "3 Float Inputs": "3_float/no_repeats",
-        "3 Float Inputs (Repeated)": "3_float/with_repeats",
-        "3 Float Inputs (Over Time)": "3_float/over_time",
-        "Result Types: ResultVar": "result_types/result_var",
-        "Result Types: ResultBool": "result_types/result_bool",
-        "Result Types: ResultVec": "result_types/result_vec",
-        "Result Types: ResultString": "result_types/result_string",
-        "Result Types: ResultPath": "result_types/result_path",
-        "Result Types: ResultDataSet": "result_types/result_dataset",
-        "Plot Types": "plot_types",
-        "Optimization": "optimization",
-        "Sampling Strategies": "sampling",
-        "Constant Variables": "const_vars",
-        "Statistics": "statistics",
-    }
-
-    for title, rel_path in sections.items():
+    for title, rel_path in SECTIONS.items():
         section_dir = META_DOCS_DIR / rel_path
         if section_dir.exists():
             generate_section_index(section_dir, title)
 
     # Generate top-level meta index
     meta_index_entries = []
-    for rel_path in sections.values():
+    for rel_path in SECTIONS.values():
         section_dir = META_DOCS_DIR / rel_path
         if (section_dir / "index.rst").exists():
             meta_index_entries.append(f"   {rel_path}/index")
 
+    entries_str = "\n".join(meta_index_entries)
     meta_index = f"""Reference Gallery
 =================
 
 .. toctree::
    :maxdepth: 2
 
-{chr(10).join(meta_index_entries)}
+{entries_str}
 """
     (META_DOCS_DIR / "index.rst").write_text(meta_index, encoding="utf-8")
 

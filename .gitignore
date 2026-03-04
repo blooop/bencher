@@ -184,7 +184,6 @@ managed_context/metadata.json
 test_suite_analysis/metadata.json
 *.rrd
 docs/builtdocs*
-docs/jupyter_execute*
 thumbnails/
 docs/autoapi/*
 .qodo
@@ -201,4 +200,4 @@ _tabs/*
 # Auto-generated examples and docs (HTML reports, RST files)
 bencher/example/meta/generated/
 docs/reference/meta/
-reports/
+docs/_extra/

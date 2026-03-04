@@ -19,10 +19,10 @@ class BenchMetaGen(bch.ParametrizedSweep):
         default=0, bounds=(0, 3), doc="The number of categorical variables that are swept"
     )
 
-    # Lists to store the actual variable names
-    float_var_names = []  # Will store float variable names
-    categorical_var_names = []  # Will store categorical variable names
-    result_var_names = []  # Will store result variable names
+    # Lists to store the actual variable names (initialized in __init__)
+    float_var_names = None
+    categorical_var_names = None
+    result_var_names = None
 
     # Configuration options
     sample_with_repeats = bch.IntSweep(default=1, bounds=(1, 100))

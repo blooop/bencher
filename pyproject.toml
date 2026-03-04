@@ -159,7 +159,7 @@ dev-use-local = "./scripts/devcontainer_use_local.sh"
 generate-examples = "python -c \"from bencher.example.meta.generate_examples import generate_python_files; generate_python_files()\""
 # Generate + run + produce docs (HTML reports + RST)
 generate-docs = "python bencher/example/meta/generate_examples.py"
-docs = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs"
+docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = ["generate-docs"] }
 
 
 #demos
