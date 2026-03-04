@@ -7,7 +7,16 @@ import nbformat as nbf
 from pathlib import Path
 
 _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+# 32-char hex without dashes (Jupyter comm_id / client_comm_id)
+_HEX32_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
 _RUN_DATE_RE = re.compile(r"run date: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+")
+# ISO datetimes from recent years (2020+) that indicate live timestamps, NOT fixed
+# benchmarking dates like 2000-01-01 which are intentionally deterministic.
+_LIVE_DATETIME_RE = re.compile(
+    r"20(?:2[0-9]|3[0-9])-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?"
+)
+# Python object IDs (memory addresses) used by Panel/Bokeh in tags arrays
+_PYOBJ_ID_RE = re.compile(r"(?<![0-9])\d{12,18}(?![0-9])")
 
 
 def _deterministic_id(name: str, index: int) -> str:
@@ -15,17 +24,16 @@ def _deterministic_id(name: str, index: int) -> str:
     return hashlib.sha256(f"{name}:{index}".encode()).hexdigest()[:8]
 
 
-def _make_uuid_replacer(notebook_name: str):
-    """Return a function that deterministically replaces UUIDs in a string.
+def _make_hex_replacers(notebook_name: str):
+    """Return replacer functions for UUIDs (dashed) and 32-char hex (dashless).
 
-    Each unique UUID found gets a stable replacement derived from SHA-256 of
-    ``notebook_name:index``.  The mapping is shared across all calls so that
-    internal cross-references (e.g. Bokeh div-id ↔ render_items ↔ docs_json)
-    stay consistent.
+    Each unique identifier found gets a stable replacement derived from SHA-256
+    of ``notebook_name:index``.  A single shared mapping ensures consistent
+    indexing across both formats.
     """
     mapping: dict[str, str] = {}
 
-    def _replacement(match: re.Match) -> str:
+    def _uuid_replacement(match: re.Match) -> str:
         original = match.group(0)
         if original not in mapping:
             idx = len(mapping)
@@ -33,12 +41,24 @@ def _make_uuid_replacer(notebook_name: str):
             mapping[original] = f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
         return mapping[original]
 
-    return _replacement
+    def _hex32_replacement(match: re.Match) -> str:
+        original = match.group(0)
+        if original not in mapping:
+            idx = len(mapping)
+            mapping[original] = hashlib.sha256(
+                f"{notebook_name}:{idx}".encode()
+            ).hexdigest()[:32]
+        return mapping[original]
+
+    return _uuid_replacement, _hex32_replacement
 
 
-def _scrub_string(text: str, replacer) -> str:
-    text = _UUID_RE.sub(replacer, text)
+def _scrub_string(text: str, uuid_replacer, hex32_replacer) -> str:
+    text = _UUID_RE.sub(uuid_replacer, text)
+    text = _HEX32_RE.sub(hex32_replacer, text)
     text = _RUN_DATE_RE.sub("run date: 0000-00-00 00:00:00.000000", text)
+    text = _LIVE_DATETIME_RE.sub("2000-01-01T00:00:00", text)
+    text = _PYOBJ_ID_RE.sub("0", text)
     return text
 
 
@@ -48,7 +68,7 @@ def scrub_notebook(nb, notebook_name: str) -> None:
     Replaces execution timestamps, execution counts, UUIDs, and run-date
     strings with deterministic values.  Operates in-place.
     """
-    replacer = _make_uuid_replacer(notebook_name)
+    uuid_rep, hex32_rep = _make_hex_replacers(notebook_name)
 
     for cell in nb.cells:
         # Strip execution timestamps
@@ -64,29 +84,38 @@ def scrub_notebook(nb, notebook_name: str) -> None:
             # Scrub text fields
             if "text" in output:
                 if isinstance(output["text"], list):
-                    output["text"] = [_scrub_string(t, replacer) for t in output["text"]]
+                    output["text"] = [
+                        _scrub_string(t, uuid_rep, hex32_rep) for t in output["text"]
+                    ]
                 elif isinstance(output["text"], str):
-                    output["text"] = _scrub_string(output["text"], replacer)
+                    output["text"] = _scrub_string(output["text"], uuid_rep, hex32_rep)
 
             # Scrub data dict (text/html, text/plain, application/javascript, etc.)
             if "data" in output:
                 for mime, content in output["data"].items():
                     if isinstance(content, str):
-                        output["data"][mime] = _scrub_string(content, replacer)
+                        output["data"][mime] = _scrub_string(
+                            content, uuid_rep, hex32_rep
+                        )
                     elif isinstance(content, list):
                         output["data"][mime] = [
-                            _scrub_string(s, replacer) if isinstance(s, str) else s for s in content
+                            _scrub_string(s, uuid_rep, hex32_rep)
+                            if isinstance(s, str)
+                            else s
+                            for s in content
                         ]
 
             # Scrub metadata strings (e.g. HoloViews exec UUID)
             if "metadata" in output:
                 for key, val in output["metadata"].items():
                     if isinstance(val, str):
-                        output["metadata"][key] = _scrub_string(val, replacer)
+                        output["metadata"][key] = _scrub_string(
+                            val, uuid_rep, hex32_rep
+                        )
                     elif isinstance(val, dict):
                         for k2, v2 in val.items():
                             if isinstance(v2, str):
-                                val[k2] = _scrub_string(v2, replacer)
+                                val[k2] = _scrub_string(v2, uuid_rep, hex32_rep)
 
 
 def convert_example_to_jupyter_notebook(
@@ -136,8 +165,23 @@ def execute_notebook(notebook_path: str | Path, timeout: int = 600) -> None:
     notebook_path = Path(notebook_path)
     print(f"Executing {notebook_path}...")
     nb = nbf.read(notebook_path, as_version=4)
+
+    # Inject a setup cell to seed the RNG for reproducible outputs
+    setup_cell = nbf.v4.new_code_cell(
+        "import random as _rng; _rng.seed(42)\n"
+        "try:\n"
+        "    import numpy as _np; _np.random.seed(42)\n"
+        "except ImportError:\n"
+        "    pass"
+    )
+    nb.cells.insert(0, setup_cell)
+
     client = nbclient.NotebookClient(nb, timeout=timeout, kernel_name="python3")
     client.execute()
+
+    # Remove the injected setup cell before writing
+    nb.cells.pop(0)
+
     scrub_notebook(nb, notebook_path.stem)
     nbf.write(nb, notebook_path)
 
@@ -150,7 +194,7 @@ def execute_all_notebooks(
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
     if max_workers is None:
-        max_workers = min(os.cpu_count() or 4, len(notebooks))
+        max_workers = min(os.cpu_count() or 4, len(notebooks), 8)
 
     print(f"Executing {len(notebooks)} notebooks with {max_workers} workers...")
     with ProcessPoolExecutor(max_workers=max_workers) as executor:

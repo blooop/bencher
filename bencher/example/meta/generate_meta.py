@@ -138,6 +138,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
         if self.sample_over_time:
             code_gen = f"""
 %%capture
+from datetime import datetime, timedelta
 {module_import}
 {benchmark_import}
 run_cfg = bch.BenchRunCfg()
@@ -148,13 +149,15 @@ benchable = {obj_class}()
 benchable.noise_scale = max(0.1, {0.15 if self.sample_with_repeats > 1 else 0.0})
 bench = benchable.to_bench(run_cfg)
 time_offsets = [0.0, 0.5, 1.0]
+_base_time = datetime(2000, 1, 1)
 for i, offset in enumerate(time_offsets):
     benchable._time_offset = offset
     run_cfg.clear_cache = True
     run_cfg.clear_history = i == 0
     res = bench.plot_sweep("over_time", input_vars={input_vars},
                     result_vars={self.result_var_names},
-                    run_cfg=run_cfg)
+                    run_cfg=run_cfg,
+                    time_src=_base_time + timedelta(seconds=i))
 """
         else:
             code_gen = f"""
