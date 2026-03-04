@@ -1,237 +1,210 @@
-import hashlib
-import re
-import shutil
-import subprocess
+"""Generate Python example files, run them, save HTML reports, and generate RST for docs."""
 
-import nbformat as nbf
+import importlib
+import importlib.util
+import shutil
+import sys
 from pathlib import Path
 
-_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-# 32-char hex without dashes (Jupyter comm_id / client_comm_id)
-_HEX32_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
-_RUN_DATE_RE = re.compile(r"run date: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+")
-# ISO datetimes from recent years (2020+) that indicate live timestamps, NOT fixed
-# benchmarking dates like 2000-01-01 which are intentionally deterministic.
-_LIVE_DATETIME_RE = re.compile(r"20(?:2[0-9]|3[0-9])-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?")
-# Python object IDs (memory addresses) in Panel/Bokeh "tags" arrays.
-# Target only the specific JSON pattern `"tags":[[<id>,` to avoid clobbering
-# datetime timestamps (millisecond or nanosecond) that may appear in data arrays.
-_BOKEH_TAGS_ID_RE = re.compile(r'("tags":\[\[)\d{12,18}(,)')
+import bencher as bch
 
 
-def _deterministic_id(name: str, index: int) -> str:
-    """Generate a deterministic 8-char hex cell ID from a name and cell index."""
-    return hashlib.sha256(f"{name}:{index}".encode()).hexdigest()[:8]
+GENERATED_DIR = Path("bencher/example/meta/generated")
+META_DOCS_DIR = Path("docs/reference/meta")
 
 
-def _make_hex_replacers(notebook_name: str):
-    """Return replacer functions for UUIDs (dashed) and 32-char hex (dashless).
+def generate_python_files():
+    """Phase 1: Run meta generators to produce Python example files."""
+    if GENERATED_DIR.exists():
+        shutil.rmtree(GENERATED_DIR)
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
-    Each unique identifier found gets a stable replacement derived from SHA-256
-    of ``notebook_name:index``.  A single shared mapping ensures consistent
-    indexing across both formats.
-    """
-    mapping: dict[str, str] = {}
+    from bencher.example.meta.generate_meta import example_meta
+    from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
+    from bencher.example.meta.generate_meta_optimization import example_meta_optimization
+    from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
+    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
+    from bencher.example.meta.generate_meta_sampling import example_meta_sampling
+    from bencher.example.meta.generate_meta_statistics import example_meta_statistics
 
-    def _uuid_replacement(match: re.Match) -> str:
-        original = match.group(0)
-        if original not in mapping:
-            idx = len(mapping)
-            h = hashlib.sha256(f"{notebook_name}:{idx}".encode()).hexdigest()
-            mapping[original] = f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
-        return mapping[original]
+    example_meta()
+    example_meta_result_types()
+    example_meta_plot_types()
+    example_meta_sampling()
+    example_meta_statistics()
+    example_meta_const_vars()
+    example_meta_optimization()
 
-    def _hex32_replacement(match: re.Match) -> str:
-        original = match.group(0)
-        if original not in mapping:
-            idx = len(mapping)
-            mapping[original] = hashlib.sha256(f"{notebook_name}:{idx}".encode()).hexdigest()[:32]
-        return mapping[original]
-
-    return _uuid_replacement, _hex32_replacement
-
-
-def _scrub_string(text: str, uuid_replacer, hex32_replacer) -> str:
-    text = _UUID_RE.sub(uuid_replacer, text)
-    text = _HEX32_RE.sub(hex32_replacer, text)
-    text = _RUN_DATE_RE.sub("run date: 0000-00-00 00:00:00.000000", text)
-    text = _LIVE_DATETIME_RE.sub("2000-01-01T00:00:00", text)
-    text = _BOKEH_TAGS_ID_RE.sub(r"\g<1>0\2", text)
-    return text
+    # Write __init__.py files so generated examples are importable
+    for d in GENERATED_DIR.rglob("*"):
+        if d.is_dir():
+            init = d / "__init__.py"
+            if not init.exists():
+                init.touch()
+    init = GENERATED_DIR / "__init__.py"
+    if not init.exists():
+        init.touch()
 
 
-def scrub_notebook(nb, notebook_name: str) -> None:
-    """Normalize volatile content in *nb* so regeneration produces stable diffs.
-
-    Replaces execution timestamps, execution counts, UUIDs, and run-date
-    strings with deterministic values.  Operates in-place.
-    """
-    uuid_rep, hex32_rep = _make_hex_replacers(notebook_name)
-
-    for cell in nb.cells:
-        # Strip execution timestamps
-        cell.metadata.pop("execution", None)
-        # Normalize execution_count
-        if hasattr(cell, "execution_count"):
-            cell.execution_count = None
-
-        for output in cell.get("outputs", []):
-            if hasattr(output, "execution_count"):
-                output.execution_count = None
-
-            # Scrub text fields
-            if "text" in output:
-                if isinstance(output["text"], list):
-                    output["text"] = [_scrub_string(t, uuid_rep, hex32_rep) for t in output["text"]]
-                elif isinstance(output["text"], str):
-                    output["text"] = _scrub_string(output["text"], uuid_rep, hex32_rep)
-
-            # Scrub data dict (text/html, text/plain, application/javascript, etc.)
-            if "data" in output:
-                for mime, content in output["data"].items():
-                    if isinstance(content, str):
-                        output["data"][mime] = _scrub_string(content, uuid_rep, hex32_rep)
-                    elif isinstance(content, list):
-                        output["data"][mime] = [
-                            _scrub_string(s, uuid_rep, hex32_rep) if isinstance(s, str) else s
-                            for s in content
-                        ]
-
-            # Scrub metadata strings (e.g. HoloViews exec UUID)
-            if "metadata" in output:
-                for key, val in output["metadata"].items():
-                    if isinstance(val, str):
-                        output["metadata"][key] = _scrub_string(val, uuid_rep, hex32_rep)
-                    elif isinstance(val, dict):
-                        for k2, v2 in val.items():
-                            if isinstance(v2, str):
-                                val[k2] = _scrub_string(v2, uuid_rep, hex32_rep)
+def _import_example_module(py_file: Path):
+    """Dynamically import a Python example file and return its module."""
+    module_name = f"generated_example.{py_file.stem}"
+    spec = importlib.util.spec_from_file_location(module_name, py_file)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = mod
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def convert_example_to_jupyter_notebook(
-    filename: str, output_path: str, repeats: int | None = None
-) -> None:
-    source_path = Path(filename)
-
-    nb = nbf.v4.new_notebook()
-    title = source_path.stem
-    repeat_exr = f"bch.BenchRunCfg(repeats={repeats})" if repeats else ""
-    function_name = f"{source_path.stem}({repeat_exr})"
-    text = f"""# {title}"""
-
-    code = "%%capture\n"
-
-    example_code = source_path.read_text(encoding="utf-8")
-    split_code = example_code.split("""if __name__ == "__main__":""")
-    code += split_code[0]
-
-    code += f"bench = {function_name}"
-
-    code_results = """from bokeh.io import output_notebook
-
-output_notebook()
-bench.get_result().to_auto_plots()"""
-
-    cells = [
-        nbf.v4.new_markdown_cell(text),
-        nbf.v4.new_code_cell(code),
-        nbf.v4.new_code_cell(code_results),
-    ]
-    for i, cell in enumerate(cells):
-        cell.id = _deterministic_id(title, i)
-    nb["cells"] = cells
-    output_path = Path(f"docs/reference/{output_path}/ex_{title}.ipynb")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    # Add a newline character at the end to ensure proper end-of-file
-    notebook_content = nbf.writes(nb) + "\n"
-    output_path.write_text(notebook_content, encoding="utf-8")
-    subprocess.run(["ruff", "format", str(output_path)], check=False)
+def _find_example_function(mod):
+    """Find the example_* function in a module."""
+    for name, obj in vars(mod).items():
+        if name.startswith("example_") and callable(obj):
+            return obj
+    return None
 
 
-def execute_notebook(notebook_path: str | Path, timeout: int = 600) -> None:
-    """Execute a notebook in-place, embedding outputs."""
-    import nbclient
+def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
+    """Run a Python example, save HTML report, write RST doc page."""
+    rel = py_file.relative_to(generated_dir)
+    output_dir = docs_dir / rel.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stem = py_file.stem
 
-    notebook_path = Path(notebook_path)
-    print(f"Executing {notebook_path}...")
-    nb = nbf.read(notebook_path, as_version=4)
+    mod = _import_example_module(py_file)
+    example_fn = _find_example_function(mod)
+    if example_fn is None:
+        print(f"WARNING: No example_* function found in {py_file}, skipping")
+        return
 
-    # Inject a setup cell to seed the RNG for reproducible outputs
-    setup_cell = nbf.v4.new_code_cell(
-        "import random as _rng; _rng.seed(42)\n"
-        "try:\n"
-        "    import numpy as _np; _np.random.seed(42)\n"
-        "except ImportError:\n"
-        "    pass"
+    run_cfg = bch.BenchRunCfg()
+    run_cfg.level = 4
+    print(f"Running {py_file}...")
+    bench = example_fn(run_cfg)
+
+    report_dir = output_dir / f"_reports/{stem}"
+    report_path = bench.report.save(
+        directory=str(report_dir),
+        in_html_folder=False,
     )
-    nb.cells.insert(0, setup_cell)
+    print(f"  Saved report to {report_path}")
 
-    client = nbclient.NotebookClient(nb, timeout=timeout, kernel_name="python3")
-    client.execute()
+    # Generate RST that shows source + embeds HTML report
+    title_text = stem.replace("_", " ").title()
+    underline = "=" * len(title_text)
+    # Compute relative path from RST location to the Python source
+    rst_path = output_dir / f"{stem}.rst"
+    py_rel = Path("../../../..") / py_file
 
-    # Remove the injected setup cell before writing
-    nb.cells.pop(0)
+    rst_content = f"""{title_text}
+{underline}
 
-    scrub_notebook(nb, notebook_path.stem)
-    nbf.write(nb, notebook_path)
+.. literalinclude:: {py_rel}
+   :language: python
+
+.. raw:: html
+
+   <iframe src="_reports/{stem}/{bench.bench_name}.html"
+           style="width:100%; height:800px; border:1px solid #ccc;">
+   </iframe>
+"""
+    rst_path.write_text(rst_content, encoding="utf-8")
 
 
-def execute_all_notebooks(
-    notebooks: list[Path], timeout: int = 600, max_workers: int | None = None
-) -> None:
-    """Execute notebooks in parallel using a process pool."""
-    import os
-    from concurrent.futures import ProcessPoolExecutor, as_completed
+def generate_section_index(section_path: Path, section_title: str):
+    """Generate an index.rst for a docs section with a toctree."""
+    rst_files = sorted(section_path.rglob("*.rst"))
+    rst_files = [f for f in rst_files if f.name != "index.rst"]
 
-    if max_workers is None:
-        max_workers = min(os.cpu_count() or 4, len(notebooks), 8)
+    if not rst_files:
+        return
 
-    print(f"Executing {len(notebooks)} notebooks with {max_workers} workers...")
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(execute_notebook, nb, timeout): nb for nb in notebooks}
-        for future in as_completed(futures):
-            nb_path = futures[future]
-            try:
-                future.result()
-            except Exception as exc:
-                print(f"FAILED {nb_path}: {exc}")
-                raise
+    entries = []
+    for f in rst_files:
+        rel = f.relative_to(section_path).with_suffix("")
+        entries.append(f"   {rel}")
+
+    underline = "=" * len(section_title)
+    content = f"""{section_title}
+{underline}
+
+.. toctree::
+   :maxdepth: 1
+
+{chr(10).join(entries)}
+"""
+    index_path = section_path / "index.rst"
+    index_path.write_text(content, encoding="utf-8")
+
+
+def generate_all() -> list[Path]:
+    """Generate Python examples, run them, save HTML reports, generate RST for docs."""
+    # Clean output directories
+    if META_DOCS_DIR.exists():
+        shutil.rmtree(META_DOCS_DIR)
+    META_DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Phase 1: Generate Python example files
+    generate_python_files()
+
+    # Phase 2: Run each Python file, save HTML report, generate RST
+    py_files = sorted(GENERATED_DIR.rglob("*.py"))
+    for py_file in py_files:
+        if py_file.name == "__init__.py":
+            continue
+        run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR)
+
+    # Phase 3: Generate section index files
+    sections = {
+        "0 Float Inputs": "0_float/no_repeats",
+        "0 Float Inputs (Repeated)": "0_float/with_repeats",
+        "0 Float Inputs (Over Time)": "0_float/over_time",
+        "1 Float Input": "1_float/no_repeats",
+        "1 Float Input (Repeated)": "1_float/with_repeats",
+        "1 Float Input (Over Time)": "1_float/over_time",
+        "2 Float Inputs": "2_float/no_repeats",
+        "2 Float Inputs (Repeated)": "2_float/with_repeats",
+        "2 Float Inputs (Over Time)": "2_float/over_time",
+        "3 Float Inputs": "3_float/no_repeats",
+        "3 Float Inputs (Repeated)": "3_float/with_repeats",
+        "3 Float Inputs (Over Time)": "3_float/over_time",
+        "Result Types: ResultVar": "result_types/result_var",
+        "Result Types: ResultBool": "result_types/result_bool",
+        "Result Types: ResultVec": "result_types/result_vec",
+        "Result Types: ResultString": "result_types/result_string",
+        "Result Types: ResultPath": "result_types/result_path",
+        "Result Types: ResultDataSet": "result_types/result_dataset",
+        "Plot Types": "plot_types",
+        "Optimization": "optimization",
+        "Sampling Strategies": "sampling",
+        "Constant Variables": "const_vars",
+        "Statistics": "statistics",
+    }
+
+    for title, rel_path in sections.items():
+        section_dir = META_DOCS_DIR / rel_path
+        if section_dir.exists():
+            generate_section_index(section_dir, title)
+
+    # Generate top-level meta index
+    meta_index_entries = []
+    for rel_path in sections.values():
+        section_dir = META_DOCS_DIR / rel_path
+        if (section_dir / "index.rst").exists():
+            meta_index_entries.append(f"   {rel_path}/index")
+
+    meta_index = f"""Reference Gallery
+=================
+
+.. toctree::
+   :maxdepth: 2
+
+{chr(10).join(meta_index_entries)}
+"""
+    (META_DOCS_DIR / "index.rst").write_text(meta_index, encoding="utf-8")
+
+    return sorted(META_DOCS_DIR.rglob("*.rst"))
 
 
 if __name__ == "__main__":
-    # Meta examples only (generated programmatically via BenchMetaGen sweeps)
-    meta_dir = Path("docs/reference/meta")
-    if meta_dir.exists():
-        shutil.rmtree(meta_dir)
-    meta_dir.mkdir(parents=True, exist_ok=True)
-
-    from bencher.example.meta.generate_meta import example_meta
-
-    example_meta()
-
-    from bencher.example.meta.generate_meta_statistics import example_meta_statistics
-    from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
-    from bencher.example.meta.generate_meta_sampling import example_meta_sampling
-    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
-    from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
-    from bencher.example.meta.generate_meta_optimization import example_meta_optimization
-
-    example_meta_statistics()
-    example_meta_const_vars()
-    example_meta_sampling()
-    example_meta_result_types()
-    example_meta_plot_types()
-    example_meta_optimization()
-
-    # Collect all notebooks to execute
-    all_notebooks = sorted(meta_dir.rglob("*.ipynb"))
-
-    # Also include non-meta gallery notebooks (levels, pareto, etc.)
-    gallery_notebooks = sorted(Path("docs/reference").glob("*/*.ipynb"))
-    gallery_notebooks = [
-        nb for nb in gallery_notebooks if "meta" not in nb.parts and "yaml" not in nb.parts
-    ]
-    all_notebooks.extend(gallery_notebooks)
-
-    # Execute all notebooks in parallel so RTD only renders pre-computed results
-    execute_all_notebooks(all_notebooks)
+    generate_all()

@@ -1,11 +1,8 @@
-import subprocess
-
-import nbformat as nbf
 from typing import Any
-import bencher as bch
 
+import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
-from bencher.example.meta.generate_examples import _deterministic_id
+from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 
 class BenchMetaGen(bch.ParametrizedSweep):
@@ -38,26 +35,14 @@ class BenchMetaGen(bch.ParametrizedSweep):
     def __init__(
         self, benchable_obj=None, float_vars=None, categorical_vars=None, result_vars=None, **params
     ):
-        """Initialize with a benchable object and variable specifications
-
-        Args:
-            benchable_obj: The benchable object to use
-            float_vars: List of float variable names to sweep
-            categorical_vars: List of categorical variable names to sweep
-            result_vars: List of result variable names to plot
-            **params: Additional parameters
-        """
         super().__init__(**params)
 
-        # Set the benchable object
         self.benchable_obj = benchable_obj if benchable_obj is not None else BenchableObject()
 
-        # Dynamically discover parameters from the benchable object
         float_param_names = []
         categorical_param_names = []
         result_param_names = []
 
-        # Check all parameters of the benchable object
         for name, param in self.benchable_obj.__class__.param.objects().items():
             if hasattr(param, "bounds") and isinstance(param, bch.FloatSweep):
                 float_param_names.append(name)
@@ -66,7 +51,6 @@ class BenchMetaGen(bch.ParametrizedSweep):
             elif isinstance(param, bch.ResultVar):
                 result_param_names.append(name)
 
-        # Use provided parameter lists or discovered ones
         self.float_var_names = float_vars if float_vars is not None else float_param_names
         self.categorical_var_names = (
             categorical_vars if categorical_vars is not None else categorical_param_names
@@ -76,21 +60,13 @@ class BenchMetaGen(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        # Set noise_scale on the benchable object when using repeats
         if hasattr(self.benchable_obj, "noise_scale") and self.sample_with_repeats > 1:
             self.benchable_obj.noise_scale = 0.15
 
-        run_cfg = bch.BenchRunCfg()
-        run_cfg.level = self.level
-        run_cfg.repeats = self.sample_with_repeats
-        run_cfg.over_time = self.sample_over_time
-        run_cfg.plot_size = 500
-
-        # Limit the variables to the specified counts
+        # Build input variable lists
         float_vars = []
-        # Apply the max_level=3 limit to the 3rd and subsequent float variables
         for i, var_name in enumerate(self.float_var_names[: self.float_vars_count]):
-            if i >= 2:  # Third variable (index 2) and beyond
+            if i >= 2:
                 float_vars.append(bch.p(var_name, max_level=3))
             else:
                 float_vars.append(var_name)
@@ -98,20 +74,8 @@ class BenchMetaGen(bch.ParametrizedSweep):
         categorical_vars = self.categorical_var_names[: self.categorical_vars_count]
         input_vars = float_vars + categorical_vars
 
-        if self.run_bench and input_vars and self.result_var_names:
-            bench = self.benchable_obj.to_bench(run_cfg)
-            res = bench.plot_sweep(
-                "test",
-                input_vars=input_vars,
-                result_vars=self.result_var_names,
-                plot_callbacks=False,
-            )
-            self.plots = bch.ResultReference()
-            self.plots.obj = res.to_auto()
-
         base_title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
 
-        # Determine variant subdirectory
         if self.sample_over_time:
             variant = "over_time"
         elif self.sample_with_repeats > 1:
@@ -119,83 +83,70 @@ class BenchMetaGen(bch.ParametrizedSweep):
         else:
             variant = "no_repeats"
 
-        nb = nbf.v4.new_notebook()
-        text = f"""# {self.float_vars_count} Float, {self.categorical_vars_count} Categorical"""
-
-        # Customize notebook generation to use the actual benchmark object and variables
-        module_import = "import bencher as bch\n"
-        if self.benchable_obj.__class__.__module__ != "__main__":
-            benchmark_import = f"from {self.benchable_obj.__class__.__module__} import {self.benchable_obj.__class__.__name__}\n"
-        else:
-            # If it's from main, use BenchableObject as fallback
-            benchmark_import = "from bencher.example.meta.example_meta import BenchableObject\n"
-
+        # Determine benchable class info
         obj_class = self.benchable_obj.__class__.__name__
+        if self.benchable_obj.__class__.__module__ != "__main__":
+            benchmark_import = f"from {self.benchable_obj.__class__.__module__} import {obj_class}"
+        else:
+            benchmark_import = "from bencher.example.meta.example_meta import BenchableObject"
+
+        title = f"{self.float_vars_count} Float, {self.categorical_vars_count} Categorical"
+        function_name = f"example_{variant}_{base_title}"
+        filename = f"ex_{base_title}"
+
         noise_line = ""
         if self.sample_with_repeats > 1:
-            noise_line = "benchable.noise_scale = 0.15\n"
+            noise_line = "    benchable.noise_scale = 0.15\n"
 
         if self.sample_over_time:
-            code_gen = f"""
-%%capture
-from datetime import datetime, timedelta
-{module_import}
-{benchmark_import}
-run_cfg = bch.BenchRunCfg()
-run_cfg.repeats = {self.sample_with_repeats}
-run_cfg.level = 4
-run_cfg.over_time = True
-benchable = {obj_class}()
-benchable.noise_scale = max(0.1, {0.15 if self.sample_with_repeats > 1 else 0.0})
-bench = benchable.to_bench(run_cfg)
-time_offsets = [0.0, 0.5, 1.0]
-_base_time = datetime(2000, 1, 1)
-for i, offset in enumerate(time_offsets):
-    benchable._time_offset = offset
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
-    res = bench.plot_sweep("over_time", input_vars={input_vars},
-                    result_vars={self.result_var_names},
-                    run_cfg=run_cfg,
-                    time_src=_base_time + timedelta(seconds=i))
-"""
+            noise_val = max(0.1, 0.15 if self.sample_with_repeats > 1 else 0.0)
+            body = (
+                f"    from datetime import datetime, timedelta\n"
+                f"    run_cfg.repeats = {self.sample_with_repeats}\n"
+                f"    run_cfg.level = 4\n"
+                f"    run_cfg.over_time = True\n"
+                f"    benchable = {obj_class}()\n"
+                f"    benchable.noise_scale = {noise_val}\n"
+                f"    bench = benchable.to_bench(run_cfg)\n"
+                f"    time_offsets = [0.0, 0.5, 1.0]\n"
+                f"    _base_time = datetime(2000, 1, 1)\n"
+                f"    for i, offset in enumerate(time_offsets):\n"
+                f"        benchable._time_offset = offset\n"
+                f"        run_cfg.clear_cache = True\n"
+                f"        run_cfg.clear_history = i == 0\n"
+                f"        res = bench.plot_sweep(\n"
+                f'            "over_time",\n'
+                f"            input_vars={input_vars},\n"
+                f"            result_vars={self.result_var_names},\n"
+                f"            run_cfg=run_cfg,\n"
+                f"            time_src=_base_time + timedelta(seconds=i),\n"
+                f"        )\n"
+            )
         else:
-            code_gen = f"""
-%%capture
-{module_import}
-{benchmark_import}
-run_cfg = bch.BenchRunCfg()
-run_cfg.repeats = {self.sample_with_repeats}
-run_cfg.level = 4
-run_cfg.over_time = False
-benchable = {obj_class}()
-{noise_line}bench = benchable.to_bench(run_cfg)
-res=bench.plot_sweep(input_vars={input_vars},
-                    result_vars={self.result_var_names})
-"""
-        code_results = """
-from bokeh.io import output_notebook
-output_notebook()
-res.to_auto_plots()
-"""
+            body = (
+                f"    run_cfg.repeats = {self.sample_with_repeats}\n"
+                f"    run_cfg.level = 4\n"
+                f"    run_cfg.over_time = False\n"
+                f"    benchable = {obj_class}()\n"
+                f"{noise_line}"
+                f"    bench = benchable.to_bench(run_cfg)\n"
+                f"    res = bench.plot_sweep(\n"
+                f"        input_vars={input_vars},\n"
+                f"        result_vars={self.result_var_names},\n"
+                f"    )\n"
+            )
 
-        cells = [
-            nbf.v4.new_markdown_cell(text),
-            nbf.v4.new_code_cell(code_gen),
-            nbf.v4.new_code_cell(code_results),
-        ]
-        id_key = f"{variant}/{base_title}"
-        for i, cell in enumerate(cells):
-            cell.id = _deterministic_id(id_key, i)
-        nb["cells"] = cells
-        from pathlib import Path
+        imports = f"import bencher as bch\n{benchmark_import}"
 
-        fname = Path(
-            f"docs/reference/meta/{self.float_vars_count}_float/{variant}/ex_{base_title}.ipynb"
+        gen = MetaGeneratorBase()
+        gen.generate_example(
+            title=title,
+            output_dir=f"{self.float_vars_count}_float/{variant}",
+            filename=filename,
+            function_name=function_name,
+            imports=imports,
+            body=body,
         )
-        fname.parent.mkdir(parents=True, exist_ok=True)
-        fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
-        subprocess.run(["ruff", "format", str(fname)], check=False)
 
         return super().__call__()
 
@@ -207,8 +158,6 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         """Plot gallery showing all combinations of float and categorical input variables"""
     )
 
-    # Limit categorical variables to [0,1,2] for 2+ float variables to reduce build time.
-    # The full [0,1,2,3] range is only used with fewer float variables.
     few_cats = bch.p("categorical_vars_count", [0, 1, 2])
 
     bench.plot_sweep(
