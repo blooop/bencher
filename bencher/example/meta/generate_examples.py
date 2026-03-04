@@ -209,6 +209,20 @@ if __name__ == "__main__":
 
     example_meta()
 
+    from bencher.example.meta.generate_meta_statistics import example_meta_statistics
+    from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
+    from bencher.example.meta.generate_meta_sampling import example_meta_sampling
+    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
+    from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
+    from bencher.example.meta.generate_meta_optimization import example_meta_optimization
+
+    example_meta_statistics()
+    example_meta_const_vars()
+    example_meta_sampling()
+    example_meta_result_types()
+    example_meta_plot_types()
+    example_meta_optimization()
+
     # Collect all notebooks to execute
     all_notebooks = sorted(meta_dir.rglob("*.ipynb"))
 

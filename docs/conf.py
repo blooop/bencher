@@ -69,6 +69,26 @@ nbsite_gallery_conf = {
                 {"path": "meta/3_float/no_repeats", "title": "3 Float Inputs"},
                 {"path": "meta/3_float/with_repeats", "title": "3 Float Inputs (Repeated)"},
                 {"path": "meta/3_float/over_time", "title": "3 Float Inputs (Over Time)"},
+                # Result Types
+                {"path": "meta/result_types/result_var", "title": "Result Types: ResultVar"},
+                {"path": "meta/result_types/result_bool", "title": "Result Types: ResultBool"},
+                {"path": "meta/result_types/result_vec", "title": "Result Types: ResultVec"},
+                {"path": "meta/result_types/result_string", "title": "Result Types: ResultString"},
+                {"path": "meta/result_types/result_path", "title": "Result Types: ResultPath"},
+                {
+                    "path": "meta/result_types/result_dataset",
+                    "title": "Result Types: ResultDataSet",
+                },
+                # Plot Types
+                {"path": "meta/plot_types", "title": "Plot Types"},
+                # Optimization
+                {"path": "meta/optimization", "title": "Optimization & Pareto"},
+                # Sampling Strategies
+                {"path": "meta/sampling", "title": "Sampling Strategies"},
+                # Constant Variables
+                {"path": "meta/const_vars", "title": "Constant Variables (Slicing)"},
+                # Statistics
+                {"path": "meta/statistics", "title": "Statistics & Repeats"},
                 {"path": "levels", "title": "Levels"},
                 {"path": "pareto", "title": "Pareto"},
             ],
