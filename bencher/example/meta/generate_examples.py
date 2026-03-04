@@ -12,9 +12,7 @@ _HEX32_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
 _RUN_DATE_RE = re.compile(r"run date: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+")
 # ISO datetimes from recent years (2020+) that indicate live timestamps, NOT fixed
 # benchmarking dates like 2000-01-01 which are intentionally deterministic.
-_LIVE_DATETIME_RE = re.compile(
-    r"20(?:2[0-9]|3[0-9])-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?"
-)
+_LIVE_DATETIME_RE = re.compile(r"20(?:2[0-9]|3[0-9])-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?")
 # Python object IDs (memory addresses) used by Panel/Bokeh in tags arrays
 _PYOBJ_ID_RE = re.compile(r"(?<![0-9])\d{12,18}(?![0-9])")
 
@@ -45,9 +43,7 @@ def _make_hex_replacers(notebook_name: str):
         original = match.group(0)
         if original not in mapping:
             idx = len(mapping)
-            mapping[original] = hashlib.sha256(
-                f"{notebook_name}:{idx}".encode()
-            ).hexdigest()[:32]
+            mapping[original] = hashlib.sha256(f"{notebook_name}:{idx}".encode()).hexdigest()[:32]
         return mapping[original]
 
     return _uuid_replacement, _hex32_replacement
@@ -84,9 +80,7 @@ def scrub_notebook(nb, notebook_name: str) -> None:
             # Scrub text fields
             if "text" in output:
                 if isinstance(output["text"], list):
-                    output["text"] = [
-                        _scrub_string(t, uuid_rep, hex32_rep) for t in output["text"]
-                    ]
+                    output["text"] = [_scrub_string(t, uuid_rep, hex32_rep) for t in output["text"]]
                 elif isinstance(output["text"], str):
                     output["text"] = _scrub_string(output["text"], uuid_rep, hex32_rep)
 
@@ -94,14 +88,10 @@ def scrub_notebook(nb, notebook_name: str) -> None:
             if "data" in output:
                 for mime, content in output["data"].items():
                     if isinstance(content, str):
-                        output["data"][mime] = _scrub_string(
-                            content, uuid_rep, hex32_rep
-                        )
+                        output["data"][mime] = _scrub_string(content, uuid_rep, hex32_rep)
                     elif isinstance(content, list):
                         output["data"][mime] = [
-                            _scrub_string(s, uuid_rep, hex32_rep)
-                            if isinstance(s, str)
-                            else s
+                            _scrub_string(s, uuid_rep, hex32_rep) if isinstance(s, str) else s
                             for s in content
                         ]
 
@@ -109,9 +99,7 @@ def scrub_notebook(nb, notebook_name: str) -> None:
             if "metadata" in output:
                 for key, val in output["metadata"].items():
                     if isinstance(val, str):
-                        output["metadata"][key] = _scrub_string(
-                            val, uuid_rep, hex32_rep
-                        )
+                        output["metadata"][key] = _scrub_string(val, uuid_rep, hex32_rep)
                     elif isinstance(val, dict):
                         for k2, v2 in val.items():
                             if isinstance(v2, str):
