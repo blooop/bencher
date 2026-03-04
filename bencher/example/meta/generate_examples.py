@@ -1,14 +1,88 @@
 import hashlib
+import re
 import shutil
 import subprocess
 
 import nbformat as nbf
 from pathlib import Path
 
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_RUN_DATE_RE = re.compile(r"run date: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+")
+
 
 def _deterministic_id(name: str, index: int) -> str:
     """Generate a deterministic 8-char hex cell ID from a name and cell index."""
     return hashlib.sha256(f"{name}:{index}".encode()).hexdigest()[:8]
+
+
+def _make_uuid_replacer(notebook_name: str):
+    """Return a function that deterministically replaces UUIDs in a string.
+
+    Each unique UUID found gets a stable replacement derived from SHA-256 of
+    ``notebook_name:index``.  The mapping is shared across all calls so that
+    internal cross-references (e.g. Bokeh div-id ↔ render_items ↔ docs_json)
+    stay consistent.
+    """
+    mapping: dict[str, str] = {}
+
+    def _replacement(match: re.Match) -> str:
+        original = match.group(0)
+        if original not in mapping:
+            idx = len(mapping)
+            h = hashlib.sha256(f"{notebook_name}:{idx}".encode()).hexdigest()
+            mapping[original] = f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+        return mapping[original]
+
+    return _replacement
+
+
+def _scrub_string(text: str, replacer) -> str:
+    text = _UUID_RE.sub(replacer, text)
+    text = _RUN_DATE_RE.sub("run date: 0000-00-00 00:00:00.000000", text)
+    return text
+
+
+def scrub_notebook(nb, notebook_name: str) -> None:
+    """Normalize volatile content in *nb* so regeneration produces stable diffs.
+
+    Replaces execution timestamps, execution counts, UUIDs, and run-date
+    strings with deterministic values.  Operates in-place.
+    """
+    replacer = _make_uuid_replacer(notebook_name)
+
+    for cell in nb.cells:
+        # Strip execution timestamps
+        cell.metadata.pop("execution", None)
+        # Normalize execution_count
+        if hasattr(cell, "execution_count"):
+            cell.execution_count = None
+
+        for output in cell.get("outputs", []):
+            if hasattr(output, "execution_count"):
+                output.execution_count = None
+
+            # Scrub text fields
+            if "text" in output:
+                if isinstance(output["text"], list):
+                    output["text"] = [_scrub_string(t, replacer) for t in output["text"]]
+                elif isinstance(output["text"], str):
+                    output["text"] = _scrub_string(output["text"], replacer)
+
+            # Scrub data dict (text/html, text/plain, application/javascript, etc.)
+            if "data" in output:
+                for mime, content in output["data"].items():
+                    if isinstance(content, str):
+                        output["data"][mime] = _scrub_string(content, replacer)
+                    elif isinstance(content, list):
+                        output["data"][mime] = [
+                            _scrub_string(s, replacer) if isinstance(s, str) else s for s in content
+                        ]
+
+            # Scrub metadata strings (e.g. HoloViews exec UUID)
+            if "metadata" in output:
+                for key, val in output["metadata"].items():
+                    if isinstance(val, str):
+                        output["metadata"][key] = _scrub_string(val, replacer)
 
 
 def convert_example_to_jupyter_notebook(
@@ -60,6 +134,7 @@ def execute_notebook(notebook_path: str | Path, timeout: int = 600) -> None:
     nb = nbf.read(notebook_path, as_version=4)
     client = nbclient.NotebookClient(nb, timeout=timeout, kernel_name="python3")
     client.execute()
+    scrub_notebook(nb, notebook_path.stem)
     nbf.write(nb, notebook_path)
 
 
