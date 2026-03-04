@@ -106,5 +106,4 @@ def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bench_run = bch.BenchRunner(example_holosweep)
-    bench_run.run(level=4, show=True)
+    bch.run(example_holosweep, level=4)

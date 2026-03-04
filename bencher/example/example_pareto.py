@@ -122,4 +122,4 @@ def example_pareto(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    example_pareto().report.show()
+    bch.run(example_pareto)

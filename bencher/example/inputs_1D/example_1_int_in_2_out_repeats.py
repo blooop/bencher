@@ -84,4 +84,4 @@ def example_1_int_in_2_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    example_1_int_in_2_out_repeats(bch.BenchRunCfg(repeats=4)).report.show()
+    bch.run(example_1_int_in_2_out_repeats, repeats=4)

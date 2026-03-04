@@ -32,4 +32,4 @@ def example_yaml_sweep_list(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench
 
 
 if __name__ == "__main__":
-    example_yaml_sweep_list().report.show()
+    bch.run(example_yaml_sweep_list)

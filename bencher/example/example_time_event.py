@@ -33,27 +33,29 @@ def example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     return bencher
 
 
-def run_example_time_event(ex_run_cfg):
-    ex_run_cfg.repeats = 1
-    ex_run_cfg.print_pandas = True
-    ex_run_cfg.over_time = True
+def run_example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    if run_cfg is None:
+        run_cfg = bch.BenchRunCfg()
+    run_cfg.repeats = 1
+    run_cfg.print_pandas = True
+    run_cfg.over_time = True
 
-    ex_run_cfg.clear_cache = True
-    ex_run_cfg.clear_history = True
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = True
 
-    ex_run_cfg.time_event = "-first_event"
-    example_time_event(ex_run_cfg)
+    run_cfg.time_event = "-first_event"
+    example_time_event(run_cfg)
 
-    ex_run_cfg.clear_cache = False
-    ex_run_cfg.clear_history = False
-    ex_run_cfg.time_event = "_second_event"
-    example_time_event(ex_run_cfg)
+    run_cfg.clear_cache = False
+    run_cfg.clear_history = False
+    run_cfg.time_event = "_second_event"
+    example_time_event(run_cfg)
 
-    ex_run_cfg.time_event = (
+    run_cfg.time_event = (
         "*third_event has a very very long label to demonstrate automatic text wrapping"
     )
-    return example_time_event(ex_run_cfg)
+    return example_time_event(run_cfg)
 
 
 if __name__ == "__main__":
-    run_example_time_event(bch.BenchRunCfg()).report.show()
+    bch.run(run_example_time_event)

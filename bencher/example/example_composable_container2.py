@@ -151,8 +151,4 @@ def example_composable_container_image(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bench_runner = bch.BenchRunner("ImageChar")
-    # bench_runner.add_run(bench_image)
-    bench_runner.add_run(example_composable_container_image)
-
-    bench_runner.run(level=6, show=True, cache_results=False)
+    bch.run(example_composable_container_image, level=6, cache_results=False)

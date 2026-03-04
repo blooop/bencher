@@ -44,4 +44,4 @@ def example_dataset(run_cfg: bch.BenchRunCfg | None = None):
 
 
 if __name__ == "__main__":
-    example_dataset().report.show()
+    bch.run(example_dataset)

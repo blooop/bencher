@@ -89,5 +89,4 @@ def example_1_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    br = bch.BenchRunner()
-    br.add(example_1_cat_in_2_out).run(repeats=5, show=True)
+    bch.run(example_1_cat_in_2_out, repeats=5)

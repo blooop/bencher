@@ -215,6 +215,6 @@ class ParametrizedSweep(Parameterized):
         """Create a BenchRunner instance from this ParametrizedSweep.
 
         Enables fluent chaining like:
-            MyConfig().to_bench_runner().add_run(func).run(level=2, max_level=4)
+            MyConfig().to_bench_runner().add(func).run(level=2, max_level=4)
         """
         return create_bench_runner(self, run_cfg=run_cfg, name=name)

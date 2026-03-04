@@ -219,4 +219,4 @@ The full 3D function with all cross-coupling terms active.""",
 
 
 if __name__ == "__main__":
-    example_meta().report.show()
+    bch.run(example_meta)

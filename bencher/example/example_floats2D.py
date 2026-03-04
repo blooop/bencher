@@ -61,5 +61,4 @@ def example_floats2D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bench_runner = bch.BenchRunner()
-    bench_runner.add(example_floats2D).run(repeats=2, level=3, show=True)
+    bch.run(example_floats2D, repeats=2, level=3)

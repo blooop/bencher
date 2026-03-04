@@ -123,10 +123,4 @@ def example_video_tap(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:  # p
 
 
 if __name__ == "__main__":
-    run_cfg_ex = bch.BenchRunCfg()
-    run_cfg_ex.level = 2
-    # run_cfg_ex.cache_samples = True
-    # run_cfg_ex.only_hash_tag = True
-
-    # example_video(run_cfg_ex).report.show()
-    example_video_tap(run_cfg_ex).report.show()
+    bch.run(example_video_tap, level=2)

@@ -136,7 +136,7 @@ def example_holosweep_tap_slider(
 
 
 if __name__ == "__main__":
-    example_holosweep_tap(bch.BenchRunCfg()).report.show()
+    bch.run(example_holosweep_tap)
 
 
 # todo  https://discourse.holoviz.org/t/pointdraw-as-parameterized-class/3539

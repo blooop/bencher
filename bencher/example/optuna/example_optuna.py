@@ -73,4 +73,4 @@ def optuna_rastrigin(run_cfg: bch.BenchRunCfg | None = None):
 
 
 if __name__ == "__main__":
-    optuna_rastrigin().report.show()
+    bch.run(optuna_rastrigin)

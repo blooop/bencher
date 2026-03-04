@@ -78,5 +78,4 @@ def example_image(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bench_runner = bch.BenchRunner()
-    bench_runner.add(example_image).run(level=3, show=True)
+    bch.run(example_image, level=3)

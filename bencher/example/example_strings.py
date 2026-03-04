@@ -42,4 +42,4 @@ def example_strings(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    example_strings().report.show()
+    bch.run(example_strings)
