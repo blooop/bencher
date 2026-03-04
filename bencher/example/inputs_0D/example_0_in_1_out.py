@@ -40,13 +40,7 @@ def example_0_in_1_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    example_0_in_1_out().report.show()
-    # run_config = bch.BenchRunCfg(repeats=100)
-    # report_obj = bch.BenchReport()
-    # example_0_in_1_out(run_config).report.show()
-
-    # run_cfg.over_time = True
-    # run_cfg.cache_samples = True
+    bch.run(example_0_in_1_out)
     # for i in range(4):
     #     example_0_in_1_out(run_cfg)
 

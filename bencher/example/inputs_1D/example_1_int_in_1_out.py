@@ -81,12 +81,6 @@ def example_1_int_in_1_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    run_config = bch.BenchRunCfg()
-    example_1_int_in_1_out(run_config).report.show()
-
-    run_config.repeats = 4
-    example_1_int_in_1_out(run_config)
-
-    # run_cfg.over_time = True
+    bch.run(example_1_int_in_1_out)
     # for i in range(4):
     #     example_1_in_2_out(run_cfg)

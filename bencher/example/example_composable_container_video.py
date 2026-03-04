@@ -43,5 +43,4 @@ def example_composable_container_video(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    ex_run_cfg = bch.BenchRunCfg()
-    example_composable_container_video(ex_run_cfg).report.show()
+    bch.run(example_composable_container_video)

@@ -82,6 +82,4 @@ def example_floats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bench_ex = example_floats(bch.BenchRunCfg(repeats=2))
-    bench_ex.report.save_index()
-    bench_ex.report.show()
+    bch.run(example_floats, repeats=2, save=True)

@@ -15,4 +15,4 @@ def example_meta_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    example_meta_float().report.show()
+    bch.run(example_meta_float)

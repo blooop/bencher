@@ -31,6 +31,4 @@ def example_1D_bool(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    br = bch.BenchRunner()
-    br.add(example_1D_bool)
-    br.run(repeats=20, show=True)
+    bch.run(example_1D_bool, repeats=20)

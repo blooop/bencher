@@ -34,4 +34,4 @@ def example_2D_float_const(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    example_2D_float_const().report.show()
+    bch.run(example_2D_float_const)

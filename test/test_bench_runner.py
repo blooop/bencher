@@ -20,8 +20,8 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner = bch.BenchRunner("bench_runner_test")
         bench_fn1 = Mock()
         bench_fn2 = Mock()
-        bench_runner.add_run(bench_fn1)
-        bench_runner.add_run(bench_fn2)
+        bench_runner.add(bench_fn1)
+        bench_runner.add(bench_fn2)
         self.assertEqual(len(bench_runner.bench_fns), 2)
         self.assertIn(bench_fn1, bench_runner.bench_fns)
         self.assertIn(bench_fn2, bench_runner.bench_fns)
@@ -55,7 +55,7 @@ class TestBenchRunner(unittest.TestCase):
             bench.plot_sweep("bench_1")
             return bench
 
-        bench_runner.add_run(run_bench_class)
+        bench_runner.add(run_bench_class)
 
         # run with unique tag and with cache, should not hit cache because unique tag
         results = bench_runner.run()
@@ -164,7 +164,7 @@ class TestBenchRunner(unittest.TestCase):
             cfg.run_cfg = run_cfg
             return cfg
 
-        bench_runner.add_run(simple_test)
+        bench_runner.add(simple_test)
 
         # Capture warnings manually to avoid import issues
         with warnings.catch_warnings(record=True) as w:
@@ -275,7 +275,18 @@ class TestBenchRunner(unittest.TestCase):
     #     self.assertEqual(bench_runner.publisher.call_args_list[8][0][0], results[8])
     #     self.assertEqual(bench_runner.publisher.call_args_list[9][0][0], results[9])
 
-    # Tests that bch.BenchRunner can handle empty list of Benchable functions
+    def test_add_run_deprecation_warning(self):
+        """Test that add_run() emits a DeprecationWarning."""
+        import warnings
+
+        bench_runner = bch.BenchRunner("test_add_run_deprecation")
+        bench_fn = Mock()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            bench_runner.add_run(bench_fn)
+            self.assertTrue(any("add_run() is deprecated" in str(warning.message) for warning in w))
+        # Function should still have been added
+        self.assertIn(bench_fn, bench_runner.bench_fns)
 
     # Tests that bch.BenchRunner can handle empty list of Benchable functions
     # def test_benchrunner_handle_empty_list(self):

@@ -25,5 +25,4 @@ def example_simple_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    br = bch.BenchRunner()
-    br.add(example_simple_float).run(show=True)
+    bch.run(example_simple_float)

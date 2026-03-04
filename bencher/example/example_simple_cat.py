@@ -38,7 +38,4 @@ def example_1D_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    ex_run_cfg = bch.BenchRunCfg()
-    ex_run_cfg.repeats = 10
-
-    srv1 = example_1D_cat(ex_run_cfg).report.show()
+    bch.run(example_1D_cat, repeats=10)

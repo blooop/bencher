@@ -24,4 +24,4 @@ def example_filepath(run_cfg: bch.BenchRunCfg | None = None):
 
 
 if __name__ == "__main__":
-    example_filepath().report.show()
+    bch.run(example_filepath)

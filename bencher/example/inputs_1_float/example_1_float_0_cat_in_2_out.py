@@ -108,4 +108,4 @@ def example_1_float_0_cat_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    example_1_float_0_cat_in_2_out().report.show()
+    bch.run(example_1_float_0_cat_in_2_out)

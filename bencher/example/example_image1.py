@@ -69,6 +69,4 @@ if __name__ == "__main__":
     ex_run_cfg = bch.BenchRunCfg()
     ex_run_cfg.cache_samples = True
     ex_run_cfg.overwrite_sample_cache = True
-    ex_run_cfg.level = 3
-
-    example_image_vid_sequential1(ex_run_cfg).report.show()
+    bch.run(example_image_vid_sequential1, level=3, run_cfg=ex_run_cfg)

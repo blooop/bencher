@@ -95,6 +95,4 @@ def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     PlotFunctions().to_gui()
-    bench_run = bch.BenchRunner("bench_runner_test")
-    bench_run.add_run(example_holosweep)
-    bench_run.run(level=6, show=True, cache_results=False)
+    bch.run(example_holosweep, level=6, cache_results=False)

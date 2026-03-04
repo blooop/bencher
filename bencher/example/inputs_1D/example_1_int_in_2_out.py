@@ -85,12 +85,7 @@ def example_1_int_in_2_out(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    run_config = bch.BenchRunCfg()
-    example_1_int_in_2_out(run_config).report.show()
-    # run_config.over_time = True
-    # run_config.auto_plot = False
-    # for i in range(4):
-    #     example_1_in_2_out(run_config)
+    bch.run(example_1_int_in_2_out)
 
     # run_config.auto_plot = True
     # example_1_in_2_out(run_config).report.show()

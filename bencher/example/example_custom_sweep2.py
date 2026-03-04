@@ -38,4 +38,4 @@ def example_custom_sweep2(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    example_custom_sweep2().report.show()
+    bch.run(example_custom_sweep2)

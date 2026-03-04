@@ -61,37 +61,22 @@ def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     return bench
 
 
-def run_example_float_cat(ex_run_cfg: bch.BenchRunCfg | None = None) -> None:
-    if ex_run_cfg is None:
-        ex_run_cfg = bch.BenchRunCfg()
-    ex_run_cfg.repeats = 2
-    ex_run_cfg.over_time = True
-    ex_run_cfg.clear_cache = True
-    ex_run_cfg.clear_history = True
-    ex_run_cfg.level = 3
-    # ex_run_cfg.time_event = "run 1"
-    # ex_run_cfg.use_optuna = True
+def run_example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    if run_cfg is None:
+        run_cfg = bch.BenchRunCfg()
+    run_cfg.repeats = 2
+    run_cfg.over_time = True
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = True
+    run_cfg.level = 3
 
-    example_float_cat(ex_run_cfg)
+    example_float_cat(run_cfg)
 
-    # ex_run_cfg.repeats = 2
-    # ex_run_cfg.over_time = True
-    ex_run_cfg.clear_cache = False
-    ex_run_cfg.clear_history = False
-    # ex_run_cfg.time_event = "run 2"
-    # ex_run_cfg.use_optuna = True
+    run_cfg.clear_cache = False
+    run_cfg.clear_history = False
 
-    # example_float_cat(ex_run_cfg)
-
-    # ex_run_cfg.clear_cache = False
-    # ex_run_cfg.clear_history = False
-    # ex_run_cfg.time_event = "run 2"
-
-    # example_float_cat(ex_run_cfg)
-
-    # ex_run_cfg.time_event = "run 3"
-    return example_float_cat(ex_run_cfg)
+    return example_float_cat(run_cfg)
 
 
 if __name__ == "__main__":
-    run_example_float_cat().report.show()
+    bch.run(run_example_float_cat)

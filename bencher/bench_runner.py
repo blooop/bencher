@@ -68,7 +68,7 @@ class BenchRunner:
             self.name = name
         elif isinstance(name, Callable):
             self.name = name.__name__
-            self.add_run(name)
+            self.bench_fns.append(name)
         else:
             # Fallback - treat as name
             self.name = str(name)
@@ -164,15 +164,23 @@ class BenchRunner:
         Returns:
             BenchRunner: Self for method chaining
         """
-        self.add_run(bench_fn)
+        self.bench_fns.append(bench_fn)
         return self
 
     def add_run(self, bench_fn: Benchable) -> None:
         """Add a benchmark function to be executed by this runner.
 
+        .. deprecated::
+            Use :meth:`add` instead.
+
         Args:
             bench_fn (Benchable): A callable that implements the Benchable protocol
         """
+        warnings.warn(
+            "add_run() is deprecated, use add() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.bench_fns.append(bench_fn)
 
     def add_bench(self, class_instance: ParametrizedSweep) -> None:
@@ -194,7 +202,7 @@ class BenchRunner:
             result.report = report
             return result
 
-        self.add_run(cb)
+        self.bench_fns.append(cb)
 
     def _merge_reports(self, target: BenchReport, source: BenchReport | None) -> None:
         """Append all tabs from source report into the target report."""
