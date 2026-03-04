@@ -42,15 +42,15 @@ class MetaOptimization(MetaGeneratorBase):
         )
 
         body = (
-            f"    run_cfg.level = {level}\n"
-            f"    run_cfg.repeats = 3\n"
-            f"    run_cfg.use_optuna = True\n"
-            f"    benchable = BenchableMultiObjective()\n"
-            f"    benchable.noise_scale = 0.1\n"
-            f"    bench = benchable.to_bench(run_cfg)\n"
-            f"    res = bench.plot_sweep(input_vars={input_vars_code}, "
+            f"run_cfg.level = {level}\n"
+            f"run_cfg.repeats = 3\n"
+            f"run_cfg.use_optuna = True\n"
+            f"benchable = BenchableMultiObjective()\n"
+            f"benchable.noise_scale = 0.1\n"
+            f"bench = benchable.to_bench(run_cfg)\n"
+            f"res = bench.plot_sweep(input_vars={input_vars_code}, "
             f"result_vars={result_vars_code})\n"
-            f"    res.to_optuna_plots()\n"
+            f"res.to_optuna_plots()\n"
         )
 
         self.generate_example(

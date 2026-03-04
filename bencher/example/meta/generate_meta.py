@@ -94,47 +94,49 @@ class BenchMetaGen(bch.ParametrizedSweep):
         function_name = f"example_{variant}_{base_title}"
         filename = f"ex_{base_title}"
 
-        noise_line = ""
-        if self.sample_with_repeats > 1:
-            noise_line = "    benchable.noise_scale = 0.15\n"
-
         if self.sample_over_time:
             noise_val = max(0.1, 0.15 if self.sample_with_repeats > 1 else 0.0)
             body = (
-                f"    from datetime import datetime, timedelta\n"
-                f"    run_cfg.repeats = {self.sample_with_repeats}\n"
-                f"    run_cfg.level = 4\n"
-                f"    run_cfg.over_time = True\n"
-                f"    benchable = {obj_class}()\n"
-                f"    benchable.noise_scale = {noise_val}\n"
-                f"    bench = benchable.to_bench(run_cfg)\n"
-                f"    time_offsets = [0.0, 0.5, 1.0]\n"
-                f"    _base_time = datetime(2000, 1, 1)\n"
-                f"    for i, offset in enumerate(time_offsets):\n"
-                f"        benchable._time_offset = offset\n"
-                f"        run_cfg.clear_cache = True\n"
-                f"        run_cfg.clear_history = i == 0\n"
-                f"        res = bench.plot_sweep(\n"
-                f'            "over_time",\n'
-                f"            input_vars={input_vars},\n"
-                f"            result_vars={self.result_var_names},\n"
-                f"            run_cfg=run_cfg,\n"
-                f"            time_src=_base_time + timedelta(seconds=i),\n"
-                f"        )\n"
-            )
-        else:
-            body = (
-                f"    run_cfg.repeats = {self.sample_with_repeats}\n"
-                f"    run_cfg.level = 4\n"
-                f"    run_cfg.over_time = False\n"
-                f"    benchable = {obj_class}()\n"
-                f"{noise_line}"
-                f"    bench = benchable.to_bench(run_cfg)\n"
+                f"from datetime import datetime, timedelta\n"
+                f"run_cfg.repeats = {self.sample_with_repeats}\n"
+                f"run_cfg.level = 4\n"
+                f"run_cfg.over_time = True\n"
+                f"benchable = {obj_class}()\n"
+                f"benchable.noise_scale = {noise_val}\n"
+                f"bench = benchable.to_bench(run_cfg)\n"
+                f"time_offsets = [0.0, 0.5, 1.0]\n"
+                f"_base_time = datetime(2000, 1, 1)\n"
+                f"for i, offset in enumerate(time_offsets):\n"
+                f"    benchable._time_offset = offset\n"
+                f"    run_cfg.clear_cache = True\n"
+                f"    run_cfg.clear_history = i == 0\n"
                 f"    res = bench.plot_sweep(\n"
+                f'        "over_time",\n'
                 f"        input_vars={input_vars},\n"
                 f"        result_vars={self.result_var_names},\n"
+                f"        run_cfg=run_cfg,\n"
+                f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"
             )
+        else:
+            lines = [
+                f"run_cfg.repeats = {self.sample_with_repeats}",
+                "run_cfg.level = 4",
+                "run_cfg.over_time = False",
+                f"benchable = {obj_class}()",
+            ]
+            if self.sample_with_repeats > 1:
+                lines.append("benchable.noise_scale = 0.15")
+            lines.extend(
+                [
+                    "bench = benchable.to_bench(run_cfg)",
+                    "res = bench.plot_sweep(",
+                    f"    input_vars={input_vars},",
+                    f"    result_vars={self.result_var_names},",
+                    ")",
+                ]
+            )
+            body = "\n".join(lines) + "\n"
 
         imports = f"import bencher as bch\n{benchmark_import}"
 

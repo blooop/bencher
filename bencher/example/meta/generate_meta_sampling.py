@@ -25,44 +25,42 @@ class MetaSampling(MetaGeneratorBase):
         function_name = f"example_sampling_{self.strategy}"
         title = f"Sampling: {self.strategy.replace('_', ' ').title()}"
 
+        common_imports = (
+            "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchableObject"
+        )
+
         if self.strategy == "uniform":
-            imports = (
-                "import bencher as bch\n"
-                "from bencher.example.meta.example_meta import BenchableObject"
-            )
+            imports = common_imports
             body = (
-                "    run_cfg.level = 4\n"
-                "    benchable = BenchableObject()\n"
-                "    bench = benchable.to_bench(run_cfg)\n"
-                '    bench.plot_sweep(input_vars=["float1"], result_vars=["distance"])\n'
+                "run_cfg.level = 4\n"
+                "benchable = BenchableObject()\n"
+                "bench = benchable.to_bench(run_cfg)\n"
+                'bench.plot_sweep(input_vars=["float1"], result_vars=["distance"])\n'
             )
         elif self.strategy == "custom_values":
-            imports = (
-                "import bencher as bch\n"
-                "from bencher.example.meta.example_meta import BenchableObject"
-            )
+            imports = common_imports
             body = (
-                "    benchable = BenchableObject()\n"
-                "    bench = benchable.to_bench(run_cfg)\n"
-                "    bench.plot_sweep(\n"
-                '        input_vars=[bch.p("float1", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
-                '        result_vars=["distance"],\n'
-                "    )\n"
+                "benchable = BenchableObject()\n"
+                "bench = benchable.to_bench(run_cfg)\n"
+                "bench.plot_sweep(\n"
+                '    input_vars=[bch.p("float1", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
+                '    result_vars=["distance"],\n'
+                ")\n"
             )
         elif self.strategy == "levels":
             imports = (
                 "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchMeta"
             )
             body = (
-                "    bench = BenchMeta().to_bench(run_cfg)\n"
-                "    bench.plot_sweep(\n"
-                '        title="Level-based sampling resolution",\n'
-                "        input_vars=[\n"
-                '            bch.p("float_vars", [1, 2]),\n'
-                '            bch.p("level", [2, 3, 4, 5]),\n'
-                "        ],\n"
-                "        const_vars=dict(categorical_vars=0),\n"
-                "    )\n"
+                "bench = BenchMeta().to_bench(run_cfg)\n"
+                "bench.plot_sweep(\n"
+                '    title="Level-based sampling resolution",\n'
+                "    input_vars=[\n"
+                '        bch.p("float_vars", [1, 2]),\n'
+                '        bch.p("level", [2, 3, 4, 5]),\n'
+                "    ],\n"
+                "    const_vars=dict(categorical_vars=0),\n"
+                ")\n"
             )
         else:  # int_vs_float
             imports = (
@@ -70,10 +68,10 @@ class MetaSampling(MetaGeneratorBase):
                 "from bencher.example.meta.benchable_objects import BenchableIntFloat"
             )
             body = (
-                "    run_cfg.level = 3\n"
-                "    benchable = BenchableIntFloat()\n"
-                "    bench = benchable.to_bench(run_cfg)\n"
-                '    bench.plot_sweep(input_vars=["int_input", "float_input"], '
+                "run_cfg.level = 3\n"
+                "benchable = BenchableIntFloat()\n"
+                "bench = benchable.to_bench(run_cfg)\n"
+                'bench.plot_sweep(input_vars=["int_input", "float_input"], '
                 'result_vars=["output"])\n'
             )
 

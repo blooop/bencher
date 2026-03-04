@@ -1,7 +1,6 @@
 """Test that all generated meta examples run without crashing."""
 
-import importlib.util
-import sys
+import importlib
 from pathlib import Path
 
 import pytest
@@ -34,13 +33,9 @@ if not _examples:
 )
 def test_generated_example(example_path):
     """Run a generated example. Success = no exception."""
-    rel = example_path.relative_to(GENERATED_DIR)
-    module_name = f"test_generated.{rel.with_suffix('').as_posix().replace('/', '.')}"
-    spec = importlib.util.spec_from_file_location(module_name, example_path)
-    assert spec is not None and spec.loader is not None, f"Could not load {example_path}"
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = mod
-    spec.loader.exec_module(mod)
+    rel = example_path.relative_to(GENERATED_DIR).with_suffix("")
+    module_path = ".".join(("bencher.example.meta.generated", *rel.parts))
+    mod = importlib.import_module(module_path)
 
     # Find the example_* function
     example_fns = [v for k, v in vars(mod).items() if k.startswith("example_") and callable(v)]

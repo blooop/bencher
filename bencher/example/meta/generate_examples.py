@@ -1,10 +1,9 @@
 """Generate Python example files, run them, save HTML reports, and generate RST for docs."""
 
 import importlib
-import importlib.util
 import os
 import shutil
-import sys
+import subprocess
 from pathlib import Path
 
 import bencher as bch
@@ -48,19 +47,16 @@ def generate_python_files():
     if not init.exists():
         init.touch()
 
+    # Format all generated files in a single pass
+    if shutil.which("ruff"):
+        subprocess.run(["ruff", "format", str(GENERATED_DIR)], check=False)
+
 
 def _import_example_module(py_file: Path):
-    """Dynamically import a Python example file and return its module."""
-    rel = py_file.relative_to(GENERATED_DIR)
-    module_name = f"generated_example.{rel.with_suffix('').as_posix().replace('/', '.')}"
-    spec = importlib.util.spec_from_file_location(module_name, py_file)
-    if spec is None or spec.loader is None:
-        print(f"ERROR: Could not load module from {py_file}, skipping")
-        return None
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    """Import a generated example module using the normal package path."""
+    rel = py_file.relative_to(GENERATED_DIR).with_suffix("")
+    module_path = ".".join(("bencher.example.meta.generated", *rel.parts))
+    return importlib.import_module(module_path)
 
 
 def _find_example_function(mod):
@@ -79,8 +75,6 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
     stem = py_file.stem
 
     mod = _import_example_module(py_file)
-    if mod is None:
-        return
     example_fn = _find_example_function(mod)
     if example_fn is None:
         print(f"WARNING: No example_* function found in {py_file}, skipping")

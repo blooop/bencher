@@ -96,10 +96,10 @@ class MetaResultTypes(MetaGeneratorBase):
         imports = f"import bencher as bch\nfrom {info['module']} import {info['class']}"
 
         body = (
-            f"    run_cfg.level = {level}\n"
-            f"    benchable = {info['class']}()\n"
-            f"    bench = benchable.to_bench(run_cfg)\n"
-            f"    bench.plot_sweep(input_vars={input_vars_code}, "
+            f"run_cfg.level = {level}\n"
+            f"benchable = {info['class']}()\n"
+            f"bench = benchable.to_bench(run_cfg)\n"
+            f"bench.plot_sweep(input_vars={input_vars_code}, "
             f"result_vars={info['result_vars']})\n"
         )
 

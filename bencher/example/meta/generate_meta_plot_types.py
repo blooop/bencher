@@ -57,10 +57,10 @@ PLOT_CONFIGS = {
         "float_dims": 0,
         "cat_dims": 1,
         "repeats": 10,
-        "plot_call": (
+        "plot_call": "res.to(BoxWhiskerResult)",
+        "extra_import": (
             "from bencher.results.holoview_results.distribution_result"
-            ".box_whisker_result import BoxWhiskerResult\n"
-            "    res.to(BoxWhiskerResult)"
+            ".box_whisker_result import BoxWhiskerResult"
         ),
         "input_vars": '["wave"]',
     },
@@ -68,10 +68,10 @@ PLOT_CONFIGS = {
         "float_dims": 0,
         "cat_dims": 1,
         "repeats": 10,
-        "plot_call": (
+        "plot_call": "res.to(ScatterJitterResult)",
+        "extra_import": (
             "from bencher.results.holoview_results.distribution_result"
-            ".scatter_jitter_result import ScatterJitterResult\n"
-            "    res.to(ScatterJitterResult)"
+            ".scatter_jitter_result import ScatterJitterResult"
         ),
         "input_vars": '["wave"]',
     },
@@ -94,24 +94,30 @@ class MetaPlotTypes(MetaGeneratorBase):
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
         level = 2 if cfg["float_dims"] >= 2 else 3
-        noise_line = ""
+
+        import_lines = [
+            "import bencher as bch",
+            "from bencher.example.meta.example_meta import BenchableObject",
+        ]
+        if cfg.get("extra_import"):
+            import_lines.append(cfg["extra_import"])
+        imports = "\n".join(import_lines)
+
+        body_lines = [
+            f"run_cfg.repeats = {cfg['repeats']}",
+            f"run_cfg.level = {level}",
+            "benchable = BenchableObject()",
+        ]
         if cfg["repeats"] > 1:
-            noise_line = "    benchable.noise_scale = 0.15\n"
-
-        imports = (
-            "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchableObject"
+            body_lines.append("benchable.noise_scale = 0.15")
+        body_lines.extend(
+            [
+                "bench = benchable.to_bench(run_cfg)",
+                f'res = bench.plot_sweep(input_vars={cfg["input_vars"]}, result_vars=["distance"])',
+                cfg["plot_call"],
+            ]
         )
-
-        body = (
-            f"    run_cfg.repeats = {cfg['repeats']}\n"
-            f"    run_cfg.level = {level}\n"
-            f"    benchable = BenchableObject()\n"
-            f"{noise_line}"
-            f"    bench = benchable.to_bench(run_cfg)\n"
-            f"    res = bench.plot_sweep(input_vars={cfg['input_vars']}, "
-            f'result_vars=["distance"])\n'
-            f"    {cfg['plot_call']}\n"
-        )
+        body = "\n".join(body_lines) + "\n"
 
         self.generate_example(
             title=title,

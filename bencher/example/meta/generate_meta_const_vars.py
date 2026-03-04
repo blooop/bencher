@@ -38,10 +38,10 @@ class MetaConstVars(MetaGeneratorBase):
         )
 
         body = (
-            f"    run_cfg.level = 3\n"
-            f"    benchable = BenchableObject()\n"
-            f"    bench = benchable.to_bench(run_cfg)\n"
-            f"    bench.plot_sweep(input_vars={input_vars_code}, "
+            f"run_cfg.level = 3\n"
+            f"benchable = BenchableObject()\n"
+            f"bench = benchable.to_bench(run_cfg)\n"
+            f"bench.plot_sweep(input_vars={input_vars_code}, "
             f'result_vars=["distance"]{const_vars_code})\n'
         )
 

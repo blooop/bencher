@@ -17,6 +17,22 @@ class MetaStatistics(MetaGeneratorBase):
     repeats = bch.IntSweep(default=1, bounds=(1, 100), doc="Number of repeats")
     input_dims = bch.IntSweep(default=0, bounds=(0, 1), doc="0 = categorical only, 1 = float sweep")
 
+    def _build_body(self, input_vars_code: str) -> str:
+        lines = [
+            f"run_cfg.repeats = {self.repeats}",
+            "run_cfg.level = 3",
+            "benchable = BenchableObject()",
+        ]
+        if self.repeats > 1:
+            lines.append("benchable.noise_scale = 0.15")
+        lines.extend(
+            [
+                "bench = benchable.to_bench(run_cfg)",
+                f'bench.plot_sweep(input_vars={input_vars_code}, result_vars=["distance"])',
+            ]
+        )
+        return "\n".join(lines) + "\n"
+
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
@@ -33,22 +49,11 @@ class MetaStatistics(MetaGeneratorBase):
         else:
             input_vars_code = '["float1"]'
 
-        noise_line = ""
-        if self.repeats > 1:
-            noise_line = "    benchable.noise_scale = 0.15\n"
-
         imports = (
             "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchableObject"
         )
 
-        body = (
-            f"    run_cfg.repeats = {self.repeats}\n"
-            f"    run_cfg.level = 3\n"
-            f"    benchable = BenchableObject()\n"
-            f"{noise_line}"
-            f"    bench = benchable.to_bench(run_cfg)\n"
-            f'    bench.plot_sweep(input_vars={input_vars_code}, result_vars=["distance"])\n'
-        )
+        body = self._build_body(input_vars_code)
 
         self.generate_example(
             title=title,
