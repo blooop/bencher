@@ -9,4 +9,3 @@ dependencies:
       - -e ../
       - -r requirements.txt
       - matplotlib
-
