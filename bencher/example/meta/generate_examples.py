@@ -13,8 +13,10 @@ _RUN_DATE_RE = re.compile(r"run date: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+")
 # ISO datetimes from recent years (2020+) that indicate live timestamps, NOT fixed
 # benchmarking dates like 2000-01-01 which are intentionally deterministic.
 _LIVE_DATETIME_RE = re.compile(r"20(?:2[0-9]|3[0-9])-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?")
-# Python object IDs (memory addresses) used by Panel/Bokeh in tags arrays
-_PYOBJ_ID_RE = re.compile(r"(?<![0-9])\d{12,18}(?![0-9])")
+# Python object IDs (memory addresses) in Panel/Bokeh "tags" arrays.
+# Target only the specific JSON pattern `"tags":[[<id>,` to avoid clobbering
+# datetime timestamps (millisecond or nanosecond) that may appear in data arrays.
+_BOKEH_TAGS_ID_RE = re.compile(r'("tags":\[\[)\d{12,18}(,)')
 
 
 def _deterministic_id(name: str, index: int) -> str:
@@ -54,7 +56,7 @@ def _scrub_string(text: str, uuid_replacer, hex32_replacer) -> str:
     text = _HEX32_RE.sub(hex32_replacer, text)
     text = _RUN_DATE_RE.sub("run date: 0000-00-00 00:00:00.000000", text)
     text = _LIVE_DATETIME_RE.sub("2000-01-01T00:00:00", text)
-    text = _PYOBJ_ID_RE.sub("0", text)
+    text = _BOKEH_TAGS_ID_RE.sub(r"\g<1>0\2", text)
     return text
 
 
