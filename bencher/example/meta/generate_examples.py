@@ -194,7 +194,7 @@ def execute_all_notebooks(
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
     if max_workers is None:
-        max_workers = min(os.cpu_count() or 4, len(notebooks))
+        max_workers = len(notebooks)
 
     print(f"Executing {len(notebooks)} notebooks with {max_workers} workers...")
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
