@@ -21,7 +21,8 @@ class MetaOptimization(MetaGeneratorBase):
         self.update_params_from_kwargs(**kwargs)
 
         filename = f"optim_{self.n_objectives}obj_{self.input_dims}d"
-        title = f"Optimization: {self.n_objectives} objective(s), {self.input_dims}D input"
+        obj_label = "objective" if self.n_objectives == 1 else "objectives"
+        title = f"Optimization: {self.n_objectives} {obj_label}, {self.input_dims}D input"
 
         if self.n_objectives == 1:
             result_vars_code = '["performance"]'

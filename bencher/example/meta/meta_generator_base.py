@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 import nbformat as nbf
@@ -9,8 +8,6 @@ from bencher.example.meta.generate_examples import _deterministic_id
 
 class MetaGeneratorBase(bch.ParametrizedSweep):
     """Shared base class for meta-generators that produce notebooks programmatically."""
-
-    plots = bch.ResultReference(units="int")
 
     def generate_notebook(
         self,
@@ -50,4 +47,3 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
         fname = Path(f"docs/reference/meta/{output_dir}/ex_{filename}.ipynb")
         fname.parent.mkdir(parents=True, exist_ok=True)
         fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
-        subprocess.run(["ruff", "format", str(fname)], check=False)

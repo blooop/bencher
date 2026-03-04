@@ -26,7 +26,7 @@ class BenchableBoolResult(bch.ParametrizedSweep):
         score = math.sin(math.pi * self.threshold) * (1.0 - 0.5 * self.difficulty)
         if self.noise_scale > 0:
             score += random.gauss(0, self.noise_scale)
-        self.pass_rate = float(score > 0.5)
+        self.pass_rate = score > 0.5
         return super().__call__()
 
 

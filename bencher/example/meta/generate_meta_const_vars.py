@@ -20,7 +20,8 @@ class MetaConstVars(MetaGeneratorBase):
         self.update_params_from_kwargs(**kwargs)
 
         filename = f"const_vars_{self.n_const}"
-        title = f"Constant Variables: {self.n_const} fixed parameter(s)"
+        param_label = "parameter" if self.n_const == 1 else "parameters"
+        title = f"Constant Variables: {self.n_const} fixed {param_label}"
 
         if self.n_const == 0:
             input_vars_code = '["float1", "float2", "float3"]'

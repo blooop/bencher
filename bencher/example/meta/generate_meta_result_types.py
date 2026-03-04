@@ -6,6 +6,14 @@ Demonstrates each result type at different input dimensionalities.
 from typing import Any
 
 import bencher as bch
+from bencher.example.meta.benchable_objects import (
+    BenchableBoolResult,
+    BenchableDataSetResult,
+    BenchablePathResult,
+    BenchableStringResult,
+    BenchableVecResult,
+)
+from bencher.example.meta.example_meta import BenchableObject
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "result_types"
@@ -19,48 +27,34 @@ RESULT_TYPES = [
     "result_dataset",
 ]
 
+
+def _cls_info(cls, result_vars):
+    """Build BENCHABLE_MAP entry from a class, reducing stringly-typed duplication."""
+    return {
+        "class": cls.__name__,
+        "module": cls.__module__,
+        "result_vars": "[" + ", ".join(f'"{v}"' for v in result_vars) + "]",
+    }
+
+
 # Validity matrix: which (result_type, input_dims) combos generate notebooks
 VALID_COMBOS = {
     "result_var": [0, 1, 2],
     "result_bool": [0, 1, 2],
     "result_vec": [1, 2],
     "result_string": [0, 1],
-    "result_path": [0, 1],
+    "result_path": [0],
     "result_dataset": [1, 2],
 }
 
 # Map result types to their benchable class and module
 BENCHABLE_MAP = {
-    "result_var": {
-        "class": "BenchableObject",
-        "module": "bencher.example.meta.example_meta",
-        "result_vars": '["distance"]',
-    },
-    "result_bool": {
-        "class": "BenchableBoolResult",
-        "module": "bencher.example.meta.benchable_objects",
-        "result_vars": '["pass_rate"]',
-    },
-    "result_vec": {
-        "class": "BenchableVecResult",
-        "module": "bencher.example.meta.benchable_objects",
-        "result_vars": '["position"]',
-    },
-    "result_string": {
-        "class": "BenchableStringResult",
-        "module": "bencher.example.meta.benchable_objects",
-        "result_vars": '["report"]',
-    },
-    "result_path": {
-        "class": "BenchablePathResult",
-        "module": "bencher.example.meta.benchable_objects",
-        "result_vars": '["file_result"]',
-    },
-    "result_dataset": {
-        "class": "BenchableDataSetResult",
-        "module": "bencher.example.meta.benchable_objects",
-        "result_vars": '["result_ds"]',
-    },
+    "result_var": _cls_info(BenchableObject, ["distance"]),
+    "result_bool": _cls_info(BenchableBoolResult, ["pass_rate"]),
+    "result_vec": _cls_info(BenchableVecResult, ["position"]),
+    "result_string": _cls_info(BenchableStringResult, ["report"]),
+    "result_path": _cls_info(BenchablePathResult, ["file_result"]),
+    "result_dataset": _cls_info(BenchableDataSetResult, ["result_ds"]),
 }
 
 # Map result types to input variables per dimensionality
@@ -69,7 +63,7 @@ INPUT_VARS_MAP = {
     "result_bool": {0: '["difficulty"]', 1: '["threshold"]', 2: '["threshold", "difficulty"]'},
     "result_vec": {1: '["x"]', 2: '["x", "y"]'},
     "result_string": {0: '["label"]', 1: '["label", "value"]'},
-    "result_path": {0: '["content"]', 1: '["content"]'},
+    "result_path": {0: '["content"]'},
     "result_dataset": {1: '["value"]', 2: '["value", "scale"]'},
 }
 

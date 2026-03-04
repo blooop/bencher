@@ -22,7 +22,9 @@ class MetaStatistics(MetaGeneratorBase):
 
         dim_label = "0d_categorical" if self.input_dims == 0 else "1d_float"
         filename = f"stats_{dim_label}_repeats_{self.repeats}"
-        title = f"Statistics: {self.repeats} repeat(s), {'categorical' if self.input_dims == 0 else '1D float'}"
+        rep_label = "repeat" if self.repeats == 1 else "repeats"
+        dim_label_text = "categorical" if self.input_dims == 0 else "1D float"
+        title = f"Statistics: {self.repeats} {rep_label}, {dim_label_text}"
 
         if self.input_dims == 0:
             input_vars_code = '["wave"]'
