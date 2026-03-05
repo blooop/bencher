@@ -4,15 +4,11 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_no_repeats_2_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_no_repeats_2_float_2_cat(run_cfg=None):
     """2 Float, 2 Categorical."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    benchable = BenchableObject()
-    bench = benchable.to_bench(run_cfg)
-    res = bench.plot_sweep(
-        input_vars=["float1", "float2", "wave", "variant"],
-        result_vars=["distance", "sample_noise"],
+    bench = BenchableObject().to_bench(run_cfg)
+    bench.plot_sweep(
+        input_vars=["float1", "float2", "wave", "variant"], result_vars=["distance", "sample_noise"]
     )
 
     return bench

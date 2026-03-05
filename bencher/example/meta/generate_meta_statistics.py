@@ -17,23 +17,6 @@ class MetaStatistics(MetaGeneratorBase):
     repeats = bch.IntSweep(default=1, bounds=(1, 100), doc="Number of repeats")
     input_dims = bch.IntSweep(default=0, bounds=(0, 1), doc="0 = categorical only, 1 = float sweep")
 
-    def _build_body(self, input_vars_code: str) -> str:
-        noise_const = ", const_vars=dict(noise_scale=0.15)" if self.repeats > 1 else ""
-        lines = []
-        if self.repeats > 1:
-            lines.append(f"run_cfg.repeats = {self.repeats}")
-        lines.extend(
-            [
-                "benchable = BenchableObject()",
-                "bench = benchable.to_bench(run_cfg)",
-                (
-                    f"bench.plot_sweep(input_vars={input_vars_code},"
-                    f' result_vars=["distance"]{noise_const})'
-                ),
-            ]
-        )
-        return "\n".join(lines) + "\n"
-
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
@@ -45,25 +28,24 @@ class MetaStatistics(MetaGeneratorBase):
             f"{'categorical' if self.input_dims == 0 else '1D float'}"
         )
 
-        if self.input_dims == 0:
-            input_vars_code = '["wave"]'
-        else:
-            input_vars_code = '["float1"]'
+        input_vars_code = '["wave"]' if self.input_dims == 0 else '["float1"]'
+        const_vars = "dict(noise_scale=0.15)" if self.repeats > 1 else None
 
-        imports = (
-            "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchableObject"
-        )
+        run_kwargs = {"level": 3}
+        if self.repeats > 1:
+            run_kwargs["repeats"] = self.repeats
 
-        body = self._build_body(input_vars_code)
-
-        self.generate_example(
+        self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            imports=imports,
-            body=body,
-            main_extra=", level=3",
+            benchable_class="BenchableObject",
+            benchable_module="bencher.example.meta.example_meta",
+            input_vars=input_vars_code,
+            result_vars='["distance"]',
+            const_vars=const_vars,
+            run_kwargs=run_kwargs,
         )
 
         return super().__call__()

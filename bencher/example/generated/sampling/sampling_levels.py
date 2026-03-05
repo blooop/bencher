@@ -4,10 +4,8 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchMeta
 
 
-def example_sampling_levels(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_sampling_levels(run_cfg=None):
     """Sampling: Levels."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
     bench = BenchMeta().to_bench(run_cfg)
     bench.plot_sweep(
         title="Level-based sampling resolution",

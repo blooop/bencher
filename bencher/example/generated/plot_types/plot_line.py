@@ -4,12 +4,9 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_plot_line(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_plot_line(run_cfg=None):
     """Plot Type: Line."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    benchable = BenchableObject()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["float1"], result_vars=["distance"])
     res.to_line()
 
