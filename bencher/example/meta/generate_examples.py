@@ -124,6 +124,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
         "title": title_text,
         "section_rel": str(rel.parent),
         "rst_rel": str(rel.with_suffix("").as_posix()),
+        "bench_name": bench.bench_name,
     }
 
 
@@ -154,57 +155,6 @@ def generate_section_index(section_path: Path, section_title: str):
     index_path.write_text(content, encoding="utf-8")
 
 
-SECTION_ICONS = {
-    "0_float": (
-        "#4CAF50",
-        '<path d="M3 17h2v-7H3v7zm4 0h2V7H7v10zm4 0h2v-4h-2v4zm4 0h2v-9h-2v9zm4 0h2V3h-2v14z"/>',
-    ),
-    "1_float": (
-        "#2196F3",
-        '<path d="M3.5 18.5l6-6 4 4L22 6.92 20.59 5.5l-7.09 8.07-4-4L2 17z"/>',
-    ),
-    "2_float": (
-        "#9C27B0",
-        '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9'
-        ' 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>',
-    ),
-    "3_float": (
-        "#FF5722",
-        '<circle cx="7" cy="14" r="3"/><circle cx="11" cy="6" r="3"/><circle cx="16.6" '
-        'cy="17.6" r="3"/>',
-    ),
-    "result_types": (
-        "#FF9800",
-        '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9'
-        ' 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>',
-    ),
-    "plot_types": (
-        "#E91E63",
-        '<path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/>',
-    ),
-    "optimization": (
-        "#00BCD4",
-        '<circle cx="12" cy="12" r="3.2"/><path d="M9 2L7.2 4.8l2.8 2.8L7.2'
-        ' 10.4 9 13.2l3-3 3 3 1.8-2.8-2.8-2.8 2.8-2.8L15 2l-3 3z"/>',
-    ),
-    "sampling": (
-        "#795548",
-        '<circle cx="6" cy="18" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="18"'
-        ' cy="16" r="2"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="6" r="2"/>',
-    ),
-    "const_vars": (
-        "#607D8B",
-        '<path d="M14 4l2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4'
-        ' 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3z"/>',
-    ),
-    "statistics": (
-        "#3F51B5",
-        '<path d="M2 20h20v-2H2v2zM4 14c.6-3.3 3.5-5.5 6.8-5 2.3.4 4.2 2.2'
-        ' 4.6 4.5.1.5.1 1 .1 1.5h4c0-5.5-4.5-10-10-10C4.5 5 .3 9.6 0 14h4z"/>',
-    ),
-}
-
-
 SECTIONS = {
     "0 Float Inputs": "0_float/no_repeats",
     "0 Float Inputs (Repeated)": "0_float/with_repeats",
@@ -232,16 +182,8 @@ SECTIONS = {
 }
 
 
-def _icon_for_section(section_rel: str):
-    """Return (color, svg_path_data) for a section by matching its path prefix."""
-    for prefix, val in SECTION_ICONS.items():
-        if section_rel.startswith(prefix):
-            return val
-    return ("#9E9E9E", '<circle cx="12" cy="12" r="6"/>')
-
-
 def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
-    """Generate a single gallery.rst page with a CSS grid of cards grouped by section."""
+    """Generate a single gallery.rst page with iframe thumbnail cards grouped by section."""
     from collections import OrderedDict
 
     grouped = OrderedDict()
@@ -258,7 +200,8 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         "Gallery Overview",
         "================",
         "",
-        "All examples at a glance. Click any card to see the full example with source and report.",
+        "All examples at a glance. Click any card to see the full example"
+        " with source code and interactive report.",
         "",
         ".. raw:: html",
         "",
@@ -268,24 +211,20 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
     for section_title, info in grouped.items():
         if not info["examples"]:
             continue
-        color, svg_path = _icon_for_section(info["rel_path"])
-        lines.append(
-            f'   <h3 class="gallery-section-title"'
-            f' style="border-left: 4px solid {color};">{section_title}</h3>'
-        )
+        lines.append(f'   <h3 class="gallery-section-title">{section_title}</h3>')
         lines.append('   <div class="gallery-grid">')
         for ex in info["examples"]:
             href = f"{ex['rst_rel']}.html"
-            subtitle = info["rel_path"].replace("/", " / ").replace("_", " ").title()
+            # Report iframe path relative to gallery.html (which is at docs/reference/meta/)
+            report_src = f"{ex['section_rel']}/_reports/{ex['stem']}/{ex['bench_name']}.html"
             lines.append(f'   <a class="gallery-card" href="{href}">')
-            lines.append('     <div class="gallery-card-icon">')
+            lines.append('     <div class="gallery-thumb-wrap">')
             lines.append(
-                f'       <svg viewBox="0 0 24 24" width="48" height="48"'
-                f' fill="{color}">{svg_path}</svg>'
+                f'       <iframe class="gallery-thumb" src="{report_src}"'
+                ' loading="lazy" tabindex="-1" scrolling="no"></iframe>'
             )
             lines.append("     </div>")
             lines.append(f'     <div class="gallery-card-title">{ex["title"]}</div>')
-            lines.append(f'     <div class="gallery-card-subtitle">{subtitle}</div>')
             lines.append("   </a>")
         lines.append("   </div>")
 
