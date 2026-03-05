@@ -6,7 +6,6 @@ import io
 import os
 import shutil
 import subprocess
-import time
 from pathlib import Path
 
 import bencher as bch
@@ -43,22 +42,9 @@ REPORTS_EXTRA_DIR = Path("docs/_extra/reference/meta")
 THUMBS_EXTRA_DIR = REPORTS_EXTRA_DIR / "_thumbs"
 
 
-def _save_thumbnail(html_path: Path, thumb_path: Path, width=1200, height=900, thumb_width=480):
-    """Screenshot an HTML report and save as a resized PNG thumbnail."""
+def _resize_and_save_png(png_data: bytes, thumb_path: Path, thumb_width: int = 480) -> None:
+    """Resize screenshot PNG data to thumbnail width and save to disk."""
     from PIL import Image
-    from selenium import webdriver
-    from selenium.webdriver.firefox.options import Options
-
-    options = Options()
-    options.add_argument("--headless")
-    driver = webdriver.Firefox(options=options)
-    try:
-        driver.set_window_size(width, height)
-        driver.get(html_path.resolve().as_uri())
-        time.sleep(2)
-        png_data = driver.get_screenshot_as_png()
-    finally:
-        driver.quit()
 
     img = Image.open(io.BytesIO(png_data))
     ratio = thumb_width / img.width
@@ -79,19 +65,43 @@ def _create_driver():
     return driver
 
 
-def _screenshot_thumbnail(driver, html_path: Path, thumb_path: Path, thumb_width=480):
-    """Take a screenshot using an existing driver and save as a resized PNG thumbnail."""
-    from PIL import Image
+def _take_thumbnail(
+    html_path: Path,
+    thumb_path: Path,
+    driver=None,
+    width: int = 1200,
+    height: int = 900,
+    thumb_width: int = 480,
+) -> None:
+    """Screenshot an HTML report and save as a resized PNG thumbnail.
 
-    driver.get(html_path.resolve().as_uri())
-    time.sleep(2)
-    png_data = driver.get_screenshot_as_png()
+    Uses the provided driver if given; otherwise creates a temporary one.
+    """
+    from selenium import webdriver
+    from selenium.webdriver.firefox.options import Options
+    from selenium.webdriver.support.ui import WebDriverWait
 
-    img = Image.open(io.BytesIO(png_data))
-    ratio = thumb_width / img.width
-    img = img.resize((thumb_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
-    thumb_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(thumb_path)
+    def _screenshot_with(drv: webdriver.Firefox) -> bytes:
+        drv.set_window_size(width, height)
+        drv.get(html_path.resolve().as_uri())
+        WebDriverWait(drv, 10).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        return drv.get_screenshot_as_png()
+
+    if driver is not None:
+        png_data = _screenshot_with(driver)
+        _resize_and_save_png(png_data, thumb_path, thumb_width)
+        return
+
+    options = Options()
+    options.add_argument("--headless")
+    tmp_driver = webdriver.Firefox(options=options)
+    try:
+        png_data = _screenshot_with(tmp_driver)
+        _resize_and_save_png(png_data, thumb_path, thumb_width)
+    finally:
+        tmp_driver.quit()
 
 
 def generate_python_files():
@@ -183,18 +193,11 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, dri
 
     # Generate thumbnail screenshot
     thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
-    if driver is not None:
-        try:
-            _screenshot_thumbnail(driver, Path(report_path), thumb_path)
-            print(f"  Saved thumbnail to {thumb_path}")
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
-    else:
-        try:
-            _save_thumbnail(Path(report_path), thumb_path)
-            print(f"  Saved thumbnail to {thumb_path}")
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
+    try:
+        _take_thumbnail(Path(report_path), thumb_path, driver=driver)
+        print(f"  Saved thumbnail to {thumb_path}")
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
     # Generate RST that shows source + embeds HTML report
     title_text = stem.replace("_", " ").title()
