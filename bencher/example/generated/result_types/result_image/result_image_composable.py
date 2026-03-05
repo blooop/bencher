@@ -1,8 +1,11 @@
 """Auto-generated example: ResultImage: Composable Container Video from Images."""
 
 import bencher as bch
-from bencher.example.meta.benchable_objects import BenchableImageResult
-from bencher.example.meta.benchable_objects import _polygon_points, _draw_polygon_image
+from bencher.example.meta.benchable_objects import (
+    BenchableImageResult,
+    _polygon_points,
+    _draw_polygon_image,
+)
 
 
 class _ComposableImageDemo(BenchableImageResult):

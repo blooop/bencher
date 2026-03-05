@@ -25,6 +25,7 @@ IMAGE_SWEEP_COMBOS = {
 VIDEO_SWEEP_COMBOS = {
     0: {"input_vars": '["speed"]', "dims_label": "0D"},
     1: {"input_vars": '["sides"]', "dims_label": "1D"},
+    2: {"input_vars": '["sides", "speed"]', "dims_label": "2D"},
 }
 
 
@@ -184,9 +185,8 @@ class MetaImageVideoRich(MetaGeneratorBase):
         # emitted between the module docstring and the function definition.
         imports = (
             "import bencher as bch\n"
-            f"from {BENCHABLE_MODULE} import BenchableImageResult\n"
-            "from bencher.example.meta.benchable_objects import "
-            "_polygon_points, _draw_polygon_image\n"
+            f"from {BENCHABLE_MODULE} import "
+            "BenchableImageResult, _polygon_points, _draw_polygon_image\n"
             "\n\n"
             "class _ComposableImageDemo(BenchableImageResult):\n"
             "    compose_method = bch.EnumSweep(\n"

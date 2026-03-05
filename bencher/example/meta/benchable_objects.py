@@ -203,5 +203,5 @@ class BenchableVideoResult(bch.ParametrizedSweep):
             img = _draw_polygon_image(points, "white", linewidth=3, size=200)
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
-        self.frame_snapshot = bch.video_writer.VideoWriter.extract_frame(self.animation)
+        self.frame_snapshot = bch.VideoWriter.extract_frame(self.animation)
         return super().__call__()
