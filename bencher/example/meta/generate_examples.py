@@ -22,10 +22,15 @@ def _extract_run_kwargs(py_file: Path) -> dict:
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "run"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "bch"
         ):
             kwargs = {}
             for kw in node.keywords:
-                kwargs[kw.arg] = ast.literal_eval(kw.value)
+                try:
+                    kwargs[kw.arg] = ast.literal_eval(kw.value)
+                except (ValueError, TypeError):
+                    continue
             return kwargs
     return {}
 
