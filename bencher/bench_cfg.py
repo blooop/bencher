@@ -78,7 +78,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         nightly (bool): Run a more extensive set of tests for a nightly benchmark
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
-        render_plotly (bool): Controls plotly rendering behavior with bokeh
+
         level (int): Method of defining the number of samples to sweep over
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
@@ -195,10 +195,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     use_optuna: bool = param.Boolean(False, doc="show optuna plots")
 
-    render_plotly: bool = param.Boolean(
-        True,
-        doc="Plotly and Bokeh don't play nicely together, so by default pre-render plotly figures to a non dynamic version so that bokeh plots correctly.  If you want interactive 3D graphs, set this to true but be aware that your 2D interactive graphs will probably stop working.",
-    )
 
     plot_size: Optional[int] = param.Integer(
         default=None, doc="Sets the width and height of the plot"

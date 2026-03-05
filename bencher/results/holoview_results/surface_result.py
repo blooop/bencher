@@ -152,12 +152,9 @@ class SurfaceResult(HoloviewResult):
                 **kwargs,
             )
 
-            if self.bench_cfg.render_plotly:
-                hv.extension("plotly")
-                out = surface
-            else:
-                # using render disabled the holoviews sliders :(
-                out = hv.render(surface, backend="plotly")
+            # Always pre-render to plotly to avoid hv.extension("plotly") polluting
+            # the global backend (which would make all subsequent plots use plotly).
+            out = pn.pane.Plotly(hv.render(surface, backend="plotly"))
             return pn.Column(out, name="surface_hv")
 
         return matches_res.to_panel()
