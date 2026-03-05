@@ -40,7 +40,8 @@ class ComposableContainerPanel(ComposableContainerBase):
                 self.container = pn.Column(**container_args)
                 align = ("center", "center")
             case ComposeType.sequence:
-                self.container = pn.Tabs(name=self.name)
+                self._tabs = pn.Tabs(**container_args)
+                self.container = pn.Column(**container_args)
                 align = ("center", "center")
             case ComposeType.overlay:
                 styles["position"] = "relative"
@@ -51,7 +52,20 @@ class ComposableContainerPanel(ComposableContainerBase):
         if label is not None:
             self.label_len = len(label)
             side = pn.pane.Markdown(label, align=align)
-            self.append(side)
+            if self.compose_method == ComposeType.sequence:
+                # For Tabs, label sits outside the tab bar in a wrapper Column
+                self.container.append(side)
+            else:
+                self.append(side)
+
+    def append(self, obj):
+        if self.compose_method == ComposeType.sequence:
+            self._tabs.append(obj)
+        else:
+            self.container.append(obj)
 
     def render(self):
+        if self.compose_method == ComposeType.sequence:
+            self.container.append(self._tabs)
+            return self.container
         return self.container
