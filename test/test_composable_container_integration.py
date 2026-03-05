@@ -3,32 +3,18 @@ import numpy as np
 import xarray as xr
 import panel as pn
 
-from bencher.results.composable_container.composable_container_base import (
+from bencher.results.composable_container import (
     ComposeType,
     ComposableContainerBase,
-)
-from bencher.results.composable_container.composable_container_panel import (
-    ComposableContainerPanel,
-)
-from bencher.results.composable_container.composable_container_dataframe import (
-    ComposableContainerDataset,
-)
-from bencher.results.composable_container.composable_container_video import (
     ComposableContainerVideo,
+    ComposableContainerPanel,
+    ComposableContainerDataset,
+    RenderCfg,
 )
 
 
 def test_imports():
     """All container classes are importable from the package."""
-    from bencher.results.composable_container import (
-        ComposeType,
-        ComposableContainerBase,
-        ComposableContainerVideo,
-        ComposableContainerPanel,
-        ComposableContainerDataset,
-        RenderCfg,
-    )
-
     assert ComposeType is not None
     assert ComposableContainerBase is not None
     assert ComposableContainerVideo is not None
@@ -39,7 +25,7 @@ def test_imports():
 
 def test_imports_from_bencher():
     """Container classes are importable from top-level bencher package."""
-    import bencher as bch
+    import bencher as bch  # pylint: disable=import-outside-toplevel
 
     assert bch.ComposableContainerPanel is not None
     assert bch.ComposableContainerDataset is not None
@@ -97,8 +83,6 @@ class TestDatasetAllComposeTypes:
 @pytest.mark.parametrize("compose_type", list(ComposeType))
 class TestVideoAllComposeTypes:
     def test_video_render(self, compose_type):
-        from bencher.results.composable_container.composable_container_video import RenderCfg
-
         img = np.ones((2, 1, 3))
         c = ComposableContainerVideo()
         c.append(img)
