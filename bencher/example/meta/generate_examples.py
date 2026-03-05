@@ -210,8 +210,11 @@ def generate_section_index(section_path: Path, section_title: str, section_metad
         ]
         lines += _render_gallery_cards(
             section_metadata,
-            href_fn=lambda ex: f"{ex['stem']}.html",
-            report_src_fn=lambda ex: f"_reports/{ex['stem']}/{ex['bench_name']}.html",
+            href_fn=lambda ex: f"{Path(ex['rst_rel']).relative_to(ex['section_rel'])}.html",
+            report_src_fn=lambda ex: str(
+                Path(ex["rst_rel"]).relative_to(ex["section_rel"]).parent
+                / f"_reports/{ex['stem']}/{ex['bench_name']}.html"
+            ),
         )
         lines += [
             "   </div>",
