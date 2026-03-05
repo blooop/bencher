@@ -11,6 +11,9 @@ build:
   tools:
     python: "mambaforge-23.11"
   jobs:
+    post_install:
+      # Install Chromium for playwright thumbnail screenshots
+      - playwright install chromium --with-deps
     pre_build:
       # Generate Python example files, run them, save HTML reports, and create RST docs
       - python bencher/example/meta/generate_examples.py
