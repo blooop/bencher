@@ -78,7 +78,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
         nightly (bool): Run a more extensive set of tests for a nightly benchmark
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
-
         level (int): Method of defining the number of samples to sweep over
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
@@ -194,7 +193,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
     use_holoview: bool = param.Boolean(False, doc="Use holoview for plotting")
 
     use_optuna: bool = param.Boolean(False, doc="show optuna plots")
-
 
     plot_size: Optional[int] = param.Integer(
         default=None, doc="Sets the width and height of the plot"

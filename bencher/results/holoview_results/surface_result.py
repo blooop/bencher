@@ -154,6 +154,7 @@ class SurfaceResult(HoloviewResult):
 
             # Always pre-render to plotly to avoid hv.extension("plotly") polluting
             # the global backend (which would make all subsequent plots use plotly).
+            # Note: pre-rendering disables holoviews sliders for surface plots.
             out = pn.pane.Plotly(hv.render(surface, backend="plotly"))
             return pn.Column(out, name="surface_hv")
 
