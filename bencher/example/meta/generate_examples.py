@@ -97,6 +97,7 @@ def generate_python_files():
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     from bencher.example.meta.generate_meta import example_meta
+    from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_image_video import example_meta_image_video
     from bencher.example.meta.generate_meta_optimization import example_meta_optimization
@@ -108,6 +109,7 @@ def generate_python_files():
     example_meta()
     example_meta_result_types()
     example_meta_image_video()
+    example_meta_composable()
     example_meta_plot_types()
     example_meta_sampling()
     example_meta_statistics()
@@ -310,6 +312,7 @@ SECTIONS = {
     "Plot Types": "plot_types",
     "Optimization": "optimization",
     "Sampling Strategies": "sampling",
+    "Composable Containers": "composable_containers",
     "Constant Variables": "const_vars",
     "Statistics": "statistics",
 }

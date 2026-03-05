@@ -40,6 +40,12 @@ from .results.composable_container.composable_container_video import (
     ComposableContainerVideo,
     RenderCfg,
 )
+from .results.composable_container.composable_container_panel import (
+    ComposableContainerPanel,
+)
+from .results.composable_container.composable_container_dataframe import (
+    ComposableContainerDataset,
+)
 
 from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
 from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
