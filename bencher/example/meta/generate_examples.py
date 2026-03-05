@@ -66,7 +66,7 @@ def _take_thumbnail(
 
     Uses the provided playwright page if given; otherwise creates a temporary browser.
     """
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
     def _screenshot_with(pg) -> bytes:
         pg.set_viewport_size({"width": width, "height": height})
@@ -384,7 +384,7 @@ def generate_all() -> list[Path]:
     browser = None
     page = None
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
         pw_context = sync_playwright().start()
         browser = pw_context.chromium.launch(headless=True)
