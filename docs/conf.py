@@ -35,6 +35,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+html_js_files = ["gallery.js"]
 
 # Copy HTML reports into the build so iframes resolve (only if generated)
 # Reports live in docs/_extra/reference/meta/ to mirror the built output structure
