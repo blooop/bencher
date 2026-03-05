@@ -7,13 +7,9 @@ from bencher.results.holoview_results.distribution_result.scatter_jitter_result 
 )
 
 
-def example_plot_scatter_jitter(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_plot_scatter_jitter(run_cfg=None):
     """Plot Type: Scatter Jitter."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 10
-    benchable = BenchableObject()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(
         input_vars=["wave"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
     )
@@ -23,4 +19,4 @@ def example_plot_scatter_jitter(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
 
 
 if __name__ == "__main__":
-    bch.run(example_plot_scatter_jitter, level=3)
+    bch.run(example_plot_scatter_jitter, level=3, repeats=10)

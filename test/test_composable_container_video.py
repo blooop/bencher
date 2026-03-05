@@ -70,6 +70,13 @@ class TestComposableContainerVideo(unittest.TestCase):
         self.assertEqual(res.size, (1, 2))
         self.assertEqual(res.duration, 0.1)
 
+    def test_img_overlay(self):
+        res = self.small_video(
+            1, bch.RenderCfg(duration=0.1, compose_method=bch.ComposeType.overlay)
+        )
+        self.assertEqual(res.size, (1, 2))
+        self.assertEqual(res.duration, 0.1)
+
     def test_img_right_x2(self):
         res = self.small_video(2, bch.RenderCfg(compose_method=bch.ComposeType.right))
         self.assertEqual(res.size, (2, 2))
@@ -84,6 +91,49 @@ class TestComposableContainerVideo(unittest.TestCase):
         res = self.small_video(2, bch.RenderCfg(compose_method=bch.ComposeType.sequence))
         self.assertEqual(res.size, (1, 2))
         self.assertEqual(res.duration, 4)
+
+    def test_img_overlay_x2(self):
+        res = self.small_video(2, bch.RenderCfg(compose_method=bch.ComposeType.overlay))
+        self.assertEqual(res.size, (1, 2))
+        self.assertEqual(res.duration, 2)
+
+    def test_1px_all_compose_types(self):
+        """Test all compose types with a minimal 1x1 pixel image."""
+        img = np.ones((1, 1, 3))
+        for compose_type in bch.ComposeType:
+            vid = bch.ComposableContainerVideo()
+            vid.append(img)
+            vid.append(img)
+            res = vid.render(bch.RenderCfg(compose_method=compose_type, duration=0.1))
+            self.assertIsNotNone(res)
+            self.assertGreater(res.duration, 0)
+
+    def test_1px_overlay_pixel_values(self):
+        """Overlay of two 1x1 images should blend pixel values via opacity."""
+        white = np.ones((1, 1, 3)) * 255
+        black = np.zeros((1, 1, 3))
+        vid = bch.ComposableContainerVideo()
+        vid.append(white)
+        vid.append(black)
+        res = vid.render(bch.RenderCfg(compose_method=bch.ComposeType.overlay, duration=0.1))
+        frame = res.get_frame(0)
+        self.assertEqual(frame.shape[0], 1)
+        self.assertEqual(frame.shape[1], 1)
+
+    def test_1px_to_video(self):
+        """to_video() should produce a file path from 1x1 pixel images."""
+        import os
+
+        img = np.ones((1, 1, 3))
+        vid = bch.ComposableContainerVideo()
+        vid.append(img)
+        vid.append(img)
+        for compose_type in bch.ComposeType:
+            vid2 = bch.ComposableContainerVideo()
+            vid2.append(img)
+            vid2.append(img)
+            path = vid2.to_video(bch.RenderCfg(compose_method=compose_type, duration=0.1))
+            self.assertTrue(os.path.exists(path), f"Video file not created for {compose_type}")
 
     def test_video_seq(self):
         img = self.small_img()
@@ -245,6 +295,22 @@ class TestComposableContainerVideo(unittest.TestCase):
 
         # still concatted vid time
         self.assertAlmostEqual(ccv.render().duration, 800.0)
+
+    def test_render_no_stdout(self):
+        """render() should not print debug output to stdout."""
+        import io
+        import contextlib
+
+        img = self.small_img()
+        vid = bch.ComposableContainerVideo()
+        vid.append(img)
+        vid.append(img)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            vid.render(bch.RenderCfg(duration=0.1, compose_method=bch.ComposeType.sequence))
+
+        assert buf.getvalue() == "", f"Unexpected stdout: {buf.getvalue()!r}"
 
 
 if __name__ == "__main__":

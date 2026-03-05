@@ -4,14 +4,10 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_with_repeats_3_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_3_float_0_cat(run_cfg=None):
     """3 Float, 0 Categorical."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 3
-    benchable = BenchableObject()
-    bench = benchable.to_bench(run_cfg)
-    res = bench.plot_sweep(
+    bench = BenchableObject().to_bench(run_cfg)
+    bench.plot_sweep(
         input_vars=[
             "float1",
             "float2",
@@ -25,4 +21,4 @@ def example_with_repeats_3_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_3_float_0_cat, level=4)
+    bch.run(example_with_repeats_3_float_0_cat, level=4, repeats=3)

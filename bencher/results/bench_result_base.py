@@ -25,6 +25,7 @@ from bencher.variables.results import ResultReference, ResultDataSet
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
+from bencher.results.composable_container.composable_container_base import ComposeType
 
 from collections import defaultdict
 
@@ -640,7 +641,7 @@ class BenchResultBase:
             outer_container = ComposableContainerPanel(
                 name=" vs ".join(pane_dims),
                 background_col=dim_color,
-                horizontal=not horizontal,
+                compose_method=ComposeType.down if not horizontal else ComposeType.right,
             )
             max_len = 0
             for i in range(dataset.sizes[selected_dim]):
@@ -651,7 +652,7 @@ class BenchResultBase:
                     width=num_pane_dims - target_dimension,
                     var_name=selected_dim,
                     var_value=label_val,
-                    horizontal=horizontal,
+                    compose_method=ComposeType.down if horizontal else ComposeType.right,
                 )
 
                 panes = self._to_panes_da(

@@ -1,6 +1,9 @@
 """Generate Python example files, run them, save HTML reports, and generate RST for docs."""
 
+import ast
+import html
 import importlib
+import io
 import os
 import shutil
 import subprocess
@@ -10,9 +13,81 @@ import bencher as bch
 
 
 GENERATED_DIR = Path("bencher/example/generated")
+
+
+def _extract_run_kwargs(py_file: Path) -> dict:
+    """Extract kwargs from bch.run() call in __main__ block."""
+    source = py_file.read_text()
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "run"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "bch"
+        ):
+            kwargs = {}
+            for kw in node.keywords:
+                try:
+                    kwargs[kw.arg] = ast.literal_eval(kw.value)
+                except (ValueError, TypeError):
+                    continue
+            return kwargs
+    return {}
+
+
 META_DOCS_DIR = Path("docs/reference/meta")
 # Reports go under docs/_extra/ so html_extra_path copies them to match the built output structure
 REPORTS_EXTRA_DIR = Path("docs/_extra/reference/meta")
+THUMBS_EXTRA_DIR = REPORTS_EXTRA_DIR / "_thumbs"
+
+
+def _resize_and_save_png(png_data: bytes, thumb_path: Path, thumb_width: int = 480) -> None:
+    """Resize screenshot PNG data to thumbnail width and save to disk."""
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(png_data))
+    ratio = thumb_width / img.width
+    img = img.resize((thumb_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(thumb_path)
+
+
+def _take_thumbnail(
+    html_path: Path,
+    thumb_path: Path,
+    page=None,
+    width: int = 1200,
+    height: int = 900,
+    thumb_width: int = 480,
+) -> None:
+    """Screenshot an HTML report and save as a resized PNG thumbnail.
+
+    Uses the provided playwright page if given; otherwise creates a temporary browser.
+    """
+    from playwright.sync_api import sync_playwright  # pylint: disable=import-error
+
+    def _screenshot_with(pg) -> bytes:
+        pg.set_viewport_size({"width": width, "height": height})
+        pg.goto(html_path.resolve().as_uri(), wait_until="load", timeout=15000)
+        # Brief pause for Bokeh/Panel JS to render plots after DOM load
+        pg.wait_for_timeout(2000)
+        return pg.screenshot()
+
+    if page is not None:
+        png_data = _screenshot_with(page)
+        _resize_and_save_png(png_data, thumb_path, thumb_width)
+        return
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        tmp_page = browser.new_page(viewport={"width": width, "height": height})
+        try:
+            png_data = _screenshot_with(tmp_page)
+            _resize_and_save_png(png_data, thumb_path, thumb_width)
+        finally:
+            browser.close()
 
 
 def generate_python_files():
@@ -22,7 +97,9 @@ def generate_python_files():
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     from bencher.example.meta.generate_meta import example_meta
+    from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
+    from bencher.example.meta.generate_meta_image_video import example_meta_image_video
     from bencher.example.meta.generate_meta_optimization import example_meta_optimization
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
@@ -31,6 +108,8 @@ def generate_python_files():
 
     example_meta()
     example_meta_result_types()
+    example_meta_image_video()
+    example_meta_composable()
     example_meta_plot_types()
     example_meta_sampling()
     example_meta_statistics()
@@ -67,7 +146,7 @@ def _find_example_function(mod):
     return None
 
 
-def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
+def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, page=None):
     """Run a Python example, save HTML report, write RST doc page.
 
     Returns a metadata dict for gallery generation, or None on failure.
@@ -83,8 +162,12 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
         print(f"WARNING: No example_* function found in {py_file}, skipping")
         return None
 
+    run_kwargs = _extract_run_kwargs(py_file)
     run_cfg = bch.BenchRunCfg()
-    run_cfg.level = 4
+    run_cfg.level = run_kwargs.get("level", 4)
+    run_cfg.repeats = run_kwargs.get("repeats", 1)
+    if "use_optuna" in run_kwargs:
+        run_cfg.use_optuna = run_kwargs["use_optuna"]
     print(f"Running {py_file}...")
     bench = example_fn(run_cfg)
 
@@ -97,6 +180,14 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
         in_html_folder=False,
     )
     print(f"  Saved report to {report_path}")
+
+    # Generate thumbnail screenshot
+    thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
+    try:
+        _take_thumbnail(Path(report_path), thumb_path, page=page)
+        print(f"  Saved thumbnail to {thumb_path}")
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
     # Generate RST that shows source + embeds HTML report
     title_text = stem.replace("_", " ").title()
@@ -128,31 +219,73 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
     }
 
 
-def generate_section_index(section_path: Path, section_title: str):
-    """Generate an index.rst for a docs section with a toctree."""
+def _render_gallery_cards(examples: list[dict], href_fn, thumb_src_fn) -> list[str]:
+    """Render gallery card HTML lines for a list of example metadata dicts."""
+    lines = []
+    for ex in sorted(examples, key=lambda e: e["stem"]):
+        href = href_fn(ex)
+        thumb_src = thumb_src_fn(ex)
+        title = html.escape(ex["title"])
+        lines.append(f'   <a class="gallery-card" href="{href}">')
+        lines.append('     <div class="gallery-thumb-wrap">')
+        lines.append(
+            f'       <img class="gallery-thumb" src="{thumb_src}" loading="lazy" alt="{title}">'
+        )
+        lines.append("     </div>")
+        lines.append(f'     <div class="gallery-card-title">{title}</div>')
+        lines.append("   </a>")
+    return lines
+
+
+def generate_section_index(section_path: Path, section_title: str, section_metadata: list[dict]):
+    """Generate an index.rst for a docs section with a gallery grid and hidden toctree."""
     rst_files = sorted(section_path.rglob("*.rst"))
     rst_files = [f for f in rst_files if f.name != "index.rst"]
 
     if not rst_files:
         return
 
-    entries = []
-    for f in rst_files:
-        rel = f.relative_to(section_path).with_suffix("")
-        entries.append(f"   {rel}")
+    toc_entries = [f"   {f.relative_to(section_path).with_suffix('')}" for f in rst_files]
 
     underline = "=" * len(section_title)
-    entries_str = "\n".join(entries)
-    content = f"""{section_title}
-{underline}
 
-.. toctree::
-   :maxdepth: 1
+    lines = [
+        section_title,
+        underline,
+        "",
+        ".. toctree::",
+        "   :hidden:",
+        "   :maxdepth: 1",
+        "",
+        "\n".join(toc_entries),
+        "",
+    ]
 
-{entries_str}
-"""
+    if section_metadata:
+        lines += [
+            ".. raw:: html",
+            "",
+            '   <div class="gallery-container">',
+            '   <div class="gallery-grid">',
+        ]
+        # Compute relative path from section index to _thumbs root
+        depth = len(section_path.relative_to(META_DOCS_DIR).parts)
+        thumbs_prefix = "/".join([".."] * depth) + "/_thumbs"
+        lines += _render_gallery_cards(
+            section_metadata,
+            href_fn=lambda ex: f"{Path(ex['rst_rel']).relative_to(ex['section_rel'])}.html",
+            thumb_src_fn=lambda ex, pfx=thumbs_prefix: (
+                f"{pfx}/{ex['section_rel']}/{ex['stem']}.png"
+            ),
+        )
+        lines += [
+            "   </div>",
+            "   </div>",
+            "",
+        ]
+
     index_path = section_path / "index.rst"
-    index_path.write_text(content, encoding="utf-8")
+    index_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 SECTIONS = {
@@ -174,16 +307,19 @@ SECTIONS = {
     "Result Types: ResultString": "result_types/result_string",
     "Result Types: ResultPath": "result_types/result_path",
     "Result Types: ResultDataSet": "result_types/result_dataset",
+    "Result Types: ResultImage": "result_types/result_image",
+    "Result Types: ResultVideo": "result_types/result_video",
     "Plot Types": "plot_types",
     "Optimization": "optimization",
     "Sampling Strategies": "sampling",
+    "Composable Containers": "composable_containers",
     "Constant Variables": "const_vars",
     "Statistics": "statistics",
 }
 
 
 def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
-    """Generate a single gallery.rst page with iframe thumbnail cards grouped by section."""
+    """Generate a single gallery.rst page with PNG thumbnail cards grouped by section."""
     from collections import OrderedDict
 
     grouped = OrderedDict()
@@ -211,20 +347,13 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
     for section_title, info in grouped.items():
         if not info["examples"]:
             continue
-        lines.append(f'   <h3 class="gallery-section-title">{section_title}</h3>')
+        lines.append(f'   <h3 class="gallery-section-title">{html.escape(section_title)}</h3>')
         lines.append('   <div class="gallery-grid">')
-        for ex in info["examples"]:
-            href = f"{ex['rst_rel']}.html"
-            report_src = f"{ex['section_rel']}/_reports/{ex['stem']}/{ex['bench_name']}.html"
-            lines.append(f'   <a class="gallery-card" href="{href}">')
-            lines.append('     <div class="gallery-thumb-wrap">')
-            lines.append(
-                f'       <iframe class="gallery-thumb" src="{report_src}"'
-                ' loading="lazy" tabindex="-1" scrolling="no"></iframe>'
-            )
-            lines.append("     </div>")
-            lines.append(f'     <div class="gallery-card-title">{ex["title"]}</div>')
-            lines.append("   </a>")
+        lines += _render_gallery_cards(
+            info["examples"],
+            href_fn=lambda ex: f"{ex['rst_rel']}.html",
+            thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
+        )
         lines.append("   </div>")
 
     lines.append("   </div>")
@@ -252,18 +381,44 @@ def generate_all() -> list[Path]:
     # Phase 2: Run each Python file, save HTML report, generate RST
     examples_metadata = []
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
-    for py_file in py_files:
-        if py_file.name == "__init__.py":
-            continue
-        meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR)
-        if meta:
-            examples_metadata.append(meta)
+
+    # Create a shared playwright browser for thumbnail screenshots
+    pw_context = None
+    browser = None
+    page = None
+    try:
+        from playwright.sync_api import sync_playwright  # pylint: disable=import-error
+
+        pw_context = sync_playwright().start()
+        browser = pw_context.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 900})
+        print("Started headless Chromium for thumbnail screenshots")
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"WARNING: Could not start browser for thumbnails: {e}")
+
+    try:
+        for py_file in py_files:
+            if py_file.name == "__init__.py":
+                continue
+            meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR, page=page)
+            if meta:
+                examples_metadata.append(meta)
+    finally:
+        if browser is not None:
+            browser.close()
+        if pw_context is not None:
+            pw_context.stop()
+            print("Closed headless Chromium")
 
     # Phase 3: Generate section index files
+    meta_by_section = {}
+    for meta in examples_metadata:
+        meta_by_section.setdefault(meta["section_rel"], []).append(meta)
+
     for title, rel_path in SECTIONS.items():
         section_dir = META_DOCS_DIR / rel_path
         if section_dir.exists():
-            generate_section_index(section_dir, title)
+            generate_section_index(section_dir, title, meta_by_section.get(rel_path, []))
 
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)

@@ -4,12 +4,9 @@ import bencher as bch
 from bencher.example.meta.benchable_objects import BenchableBoolResult
 
 
-def example_result_bool_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_bool_2d(run_cfg=None):
     """Result Bool: 2D input."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    benchable = BenchableBoolResult()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableBoolResult().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["threshold", "difficulty"], result_vars=["pass_rate"])
 
     return bench

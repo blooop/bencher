@@ -4,13 +4,9 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_plot_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_plot_curve(run_cfg=None):
     """Plot Type: Curve."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 5
-    benchable = BenchableObject()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(
         input_vars=["float1"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
     )
@@ -20,4 +16,4 @@ def example_plot_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_plot_curve, level=3)
+    bch.run(example_plot_curve, level=3, repeats=5)

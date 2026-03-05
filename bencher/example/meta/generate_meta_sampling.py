@@ -25,26 +25,38 @@ class MetaSampling(MetaGeneratorBase):
         function_name = f"example_sampling_{self.strategy}"
         title = f"Sampling: {self.strategy.replace('_', ' ').title()}"
 
-        common_imports = (
-            "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchableObject"
-        )
-
         if self.strategy == "uniform":
-            imports = common_imports
-            body = (
-                "benchable = BenchableObject()\n"
-                "bench = benchable.to_bench(run_cfg)\n"
-                'bench.plot_sweep(input_vars=["float1"], result_vars=["distance"])\n'
+            self.generate_sweep_example(
+                title=title,
+                output_dir=OUTPUT_DIR,
+                filename=filename,
+                function_name=function_name,
+                benchable_class="BenchableObject",
+                benchable_module="bencher.example.meta.example_meta",
+                input_vars='["float1"]',
+                result_vars='["distance"]',
+                run_kwargs={"level": 4},
             )
         elif self.strategy == "custom_values":
-            imports = common_imports
+            imports = (
+                "import bencher as bch\n"
+                "from bencher.example.meta.example_meta import BenchableObject"
+            )
             body = (
-                "benchable = BenchableObject()\n"
-                "bench = benchable.to_bench(run_cfg)\n"
+                "bench = BenchableObject().to_bench(run_cfg)\n"
                 "bench.plot_sweep(\n"
                 '    input_vars=[bch.p("float1", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
                 '    result_vars=["distance"],\n'
                 ")\n"
+            )
+            self.generate_example(
+                title=title,
+                output_dir=OUTPUT_DIR,
+                filename=filename,
+                function_name=function_name,
+                imports=imports,
+                body=body,
+                run_kwargs={"level": 3},
             )
         elif self.strategy == "levels":
             imports = (
@@ -61,28 +73,27 @@ class MetaSampling(MetaGeneratorBase):
                 "    const_vars=dict(categorical_vars=0),\n"
                 ")\n"
             )
+            self.generate_example(
+                title=title,
+                output_dir=OUTPUT_DIR,
+                filename=filename,
+                function_name=function_name,
+                imports=imports,
+                body=body,
+                run_kwargs={"level": 3},
+            )
         else:  # int_vs_float
-            imports = (
-                "import bencher as bch\n"
-                "from bencher.example.meta.benchable_objects import BenchableIntFloat"
+            self.generate_sweep_example(
+                title=title,
+                output_dir=OUTPUT_DIR,
+                filename=filename,
+                function_name=function_name,
+                benchable_class="BenchableIntFloat",
+                benchable_module="bencher.example.meta.benchable_objects",
+                input_vars='["int_input", "float_input"]',
+                result_vars='["output"]',
+                run_kwargs={"level": 3},
             )
-            body = (
-                "benchable = BenchableIntFloat()\n"
-                "bench = benchable.to_bench(run_cfg)\n"
-                'bench.plot_sweep(input_vars=["int_input", "float_input"], '
-                'result_vars=["output"])\n'
-            )
-
-        level = 4 if self.strategy == "uniform" else 3
-        self.generate_example(
-            title=title,
-            output_dir=OUTPUT_DIR,
-            filename=filename,
-            function_name=function_name,
-            imports=imports,
-            body=body,
-            main_extra=f", level={level}",
-        )
 
         return super().__call__()
 

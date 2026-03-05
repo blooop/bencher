@@ -93,40 +93,27 @@ class MetaPlotTypes(MetaGeneratorBase):
         function_name = f"example_plot_{self.plot_type}"
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
-        import_lines = [
-            "import bencher as bch",
-            "from bencher.example.meta.example_meta import BenchableObject",
-        ]
-        if cfg.get("extra_import"):
-            import_lines.append(cfg["extra_import"])
-        imports = "\n".join(import_lines)
-
-        noise_const = ", const_vars=dict(noise_scale=0.15)" if cfg["repeats"] > 1 else ""
-        body_lines = []
-        if cfg["repeats"] > 1:
-            body_lines.append(f"run_cfg.repeats = {cfg['repeats']}")
-        body_lines.extend(
-            [
-                "benchable = BenchableObject()",
-                "bench = benchable.to_bench(run_cfg)",
-                (
-                    f"res = bench.plot_sweep(input_vars={cfg['input_vars']},"
-                    f' result_vars=["distance"]{noise_const})'
-                ),
-                cfg["plot_call"],
-            ]
-        )
-        body = "\n".join(body_lines) + "\n"
+        const_vars = "dict(noise_scale=0.15)" if cfg["repeats"] > 1 else None
+        extra_imports = [cfg["extra_import"]] if cfg.get("extra_import") else None
 
         level = 2 if cfg["float_dims"] >= 2 else 3
-        self.generate_example(
+        run_kwargs = {"level": level}
+        if cfg["repeats"] > 1:
+            run_kwargs["repeats"] = cfg["repeats"]
+
+        self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            imports=imports,
-            body=body,
-            main_extra=f", level={level}",
+            benchable_class="BenchableObject",
+            benchable_module="bencher.example.meta.example_meta",
+            input_vars=cfg["input_vars"],
+            result_vars='["distance"]',
+            const_vars=const_vars,
+            post_sweep_line=cfg["plot_call"],
+            extra_imports=extra_imports,
+            run_kwargs=run_kwargs,
         )
 
         return super().__call__()

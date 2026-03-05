@@ -44,6 +44,17 @@ An example of the type of output bencher produces can be seen here:
 https://blooop.github.io/bencher/ 
 
 
+## Composable Containers
+
+Bencher includes a composable container system for combining visual outputs (images, videos, datasets) using four composition strategies defined by `ComposeType`:
+
+- **right** — place items side by side in a row
+- **down** — stack items vertically in a column
+- **sequence** — display items one after another (e.g. video frames, tabs)
+- **overlay** — blend items on top of each other (alpha compositing or averaging)
+
+Three backends are available: `ComposableContainerVideo` (moviepy), `ComposableContainerPanel` (Panel widgets), and `ComposableContainerDataset` (xarray). See `example_composable_backends.py` for a demonstration, and the "Composable Containers" section in the reference gallery for auto-generated examples of each backend and compose type.
+
 ## Examples
 
 Most of the features that are supported are demonstrated in the examples folder.

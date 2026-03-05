@@ -4,12 +4,9 @@ import bencher as bch
 from bencher.example.meta.benchable_objects import BenchableVecResult
 
 
-def example_result_vec_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_vec_1d(run_cfg=None):
     """Result Vec: 1D input."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    benchable = BenchableVecResult()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableVecResult().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["x"], result_vars=["position"])
 
     return bench

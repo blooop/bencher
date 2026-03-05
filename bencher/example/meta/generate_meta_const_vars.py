@@ -25,33 +25,25 @@ class MetaConstVars(MetaGeneratorBase):
 
         if self.n_const == 0:
             input_vars_code = '["float1", "float2", "float3"]'
-            const_vars_code = ""
+            const_vars = None
         elif self.n_const == 1:
             input_vars_code = '["float1", "float2"]'
-            const_vars_code = ", const_vars=dict(float3=0.5)"
+            const_vars = "dict(float3=0.5)"
         else:
             input_vars_code = '["float1"]'
-            const_vars_code = ", const_vars=dict(float2=0.5, float3=0.5)"
+            const_vars = "dict(float2=0.5, float3=0.5)"
 
-        imports = (
-            "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchableObject"
-        )
-
-        body = (
-            f"benchable = BenchableObject()\n"
-            f"bench = benchable.to_bench(run_cfg)\n"
-            f"bench.plot_sweep(input_vars={input_vars_code}, "
-            f'result_vars=["distance"]{const_vars_code})\n'
-        )
-
-        self.generate_example(
+        self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            imports=imports,
-            body=body,
-            main_extra=", level=3",
+            benchable_class="BenchableObject",
+            benchable_module="bencher.example.meta.example_meta",
+            input_vars=input_vars_code,
+            result_vars='["distance"]',
+            const_vars=const_vars,
+            run_kwargs={"level": 3},
         )
 
         return super().__call__()

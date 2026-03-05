@@ -5,10 +5,9 @@ from bencher.example.meta.example_meta import BenchableObject
 from datetime import datetime, timedelta
 
 
-def example_over_time_0_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_0_float_0_cat(run_cfg=None):
     """0 Float, 0 Categorical."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
+    run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg)

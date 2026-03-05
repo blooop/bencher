@@ -4,14 +4,11 @@ import bencher as bch
 from bencher.example.meta.benchable_objects import BenchableMultiObjective
 
 
-def example_optim_2obj_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_optim_2obj_1d(run_cfg=None):
     """Optimization: 2 objective(s), 1D input."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 3
+    run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.use_optuna = True
-    benchable = BenchableMultiObjective()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableMultiObjective().to_bench(run_cfg)
     res = bench.plot_sweep(
         input_vars=["x"], result_vars=["performance", "cost"], const_vars=dict(noise_scale=0.1)
     )
@@ -21,4 +18,4 @@ def example_optim_2obj_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_optim_2obj_1d, level=3)
+    bch.run(example_optim_2obj_1d, level=3, repeats=3)
