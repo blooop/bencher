@@ -12,7 +12,7 @@ OUTPUT_DIR = "const_vars"
 
 
 class MetaConstVars(MetaGeneratorBase):
-    """Generate notebooks demonstrating const_vars usage."""
+    """Generate Python examples demonstrating const_vars usage."""
 
     n_const = bch.IntSweep(default=0, bounds=(0, 2), doc="Number of constant variables")
 
@@ -20,35 +20,30 @@ class MetaConstVars(MetaGeneratorBase):
         self.update_params_from_kwargs(**kwargs)
 
         filename = f"const_vars_{self.n_const}"
-        param_label = "parameter" if self.n_const == 1 else "parameters"
-        title = f"Constant Variables: {self.n_const} fixed {param_label}"
+        function_name = f"example_const_vars_{self.n_const}"
+        title = f"Constant Variables: {self.n_const} fixed parameter(s)"
 
         if self.n_const == 0:
             input_vars_code = '["float1", "float2", "float3"]'
-            const_vars_code = ""
+            const_vars = None
         elif self.n_const == 1:
             input_vars_code = '["float1", "float2"]'
-            const_vars_code = ", const_vars=dict(float3=0.5)"
+            const_vars = "dict(float3=0.5)"
         else:
             input_vars_code = '["float1"]'
-            const_vars_code = ", const_vars=dict(float2=0.5, float3=0.5)"
+            const_vars = "dict(float2=0.5, float3=0.5)"
 
-        setup_code = (
-            "import bencher as bch\n"
-            "from bencher.example.meta.example_meta import BenchableObject\n"
-            "run_cfg = bch.BenchRunCfg()\n"
-            "run_cfg.level = 3\n"
-            "benchable = BenchableObject()\n"
-            "bench = benchable.to_bench(run_cfg)\n"
-            f"res = bench.plot_sweep(input_vars={input_vars_code}, "
-            f'result_vars=["distance"]{const_vars_code})\n'
-        )
-
-        self.generate_notebook(
+        self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
-            setup_code=setup_code,
+            function_name=function_name,
+            benchable_class="BenchableObject",
+            benchable_module="bencher.example.meta.example_meta",
+            input_vars=input_vars_code,
+            result_vars='["distance"]',
+            const_vars=const_vars,
+            run_kwargs={"level": 3},
         )
 
         return super().__call__()

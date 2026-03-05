@@ -10,62 +10,69 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "plot_types"
 
-# Each plot type maps to the sweep config needed to satisfy its VarRange constraints
 PLOT_CONFIGS = {
     "bar": {
         "float_dims": 0,
         "cat_dims": 1,
         "repeats": 1,
-        "result_code": "res.to_bar()",
+        "plot_call": "res.to_bar()",
         "input_vars": '["wave"]',
     },
     "line": {
         "float_dims": 1,
         "cat_dims": 0,
         "repeats": 1,
-        "result_code": "res.to_line()",
+        "plot_call": "res.to_line()",
         "input_vars": '["float1"]',
     },
     "curve": {
         "float_dims": 1,
         "cat_dims": 0,
         "repeats": 5,
-        "result_code": "res.to_curve()",
+        "plot_call": "res.to_curve()",
         "input_vars": '["float1"]',
     },
     "scatter": {
         "float_dims": 0,
         "cat_dims": 1,
         "repeats": 1,
-        "result_code": "res.to_scatter()",
+        "plot_call": "res.to_scatter()",
         "input_vars": '["wave"]',
     },
     "heatmap": {
         "float_dims": 2,
         "cat_dims": 0,
         "repeats": 1,
-        "result_code": "res.to_heatmap()",
+        "plot_call": "res.to_heatmap()",
         "input_vars": '["float1", "float2"]',
     },
     "surface": {
         "float_dims": 2,
         "cat_dims": 0,
         "repeats": 1,
-        "result_code": "res.to_surface()",
+        "plot_call": "res.to_surface()",
         "input_vars": '["float1", "float2"]',
     },
     "box_whisker": {
         "float_dims": 0,
         "cat_dims": 1,
         "repeats": 10,
-        "result_code": "from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult\nres.to(BoxWhiskerResult)",
+        "plot_call": "res.to(BoxWhiskerResult)",
+        "extra_import": (
+            "from bencher.results.holoview_results.distribution_result"
+            ".box_whisker_result import BoxWhiskerResult"
+        ),
         "input_vars": '["wave"]',
     },
     "scatter_jitter": {
         "float_dims": 0,
         "cat_dims": 1,
         "repeats": 10,
-        "result_code": "from bencher.results.holoview_results.distribution_result.scatter_jitter_result import ScatterJitterResult\nres.to(ScatterJitterResult)",
+        "plot_call": "res.to(ScatterJitterResult)",
+        "extra_import": (
+            "from bencher.results.holoview_results.distribution_result"
+            ".scatter_jitter_result import ScatterJitterResult"
+        ),
         "input_vars": '["wave"]',
     },
 }
@@ -74,7 +81,7 @@ PLOT_NAMES = list(PLOT_CONFIGS.keys())
 
 
 class MetaPlotTypes(MetaGeneratorBase):
-    """Generate notebooks demonstrating each plot type."""
+    """Generate Python examples demonstrating each plot type."""
 
     plot_type = bch.StringSweep(PLOT_NAMES, doc="Plot type to demonstrate")
 
@@ -83,36 +90,30 @@ class MetaPlotTypes(MetaGeneratorBase):
 
         cfg = PLOT_CONFIGS[self.plot_type]
         filename = f"plot_{self.plot_type}"
+        function_name = f"example_plot_{self.plot_type}"
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
+        const_vars = "dict(noise_scale=0.15)" if cfg["repeats"] > 1 else None
+        extra_imports = [cfg["extra_import"]] if cfg.get("extra_import") else None
+
         level = 2 if cfg["float_dims"] >= 2 else 3
-        noise_line = ""
+        run_kwargs = {"level": level}
         if cfg["repeats"] > 1:
-            noise_line = "benchable.noise_scale = 0.15\n"
+            run_kwargs["repeats"] = cfg["repeats"]
 
-        setup_code = (
-            "import bencher as bch\n"
-            "from bencher.example.meta.example_meta import BenchableObject\n"
-            "run_cfg = bch.BenchRunCfg()\n"
-            f"run_cfg.repeats = {cfg['repeats']}\n"
-            f"run_cfg.level = {level}\n"
-            "benchable = BenchableObject()\n"
-            f"{noise_line}"
-            "bench = benchable.to_bench(run_cfg)\n"
-            f"res = bench.plot_sweep(input_vars={cfg['input_vars']}, "
-            'result_vars=["distance"])\n'
-        )
-
-        results_code = (
-            f"from bokeh.io import output_notebook\noutput_notebook()\n{cfg['result_code']}"
-        )
-
-        self.generate_notebook(
+        self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
-            setup_code=setup_code,
-            results_code=results_code,
+            function_name=function_name,
+            benchable_class="BenchableObject",
+            benchable_module="bencher.example.meta.example_meta",
+            input_vars=cfg["input_vars"],
+            result_vars='["distance"]',
+            const_vars=const_vars,
+            post_sweep_line=cfg["plot_call"],
+            extra_imports=extra_imports,
+            run_kwargs=run_kwargs,
         )
 
         return super().__call__()

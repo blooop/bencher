@@ -4,6 +4,7 @@ unique_names/
 
 # Generated HTML output files
 index.html
+reports/
 
 
 # Byte-compiled / optimized / DLL files
@@ -183,7 +184,6 @@ managed_context/metadata.json
 test_suite_analysis/metadata.json
 *.rrd
 docs/builtdocs*
-docs/jupyter_execute*
 thumbnails/
 docs/autoapi/*
 .qodo
@@ -196,3 +196,7 @@ docs/autoapi/*
 # Claude Code local settings (personal, not shared)
 .claude/settings.local.json
 _tabs/*
+
+# Auto-generated docs (HTML reports, RST files) — examples are tracked
+docs/reference/meta/
+docs/_extra/

@@ -29,7 +29,7 @@ def create_bench(
         sweep: The ParametrizedSweep instance to benchmark.
         run_cfg: Optional benchmark run configuration.
         report: Optional existing report to append results to.
-        name: Optional name for the benchmark. If None, derived from sweep.name.
+        name: Optional name for the benchmark. If None, derived from sweep's class name.
 
     Returns:
         A configured Bench instance.
@@ -37,7 +37,9 @@ def create_bench(
     from bencher.bencher import Bench
 
     if name is None:
-        name = sweep.name[:-5]  # param adds 5 digit number to the end
+        # Use the class name directly instead of trying to strip param's suffix.
+        # This handles cases where the param counter exceeds 5 digits.
+        name = sweep.__class__.__name__
 
     return Bench(name, sweep, run_cfg=run_cfg, report=report)
 

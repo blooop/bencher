@@ -112,7 +112,9 @@ class BenchReport(BenchPlotServer):
 
         if len(self.pane) <= 1:
             logging.info(f"saving html output to: {index_path.absolute()}")
-            self.pane.save(filename=index_path, progress=True, embed=True, **kwargs)
+            # Save inner content directly so the Tabs sidebar is not rendered
+            content = self.pane[0] if len(self.pane) == 1 else self.pane
+            content.save(filename=index_path, progress=True, embed=True, **kwargs)
             return index_path
 
         # Save each tab to its own HTML so HoloMap sliders don't collide.

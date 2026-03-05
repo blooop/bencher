@@ -142,6 +142,7 @@ ci = { depends-on = [
     "ruff-lint",
     "pylint",
     "ty",
+    "generate-examples",
     "coverage",
     "coverage-report",
 ] }
@@ -154,8 +155,11 @@ update-from-template-repo = "./scripts/update_from_template.sh"
 dev-use-prebuilt = "./scripts/devcontainer_use_prebuilt.sh"
 dev-use-local = "./scripts/devcontainer_use_local.sh"
 
+# Generate Python example files only (fast, no computation)
+generate-examples = "python -c \"from bencher.example.meta.generate_examples import generate_python_files; generate_python_files()\""
+# Generate + run + produce docs (HTML reports + RST)
 generate-docs = "python bencher/example/meta/generate_examples.py"
-docs = "rm -rf docs/builtdocs; rm -rf docs/jupyter_execute; sphinx-build -b html docs docs/builtdocs"
+docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = ["generate-docs"] }
 
 
 #demos
@@ -166,7 +170,7 @@ demo_rerun = "python3 bencher/example/example_rerun.py"
 [tool.pylint]
 extension-pkg-whitelist = ["numpy", "scipy"]
 jobs = 16                                    #detect number of cores
-ignore-paths = "docs/*"
+ignore-paths = ["docs/.*", "bencher/example/generated/.*"]
 
 [tool.pylint.'MESSAGES CONTROL']
 disable = "C,logging-fstring-interpolation,line-too-long,fixme,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,duplicate-code,too-many-public-methods,too-many-nested-blocks,cyclic-import,too-many-positional-arguments"

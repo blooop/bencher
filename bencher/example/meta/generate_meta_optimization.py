@@ -12,7 +12,7 @@ OUTPUT_DIR = "optimization"
 
 
 class MetaOptimization(MetaGeneratorBase):
-    """Generate notebooks demonstrating optimization features."""
+    """Generate Python examples demonstrating optimization features."""
 
     n_objectives = bch.IntSweep(default=1, bounds=(1, 2), doc="Number of objectives")
     input_dims = bch.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
@@ -21,8 +21,8 @@ class MetaOptimization(MetaGeneratorBase):
         self.update_params_from_kwargs(**kwargs)
 
         filename = f"optim_{self.n_objectives}obj_{self.input_dims}d"
-        obj_label = "objective" if self.n_objectives == 1 else "objectives"
-        title = f"Optimization: {self.n_objectives} {obj_label}, {self.input_dims}D input"
+        function_name = f"example_optim_{self.n_objectives}obj_{self.input_dims}d"
+        title = f"Optimization: {self.n_objectives} objective(s), {self.input_dims}D input"
 
         if self.n_objectives == 1:
             result_vars_code = '["performance"]'
@@ -35,34 +35,19 @@ class MetaOptimization(MetaGeneratorBase):
             input_vars_code = '["x", "y"]'
 
         level = 2 if self.input_dims >= 2 else 3
-
-        setup_code = (
-            "import bencher as bch\n"
-            "from bencher.example.meta.benchable_objects import BenchableMultiObjective\n"
-            "run_cfg = bch.BenchRunCfg()\n"
-            f"run_cfg.level = {level}\n"
-            "run_cfg.repeats = 3\n"
-            "run_cfg.use_optuna = True\n"
-            "benchable = BenchableMultiObjective()\n"
-            "benchable.noise_scale = 0.1\n"
-            "bench = benchable.to_bench(run_cfg)\n"
-            f"res = bench.plot_sweep(input_vars={input_vars_code}, "
-            f"result_vars={result_vars_code})\n"
-        )
-
-        results_code = (
-            "from bokeh.io import output_notebook\n"
-            "output_notebook()\n"
-            "res.to_auto_plots()\n"
-            "res.to_optuna_plots()"
-        )
-
-        self.generate_notebook(
+        self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
-            setup_code=setup_code,
-            results_code=results_code,
+            function_name=function_name,
+            benchable_class="BenchableMultiObjective",
+            benchable_module="bencher.example.meta.benchable_objects",
+            input_vars=input_vars_code,
+            result_vars=result_vars_code,
+            const_vars="dict(noise_scale=0.1)",
+            post_sweep_line="res.to_optuna_plots()",
+            run_cfg_lines=["run_cfg.use_optuna = True"],
+            run_kwargs={"level": level, "repeats": 3},
         )
 
         return super().__call__()

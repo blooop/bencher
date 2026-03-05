@@ -3,12 +3,9 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
-  - firefox  # Explicitly include Firefox
-  - geckodriver  # Install geckodriver from conda-forge
   - pip
   - sqlite=3.48.0
   - pip:
       - -e ../
       - -r requirements.txt
       - matplotlib
-      

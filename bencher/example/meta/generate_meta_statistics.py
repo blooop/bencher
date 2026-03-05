@@ -12,7 +12,7 @@ OUTPUT_DIR = "statistics"
 
 
 class MetaStatistics(MetaGeneratorBase):
-    """Generate notebooks demonstrating repeat-based statistics."""
+    """Generate Python examples demonstrating repeat-based statistics."""
 
     repeats = bch.IntSweep(default=1, bounds=(1, 100), doc="Number of repeats")
     input_dims = bch.IntSweep(default=0, bounds=(0, 1), doc="0 = categorical only, 1 = float sweep")
@@ -22,36 +22,30 @@ class MetaStatistics(MetaGeneratorBase):
 
         dim_label = "0d_categorical" if self.input_dims == 0 else "1d_float"
         filename = f"stats_{dim_label}_repeats_{self.repeats}"
-        rep_label = "repeat" if self.repeats == 1 else "repeats"
-        dim_label_text = "categorical" if self.input_dims == 0 else "1D float"
-        title = f"Statistics: {self.repeats} {rep_label}, {dim_label_text}"
-
-        if self.input_dims == 0:
-            input_vars_code = '["wave"]'
-        else:
-            input_vars_code = '["float1"]'
-
-        noise_line = ""
-        if self.repeats > 1:
-            noise_line = "benchable.noise_scale = 0.15\n"
-
-        setup_code = (
-            "import bencher as bch\n"
-            "from bencher.example.meta.example_meta import BenchableObject\n"
-            "run_cfg = bch.BenchRunCfg()\n"
-            f"run_cfg.repeats = {self.repeats}\n"
-            "run_cfg.level = 3\n"
-            "benchable = BenchableObject()\n"
-            f"{noise_line}"
-            "bench = benchable.to_bench(run_cfg)\n"
-            f'res = bench.plot_sweep(input_vars={input_vars_code}, result_vars=["distance"])\n'
+        function_name = f"example_stats_{dim_label}_repeats_{self.repeats}"
+        title = (
+            f"Statistics: {self.repeats} repeat(s), "
+            f"{'categorical' if self.input_dims == 0 else '1D float'}"
         )
 
-        self.generate_notebook(
+        input_vars_code = '["wave"]' if self.input_dims == 0 else '["float1"]'
+        const_vars = "dict(noise_scale=0.15)" if self.repeats > 1 else None
+
+        run_kwargs = {"level": 3}
+        if self.repeats > 1:
+            run_kwargs["repeats"] = self.repeats
+
+        self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
-            setup_code=setup_code,
+            function_name=function_name,
+            benchable_class="BenchableObject",
+            benchable_module="bencher.example.meta.example_meta",
+            input_vars=input_vars_code,
+            result_vars='["distance"]',
+            const_vars=const_vars,
+            run_kwargs=run_kwargs,
         )
 
         return super().__call__()
