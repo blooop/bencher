@@ -151,6 +151,8 @@ class ComposableContainerVideo(ComposableContainerBase):
                 for i in range(len(self.container)):
                     self.container[i] = self.container[i].with_opacity(1.0 / len(self.container))
                 out = CompositeVideoClip(self.container, bg_color=render_cfg.background_col)
+                if out.duration is None:
+                    out.duration = max_duration
             case _:
                 raise RuntimeError(
                     f"This compose type is not supported: {render_cfg.compose_method}"

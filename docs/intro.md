@@ -53,7 +53,7 @@ Bencher includes a composable container system for combining visual outputs (ima
 - **sequence** — display items one after another (e.g. video frames, tabs)
 - **overlay** — blend items on top of each other (alpha compositing or averaging)
 
-Three backends are available: `ComposableContainerVideo` (moviepy), `ComposableContainerPanel` (Panel widgets), and `ComposableContainerDataset` (xarray). See `example_composable_backends.py` for a demonstration.
+Three backends are available: `ComposableContainerVideo` (moviepy), `ComposableContainerPanel` (Panel widgets), and `ComposableContainerDataset` (xarray). See `example_composable_backends.py` for a demonstration, and the "Composable Containers" section in the reference gallery for auto-generated examples of each backend and compose type.
 
 ## Examples
 
