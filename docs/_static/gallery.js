@@ -1,11 +1,15 @@
-/* Auto-crop gallery thumbnails to actual content height.
-   Panel/Bokeh reports set html,body{height:100%} which makes scrollHeight
-   return the iframe's CSS height, not the content height. We override that
-   to auto, then use ResizeObserver to detect when Bokeh finishes rendering. */
+/* Deferred iframe loading with IntersectionObserver + concurrency limiter.
+   Gallery iframes start with data-src instead of src. When an iframe enters
+   the viewport (with 200px margin), its src is set and loading begins.
+   At most MAX_CONCURRENT iframes load simultaneously to avoid browser thrash.
+   Once loaded, ResizeObserver auto-crops each thumbnail to its content height. */
 (function () {
   var SCALE = 0.2;
   var MIN_CONTENT_HEIGHT = 100;
-  var MAX_WRAPPER_HEIGHT = 600; /* never grow beyond the CSS default */
+  var MAX_WRAPPER_HEIGHT = 600;
+  var MAX_CONCURRENT = 4;
+  var loading = 0;
+  var queue = [];
 
   function applyHeight(iframe, h) {
     if (h > MIN_CONTENT_HEIGHT) {
@@ -19,50 +23,70 @@
     try {
       doc.documentElement.style.setProperty("height", "auto", "important");
       doc.body.style.setProperty("height", "auto", "important");
-    } catch (e) { /* cross-origin */ }
+    } catch (e) {}
   }
 
   function observeIframe(iframe) {
     try {
       var doc = iframe.contentDocument || iframe.contentWindow.document;
       if (!doc || !doc.body) return;
-
       fixBodyHeight(doc);
-
-      /* Use ResizeObserver on the body to react to Bokeh rendering */
       if (typeof ResizeObserver !== "undefined") {
         var observer = new ResizeObserver(function () {
           fixBodyHeight(doc);
-          var h = doc.body.scrollHeight;
-          applyHeight(iframe, h);
+          applyHeight(iframe, doc.body.scrollHeight);
         });
         observer.observe(doc.body);
-        /* Also observe documentElement for layout changes */
         observer.observe(doc.documentElement);
       }
+      applyHeight(iframe, doc.body.scrollHeight);
+    } catch (e) {}
+  }
 
-      /* Immediate attempt as well */
-      var h = doc.body.scrollHeight;
-      applyHeight(iframe, h);
-    } catch (e) {
-      console.log("gallery.js: cannot access iframe", e.message);
+  function loadNext() {
+    while (loading < MAX_CONCURRENT && queue.length) {
+      var iframe = queue.shift();
+      var src = iframe.getAttribute("data-src");
+      if (!src) continue;
+      loading++;
+      iframe.addEventListener("load", function handler() {
+        iframe.removeEventListener("load", handler);
+        loading--;
+        observeIframe(iframe);
+        loadNext();
+      });
+      iframe.src = src;
+      iframe.removeAttribute("data-src");
     }
   }
 
-  function attachListeners() {
-    var iframes = document.querySelectorAll(".gallery-thumb");
-    for (var i = 0; i < iframes.length; i++) {
-      (function (iframe) {
-        iframe.addEventListener("load", function () {
-          observeIframe(iframe);
-        });
-      })(iframes[i]);
-    }
+  function enqueueIframe(iframe) {
+    if (!iframe.getAttribute("data-src")) return;
+    queue.push(iframe);
+    loadNext();
+  }
+
+  function setupIntersectionObserver() {
+    var iframes = document.querySelectorAll(".gallery-thumb[data-src]");
+    if (!iframes.length) return;
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          observer.unobserve(entry.target);
+          enqueueIframe(entry.target);
+        }
+      });
+    }, { rootMargin: "200px" });
+
+    iframes.forEach(function (iframe) {
+      observer.observe(iframe);
+    });
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", attachListeners);
+    document.addEventListener("DOMContentLoaded", setupIntersectionObserver);
   } else {
-    attachListeners();
+    setupIntersectionObserver();
   }
 })();

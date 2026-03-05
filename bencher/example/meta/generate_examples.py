@@ -248,8 +248,8 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
             lines.append(f'   <a class="gallery-card" href="{href}">')
             lines.append('     <div class="gallery-thumb-wrap">')
             lines.append(
-                f'       <iframe class="gallery-thumb" src="{report_src}"'
-                ' loading="lazy" tabindex="-1" scrolling="no"></iframe>'
+                f'       <iframe class="gallery-thumb" data-src="{report_src}"'
+                ' tabindex="-1" scrolling="no"></iframe>'
             )
             lines.append("     </div>")
             lines.append(f'     <div class="gallery-card-title">{ex["title"]}</div>')
