@@ -137,8 +137,11 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
 
     # Take a full-page screenshot for the gallery thumbnail
     screenshot_path = reports_output_dir / f"_reports/{stem}/thumbnail.png"
-    take_screenshot(Path(report_path), screenshot_path)
-    print(f"  Saved thumbnail to {screenshot_path}")
+    try:
+        take_screenshot(Path(report_path), screenshot_path)
+        print(f"  Saved thumbnail to {screenshot_path}")
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"  WARNING: Screenshot failed for {stem}: {exc}")
 
     # Generate RST that shows source + embeds HTML report
     title_text = stem.replace("_", " ").title()
