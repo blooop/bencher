@@ -15,9 +15,9 @@ _browser = None
 
 def _get_browser():
     """Return a shared headless Chromium browser, launching it on first call."""
-    global _playwright_instance, _browser  # noqa: PLW0603
+    global _playwright_instance, _browser  # noqa: PLW0603  # pylint: disable=global-statement
     if _browser is None:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
         _playwright_instance = sync_playwright().start()
         _browser = _playwright_instance.chromium.launch()
@@ -26,7 +26,7 @@ def _get_browser():
 
 def _close_browser():
     """Shut down the shared browser if it was started."""
-    global _playwright_instance, _browser  # noqa: PLW0603
+    global _playwright_instance, _browser  # noqa: PLW0603  # pylint: disable=global-statement
     if _browser is not None:
         _browser.close()
         _browser = None
