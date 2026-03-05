@@ -8,8 +8,6 @@
   var MIN_CONTENT_HEIGHT = 100;
   var MAX_WRAPPER_HEIGHT = 600;
   var MAX_CONCURRENT = 4;
-  var loading = 0;
-  var queue = [];
 
   function applyHeight(iframe, h) {
     if (h > MIN_CONTENT_HEIGHT) {
@@ -43,32 +41,50 @@
     } catch (e) {}
   }
 
-  function loadNext() {
-    while (loading < MAX_CONCURRENT && queue.length) {
-      var iframe = queue.shift();
-      var src = iframe.getAttribute("data-src");
-      if (!src) continue;
-      loading++;
-      iframe.addEventListener("load", function handler() {
-        iframe.removeEventListener("load", handler);
-        loading--;
-        observeIframe(iframe);
-        loadNext();
+  function withConcurrencyLimit(max, worker) {
+    var active = 0;
+    var queue = [];
+
+    function runNext() {
+      if (active >= max || !queue.length) return;
+      active++;
+      var item = queue.shift();
+      worker(item, function done() {
+        active--;
+        runNext();
       });
-      iframe.src = src;
-      iframe.removeAttribute("data-src");
     }
+
+    return function enqueue(item) {
+      queue.push(item);
+      runNext();
+    };
   }
 
-  function enqueueIframe(iframe) {
-    if (!iframe.getAttribute("data-src")) return;
-    queue.push(iframe);
-    loadNext();
-  }
+  var enqueueIframe = withConcurrencyLimit(MAX_CONCURRENT, function (iframe, done) {
+    var src = iframe.getAttribute("data-src");
+    if (!src) {
+      done();
+      return;
+    }
 
-  function setupIntersectionObserver() {
+    iframe.addEventListener("load", function () {
+      observeIframe(iframe);
+      done();
+    }, { once: true });
+
+    iframe.src = src;
+    iframe.removeAttribute("data-src");
+  });
+
+  function setupDeferredLoading() {
     var iframes = document.querySelectorAll(".gallery-thumb[data-src]");
     if (!iframes.length) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      iframes.forEach(enqueueIframe);
+      return;
+    }
 
     var observer = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
@@ -85,8 +101,8 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", setupIntersectionObserver);
+    document.addEventListener("DOMContentLoaded", setupDeferredLoading);
   } else {
-    setupIntersectionObserver();
+    setupDeferredLoading();
   }
 })();
