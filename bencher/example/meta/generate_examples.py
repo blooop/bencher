@@ -48,6 +48,7 @@ def generate_python_files():
 
     from bencher.example.meta.generate_meta import example_meta
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
+    from bencher.example.meta.generate_meta_image_video import example_meta_image_video
     from bencher.example.meta.generate_meta_optimization import example_meta_optimization
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
@@ -56,6 +57,7 @@ def generate_python_files():
 
     example_meta()
     example_meta_result_types()
+    example_meta_image_video()
     example_meta_plot_types()
     example_meta_sampling()
     example_meta_statistics()
@@ -203,6 +205,8 @@ SECTIONS = {
     "Result Types: ResultString": "result_types/result_string",
     "Result Types: ResultPath": "result_types/result_path",
     "Result Types: ResultDataSet": "result_types/result_dataset",
+    "Result Types: ResultImage": "result_types/result_image",
+    "Result Types: ResultVideo": "result_types/result_video",
     "Plot Types": "plot_types",
     "Optimization": "optimization",
     "Sampling Strategies": "sampling",

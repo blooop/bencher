@@ -8,6 +8,9 @@ imported directly in notebooks.
 import math
 import random
 
+import numpy as np
+from PIL import Image, ImageDraw
+
 import bencher as bch
 
 
@@ -95,7 +98,6 @@ class BenchableDataSetResult(bch.ParametrizedSweep):
     result_ds = bch.ResultDataSet(doc="Generated dataset")
 
     def __call__(self, **kwargs):
-        import numpy as np
         import xarray as xr
 
         self.update_params_from_kwargs(**kwargs)
@@ -138,4 +140,68 @@ class BenchableIntFloat(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
+        return super().__call__()
+
+
+def _polygon_points(radius, sides, start_angle=0.0):
+    """Compute polygon vertices on a unit circle."""
+    points = []
+    for ang in np.linspace(0, 360, sides + 1):
+        angle = math.radians(start_angle + ang)
+        points.append([math.sin(angle) * radius, math.cos(angle) * radius])
+    return points
+
+
+def _draw_polygon_image(points, color, linewidth, size=200):
+    """Draw a polygon onto a transparent RGBA image and return the PIL Image."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    scaled = [((p[0] + 1) * size / 2, (1 - p[1]) * size / 2) for p in points]
+    draw.line(scaled, fill=color, width=int(linewidth))
+    return img
+
+
+class BenchableImageResult(bch.ParametrizedSweep):
+    """Demonstrates ResultImage — a lightweight polygon renderer."""
+
+    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
+    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
+    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")
+
+    polygon = bch.ResultImage(doc="Rendered polygon image")
+    area = bch.ResultVar("u^2", doc="Polygon area")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        points = _polygon_points(self.radius, self.sides)
+        img = _draw_polygon_image(points, self.color, linewidth=3)
+        filepath = bch.gen_image_path("polygon")
+        img.save(filepath, "PNG")
+        self.polygon = str(filepath)
+        self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (
+            4 * math.tan(math.pi / self.sides)
+        )
+        return super().__call__()
+
+
+class BenchableVideoResult(bch.ParametrizedSweep):
+    """Demonstrates ResultVideo — a polygon rotation animation."""
+
+    sides = bch.IntSweep(default=4, bounds=(3, 7), doc="Number of polygon sides")
+    speed = bch.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
+
+    animation = bch.ResultVideo(doc="Rotating polygon video")
+    frame_snapshot = bch.ResultImage(doc="Last frame snapshot")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        vid_writer = bch.VideoWriter()
+        num_frames = 8
+        for i in range(num_frames):
+            angle = self.speed * (360.0 * i / num_frames)
+            points = _polygon_points(0.7, self.sides, start_angle=angle)
+            img = _draw_polygon_image(points, "white", linewidth=3, size=200)
+            vid_writer.append(np.array(img.convert("RGB")))
+        self.animation = vid_writer.write()
+        self.frame_snapshot = bch.video_writer.VideoWriter.extract_frame(self.animation)
         return super().__call__()
