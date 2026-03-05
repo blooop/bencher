@@ -19,4 +19,4 @@ def example_sampling_custom_values(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    bch.run(example_sampling_custom_values)
+    bch.run(example_sampling_custom_values, level=3)

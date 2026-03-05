@@ -8,9 +8,6 @@ def example_no_repeats_2_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> 
     """2 Float, 2 Categorical."""
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 1
-    run_cfg.level = 4
-    run_cfg.over_time = False
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg)
     res = bench.plot_sweep(
@@ -22,4 +19,4 @@ def example_no_repeats_2_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> 
 
 
 if __name__ == "__main__":
-    bch.run(example_no_repeats_2_float_2_cat)
+    bch.run(example_no_repeats_2_float_2_cat, level=4)

@@ -8,7 +8,6 @@ def example_sampling_int_vs_float(run_cfg: bch.BenchRunCfg | None = None) -> bch
     """Sampling: Int Vs Float."""
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.level = 3
     benchable = BenchableIntFloat()
     bench = benchable.to_bench(run_cfg)
     bench.plot_sweep(input_vars=["int_input", "float_input"], result_vars=["output"])
@@ -17,4 +16,4 @@ def example_sampling_int_vs_float(run_cfg: bch.BenchRunCfg | None = None) -> bch
 
 
 if __name__ == "__main__":
-    bch.run(example_sampling_int_vs_float)
+    bch.run(example_sampling_int_vs_float, level=3)

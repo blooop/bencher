@@ -8,8 +8,6 @@ def example_stats_1d_float_repeats_1(run_cfg: bch.BenchRunCfg | None = None) -> 
     """Statistics: 1 repeat(s), 1D float."""
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.repeats = 1
-    run_cfg.level = 3
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg)
     bench.plot_sweep(input_vars=["float1"], result_vars=["distance"])
@@ -18,4 +16,4 @@ def example_stats_1d_float_repeats_1(run_cfg: bch.BenchRunCfg | None = None) -> 
 
 
 if __name__ == "__main__":
-    bch.run(example_stats_1d_float_repeats_1)
+    bch.run(example_stats_1d_float_repeats_1, level=3)

@@ -9,10 +9,7 @@ def example_with_repeats_3_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
     run_cfg.repeats = 3
-    run_cfg.level = 4
-    run_cfg.over_time = False
     benchable = BenchableObject()
-    benchable.noise_scale = 0.15
     bench = benchable.to_bench(run_cfg)
     res = bench.plot_sweep(
         input_vars=[
@@ -21,10 +18,11 @@ def example_with_repeats_3_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -
             {"name": "float3", "values": None, "max_level": 3, "samples": None},
         ],
         result_vars=["distance", "sample_noise"],
+        const_vars=dict(noise_scale=0.15),
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_3_float_0_cat)
+    bch.run(example_with_repeats_3_float_0_cat, level=4)

@@ -2,19 +2,15 @@
 
 import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
+from datetime import datetime, timedelta
 
 
 def example_over_time_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """2 Float, 0 Categorical."""
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    from datetime import datetime, timedelta
-
-    run_cfg.repeats = 1
-    run_cfg.level = 4
     run_cfg.over_time = True
     benchable = BenchableObject()
-    benchable.noise_scale = 0.1
     bench = benchable.to_bench(run_cfg)
     time_offsets = [0.0, 0.5, 1.0]
     _base_time = datetime(2000, 1, 1)
@@ -26,6 +22,7 @@ def example_over_time_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> b
             "over_time",
             input_vars=["float1", "float2"],
             result_vars=["distance", "sample_noise"],
+            const_vars=dict(noise_scale=0.1),
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )
@@ -34,4 +31,4 @@ def example_over_time_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_2_float_0_cat)
+    bch.run(example_over_time_2_float_0_cat, level=4)

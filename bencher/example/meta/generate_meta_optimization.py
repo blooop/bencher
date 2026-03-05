@@ -34,25 +34,22 @@ class MetaOptimization(MetaGeneratorBase):
         else:
             input_vars_code = '["x", "y"]'
 
-        level = 2 if self.input_dims >= 2 else 3
-
         imports = (
             "import bencher as bch\n"
             "from bencher.example.meta.benchable_objects import BenchableMultiObjective"
         )
 
         body = (
-            f"run_cfg.level = {level}\n"
             f"run_cfg.repeats = 3\n"
             f"run_cfg.use_optuna = True\n"
             f"benchable = BenchableMultiObjective()\n"
-            f"benchable.noise_scale = 0.1\n"
             f"bench = benchable.to_bench(run_cfg)\n"
             f"res = bench.plot_sweep(input_vars={input_vars_code}, "
-            f"result_vars={result_vars_code})\n"
+            f"result_vars={result_vars_code}, const_vars=dict(noise_scale=0.1))\n"
             f"res.to_optuna_plots()\n"
         )
 
+        level = 2 if self.input_dims >= 2 else 3
         self.generate_example(
             title=title,
             output_dir=OUTPUT_DIR,
@@ -60,6 +57,7 @@ class MetaOptimization(MetaGeneratorBase):
             function_name=function_name,
             imports=imports,
             body=body,
+            main_extra=f", level={level}",
         )
 
         return super().__call__()

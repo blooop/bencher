@@ -32,7 +32,6 @@ class MetaSampling(MetaGeneratorBase):
         if self.strategy == "uniform":
             imports = common_imports
             body = (
-                "run_cfg.level = 4\n"
                 "benchable = BenchableObject()\n"
                 "bench = benchable.to_bench(run_cfg)\n"
                 'bench.plot_sweep(input_vars=["float1"], result_vars=["distance"])\n'
@@ -68,13 +67,13 @@ class MetaSampling(MetaGeneratorBase):
                 "from bencher.example.meta.benchable_objects import BenchableIntFloat"
             )
             body = (
-                "run_cfg.level = 3\n"
                 "benchable = BenchableIntFloat()\n"
                 "bench = benchable.to_bench(run_cfg)\n"
                 'bench.plot_sweep(input_vars=["int_input", "float_input"], '
                 'result_vars=["output"])\n'
             )
 
+        level = 4 if self.strategy == "uniform" else 3
         self.generate_example(
             title=title,
             output_dir=OUTPUT_DIR,
@@ -82,6 +81,7 @@ class MetaSampling(MetaGeneratorBase):
             function_name=function_name,
             imports=imports,
             body=body,
+            main_extra=f", level={level}",
         )
 
         return super().__call__()

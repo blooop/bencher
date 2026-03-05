@@ -19,6 +19,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
         function_name,
         imports,
         body,
+        main_extra="",
     ):
         """Write a runnable Python example file.
 
@@ -30,6 +31,8 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
             imports: Import lines placed at the top of the file.
             body: Unindented function body lines (after ``run_cfg`` guard).
                   Indentation is applied automatically.
+            main_extra: Extra keyword args for the ``bch.run()`` call in ``__main__``
+                        (e.g. ``", level=4"``).
         """
         indented_body = textwrap.indent(body, "    ")
         content = f'''"""Auto-generated example: {title}."""
@@ -46,7 +49,7 @@ def {function_name}(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run({function_name})
+    bch.run({function_name}{main_extra})
 '''
         fpath = GENERATED_DIR / output_dir / f"{filename}.py"
         fpath.parent.mkdir(parents=True, exist_ok=True)

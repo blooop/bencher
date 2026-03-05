@@ -8,7 +8,6 @@ def example_const_vars_2(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Constant Variables: 2 fixed parameter(s)."""
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.level = 3
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg)
     bench.plot_sweep(
@@ -19,4 +18,4 @@ def example_const_vars_2(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_const_vars_2)
+    bch.run(example_const_vars_2, level=3)

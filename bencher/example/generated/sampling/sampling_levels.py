@@ -22,4 +22,4 @@ def example_sampling_levels(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench
 
 
 if __name__ == "__main__":
-    bch.run(example_sampling_levels)
+    bch.run(example_sampling_levels, level=3)

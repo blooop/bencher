@@ -8,7 +8,6 @@ def example_result_string_0d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
     """Result String: 0D input."""
     if run_cfg is None:
         run_cfg = bch.BenchRunCfg()
-    run_cfg.level = 3
     benchable = BenchableStringResult()
     bench = benchable.to_bench(run_cfg)
     bench.plot_sweep(input_vars=["label"], result_vars=["report"])
@@ -17,4 +16,4 @@ def example_result_string_0d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
 
 
 if __name__ == "__main__":
-    bch.run(example_result_string_0d)
+    bch.run(example_result_string_0d, level=3)
