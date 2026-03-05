@@ -246,6 +246,22 @@ class TestComposableContainerVideo(unittest.TestCase):
         # still concatted vid time
         self.assertAlmostEqual(ccv.render().duration, 800.0)
 
+    def test_render_no_stdout(self):
+        """render() should not print debug output to stdout."""
+        import io
+        import contextlib
+
+        img = self.small_img()
+        vid = bch.ComposableContainerVideo()
+        vid.append(img)
+        vid.append(img)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            vid.render(bch.RenderCfg(duration=0.1, compose_method=bch.ComposeType.sequence))
+
+        assert buf.getvalue() == "", f"Unexpected stdout: {buf.getvalue()!r}"
+
 
 if __name__ == "__main__":
     tst = TestComposableContainerVideo()
