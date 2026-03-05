@@ -48,26 +48,15 @@
     transform: translateY(-2px);
 }
 
-/* Thumbnail wrapper: clips a scaled-down iframe to create a preview */
-.gallery-thumb-wrap {
+/* Thumbnail image: shows the full screenshot scaled to fit the card */
+.gallery-thumb {
     width: 100%;
-    height: 192px;
-    overflow: hidden;
-    position: relative;
+    max-height: 280px;
+    object-fit: contain;
+    object-position: top;
     background: #fafafa;
     border-bottom: 1px solid #eee;
-}
-
-.gallery-thumb {
-    width: 1000px;
-    height: 800px;
-    border: none;
-    transform: scale(0.24);
-    transform-origin: top left;
-    pointer-events: none;
-    position: absolute;
-    top: 0;
-    left: 0;
+    display: block;
 }
 
 .gallery-card-title {
