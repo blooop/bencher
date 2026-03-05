@@ -44,9 +44,7 @@ shellcheck = ">=0.10.0,<0.11"
 devpod = ">=0.8.0,<0.9"
 gh = ">=2.83.0,<3.0"
 ralph-orchestrator = ">=2.6.0,<2.7.0"
-selenium = ">=4.20,<5"
-geckodriver = ">=0.34,<1"
-firefox = ">=130,<200"
+playwright = ">=1.50,<2"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"

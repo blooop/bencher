@@ -53,55 +53,40 @@ def _resize_and_save_png(png_data: bytes, thumb_path: Path, thumb_width: int = 4
     img.save(thumb_path)
 
 
-def _create_driver():
-    """Create a reusable headless Firefox driver for thumbnail screenshots."""
-    from selenium import webdriver
-    from selenium.webdriver.firefox.options import Options
-
-    options = Options()
-    options.add_argument("--headless")
-    driver = webdriver.Firefox(options=options)
-    driver.set_window_size(1200, 900)
-    return driver
-
-
 def _take_thumbnail(
     html_path: Path,
     thumb_path: Path,
-    driver=None,
+    page=None,
     width: int = 1200,
     height: int = 900,
     thumb_width: int = 480,
 ) -> None:
     """Screenshot an HTML report and save as a resized PNG thumbnail.
 
-    Uses the provided driver if given; otherwise creates a temporary one.
+    Uses the provided playwright page if given; otherwise creates a temporary browser.
     """
-    from selenium import webdriver
-    from selenium.webdriver.firefox.options import Options
-    from selenium.webdriver.support.ui import WebDriverWait
+    from playwright.sync_api import sync_playwright
 
-    def _screenshot_with(drv: webdriver.Firefox) -> bytes:
-        drv.set_window_size(width, height)
-        drv.get(html_path.resolve().as_uri())
-        WebDriverWait(drv, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        return drv.get_screenshot_as_png()
+    def _screenshot_with(pg) -> bytes:
+        pg.set_viewport_size({"width": width, "height": height})
+        pg.goto(html_path.resolve().as_uri(), wait_until="load", timeout=15000)
+        # Brief pause for Bokeh/Panel JS to render plots after DOM load
+        pg.wait_for_timeout(2000)
+        return pg.screenshot()
 
-    if driver is not None:
-        png_data = _screenshot_with(driver)
+    if page is not None:
+        png_data = _screenshot_with(page)
         _resize_and_save_png(png_data, thumb_path, thumb_width)
         return
 
-    options = Options()
-    options.add_argument("--headless")
-    tmp_driver = webdriver.Firefox(options=options)
-    try:
-        png_data = _screenshot_with(tmp_driver)
-        _resize_and_save_png(png_data, thumb_path, thumb_width)
-    finally:
-        tmp_driver.quit()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        tmp_page = browser.new_page(viewport={"width": width, "height": height})
+        try:
+            png_data = _screenshot_with(tmp_page)
+            _resize_and_save_png(png_data, thumb_path, thumb_width)
+        finally:
+            browser.close()
 
 
 def generate_python_files():
@@ -156,7 +141,7 @@ def _find_example_function(mod):
     return None
 
 
-def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, driver=None):
+def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, page=None):
     """Run a Python example, save HTML report, write RST doc page.
 
     Returns a metadata dict for gallery generation, or None on failure.
@@ -194,7 +179,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, dri
     # Generate thumbnail screenshot
     thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
     try:
-        _take_thumbnail(Path(report_path), thumb_path, driver=driver)
+        _take_thumbnail(Path(report_path), thumb_path, page=page)
         print(f"  Saved thumbnail to {thumb_path}")
     except Exception as e:  # pylint: disable=broad-except
         print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
@@ -354,25 +339,33 @@ def generate_all() -> list[Path]:
     examples_metadata = []
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
 
-    # Create a shared browser driver for thumbnail screenshots
-    driver = None
+    # Create a shared playwright browser for thumbnail screenshots
+    pw_context = None
+    browser = None
+    page = None
     try:
-        driver = _create_driver()
-        print("Started headless Firefox for thumbnail screenshots")
+        from playwright.sync_api import sync_playwright
+
+        pw_context = sync_playwright().start()
+        browser = pw_context.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 900})
+        print("Started headless Chromium for thumbnail screenshots")
     except Exception as e:  # pylint: disable=broad-except
-        print(f"WARNING: Could not start Firefox for thumbnails: {e}")
+        print(f"WARNING: Could not start browser for thumbnails: {e}")
 
     try:
         for py_file in py_files:
             if py_file.name == "__init__.py":
                 continue
-            meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR, driver=driver)
+            meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR, page=page)
             if meta:
                 examples_metadata.append(meta)
     finally:
-        if driver is not None:
-            driver.quit()
-            print("Closed headless Firefox")
+        if browser is not None:
+            browser.close()
+        if pw_context is not None:
+            pw_context.stop()
+            print("Closed headless Chromium")
 
     # Phase 3: Generate section index files
     for title, rel_path in SECTIONS.items():
