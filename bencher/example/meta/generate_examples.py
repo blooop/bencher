@@ -157,31 +157,61 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
     }
 
 
-def generate_section_index(section_path: Path, section_title: str):
-    """Generate an index.rst for a docs section with a toctree."""
+def generate_section_index(section_path: Path, section_title: str, section_metadata: list[dict]):
+    """Generate an index.rst for a docs section with a gallery grid and hidden toctree."""
     rst_files = sorted(section_path.rglob("*.rst"))
     rst_files = [f for f in rst_files if f.name != "index.rst"]
 
     if not rst_files:
         return
 
-    entries = []
+    toc_entries = []
     for f in rst_files:
         rel = f.relative_to(section_path).with_suffix("")
-        entries.append(f"   {rel}")
+        toc_entries.append(f"   {rel}")
 
     underline = "=" * len(section_title)
-    entries_str = "\n".join(entries)
-    content = f"""{section_title}
-{underline}
+    toc_entries_str = "\n".join(toc_entries)
 
-.. toctree::
-   :maxdepth: 1
+    lines = [
+        section_title,
+        underline,
+        "",
+        ".. toctree::",
+        "   :hidden:",
+        "   :maxdepth: 1",
+        "",
+        toc_entries_str,
+        "",
+    ]
 
-{entries_str}
-"""
+    if section_metadata:
+        lines += [
+            ".. raw:: html",
+            "",
+            '   <div class="gallery-container">',
+            '   <div class="gallery-grid">',
+        ]
+        for ex in section_metadata:
+            href = f"{ex['stem']}.html"
+            report_src = f"_reports/{ex['stem']}/{ex['bench_name']}.html"
+            lines.append(f'   <a class="gallery-card" href="{href}">')
+            lines.append('     <div class="gallery-thumb-wrap">')
+            lines.append(
+                f'       <iframe class="gallery-thumb" data-src="{report_src}"'
+                ' tabindex="-1" scrolling="no"></iframe>'
+            )
+            lines.append("     </div>")
+            lines.append(f'     <div class="gallery-card-title">{ex["title"]}</div>')
+            lines.append("   </a>")
+        lines += [
+            "   </div>",
+            "   </div>",
+            "",
+        ]
+
     index_path = section_path / "index.rst"
-    index_path.write_text(content, encoding="utf-8")
+    index_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 SECTIONS = {
@@ -289,10 +319,15 @@ def generate_all() -> list[Path]:
             examples_metadata.append(meta)
 
     # Phase 3: Generate section index files
+    # Group metadata by section for gallery rendering
+    meta_by_section = {}
+    for meta in examples_metadata:
+        meta_by_section.setdefault(meta["section_rel"], []).append(meta)
+
     for title, rel_path in SECTIONS.items():
         section_dir = META_DOCS_DIR / rel_path
         if section_dir.exists():
-            generate_section_index(section_dir, title)
+            generate_section_index(section_dir, title, meta_by_section.get(rel_path, []))
 
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)
