@@ -68,7 +68,10 @@ def _find_example_function(mod):
 
 
 def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
-    """Run a Python example, save HTML report, write RST doc page."""
+    """Run a Python example, save HTML report, write RST doc page.
+
+    Returns a metadata dict for gallery generation, or None on failure.
+    """
     rel = py_file.relative_to(generated_dir)
     output_dir = docs_dir / rel.parent
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +81,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
     example_fn = _find_example_function(mod)
     if example_fn is None:
         print(f"WARNING: No example_* function found in {py_file}, skipping")
-        return
+        return None
 
     run_cfg = bch.BenchRunCfg()
     run_cfg.level = 4
@@ -116,6 +119,13 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
 """
     rst_path.write_text(rst_content, encoding="utf-8")
 
+    return {
+        "stem": stem,
+        "title": title_text,
+        "section_rel": str(rel.parent),
+        "rst_rel": str(rel.with_suffix("").as_posix()),
+    }
+
 
 def generate_section_index(section_path: Path, section_title: str):
     """Generate an index.rst for a docs section with a toctree."""
@@ -142,6 +152,57 @@ def generate_section_index(section_path: Path, section_title: str):
 """
     index_path = section_path / "index.rst"
     index_path.write_text(content, encoding="utf-8")
+
+
+SECTION_ICONS = {
+    "0_float": (
+        "#4CAF50",
+        '<path d="M3 17h2v-7H3v7zm4 0h2V7H7v10zm4 0h2v-4h-2v4zm4 0h2v-9h-2v9zm4 0h2V3h-2v14z"/>',
+    ),
+    "1_float": (
+        "#2196F3",
+        '<path d="M3.5 18.5l6-6 4 4L22 6.92 20.59 5.5l-7.09 8.07-4-4L2 17z"/>',
+    ),
+    "2_float": (
+        "#9C27B0",
+        '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9'
+        ' 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>',
+    ),
+    "3_float": (
+        "#FF5722",
+        '<circle cx="7" cy="14" r="3"/><circle cx="11" cy="6" r="3"/><circle cx="16.6" '
+        'cy="17.6" r="3"/>',
+    ),
+    "result_types": (
+        "#FF9800",
+        '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9'
+        ' 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>',
+    ),
+    "plot_types": (
+        "#E91E63",
+        '<path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/>',
+    ),
+    "optimization": (
+        "#00BCD4",
+        '<circle cx="12" cy="12" r="3.2"/><path d="M9 2L7.2 4.8l2.8 2.8L7.2'
+        ' 10.4 9 13.2l3-3 3 3 1.8-2.8-2.8-2.8 2.8-2.8L15 2l-3 3z"/>',
+    ),
+    "sampling": (
+        "#795548",
+        '<circle cx="6" cy="18" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="18"'
+        ' cy="16" r="2"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="6" r="2"/>',
+    ),
+    "const_vars": (
+        "#607D8B",
+        '<path d="M14 4l2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4'
+        ' 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3z"/>',
+    ),
+    "statistics": (
+        "#3F51B5",
+        '<path d="M2 20h20v-2H2v2zM4 14c.6-3.3 3.5-5.5 6.8-5 2.3.4 4.2 2.2'
+        ' 4.6 4.5.1.5.1 1 .1 1.5h4c0-5.5-4.5-10-10-10C4.5 5 .3 9.6 0 14h4z"/>',
+    ),
+}
 
 
 SECTIONS = {
@@ -171,6 +232,71 @@ SECTIONS = {
 }
 
 
+def _icon_for_section(section_rel: str):
+    """Return (color, svg_path_data) for a section by matching its path prefix."""
+    for prefix, val in SECTION_ICONS.items():
+        if section_rel.startswith(prefix):
+            return val
+    return ("#9E9E9E", '<circle cx="12" cy="12" r="6"/>')
+
+
+def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
+    """Generate a single gallery.rst page with a CSS grid of cards grouped by section."""
+    from collections import OrderedDict
+
+    grouped = OrderedDict()
+    for title, rel_path in SECTIONS.items():
+        grouped[title] = {"rel_path": rel_path, "examples": []}
+
+    for meta in examples_metadata:
+        for title, rel_path in SECTIONS.items():
+            if meta["section_rel"] == rel_path:
+                grouped[title]["examples"].append(meta)
+                break
+
+    lines = [
+        "Gallery Overview",
+        "================",
+        "",
+        "All examples at a glance. Click any card to see the full example with source and report.",
+        "",
+        ".. raw:: html",
+        "",
+        '   <div class="gallery-container">',
+    ]
+
+    for section_title, info in grouped.items():
+        if not info["examples"]:
+            continue
+        color, svg_path = _icon_for_section(info["rel_path"])
+        lines.append(
+            f'   <h3 class="gallery-section-title"'
+            f' style="border-left: 4px solid {color};">{section_title}</h3>'
+        )
+        lines.append('   <div class="gallery-grid">')
+        for ex in info["examples"]:
+            href = f"{ex['rst_rel']}.html"
+            subtitle = info["rel_path"].replace("/", " / ").replace("_", " ").title()
+            lines.append(f'   <a class="gallery-card" href="{href}">')
+            lines.append('     <div class="gallery-card-icon">')
+            lines.append(
+                f'       <svg viewBox="0 0 24 24" width="48" height="48"'
+                f' fill="{color}">{svg_path}</svg>'
+            )
+            lines.append("     </div>")
+            lines.append(f'     <div class="gallery-card-title">{ex["title"]}</div>')
+            lines.append(f'     <div class="gallery-card-subtitle">{subtitle}</div>')
+            lines.append("   </a>")
+        lines.append("   </div>")
+
+    lines.append("   </div>")
+    lines.append("")
+
+    gallery_path = docs_dir / "gallery.rst"
+    gallery_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"  Generated gallery page: {gallery_path}")
+
+
 def generate_all() -> list[Path]:
     """Generate Python examples, run them, save HTML reports, generate RST for docs."""
     # Clean output directories
@@ -186,17 +312,23 @@ def generate_all() -> list[Path]:
     generate_python_files()
 
     # Phase 2: Run each Python file, save HTML report, generate RST
+    examples_metadata = []
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
     for py_file in py_files:
         if py_file.name == "__init__.py":
             continue
-        run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR)
+        meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR)
+        if meta:
+            examples_metadata.append(meta)
 
     # Phase 3: Generate section index files
     for title, rel_path in SECTIONS.items():
         section_dir = META_DOCS_DIR / rel_path
         if section_dir.exists():
             generate_section_index(section_dir, title)
+
+    # Phase 4: Generate gallery overview page
+    generate_gallery_page(examples_metadata, META_DOCS_DIR)
 
     # Generate top-level meta index
     meta_index_entries = []
@@ -212,6 +344,7 @@ def generate_all() -> list[Path]:
 .. toctree::
    :maxdepth: 2
 
+   gallery
 {entries_str}
 """
     (META_DOCS_DIR / "index.rst").write_text(meta_index, encoding="utf-8")
