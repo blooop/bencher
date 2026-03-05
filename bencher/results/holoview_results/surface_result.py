@@ -11,6 +11,20 @@ from bencher.variables.results import ResultVar
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
+def _da_to_sorted_grid(da: xr.DataArray, x_name: str, y_name: str):
+    """Extract sorted x/y coordinate arrays and a 2D z grid from a DataArray.
+
+    Sorts the DataArray along both axes so the resulting grid has monotonically
+    increasing x and y values, which plotly requires for correct surface rendering.
+    """
+    sorted_da = da.sortby([x_name, y_name])
+    return (
+        sorted_da.coords[x_name].values,
+        sorted_da.coords[y_name].values,
+        sorted_da.values,
+    )
+
+
 class SurfaceResult(HoloviewResult):
     """A class for creating 3D surface plots from benchmark results.
 
@@ -85,7 +99,8 @@ class SurfaceResult(HoloviewResult):
         """Creates a 3D surface plot from the provided dataset.
 
         Uses plotly directly (like VolumeResult) to avoid HoloViews backend
-        contamination issues while ensuring reliable 3D rendering.
+        contamination issues while ensuring reliable 3D rendering. Coordinates
+        are sorted to guarantee monotonic x/y grids for plotly.
 
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
@@ -109,14 +124,14 @@ class SurfaceResult(HoloviewResult):
             x = self.plt_cnt_cfg.float_vars[0]
             y = self.plt_cnt_cfg.float_vars[1]
 
-            meandf = dataset[result_var.name].to_dataframe().reset_index()
-            pivot = meandf.pivot_table(values=result_var.name, index=y.name, columns=x.name)
+            mean_da = dataset[result_var.name]
+            x_vals, y_vals, z_vals = _da_to_sorted_grid(mean_da, x.name, y.name)
 
             data = [
                 go.Surface(
-                    x=pivot.columns.values,
-                    y=pivot.index.values,
-                    z=pivot.values,
+                    x=x_vals,
+                    y=y_vals,
+                    z=z_vals,
                     colorscale="Viridis",
                     colorbar=dict(title=f"{result_var.name} [{result_var.units}]"),
                 )
@@ -124,18 +139,15 @@ class SurfaceResult(HoloviewResult):
 
             if self.bench_cfg.repeats > 1:
                 std_dev = dataset[f"{result_var.name}_std"]
-                mean_da = dataset[result_var.name]
 
                 for bound, sign in [("upper", 1), ("lower", -1)]:
                     bound_da = mean_da + sign * std_dev
-                    bound_da.name = result_var.name
-                    bdf = bound_da.to_dataframe().reset_index()
-                    bpivot = bdf.pivot_table(values=result_var.name, index=y.name, columns=x.name)
+                    _, _, bz = _da_to_sorted_grid(bound_da, x.name, y.name)
                     data.append(
                         go.Surface(
-                            x=bpivot.columns.values,
-                            y=bpivot.index.values,
-                            z=bpivot.values,
+                            x=x_vals,
+                            y=y_vals,
+                            z=bz,
                             colorscale="Viridis",
                             showscale=False,
                             opacity=alpha,
