@@ -23,7 +23,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
 
         Args:
             title: Docstring / heading text.
-            output_dir: Relative path under ``bencher/example/meta/generated/``.
+            output_dir: Relative path under ``bencher/example/generated/``.
             filename: Python file stem (e.g. ``result_var_1d``).
             function_name: Name of the example function (e.g. ``example_result_var_1d``).
             imports: Import lines placed at the top of the file.
@@ -47,7 +47,7 @@ def {function_name}(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 if __name__ == "__main__":
     bch.run({function_name})
 '''
-        fpath = Path(f"bencher/example/meta/generated/{output_dir}/{filename}.py")
+        fpath = Path(f"bencher/example/generated/{output_dir}/{filename}.py")
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fpath.write_text(content, encoding="utf-8")
         return fpath

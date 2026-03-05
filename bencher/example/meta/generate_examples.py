@@ -9,7 +9,7 @@ from pathlib import Path
 import bencher as bch
 
 
-GENERATED_DIR = Path("bencher/example/meta/generated")
+GENERATED_DIR = Path("bencher/example/generated")
 META_DOCS_DIR = Path("docs/reference/meta")
 # Reports go under docs/_extra/ so html_extra_path copies them to match the built output structure
 REPORTS_EXTRA_DIR = Path("docs/_extra/reference/meta")
@@ -55,7 +55,7 @@ def generate_python_files():
 def _import_example_module(py_file: Path):
     """Import a generated example module using the normal package path."""
     rel = py_file.relative_to(GENERATED_DIR).with_suffix("")
-    module_path = ".".join(("bencher.example.meta.generated", *rel.parts))
+    module_path = ".".join(("bencher.example.generated", *rel.parts))
     return importlib.import_module(module_path)
 
 

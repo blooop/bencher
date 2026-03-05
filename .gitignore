@@ -198,6 +198,6 @@ docs/autoapi/*
 _tabs/*
 
 # Auto-generated examples and docs (HTML reports, RST files)
-bencher/example/meta/generated/
+bencher/example/generated/
 docs/reference/meta/
 docs/_extra/
