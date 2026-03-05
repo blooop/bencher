@@ -7,7 +7,7 @@ import os
 
 
 class TestBenchExamples(unittest.TestCase):
-    """The purpose of this test class is to run the example problems to make sure they don't crash.  The bencher logic is tested in the other test files test_bencher.py and test_vars.py"""
+    """Run example problems to make sure they don't crash."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -16,8 +16,8 @@ class TestBenchExamples(unittest.TestCase):
     def create_run_cfg(self) -> bch.BenchRunCfg:
         cfg = bch.BenchRunCfg()
         if not self.generate_all:
-            cfg.repeats = 2  # low number of repeats to reduce test time, but also test averaging and variance code
-            cfg.level = 2  # reduce size of param sweep so tests are faster
+            cfg.repeats = 2
+            cfg.level = 2
         cfg.clear_cache = True
         return cfg
 

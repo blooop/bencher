@@ -6,14 +6,6 @@ Demonstrates each result type at different input dimensionalities.
 from typing import Any
 
 import bencher as bch
-from bencher.example.meta.benchable_objects import (
-    BenchableBoolResult,
-    BenchableDataSetResult,
-    BenchablePathResult,
-    BenchableStringResult,
-    BenchableVecResult,
-)
-from bencher.example.meta.example_meta import BenchableObject
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "result_types"
@@ -27,49 +19,60 @@ RESULT_TYPES = [
     "result_dataset",
 ]
 
-
-def _cls_info(cls, result_vars):
-    """Build BENCHABLE_MAP entry from a class, reducing stringly-typed duplication."""
-    return {
-        "class": cls.__name__,
-        "module": cls.__module__,
-        "result_vars": "[" + ", ".join(f'"{v}"' for v in result_vars) + "]",
-    }
-
-
-# Validity matrix: which (result_type, input_dims) combos generate notebooks
 VALID_COMBOS = {
     "result_var": [0, 1, 2],
     "result_bool": [0, 1, 2],
     "result_vec": [1, 2],
     "result_string": [0, 1],
-    "result_path": [0],
+    "result_path": [0, 1],
     "result_dataset": [1, 2],
 }
 
-# Map result types to their benchable class and module
 BENCHABLE_MAP = {
-    "result_var": _cls_info(BenchableObject, ["distance"]),
-    "result_bool": _cls_info(BenchableBoolResult, ["pass_rate"]),
-    "result_vec": _cls_info(BenchableVecResult, ["position"]),
-    "result_string": _cls_info(BenchableStringResult, ["report"]),
-    "result_path": _cls_info(BenchablePathResult, ["file_result"]),
-    "result_dataset": _cls_info(BenchableDataSetResult, ["result_ds"]),
+    "result_var": {
+        "class": "BenchableObject",
+        "module": "bencher.example.meta.example_meta",
+        "result_vars": '["distance"]',
+    },
+    "result_bool": {
+        "class": "BenchableBoolResult",
+        "module": "bencher.example.meta.benchable_objects",
+        "result_vars": '["pass_rate"]',
+    },
+    "result_vec": {
+        "class": "BenchableVecResult",
+        "module": "bencher.example.meta.benchable_objects",
+        "result_vars": '["position"]',
+    },
+    "result_string": {
+        "class": "BenchableStringResult",
+        "module": "bencher.example.meta.benchable_objects",
+        "result_vars": '["report"]',
+    },
+    "result_path": {
+        "class": "BenchablePathResult",
+        "module": "bencher.example.meta.benchable_objects",
+        "result_vars": '["file_result"]',
+    },
+    "result_dataset": {
+        "class": "BenchableDataSetResult",
+        "module": "bencher.example.meta.benchable_objects",
+        "result_vars": '["result_ds"]',
+    },
 }
 
-# Map result types to input variables per dimensionality
 INPUT_VARS_MAP = {
     "result_var": {0: '["wave"]', 1: '["float1"]', 2: '["float1", "float2"]'},
     "result_bool": {0: '["difficulty"]', 1: '["threshold"]', 2: '["threshold", "difficulty"]'},
     "result_vec": {1: '["x"]', 2: '["x", "y"]'},
     "result_string": {0: '["label"]', 1: '["label", "value"]'},
-    "result_path": {0: '["content"]'},
+    "result_path": {0: '["content"]', 1: '["content"]'},
     "result_dataset": {1: '["value"]', 2: '["value", "scale"]'},
 }
 
 
 class MetaResultTypes(MetaGeneratorBase):
-    """Generate notebooks demonstrating each result type."""
+    """Generate Python examples demonstrating each result type."""
 
     result_type = bch.StringSweep(RESULT_TYPES, doc="Result type to demonstrate")
     input_dims = bch.IntSweep(default=0, bounds=(0, 2), doc="Number of input dimensions")
@@ -77,7 +80,6 @@ class MetaResultTypes(MetaGeneratorBase):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        # Skip invalid combinations
         if self.input_dims not in VALID_COMBOS.get(self.result_type, []):
             return super().__call__()
 
@@ -86,26 +88,28 @@ class MetaResultTypes(MetaGeneratorBase):
 
         sub_dir = f"{OUTPUT_DIR}/{self.result_type}"
         filename = f"{self.result_type}_{self.input_dims}d"
+        function_name = f"example_{self.result_type}_{self.input_dims}d"
         title = f"{self.result_type.replace('_', ' ').title()}: {self.input_dims}D input"
 
         level = 2 if self.input_dims >= 2 else 3
 
-        setup_code = (
-            "import bencher as bch\n"
-            f"from {info['module']} import {info['class']}\n"
-            "run_cfg = bch.BenchRunCfg()\n"
+        imports = f"import bencher as bch\nfrom {info['module']} import {info['class']}"
+
+        body = (
             f"run_cfg.level = {level}\n"
             f"benchable = {info['class']}()\n"
-            "bench = benchable.to_bench(run_cfg)\n"
-            f"res = bench.plot_sweep(input_vars={input_vars_code}, "
+            f"bench = benchable.to_bench(run_cfg)\n"
+            f"bench.plot_sweep(input_vars={input_vars_code}, "
             f"result_vars={info['result_vars']})\n"
         )
 
-        self.generate_notebook(
+        self.generate_example(
             title=title,
             output_dir=sub_dir,
             filename=filename,
-            setup_code=setup_code,
+            function_name=function_name,
+            imports=imports,
+            body=body,
         )
 
         return super().__call__()

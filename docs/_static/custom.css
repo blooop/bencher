@@ -9,3 +9,74 @@
 
     height: 99vh;
 }
+
+/* --- Gallery overview page --- */
+.gallery-container {
+    max-width: 1400px;
+}
+
+.gallery-section-title {
+    margin: 28px 0 12px 0;
+    padding: 6px 12px;
+    font-size: 1.1em;
+    background: #f0f2f5;
+    border-left: 4px solid #666;
+    border-radius: 2px;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.gallery-card {
+    display: block;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    text-align: center;
+    text-decoration: none !important;
+    color: inherit !important;
+    transition: box-shadow 0.15s, transform 0.15s;
+    background: #fff;
+    overflow: hidden;
+}
+
+.gallery-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+/* Thumbnail wrapper: clips a scaled-down iframe to create a preview.
+   iframe is 1200×3000 scaled to 0.2 → rendered 240×600.
+   Wrapper shows the full scaled height so nothing is cropped. */
+.gallery-thumb-wrap {
+    width: 100%;
+    height: 600px;
+    overflow: hidden;
+    position: relative;
+    background: #fafafa;
+    border-bottom: 1px solid #eee;
+    transition: height 0.3s ease;
+}
+
+.gallery-thumb {
+    width: 1200px;
+    height: 3000px;
+    border: none;
+    transform: scale(0.2);
+    transform-origin: top left;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.gallery-card-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #333;
+    padding: 10px 8px;
+}

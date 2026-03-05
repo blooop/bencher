@@ -1,9 +1,5 @@
+myst-parser
 sphinxcontrib-napoleon
 sphinx-rtd-theme
 sphinx-autoapi
-pydata-sphinx-theme 
-nbsite==0.8.7
-jupyter_bokeh
-selenium
-chromedriver_binary
-# moviepy>=2.1.2
+sphinx_copybutton

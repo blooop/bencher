@@ -1,49 +1,53 @@
+import textwrap
 from pathlib import Path
 
-import nbformat as nbf
-
 import bencher as bch
-from bencher.example.meta.generate_examples import _deterministic_id
 
 
 class MetaGeneratorBase(bch.ParametrizedSweep):
-    """Shared base class for meta-generators that produce notebooks programmatically."""
+    """Shared base class for meta-generators that produce Python example files."""
 
-    def generate_notebook(
+    plots = bch.ResultReference(units="int")
+
+    def generate_example(
         self,
         *,
         title,
         output_dir,
         filename,
-        setup_code,
-        results_code=None,
+        function_name,
+        imports,
+        body,
     ):
-        """Create a 3-cell notebook: markdown title, %%capture setup, results display.
+        """Write a runnable Python example file.
 
         Args:
-            title: Markdown heading text.
-            output_dir: Relative path under ``docs/reference/meta/`` (e.g. ``result_types/result_bool``).
-            filename: Notebook stem (e.g. ``result_bool_1d``).
-            setup_code: Full Python code for cell 2. Automatically prefixed with ``%%capture\\n``.
-            results_code: Code for cell 3. Defaults to ``output_notebook()`` + ``res.to_auto_plots()``.
+            title: Docstring / heading text.
+            output_dir: Relative path under ``bencher/example/meta/generated/``.
+            filename: Python file stem (e.g. ``result_var_1d``).
+            function_name: Name of the example function (e.g. ``example_result_var_1d``).
+            imports: Import lines placed at the top of the file.
+            body: Unindented function body lines (after ``run_cfg`` guard).
+                  Indentation is applied automatically.
         """
-        if results_code is None:
-            results_code = (
-                "from bokeh.io import output_notebook\noutput_notebook()\nres.to_auto_plots()"
-            )
+        indented_body = textwrap.indent(body, "    ")
+        content = f'''"""Auto-generated example: {title}."""
 
-        nb = nbf.v4.new_notebook()
-        cells = [
-            nbf.v4.new_markdown_cell(f"# {title}"),
-            nbf.v4.new_code_cell(f"%%capture\n{setup_code}"),
-            nbf.v4.new_code_cell(results_code),
-        ]
+{imports}
 
-        id_key = f"{output_dir}/{filename}"
-        for i, cell in enumerate(cells):
-            cell.id = _deterministic_id(id_key, i)
-        nb["cells"] = cells
 
-        fname = Path(f"docs/reference/meta/{output_dir}/ex_{filename}.ipynb")
-        fname.parent.mkdir(parents=True, exist_ok=True)
-        fname.write_text(nbf.writes(nb) + "\n", encoding="utf-8")
+def {function_name}(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """{title}."""
+    if run_cfg is None:
+        run_cfg = bch.BenchRunCfg()
+{indented_body}
+    return bench
+
+
+if __name__ == "__main__":
+    bch.run({function_name})
+'''
+        fpath = Path(f"bencher/example/meta/generated/{output_dir}/{filename}.py")
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        fpath.write_text(content, encoding="utf-8")
+        return fpath
