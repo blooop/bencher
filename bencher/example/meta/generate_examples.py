@@ -2,9 +2,11 @@
 
 import ast
 import importlib
+import io
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import bencher as bch
@@ -38,6 +40,58 @@ def _extract_run_kwargs(py_file: Path) -> dict:
 META_DOCS_DIR = Path("docs/reference/meta")
 # Reports go under docs/_extra/ so html_extra_path copies them to match the built output structure
 REPORTS_EXTRA_DIR = Path("docs/_extra/reference/meta")
+THUMBS_EXTRA_DIR = REPORTS_EXTRA_DIR / "_thumbs"
+
+
+def _save_thumbnail(html_path: Path, thumb_path: Path, width=1200, height=900, thumb_width=480):
+    """Screenshot an HTML report and save as a resized PNG thumbnail."""
+    from PIL import Image
+    from selenium import webdriver
+    from selenium.webdriver.firefox.options import Options
+
+    options = Options()
+    options.add_argument("--headless")
+    driver = webdriver.Firefox(options=options)
+    try:
+        driver.set_window_size(width, height)
+        driver.get(html_path.resolve().as_uri())
+        time.sleep(2)
+        png_data = driver.get_screenshot_as_png()
+    finally:
+        driver.quit()
+
+    img = Image.open(io.BytesIO(png_data))
+    ratio = thumb_width / img.width
+    img = img.resize((thumb_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(thumb_path)
+
+
+def _create_driver():
+    """Create a reusable headless Firefox driver for thumbnail screenshots."""
+    from selenium import webdriver
+    from selenium.webdriver.firefox.options import Options
+
+    options = Options()
+    options.add_argument("--headless")
+    driver = webdriver.Firefox(options=options)
+    driver.set_window_size(1200, 900)
+    return driver
+
+
+def _screenshot_thumbnail(driver, html_path: Path, thumb_path: Path, thumb_width=480):
+    """Take a screenshot using an existing driver and save as a resized PNG thumbnail."""
+    from PIL import Image
+
+    driver.get(html_path.resolve().as_uri())
+    time.sleep(2)
+    png_data = driver.get_screenshot_as_png()
+
+    img = Image.open(io.BytesIO(png_data))
+    ratio = thumb_width / img.width
+    img = img.resize((thumb_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(thumb_path)
 
 
 def generate_python_files():
@@ -92,7 +146,7 @@ def _find_example_function(mod):
     return None
 
 
-def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
+def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, driver=None):
     """Run a Python example, save HTML report, write RST doc page.
 
     Returns a metadata dict for gallery generation, or None on failure.
@@ -126,6 +180,21 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
         in_html_folder=False,
     )
     print(f"  Saved report to {report_path}")
+
+    # Generate thumbnail screenshot
+    thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
+    if driver is not None:
+        try:
+            _screenshot_thumbnail(driver, Path(report_path), thumb_path)
+            print(f"  Saved thumbnail to {thumb_path}")
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
+    else:
+        try:
+            _save_thumbnail(Path(report_path), thumb_path)
+            print(f"  Saved thumbnail to {thumb_path}")
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
     # Generate RST that shows source + embeds HTML report
     title_text = stem.replace("_", " ").title()
@@ -212,7 +281,7 @@ SECTIONS = {
 
 
 def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
-    """Generate a single gallery.rst page with iframe thumbnail cards grouped by section."""
+    """Generate a single gallery.rst page with PNG thumbnail cards grouped by section."""
     from collections import OrderedDict
 
     grouped = OrderedDict()
@@ -244,12 +313,12 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         lines.append('   <div class="gallery-grid">')
         for ex in info["examples"]:
             href = f"{ex['rst_rel']}.html"
-            report_src = f"{ex['section_rel']}/_reports/{ex['stem']}/{ex['bench_name']}.html"
+            thumb_src = f"_thumbs/{ex['section_rel']}/{ex['stem']}.png"
             lines.append(f'   <a class="gallery-card" href="{href}">')
             lines.append('     <div class="gallery-thumb-wrap">')
             lines.append(
-                f'       <iframe class="gallery-thumb" src="{report_src}"'
-                ' loading="lazy" tabindex="-1" scrolling="no"></iframe>'
+                f'       <img class="gallery-thumb" src="{thumb_src}"'
+                f' loading="lazy" alt="{ex["title"]}">'
             )
             lines.append("     </div>")
             lines.append(f'     <div class="gallery-card-title">{ex["title"]}</div>')
@@ -281,12 +350,26 @@ def generate_all() -> list[Path]:
     # Phase 2: Run each Python file, save HTML report, generate RST
     examples_metadata = []
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
-    for py_file in py_files:
-        if py_file.name == "__init__.py":
-            continue
-        meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR)
-        if meta:
-            examples_metadata.append(meta)
+
+    # Create a shared browser driver for thumbnail screenshots
+    driver = None
+    try:
+        driver = _create_driver()
+        print("Started headless Firefox for thumbnail screenshots")
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"WARNING: Could not start Firefox for thumbnails: {e}")
+
+    try:
+        for py_file in py_files:
+            if py_file.name == "__init__.py":
+                continue
+            meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR, driver=driver)
+            if meta:
+                examples_metadata.append(meta)
+    finally:
+        if driver is not None:
+            driver.quit()
+            print("Closed headless Firefox")
 
     # Phase 3: Generate section index files
     for title, rel_path in SECTIONS.items():

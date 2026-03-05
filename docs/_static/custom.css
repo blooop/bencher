@@ -48,29 +48,17 @@
     transform: translateY(-2px);
 }
 
-/* Thumbnail wrapper: clips a scaled-down iframe to create a preview.
-   iframe is 1200×3000 scaled to 0.2 → rendered 240×600.
-   Wrapper shows the full scaled height so nothing is cropped. */
 .gallery-thumb-wrap {
     width: 100%;
-    height: 600px;
     overflow: hidden;
-    position: relative;
     background: #fafafa;
     border-bottom: 1px solid #eee;
-    transition: height 0.3s ease;
 }
 
 .gallery-thumb {
-    width: 1200px;
-    height: 3000px;
-    border: none;
-    transform: scale(0.2);
-    transform-origin: top left;
-    pointer-events: none;
-    position: absolute;
-    top: 0;
-    left: 0;
+    width: 100%;
+    height: auto;
+    display: block;
 }
 
 .gallery-card-title {
