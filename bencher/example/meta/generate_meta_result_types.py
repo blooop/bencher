@@ -91,24 +91,17 @@ class MetaResultTypes(MetaGeneratorBase):
         function_name = f"example_{self.result_type}_{self.input_dims}d"
         title = f"{self.result_type.replace('_', ' ').title()}: {self.input_dims}D input"
 
-        imports = f"import bencher as bch\nfrom {info['module']} import {info['class']}"
-
-        body = (
-            f"benchable = {info['class']}()\n"
-            f"bench = benchable.to_bench(run_cfg)\n"
-            f"bench.plot_sweep(input_vars={input_vars_code}, "
-            f"result_vars={info['result_vars']})\n"
-        )
-
         level = 2 if self.input_dims >= 2 else 3
-        self.generate_example(
+        self.generate_sweep_example(
             title=title,
             output_dir=sub_dir,
             filename=filename,
             function_name=function_name,
-            imports=imports,
-            body=body,
-            main_extra=f", level={level}",
+            benchable_class=info["class"],
+            benchable_module=info["module"],
+            input_vars=input_vars_code,
+            result_vars=info["result_vars"],
+            run_kwargs={"level": level},
         )
 
         return super().__call__()

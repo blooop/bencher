@@ -1,5 +1,6 @@
 """Generate Python example files, run them, save HTML reports, and generate RST for docs."""
 
+import ast
 import importlib
 import os
 import shutil
@@ -10,6 +11,25 @@ import bencher as bch
 
 
 GENERATED_DIR = Path("bencher/example/generated")
+
+
+def _extract_run_kwargs(py_file: Path) -> dict:
+    """Extract kwargs from bch.run() call in __main__ block."""
+    source = py_file.read_text()
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "run"
+        ):
+            kwargs = {}
+            for kw in node.keywords:
+                kwargs[kw.arg] = ast.literal_eval(kw.value)
+            return kwargs
+    return {}
+
+
 META_DOCS_DIR = Path("docs/reference/meta")
 # Reports go under docs/_extra/ so html_extra_path copies them to match the built output structure
 REPORTS_EXTRA_DIR = Path("docs/_extra/reference/meta")
@@ -83,8 +103,12 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
         print(f"WARNING: No example_* function found in {py_file}, skipping")
         return None
 
+    run_kwargs = _extract_run_kwargs(py_file)
     run_cfg = bch.BenchRunCfg()
-    run_cfg.level = 4
+    run_cfg.level = run_kwargs.get("level", 4)
+    run_cfg.repeats = run_kwargs.get("repeats", 1)
+    if "use_optuna" in run_kwargs:
+        run_cfg.use_optuna = run_kwargs["use_optuna"]
     print(f"Running {py_file}...")
     bench = example_fn(run_cfg)
 

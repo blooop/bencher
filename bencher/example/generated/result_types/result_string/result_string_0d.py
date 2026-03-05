@@ -4,12 +4,9 @@ import bencher as bch
 from bencher.example.meta.benchable_objects import BenchableStringResult
 
 
-def example_result_string_0d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_string_0d(run_cfg=None):
     """Result String: 0D input."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    benchable = BenchableStringResult()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableStringResult().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["label"], result_vars=["report"])
 
     return bench

@@ -4,12 +4,9 @@ import bencher as bch
 from bencher.example.meta.benchable_objects import BenchableDataSetResult
 
 
-def example_result_dataset_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_dataset_1d(run_cfg=None):
     """Result Dataset: 1D input."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    benchable = BenchableDataSetResult()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableDataSetResult().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["value"], result_vars=["result_ds"])
 
     return bench

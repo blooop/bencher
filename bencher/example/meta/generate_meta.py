@@ -98,16 +98,16 @@ class BenchMetaGen(bch.ParametrizedSweep):
         function_name = f"example_{variant}_{base_title}"
         filename = f"ex_{base_title}"
 
+        gen = MetaGeneratorBase()
+
         if self.sample_over_time:
             noise_val = max(0.1, 0.15 if self.sample_with_repeats > 1 else 0.0)
-            repeat_lines = (
-                f"run_cfg.repeats = {self.sample_with_repeats}\n"
-                if self.sample_with_repeats > 1
-                else ""
-            )
+            run_cfg_lines = ["run_cfg.over_time = True"]
+            if self.sample_with_repeats > 1:
+                run_cfg_lines.append(f"run_cfg.repeats = {self.sample_with_repeats}")
+
             body = (
-                f"{repeat_lines}"
-                f"run_cfg.over_time = True\n"
+                "run_cfg = run_cfg or bch.BenchRunCfg()\n" + "\n".join(run_cfg_lines) + "\n"
                 f"benchable = {obj_class}()\n"
                 f"bench = benchable.to_bench(run_cfg)\n"
                 f"time_offsets = [0.0, 0.5, 1.0]\n"
@@ -125,39 +125,38 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"
             )
-            extra_imports = "\nfrom datetime import datetime, timedelta"
+            imports = f"import bencher as bch\n{benchmark_import}\nfrom datetime import datetime, timedelta"
+            gen.generate_example(
+                title=title,
+                output_dir=f"{self.float_vars_count}_float/{variant}",
+                filename=filename,
+                function_name=function_name,
+                imports=imports,
+                body=body,
+                run_kwargs={"level": 4},
+            )
         else:
-            noise_const = (
-                ", const_vars=dict(noise_scale=0.15)" if self.sample_with_repeats > 1 else ""
-            )
-            lines = []
+            noise_const = "dict(noise_scale=0.15)" if self.sample_with_repeats > 1 else None
+            run_kwargs = {"level": 4}
             if self.sample_with_repeats > 1:
-                lines.append(f"run_cfg.repeats = {self.sample_with_repeats}")
-            lines.append(f"benchable = {obj_class}()")
-            lines.extend(
-                [
-                    "bench = benchable.to_bench(run_cfg)",
-                    "res = bench.plot_sweep(",
-                    f"    input_vars={input_vars},",
-                    f"    result_vars={self.result_var_names}{noise_const},",
-                    ")",
-                ]
+                run_kwargs["repeats"] = self.sample_with_repeats
+
+            gen.generate_sweep_example(
+                title=title,
+                output_dir=f"{self.float_vars_count}_float/{variant}",
+                filename=filename,
+                function_name=function_name,
+                benchable_class=obj_class,
+                benchable_module=(
+                    self.benchable_obj.__class__.__module__
+                    if self.benchable_obj.__class__.__module__ != "__main__"
+                    else "bencher.example.meta.example_meta"
+                ),
+                input_vars=repr(input_vars),
+                result_vars=repr(self.result_var_names),
+                const_vars=noise_const,
+                run_kwargs=run_kwargs,
             )
-            body = "\n".join(lines) + "\n"
-            extra_imports = ""
-
-        imports = f"import bencher as bch\n{benchmark_import}{extra_imports}"
-
-        gen = MetaGeneratorBase()
-        gen.generate_example(
-            title=title,
-            output_dir=f"{self.float_vars_count}_float/{variant}",
-            filename=filename,
-            function_name=function_name,
-            imports=imports,
-            body=body,
-            main_extra=", level=4",
-        )
 
         return super().__call__()
 

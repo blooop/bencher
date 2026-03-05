@@ -4,12 +4,9 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_sampling_custom_values(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_sampling_custom_values(run_cfg=None):
     """Sampling: Custom Values."""
-    if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
-    benchable = BenchableObject()
-    bench = benchable.to_bench(run_cfg)
+    bench = BenchableObject().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=[bch.p("float1", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],
         result_vars=["distance"],
