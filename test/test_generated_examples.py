@@ -8,7 +8,7 @@ import pytest
 import bencher as bch
 
 
-GENERATED_DIR = Path("bencher/example/meta/generated")
+GENERATED_DIR = Path("bencher/example/generated")
 
 
 def _discover_examples():
@@ -34,7 +34,7 @@ if not _examples:
 def test_generated_example(example_path):
     """Run a generated example. Success = no exception."""
     rel = example_path.relative_to(GENERATED_DIR).with_suffix("")
-    module_path = ".".join(("bencher.example.meta.generated", *rel.parts))
+    module_path = ".".join(("bencher.example.generated", *rel.parts))
     mod = importlib.import_module(module_path)
 
     # Find the example_* function

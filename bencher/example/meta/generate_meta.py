@@ -43,7 +43,11 @@ class BenchMetaGen(bch.ParametrizedSweep):
         categorical_param_names = []
         result_param_names = []
 
+        # noise_scale is a FloatSweep used as a const_var, not a sweep input
+        skip = {"noise_scale"}
         for name, param in self.benchable_obj.__class__.param.objects().items():
+            if name in skip:
+                continue
             if hasattr(param, "bounds") and isinstance(param, bch.FloatSweep):
                 float_param_names.append(name)
             elif isinstance(param, (bch.BoolSweep, bch.EnumSweep, bch.StringSweep)):
@@ -96,13 +100,15 @@ class BenchMetaGen(bch.ParametrizedSweep):
 
         if self.sample_over_time:
             noise_val = max(0.1, 0.15 if self.sample_with_repeats > 1 else 0.0)
-            body = (
-                f"from datetime import datetime, timedelta\n"
+            repeat_lines = (
                 f"run_cfg.repeats = {self.sample_with_repeats}\n"
-                f"run_cfg.level = 4\n"
+                if self.sample_with_repeats > 1
+                else ""
+            )
+            body = (
+                f"{repeat_lines}"
                 f"run_cfg.over_time = True\n"
                 f"benchable = {obj_class}()\n"
-                f"benchable.noise_scale = {noise_val}\n"
                 f"bench = benchable.to_bench(run_cfg)\n"
                 f"time_offsets = [0.0, 0.5, 1.0]\n"
                 f"_base_time = datetime(2000, 1, 1)\n"
@@ -114,31 +120,33 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 f'        "over_time",\n'
                 f"        input_vars={input_vars},\n"
                 f"        result_vars={self.result_var_names},\n"
+                f"        const_vars=dict(noise_scale={noise_val}),\n"
                 f"        run_cfg=run_cfg,\n"
                 f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"
             )
+            extra_imports = "\nfrom datetime import datetime, timedelta"
         else:
-            lines = [
-                f"run_cfg.repeats = {self.sample_with_repeats}",
-                "run_cfg.level = 4",
-                "run_cfg.over_time = False",
-                f"benchable = {obj_class}()",
-            ]
+            noise_const = (
+                ", const_vars=dict(noise_scale=0.15)" if self.sample_with_repeats > 1 else ""
+            )
+            lines = []
             if self.sample_with_repeats > 1:
-                lines.append("benchable.noise_scale = 0.15")
+                lines.append(f"run_cfg.repeats = {self.sample_with_repeats}")
+            lines.append(f"benchable = {obj_class}()")
             lines.extend(
                 [
                     "bench = benchable.to_bench(run_cfg)",
                     "res = bench.plot_sweep(",
                     f"    input_vars={input_vars},",
-                    f"    result_vars={self.result_var_names},",
+                    f"    result_vars={self.result_var_names}{noise_const},",
                     ")",
                 ]
             )
             body = "\n".join(lines) + "\n"
+            extra_imports = ""
 
-        imports = f"import bencher as bch\n{benchmark_import}"
+        imports = f"import bencher as bch\n{benchmark_import}{extra_imports}"
 
         gen = MetaGeneratorBase()
         gen.generate_example(
@@ -148,6 +156,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
             function_name=function_name,
             imports=imports,
             body=body,
+            main_extra=", level=4",
         )
 
         return super().__call__()

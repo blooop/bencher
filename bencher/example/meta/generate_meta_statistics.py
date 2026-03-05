@@ -18,17 +18,18 @@ class MetaStatistics(MetaGeneratorBase):
     input_dims = bch.IntSweep(default=0, bounds=(0, 1), doc="0 = categorical only, 1 = float sweep")
 
     def _build_body(self, input_vars_code: str) -> str:
-        lines = [
-            f"run_cfg.repeats = {self.repeats}",
-            "run_cfg.level = 3",
-            "benchable = BenchableObject()",
-        ]
+        noise_const = ", const_vars=dict(noise_scale=0.15)" if self.repeats > 1 else ""
+        lines = []
         if self.repeats > 1:
-            lines.append("benchable.noise_scale = 0.15")
+            lines.append(f"run_cfg.repeats = {self.repeats}")
         lines.extend(
             [
+                "benchable = BenchableObject()",
                 "bench = benchable.to_bench(run_cfg)",
-                f'bench.plot_sweep(input_vars={input_vars_code}, result_vars=["distance"])',
+                (
+                    f"bench.plot_sweep(input_vars={input_vars_code},"
+                    f' result_vars=["distance"]{noise_const})'
+                ),
             ]
         )
         return "\n".join(lines) + "\n"
@@ -62,6 +63,7 @@ class MetaStatistics(MetaGeneratorBase):
             function_name=function_name,
             imports=imports,
             body=body,
+            main_extra=", level=3",
         )
 
         return super().__call__()

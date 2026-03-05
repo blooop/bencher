@@ -197,7 +197,6 @@ docs/autoapi/*
 .claude/settings.local.json
 _tabs/*
 
-# Auto-generated examples and docs (HTML reports, RST files)
-bencher/example/meta/generated/
+# Auto-generated docs (HTML reports, RST files) — examples are tracked
 docs/reference/meta/
 docs/_extra/

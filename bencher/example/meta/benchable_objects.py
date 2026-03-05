@@ -19,7 +19,7 @@ class BenchableBoolResult(bch.ParametrizedSweep):
 
     pass_rate = bch.ResultBool(doc="Whether the score exceeded the threshold")
 
-    noise_scale = 0.0
+    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -38,7 +38,7 @@ class BenchableVecResult(bch.ParametrizedSweep):
 
     position = bch.ResultVec(3, "m", doc="3D position vector")
 
-    noise_scale = 0.0
+    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -115,7 +115,7 @@ class BenchableMultiObjective(bch.ParametrizedSweep):
     performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance (maximize)")
     cost = bch.ResultVar("$", bch.OptDir.minimize, doc="Cost (minimize)")
 
-    noise_scale = 0.0
+    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)

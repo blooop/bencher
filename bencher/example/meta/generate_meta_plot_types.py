@@ -93,8 +93,6 @@ class MetaPlotTypes(MetaGeneratorBase):
         function_name = f"example_plot_{self.plot_type}"
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
-        level = 2 if cfg["float_dims"] >= 2 else 3
-
         import_lines = [
             "import bencher as bch",
             "from bencher.example.meta.example_meta import BenchableObject",
@@ -103,22 +101,24 @@ class MetaPlotTypes(MetaGeneratorBase):
             import_lines.append(cfg["extra_import"])
         imports = "\n".join(import_lines)
 
-        body_lines = [
-            f"run_cfg.repeats = {cfg['repeats']}",
-            f"run_cfg.level = {level}",
-            "benchable = BenchableObject()",
-        ]
+        noise_const = ", const_vars=dict(noise_scale=0.15)" if cfg["repeats"] > 1 else ""
+        body_lines = []
         if cfg["repeats"] > 1:
-            body_lines.append("benchable.noise_scale = 0.15")
+            body_lines.append(f"run_cfg.repeats = {cfg['repeats']}")
         body_lines.extend(
             [
+                "benchable = BenchableObject()",
                 "bench = benchable.to_bench(run_cfg)",
-                f'res = bench.plot_sweep(input_vars={cfg["input_vars"]}, result_vars=["distance"])',
+                (
+                    f"res = bench.plot_sweep(input_vars={cfg['input_vars']},"
+                    f' result_vars=["distance"]{noise_const})'
+                ),
                 cfg["plot_call"],
             ]
         )
         body = "\n".join(body_lines) + "\n"
 
+        level = 2 if cfg["float_dims"] >= 2 else 3
         self.generate_example(
             title=title,
             output_dir=OUTPUT_DIR,
@@ -126,6 +126,7 @@ class MetaPlotTypes(MetaGeneratorBase):
             function_name=function_name,
             imports=imports,
             body=body,
+            main_extra=f", level={level}",
         )
 
         return super().__call__()

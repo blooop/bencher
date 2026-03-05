@@ -43,8 +43,9 @@ class BenchableObject(bch.ParametrizedSweep):
 
     result_hmap = bch.ResultHmap()
 
-    # Class attributes set by BenchMeta/BenchMetaGen before sweep
-    noise_scale = 0.0  # signal-proportional noise scale (0.0 = deterministic)
+    noise_scale = bch.FloatSweep(
+        default=0.0, bounds=[0.0, 1.0], doc="Signal-proportional noise scale (0 = deterministic)"
+    )
     _time_offset = 0.0  # offset added to output for over-time support
 
     def __call__(self, **kwargs):
@@ -111,8 +112,7 @@ class BenchMeta(bch.ParametrizedSweep):
         run_cfg.plot_size = 500
 
         benchable = BenchableObject()
-        if self.sample_with_repeats > 1:
-            benchable.noise_scale = 0.15
+        noise = 0.15 if self.sample_with_repeats > 1 else 0.0
 
         bench = bch.Bench("benchable", benchable, run_cfg=run_cfg)
 
@@ -133,7 +133,7 @@ class BenchMeta(bch.ParametrizedSweep):
         )
 
         if self.sample_over_time:
-            benchable.noise_scale = max(benchable.noise_scale, 0.1)
+            noise = max(noise, 0.1)
             time_offsets = [0.0, 0.3, 0.7, 1.0]
             base_time = datetime(2000, 1, 1)
             for i, offset in enumerate(time_offsets):
@@ -144,6 +144,7 @@ class BenchMeta(bch.ParametrizedSweep):
                     "over_time",
                     input_vars=input_vars,
                     result_vars=["distance"],
+                    const_vars=dict(noise_scale=noise),
                     plot_callbacks=False,
                     run_cfg=run_cfg,
                     time_src=base_time + timedelta(seconds=i),
@@ -153,6 +154,7 @@ class BenchMeta(bch.ParametrizedSweep):
                 "test",
                 input_vars=input_vars,
                 result_vars=["distance"],
+                const_vars=dict(noise_scale=noise),
                 plot_callbacks=False,
             )
 
