@@ -48,15 +48,28 @@
     transform: translateY(-2px);
 }
 
-/* Thumbnail image: shows the full screenshot scaled to fit the card */
-.gallery-thumb {
+/* Thumbnail wrapper: clips a scaled-down iframe to create a preview.
+   iframe is 1200×3000 scaled to 0.2 → rendered 240×600.
+   Wrapper shows the full scaled height so nothing is cropped. */
+.gallery-thumb-wrap {
     width: 100%;
-    max-height: 280px;
-    object-fit: contain;
-    object-position: top;
+    height: 600px;
+    overflow: hidden;
+    position: relative;
     background: #fafafa;
     border-bottom: 1px solid #eee;
-    display: block;
+}
+
+.gallery-thumb {
+    width: 1200px;
+    height: 3000px;
+    border: none;
+    transform: scale(0.2);
+    transform-origin: top left;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
 .gallery-card-title {

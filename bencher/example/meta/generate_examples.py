@@ -8,43 +8,6 @@ from pathlib import Path
 
 import bencher as bch
 
-# Lazy-initialized Playwright browser for screenshots
-_playwright_instance = None
-_browser = None
-
-
-def _get_browser():
-    """Return a shared headless Chromium browser, launching it on first call."""
-    global _playwright_instance, _browser  # noqa: PLW0603  # pylint: disable=global-statement
-    if _browser is None:
-        from playwright.sync_api import sync_playwright  # pylint: disable=import-error
-
-        _playwright_instance = sync_playwright().start()
-        _browser = _playwright_instance.chromium.launch()
-    return _browser
-
-
-def _close_browser():
-    """Shut down the shared browser if it was started."""
-    global _playwright_instance, _browser  # noqa: PLW0603  # pylint: disable=global-statement
-    if _browser is not None:
-        _browser.close()
-        _browser = None
-    if _playwright_instance is not None:
-        _playwright_instance.stop()
-        _playwright_instance = None
-
-
-def take_screenshot(html_path: Path, png_path: Path, width: int = 1200):
-    """Take a full-page screenshot of an HTML file using Playwright."""
-    browser = _get_browser()
-    page = browser.new_page(viewport={"width": width, "height": 800})
-    page.goto(html_path.as_uri())
-    page.wait_for_load_state("networkidle")
-    png_path.parent.mkdir(parents=True, exist_ok=True)
-    page.screenshot(path=str(png_path), full_page=True)
-    page.close()
-
 
 GENERATED_DIR = Path("bencher/example/meta/generated")
 META_DOCS_DIR = Path("docs/reference/meta")
@@ -134,14 +97,6 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path):
         in_html_folder=False,
     )
     print(f"  Saved report to {report_path}")
-
-    # Take a full-page screenshot for the gallery thumbnail
-    screenshot_path = reports_output_dir / f"_reports/{stem}/thumbnail.png"
-    try:
-        take_screenshot(Path(report_path), screenshot_path)
-        print(f"  Saved thumbnail to {screenshot_path}")
-    except Exception as exc:  # pylint: disable=broad-except
-        print(f"  WARNING: Screenshot failed for {stem}: {exc}")
 
     # Generate RST that shows source + embeds HTML report
     title_text = stem.replace("_", " ").title()
@@ -260,12 +215,14 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         lines.append('   <div class="gallery-grid">')
         for ex in info["examples"]:
             href = f"{ex['rst_rel']}.html"
-            thumb_src = f"{ex['section_rel']}/_reports/{ex['stem']}/thumbnail.png"
+            report_src = f"{ex['section_rel']}/_reports/{ex['stem']}/{ex['bench_name']}.html"
             lines.append(f'   <a class="gallery-card" href="{href}">')
+            lines.append('     <div class="gallery-thumb-wrap">')
             lines.append(
-                f'     <img class="gallery-thumb" src="{thumb_src}"'
-                f' alt="{ex["title"]}" loading="lazy">'
+                f'       <iframe class="gallery-thumb" src="{report_src}"'
+                ' loading="lazy" tabindex="-1" scrolling="no"></iframe>'
             )
+            lines.append("     </div>")
             lines.append(f'     <div class="gallery-card-title">{ex["title"]}</div>')
             lines.append("   </a>")
         lines.append("   </div>")
@@ -301,8 +258,6 @@ def generate_all() -> list[Path]:
         meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR)
         if meta:
             examples_metadata.append(meta)
-
-    _close_browser()
 
     # Phase 3: Generate section index files
     for title, rel_path in SECTIONS.items():
