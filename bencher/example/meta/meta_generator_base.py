@@ -1,7 +1,8 @@
 import textwrap
-from pathlib import Path
 
 import bencher as bch
+
+from .generate_examples import GENERATED_DIR
 
 
 class MetaGeneratorBase(bch.ParametrizedSweep):
@@ -23,7 +24,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
 
         Args:
             title: Docstring / heading text.
-            output_dir: Relative path under ``bencher/example/generated/``.
+            output_dir: Relative path under ``GENERATED_DIR``.
             filename: Python file stem (e.g. ``result_var_1d``).
             function_name: Name of the example function (e.g. ``example_result_var_1d``).
             imports: Import lines placed at the top of the file.
@@ -47,7 +48,7 @@ def {function_name}(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 if __name__ == "__main__":
     bch.run({function_name})
 '''
-        fpath = Path(f"bencher/example/generated/{output_dir}/{filename}.py")
+        fpath = GENERATED_DIR / output_dir / f"{filename}.py"
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fpath.write_text(content, encoding="utf-8")
         return fpath
