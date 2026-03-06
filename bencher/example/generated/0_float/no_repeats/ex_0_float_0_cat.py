@@ -1,13 +1,23 @@
 """Auto-generated example: 0 Float, 0 Categorical."""
 
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
+
+
+class BaselineCheck(bch.ParametrizedSweep):
+    """Measures a fixed baseline metric with no swept parameters."""
+
+    baseline = bch.ResultVar(units="ms", doc="Baseline latency")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.baseline = 42.0
+        return super().__call__()
 
 
 def example_no_repeats_0_float_0_cat(run_cfg=None):
     """0 Float, 0 Categorical."""
-    bench = BenchableObject().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=[], result_vars=["distance", "sample_noise"])
+    bench = BaselineCheck().to_bench(run_cfg)
+    bench.plot_sweep(input_vars=[], result_vars=["baseline"])
 
     return bench
 

@@ -1,13 +1,34 @@
 """Auto-generated example: Result Vec: 1D input."""
 
 import bencher as bch
-from bencher.example.meta.benchable_objects import BenchableVecResult
+import math
+
+
+class SystemMetrics(bch.ParametrizedSweep):
+    """Returns a [cpu, mem, disk] utilization vector."""
+
+    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="System load factor")
+    instances = bch.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Number of instances")
+
+    metrics = bch.ResultVec(3, "%", doc="CPU, memory, disk utilization")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        cpu = 20.0 + 70.0 * math.sin(math.pi * self.load / 2.0)
+        mem = 30.0 + 50.0 * self.load * math.log1p(self.instances)
+        disk = 10.0 + 40.0 * math.sqrt(self.load * self.instances / 10.0)
+        self.metrics = [cpu, mem, disk]
+        return super().__call__()
 
 
 def example_result_vec_1d(run_cfg=None):
     """Result Vec: 1D input."""
-    bench = BenchableVecResult().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["x"], result_vars=["position"])
+    bench = SystemMetrics().to_bench(run_cfg)
+    bench.plot_sweep(
+        input_vars=["load"],
+        result_vars=["metrics"],
+        description="Demonstrates a fixed-size numeric vector with 1D input sweep.",
+    )
 
     return bench
 

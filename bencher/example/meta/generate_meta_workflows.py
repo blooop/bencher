@@ -38,7 +38,7 @@ class MetaWorkflows(MetaGeneratorBase):
     def _generate_bench_runner(self):
         """B1: BenchRunner example showing multiple benchmarks combined."""
         imports = "import math\nimport bencher as bch"
-        body = '''\
+        class_code = '''\
 class SineWave(bch.ParametrizedSweep):
     """A sine wave — one of two benchmarks combined by BenchRunner."""
 
@@ -48,8 +48,8 @@ class SineWave(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.out_sin = math.sin(self.theta)
-        return super().__call__()
-
+        return super().__call__()'''
+        body = """\
 # This example shows the building block that BenchRunner orchestrates.
 # To combine multiple independent benchmarks into one session, use:
 #
@@ -69,7 +69,7 @@ bench.plot_sweep(
     "single session. Each added function produces its own tab in the combined "
     "report. This example shows one such benchmark function.",
 )
-'''
+"""
         self.generate_example(
             title="BenchRunner — run multiple benchmarks in one session",
             output_dir=OUTPUT_DIR,
@@ -77,44 +77,59 @@ bench.plot_sweep(
             function_name="example_workflow_bench_runner",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 3},
         )
 
     def _generate_multi_sweep(self):
         """B2: Multiple sweeps per report."""
-        imports = (
-            "import bencher as bch\n"
-            "from bencher.example.meta.benchable_objects import BenchableRobotArm"
-        )
+        imports = "import math\nimport bencher as bch"
+        class_code = '''\
+class DataPipeline(bch.ParametrizedSweep):
+    """Simulates a data processing pipeline with configurable stages."""
+
+    batch_size = bch.FloatSweep(default=100, bounds=[10, 1000], doc="Batch size", units="rows")
+    parallelism = bch.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
+    storage = bch.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
+
+    throughput = bch.ResultVar(units="rows/s", doc="Processing throughput")
+    latency = bch.ResultVar(units="ms", doc="Per-batch latency")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        storage_factor = {"ssd": 1.0, "hdd": 0.4, "network": 0.25}[self.storage]
+        self.throughput = self.batch_size * math.sqrt(self.parallelism) * storage_factor * 0.5
+        self.latency = 1000 * self.batch_size / max(self.throughput, 1)
+        return super().__call__()'''
         body = """\
-bench = BenchableRobotArm().to_bench(run_cfg)
+bench = DataPipeline().to_bench(run_cfg)
 
-# Sweep 1: Vary only joint1 — produces a 1D line plot
+# Sweep 1: Vary only batch_size — produces a 1D line plot
 bench.plot_sweep(
-    title="Joint 1 Sweep",
-    input_vars=["joint1"],
-    result_vars=["reach", "energy"],
-    description="Sweep the shoulder joint angle while keeping the elbow fixed. "
-    "This shows how a single joint affects both reach and energy.",
+    title="Batch Size Sweep",
+    input_vars=["batch_size"],
+    result_vars=["throughput", "latency"],
+    description="Sweep the batch size while keeping other parameters at defaults. "
+    "This shows how batch size affects both throughput and latency.",
 )
 
-# Sweep 2: Vary joint1 and joint2 — produces a 2D heatmap
+# Sweep 2: Vary batch_size and parallelism — produces a 2D heatmap
 bench.plot_sweep(
-    title="Joint 1 + Joint 2 Sweep",
-    input_vars=["joint1", "joint2"],
-    result_vars=["reach"],
-    description="Sweep both joint angles to see their combined effect on reach. "
-    "The heatmap reveals the arm's reachable workspace.",
+    title="Batch Size + Parallelism Sweep",
+    input_vars=["batch_size", "parallelism"],
+    result_vars=["throughput"],
+    description="Sweep both batch size and parallelism to see their combined effect "
+    "on throughput. The heatmap reveals optimal configurations.",
 )
 
-# Sweep 3: Compare gripper types at a fixed pose
+# Sweep 3: Compare storage backends at fixed configuration
 bench.plot_sweep(
-    title="Gripper Comparison",
-    input_vars=["gripper"],
-    result_vars=["energy"],
-    const_vars=dict(joint1=1.0, joint2=0.8),
-    description="Compare energy consumption across gripper types at a fixed arm pose. "
-    "const_vars pins the joint angles so only the gripper varies.",
+    title="Storage Backend Comparison",
+    input_vars=["storage"],
+    result_vars=["latency"],
+    const_vars=dict(batch_size=500, parallelism=4),
+    description="Compare latency across storage backends at a fixed configuration. "
+    "const_vars pins batch_size and parallelism so only storage varies.",
 )
 """
         self.generate_example(
@@ -124,69 +139,66 @@ bench.plot_sweep(
             function_name="example_workflow_multi_sweep",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 3},
         )
 
     def _generate_input_output_cfg(self):
         """B9: InputCfg/OutputCfg separation pattern."""
         imports = "import math\nimport bencher as bch"
-        body = '''\
-class OutputMetrics(bch.ParametrizedSweep):
-    """Output metrics returned by the benchmark function.
+        class_code = '''\
+class ServerMetrics(bch.ParametrizedSweep):
+    """Output metrics from the server benchmark."""
 
-    Separating outputs into their own class makes the interface explicit:
-    the benchmark function accepts an InputConfig and returns OutputMetrics.
-    """
-
-    accuracy = bch.ResultVar(
-        units="%", direction=bch.OptDir.maximize, doc="Model accuracy"
+    throughput = bch.ResultVar(
+        units="req/s", direction=bch.OptDir.maximize, doc="Request throughput"
     )
     latency = bch.ResultVar(
-        units="ms", direction=bch.OptDir.minimize, doc="Inference latency"
+        units="ms", direction=bch.OptDir.minimize, doc="Response latency"
     )
 
 
-class InputConfig(bch.ParametrizedSweep):
-    """Input parameters for the benchmark.
+class ServerConfig(bch.ParametrizedSweep):
+    """Server configuration parameters.
 
-    The static bench_function method takes an InputConfig instance and
-    returns an OutputMetrics instance. This separation makes it clear
+    The static bench_function method takes a ServerConfig instance and
+    returns a ServerMetrics instance. This separation makes it clear
     which variables are inputs and which are outputs.
     """
 
-    batch_size = bch.FloatSweep(
-        default=32, bounds=[1, 128], doc="Training batch size"
+    worker_count = bch.FloatSweep(
+        default=4, bounds=[1, 32], doc="Number of worker threads"
     )
-    model_size = bch.StringSweep(
-        ["small", "medium", "large"], doc="Model architecture size"
+    cache_size = bch.StringSweep(
+        ["small", "medium", "large"], doc="Cache tier size"
     )
 
     @staticmethod
-    def bench_function(cfg: "InputConfig") -> OutputMetrics:
-        """Simulate training with the given configuration."""
-        output = OutputMetrics()
-        size_factor = {"small": 0.7, "medium": 1.0, "large": 1.3}[cfg.model_size]
-        output.accuracy = 60 + 20 * math.log2(cfg.batch_size + 1) / 7 * size_factor
-        output.latency = 10 * size_factor + 0.5 * cfg.batch_size
-        return output
-
-# The Bench constructor accepts the static function and the InputConfig class.
+    def bench_function(cfg: "ServerConfig") -> ServerMetrics:
+        """Simulate a server benchmark with the given configuration."""
+        output = ServerMetrics()
+        size_factor = {"small": 0.7, "medium": 1.0, "large": 1.3}[cfg.cache_size]
+        output.throughput = 100 * math.sqrt(cfg.worker_count) * size_factor
+        output.latency = 500 / max(output.throughput, 1)
+        return output'''
+        body = """\
+# The Bench constructor accepts the static function and the ServerConfig class.
 # This is an alternative to the ParametrizedSweep.__call__ pattern.
-bench = bch.Bench("input_output_example", InputConfig.bench_function, InputConfig, run_cfg)
+bench = bch.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
 bench.plot_sweep(
-    input_vars=[InputConfig.param.batch_size],
-    result_vars=[OutputMetrics.param.accuracy, OutputMetrics.param.latency],
+    input_vars=[ServerConfig.param.worker_count],
+    result_vars=[ServerMetrics.param.throughput, ServerMetrics.param.latency],
     description="The InputCfg/OutputCfg pattern separates input parameters from "
     "result metrics into distinct classes. The benchmark function is a static "
-    "method on InputCfg that returns an OutputCfg instance.",
+    "method on ServerConfig that returns a ServerMetrics instance.",
 )
 bench.plot_sweep(
-    input_vars=[InputConfig.param.batch_size, InputConfig.param.model_size],
-    result_vars=[OutputMetrics.param.accuracy],
+    input_vars=[ServerConfig.param.worker_count, ServerConfig.param.cache_size],
+    result_vars=[ServerMetrics.param.throughput],
     description="A 2D sweep combining a continuous and categorical input. "
-    "Each model size produces a different accuracy curve over batch sizes.",
+    "Each cache size produces a different throughput curve over worker counts.",
 )
-'''
+"""
         self.generate_example(
             title="InputCfg/OutputCfg — separated input and output classes",
             output_dir=OUTPUT_DIR,
@@ -194,6 +206,7 @@ bench.plot_sweep(
             function_name="example_workflow_input_output_cfg",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 3},
         )
 

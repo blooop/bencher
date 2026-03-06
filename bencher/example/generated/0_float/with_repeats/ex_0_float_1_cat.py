@@ -1,17 +1,26 @@
 """Auto-generated example: 0 Float, 1 Categorical."""
 
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
+
+
+class CacheBackend(bch.ParametrizedSweep):
+    """Compares latency across different cache backends."""
+
+    backend = bch.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
+
+    latency = bch.ResultVar(units="ms", doc="Cache lookup latency")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        base = {"redis": 1.2, "memcached": 1.5, "local": 0.3}[self.backend]
+        self.latency = base + __import__("random").gauss(0, 0.15 * base)
+        return super().__call__()
 
 
 def example_with_repeats_0_float_1_cat(run_cfg=None):
     """0 Float, 1 Categorical."""
-    bench = BenchableObject().to_bench(run_cfg)
-    bench.plot_sweep(
-        input_vars=["wave"],
-        result_vars=["distance", "sample_noise"],
-        const_vars=dict(noise_scale=0.15),
-    )
+    bench = CacheBackend().to_bench(run_cfg)
+    bench.plot_sweep(input_vars=["backend"], result_vars=["latency"])
 
     return bench
 

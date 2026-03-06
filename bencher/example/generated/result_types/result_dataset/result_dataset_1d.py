@@ -1,13 +1,39 @@
 """Auto-generated example: Result Dataset: 1D input."""
 
 import bencher as bch
-from bencher.example.meta.benchable_objects import BenchableDataSetResult
+import math
+
+
+class TimeseriesCollector(bch.ParametrizedSweep):
+    """Collects a timeseries and returns it as an xarray dataset."""
+
+    duration = bch.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Collection duration")
+    sample_rate = bch.FloatSweep(default=1.0, bounds=[0.5, 2.0], doc="Samples per second")
+
+    result_ds = bch.ResultDataSet(doc="Collected timeseries dataset")
+
+    def __call__(self, **kwargs):
+        import xarray as xr
+
+        self.update_params_from_kwargs(**kwargs)
+        n_samples = max(1, int(self.duration * self.sample_rate))
+        values = [
+            math.sin(2 * math.pi * i / max(n_samples, 1)) * self.duration for i in range(n_samples)
+        ]
+        data_array = xr.DataArray(values, dims=["time"], coords={"time": list(range(n_samples))})
+        ds = xr.Dataset({"result_ds": data_array})
+        self.result_ds = bch.ResultDataSet(ds.to_pandas())
+        return super().__call__()
 
 
 def example_result_dataset_1d(run_cfg=None):
     """Result Dataset: 1D input."""
-    bench = BenchableDataSetResult().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["value"], result_vars=["result_ds"])
+    bench = TimeseriesCollector().to_bench(run_cfg)
+    bench.plot_sweep(
+        input_vars=["duration"],
+        result_vars=["result_ds"],
+        description="Demonstrates an xarray/pandas dataset with 1D input sweep.",
+    )
 
     return bench
 

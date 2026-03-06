@@ -12,7 +12,53 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "composable_containers"
 
-BENCHABLE_MODULE = "bencher.example.meta.benchable_objects"
+# ---------------------------------------------------------------------------
+# Shared helpers and base class inlined into generated examples
+# ---------------------------------------------------------------------------
+
+_POLYGON_IMPORTS = (
+    "import math\nimport numpy as np\nfrom PIL import Image, ImageDraw\nimport bencher as bch"
+)
+
+_POLYGON_HELPERS = (
+    "def _polygon_points(radius, sides, start_angle=0.0):\n"
+    "    points = []\n"
+    "    for ang in np.linspace(0, 360, sides + 1):\n"
+    "        angle = math.radians(start_angle + ang)\n"
+    "        points.append([math.sin(angle) * radius, math.cos(angle) * radius])\n"
+    "    return points\n"
+    "\n\n"
+    "def _draw_polygon_image(points, color, linewidth, size=200):\n"
+    '    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))\n'
+    "    draw = ImageDraw.Draw(img)\n"
+    "    scaled = [((p[0] + 1) * size / 2, (1 - p[1]) * size / 2) for p in points]\n"
+    "    draw.line(scaled, fill=color, width=int(linewidth))\n"
+    "    return img"
+)
+
+_BENCHABLE_IMAGE_CLASS = (
+    "class BenchableImageResult(bch.ParametrizedSweep):\n"
+    '    """Lightweight polygon renderer for composable container demos."""\n'
+    "\n"
+    '    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")\n'
+    '    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")\n'
+    '    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")\n'
+    "\n"
+    '    polygon = bch.ResultImage(doc="Rendered polygon image")\n'
+    '    area = bch.ResultVar("u^2", doc="Polygon area")\n'
+    "\n"
+    "    def __call__(self, **kwargs):\n"
+    "        self.update_params_from_kwargs(**kwargs)\n"
+    "        points = _polygon_points(self.radius, self.sides)\n"
+    "        img = _draw_polygon_image(points, self.color, linewidth=3)\n"
+    '        filepath = bch.gen_image_path("polygon")\n'
+    '        img.save(filepath, "PNG")\n'
+    "        self.polygon = str(filepath)\n"
+    "        self.area = (\n"
+    "            self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2\n"
+    "        ) / (4 * math.tan(math.pi / self.sides))\n"
+    "        return super().__call__()"
+)
 
 
 class MetaComposableVideo(MetaGeneratorBase):
@@ -31,10 +77,10 @@ class MetaComposableVideo(MetaGeneratorBase):
         function_name = f"example_composable_video_{compose}"
         title = f"Composable Video: ComposeType.{compose}"
 
-        imports = (
-            "import bencher as bch\n"
-            f"from {BENCHABLE_MODULE} import "
-            "BenchableImageResult, _polygon_points, _draw_polygon_image\n"
+        imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
+
+        class_code = (
+            f"{_BENCHABLE_IMAGE_CLASS}\n"
             "\n\n"
             "class _VideoComposeDemo(BenchableImageResult):\n"
             '    """Compose polygon frames into a video using ComposableContainerVideo."""\n'
@@ -62,6 +108,7 @@ class MetaComposableVideo(MetaGeneratorBase):
             "        )\n"
             "        return self.get_results_values_as_dict()"
         )
+
         body = (
             "bench = _VideoComposeDemo().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"
@@ -77,6 +124,7 @@ class MetaComposableVideo(MetaGeneratorBase):
             function_name=function_name,
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 2},
         )
 
@@ -99,10 +147,10 @@ class MetaComposablePanel(MetaGeneratorBase):
         function_name = f"example_composable_panel_{compose}"
         title = f"Composable Panel: ComposeType.{compose}"
 
-        imports = (
-            "import bencher as bch\n"
-            f"from {BENCHABLE_MODULE} import "
-            "BenchableImageResult, _polygon_points, _draw_polygon_image\n"
+        imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
+
+        class_code = (
+            f"{_BENCHABLE_IMAGE_CLASS}\n"
             "\n\n"
             "class _PanelComposeDemo(BenchableImageResult):\n"
             '    """Compose polygon images into a Panel layout."""\n'
@@ -118,6 +166,7 @@ class MetaComposablePanel(MetaGeneratorBase):
             "        self.result_image = str(filepath)\n"
             "        return self.get_results_values_as_dict()"
         )
+
         body = (
             "bench = _PanelComposeDemo().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"
@@ -134,6 +183,7 @@ class MetaComposablePanel(MetaGeneratorBase):
             function_name=function_name,
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 2},
         )
 
@@ -156,14 +206,37 @@ class MetaComposableDataset(MetaGeneratorBase):
         function_name = f"example_composable_dataset_{compose}"
         title = f"Composable Dataset: ComposeType.{compose}"
 
+        class_code = (
+            "class TimeseriesCollector(bch.ParametrizedSweep):\n"
+            '    """Collects time-series data into an xarray dataset."""\n'
+            "\n"
+            "    duration = bch.FloatSweep("
+            'default=5.0, bounds=[1.0, 10.0], doc="Collection duration")\n'
+            '    result_ds = bch.ResultDataSet(doc="Collected time-series dataset")\n'
+            "\n"
+            "    def __call__(self, **kwargs):\n"
+            "        import xarray as xr\n"
+            "        import numpy as np\n"
+            "        self.update_params_from_kwargs(**kwargs)\n"
+            "        n = int(self.duration * 10)\n"
+            "        t = np.linspace(0, self.duration, n)\n"
+            "        values = np.sin(2 * np.pi * t / self.duration) * self.duration\n"
+            '        data_array = xr.DataArray(values, dims=["time"], '
+            'coords={"time": t})\n'
+            "        self.result_ds = bch.ResultDataSet("
+            'xr.Dataset({"signal": data_array}).to_pandas())\n'
+            "        return super().__call__()"
+        )
+
         self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            benchable_class="BenchableDataSetResult",
-            benchable_module=BENCHABLE_MODULE,
-            input_vars='["value"]',
+            benchable_class="TimeseriesCollector",
+            benchable_module=None,
+            class_code=class_code,
+            input_vars='["duration"]',
             result_vars='["result_ds"]',
             run_kwargs={"level": 3},
         )
@@ -177,10 +250,10 @@ class MetaComposableAllTypes(MetaGeneratorBase):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        imports = (
-            "import bencher as bch\n"
-            f"from {BENCHABLE_MODULE} import "
-            "BenchableImageResult, _polygon_points, _draw_polygon_image\n"
+        imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
+
+        class_code = (
+            f"{_BENCHABLE_IMAGE_CLASS}\n"
             "\n\n"
             "class _ComposeTypeSweep(BenchableImageResult):\n"
             '    """Sweep all ComposeType values in a single benchmark."""\n'
@@ -233,6 +306,7 @@ class MetaComposableAllTypes(MetaGeneratorBase):
             function_name="example_composable_all_compose_types",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 2},
         )
 

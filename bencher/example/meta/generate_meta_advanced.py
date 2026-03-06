@@ -38,7 +38,7 @@ class MetaAdvanced(MetaGeneratorBase):
     def _generate_cache_patterns(self):
         """B3: Cache and context patterns."""
         imports = "import math\nimport random\nimport bencher as bch"
-        body = '''\
+        class_code = '''\
 class NoisySensor(bch.ParametrizedSweep):
     """Simulates a sensor with configurable noise.
 
@@ -60,8 +60,8 @@ class NoisySensor(bch.ParametrizedSweep):
         self.reading = 0.5 + 0.03 * self.temperature + math.sin(self.temperature * 0.1)
         if self.noise_scale > 0:
             self.reading += random.gauss(0, self.noise_scale)
-        return super().__call__()
-
+        return super().__call__()'''
+        body = """\
 run_cfg = run_cfg or bch.BenchRunCfg()
 
 # run_tag partitions the cache so different experiment runs don't collide.
@@ -84,7 +84,7 @@ bench.plot_sweep(
     post_description="The repeated measurements show noise around the true sensor "
     "curve. If this run were interrupted, re-running would reuse cached samples.",
 )
-'''
+"""
         self.generate_example(
             title="Cache Patterns — run_tag and cache_samples",
             output_dir=OUTPUT_DIR,
@@ -92,13 +92,14 @@ bench.plot_sweep(
             function_name="example_advanced_cache_patterns",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 3, "repeats": 5},
         )
 
     def _generate_time_event(self):
         """B7: TimeEvent example."""
-        imports = "import math\nimport bencher as bch"
-        body = '''\
+        imports = "import bencher as bch"
+        class_code = '''\
 class PullRequestBenchmark(bch.ParametrizedSweep):
     """Tracks benchmark metrics across discrete events (e.g. pull requests).
 
@@ -120,8 +121,8 @@ class PullRequestBenchmark(bch.ParametrizedSweep):
         base = {"light": 1000, "medium": 500, "heavy": 200}[self.workload]
         # Simulate gradual improvement across events
         self.throughput = base + self._event_idx * 30
-        return super().__call__()
-
+        return super().__call__()'''
+        body = """\
 run_cfg = run_cfg or bch.BenchRunCfg()
 run_cfg.over_time = True
 
@@ -144,7 +145,7 @@ for i, event_name in enumerate(events):
         "instead of a timestamp.",
         run_cfg=run_cfg,
     )
-'''
+"""
         self.generate_example(
             title="Time Events — track metrics across discrete events",
             output_dir=OUTPUT_DIR,
@@ -152,13 +153,14 @@ for i, event_name in enumerate(events):
             function_name="example_advanced_time_event",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 3},
         )
 
     def _generate_report_save(self):
         """B8: Report customization and saving."""
-        imports = "import math\nimport bencher as bch"
-        body = '''\
+        imports = "import bencher as bch"
+        class_code = '''\
 class QuadraticFit(bch.ParametrizedSweep):
     """A simple quadratic function for demonstrating report features."""
 
@@ -168,8 +170,8 @@ class QuadraticFit(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.y = self.x**2 - 1
-        return super().__call__()
-
+        return super().__call__()'''
+        body = """\
 bench = QuadraticFit().to_bench(run_cfg)
 
 # First sweep: standard plot
@@ -186,7 +188,7 @@ bench.plot_sweep(
 bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** content "
     "directly to the report using `bench.report.append_markdown()`.",
     name="Custom Content")
-'''
+"""
         self.generate_example(
             title="Report Customization — saving and appending content",
             output_dir=OUTPUT_DIR,
@@ -194,6 +196,7 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
             function_name="example_advanced_report_save",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 3},
         )
 

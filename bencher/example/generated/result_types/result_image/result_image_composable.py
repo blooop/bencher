@@ -1,14 +1,33 @@
 """Auto-generated example: ResultImage: Composable Container Video from Images."""
 
 import bencher as bch
-from bencher.example.meta.benchable_objects import (
-    BenchableImageResult,
-    _polygon_points,
-    _draw_polygon_image,
-)
+import math
+import numpy as np
+from PIL import Image, ImageDraw
 
 
-class _ComposableImageDemo(BenchableImageResult):
+def _polygon_points(radius, sides, start_angle=0.0):
+    points = []
+    for ang in np.linspace(0, 360, sides + 1):
+        angle = math.radians(start_angle + ang)
+        points.append([math.sin(angle) * radius, math.cos(angle) * radius])
+    return points
+
+
+def _draw_polygon_image(points, color, linewidth, size=200):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    scaled = [((p[0] + 1) * size / 2, (1 - p[1]) * size / 2) for p in points]
+    draw.line(scaled, fill=color, width=int(linewidth))
+    return img
+
+
+class _ComposableImageDemo(bch.ParametrizedSweep):
+    """Composable polygon renderer with video output."""
+
+    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
+    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
+    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")
     compose_method = bch.EnumSweep(
         bch.ComposeType,
         default=bch.ComposeType.right,

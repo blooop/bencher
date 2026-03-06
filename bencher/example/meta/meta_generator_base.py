@@ -19,6 +19,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
         function_name,
         imports,
         body,
+        class_code=None,
         run_kwargs=None,
     ):
         """Write a runnable Python example file.
@@ -30,6 +31,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
             function_name: Name of the example function (e.g. ``example_result_var_1d``).
             imports: Import lines placed at the top of the file.
             body: Unindented function body lines. Indentation is applied automatically.
+            class_code: Optional class definition emitted between imports and function.
             run_kwargs: Dict of keyword args for ``bch.run()`` in ``__main__``
                         (e.g. ``{"level": 4, "repeats": 10}``).
         """
@@ -37,9 +39,10 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
             run_kwargs = {}
         indented_body = textwrap.indent(body, "    ")
         kwargs_str = "".join(f", {k}={v!r}" for k, v in run_kwargs.items())
+        class_block = f"\n\n{class_code}" if class_code else ""
         content = f'''"""Auto-generated example: {title}."""
 
-{imports}
+{imports}{class_block}
 
 
 def {function_name}(run_cfg=None):
@@ -56,6 +59,108 @@ if __name__ == "__main__":
         fpath.write_text(content, encoding="utf-8")
         return fpath
 
+    def generate_inline_example(
+        self,
+        *,
+        title,
+        output_dir,
+        filename,
+        function_name,
+        class_name,
+        class_doc,
+        params,
+        result_vars_def,
+        call_body,
+        input_vars,
+        result_vars,
+        extra_imports=None,
+        const_vars=None,
+        description=None,
+        post_description=None,
+        post_sweep_line=None,
+        run_cfg_lines=None,
+        run_kwargs=None,
+        extra_class_attrs=None,
+    ):
+        """Generate a self-contained example with an inline class definition.
+
+        Args:
+            class_name: Name of the ParametrizedSweep subclass.
+            class_doc: Docstring for the class.
+            params: Dict mapping param name to definition code string.
+            result_vars_def: Dict mapping result var name to definition code string.
+            call_body: Lines of code inside __call__ after update_params_from_kwargs.
+            input_vars: Code string for input_vars (e.g. '["size"]').
+            result_vars: Code string for result_vars (e.g. '["time"]').
+            extra_imports: Optional list of additional import lines.
+            const_vars: Optional code string for const_vars.
+            description: Optional description kwarg for plot_sweep().
+            post_description: Optional post_description kwarg for plot_sweep().
+            post_sweep_line: Optional line after plot_sweep.
+            run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
+            run_kwargs: Dict of kwargs for bch.run().
+            extra_class_attrs: Optional list of extra class-level lines.
+        """
+        import_lines = ["import bencher as bch"]
+        if extra_imports:
+            import_lines.extend(extra_imports)
+        imports = "\n".join(import_lines)
+
+        # Build class code
+        cls_lines = [f"class {class_name}(bch.ParametrizedSweep):"]
+        cls_lines.append(f'    """{class_doc}"""')
+        cls_lines.append("")
+        for pname, pdef in params.items():
+            cls_lines.append(f"    {pname} = {pdef}")
+        if params and result_vars_def:
+            cls_lines.append("")
+        for rname, rdef in result_vars_def.items():
+            cls_lines.append(f"    {rname} = {rdef}")
+        if extra_class_attrs:
+            cls_lines.append("")
+            cls_lines.extend(f"    {line}" for line in extra_class_attrs)
+        cls_lines.append("")
+        cls_lines.append("    def __call__(self, **kwargs):")
+        cls_lines.append("        self.update_params_from_kwargs(**kwargs)")
+        for line in call_body:
+            cls_lines.append(f"        {line}")
+        cls_lines.append("        return super().__call__()")
+        class_code = "\n".join(cls_lines)
+
+        # Build function body
+        body_lines = []
+        if run_cfg_lines:
+            body_lines.append("run_cfg = run_cfg or bch.BenchRunCfg()")
+            body_lines.extend(run_cfg_lines)
+        body_lines.append(f"bench = {class_name}().to_bench(run_cfg)")
+
+        sweep_parts = [f"input_vars={input_vars}", f"result_vars={result_vars}"]
+        if const_vars:
+            sweep_parts.append(f"const_vars={const_vars}")
+        if description:
+            sweep_parts.append(f"description={description!r}")
+        if post_description:
+            sweep_parts.append(f"post_description={post_description!r}")
+        sweep_args = ", ".join(sweep_parts)
+
+        use_res = post_sweep_line is not None
+        prefix = "res = " if use_res else ""
+        body_lines.append(f"{prefix}bench.plot_sweep({sweep_args})")
+        if post_sweep_line:
+            body_lines.append(post_sweep_line)
+        body = "\n".join(body_lines) + "\n"
+
+        return self.generate_example(
+            title=title,
+            output_dir=output_dir,
+            filename=filename,
+            function_name=function_name,
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs=run_kwargs or {},
+        )
+
     def generate_sweep_example(
         self,
         *,
@@ -67,6 +172,7 @@ if __name__ == "__main__":
         benchable_module,
         input_vars,
         result_vars,
+        class_code=None,
         const_vars=None,
         description=None,
         post_description=None,
@@ -81,8 +187,10 @@ if __name__ == "__main__":
         Args:
             benchable_class: Class name to instantiate (e.g. "BenchableObject").
             benchable_module: Module to import from (e.g. "bencher.example.meta.example_meta").
+                Set to None when class_code is provided (self-contained).
             input_vars: Code string for input_vars (e.g. '["float1"]').
             result_vars: Code string for result_vars (e.g. '["distance"]').
+            class_code: Optional inline class definition (makes example self-contained).
             const_vars: Optional code string for const_vars (e.g. 'dict(noise_scale=0.15)').
             description: Optional description kwarg for plot_sweep().
             post_description: Optional post_description kwarg for plot_sweep().
@@ -92,10 +200,9 @@ if __name__ == "__main__":
             run_kwargs: Dict of kwargs for bch.run() (e.g. {"level": 4, "repeats": 10}).
             module_docstring: Optional override for the module-level docstring.
         """
-        import_lines = [
-            "import bencher as bch",
-            f"from {benchable_module} import {benchable_class}",
-        ]
+        import_lines = ["import bencher as bch"]
+        if benchable_module is not None:
+            import_lines.append(f"from {benchable_module} import {benchable_class}")
         if extra_imports:
             import_lines.extend(extra_imports)
         imports = "\n".join(import_lines)
@@ -134,5 +241,6 @@ if __name__ == "__main__":
             function_name=function_name,
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs=run_kwargs or {},
         )

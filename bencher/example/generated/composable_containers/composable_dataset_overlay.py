@@ -1,13 +1,31 @@
 """Auto-generated example: Composable Dataset: ComposeType.overlay."""
 
 import bencher as bch
-from bencher.example.meta.benchable_objects import BenchableDataSetResult
+
+
+class TimeseriesCollector(bch.ParametrizedSweep):
+    """Collects time-series data into an xarray dataset."""
+
+    duration = bch.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Collection duration")
+    result_ds = bch.ResultDataSet(doc="Collected time-series dataset")
+
+    def __call__(self, **kwargs):
+        import xarray as xr
+        import numpy as np
+
+        self.update_params_from_kwargs(**kwargs)
+        n = int(self.duration * 10)
+        t = np.linspace(0, self.duration, n)
+        values = np.sin(2 * np.pi * t / self.duration) * self.duration
+        data_array = xr.DataArray(values, dims=["time"], coords={"time": t})
+        self.result_ds = bch.ResultDataSet(xr.Dataset({"signal": data_array}).to_pandas())
+        return super().__call__()
 
 
 def example_composable_dataset_overlay(run_cfg=None):
     """Composable Dataset: ComposeType.overlay."""
-    bench = BenchableDataSetResult().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["value"], result_vars=["result_ds"])
+    bench = TimeseriesCollector().to_bench(run_cfg)
+    bench.plot_sweep(input_vars=["duration"], result_vars=["result_ds"])
 
     return bench
 

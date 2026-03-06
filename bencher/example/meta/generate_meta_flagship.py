@@ -38,7 +38,7 @@ class MetaFlagship(MetaGeneratorBase):
     def _generate_line_plot(self):
         """1D float sweep — simplest line plot with inline class."""
         imports = "import math\nimport bencher as bch"
-        body = '''\
+        class_code = '''\
 class WaveFunction(bch.ParametrizedSweep):
     """A simple wave function that maps an angle to its sine value.
 
@@ -55,8 +55,8 @@ class WaveFunction(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.amplitude = math.sin(self.theta)
-        return super().__call__()
-
+        return super().__call__()'''
+        body = """\
 bench = WaveFunction().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["theta"],
@@ -67,7 +67,7 @@ bench.plot_sweep(
     post_description="The plot shows a clean sine curve. Try adding noise_scale "
     "or repeats to see how bencher handles uncertainty.",
 )
-'''
+"""
         self.generate_example(
             title="Line Plot — Inline Class Definition",
             output_dir=OUTPUT_DIR,
@@ -75,13 +75,14 @@ bench.plot_sweep(
             function_name="example_flagship_line_plot",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 4},
         )
 
     def _generate_bar_chart(self):
         """Categorical sweep — simplest bar chart with inline class."""
         imports = "import bencher as bch"
-        body = '''\
+        class_code = '''\
 class ServerBenchmark(bch.ParametrizedSweep):
     """Compares response times across different server configurations.
 
@@ -107,8 +108,8 @@ class ServerBenchmark(bch.ParametrizedSweep):
             "ap-south": 180.0,
         }
         self.latency = region_latency[self.region]
-        return super().__call__()
-
+        return super().__call__()'''
+        body = """\
 bench = ServerBenchmark().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["region"],
@@ -118,7 +119,7 @@ bench.plot_sweep(
     post_description="US-East has the lowest latency. In a real scenario you would "
     "add repeats to capture variance across measurements.",
 )
-'''
+"""
         self.generate_example(
             title="Bar Chart — Inline Class Definition",
             output_dir=OUTPUT_DIR,
@@ -126,13 +127,14 @@ bench.plot_sweep(
             function_name="example_flagship_bar_chart",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 4},
         )
 
     def _generate_heatmap(self):
         """2D float sweep — simplest heatmap with inline class."""
         imports = "import math\nimport bencher as bch"
-        body = '''\
+        class_code = '''\
 class TerrainSampler(bch.ParametrizedSweep):
     """Samples elevation across a 2D terrain grid.
 
@@ -151,8 +153,8 @@ class TerrainSampler(bch.ParametrizedSweep):
             math.sin(2 * math.pi * self.x) * math.cos(2 * math.pi * self.y)
             + 0.5 * math.sin(4 * math.pi * self.x * self.y)
         )
-        return super().__call__()
-
+        return super().__call__()'''
+        body = """\
 bench = TerrainSampler().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["x", "y"],
@@ -163,7 +165,7 @@ bench.plot_sweep(
     post_description="Notice the interference pattern created by the sine/cosine "
     "interaction. Increase the level parameter for finer resolution.",
 )
-'''
+"""
         self.generate_example(
             title="Heatmap — Inline Class Definition",
             output_dir=OUTPUT_DIR,
@@ -171,6 +173,7 @@ bench.plot_sweep(
             function_name="example_flagship_heatmap",
             imports=imports,
             body=body,
+            class_code=class_code,
             run_kwargs={"level": 3},
         )
 

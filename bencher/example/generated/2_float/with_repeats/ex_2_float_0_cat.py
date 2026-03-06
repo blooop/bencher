@@ -1,17 +1,28 @@
 """Auto-generated example: 2 Float, 0 Categorical."""
 
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
+import math
+
+
+class CompressionBench(bch.ParametrizedSweep):
+    """Measures compression ratio across block size and input entropy."""
+
+    block_size = bch.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
+    entropy = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
+
+    ratio = bch.ResultVar(units="x", doc="Compression ratio")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
+        self.ratio += __import__("random").gauss(0, 0.15 * 0.3)
+        return super().__call__()
 
 
 def example_with_repeats_2_float_0_cat(run_cfg=None):
     """2 Float, 0 Categorical."""
-    bench = BenchableObject().to_bench(run_cfg)
-    bench.plot_sweep(
-        input_vars=["float1", "float2"],
-        result_vars=["distance", "sample_noise"],
-        const_vars=dict(noise_scale=0.15),
-    )
+    bench = CompressionBench().to_bench(run_cfg)
+    bench.plot_sweep(input_vars=["block_size", "entropy"], result_vars=["ratio"])
 
     return bench
 

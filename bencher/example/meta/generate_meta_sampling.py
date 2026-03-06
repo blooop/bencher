@@ -12,6 +12,62 @@ OUTPUT_DIR = "sampling"
 
 STRATEGIES = ["uniform", "custom_values", "levels", "int_vs_float"]
 
+# -- Inline class definitions for self-contained examples -----------------------
+
+_UNIFORM_CLASS_CODE = '''\
+class UniformSampler(bch.ParametrizedSweep):
+    """Demonstrates uniform sampling across a parameter range."""
+
+    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
+
+    latency = bch.ResultVar(units="ms", doc="Response latency")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
+        return super().__call__()'''
+
+_CUSTOM_CLASS_CODE = '''\
+class CustomSampler(bch.ParametrizedSweep):
+    """Demonstrates custom sample value selection."""
+
+    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
+
+    latency = bch.ResultVar(units="ms", doc="Response latency")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
+        return super().__call__()'''
+
+_LEVELS_CLASS_CODE = '''\
+class LevelDemo(bch.ParametrizedSweep):
+    """Demonstrates how sampling level affects resolution."""
+
+    resolution = bch.IntSweep(default=2, bounds=(2, 5), doc="Sampling resolution level")
+    points = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Sample point")
+
+    value = bch.ResultVar(units="ul")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.value = math.sin(self.points * math.pi * self.resolution) + self.resolution * 0.1
+        return super().__call__()'''
+
+_INT_FLOAT_CLASS_CODE = '''\
+class IntFloatCompare(bch.ParametrizedSweep):
+    """Compares integer vs float sweep behaviour."""
+
+    int_input = bch.IntSweep(default=5, bounds=[0, 10], doc="Discrete integer input")
+    float_input = bch.FloatSweep(default=5.0, bounds=[0.0, 10.0], doc="Continuous float input")
+
+    output = bch.ResultVar("ul", doc="Computed output")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
+        return super().__call__()'''
+
 
 class MetaSampling(MetaGeneratorBase):
     """Generate Python examples demonstrating sampling strategies."""
@@ -31,10 +87,12 @@ class MetaSampling(MetaGeneratorBase):
                 output_dir=OUTPUT_DIR,
                 filename=filename,
                 function_name=function_name,
-                benchable_class="BenchableObject",
-                benchable_module="bencher.example.meta.example_meta",
-                input_vars='["float1"]',
-                result_vars='["distance"]',
+                benchable_class="UniformSampler",
+                benchable_module=None,
+                input_vars='["load"]',
+                result_vars='["latency"]',
+                class_code=_UNIFORM_CLASS_CODE,
+                extra_imports=["import math"],
                 description=(
                     "Uniform sampling distributes points evenly across the parameter bounds. "
                     "The number of samples is controlled by the level parameter."
@@ -42,15 +100,12 @@ class MetaSampling(MetaGeneratorBase):
                 run_kwargs={"level": 4},
             )
         elif self.strategy == "custom_values":
-            imports = (
-                "import bencher as bch\n"
-                "from bencher.example.meta.example_meta import BenchableObject"
-            )
+            imports = "import math\nimport bencher as bch"
             body = (
-                "bench = BenchableObject().to_bench(run_cfg)\n"
+                "bench = CustomSampler().to_bench(run_cfg)\n"
                 "bench.plot_sweep(\n"
-                '    input_vars=[bch.p("float1", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
-                '    result_vars=["distance"],\n'
+                '    input_vars=[bch.p("load", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
+                '    result_vars=["latency"],\n'
                 '    description="Custom sample values let you pick exact points '
                 "to evaluate. Use bch.p() to override a variable's sweep values.\",\n"
                 ")\n"
@@ -62,21 +117,20 @@ class MetaSampling(MetaGeneratorBase):
                 function_name=function_name,
                 imports=imports,
                 body=body,
+                class_code=_CUSTOM_CLASS_CODE,
                 run_kwargs={"level": 3},
             )
         elif self.strategy == "levels":
-            imports = (
-                "import bencher as bch\nfrom bencher.example.meta.example_meta import BenchMeta"
-            )
+            imports = "import math\nimport bencher as bch"
             body = (
-                "bench = BenchMeta().to_bench(run_cfg)\n"
+                "bench = LevelDemo().to_bench(run_cfg)\n"
                 "bench.plot_sweep(\n"
                 '    title="Level-based sampling resolution",\n'
                 "    input_vars=[\n"
-                '        bch.p("float_vars", [1, 2]),\n'
-                '        bch.p("level", [2, 3, 4, 5]),\n'
+                '        "points",\n'
+                '        bch.p("resolution", [2, 3, 4, 5]),\n'
                 "    ],\n"
-                "    const_vars=dict(categorical_vars=0),\n"
+                '    result_vars=["value"],\n'
                 '    description="The level parameter controls how many samples are taken along '
                 'each axis. Higher levels give finer resolution but take longer.",\n'
                 ")\n"
@@ -88,6 +142,7 @@ class MetaSampling(MetaGeneratorBase):
                 function_name=function_name,
                 imports=imports,
                 body=body,
+                class_code=_LEVELS_CLASS_CODE,
                 run_kwargs={"level": 3},
             )
         else:  # int_vs_float
@@ -96,10 +151,12 @@ class MetaSampling(MetaGeneratorBase):
                 output_dir=OUTPUT_DIR,
                 filename=filename,
                 function_name=function_name,
-                benchable_class="BenchableIntFloat",
-                benchable_module="bencher.example.meta.benchable_objects",
+                benchable_class="IntFloatCompare",
+                benchable_module=None,
                 input_vars='["int_input", "float_input"]',
                 result_vars='["output"]',
+                class_code=_INT_FLOAT_CLASS_CODE,
+                extra_imports=["import math"],
                 description=(
                     "Integer sweeps produce discrete steps while float sweeps produce "
                     "continuous curves. Compare how the plot changes between the two types."

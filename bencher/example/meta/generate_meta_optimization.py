@@ -10,6 +10,30 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "optimization"
 
+CLASS_CODE = "\n".join(
+    [
+        "class ServerOptimizer(bch.ParametrizedSweep):",
+        '    """Optimizes server configuration for performance vs cost tradeoff."""',
+        "",
+        '    cpu_cores = bch.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
+        '    memory_gb = bch.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
+        "",
+        '    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance score (maximize)")',
+        '    cost = bch.ResultVar("$/hr", bch.OptDir.minimize, doc="Hourly cost (minimize)")',
+        "",
+        '    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
+        "",
+        "    def __call__(self, **kwargs):",
+        "        self.update_params_from_kwargs(**kwargs)",
+        "        self.performance = math.log2(self.cpu_cores + 1) * math.sqrt(self.memory_gb) * 10",
+        "        self.cost = 0.05 * self.cpu_cores + 0.02 * self.memory_gb",
+        "        if self.noise_scale > 0:",
+        "            self.performance += random.gauss(0, self.noise_scale * 5)",
+        "            self.cost += random.gauss(0, self.noise_scale * 0.1)",
+        "        return super().__call__()",
+    ]
+)
+
 
 class MetaOptimization(MetaGeneratorBase):
     """Generate Python examples demonstrating optimization features."""
@@ -30,9 +54,9 @@ class MetaOptimization(MetaGeneratorBase):
             result_vars_code = '["performance", "cost"]'
 
         if self.input_dims == 1:
-            input_vars_code = '["x"]'
+            input_vars_code = '["cpu_cores"]'
         else:
-            input_vars_code = '["x", "y"]'
+            input_vars_code = '["cpu_cores", "memory_gb"]'
 
         if self.n_objectives == 1:
             description = (
@@ -58,8 +82,10 @@ class MetaOptimization(MetaGeneratorBase):
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            benchable_class="BenchableMultiObjective",
-            benchable_module="bencher.example.meta.benchable_objects",
+            benchable_class="ServerOptimizer",
+            benchable_module=None,
+            class_code=CLASS_CODE,
+            extra_imports=["import math", "import random"],
             input_vars=input_vars_code,
             result_vars=result_vars_code,
             const_vars="dict(noise_scale=0.1)",

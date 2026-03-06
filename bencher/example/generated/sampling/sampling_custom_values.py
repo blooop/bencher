@@ -1,15 +1,29 @@
 """Auto-generated example: Sampling: Custom Values."""
 
+import math
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
+
+
+class CustomSampler(bch.ParametrizedSweep):
+    """Demonstrates custom sample value selection."""
+
+    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
+
+    latency = bch.ResultVar(units="ms", doc="Response latency")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
+        return super().__call__()
 
 
 def example_sampling_custom_values(run_cfg=None):
     """Sampling: Custom Values."""
-    bench = BenchableObject().to_bench(run_cfg)
+    bench = CustomSampler().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=[bch.p("float1", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],
-        result_vars=["distance"],
+        input_vars=[bch.p("load", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],
+        result_vars=["latency"],
+        description="Custom sample values let you pick exact points to evaluate. Use bch.p() to override a variable's sweep values.",
     )
 
     return bench

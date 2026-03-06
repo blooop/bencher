@@ -1,33 +1,55 @@
 """Auto-generated example: 3 Float, 2 Categorical."""
 
+import math
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
 from datetime import datetime, timedelta
+
+
+class HashAnalysis(bch.ParametrizedSweep):
+    """Hash analysis: key size, payload, iterations, algorithm, and mode."""
+
+    key_size = bch.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")
+    payload_size = bch.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")
+    iterations = bch.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")
+    algorithm = bch.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")
+    mode = bch.StringSweep(["stream", "block"], doc="Processing mode")
+
+    throughput = bch.ResultVar(units="MB/s", doc="Hash throughput")
+
+    _time_offset = 0.0
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        algo_speed = {"sha256": 1.0, "blake2": 1.4, "md5": 1.8}[self.algorithm]
+        mode_factor = {"stream": 1.0, "block": 0.85}[self.mode]
+        self.throughput = (
+            algo_speed
+            * mode_factor
+            * 500.0
+            / (1.0 + 0.5 * math.log2(self.key_size / 8))
+            / (1.0 + 0.3 * math.log2(self.payload_size / 64))
+            * (self.iterations / 100)
+        )
+        self.throughput += __import__("random").gauss(0, 0.1 * 30)
+        self.throughput += self._time_offset * 10
+        return super().__call__()
 
 
 def example_over_time_3_float_2_cat(run_cfg=None):
     """3 Float, 2 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
-    benchable = BenchableObject()
+    benchable = HashAnalysis()
     bench = benchable.to_bench(run_cfg)
-    time_offsets = [0.0, 0.5, 1.0]
     _base_time = datetime(2000, 1, 1)
-    for i, offset in enumerate(time_offsets):
+    for i, offset in enumerate([0.0, 0.5, 1.0]):
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time",
-            input_vars=[
-                "float1",
-                "float2",
-                {"name": "float3", "values": None, "max_level": 3, "samples": None},
-                "wave",
-                "variant",
-            ],
-            result_vars=["distance", "sample_noise"],
-            const_vars=dict(noise_scale=0.1),
+            input_vars=["key_size", "payload_size", "iterations", "algorithm", "mode"],
+            result_vars=["throughput"],
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )
