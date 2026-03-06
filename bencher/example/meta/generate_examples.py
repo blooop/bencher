@@ -105,6 +105,7 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
+    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
 
     example_meta()
     example_meta_result_types()
@@ -115,6 +116,7 @@ def generate_python_files():
     example_meta_statistics()
     example_meta_const_vars()
     example_meta_optimization()
+    example_meta_rerun()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -353,6 +355,7 @@ SECTIONS = {
     "Composable Containers": "composable_containers",
     "Constant Variables": "const_vars",
     "Statistics": "statistics",
+    "Rerun Backend": "rerun_backend",
 }
 
 
