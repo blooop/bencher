@@ -68,10 +68,13 @@ if __name__ == "__main__":
         input_vars,
         result_vars,
         const_vars=None,
+        description=None,
+        post_description=None,
         post_sweep_line=None,
         run_cfg_lines=None,
         extra_imports=None,
         run_kwargs=None,
+        module_docstring=None,
     ):
         """Build imports + body and call generate_example() for a standard sweep.
 
@@ -81,10 +84,13 @@ if __name__ == "__main__":
             input_vars: Code string for input_vars (e.g. '["float1"]').
             result_vars: Code string for result_vars (e.g. '["distance"]').
             const_vars: Optional code string for const_vars (e.g. 'dict(noise_scale=0.15)').
+            description: Optional description kwarg for plot_sweep().
+            post_description: Optional post_description kwarg for plot_sweep().
             post_sweep_line: Optional line after plot_sweep (e.g. 'res.to_bar()').
             run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
             extra_imports: Optional list of additional import lines.
             run_kwargs: Dict of kwargs for bch.run() (e.g. {"level": 4, "repeats": 10}).
+            module_docstring: Optional override for the module-level docstring.
         """
         import_lines = [
             "import bencher as bch",
@@ -106,6 +112,10 @@ if __name__ == "__main__":
         sweep_parts.append(f"result_vars={result_vars}")
         if const_vars:
             sweep_parts.append(f"const_vars={const_vars}")
+        if description:
+            sweep_parts.append(f"description={description!r}")
+        if post_description:
+            sweep_parts.append(f"post_description={post_description!r}")
         sweep_args = ", ".join(sweep_parts)
 
         use_res = post_sweep_line is not None
@@ -118,7 +128,7 @@ if __name__ == "__main__":
         body = "\n".join(body_lines) + "\n"
 
         return self.generate_example(
-            title=title,
+            title=module_docstring or title,
             output_dir=output_dir,
             filename=filename,
             function_name=function_name,

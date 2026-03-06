@@ -91,6 +91,19 @@ class MetaResultTypes(MetaGeneratorBase):
         function_name = f"example_{self.result_type}_{self.input_dims}d"
         title = f"{self.result_type.replace('_', ' ').title()}: {self.input_dims}D input"
 
+        desc_map = {
+            "result_var": "a scalar numeric metric with units",
+            "result_bool": "a boolean pass/fail outcome",
+            "result_vec": "a fixed-size numeric vector",
+            "result_string": "a formatted markdown string",
+            "result_path": "a downloadable file output",
+            "result_dataset": "an xarray/pandas dataset",
+        }
+        description = (
+            f"Demonstrates {desc_map.get(self.result_type, self.result_type)} "
+            f"with {self.input_dims}D input sweep."
+        )
+
         level = 2 if self.input_dims >= 2 else 3
         self.generate_sweep_example(
             title=title,
@@ -101,6 +114,7 @@ class MetaResultTypes(MetaGeneratorBase):
             benchable_module=info["module"],
             input_vars=input_vars_code,
             result_vars=info["result_vars"],
+            description=description,
             run_kwargs={"level": level},
         )
 

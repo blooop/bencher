@@ -98,6 +98,25 @@ class BenchMetaGen(bch.ParametrizedSweep):
         function_name = f"example_{variant}_{base_title}"
         filename = f"ex_{base_title}"
 
+        # Build contextual description for the generated example
+        dim_descriptions = {
+            0: "a scalar value at the default float point",
+            1: "a 1D line/curve plot over a single continuous variable",
+            2: "a 2D heatmap showing interactions between two continuous variables",
+            3: "a 3D volume plot across all three continuous dimensions",
+        }
+        cat_descriptions = {
+            0: "",
+            1: " with one categorical grouping variable",
+            2: " with two categorical grouping variables",
+            3: " with three categorical grouping variables",
+        }
+        sweep_description = (
+            f"Sweeps {self.float_vars_count} float and {self.categorical_vars_count} "
+            f"categorical inputs, producing {dim_descriptions[self.float_vars_count]}"
+            f"{cat_descriptions[self.categorical_vars_count]}."
+        )
+
         gen = MetaGeneratorBase()
 
         if self.sample_over_time:
@@ -121,11 +140,15 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 f"        input_vars={input_vars},\n"
                 f"        result_vars={self.result_var_names},\n"
                 f"        const_vars=dict(noise_scale={noise_val}),\n"
+                f"        description={sweep_description!r},\n"
                 f"        run_cfg=run_cfg,\n"
                 f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"
             )
-            imports = f"import bencher as bch\n{benchmark_import}\nfrom datetime import datetime, timedelta"
+            imports = (
+                f"import bencher as bch\n{benchmark_import}\n"
+                "from datetime import datetime, timedelta"
+            )
             gen.generate_example(
                 title=title,
                 output_dir=f"{self.float_vars_count}_float/{variant}",
@@ -155,6 +178,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 input_vars=repr(input_vars),
                 result_vars=repr(self.result_var_names),
                 const_vars=noise_const,
+                description=sweep_description,
                 run_kwargs=run_kwargs,
             )
 

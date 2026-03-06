@@ -184,6 +184,98 @@ class BenchableImageResult(bch.ParametrizedSweep):
         return super().__call__()
 
 
+class BenchableRobotArm(bch.ParametrizedSweep):
+    """Simulates a 2-joint robot arm reaching for a target.
+
+    Sweep the joint angles to explore how arm configuration affects reach distance
+    and energy consumption.  This is a relatable physical-simulation use case that
+    new users can adapt to their own domain.
+    """
+
+    joint1 = bch.FloatSweep(
+        default=0.5, bounds=[0.0, math.pi], doc="Angle of the first joint (shoulder)", units="rad"
+    )
+    joint2 = bch.FloatSweep(
+        default=0.5, bounds=[0.0, math.pi], doc="Angle of the second joint (elbow)", units="rad"
+    )
+    gripper = bch.StringSweep(
+        ["suction", "parallel_jaw", "soft"], doc="Type of gripper attached to the end-effector"
+    )
+
+    reach = bch.ResultVar("m", doc="Euclidean distance from base to end-effector")
+    energy = bch.ResultVar("J", doc="Estimated energy to hold the pose")
+
+    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+
+    # Arm link lengths
+    _L1 = 1.0
+    _L2 = 0.8
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+
+        # Forward kinematics for a planar 2-link arm
+        x = self._L1 * math.cos(self.joint1) + self._L2 * math.cos(self.joint1 + self.joint2)
+        y = self._L1 * math.sin(self.joint1) + self._L2 * math.sin(self.joint1 + self.joint2)
+        self.reach = math.sqrt(x**2 + y**2)
+
+        # Energy model: torque proportional to gravity load on each joint
+        gripper_mass = {"suction": 0.5, "parallel_jaw": 1.0, "soft": 0.7}[self.gripper]
+        self.energy = (
+            abs(math.sin(self.joint1)) * (self._L1 + self._L2) * gripper_mass
+            + abs(math.sin(self.joint2)) * self._L2 * gripper_mass
+        )
+
+        if self.noise_scale > 0:
+            self.reach += random.gauss(0, self.noise_scale * 0.1)
+            self.energy += random.gauss(0, self.noise_scale * 0.05)
+
+        return super().__call__()
+
+
+class BenchableMLTrainer(bch.ParametrizedSweep):
+    """Simulates an ML training run to explore hyper-parameter sensitivity.
+
+    Sweep learning rate, dropout, and optimizer choice to see how they affect
+    validation accuracy and training time.  This mirrors a common ML workflow
+    and gives users a template for their own hyper-parameter searches.
+    """
+
+    learning_rate = bch.FloatSweep(
+        default=0.01, bounds=[0.0001, 0.1], doc="Optimizer learning rate"
+    )
+    dropout = bch.FloatSweep(default=0.2, bounds=[0.0, 0.8], doc="Dropout probability")
+    optimizer = bch.StringSweep(["adam", "sgd", "rmsprop"], doc="Optimizer algorithm")
+
+    accuracy = bch.ResultVar("%", bch.OptDir.maximize, doc="Validation accuracy (higher is better)")
+    training_time = bch.ResultVar(
+        "s", bch.OptDir.minimize, doc="Training wall-clock time (lower is better)"
+    )
+
+    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+
+        # Simulated accuracy: peaks around lr=0.01, low dropout, adam is best
+        lr_score = math.exp(-((math.log10(self.learning_rate) + 2) ** 2))  # peak at 0.01
+        dropout_penalty = 0.3 * self.dropout**2
+        opt_bonus = {"adam": 0.05, "sgd": 0.0, "rmsprop": 0.03}[self.optimizer]
+        self.accuracy = max(0.0, min(100.0, (lr_score - dropout_penalty + opt_bonus + 0.5) * 80))
+
+        # Simulated training time: higher lr converges faster, adam is fastest
+        opt_speed = {"adam": 1.0, "sgd": 1.5, "rmsprop": 1.2}[self.optimizer]
+        self.training_time = opt_speed * (50 + 200 * (1 - lr_score) + 30 * self.dropout)
+
+        if self.noise_scale > 0:
+            self.accuracy += random.gauss(0, self.noise_scale * 5)
+            self.training_time += random.gauss(0, self.noise_scale * 10)
+            self.accuracy = max(0.0, min(100.0, self.accuracy))
+            self.training_time = max(1.0, self.training_time)
+
+        return super().__call__()
+
+
 class BenchableVideoResult(bch.ParametrizedSweep):
     """Demonstrates ResultVideo — a polygon rotation animation."""
 

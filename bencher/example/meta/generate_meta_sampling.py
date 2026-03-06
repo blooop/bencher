@@ -35,6 +35,10 @@ class MetaSampling(MetaGeneratorBase):
                 benchable_module="bencher.example.meta.example_meta",
                 input_vars='["float1"]',
                 result_vars='["distance"]',
+                description=(
+                    "Uniform sampling distributes points evenly across the parameter bounds. "
+                    "The number of samples is controlled by the level parameter."
+                ),
                 run_kwargs={"level": 4},
             )
         elif self.strategy == "custom_values":
@@ -47,6 +51,8 @@ class MetaSampling(MetaGeneratorBase):
                 "bench.plot_sweep(\n"
                 '    input_vars=[bch.p("float1", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
                 '    result_vars=["distance"],\n'
+                '    description="Custom sample values let you pick exact points '
+                "to evaluate. Use bch.p() to override a variable's sweep values.\",\n"
                 ")\n"
             )
             self.generate_example(
@@ -71,6 +77,8 @@ class MetaSampling(MetaGeneratorBase):
                 '        bch.p("level", [2, 3, 4, 5]),\n'
                 "    ],\n"
                 "    const_vars=dict(categorical_vars=0),\n"
+                '    description="The level parameter controls how many samples are taken along '
+                'each axis. Higher levels give finer resolution but take longer.",\n'
                 ")\n"
             )
             self.generate_example(
@@ -92,6 +100,10 @@ class MetaSampling(MetaGeneratorBase):
                 benchable_module="bencher.example.meta.benchable_objects",
                 input_vars='["int_input", "float_input"]',
                 result_vars='["output"]',
+                description=(
+                    "Integer sweeps produce discrete steps while float sweeps produce "
+                    "continuous curves. Compare how the plot changes between the two types."
+                ),
                 run_kwargs={"level": 3},
             )
 

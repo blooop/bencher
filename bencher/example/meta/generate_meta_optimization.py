@@ -34,6 +34,24 @@ class MetaOptimization(MetaGeneratorBase):
         else:
             input_vars_code = '["x", "y"]'
 
+        if self.n_objectives == 1:
+            description = (
+                f"Single-objective optimization over {self.input_dims}D input space using Optuna. "
+                "The optimizer searches for the parameter combination that maximizes performance."
+            )
+            post_description = (
+                "The Optuna importance plot shows which input parameters most affect the objective."
+            )
+        else:
+            description = (
+                f"Multi-objective optimization over {self.input_dims}D input space using Optuna. "
+                "The optimizer finds the Pareto front trading off performance vs cost."
+            )
+            post_description = (
+                "The Pareto front shows optimal trade-offs — no point can improve one "
+                "objective without worsening the other."
+            )
+
         level = 2 if self.input_dims >= 2 else 3
         self.generate_sweep_example(
             title=title,
@@ -45,6 +63,8 @@ class MetaOptimization(MetaGeneratorBase):
             input_vars=input_vars_code,
             result_vars=result_vars_code,
             const_vars="dict(noise_scale=0.1)",
+            description=description,
+            post_description=post_description,
             post_sweep_line="res.to_optuna_plots()",
             run_cfg_lines=["run_cfg.use_optuna = True"],
             run_kwargs={"level": level, "repeats": 3},
