@@ -1,16 +1,28 @@
 from __future__ import annotations
-import logging
 from typing import Optional
 import panel as pn
-import holoviews as hv
 from param import Parameter
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
+import plotly.graph_objs as go
 import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.variables.results import ResultVar
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+
+
+def _da_to_sorted_grid(da: xr.DataArray, x_name: str, y_name: str):
+    """Extract sorted x/y coordinate arrays and a 2D z grid from a DataArray.
+
+    Sorts the DataArray along both axes so the resulting grid has monotonically
+    increasing x and y values, which plotly requires for correct surface rendering.
+    """
+    sorted_da = da.sortby([x_name, y_name])
+    return (
+        sorted_da.coords[x_name].values,
+        sorted_da.coords[y_name].values,
+        sorted_da.values,
+    )
 
 
 class SurfaceResult(HoloviewResult):
@@ -81,20 +93,22 @@ class SurfaceResult(HoloviewResult):
         result_var: Parameter,
         override: bool = True,
         alpha: float = 0.3,
-        **kwargs,
+        width: int = 600,
+        height: int = 600,
     ) -> Optional[pn.panel]:
         """Creates a 3D surface plot from the provided dataset.
 
-        Given a filtered dataset, this method generates a 3D surface visualization showing
-        the relationship between two input variables and the result variable. When multiple
-        benchmark repetitions are available, standard deviation bounds can also be displayed.
+        Uses plotly directly (like VolumeResult) to avoid HoloViews backend
+        contamination issues while ensuring reliable 3D rendering. Coordinates
+        are sorted to guarantee monotonic x/y grids for plotly.
 
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
             result_var (Parameter): The result variable to plot.
             override (bool, optional): Whether to override filter restrictions. Defaults to True.
-            alpha (float, optional): The transparency level for standard deviation surfaces. Defaults to 0.3.
-            **kwargs: Additional keyword arguments passed to the surface plot options.
+            alpha (float, optional): The transparency for std-dev surfaces. Defaults to 0.3.
+            width (int, optional): Plot width in pixels. Defaults to 600.
+            height (int, optional): Plot height in pixels. Defaults to 600.
 
         Returns:
             Optional[pn.panel]: A panel containing the surface plot if data matches criteria,
@@ -107,55 +121,53 @@ class SurfaceResult(HoloviewResult):
             result_vars=VarRange(1, 1),
         ).matches_result(self.plt_cnt_cfg, "to_surface_hv", override)
         if matches_res.overall:
-            # xr_cfg = plot_float_cnt_2(self.plt_cnt_cfg, result_var)
-
-            # TODO a warning suggests setting this parameter, but it does not seem to help as expected, leaving here to fix in the future
-            # hv.config.image_rtol = 1.0
-
-            mean = dataset[result_var.name]
-
-            hvds = hv.Dataset(dataset[result_var.name])
-
             x = self.plt_cnt_cfg.float_vars[0]
             y = self.plt_cnt_cfg.float_vars[1]
 
-            try:
-                surface = hvds.to(hv.Surface, vdims=[result_var.name])
-                surface = surface.opts(colorbar=True)
-            except Exception as e:  # pylint: disable=broad-except
-                logging.warning(e)
+            mean_da = dataset[result_var.name]
+            x_vals, y_vals, z_vals = _da_to_sorted_grid(mean_da, x.name, y.name)
+
+            data = [
+                go.Surface(
+                    x=x_vals,
+                    y=y_vals,
+                    z=z_vals,
+                    colorscale="Viridis",
+                    colorbar=dict(title=f"{result_var.name} [{result_var.units}]"),
+                )
+            ]
 
             if self.bench_cfg.repeats > 1:
                 std_dev = dataset[f"{result_var.name}_std"]
 
-                upper = mean + std_dev
-                upper.name = result_var.name
+                for bound, sign in [("upper", 1), ("lower", -1)]:
+                    bound_da = mean_da + sign * std_dev
+                    _, _, bz = _da_to_sorted_grid(bound_da, x.name, y.name)
+                    data.append(
+                        go.Surface(
+                            x=x_vals,
+                            y=y_vals,
+                            z=bz,
+                            colorscale="Viridis",
+                            showscale=False,
+                            opacity=alpha,
+                            name=bound,
+                        )
+                    )
 
-                lower = mean - std_dev
-                lower.name = result_var.name
-
-                surface *= (
-                    hv.Dataset(upper)
-                    .to(hv.Surface)
-                    .opts(alpha=alpha, colorbar=False, backend="plotly")
-                )
-                surface *= (
-                    hv.Dataset(lower)
-                    .to(hv.Surface)
-                    .opts(alpha=alpha, colorbar=False, backend="plotly")
-                )
-
-            surface = surface.opts(
-                zlabel=f"{result_var.name} [{result_var.units}]",
+            layout = go.Layout(
                 title=f"{result_var.name} vs ({x.name} and {y.name})",
-                backend="plotly",
-                **kwargs,
+                width=width,
+                height=height,
+                margin=dict(t=50, b=50, r=50, l=50),
+                scene=dict(
+                    xaxis_title=f"{x.name} [{x.units}]",
+                    yaxis_title=f"{y.name} [{y.units}]",
+                    zaxis_title=f"{result_var.name} [{result_var.units}]",
+                ),
             )
 
-            # Always pre-render to plotly to avoid hv.extension("plotly") polluting
-            # the global backend (which would make all subsequent plots use plotly).
-            # Note: pre-rendering disables holoviews sliders for surface plots.
-            out = pn.pane.Plotly(hv.render(surface, backend="plotly"))
-            return pn.Column(out, name="surface_hv")
+            fig = dict(data=data, layout=layout)
+            return pn.pane.Plotly(fig, name="surface_plotly")
 
         return matches_res.to_panel()

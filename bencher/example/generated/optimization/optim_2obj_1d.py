@@ -38,7 +38,7 @@ def example_optim_2obj_1d(run_cfg=None):
         description="Multi-objective optimization over 1D input space using Optuna. The optimizer finds the Pareto front trading off performance vs cost.",
         post_description="The Pareto front shows optimal trade-offs — no point can improve one objective without worsening the other.",
     )
-    res.to_optuna_plots()
+    bench.report.append(res.to_optuna_plots())
 
     return bench
 

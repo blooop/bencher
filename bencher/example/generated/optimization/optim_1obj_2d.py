@@ -38,7 +38,7 @@ def example_optim_1obj_2d(run_cfg=None):
         description="Single-objective optimization over 2D input space using Optuna. The optimizer searches for the parameter combination that maximizes performance.",
         post_description="The Optuna importance plot shows which input parameters most affect the objective.",
     )
-    res.to_optuna_plots()
+    bench.report.append(res.to_optuna_plots())
 
     return bench
 

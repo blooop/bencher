@@ -29,7 +29,7 @@ def example_plot_box_whisker(run_cfg=None):
     res = bench.plot_sweep(
         input_vars=["backend"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
     )
-    res.to(BoxWhiskerResult)
+    bench.report.append(res.to(BoxWhiskerResult))
 
     return bench
 

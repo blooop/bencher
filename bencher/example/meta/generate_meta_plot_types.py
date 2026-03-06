@@ -15,6 +15,10 @@ OUTPUT_DIR = "plot_types"
 # Inline class code for each plot type
 # ---------------------------------------------------------------------------
 
+_DEFAULT_CLASS = "BenchableObject"
+_DEFAULT_MODULE = "bencher.example.meta.example_meta"
+_BENCHABLE_MODULE = "bencher.example.meta.benchable_objects"
+
 _CACHE_COMPARE_CODE = """\
 class CacheCompare(bch.ParametrizedSweep):
     \"\"\"Compare response distance across cache backends.\"\"\"
@@ -212,6 +216,33 @@ PLOT_CONFIGS = {
         "benchable_class": "SurfaceDemo",
         "class_code": _SURFACE_DEMO_CODE,
     },
+    "volume": {
+        "float_dims": 3,
+        "cat_dims": 0,
+        "repeats": 1,
+        "plot_call": "res.to_volume()",
+        "input_vars": '["float1", "float2", "float3"]',
+    },
+    "image": {
+        "float_dims": 0,
+        "cat_dims": 1,
+        "repeats": 1,
+        "plot_call": "res.to_panes()",
+        "input_vars": '["sides"]',
+        "benchable_class": "BenchableImageResult",
+        "benchable_module": _BENCHABLE_MODULE,
+        "result_vars": '["polygon"]',
+    },
+    "video": {
+        "float_dims": 0,
+        "cat_dims": 1,
+        "repeats": 1,
+        "plot_call": "res.to_panes()",
+        "input_vars": '["sides"]',
+        "benchable_class": "BenchableVideoResult",
+        "benchable_module": _BENCHABLE_MODULE,
+        "result_vars": '["animation"]',
+    },
     "box_whisker": {
         "float_dims": 0,
         "cat_dims": 1,
@@ -264,20 +295,24 @@ class MetaPlotTypes(MetaGeneratorBase):
         if cfg["repeats"] > 1:
             run_kwargs["repeats"] = cfg["repeats"]
 
+        # Use inline class_code when available, otherwise import from module
+        has_inline = "class_code" in cfg
+        benchable_module = None if has_inline else cfg.get("benchable_module", _DEFAULT_MODULE)
+
         self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            benchable_class=cfg["benchable_class"],
-            benchable_module=None,
+            benchable_class=cfg.get("benchable_class", _DEFAULT_CLASS),
+            benchable_module=benchable_module,
             input_vars=cfg["input_vars"],
-            result_vars='["distance"]',
+            result_vars=cfg.get("result_vars", '["distance"]'),
             const_vars=const_vars,
             post_sweep_line=cfg["plot_call"],
             extra_imports=extra_imports,
             run_kwargs=run_kwargs,
-            class_code=cfg["class_code"],
+            class_code=cfg.get("class_code"),
         )
 
         return super().__call__()
