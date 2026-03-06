@@ -97,6 +97,7 @@ def generate_python_files():
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     from bencher.example.meta.generate_meta import example_meta
+    from bencher.example.meta.generate_meta_advanced import example_meta_advanced
     from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_image_video import example_meta_image_video
@@ -105,6 +106,7 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
+    from bencher.example.meta.generate_meta_workflows import example_meta_workflows
 
     example_meta()
     example_meta_result_types()
@@ -115,6 +117,8 @@ def generate_python_files():
     example_meta_statistics()
     example_meta_const_vars()
     example_meta_optimization()
+    example_meta_workflows()
+    example_meta_advanced()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -353,6 +357,8 @@ SECTIONS = {
     "Composable Containers": "composable_containers",
     "Constant Variables": "const_vars",
     "Statistics": "statistics",
+    "Workflows": "workflows",
+    "Advanced Patterns": "advanced",
 }
 
 

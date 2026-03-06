@@ -1,27 +1,43 @@
 """Auto-generated example: 0 Float, 1 Categorical."""
 
+from typing import Any
+
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
 from datetime import datetime, timedelta
 
 
-def example_over_time_0_float_1_cat(run_cfg=None):
+class CacheBackend(bch.ParametrizedSweep):
+    """Compares latency across different cache backends."""
+
+    backend = bch.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
+
+    latency = bch.ResultVar(units="ms", doc="Cache lookup latency")
+
+    _time_offset = 0.0
+
+    def __call__(self, **kwargs: Any) -> Any:
+        self.update_params_from_kwargs(**kwargs)
+        base = {"redis": 1.2, "memcached": 1.5, "local": 0.3}[self.backend]
+        self.latency = base + __import__("random").gauss(0, 0.1 * base)
+        self.latency += self._time_offset * 10
+        return super().__call__()
+
+
+def example_over_time_0_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 1 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
-    benchable = BenchableObject()
+    benchable = CacheBackend()
     bench = benchable.to_bench(run_cfg)
-    time_offsets = [0.0, 0.5, 1.0]
     _base_time = datetime(2000, 1, 1)
-    for i, offset in enumerate(time_offsets):
+    for i, offset in enumerate([0.0, 0.5, 1.0]):
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time",
-            input_vars=["wave"],
-            result_vars=["distance", "sample_noise"],
-            const_vars=dict(noise_scale=0.1),
+            input_vars=["backend"],
+            result_vars=["latency"],
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )

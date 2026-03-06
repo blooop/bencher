@@ -4,7 +4,7 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_stats_distributions(run_cfg=None):
+def example_stats_distributions(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Distributions: box-whisker and scatter-jitter for categorical sweeps."""
     bench = BenchableObject().to_bench(run_cfg)
     bench.plot_sweep(

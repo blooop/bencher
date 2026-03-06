@@ -4,7 +4,7 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_stats_repeats_comparison(run_cfg=None):
+def example_stats_repeats_comparison(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Repeats Comparison: 1 vs 5 vs 20 repeats on a categorical sweep."""
     bench = BenchableObject().to_bench(run_cfg)
     for n_repeats in [1, 5, 20]:

@@ -1,27 +1,41 @@
 """Auto-generated example: 0 Float, 0 Categorical."""
 
+from typing import Any
+
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
 from datetime import datetime, timedelta
 
 
-def example_over_time_0_float_0_cat(run_cfg=None):
+class BaselineCheck(bch.ParametrizedSweep):
+    """Measures a fixed baseline metric with no swept parameters."""
+
+    baseline = bch.ResultVar(units="ms", doc="Baseline latency")
+
+    _time_offset = 0.0
+
+    def __call__(self, **kwargs: Any) -> Any:
+        self.update_params_from_kwargs(**kwargs)
+        self.baseline = 42.0
+        self.baseline += __import__("random").gauss(0, 0.1 * 5)
+        self.baseline += self._time_offset * 10
+        return super().__call__()
+
+
+def example_over_time_0_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 0 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
-    benchable = BenchableObject()
+    benchable = BaselineCheck()
     bench = benchable.to_bench(run_cfg)
-    time_offsets = [0.0, 0.5, 1.0]
     _base_time = datetime(2000, 1, 1)
-    for i, offset in enumerate(time_offsets):
+    for i, offset in enumerate([0.0, 0.5, 1.0]):
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time",
             input_vars=[],
-            result_vars=["distance", "sample_noise"],
-            const_vars=dict(noise_scale=0.1),
+            result_vars=["baseline"],
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )
