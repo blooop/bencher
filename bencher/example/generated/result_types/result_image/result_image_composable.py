@@ -1,14 +1,35 @@
 """Auto-generated example: ResultImage: Composable Container Video from Images."""
 
+from typing import Any
+
 import bencher as bch
-from bencher.example.meta.benchable_objects import (
-    BenchableImageResult,
-    _polygon_points,
-    _draw_polygon_image,
-)
+import math
+import numpy as np
+from PIL import Image, ImageDraw
 
 
-class _ComposableImageDemo(BenchableImageResult):
+def _polygon_points(radius, sides, start_angle=0.0):
+    points = []
+    for ang in np.linspace(0, 360, sides + 1):
+        angle = math.radians(start_angle + ang)
+        points.append([math.sin(angle) * radius, math.cos(angle) * radius])
+    return points
+
+
+def _draw_polygon_image(points, color, linewidth, size=200):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    scaled = [((p[0] + 1) * size / 2, (1 - p[1]) * size / 2) for p in points]
+    draw.line(scaled, fill=color, width=int(linewidth))
+    return img
+
+
+class _ComposableImageDemo(bch.ParametrizedSweep):
+    """Composable polygon renderer with video output."""
+
+    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
+    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
+    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")
     compose_method = bch.EnumSweep(
         bch.ComposeType,
         default=bch.ComposeType.right,
@@ -17,7 +38,7 @@ class _ComposableImageDemo(BenchableImageResult):
     num_frames = bch.IntSweep(default=5, bounds=[2, 20], doc="Frame count")
     polygon_vid = bch.ResultVideo()
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         vr = bch.ComposableContainerVideo()
         for i in range(self.num_frames):
@@ -36,7 +57,7 @@ class _ComposableImageDemo(BenchableImageResult):
         return self.get_results_values_as_dict()
 
 
-def example_result_image_composable(run_cfg=None):
+def example_result_image_composable(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """ResultImage: Composable Container Video from Images."""
     bench = _ComposableImageDemo().to_bench(run_cfg)
     bench.plot_sweep(

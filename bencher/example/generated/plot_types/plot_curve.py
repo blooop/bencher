@@ -1,14 +1,34 @@
 """Auto-generated example: Plot Type: Curve."""
 
+from typing import Any
+
 import bencher as bch
-from bencher.example.meta.example_meta import BenchableObject
+
+import math
+import random
 
 
-def example_plot_curve(run_cfg=None):
+class LatencyNoisyProfile(bch.ParametrizedSweep):
+    """Latency with noise as a function of load."""
+
+    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0])
+
+    distance = bch.ResultVar("m", doc="Latency distance metric")
+
+    def __call__(self, **kwargs: Any) -> Any:
+        self.update_params_from_kwargs(**kwargs)
+        self.distance = math.sin(math.pi * self.load) + 0.5
+        if self.noise_scale > 0:
+            self.distance += random.gauss(0, self.noise_scale)
+        return super().__call__()
+
+
+def example_plot_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Plot Type: Curve."""
-    bench = BenchableObject().to_bench(run_cfg)
+    bench = LatencyNoisyProfile().to_bench(run_cfg)
     res = bench.plot_sweep(
-        input_vars=["float1"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
+        input_vars=["load"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
     )
     bench.report.append(res.to_curve())
 
