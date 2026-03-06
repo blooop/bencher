@@ -1,5 +1,7 @@
 """Auto-generated example: Plot Type: Scatter."""
 
+from typing import Any
+
 import bencher as bch
 
 
@@ -10,14 +12,14 @@ class ThroughputCompare(bch.ParametrizedSweep):
 
     distance = bch.ResultVar("m", doc="Throughput distance metric")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         lookup = {"redis": 5.4, "memcached": 4.1, "local": 8.7}
         self.distance = lookup[self.backend]
         return super().__call__()
 
 
-def example_plot_scatter(run_cfg=None):
+def example_plot_scatter(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Plot Type: Scatter."""
     bench = ThroughputCompare().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["backend"], result_vars=["distance"])

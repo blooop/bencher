@@ -1,5 +1,7 @@
 """Auto-generated example: Sampling: Uniform."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -11,13 +13,13 @@ class UniformSampler(bch.ParametrizedSweep):
 
     latency = bch.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
         return super().__call__()
 
 
-def example_sampling_uniform(run_cfg=None):
+def example_sampling_uniform(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Sampling: Uniform."""
     bench = UniformSampler().to_bench(run_cfg)
     bench.plot_sweep(

@@ -1,5 +1,7 @@
 """Auto-generated example: 3 Float, 0 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -13,7 +15,7 @@ class HashBenchmark(bch.ParametrizedSweep):
 
     throughput = bch.ResultVar(units="MB/s", doc="Hash throughput")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.throughput = (
             500.0
@@ -25,7 +27,7 @@ class HashBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_3_float_0_cat(run_cfg=None):
+def example_with_repeats_3_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """3 Float, 0 Categorical."""
     bench = HashBenchmark().to_bench(run_cfg)
     bench.plot_sweep(

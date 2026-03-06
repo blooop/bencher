@@ -1,5 +1,7 @@
 """Auto-generated example: BenchRunner — run multiple benchmarks in one session."""
 
+from typing import Any
+
 import math
 import bencher as bch
 
@@ -10,13 +12,13 @@ class SineWave(bch.ParametrizedSweep):
     theta = bch.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
     out_sin = bch.ResultVar(units="V", doc="Sine output")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.out_sin = math.sin(self.theta)
         return super().__call__()
 
 
-def example_workflow_bench_runner(run_cfg=None):
+def example_workflow_bench_runner(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """BenchRunner — run multiple benchmarks in one session."""
     # This example shows the building block that BenchRunner orchestrates.
     # To combine multiple independent benchmarks into one session, use:

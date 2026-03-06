@@ -333,7 +333,7 @@ def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset
         cls_lines.append("    _time_offset = 0.0")
 
     cls_lines.append("")
-    cls_lines.append("    def __call__(self, **kwargs):")
+    cls_lines.append("    def __call__(self, **kwargs: Any) -> Any:")
     cls_lines.append("        self.update_params_from_kwargs(**kwargs)")
 
     if noise_val > 0 and "noise_body" in info:

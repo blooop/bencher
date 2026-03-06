@@ -39,13 +39,23 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
             run_kwargs = {}
         indented_body = textwrap.indent(body, "    ")
         kwargs_str = "".join(f", {k}={v!r}" for k, v in run_kwargs.items())
+
+        # When class_code is provided, add type hints to __call__ and ensure Any import
+        if class_code:
+            class_code = class_code.replace(
+                "def __call__(self, **kwargs):",
+                "def __call__(self, **kwargs: Any) -> Any:",
+            )
+            if "from typing import Any" not in imports:
+                imports = f"from typing import Any\n\n{imports}"
+
         class_block = f"\n\n{class_code}" if class_code else ""
         content = f'''"""Auto-generated example: {title}."""
 
 {imports}{class_block}
 
 
-def {function_name}(run_cfg=None):
+def {function_name}(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """{title}."""
 {indented_body}
     return bench
@@ -101,7 +111,7 @@ if __name__ == "__main__":
             run_kwargs: Dict of kwargs for bch.run().
             extra_class_attrs: Optional list of extra class-level lines.
         """
-        import_lines = ["import bencher as bch"]
+        import_lines = ["from typing import Any", "", "import bencher as bch"]
         if extra_imports:
             import_lines.extend(extra_imports)
         imports = "\n".join(import_lines)
@@ -120,7 +130,7 @@ if __name__ == "__main__":
             cls_lines.append("")
             cls_lines.extend(f"    {line}" for line in extra_class_attrs)
         cls_lines.append("")
-        cls_lines.append("    def __call__(self, **kwargs):")
+        cls_lines.append("    def __call__(self, **kwargs: Any) -> Any:")
         cls_lines.append("        self.update_params_from_kwargs(**kwargs)")
         for line in call_body:
             cls_lines.append(f"        {line}")

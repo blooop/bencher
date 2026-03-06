@@ -1,5 +1,7 @@
 """Auto-generated example: 3 Float, 1 Categorical."""
 
+from typing import Any
+
 import math
 import bencher as bch
 from datetime import datetime, timedelta
@@ -17,7 +19,7 @@ class HashComparison(bch.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         algo_speed = {"sha256": 1.0, "blake2": 1.4, "md5": 1.8}[self.algorithm]
         self.throughput = (
@@ -32,7 +34,7 @@ class HashComparison(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_3_float_1_cat(run_cfg=None):
+def example_over_time_3_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """3 Float, 1 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True

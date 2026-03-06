@@ -1,5 +1,7 @@
 """Auto-generated example: Const Vars: Comparing Slices."""
 
+from typing import Any
+
 import bencher as bch
 
 
@@ -17,7 +19,7 @@ class ServerBenchmark(bch.ParametrizedSweep):
     latency = bch.ResultVar(units="ms", doc="Request latency")
     throughput = bch.ResultVar(units="req/s", doc="Request throughput")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         cache_factor = 0.6 if self.cache_enabled else 1.0
         db_base = {"postgres": 1.0, "mysql": 1.1, "sqlite": 0.7}[self.backend]
@@ -37,7 +39,7 @@ class ServerBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_const_vars_compare(run_cfg=None):
+def example_const_vars_compare(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Const Vars: Comparing Slices."""
     bench = ServerBenchmark().to_bench(run_cfg)
     for mem_val in [20, 50, 80]:

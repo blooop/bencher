@@ -1,5 +1,7 @@
 """Auto-generated example: Result Image: 0D input."""
 
+from typing import Any
+
 import bencher as bch
 import math
 import numpy as np
@@ -31,7 +33,7 @@ class PolygonRenderer(bch.ParametrizedSweep):
     polygon = bch.ResultImage(doc="Rendered polygon image")
     area = bch.ResultVar("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
@@ -44,7 +46,7 @@ class PolygonRenderer(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_image_0d(run_cfg=None):
+def example_result_image_0d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Result Image: 0D input."""
     bench = PolygonRenderer().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["color"], result_vars=["polygon"])

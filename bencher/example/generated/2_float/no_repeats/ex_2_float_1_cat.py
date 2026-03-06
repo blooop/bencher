@@ -1,5 +1,7 @@
 """Auto-generated example: 2 Float, 1 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -13,7 +15,7 @@ class CompressionCodec(bch.ParametrizedSweep):
 
     ratio = bch.ResultVar(units="x", doc="Compression ratio")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         codec_eff = {"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}[self.codec]
         self.ratio = (
@@ -22,7 +24,7 @@ class CompressionCodec(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_no_repeats_2_float_1_cat(run_cfg=None):
+def example_no_repeats_2_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """2 Float, 1 Categorical."""
     bench = CompressionCodec().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["block_size", "entropy", "codec"], result_vars=["ratio"])

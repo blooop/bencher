@@ -1,5 +1,7 @@
 """Auto-generated example: 1 Float, 2 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -13,7 +15,7 @@ class SortAnalysis(bch.ParametrizedSweep):
 
     time = bch.ResultVar(units="ms", doc="Sort duration")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         algo_factor = {"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}[self.algorithm]
         dist_factor = {"uniform": 1.0, "sorted": 0.6, "reversed": 1.8}[self.distribution]
@@ -23,7 +25,7 @@ class SortAnalysis(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_no_repeats_1_float_2_cat(run_cfg=None):
+def example_no_repeats_1_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """1 Float, 2 Categorical."""
     bench = SortAnalysis().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["array_size", "algorithm", "distribution"], result_vars=["time"])

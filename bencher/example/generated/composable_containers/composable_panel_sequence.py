@@ -1,5 +1,7 @@
 """Auto-generated example: Composable Panel: ComposeType.sequence."""
 
+from typing import Any
+
 import math
 import numpy as np
 from PIL import Image, ImageDraw
@@ -32,7 +34,7 @@ class BenchableImageResult(bch.ParametrizedSweep):
     polygon = bch.ResultImage(doc="Rendered polygon image")
     area = bch.ResultVar("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
@@ -50,7 +52,7 @@ class _PanelComposeDemo(BenchableImageResult):
 
     result_image = bch.ResultImage(doc="Composed panel image")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
@@ -60,7 +62,7 @@ class _PanelComposeDemo(BenchableImageResult):
         return self.get_results_values_as_dict()
 
 
-def example_composable_panel_sequence(run_cfg=None):
+def example_composable_panel_sequence(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Composable Panel: ComposeType.sequence."""
     bench = _PanelComposeDemo().to_bench(run_cfg)
     bench.plot_sweep(

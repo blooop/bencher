@@ -1,5 +1,7 @@
 """Auto-generated example: Result Video: 2D input."""
 
+from typing import Any
+
 import bencher as bch
 import math
 import numpy as np
@@ -30,7 +32,7 @@ class PolygonAnimator(bch.ParametrizedSweep):
     animation = bch.ResultVideo(doc="Rotating polygon video")
     frame_snapshot = bch.ResultImage(doc="Last frame snapshot")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         vid_writer = bch.VideoWriter()
         num_frames = 8
@@ -44,7 +46,7 @@ class PolygonAnimator(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_video_2d(run_cfg=None):
+def example_result_video_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Result Video: 2D input."""
     bench = PolygonAnimator().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["sides", "speed"], result_vars=["animation"])

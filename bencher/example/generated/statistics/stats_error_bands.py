@@ -4,7 +4,7 @@ import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_stats_error_bands(run_cfg=None):
+def example_stats_error_bands(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Error Bands: mean +/- std deviation on a 1D sweep with 10 repeats."""
     bench = BenchableObject().to_bench(run_cfg)
     bench.plot_sweep(

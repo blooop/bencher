@@ -1,5 +1,7 @@
 """Auto-generated example: 0 Float, 2 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 
 
@@ -11,7 +13,7 @@ class NetworkConfig(bch.ParametrizedSweep):
 
     throughput = bch.ResultVar(units="req/s", doc="Request throughput")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         proto_factor = {"http": 1.0, "grpc": 1.8}[self.protocol]
         region_base = {"us-east": 500, "eu-west": 420, "ap-south": 350}[self.region]
@@ -19,7 +21,7 @@ class NetworkConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_0_float_2_cat(run_cfg=None):
+def example_with_repeats_0_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 2 Categorical."""
     bench = NetworkConfig().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["protocol", "region"], result_vars=["throughput"])

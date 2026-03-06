@@ -1,5 +1,7 @@
 """Auto-generated example: Sampling: Levels."""
 
+from typing import Any
+
 import math
 import bencher as bch
 
@@ -12,13 +14,13 @@ class LevelDemo(bch.ParametrizedSweep):
 
     value = bch.ResultVar(units="ul")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.value = math.sin(self.points * math.pi * self.resolution) + self.resolution * 0.1
         return super().__call__()
 
 
-def example_sampling_levels(run_cfg=None):
+def example_sampling_levels(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Sampling: Levels."""
     bench = LevelDemo().to_bench(run_cfg)
     bench.plot_sweep(

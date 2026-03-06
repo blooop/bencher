@@ -1,5 +1,7 @@
 """Auto-generated example: 1 Float, 0 Categorical."""
 
+from typing import Any
+
 import math
 import bencher as bch
 from datetime import datetime, timedelta
@@ -14,7 +16,7 @@ class SortBenchmark(bch.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.time = self.array_size * math.log2(self.array_size + 1) * 0.001
         self.time += __import__("random").gauss(0, 0.1 * self.time)
@@ -22,7 +24,7 @@ class SortBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_1_float_0_cat(run_cfg=None):
+def example_over_time_1_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """1 Float, 0 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True

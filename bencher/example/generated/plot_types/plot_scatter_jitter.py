@@ -1,5 +1,7 @@
 """Auto-generated example: Plot Type: Scatter Jitter."""
 
+from typing import Any
+
 import bencher as bch
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
@@ -16,7 +18,7 @@ class ScatterJitterDemo(bch.ParametrizedSweep):
 
     distance = bch.ResultVar("m", doc="Jittered distance metric")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
         self.distance = lookup[self.backend]
@@ -25,7 +27,7 @@ class ScatterJitterDemo(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_plot_scatter_jitter(run_cfg=None):
+def example_plot_scatter_jitter(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Plot Type: Scatter Jitter."""
     bench = ScatterJitterDemo().to_bench(run_cfg)
     res = bench.plot_sweep(

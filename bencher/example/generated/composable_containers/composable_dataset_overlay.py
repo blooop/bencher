@@ -1,5 +1,7 @@
 """Auto-generated example: Composable Dataset: ComposeType.overlay."""
 
+from typing import Any
+
 import bencher as bch
 
 
@@ -9,7 +11,7 @@ class TimeseriesCollector(bch.ParametrizedSweep):
     duration = bch.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Collection duration")
     result_ds = bch.ResultDataSet(doc="Collected time-series dataset")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         import xarray as xr
         import numpy as np
 
@@ -22,7 +24,7 @@ class TimeseriesCollector(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_composable_dataset_overlay(run_cfg=None):
+def example_composable_dataset_overlay(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Composable Dataset: ComposeType.overlay."""
     bench = TimeseriesCollector().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["duration"], result_vars=["result_ds"])

@@ -1,5 +1,7 @@
 """Auto-generated example: Result Path: 0D input."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -11,7 +13,7 @@ class ReportExporter(bch.ParametrizedSweep):
 
     file_result = bch.ResultPath(doc="Generated report file")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         filename = bch.gen_path(self.format_type, suffix=".txt")
         line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]
@@ -22,7 +24,7 @@ class ReportExporter(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_path_0d(run_cfg=None):
+def example_result_path_0d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Result Path: 0D input."""
     bench = ReportExporter().to_bench(run_cfg)
     bench.plot_sweep(

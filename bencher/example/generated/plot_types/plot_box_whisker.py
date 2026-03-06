@@ -1,5 +1,7 @@
 """Auto-generated example: Plot Type: Box Whisker."""
 
+from typing import Any
+
 import bencher as bch
 from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
 
@@ -14,7 +16,7 @@ class JitterDemo(bch.ParametrizedSweep):
 
     distance = bch.ResultVar("m", doc="Jittered distance metric")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
         self.distance = lookup[self.backend]
@@ -23,7 +25,7 @@ class JitterDemo(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_plot_box_whisker(run_cfg=None):
+def example_plot_box_whisker(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Plot Type: Box Whisker."""
     bench = JitterDemo().to_bench(run_cfg)
     res = bench.plot_sweep(

@@ -1,5 +1,7 @@
 """Auto-generated example: 2 Float, 0 Categorical."""
 
+from typing import Any
+
 import math
 import bencher as bch
 from datetime import datetime, timedelta
@@ -15,7 +17,7 @@ class CompressionBench(bch.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
         self.ratio += __import__("random").gauss(0, 0.1 * 0.3)
@@ -23,7 +25,7 @@ class CompressionBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_2_float_0_cat(run_cfg=None):
+def example_over_time_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """2 Float, 0 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True

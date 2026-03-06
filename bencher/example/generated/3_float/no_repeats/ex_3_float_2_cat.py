@@ -1,5 +1,7 @@
 """Auto-generated example: 3 Float, 2 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -15,7 +17,7 @@ class HashAnalysis(bch.ParametrizedSweep):
 
     throughput = bch.ResultVar(units="MB/s", doc="Hash throughput")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         algo_speed = {"sha256": 1.0, "blake2": 1.4, "md5": 1.8}[self.algorithm]
         mode_factor = {"stream": 1.0, "block": 0.85}[self.mode]
@@ -30,7 +32,7 @@ class HashAnalysis(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_no_repeats_3_float_2_cat(run_cfg=None):
+def example_no_repeats_3_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """3 Float, 2 Categorical."""
     bench = HashAnalysis().to_bench(run_cfg)
     bench.plot_sweep(

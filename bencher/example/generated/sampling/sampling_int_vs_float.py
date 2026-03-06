@@ -1,5 +1,7 @@
 """Auto-generated example: Sampling: Int Vs Float."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -12,13 +14,13 @@ class IntFloatCompare(bch.ParametrizedSweep):
 
     output = bch.ResultVar("ul", doc="Computed output")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
         return super().__call__()
 
 
-def example_sampling_int_vs_float(run_cfg=None):
+def example_sampling_int_vs_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Sampling: Int Vs Float."""
     bench = IntFloatCompare().to_bench(run_cfg)
     bench.plot_sweep(

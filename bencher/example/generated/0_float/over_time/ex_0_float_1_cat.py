@@ -1,5 +1,7 @@
 """Auto-generated example: 0 Float, 1 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 from datetime import datetime, timedelta
 
@@ -13,7 +15,7 @@ class CacheBackend(bch.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         base = {"redis": 1.2, "memcached": 1.5, "local": 0.3}[self.backend]
         self.latency = base + __import__("random").gauss(0, 0.1 * base)
@@ -21,7 +23,7 @@ class CacheBackend(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_0_float_1_cat(run_cfg=None):
+def example_over_time_0_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 1 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True

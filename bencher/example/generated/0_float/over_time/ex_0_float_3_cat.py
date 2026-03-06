@@ -1,5 +1,7 @@
 """Auto-generated example: 0 Float, 3 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 from datetime import datetime, timedelta
 
@@ -15,7 +17,7 @@ class DeploymentConfig(bch.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         proto_factor = {"http": 1.0, "grpc": 1.8}[self.protocol]
         region_base = {"us-east": 500, "eu-west": 420, "ap-south": 350}[self.region]
@@ -27,7 +29,7 @@ class DeploymentConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_0_float_3_cat(run_cfg=None):
+def example_over_time_0_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 3 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True

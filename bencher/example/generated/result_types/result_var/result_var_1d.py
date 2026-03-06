@@ -1,5 +1,7 @@
 """Auto-generated example: Result Var: 1D input."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -12,14 +14,14 @@ class ResponseTimer(bch.ParametrizedSweep):
 
     latency = bch.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         base = {"api/users": 12.0, "api/orders": 25.0}[self.endpoint]
         self.latency = base + 0.5 * math.log1p(self.concurrency)
         return super().__call__()
 
 
-def example_result_var_1d(run_cfg=None):
+def example_result_var_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Result Var: 1D input."""
     bench = ResponseTimer().to_bench(run_cfg)
     bench.plot_sweep(

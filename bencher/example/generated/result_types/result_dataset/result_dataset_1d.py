@@ -1,5 +1,7 @@
 """Auto-generated example: Result Dataset: 1D input."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -12,7 +14,7 @@ class TimeseriesCollector(bch.ParametrizedSweep):
 
     result_ds = bch.ResultDataSet(doc="Collected timeseries dataset")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         import xarray as xr
 
         self.update_params_from_kwargs(**kwargs)
@@ -26,7 +28,7 @@ class TimeseriesCollector(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_dataset_1d(run_cfg=None):
+def example_result_dataset_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Result Dataset: 1D input."""
     bench = TimeseriesCollector().to_bench(run_cfg)
     bench.plot_sweep(

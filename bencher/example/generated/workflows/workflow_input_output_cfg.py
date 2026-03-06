@@ -1,5 +1,7 @@
 """Auto-generated example: InputCfg/OutputCfg — separated input and output classes."""
 
+from typing import Any
+
 import math
 import bencher as bch
 
@@ -34,7 +36,7 @@ class ServerConfig(bch.ParametrizedSweep):
         return output
 
 
-def example_workflow_input_output_cfg(run_cfg=None):
+def example_workflow_input_output_cfg(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """InputCfg/OutputCfg — separated input and output classes."""
     # The Bench constructor accepts the static function and the ServerConfig class.
     # This is an alternative to the ParametrizedSweep.__call__ pattern.

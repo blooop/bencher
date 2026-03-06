@@ -1,5 +1,7 @@
 """Auto-generated example: 2 Float, 1 Categorical."""
 
+from typing import Any
+
 import math
 import bencher as bch
 from datetime import datetime, timedelta
@@ -16,7 +18,7 @@ class CompressionCodec(bch.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         codec_eff = {"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}[self.codec]
         self.ratio = (
@@ -27,7 +29,7 @@ class CompressionCodec(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_2_float_1_cat(run_cfg=None):
+def example_over_time_2_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """2 Float, 1 Categorical."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True

@@ -100,7 +100,6 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_advanced import example_meta_advanced
     from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
-    from bencher.example.meta.generate_meta_flagship import example_meta_flagship
     from bencher.example.meta.generate_meta_image_video import example_meta_image_video
     from bencher.example.meta.generate_meta_optimization import example_meta_optimization
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
@@ -118,7 +117,6 @@ def generate_python_files():
     example_meta_statistics()
     example_meta_const_vars()
     example_meta_optimization()
-    example_meta_flagship()
     example_meta_workflows()
     example_meta_advanced()
 
@@ -340,7 +338,6 @@ def generate_section_index(
 
 
 SECTIONS = {
-    "Flagship Examples": "flagship",
     "0 Float Inputs": "0_float/no_repeats",
     "0 Float Inputs (Repeated)": "0_float/with_repeats",
     "0 Float Inputs (Over Time)": "0_float/over_time",

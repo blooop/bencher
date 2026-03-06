@@ -1,5 +1,7 @@
 """Auto-generated example: 1 Float, 3 Categorical."""
 
+from typing import Any
+
 import bencher as bch
 import math
 
@@ -14,7 +16,7 @@ class SortFullMatrix(bch.ParametrizedSweep):
 
     time = bch.ResultVar(units="ms", doc="Sort duration")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         algo_factor = {"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}[self.algorithm]
         dist_factor = {"uniform": 1.0, "sorted": 0.6, "reversed": 1.8}[self.distribution]
@@ -31,7 +33,7 @@ class SortFullMatrix(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_1_float_3_cat(run_cfg=None):
+def example_with_repeats_1_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """1 Float, 3 Categorical."""
     bench = SortFullMatrix().to_bench(run_cfg)
     bench.plot_sweep(

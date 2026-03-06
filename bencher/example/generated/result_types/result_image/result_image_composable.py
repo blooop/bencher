@@ -1,5 +1,7 @@
 """Auto-generated example: ResultImage: Composable Container Video from Images."""
 
+from typing import Any
+
 import bencher as bch
 import math
 import numpy as np
@@ -36,7 +38,7 @@ class _ComposableImageDemo(bch.ParametrizedSweep):
     num_frames = bch.IntSweep(default=5, bounds=[2, 20], doc="Frame count")
     polygon_vid = bch.ResultVideo()
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         vr = bch.ComposableContainerVideo()
         for i in range(self.num_frames):
@@ -55,7 +57,7 @@ class _ComposableImageDemo(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_result_image_composable(run_cfg=None):
+def example_result_image_composable(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """ResultImage: Composable Container Video from Images."""
     bench = _ComposableImageDemo().to_bench(run_cfg)
     bench.plot_sweep(
