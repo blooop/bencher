@@ -21,7 +21,7 @@ class ComposableContainerRerun(ComposableContainerBase):
 
     container: list[Any] = field(default_factory=list)
 
-    def render(self, **kwargs):
+    def render(self):
         """Return a rerun blueprint container matching the compose method."""
         import rerun.blueprint as rrb
 
