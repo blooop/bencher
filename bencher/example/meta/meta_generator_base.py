@@ -113,7 +113,7 @@ if __name__ == "__main__":
         body_lines.append(f"{prefix}bench.plot_sweep({sweep_args})")
 
         if post_sweep_line:
-            body_lines.append(post_sweep_line)
+            body_lines.append(f"bench.report.append({post_sweep_line})")
 
         body = "\n".join(body_lines) + "\n"
 

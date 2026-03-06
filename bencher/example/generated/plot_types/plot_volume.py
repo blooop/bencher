@@ -8,7 +8,7 @@ def example_plot_volume(run_cfg=None):
     """Plot Type: Volume."""
     bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["float1", "float2", "float3"], result_vars=["distance"])
-    res.to_volume()
+    bench.report.append(res.to_volume())
 
     return bench
 

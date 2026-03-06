@@ -8,7 +8,7 @@ def example_plot_surface(run_cfg=None):
     """Plot Type: Surface."""
     bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["float1", "float2"], result_vars=["distance"])
-    res.to_surface()
+    bench.report.append(res.to_surface())
 
     return bench
 
