@@ -1,7 +1,5 @@
 """Auto-generated example: InputCfg/OutputCfg — separated input and output classes."""
 
-from typing import Any
-
 import math
 import bencher as bch
 
