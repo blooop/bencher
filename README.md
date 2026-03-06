@@ -10,7 +10,7 @@
 [![PyPI](https://img.shields.io/pypi/v/holobench)](https://pypi.org/project/holobench/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/holobench)](https://pypistats.org/packages/holobench)
 [![License](https://img.shields.io/pypi/l/bencher)](https://opensource.org/license/mit/)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.13-blue)](https://www.python.org/downloads/)
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
 ## Install
@@ -79,6 +79,10 @@ Start with example_simple_float.py and explore other examples based on your data
 - example_image.py: Output images as part of the sweep
 - example_video.py: Output videos as part of the sweep
 - example_filepath.py: Output arbitrary files as part of the sweep
+- example_composable_container2.py: Composable containers for combining multiple result types
+- example_composable_container_image.py: Composable containers with image results
+- example_composable_container_video.py: Composable containers with video results
+- example_composable_backends.py: Different composable container backends (Tabs, Panel, etc.)
 - and many others
 
 
