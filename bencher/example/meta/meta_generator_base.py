@@ -72,6 +72,7 @@ if __name__ == "__main__":
         run_cfg_lines=None,
         extra_imports=None,
         run_kwargs=None,
+        plot_callbacks_code=None,
     ):
         """Build imports + body and call generate_example() for a standard sweep.
 
@@ -85,6 +86,8 @@ if __name__ == "__main__":
             run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
             extra_imports: Optional list of additional import lines.
             run_kwargs: Dict of kwargs for bch.run() (e.g. {"level": 4, "repeats": 10}).
+            plot_callbacks_code: Optional code string for plot_callbacks kwarg in plot_sweep
+                (e.g. '[SurfaceResult.to_surface]').
         """
         import_lines = [
             "import bencher as bch",
@@ -106,6 +109,8 @@ if __name__ == "__main__":
         sweep_parts.append(f"result_vars={result_vars}")
         if const_vars:
             sweep_parts.append(f"const_vars={const_vars}")
+        if plot_callbacks_code:
+            sweep_parts.append(f"plot_callbacks={plot_callbacks_code}")
         sweep_args = ", ".join(sweep_parts)
 
         use_res = post_sweep_line is not None

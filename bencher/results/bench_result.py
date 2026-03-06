@@ -117,6 +117,7 @@ class BenchResult(
             LineResult.to_plot,
             HeatmapResult.to_plot,
             HistogramResult.to_plot,
+            SurfaceResult.to_surface,
             VolumeResult.to_plot,
             # PanelResult.to_video,
             VideoResult.to_panes,

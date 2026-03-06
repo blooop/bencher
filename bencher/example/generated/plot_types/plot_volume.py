@@ -2,12 +2,17 @@
 
 import bencher as bch
 from bencher.example.meta.example_meta import BenchableObject
+from bencher.results.volume_result import VolumeResult
 
 
 def example_plot_volume(run_cfg=None):
     """Plot Type: Volume."""
     bench = BenchableObject().to_bench(run_cfg)
-    res = bench.plot_sweep(input_vars=["float1", "float2", "float3"], result_vars=["distance"])
+    res = bench.plot_sweep(
+        input_vars=["float1", "float2", "float3"],
+        result_vars=["distance"],
+        plot_callbacks=[VolumeResult.to_volume],
+    )
     res.to_volume()
 
     return bench

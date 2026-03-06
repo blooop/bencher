@@ -56,6 +56,10 @@ PLOT_CONFIGS = {
         "repeats": 1,
         "plot_call": "res.to_surface()",
         "input_vars": '["float1", "float2"]',
+        "plot_callbacks_code": "[SurfaceResult.to_surface]",
+        "extra_import": (
+            "from bencher.results.holoview_results.surface_result import SurfaceResult"
+        ),
     },
     "volume": {
         "float_dims": 3,
@@ -63,6 +67,8 @@ PLOT_CONFIGS = {
         "repeats": 1,
         "plot_call": "res.to_volume()",
         "input_vars": '["float1", "float2", "float3"]',
+        "plot_callbacks_code": "[VolumeResult.to_volume]",
+        "extra_import": "from bencher.results.volume_result import VolumeResult",
     },
     "image": {
         "float_dims": 0,
@@ -145,6 +151,7 @@ class MetaPlotTypes(MetaGeneratorBase):
             post_sweep_line=cfg["plot_call"],
             extra_imports=extra_imports,
             run_kwargs=run_kwargs,
+            plot_callbacks_code=cfg.get("plot_callbacks_code"),
         )
 
         return super().__call__()
