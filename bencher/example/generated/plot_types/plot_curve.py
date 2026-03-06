@@ -10,7 +10,7 @@ def example_plot_curve(run_cfg=None):
     res = bench.plot_sweep(
         input_vars=["float1"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
     )
-    res.to_curve()
+    bench.report.append(res.to_curve())
 
     return bench
 

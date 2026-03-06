@@ -13,7 +13,7 @@ def example_plot_scatter_jitter(run_cfg=None):
     res = bench.plot_sweep(
         input_vars=["wave"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
     )
-    res.to(ScatterJitterResult)
+    bench.report.append(res.to(ScatterJitterResult))
 
     return bench
 
