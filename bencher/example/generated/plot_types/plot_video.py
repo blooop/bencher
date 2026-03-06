@@ -8,7 +8,7 @@ def example_plot_video(run_cfg=None):
     """Plot Type: Video."""
     bench = BenchableVideoResult().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["sides"], result_vars=["animation"])
-    res.to_panes()
+    bench.report.append(res.to_panes())
 
     return bench
 

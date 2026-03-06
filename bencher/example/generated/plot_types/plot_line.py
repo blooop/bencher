@@ -8,7 +8,7 @@ def example_plot_line(run_cfg=None):
     """Plot Type: Line."""
     bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["float1"], result_vars=["distance"])
-    res.to_line()
+    bench.report.append(res.to_line())
 
     return bench
 

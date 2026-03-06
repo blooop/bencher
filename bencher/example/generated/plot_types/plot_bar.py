@@ -8,7 +8,7 @@ def example_plot_bar(run_cfg=None):
     """Plot Type: Bar."""
     bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["wave"], result_vars=["distance"])
-    res.to_bar()
+    bench.report.append(res.to_bar())
 
     return bench
 
