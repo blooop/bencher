@@ -10,6 +10,10 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "plot_types"
 
+_DEFAULT_CLASS = "BenchableObject"
+_DEFAULT_MODULE = "bencher.example.meta.example_meta"
+_BENCHABLE_MODULE = "bencher.example.meta.benchable_objects"
+
 PLOT_CONFIGS = {
     "bar": {
         "float_dims": 0,
@@ -52,6 +56,33 @@ PLOT_CONFIGS = {
         "repeats": 1,
         "plot_call": "res.to_surface()",
         "input_vars": '["float1", "float2"]',
+    },
+    "volume": {
+        "float_dims": 3,
+        "cat_dims": 0,
+        "repeats": 1,
+        "plot_call": "res.to_volume()",
+        "input_vars": '["float1", "float2", "float3"]',
+    },
+    "image": {
+        "float_dims": 0,
+        "cat_dims": 1,
+        "repeats": 1,
+        "plot_call": "res.to_panes()",
+        "input_vars": '["sides"]',
+        "benchable_class": "BenchableImageResult",
+        "benchable_module": _BENCHABLE_MODULE,
+        "result_vars": '["polygon"]',
+    },
+    "video": {
+        "float_dims": 0,
+        "cat_dims": 1,
+        "repeats": 1,
+        "plot_call": "res.to_panes()",
+        "input_vars": '["sides"]',
+        "benchable_class": "BenchableVideoResult",
+        "benchable_module": _BENCHABLE_MODULE,
+        "result_vars": '["animation"]',
     },
     "box_whisker": {
         "float_dims": 0,
@@ -106,10 +137,10 @@ class MetaPlotTypes(MetaGeneratorBase):
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            benchable_class="BenchableObject",
-            benchable_module="bencher.example.meta.example_meta",
+            benchable_class=cfg.get("benchable_class", _DEFAULT_CLASS),
+            benchable_module=cfg.get("benchable_module", _DEFAULT_MODULE),
             input_vars=cfg["input_vars"],
-            result_vars='["distance"]',
+            result_vars=cfg.get("result_vars", '["distance"]'),
             const_vars=const_vars,
             post_sweep_line=cfg["plot_call"],
             extra_imports=extra_imports,
