@@ -109,7 +109,22 @@ class BenchableDataSetResult(bch.ParametrizedSweep):
 
 
 class BenchableMultiObjective(bch.ParametrizedSweep):
-    """Demonstrates multi-objective optimization with competing objectives."""
+    """A design problem with competing performance and cost objectives.
+
+    Models a common engineering trade-off: tuning design parameters (x, y)
+    to maximise performance while minimising cost.
+
+    Objective functions:
+        performance = sin(pi*x) * cos(0.5*pi*y) + 0.5   (maximize)
+        cost        = 0.3 + 0.7*x + 0.5*y**2             (minimize)
+
+    The objectives compete because increasing *x* improves performance
+    (the sin term peaks near x=0.5) but also raises cost (linear in x).
+    Similarly, *y* affects both objectives through different non-linearities.
+
+    Set ``noise_scale > 0`` to add Gaussian noise, simulating measurement
+    uncertainty or manufacturing variability.
+    """
 
     x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Design parameter X")
     y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Design parameter Y")

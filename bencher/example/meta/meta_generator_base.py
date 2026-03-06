@@ -20,6 +20,8 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
         imports,
         body,
         run_kwargs=None,
+        module_docstring=None,
+        function_docstring=None,
     ):
         """Write a runnable Python example file.
 
@@ -32,18 +34,25 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
             body: Unindented function body lines. Indentation is applied automatically.
             run_kwargs: Dict of keyword args for ``bch.run()`` in ``__main__``
                         (e.g. ``{"level": 4, "repeats": 10}``).
+            module_docstring: Optional multi-line module docstring. Falls back to title.
+            function_docstring: Optional multi-line function docstring. Falls back to title.
         """
         if run_kwargs is None:
             run_kwargs = {}
         indented_body = textwrap.indent(body, "    ")
         kwargs_str = "".join(f", {k}={v!r}" for k, v in run_kwargs.items())
-        content = f'''"""Auto-generated example: {title}."""
+        mod_doc = module_docstring or f"Auto-generated example: {title}."
+        func_doc = function_docstring or f"{title}."
+        # Indent multi-line function docstrings
+        if "\n" in func_doc:
+            func_doc = textwrap.indent(func_doc, "    ").strip()
+        content = f'''"""{mod_doc}"""
 
 {imports}
 
 
 def {function_name}(run_cfg=None):
-    """{title}."""
+    """{func_doc}"""
 {indented_body}
     return bench
 
@@ -72,6 +81,9 @@ if __name__ == "__main__":
         run_cfg_lines=None,
         extra_imports=None,
         run_kwargs=None,
+        module_docstring=None,
+        function_docstring=None,
+        body_comments=None,
     ):
         """Build imports + body and call generate_example() for a standard sweep.
 
@@ -85,7 +97,13 @@ if __name__ == "__main__":
             run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
             extra_imports: Optional list of additional import lines.
             run_kwargs: Dict of kwargs for bch.run() (e.g. {"level": 4, "repeats": 10}).
+            module_docstring: Optional multi-line module docstring.
+            function_docstring: Optional multi-line function docstring.
+            body_comments: Optional dict mapping body section to inline comment.
+                Keys: "run_cfg", "bench", "sweep", "post_sweep".
         """
+        if body_comments is None:
+            body_comments = {}
         import_lines = [
             "import bencher as bch",
             f"from {benchable_module} import {benchable_class}",
@@ -96,12 +114,18 @@ if __name__ == "__main__":
 
         body_lines = []
         if run_cfg_lines:
+            if "run_cfg" in body_comments:
+                body_lines.append(f"# {body_comments['run_cfg']}")
             body_lines.append("run_cfg = run_cfg or bch.BenchRunCfg()")
             body_lines.extend(run_cfg_lines)
 
+        if "bench" in body_comments:
+            body_lines.append(f"# {body_comments['bench']}")
         body_lines.append(f"bench = {benchable_class}().to_bench(run_cfg)")
 
         # Build plot_sweep call
+        if "sweep" in body_comments:
+            body_lines.append(f"# {body_comments['sweep']}")
         sweep_parts = [f"input_vars={input_vars}"]
         sweep_parts.append(f"result_vars={result_vars}")
         if const_vars:
@@ -113,6 +137,8 @@ if __name__ == "__main__":
         body_lines.append(f"{prefix}bench.plot_sweep({sweep_args})")
 
         if post_sweep_line:
+            if "post_sweep" in body_comments:
+                body_lines.append(f"# {body_comments['post_sweep']}")
             body_lines.append(post_sweep_line)
 
         body = "\n".join(body_lines) + "\n"
@@ -125,4 +151,6 @@ if __name__ == "__main__":
             imports=imports,
             body=body,
             run_kwargs=run_kwargs or {},
+            module_docstring=module_docstring,
+            function_docstring=function_docstring,
         )
