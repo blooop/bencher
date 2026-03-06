@@ -237,7 +237,53 @@ def _render_gallery_cards(examples: list[dict], href_fn, thumb_src_fn) -> list[s
     return lines
 
 
-def generate_section_index(section_path: Path, section_title: str, section_metadata: list[dict]):
+def _match_section(meta_section_rel, section_rel_path):
+    """Check if a metadata entry belongs to a section (exact or directory-prefix match)."""
+    meta_parts = Path(meta_section_rel).parts
+    section_parts = Path(section_rel_path).parts
+    return meta_parts[: len(section_parts)] == section_parts
+
+
+def _group_by_subdir(examples, section_rel):
+    """Group examples by sub-directory within a section.
+
+    Returns a dict mapping sub-directory name (empty string for root) to example list,
+    sorted with root first then alphabetically.
+    """
+    subgroups = {}
+    for ex in examples:
+        if ex["section_rel"] == section_rel:
+            key = ""
+        else:
+            key = str(Path(ex["section_rel"]).relative_to(section_rel))
+        subgroups.setdefault(key, []).append(ex)
+    return dict(sorted(subgroups.items(), key=lambda kv: (kv[0] != "", kv[0])))
+
+
+def _render_subgrouped_gallery(
+    examples,
+    section_rel,
+    href_fn,
+    thumb_src_fn,
+    heading_tag="h3",
+    heading_class="gallery-section-title",
+):
+    """Render gallery cards grouped by sub-directory with optional sub-headings."""
+    lines = []
+    subgroups = _group_by_subdir(examples, section_rel)
+    for subdir, group_examples in subgroups.items():
+        if subdir:
+            sub_title = html.escape(subdir.replace("_", " ").title())
+            lines.append(f'   <{heading_tag} class="{heading_class}">{sub_title}</{heading_tag}>')
+        lines.append('   <div class="gallery-grid">')
+        lines += _render_gallery_cards(group_examples, href_fn, thumb_src_fn)
+        lines.append("   </div>")
+    return lines
+
+
+def generate_section_index(
+    section_path: Path, section_title: str, section_metadata: list[dict], section_rel: str
+):
     """Generate an index.rst for a docs section with a gallery grid and hidden toctree."""
     rst_files = sorted(section_path.rglob("*.rst"))
     rst_files = [f for f in rst_files if f.name != "index.rst"]
@@ -262,24 +308,23 @@ def generate_section_index(section_path: Path, section_title: str, section_metad
     ]
 
     if section_metadata:
+        # Compute relative path from section index to _thumbs root
+        depth = len(section_path.relative_to(META_DOCS_DIR).parts)
+        thumbs_prefix = "/".join([".."] * depth) + "/_thumbs"
         lines += [
             ".. raw:: html",
             "",
             '   <div class="gallery-container">',
-            '   <div class="gallery-grid">',
         ]
-        # Compute relative path from section index to _thumbs root
-        depth = len(section_path.relative_to(META_DOCS_DIR).parts)
-        thumbs_prefix = "/".join([".."] * depth) + "/_thumbs"
-        lines += _render_gallery_cards(
+        lines += _render_subgrouped_gallery(
             section_metadata,
-            href_fn=lambda ex: f"{Path(ex['rst_rel']).relative_to(ex['section_rel'])}.html",
+            section_rel,
+            href_fn=lambda ex: f"{Path(ex['rst_rel']).relative_to(section_rel)}.html",
             thumb_src_fn=lambda ex, pfx=thumbs_prefix: (
                 f"{pfx}/{ex['section_rel']}/{ex['stem']}.png"
             ),
         )
         lines += [
-            "   </div>",
             "   </div>",
             "",
         ]
@@ -301,14 +346,7 @@ SECTIONS = {
     "3 Float Inputs": "3_float/no_repeats",
     "3 Float Inputs (Repeated)": "3_float/with_repeats",
     "3 Float Inputs (Over Time)": "3_float/over_time",
-    "Result Types: ResultVar": "result_types/result_var",
-    "Result Types: ResultBool": "result_types/result_bool",
-    "Result Types: ResultVec": "result_types/result_vec",
-    "Result Types: ResultString": "result_types/result_string",
-    "Result Types: ResultPath": "result_types/result_path",
-    "Result Types: ResultDataSet": "result_types/result_dataset",
-    "Result Types: ResultImage": "result_types/result_image",
-    "Result Types: ResultVideo": "result_types/result_video",
+    "Result Types": "result_types",
     "Plot Types": "plot_types",
     "Optimization": "optimization",
     "Sampling Strategies": "sampling",
@@ -328,7 +366,7 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
 
     for meta in examples_metadata:
         for title, rel_path in SECTIONS.items():
-            if meta["section_rel"] == rel_path:
+            if _match_section(meta["section_rel"], rel_path):
                 grouped[title]["examples"].append(meta)
                 break
 
@@ -348,13 +386,14 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         if not info["examples"]:
             continue
         lines.append(f'   <h3 class="gallery-section-title">{html.escape(section_title)}</h3>')
-        lines.append('   <div class="gallery-grid">')
-        lines += _render_gallery_cards(
+        lines += _render_subgrouped_gallery(
             info["examples"],
+            info["rel_path"],
             href_fn=lambda ex: f"{ex['rst_rel']}.html",
             thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
+            heading_tag="h4",
+            heading_class="gallery-subsection-title",
         )
-        lines.append("   </div>")
 
     lines.append("   </div>")
     lines.append("")
@@ -413,12 +452,15 @@ def generate_all() -> list[Path]:
     # Phase 3: Generate section index files
     meta_by_section = {}
     for meta in examples_metadata:
-        meta_by_section.setdefault(meta["section_rel"], []).append(meta)
+        for _title, rel_path in SECTIONS.items():
+            if _match_section(meta["section_rel"], rel_path):
+                meta_by_section.setdefault(rel_path, []).append(meta)
+                break
 
     for title, rel_path in SECTIONS.items():
         section_dir = META_DOCS_DIR / rel_path
         if section_dir.exists():
-            generate_section_index(section_dir, title, meta_by_section.get(rel_path, []))
+            generate_section_index(section_dir, title, meta_by_section.get(rel_path, []), rel_path)
 
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)
