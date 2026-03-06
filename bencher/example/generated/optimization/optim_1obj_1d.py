@@ -12,7 +12,7 @@ def example_optim_1obj_1d(run_cfg=None):
     res = bench.plot_sweep(
         input_vars=["x"], result_vars=["performance"], const_vars=dict(noise_scale=0.1)
     )
-    res.to_optuna_plots()
+    bench.report.append(res.to_optuna_plots())
 
     return bench
 
