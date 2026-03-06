@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.62.0] - 2026-03-06
+
+### Added
+- Over-time slider for visualizing benchmark results across time steps (#729, #730)
+- Single-page scrollable gallery overview with CSS grid cards (#731)
+- Feature-specific meta generators for result types, plot types, optimization, sampling, const vars, and statistics (#732)
+- `bch.run()` API for simplified benchmark execution (#732)
+- Inline rerun viewer support with `rerun_to_pane()` (#717)
+- Prebuilt devcontainer image support via GHCR (#136)
+- 3D visualization example
+- Image, video, and volume plot type examples (#747)
+- Full `ComposeType` support across all composable container backends (#746)
+- Composable container gallery examples (#746)
+
+### Changed
+- Replaced notebook pipeline with Python examples + HTML reports (#734)
+- Consolidated generated examples from `meta/generated/` to `example/generated/` and tracked in Git (#735)
+- Updated rerun-sdk from 0.29.x to 0.30.1 (#725)
+- Replaced `rerun.legacy_notebook` with `rerun_notebook.Viewer`
+- Gallery now uses real iframe thumbnails with auto-crop via ResizeObserver
+- Skip Tabs sidebar for single-tab reports
+- Notebook generation is now fully deterministic across runs
+- Updated meta generator `__main__` blocks to use `bch.run()`
+- Switched gallery thumbnails from selenium+Firefox to playwright+Chromium (#741)
+- Consolidated result types into a single gallery section with sub-headings (#748)
+- Improved const vars documentation examples (#749)
+- Improved statistics examples to showcase distinct bencher features (#751)
+
+### Fixed
+- Panel server dying on `bch.run(show=True)` (#732)
+- Widget location fixed by wrapping HoloMaps in `pn.pane.HoloViews` (#730)
+- Parameterized sweep benchmark naming when param counter exceeds 5 digits
+- Over-time rendering for heatmap/line plots
+- `const_vars` hash not chaining accumulated `hash_val` (#723)
+- RTD build configuration for Playwright dependencies
+- Over-time scrubber not appearing in static HTML
+- Surface plot 3D rendering using xarray DataArray directly instead of pivot_table (#747)
+- Gallery thumbnails broken on ReadTheDocs (#741)
+- Overlay duration bug in composable containers (#746)
+- apt package name `libasound2` → `libasound2t64` for Ubuntu 24.04
+
+### Dependencies
+- Bumped `rerun-sdk` and `rerun-notebook` to >= 0.30.1
+- Updated `actions/checkout` from 4 to 6
+- Updated `prefix-dev/setup-pixi` from 0.9.3 to 0.9.4
+- Various dependency updates via Dependabot
+
 ## [1.60.0] - 2026-01-24
 
 ### Changed
