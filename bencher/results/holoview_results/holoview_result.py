@@ -150,6 +150,10 @@ class HoloviewResult(VideoResult):
         row = pn.panel(holomap)
         widget_box = row[1]
         widget_box.align = ("start", "start")
+        # Default slider to the most recent (last) time point
+        for w in widget_box:
+            if hasattr(w, "value") and hasattr(w, "options"):
+                w.value = list(w.options)[-1]
         return pn.Column(row[0], widget_box)
 
     def hv_container_ds(
