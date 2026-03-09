@@ -132,6 +132,31 @@ class CoinFlip(bch.ParametrizedSweep):
         self.heads = random.random() < 0.5
         return super().__call__()"""
 
+_FLAKY_SERVICE_CODE = """\
+import random
+
+
+class FlakyService(bch.ParametrizedSweep):
+    \"\"\"Service that sometimes fails entirely (returns NaN).
+
+    Demonstrates that ResultBool handles missing data gracefully.
+    NaN values are skipped during aggregation so the bar chart
+    shows the success rate computed from valid runs only.
+    \"\"\"
+
+    backend = bch.StringSweep(["redis", "memcached", "local"])
+
+    healthy = bch.ResultBool(doc="Whether the service responded")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        failure_rates = {"redis": 0.1, "memcached": 0.3, "local": 0.0}
+        if random.random() < failure_rates[self.backend]:
+            self.healthy = float("nan")  # service did not respond
+        else:
+            self.healthy = random.random() < 0.8
+        return super().__call__()"""
+
 # ---------------------------------------------------------------------------
 # Plot configuration table
 # ---------------------------------------------------------------------------
@@ -230,6 +255,15 @@ BOOL_PLOT_CONFIGS = {
         "result_vars": '["heads"]',
         "benchable_class": "CoinFlip",
         "class_code": _COIN_FLIP_CODE,
+    },
+    "nan_handling": {
+        "float_dims": 0,
+        "repeats": 10,
+        "plot_call": "res.to_bar()",
+        "input_vars": '["backend"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "FlakyService",
+        "class_code": _FLAKY_SERVICE_CODE,
     },
 }
 

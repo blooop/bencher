@@ -44,11 +44,19 @@ class ResultBool(Number):
 
     def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
         params.setdefault("default", default)
-        Number.__init__(self, **params)
+        Number.__init__(self, allow_None=True, **params)
         assert isinstance(units, str)
         self.units = units
         self.direction = direction
         self.bounds = (0, 1)  # bools are always between 0 and 1
+
+    def _validate_bounds(self, val, bounds, inclusive_bounds):
+        """Allow NaN values to pass bounds validation (e.g. missing/failed results)."""
+        import math
+
+        if isinstance(val, float) and math.isnan(val):
+            return
+        super()._validate_bounds(val, bounds, inclusive_bounds)
 
     def as_dim(self) -> hv.Dimension:
         return hv.Dimension((self.name, self.name), unit=self.units)
