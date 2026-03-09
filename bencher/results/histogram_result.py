@@ -10,7 +10,7 @@ from bencher.results.video_result import VideoResult
 from bencher.results.bench_result_base import ReduceType
 
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultVar, ResultBool
 
 
 class HistogramResult(VideoResult):
@@ -39,7 +39,7 @@ class HistogramResult(VideoResult):
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar),
+            result_types=(ResultVar, ResultBool),
             **kwargs,
         )
 
