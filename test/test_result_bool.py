@@ -29,6 +29,7 @@ from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.table_result import TableResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.histogram_result import HistogramResult
+from bencher.results.volume_result import VolumeResult
 from bencher.variables.results import ResultVar, ResultBool
 
 
@@ -109,6 +110,20 @@ class TwoFloatBool(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
+class ThreeFloatBool(bch.ParametrizedSweep):
+    """Three float inputs, deterministic bool output. For volume plot tests."""
+
+    x1 = bch.FloatSweep(default=0, bounds=[0, 1])
+    x2 = bch.FloatSweep(default=0, bounds=[0, 1])
+    x3 = bch.FloatSweep(default=0, bounds=[0, 1])
+    out = bch.ResultBool(doc="bool output")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.out = (self.x1 + self.x2 + self.x3) > 1.5
+        return super().__call__(**kwargs)
+
+
 class BoolBenchAllNaN(bch.ParametrizedSweep):
     """Always NaN. For edge case: all results missing."""
 
@@ -177,6 +192,9 @@ def _run_sweep(bench_cls, input_vars, result_vars=None, repeats=1, **kwargs):
 class TestDataIntegrity(unittest.TestCase):
     """Verify that ResultBool data is stored and aggregated correctly."""
 
+    def setUp(self):
+        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+
     def test_bool_values_stored_as_float(self):
         """Bool values should be stored as float64 with values 0.0/1.0."""
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
@@ -188,7 +206,6 @@ class TestDataIntegrity(unittest.TestCase):
 
     def test_bool_aggregation_mean_with_repeats(self):
         """After REDUCE, mean should be in [0,1] and _std should exist."""
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
         da_mean = ds["out"]
@@ -238,13 +255,15 @@ class TestDataIntegrity(unittest.TestCase):
 class TestBarResult(unittest.TestCase):
     """BarResult has explicit ResultBool scenarios so these should all produce plots."""
 
+    def setUp(self):
+        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+
     def test_bar_1cat_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
         plot = res.to(BarResult)
         self.assertIsNotNone(plot)
 
     def test_bar_1cat_multi_repeat(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(BarResult)
         self.assertIsNotNone(plot)
@@ -282,14 +301,15 @@ class TestLineResult(unittest.TestCase):
 class TestCurveResult(unittest.TestCase):
     """CurveResult includes ResultBool in result_types."""
 
-    def test_curve_1float_multi_repeat(self):
+    def setUp(self):
         BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+
+    def test_curve_1float_multi_repeat(self):
         res = _run_sweep(BoolBenchAlternating, ["x"], repeats=4)
         plot = res.to(CurveResult)
         self.assertIsNotNone(plot)
 
     def test_curve_1float_1cat_multi_repeat(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, ["x", "cat"], repeats=4)
         plot = res.to(CurveResult)
         self.assertIsNotNone(plot)
@@ -320,9 +340,23 @@ class TestSurfaceResult(unittest.TestCase):
 
     def test_surface_2float_multi_repeat(self):
         """Surface should produce a plot for ResultBool data."""
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(TwoFloatBool, ["x1", "x2"], repeats=2)
         plot = res.to(SurfaceResult)
+        self.assertIsNotNone(plot)
+
+
+# ===========================================================================
+# Category 6b: Volume (supports ResultBool)
+# ===========================================================================
+
+
+class TestVolumeResult(unittest.TestCase):
+    """VolumeResult supports ResultBool via result_types=(ResultVar, ResultBool)."""
+
+    def test_volume_3float_multi_repeat(self):
+        """Volume should produce a plot for ResultBool data."""
+        res = _run_sweep(ThreeFloatBool, ["x1", "x2", "x3"], repeats=2)
+        plot = res.to(VolumeResult)
         self.assertIsNotNone(plot)
 
 
@@ -335,23 +369,23 @@ class TestDistributionResult(unittest.TestCase):
     """DistributionResult, ViolinResult, BoxWhiskerResult, and ScatterJitterResult
     all support ResultBool via result_types=(ResultVar, ResultBool)."""
 
+    def setUp(self):
+        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+
     def test_violin_1cat_multi_repeat(self):
         """Violin should produce a plot for ResultBool data."""
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(ViolinResult)
         self.assertIsNotNone(plot)
 
     def test_boxwhisker_1cat_multi_repeat(self):
         """BoxWhisker should produce a plot for ResultBool data."""
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(BoxWhiskerResult)
         self.assertIsNotNone(plot)
 
     def test_scatter_jitter_1cat_multi_repeat(self):
         """ScatterJitter should produce a plot for ResultBool data."""
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(ScatterJitterResult)
         self.assertIsNotNone(plot)
@@ -382,6 +416,9 @@ class TestScatterResult(unittest.TestCase):
 class TestTableResult(unittest.TestCase):
     """TableResult and TabulatorResult have no result_types filter."""
 
+    def setUp(self):
+        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+
     def test_table_1cat_1repeat(self):
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
         plot = res.to(TableResult)
@@ -393,7 +430,6 @@ class TestTableResult(unittest.TestCase):
         self.assertIsNotNone(plot)
 
     def test_tabulator_1cat_multi_repeat(self):
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         plot = res.to(TabulatorResult)
         self.assertIsNotNone(plot)
@@ -407,9 +443,11 @@ class TestTableResult(unittest.TestCase):
 class TestHistogramResult(unittest.TestCase):
     """HistogramResult supports ResultBool via result_types=(ResultVar, ResultBool)."""
 
+    def setUp(self):
+        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+
     def test_histogram_0input_multi_repeat(self):
         """Histogram should produce a plot for ResultBool data."""
-        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchAlternating, [], repeats=4)
         plot = res.to(HistogramResult)
         self.assertIsNotNone(plot)
@@ -422,6 +460,9 @@ class TestHistogramResult(unittest.TestCase):
 
 class TestNaNHandling(unittest.TestCase):
     """Verify that NaN and None values are handled gracefully in ResultBool."""
+
+    def setUp(self):
+        BoolBenchPartialNaN._call_count = 0  # pylint: disable=protected-access
 
     def test_nan_stored_as_float64_nan(self):
         """Setting out = float('nan') should store as float64 NaN."""
@@ -451,7 +492,6 @@ class TestNaNHandling(unittest.TestCase):
 
     def test_partial_nan_reduce_skips_nan(self):
         """Partial NaN repeats: REDUCE mean should use only valid values."""
-        BoolBenchPartialNaN._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchPartialNaN, ["cat"], repeats=6)
         ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
@@ -461,7 +501,6 @@ class TestNaNHandling(unittest.TestCase):
 
     def test_partial_nan_bar_does_not_crash(self):
         """Bar plot should handle partial NaN data without crashing."""
-        BoolBenchPartialNaN._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchPartialNaN, ["cat"], repeats=6)
         plot = res.to(BarResult)
         self.assertIsNotNone(plot)
@@ -476,7 +515,6 @@ class TestNaNHandling(unittest.TestCase):
 
     def test_partial_nan_table_does_not_crash(self):
         """Table plot should handle partial NaN data without crashing."""
-        BoolBenchPartialNaN._call_count = 0  # pylint: disable=protected-access
         res = _run_sweep(BoolBenchPartialNaN, ["cat"], repeats=4)
         plot = res.to(TabulatorResult)
         self.assertIsNotNone(plot)

@@ -1,3 +1,4 @@
+import math
 from enum import auto
 from typing import List, Callable, Any, Optional
 from functools import partial
@@ -52,9 +53,7 @@ class ResultBool(Number):
 
     def _validate_bounds(self, val, bounds, inclusive_bounds):
         """Allow NaN values to pass bounds validation (e.g. missing/failed results)."""
-        import math
-
-        if isinstance(val, float) and math.isnan(val):
+        if val is not None and math.isnan(float(val)):
             return
         super()._validate_bounds(val, bounds, inclusive_bounds)
 
