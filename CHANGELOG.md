@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.62.1] - 2026-03-09
+
+### Fixed
+- Over-time slider now correctly defaults to the most recent time point instead of the first (#756)
+- Fixed `DiscreteSlider` dict options handling — `list(w.options)` returned string keys instead of actual values, causing the slider to silently fall back to the first time point
+- Added guard against empty widget options to prevent `IndexError`
+- Narrowed slider default logic to only target the `over_time` widget, avoiding unintended side effects on other widgets
+
 ## [1.62.0] - 2026-03-06
 
 ### Added
