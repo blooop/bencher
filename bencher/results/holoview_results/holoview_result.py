@@ -152,7 +152,7 @@ class HoloviewResult(VideoResult):
         widget_box.align = ("start", "start")
         # Default slider to the most recent (last) time point
         for w in widget_box:
-            if hasattr(w, "value") and hasattr(w, "options"):
+            if hasattr(w, "value") and hasattr(w, "options") and w.options:
                 w.value = list(w.options)[-1]
         return pn.Column(row[0], widget_box)
 
