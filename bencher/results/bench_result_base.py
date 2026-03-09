@@ -16,7 +16,7 @@ from bencher.variables.inputs import with_level
 
 from bencher.variables.results import OptDir
 from copy import deepcopy
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultVar, ResultBool
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
@@ -241,14 +241,14 @@ class BenchResultBase:
             case ReduceType.REDUCE:
                 ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
                 ds_reduce_std = ds_out.std(dim="repeat", keep_attrs=False)
+                # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std
+                n_repeats = ds_out.sizes["repeat"]
+                for rv in self.bench_cfg.result_vars:
+                    if isinstance(rv, ResultBool) and rv.name in ds_reduce_std.data_vars:
+                        p = ds_reduce_mean[rv.name]
+                        ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_repeats)
                 ds_reduce_std = rename_ds(ds_reduce_std, "std")
                 ds_out = xr.merge([ds_reduce_mean, ds_reduce_std])
-                ds_out = xr.merge(
-                    [
-                        ds_reduce_mean,
-                        ds_reduce_std,
-                    ]
-                )
             case ReduceType.MINMAX:  # TODO, need to pass mean, center of minmax, and minmax
                 ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
                 ds_reduce_min = ds_out.min(dim="repeat")
@@ -505,9 +505,14 @@ class BenchResultBase:
         # kwargs= self.set_plot_size(**kwargs)
         for rv in self.get_results_var_list(result_var):
             if result_types is None or isinstance(rv, result_types):
+                rv_dataset = hv_dataset
+                if isinstance(rv, ResultBool) and "repeat" in hv_dataset.data.dims:
+                    non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
+                    if non_repeat_dims:
+                        rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
                 row.append(
                     self.to_panes_multi_panel(
-                        hv_dataset,
+                        rv_dataset,
                         rv,
                         plot_callback=partial(plot_callback, **kwargs),
                         target_dimension=target_dimension,

@@ -554,5 +554,84 @@ class TestResultBoolClass(unittest.TestCase):
         self.assertNotEqual(rb1.hash_persistent(), rb2.hash_persistent())
 
 
+# ===========================================================================
+# Category 13: Auto-Reduction for ResultBool
+# ===========================================================================
+
+
+class TestAutoReduction(unittest.TestCase):
+    """Verify that distribution plots auto-reduce ResultBool repeats to proportions."""
+
+    def setUp(self):
+        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+
+    def test_violin_shows_proportions_not_raw(self):
+        """Violin with ResultBool should auto-reduce: no 'repeat' dim in rendered dataset."""
+        res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
+        # Get the hv_dataset that would be passed to distribution plots (ReduceType.NONE)
+        hv_ds_none = res.to_hv_dataset(reduce=bch.ReduceType.NONE)
+        self.assertIn("repeat", hv_ds_none.data.dims)
+        # After auto-reduction, the dataset should be reduced
+        hv_ds_reduced = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE)
+        self.assertNotIn("repeat", hv_ds_reduced.data.dims)
+        # Confirm the plot still works
+        plot = res.to(ViolinResult)
+        self.assertIsNotNone(plot)
+
+    def test_boxwhisker_shows_proportions(self):
+        """BoxWhisker with ResultBool should auto-reduce."""
+        res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
+        plot = res.to(BoxWhiskerResult)
+        self.assertIsNotNone(plot)
+
+    def test_scatter_jitter_shows_proportions(self):
+        """ScatterJitter with ResultBool should auto-reduce."""
+        res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
+        plot = res.to(ScatterJitterResult)
+        self.assertIsNotNone(plot)
+
+    def test_histogram_shows_proportions(self):
+        """Histogram with ResultBool should auto-reduce."""
+        res = _run_sweep(BoolBenchAlternating, [], repeats=4)
+        plot = res.to(HistogramResult)
+        self.assertIsNotNone(plot)
+
+
+# ===========================================================================
+# Category 14: Binomial Standard Error
+# ===========================================================================
+
+
+class TestBinomialSE(unittest.TestCase):
+    """Verify that REDUCE uses binomial SE sqrt(p*(1-p)/n) for ResultBool."""
+
+    def test_binomial_se_value(self):
+        """For alternating True/False (p=0.5), SE should be sqrt(0.5*0.5/n)."""
+        BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
+        n = 4
+        res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=n)
+        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        for val in ds["out"].values.flat:
+            p = float(val)
+            expected_se = np.sqrt(p * (1 - p) / n)
+            actual_se = float(ds["out_std"].sel(cat=ds["out"].coords["cat"].values[0]).values)
+            self.assertAlmostEqual(actual_se, expected_se, places=10)
+            break  # one check is enough to validate the formula
+
+    def test_all_true_binomial_se_is_zero(self):
+        """If p=1.0, binomial SE should be 0.0."""
+        res = _run_sweep(BoolBenchAllTrue, ["cat"], repeats=4)
+        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        for val in ds["out_std"].values.flat:
+            self.assertAlmostEqual(float(val), 0.0)
+
+    def test_all_false_binomial_se_is_zero(self):
+        """If p=0.0, binomial SE should be 0.0."""
+        res = _run_sweep(BoolBenchAllFalse, ["cat"], repeats=4)
+        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        for val in ds["out_std"].values.flat:
+            self.assertAlmostEqual(float(val), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
