@@ -64,7 +64,7 @@ class VolumeResult(BenchResultBase):
             reduce=ReduceType.REDUCE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar),
+            result_types=(ResultVar,),
             override=override,
             **kwargs,
         )

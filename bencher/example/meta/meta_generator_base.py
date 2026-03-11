@@ -114,7 +114,37 @@ if __name__ == "__main__":
             import_lines.append(f"from {benchable_module} import {benchable_class}")
         if extra_imports:
             import_lines.extend(extra_imports)
-        imports = "\n".join(import_lines)
+
+        # Separate stdlib imports from third-party for correct ordering
+        _KNOWN_STDLIB = frozenset(
+            {
+                "math",
+                "random",
+                "os",
+                "sys",
+                "typing",
+                "enum",
+                "collections",
+                "functools",
+                "pathlib",
+                "datetime",
+                "json",
+                "re",
+            }
+        )
+
+        def _is_stdlib(line):
+            parts = line.split()
+            if parts[0] in ("import", "from"):
+                return parts[1].split(".")[0] in _KNOWN_STDLIB
+            return False
+
+        stdlib = [line for line in import_lines if _is_stdlib(line)]
+        non_stdlib = [line for line in import_lines if not _is_stdlib(line)]
+        if stdlib:
+            imports = "\n".join(stdlib) + "\n\n" + "\n".join(non_stdlib)
+        else:
+            imports = "\n".join(import_lines)
 
         body_lines = []
         if run_cfg_lines:
