@@ -1,4 +1,4 @@
-from diskcache import Cache
+from bencher.store import BencherStore
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.utils import hash_sha1
@@ -9,7 +9,7 @@ class CachedParams(ParametrizedSweep):
     def __init__(self, clear_cache=True, cache_name="fcache", **params):
         super().__init__(**params)
 
-        self.cache = Cache(f"cachedir/{cache_name}/sample_cache")
+        self.cache = BencherStore(f"cachedir/{cache_name}/sample_cache")
         logging.info(f"cache dir{self.cache.directory}")
         print(f"cache dir{self.cache.directory}")
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Callable
 import logging
-from diskcache import Cache
+from bencher.store import BencherStore
 from concurrent.futures import Future, ProcessPoolExecutor
 from .utils import hash_sha1
 from strenum import StrEnum
@@ -74,7 +74,7 @@ class JobFuture:
         job: Job,
         res: dict | None = None,
         future: Future | None = None,
-        cache: Cache | None = None,
+        cache: BencherStore | None = None,
     ) -> None:
         """Initialize a JobFuture with either an immediate result or a future.
 
@@ -82,7 +82,7 @@ class JobFuture:
             job (Job): The job this future corresponds to
             res (dict, optional): The immediate result, if available. Defaults to None.
             future (Future, optional): The future representing the pending result. Defaults to None.
-            cache (Cache, optional): The cache to store results in. Defaults to None.
+            cache (BencherStore, optional): The cache to store results in. Defaults to None.
 
         Raises:
             AssertionError: If neither res nor future is provided
@@ -176,7 +176,7 @@ class FutureCache:
     Attributes:
         executor_type (Executors): The execution strategy to use
         executor: The executor instance, created on demand
-        cache (Cache): Cache for storing job results
+        cache (BencherStore): Cache for storing job results
         overwrite (bool): Whether to overwrite existing cached results
         call_count (int): Counter for job calls
         size_limit (int): Maximum size of the cache in bytes
@@ -207,7 +207,9 @@ class FutureCache:
         self.executor_type = executor
         self.executor = None
         if cache_results:
-            self.cache = Cache(f"cachedir/{cache_name}", tag_index=tag_index, size_limit=size_limit)
+            self.cache = BencherStore(
+                f"cachedir/{cache_name}", tag_index=tag_index, size_limit=size_limit
+            )
             logging.info(f"cache dir: {self.cache.directory}")
         else:
             self.cache = None

@@ -10,7 +10,7 @@ import logging
 from hypothesis import given, settings, strategies as st
 
 from datetime import datetime
-from diskcache import Cache
+from bencher.store import BencherStore
 
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher import Bench, BenchCfg, BenchRunCfg
@@ -42,7 +42,7 @@ def clear_autofig_folder() -> None:
 clear_autofig_folder()
 
 # at the beginning of the tests clear the cache that checks for unique names
-with Cache("unique_names") as c:
+with BencherStore("unique_names") as c:
     c.clear()
 
 
@@ -245,7 +245,7 @@ class TestBencher(unittest.TestCase):
             )
 
         bench_cfg.raise_duplicate_exception = False
-        with Cache("unique_names") as name_cache:
+        with BencherStore("unique_names") as name_cache:
             bench_repr = bench_cfg.__repr__()
             plots = bench_cfg.to_auto_plots()
             for p in plots:
