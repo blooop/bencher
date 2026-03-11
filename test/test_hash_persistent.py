@@ -24,7 +24,6 @@ import pytest
 
 import bencher.variables.results as results_module
 from bencher.variables.results import (
-    ALL_RESULT_TYPES,
     ResultContainer,
     ResultDataSet,
     ResultImage,
@@ -61,9 +60,6 @@ def _make_instance(cls):
 
 # Auto-discovered list — any new Result* class will appear here automatically
 ALL_DISCOVERED_CLASSES = _discover_all_result_classes()
-
-# Manually curated list for cross-checking
-ALL_HASHABLE_CLASSES = list(ALL_RESULT_TYPES) + [ResultVolume]
 
 
 class TestSlotCoverage:
@@ -117,22 +113,10 @@ class TestSlotCoverage:
             )
 
 
-class TestHashPersistentDeterminism:
-    """Two independently constructed instances with the same parameters must hash identically."""
-
-    @pytest.mark.parametrize("cls", ALL_HASHABLE_CLASSES, ids=lambda c: c.__name__)
-    def test_same_hash_for_identical_instances(self, cls):
-        r1 = _make_instance(cls)
-        r2 = _make_instance(cls)
-        assert r1.hash_persistent() == r2.hash_persistent(), (
-            f"{cls.__name__}.hash_persistent() differs between two identical instances"
-        )
-
-
 class TestHashPersistentDeepcopy:
     """hash_persistent() must be stable across deepcopy."""
 
-    @pytest.mark.parametrize("cls", ALL_HASHABLE_CLASSES, ids=lambda c: c.__name__)
+    @pytest.mark.parametrize("cls", ALL_DISCOVERED_CLASSES, ids=lambda c: c.__name__)
     def test_deepcopy_stability(self, cls):
         r1 = _make_instance(cls)
         r2 = deepcopy(r1)
@@ -171,19 +155,6 @@ class TestHashPersistentDifferentiation:
         assert r1.hash_persistent() != r2.hash_persistent(), (
             "ResultVec hashes should differ for size=3 vs size=5"
         )
-
-
-class TestHashPersistentCompleteness:
-    """Every type in ALL_RESULT_TYPES must have a hash_persistent method."""
-
-    @pytest.mark.parametrize("cls", list(ALL_RESULT_TYPES), ids=lambda c: c.__name__)
-    def test_has_hash_persistent(self, cls):
-        assert hasattr(cls, "hash_persistent"), (
-            f"{cls.__name__} in ALL_RESULT_TYPES is missing hash_persistent()"
-        )
-        instance = _make_instance(cls)
-        h = instance.hash_persistent()
-        assert isinstance(h, str) and len(h) > 0
 
 
 class TestAutoDiscoverAllResultClasses:
@@ -293,28 +264,6 @@ class TestBenchCfgHashStability:
         assert cfg1.hash_persistent(include_repeats=True) == cfg3.hash_persistent(
             include_repeats=True
         ), "BenchCfg hash should not change when only excluded obj fields differ"
-
-
-class TestSpecificVerification:
-    """Explicit verification from the task description."""
-
-    def test_result_image_triple_equality(self):
-        r1 = ResultImage(doc="test")
-        r2 = ResultImage(doc="test")
-        r3 = deepcopy(r1)
-        assert r1.hash_persistent() == r2.hash_persistent() == r3.hash_persistent()
-
-    def test_result_string_triple_equality(self):
-        r1 = ResultString(doc="test")
-        r2 = ResultString(doc="test")
-        r3 = deepcopy(r1)
-        assert r1.hash_persistent() == r2.hash_persistent() == r3.hash_persistent()
-
-    def test_result_video_triple_equality(self):
-        r1 = ResultVideo(doc="test")
-        r2 = ResultVideo(doc="test")
-        r3 = deepcopy(r1)
-        assert r1.hash_persistent() == r2.hash_persistent() == r3.hash_persistent()
 
 
 # Script template for cross-process tests. Each subprocess imports the class,

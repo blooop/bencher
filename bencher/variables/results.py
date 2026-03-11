@@ -39,20 +39,38 @@ from bencher.utils import hash_sha1
 # from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 
+_PARAM_MODULES = frozenset({"param", "param.parameters", "param.parameterized"})
+
+
 def _hash_slots(instance):
     """Hash all __slots__ on the result class, excluding non-deterministic attributes.
 
     Reads __slots__ directly from the immediate class (not inherited via MRO) and hashes
     all values except those listed in the class-level _hash_exclude tuple. This is
     intentional: each Result* class defines its own __slots__ and is responsible for its
-    own hash. If shared slots are ever introduced via a base class, this helper would
-    need to walk the MRO to aggregate them.
+    own hash.
+
+    A defensive check ensures no intermediate base class (between the concrete Result*
+    class and the param framework) defines __slots__ that would be silently missed.
 
     The class name is always included in the hash to prevent collisions between different
     Result* classes that share the same slot layout and values (e.g. ResultPath,
     ResultVideo, and ResultImage all have __slots__ = ["units"] with default units="path").
     """
     cls = type(instance)
+
+    # Guard: ensure no intermediate bencher base class has __slots__ we'd miss.
+    for ancestor in cls.__mro__[1:]:
+        if getattr(ancestor, "__module__", "") in _PARAM_MODULES or ancestor is object:
+            break
+        ancestor_slots = ancestor.__dict__.get("__slots__", ())
+        if ancestor_slots:
+            raise TypeError(
+                f"_hash_slots({cls.__name__}): intermediate base class {ancestor.__name__} "
+                f"defines __slots__ = {ancestor_slots} which would be silently ignored. "
+                "Update _hash_slots to walk the MRO or move slots to the leaf class."
+            )
+
     exclude = getattr(cls, "_hash_exclude", ())
     slots = cls.__dict__.get("__slots__", ())
     if isinstance(slots, str):
@@ -151,7 +169,13 @@ class ResultVec(param.List):
 
 
 class ResultHmap(param.Parameter):
-    """A class to represent a holomap return type"""
+    """A class to represent a holomap return type.
+
+    Note: this class has no __slots__, so _hash_slots hashes only the class name.
+    Every ResultHmap instance produces the same hash. This is intentional — there are
+    no configuration attributes that would differentiate instances. If a slot is added
+    in the future, _hash_slots will automatically include it.
+    """
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -325,4 +349,5 @@ ALL_RESULT_TYPES = (
     ResultContainer,
     ResultDataSet,
     ResultReference,
+    ResultVolume,
 )
