@@ -78,7 +78,6 @@ class TestSlotCoverage:
     def test_all_slots_accounted_for(self, cls):
         slots = set(cls.__dict__.get("__slots__", ()))
         exclude = set(getattr(cls, "_hash_exclude", ()))
-        hashed = slots - exclude
         # _hash_exclude entries must actually be slots
         extra_excludes = exclude - slots
         assert not extra_excludes, (
@@ -307,6 +306,7 @@ def _hash_in_subprocess(cls_name, args="doc='test'", extra=""):
         capture_output=True,
         text=True,
         timeout=30,
+        check=False,
     )
     assert result.returncode == 0, f"Subprocess failed for {cls_name}:\n{result.stderr}"
     return result.stdout.strip()
@@ -368,6 +368,7 @@ class TestCrossProcessDeterminism:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                check=False,
             )
             assert result.returncode == 0, f"Subprocess failed:\n{result.stderr}"
             hashes.append(result.stdout.strip())
