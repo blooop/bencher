@@ -124,36 +124,6 @@ class ThreeFloatBool(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class BoolBenchAllNaN(bch.ParametrizedSweep):
-    """Always NaN. For edge case: all results missing."""
-
-    cat = bch.EnumSweep(CatEnum, doc="Categorical input")
-    out = bch.ResultBool(doc="Always NaN output")
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.out = float("nan")
-        return super().__call__(**kwargs)
-
-
-class BoolBenchPartialNaN(bch.ParametrizedSweep):
-    """Alternates True and NaN across repeats. For partial-missing-data tests."""
-
-    cat = bch.EnumSweep(CatEnum, doc="Categorical input")
-    out = bch.ResultBool(doc="Partially NaN output")
-
-    _call_count = 0
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        BoolBenchPartialNaN._call_count += 1  # pylint: disable=protected-access
-        if BoolBenchPartialNaN._call_count % 3 == 0:  # pylint: disable=protected-access
-            self.out = float("nan")
-        else:
-            self.out = True
-        return super().__call__(**kwargs)
-
-
 class BoolBenchNone(bch.ParametrizedSweep):
     """Returns None for the result. Tests None-to-NaN coercion."""
 
@@ -321,7 +291,7 @@ class TestCurveResult(unittest.TestCase):
 
 
 class TestHeatmapResult(unittest.TestCase):
-    """HeatmapResult supports ResultBool via result_types=(ResultVar, ResultBool)."""
+    """HeatmapResult supports ResultBool via inheritance from ResultVar."""
 
     def test_heatmap_2input_1repeat(self):
         """Heatmap should produce a plot for ResultBool data."""
@@ -336,7 +306,7 @@ class TestHeatmapResult(unittest.TestCase):
 
 
 class TestSurfaceResult(unittest.TestCase):
-    """SurfaceResult supports ResultBool via result_types=(ResultVar, ResultBool)."""
+    """SurfaceResult supports ResultBool via inheritance from ResultVar."""
 
     def test_surface_2float_multi_repeat(self):
         """Surface should produce a plot for ResultBool data."""
@@ -351,7 +321,7 @@ class TestSurfaceResult(unittest.TestCase):
 
 
 class TestVolumeResult(unittest.TestCase):
-    """VolumeResult supports ResultBool via result_types=(ResultVar, ResultBool)."""
+    """VolumeResult supports ResultBool via inheritance from ResultVar."""
 
     def test_volume_3float_multi_repeat(self):
         """Volume should produce a plot for ResultBool data."""
@@ -367,7 +337,7 @@ class TestVolumeResult(unittest.TestCase):
 
 class TestDistributionResult(unittest.TestCase):
     """DistributionResult, ViolinResult, BoxWhiskerResult, and ScatterJitterResult
-    all support ResultBool via result_types=(ResultVar, ResultBool)."""
+    all support ResultBool via inheritance from ResultVar."""
 
     def setUp(self):
         BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
@@ -441,7 +411,7 @@ class TestTableResult(unittest.TestCase):
 
 
 class TestHistogramResult(unittest.TestCase):
-    """HistogramResult supports ResultBool via result_types=(ResultVar, ResultBool)."""
+    """HistogramResult supports ResultBool via inheritance from ResultVar."""
 
     def setUp(self):
         BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
@@ -458,20 +428,8 @@ class TestHistogramResult(unittest.TestCase):
 # ===========================================================================
 
 
-class TestNaNHandling(unittest.TestCase):
-    """Verify that NaN and None values are handled gracefully in ResultBool."""
-
-    def setUp(self):
-        BoolBenchPartialNaN._call_count = 0  # pylint: disable=protected-access
-
-    def test_nan_stored_as_float64_nan(self):
-        """Setting out = float('nan') should store as float64 NaN."""
-        res = _run_sweep(BoolBenchAllNaN, ["cat"], repeats=1)
-        ds = res.to_dataset()
-        da = ds["out"]
-        self.assertEqual(da.dtype, np.float64)
-        for val in da.values.flat:
-            self.assertTrue(np.isnan(val))
+class TestNoneHandling(unittest.TestCase):
+    """Verify that None values are handled gracefully in ResultBool."""
 
     def test_none_stored_as_nan(self):
         """Setting out = None should store as NaN (not crash)."""
@@ -480,44 +438,6 @@ class TestNaNHandling(unittest.TestCase):
         da = ds["out"]
         for val in da.values.flat:
             self.assertTrue(np.isnan(val))
-
-    def test_all_nan_reduce_produces_nan(self):
-        """If all repeats are NaN, REDUCE should produce NaN mean and NaN std."""
-        res = _run_sweep(BoolBenchAllNaN, ["cat"], repeats=3)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
-        for val in ds["out"].values.flat:
-            self.assertTrue(np.isnan(val))
-        for val in ds["out_std"].values.flat:
-            self.assertTrue(np.isnan(val))
-
-    def test_partial_nan_reduce_skips_nan(self):
-        """Partial NaN repeats: REDUCE mean should use only valid values."""
-        res = _run_sweep(BoolBenchPartialNaN, ["cat"], repeats=6)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
-        for val in ds["out"].values.flat:
-            # Valid values are all True (1.0), so mean of non-NaN should be 1.0
-            self.assertFalse(np.isnan(val))
-            self.assertAlmostEqual(float(val), 1.0)
-
-    def test_partial_nan_bar_does_not_crash(self):
-        """Bar plot should handle partial NaN data without crashing."""
-        res = _run_sweep(BoolBenchPartialNaN, ["cat"], repeats=6)
-        plot = res.to(BarResult)
-        self.assertIsNotNone(plot)
-
-    def test_all_nan_bar_does_not_crash(self):
-        """Bar plot should handle all-NaN data without crashing."""
-        res = _run_sweep(BoolBenchAllNaN, ["cat"], repeats=3)
-        try:
-            res.to(BarResult)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            self.fail(f"BarResult raised {type(e).__name__}: {e}")
-
-    def test_partial_nan_table_does_not_crash(self):
-        """Table plot should handle partial NaN data without crashing."""
-        res = _run_sweep(BoolBenchPartialNaN, ["cat"], repeats=4)
-        plot = res.to(TabulatorResult)
-        self.assertIsNotNone(plot)
 
 
 # ===========================================================================
@@ -529,10 +449,10 @@ class TestResultBoolClass(unittest.TestCase):
     """Tests for the ResultBool class itself."""
 
     def test_isinstance_hierarchy(self):
-        """ResultBool is a Number but NOT a ResultVar."""
+        """ResultBool is a ResultVar (and therefore also a Number)."""
         rb = ResultBool()
         self.assertIsInstance(rb, Number)
-        self.assertNotIsInstance(rb, ResultVar)
+        self.assertIsInstance(rb, ResultVar)
 
     def test_as_dim_returns_hv_dimension(self):
         """as_dim() should return an hv.Dimension.

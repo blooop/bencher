@@ -2,10 +2,10 @@
 
 from typing import Any
 
+import random
+
 import bencher as bch
 from bencher.results.histogram_result import HistogramResult
-
-import random
 
 
 class CoinFlip(bch.ParametrizedSweep):

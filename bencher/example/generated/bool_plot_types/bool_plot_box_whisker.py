@@ -2,10 +2,10 @@
 
 from typing import Any
 
+import random
+
 import bencher as bch
 from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
-
-import random
 
 
 class ReliabilityCat(bch.ParametrizedSweep):

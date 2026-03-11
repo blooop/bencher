@@ -323,7 +323,7 @@ class ResultCollector:
             input_var: The variable to extract metadata from
         """
         for rv in bench_res.bench_cfg.result_vars:
-            if type(rv) is ResultVar:
+            if isinstance(rv, ResultVar):
                 bench_res.ds[rv.name].attrs["units"] = rv.units
                 bench_res.ds[rv.name].attrs["long_name"] = rv.name
             elif type(rv) is ResultVec:

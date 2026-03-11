@@ -30,9 +30,6 @@ class HealthCheckCat(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _HEALTH_CHECK_FLOAT_CODE = """\
-import math
-
-
 class HealthCheckFloat(bch.ParametrizedSweep):
     \"\"\"Check if service health exceeds a threshold.\"\"\"
 
@@ -47,10 +44,6 @@ class HealthCheckFloat(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _HEALTH_CHECK_FLOAT_NOISY_CODE = """\
-import math
-import random
-
-
 class HealthCheckFloatNoisy(bch.ParametrizedSweep):
     \"\"\"Check health with noise — repeated runs produce different outcomes.\"\"\"
 
@@ -65,9 +58,6 @@ class HealthCheckFloatNoisy(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _HEALTH_CHECK_2D_CODE = """\
-import math
-
-
 class HealthCheck2D(bch.ParametrizedSweep):
     \"\"\"2D health check based on two float inputs.\"\"\"
 
@@ -83,10 +73,6 @@ class HealthCheck2D(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _HEALTH_CHECK_2D_NOISY_CODE = """\
-import math
-import random
-
-
 class HealthCheck2DNoisy(bch.ParametrizedSweep):
     \"\"\"2D health check with noise for repeated-run surface plots.\"\"\"
 
@@ -102,9 +88,6 @@ class HealthCheck2DNoisy(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _RELIABILITY_CAT_CODE = """\
-import random
-
-
 class ReliabilityCat(bch.ParametrizedSweep):
     \"\"\"Service reliability check with random outcomes per repeat.\"\"\"
 
@@ -119,9 +102,6 @@ class ReliabilityCat(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _COIN_FLIP_CODE = """\
-import random
-
-
 class CoinFlip(bch.ParametrizedSweep):
     \"\"\"Simple coin flip with no inputs — shows distribution of True/False.\"\"\"
 
@@ -130,31 +110,6 @@ class CoinFlip(bch.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.heads = random.random() < 0.5
-        return super().__call__()"""
-
-_FLAKY_SERVICE_CODE = """\
-import random
-
-
-class FlakyService(bch.ParametrizedSweep):
-    \"\"\"Service that sometimes fails entirely (returns NaN).
-
-    Demonstrates that ResultBool handles missing data gracefully.
-    NaN values are skipped during aggregation so the bar chart
-    shows the success rate computed from valid runs only.
-    \"\"\"
-
-    backend = bch.StringSweep(["redis", "memcached", "local"])
-
-    healthy = bch.ResultBool(doc="Whether the service responded")
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        failure_rates = {"redis": 0.1, "memcached": 0.3, "local": 0.0}
-        if random.random() < failure_rates[self.backend]:
-            self.healthy = float("nan")  # service did not respond
-        else:
-            self.healthy = random.random() < 0.8
         return super().__call__()"""
 
 # ---------------------------------------------------------------------------
@@ -179,6 +134,7 @@ BOOL_PLOT_CONFIGS = {
         "result_vars": '["healthy"]',
         "benchable_class": "HealthCheckFloat",
         "class_code": _HEALTH_CHECK_FLOAT_CODE,
+        "extra_imports": ["import math"],
     },
     "curve": {
         "float_dims": 1,
@@ -188,6 +144,7 @@ BOOL_PLOT_CONFIGS = {
         "result_vars": '["healthy"]',
         "benchable_class": "HealthCheckFloatNoisy",
         "class_code": _HEALTH_CHECK_FLOAT_NOISY_CODE,
+        "extra_imports": ["import math", "import random"],
     },
     "heatmap": {
         "float_dims": 2,
@@ -197,6 +154,7 @@ BOOL_PLOT_CONFIGS = {
         "result_vars": '["healthy"]',
         "benchable_class": "HealthCheck2D",
         "class_code": _HEALTH_CHECK_2D_CODE,
+        "extra_imports": ["import math"],
     },
     "surface": {
         "float_dims": 2,
@@ -206,15 +164,19 @@ BOOL_PLOT_CONFIGS = {
         "result_vars": '["healthy"]',
         "benchable_class": "HealthCheck2DNoisy",
         "class_code": _HEALTH_CHECK_2D_NOISY_CODE,
+        "extra_imports": ["import math", "import random"],
     },
     "violin": {
         "float_dims": 0,
         "repeats": 10,
         "plot_call": "res.to(ViolinResult)",
-        "extra_import": (
-            "from bencher.results.holoview_results.distribution_result"
-            ".violin_result import ViolinResult"
-        ),
+        "extra_imports": [
+            "import random",
+            (
+                "from bencher.results.holoview_results.distribution_result"
+                ".violin_result import ViolinResult"
+            ),
+        ],
         "input_vars": '["backend"]',
         "result_vars": '["healthy"]',
         "benchable_class": "ReliabilityCat",
@@ -224,10 +186,13 @@ BOOL_PLOT_CONFIGS = {
         "float_dims": 0,
         "repeats": 10,
         "plot_call": "res.to(BoxWhiskerResult)",
-        "extra_import": (
-            "from bencher.results.holoview_results.distribution_result"
-            ".box_whisker_result import BoxWhiskerResult"
-        ),
+        "extra_imports": [
+            "import random",
+            (
+                "from bencher.results.holoview_results.distribution_result"
+                ".box_whisker_result import BoxWhiskerResult"
+            ),
+        ],
         "input_vars": '["backend"]',
         "result_vars": '["healthy"]',
         "benchable_class": "ReliabilityCat",
@@ -237,10 +202,13 @@ BOOL_PLOT_CONFIGS = {
         "float_dims": 0,
         "repeats": 10,
         "plot_call": "res.to(ScatterJitterResult)",
-        "extra_import": (
-            "from bencher.results.holoview_results.distribution_result"
-            ".scatter_jitter_result import ScatterJitterResult"
-        ),
+        "extra_imports": [
+            "import random",
+            (
+                "from bencher.results.holoview_results.distribution_result"
+                ".scatter_jitter_result import ScatterJitterResult"
+            ),
+        ],
         "input_vars": '["backend"]',
         "result_vars": '["healthy"]',
         "benchable_class": "ReliabilityCat",
@@ -250,20 +218,14 @@ BOOL_PLOT_CONFIGS = {
         "float_dims": 0,
         "repeats": 20,
         "plot_call": "res.to(HistogramResult)",
-        "extra_import": "from bencher.results.histogram_result import HistogramResult",
+        "extra_imports": [
+            "import random",
+            "from bencher.results.histogram_result import HistogramResult",
+        ],
         "input_vars": "[]",
         "result_vars": '["heads"]',
         "benchable_class": "CoinFlip",
         "class_code": _COIN_FLIP_CODE,
-    },
-    "nan_handling": {
-        "float_dims": 0,
-        "repeats": 10,
-        "plot_call": "res.to_bar()",
-        "input_vars": '["backend"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "FlakyService",
-        "class_code": _FLAKY_SERVICE_CODE,
     },
 }
 
@@ -283,7 +245,7 @@ class MetaBoolPlotTypes(MetaGeneratorBase):
         function_name = f"example_bool_plot_{self.plot_type}"
         title = f"Bool Plot: {self.plot_type.replace('_', ' ').title()}"
 
-        extra_imports = [cfg["extra_import"]] if cfg.get("extra_import") else None
+        extra_imports = cfg.get("extra_imports")
 
         level = 2 if cfg["float_dims"] >= 2 else 3
         run_kwargs = {"level": level}

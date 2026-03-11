@@ -2,10 +2,10 @@
 
 from typing import Any
 
-import bencher as bch
-
 import math
 import random
+
+import bencher as bch
 
 
 class HealthCheck2DNoisy(bch.ParametrizedSweep):

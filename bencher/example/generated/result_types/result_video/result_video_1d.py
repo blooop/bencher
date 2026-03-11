@@ -2,8 +2,9 @@
 
 from typing import Any
 
-import bencher as bch
 import math
+
+import bencher as bch
 import numpy as np
 from PIL import Image, ImageDraw
 

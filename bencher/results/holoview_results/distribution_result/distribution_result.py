@@ -7,7 +7,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import ResultVar
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.utils import params_to_str
 
@@ -54,7 +54,7 @@ class DistributionResult(HoloviewResult):
             reduce=ReduceType.NONE,
             target_dimension=self.plt_cnt_cfg.cat_cnt + 1,  # +1 cos we have a repeats dimension
             result_var=result_var,
-            result_types=(ResultVar, ResultBool),
+            result_types=(ResultVar,),
             override=override,
             **kwargs,
         )

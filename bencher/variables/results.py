@@ -1,4 +1,3 @@
-import math
 from enum import auto
 from typing import List, Callable, Any, Optional
 from functools import partial
@@ -38,31 +37,13 @@ class ResultVar(Number):
         return hash_sha1((self.units, self.direction))
 
 
-class ResultBool(Number):
-    """A class to represent result variables and the desired optimisation direction"""
-
-    __slots__ = ["units", "direction"]
+class ResultBool(ResultVar):
+    """A ResultVar subclass for boolean (0/1) results with bounds locked to [0, 1]."""
 
     def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
-        params.setdefault("default", default)
-        Number.__init__(self, allow_None=True, **params)
-        assert isinstance(units, str)
-        self.units = units
-        self.direction = direction
+        super().__init__(units=units, direction=direction, allow_None=True, **params)
+        self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
-
-    def _validate_bounds(self, val, bounds, inclusive_bounds):
-        """Allow NaN values to pass bounds validation (e.g. missing/failed results)."""
-        if val is not None and math.isnan(float(val)):
-            return
-        super()._validate_bounds(val, bounds, inclusive_bounds)
-
-    def as_dim(self) -> hv.Dimension:
-        return hv.Dimension((self.name, self.name), unit=self.units)
-
-    def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1((self.units, self.direction))
 
 
 class ResultVec(param.List):
