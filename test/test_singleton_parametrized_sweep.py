@@ -170,3 +170,112 @@ def test_single_argument_benchable_supported():
 
     results = br.run(level=1, repeats=1, cache_results=False)
     assert len(results) == 1
+
+
+def test_context_manager_resets_on_first_init_failure():
+    """with init_singleton() auto-resets _seen/_instances when first init raises."""
+
+    class FailCM(ParametrizedSweepSingleton):
+        def __init__(self, fail=True):
+            with self.init_singleton() as is_first:
+                if is_first:
+                    if fail:
+                        raise RuntimeError("boom")
+                    self.value = 42
+            super().__init__()
+
+    # First attempt — should fail and reset singleton state
+    with pytest.raises(RuntimeError, match="boom"):
+        FailCM(fail=True)
+
+    # Retry — singleton was rolled back, so init_singleton() is truthy again
+    obj = FailCM(fail=False)
+    assert obj.value == 42
+
+    # Third call — singleton is now established
+    obj2 = FailCM(fail=False)
+    assert obj2 is obj
+
+
+def test_context_manager_no_reset_on_success():
+    """Successful first init must NOT be rolled back."""
+
+    class SuccessCM(ParametrizedSweepSingleton):
+        def __init__(self):
+            with self.init_singleton() as is_first:
+                if is_first:
+                    self.value = 99
+            super().__init__()
+
+    obj = SuccessCM()
+    assert obj.value == 99
+
+    obj2 = SuccessCM()
+    assert obj2 is obj
+    assert obj2.value == 99
+
+
+def test_context_manager_no_reset_on_non_first_error():
+    """Error inside `with` on a non-first call must NOT reset the singleton."""
+
+    class NonFirstCM(ParametrizedSweepSingleton):
+        call_count = 0
+
+        def __init__(self):
+            with self.init_singleton() as is_first:
+                NonFirstCM.call_count += 1
+                if is_first:
+                    self.value = 7
+                elif NonFirstCM.call_count == 2:
+                    raise RuntimeError("second-call error")
+            super().__init__()
+
+    obj = NonFirstCM()
+    assert obj.value == 7
+
+    # Second construction — raises inside `with` but is_first is False
+    with pytest.raises(RuntimeError, match="second-call error"):
+        NonFirstCM()
+
+    # Singleton must still be intact
+    obj3 = NonFirstCM()
+    assert obj3 is obj
+    assert obj3.value == 7
+
+
+def test_reset_singleton_public_api():
+    """reset_singleton() clears state so the next construction re-inits."""
+
+    class Resettable(ParametrizedSweepSingleton):
+        def __init__(self, val=1):
+            if self.init_singleton():
+                self.val = val
+            super().__init__()
+
+    obj1 = Resettable(val=10)
+    assert obj1.val == 10
+
+    Resettable.reset_singleton()
+
+    obj2 = Resettable(val=20)
+    assert obj2.val == 20
+    assert obj2 is not obj1
+
+
+def test_init_singleton_boolean_backward_compat():
+    """init_singleton() result works in boolean context (if/elif/not/and/or)."""
+
+    class BoolCompat(ParametrizedSweepSingleton):
+        def __init__(self):
+            result = self.init_singleton()
+            if result:
+                self.init_count = 1
+            super().__init__()
+
+    obj = BoolCompat()
+    assert obj.init_count == 1
+
+    # Second call — init_singleton() is falsy, init_count stays 1
+    obj2 = BoolCompat()
+    assert obj2 is obj
+    assert obj.init_count == 1
