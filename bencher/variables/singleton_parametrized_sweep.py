@@ -1,4 +1,4 @@
-"""Singleton variant of ParametrizedSweep (minimal).
+"""Singleton variant of ParametrizedSweep (thread-safe).
 
 Provides a per-subclass singleton with the smallest useful surface:
 
@@ -9,6 +9,7 @@ Provides a per-subclass singleton with the smallest useful surface:
   works as a **context manager** that auto-resets singleton state when
   the ``with`` block raises during first-time init.
 - ``reset_singleton()`` classmethod to manually clear singleton state.
+- All operations are **thread-safe** via an internal lock.
 
 Example (boolean style — unchanged from before)::
 
@@ -28,6 +29,8 @@ Example (context-manager style — auto-resets on failure)::
             super().__init__()
 """
 
+import threading
+
 from .parametrised_sweep import ParametrizedSweep
 
 
@@ -36,8 +39,8 @@ class _SingletonInitResult:
 
     * **Bool** — ``bool(result)`` is ``True`` when this is the first init.
     * **Context manager** — on ``__exit__``, if the block raised *and* this
-      was the first init, singleton bookkeeping (``_seen`` / ``_instances``)
-      is rolled back so a subsequent construction can retry.
+      was the first init, singleton bookkeeping is rolled back via
+      ``reset_singleton()`` so a subsequent construction can retry.
     """
 
     __slots__ = ("_cls", "_is_first")
@@ -56,8 +59,7 @@ class _SingletonInitResult:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None and self._is_first:
-            self._cls._seen.discard(self._cls)
-            self._cls._instances.pop(self._cls, None)
+            self._cls.reset_singleton()
         return False  # never swallow exceptions
 
 
@@ -69,15 +71,18 @@ class ParametrizedSweepSingleton(ParametrizedSweep):
     - ``init_singleton()`` returns a result that is truthy once per subclass
       and doubles as a context manager for automatic rollback on failure.
     - ``reset_singleton()`` explicitly clears singleton state for a subclass.
+    - Thread-safe: all shared state is protected by ``_lock``.
     """
 
     _instances = {}
     _seen = set()
+    _lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super().__new__(cls)
-        return cls._instances[cls]
+        with cls._lock:
+            if cls not in cls._instances:
+                cls._instances[cls] = super().__new__(cls)
+            return cls._instances[cls]
 
     def __init__(self, **params):
         # Only run the Parametrized init chain once
@@ -103,12 +108,14 @@ class ParametrizedSweepSingleton(ParametrizedSweep):
         If the ``with`` block raises during a first-time init, the singleton
         bookkeeping is rolled back so the next construction can retry cleanly.
         """
-        is_first = cls not in cls._seen
-        cls._seen.add(cls)
+        with cls._lock:
+            is_first = cls not in cls._seen
+            cls._seen.add(cls)
         return _SingletonInitResult(cls, is_first)
 
     @classmethod
     def reset_singleton(cls) -> None:
         """Clear singleton state for *cls*, allowing re-initialisation."""
-        cls._seen.discard(cls)
-        cls._instances.pop(cls, None)
+        with cls._lock:
+            cls._seen.discard(cls)
+            cls._instances.pop(cls, None)
