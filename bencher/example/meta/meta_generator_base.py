@@ -140,9 +140,9 @@ if __name__ == "__main__":
             return False
 
         stdlib = [line for line in import_lines if _is_stdlib(line)]
-        thirdparty = [line for line in import_lines if not _is_stdlib(line)]
+        non_stdlib = [line for line in import_lines if not _is_stdlib(line)]
         if stdlib:
-            imports = "\n".join(stdlib) + "\n\n" + "\n".join(thirdparty)
+            imports = "\n".join(stdlib) + "\n\n" + "\n".join(non_stdlib)
         else:
             imports = "\n".join(import_lines)
 
