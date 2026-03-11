@@ -1,3 +1,31 @@
+"""Result variable classes for benchmark outputs.
+
+IMPORTANT — hash_persistent() contract:
+    Every Result* class MUST implement hash_persistent() using _hash_slots() which hashes
+    ALL __slots__ by default. This is critical for the over_time history cache:
+    BenchCfg.hash_persistent() includes result variable hashes in the cache key, so a
+    non-deterministic hash means historical data can never be found.
+
+    The default behavior hashes every slot. If a slot holds a non-deterministic value
+    (runtime objects, callbacks, etc.), add it to _hash_exclude on the class:
+
+        class MyResult(param.Parameter):
+            __slots__ = ["units", "obj"]
+            _hash_exclude = ("obj",)  # runtime object, not deterministic
+
+            def hash_persistent(self) -> str:
+                return _hash_slots(self)
+
+    WRONG — never do this (str(self) includes the memory address for param.Parameter):
+        def hash_persistent(self) -> str:
+            return hash_sha1(self)
+
+    Tests in test/test_hash_persistent.py auto-discover all Result* classes and verify:
+    - Determinism: two equivalent instances produce the same hash
+    - Slot coverage: every __slots__ entry is either hashed or in _hash_exclude
+    Adding a new class without proper hashing will fail CI.
+"""
+
 from enum import auto
 from typing import List, Callable, Any, Optional
 from functools import partial
@@ -9,6 +37,48 @@ import holoviews as hv
 from bencher.utils import hash_sha1
 
 # from bencher.variables.parametrised_sweep import ParametrizedSweep
+
+
+_PARAM_MODULES = frozenset({"param", "param.parameters", "param.parameterized"})
+
+
+def _hash_slots(instance):
+    """Hash all __slots__ from the class hierarchy, excluding non-deterministic attributes.
+
+    Walks the MRO from the concrete class up to (but not including) param framework
+    base classes, collecting __slots__ from each ancestor. This supports Result class
+    inheritance (e.g. ResultBool extends ResultVar). Attributes listed in _hash_exclude
+    on any class in the hierarchy are skipped.
+
+    The class name is always included in the hash to prevent collisions between different
+    Result* classes that share the same slot layout and values (e.g. ResultPath,
+    ResultVideo, and ResultImage all have __slots__ = ["units"] with default units="path").
+    """
+    cls = type(instance)
+
+    # Collect _hash_exclude from the entire hierarchy
+    exclude = set()
+    for klass in cls.__mro__:
+        if getattr(klass, "__module__", "") in _PARAM_MODULES or klass is object:
+            break
+        exclude.update(getattr(klass, "_hash_exclude", ()))
+
+    # Collect __slots__ from the entire bencher class hierarchy (deduplicating)
+    all_slots = []
+    seen = set()
+    for klass in cls.__mro__:
+        if getattr(klass, "__module__", "") in _PARAM_MODULES or klass is object:
+            break
+        slots = klass.__dict__.get("__slots__", ())
+        if isinstance(slots, str):
+            slots = (slots,)
+        for slot in slots:
+            if slot not in seen and slot not in exclude:
+                seen.add(slot)
+                all_slots.append(slot)
+
+    values = tuple(getattr(instance, slot) for slot in all_slots)
+    return hash_sha1((cls.__name__,) + values)
 
 
 class OptDir(StrEnum):
@@ -34,7 +104,7 @@ class ResultVar(Number):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1((self.units, self.direction))
+        return _hash_slots(self)
 
 
 class ResultBool(ResultVar):
@@ -60,7 +130,7 @@ class ResultVec(param.List):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1((self.units, self.direction))
+        return _hash_slots(self)
 
     def index_name(self, idx: int) -> str:
         """given the index of the vector, return the column name that
@@ -89,11 +159,17 @@ class ResultVec(param.List):
 
 
 class ResultHmap(param.Parameter):
-    """A class to represent a holomap return type"""
+    """A class to represent a holomap return type.
+
+    Note: this class has no __slots__, so _hash_slots hashes only the class name.
+    Every ResultHmap instance produces the same hash. This is intentional — there are
+    no configuration attributes that would differentiate instances. If a slot is added
+    in the future, _hash_slots will automatically include it.
+    """
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 def curve(
@@ -117,7 +193,7 @@ class ResultPath(param.Filename):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
     def to_container(self):
         """Returns a partial function for creating a FileDownload widget with embedding enabled.  This function is used to create a panel container to represent the ResultPath object"""
@@ -133,7 +209,7 @@ class ResultVideo(param.Filename):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 class ResultImage(param.Filename):
@@ -145,7 +221,7 @@ class ResultImage(param.Filename):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 class ResultString(param.String):
@@ -157,7 +233,7 @@ class ResultString(param.String):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 class ResultContainer(param.Parameter):
@@ -169,13 +245,14 @@ class ResultContainer(param.Parameter):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 class ResultReference(param.Parameter):
     """Use this class to save arbitrary objects that are not picklable or native to panel.  You can pass a container callback that takes the object and returns a panel pane to be displayed"""
 
     __slots__ = ["units", "obj", "container"]
+    _hash_exclude = ("obj", "container")  # runtime state, not deterministic config
 
     def __init__(
         self,
@@ -192,11 +269,12 @@ class ResultReference(param.Parameter):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 class ResultDataSet(param.Parameter):
     __slots__ = ["units", "obj"]
+    _hash_exclude = ("obj",)  # runtime state, not deterministic config
 
     def __init__(
         self,
@@ -211,11 +289,12 @@ class ResultDataSet(param.Parameter):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 class ResultVolume(param.Parameter):
     __slots__ = ["units", "obj"]
+    _hash_exclude = ("obj",)  # runtime state, not deterministic config
 
     def __init__(self, obj=None, default=None, units="container", **params):
         super().__init__(default=default, **params)
@@ -224,7 +303,7 @@ class ResultVolume(param.Parameter):
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1(self)
+        return _hash_slots(self)
 
 
 PANEL_TYPES = (
@@ -260,4 +339,5 @@ ALL_RESULT_TYPES = (
     ResultContainer,
     ResultDataSet,
     ResultReference,
+    ResultVolume,
 )
