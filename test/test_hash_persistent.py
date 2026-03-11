@@ -8,11 +8,15 @@ Key guarantees enforced by these tests:
 - Auto-discovery: any new Result* class is automatically tested (no manual updates needed)
 - Slot coverage: every __slots__ entry is either hashed or explicitly in _hash_exclude
 - Determinism: two equivalent instances produce the same hash
+- Cross-process stability: hash is identical across separate Python processes
 - Deepcopy stability: hash survives deepcopy
 - Differentiation: different config values produce different hashes
 """
 
 import inspect
+import subprocess
+import sys
+import textwrap
 from copy import deepcopy
 
 import param
@@ -278,3 +282,95 @@ class TestSpecificVerification:
         r2 = ResultVideo(doc="test")
         r3 = deepcopy(r1)
         assert r1.hash_persistent() == r2.hash_persistent() == r3.hash_persistent()
+
+
+# Script template for cross-process tests. Each subprocess imports the class,
+# constructs an instance, and prints its hash. The parent compares hashes from
+# two independent processes to verify they match.
+_SUBPROCESS_HASH_SCRIPT = textwrap.dedent("""\
+    from bencher.variables.results import {cls_name}
+    {extra}
+    r = {cls_name}({args})
+    print(r.hash_persistent())
+""")
+
+
+def _hash_in_subprocess(cls_name, args="doc='test'", extra=""):
+    """Spawn a fresh Python process and return the hash_persistent() value."""
+    script = _SUBPROCESS_HASH_SCRIPT.format(
+        cls_name=cls_name,
+        args=args,
+        extra=extra,
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, f"Subprocess failed for {cls_name}:\n{result.stderr}"
+    return result.stdout.strip()
+
+
+class TestCrossProcessDeterminism:
+    """Verify hash_persistent() produces identical values across separate processes.
+
+    This is the ultimate test for the over_time cache: process A writes cache with
+    a key, process B must compute the same key to find it. In-process tests cannot
+    catch bugs where str(obj) includes the memory address, because the address is
+    stable within a single process.
+    """
+
+    @pytest.mark.parametrize(
+        "cls_name,args",
+        [
+            ("ResultVar", "units='ul', doc='test'"),
+            ("ResultBool", "units='ratio', doc='test'"),
+            ("ResultVec", "size=3, units='ul', doc='test'"),
+            ("ResultHmap", "doc='test'"),
+            ("ResultPath", "doc='test'"),
+            ("ResultVideo", "doc='test'"),
+            ("ResultImage", "doc='test'"),
+            ("ResultString", "doc='test'"),
+            ("ResultContainer", "doc='test'"),
+            ("ResultReference", "doc='test'"),
+            ("ResultDataSet", "doc='test'"),
+            ("ResultVolume", "doc='test'"),
+        ],
+    )
+    def test_hash_stable_across_two_processes(self, cls_name, args):
+        hash_a = _hash_in_subprocess(cls_name, args)
+        hash_b = _hash_in_subprocess(cls_name, args)
+        assert hash_a == hash_b, (
+            f"{cls_name}.hash_persistent() differs across processes: {hash_a!r} != {hash_b!r}"
+        )
+
+    def test_bench_cfg_hash_stable_across_processes(self):
+        """End-to-end: BenchCfg cache key must be identical across processes."""
+        script = textwrap.dedent("""\
+            from bencher.variables.results import ResultImage, ResultVar
+            from bencher.bench_cfg import BenchCfg
+            cfg = BenchCfg()
+            cfg.bench_name = "test_bench"
+            cfg.title = "Test"
+            cfg.over_time = False
+            cfg.repeats = 1
+            cfg.tag = ""
+            cfg.input_vars = []
+            cfg.result_vars = [ResultVar(units="m/s", doc="speed"), ResultImage(doc="img")]
+            cfg.const_vars = []
+            print(cfg.hash_persistent(include_repeats=True))
+        """)
+        hashes = []
+        for _ in range(2):
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            assert result.returncode == 0, f"Subprocess failed:\n{result.stderr}"
+            hashes.append(result.stdout.strip())
+        assert hashes[0] == hashes[1], (
+            f"BenchCfg.hash_persistent() differs across processes: {hashes[0]!r} != {hashes[1]!r}"
+        )
