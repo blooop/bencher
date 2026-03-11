@@ -6,7 +6,7 @@ from typing import List, Tuple
 from threading import Thread
 
 import panel as pn
-from diskcache import Cache
+from bencher.store import BencherStore
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
 
@@ -55,7 +55,7 @@ class BenchPlotServer:
             FileNotFoundError: No data found was found in the database to plot
         """
 
-        with Cache("cachedir/benchmark_inputs") as cache:
+        with BencherStore("cachedir/benchmark_inputs") as cache:
             if bench_name in cache:
                 logging.info(f"loading benchmarks: {bench_name}")
                 # use the benchmark name to look up the hash of the results

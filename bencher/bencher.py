@@ -7,7 +7,7 @@ from typing import Callable, List, Optional, Tuple, Any
 from copy import deepcopy
 import param
 import xarray as xr
-from diskcache import Cache
+from bencher.store import BencherStore
 from contextlib import suppress
 from functools import partial
 import panel as pn
@@ -537,7 +537,7 @@ class Bench(BenchPlotServer):
             self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
 
         calculate_results = True
-        with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
+        with BencherStore("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
             if run_cfg.clear_cache:
                 c.delete(bench_cfg_hash)
                 logging.info("cleared cache")

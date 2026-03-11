@@ -11,7 +11,7 @@ from typing import Any, List, Tuple
 
 import numpy as np
 import xarray as xr
-from diskcache import Cache
+from bencher.store import BencherStore
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
 from bencher.results.bench_result import BenchResult
@@ -263,7 +263,7 @@ class ResultCollector:
             bench_cfg_hash (str): The hash value to use as the cache key
             bench_cfg_hashes (List[str]): List to append the hash to (modified in place)
         """
-        with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
+        with BencherStore("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
             logger.info(f"saving results with key: {bench_cfg_hash}")
             bench_cfg_hashes.append(bench_cfg_hash)
             # object index may not be pickleable so remove before caching
@@ -296,7 +296,7 @@ class ResultCollector:
             xr.Dataset: Combined dataset with both historical and current benchmark data,
                 or just the current data if no history exists or history is cleared
         """
-        with Cache("cachedir/history", size_limit=self.cache_size) as c:
+        with BencherStore("cachedir/history", size_limit=self.cache_size) as c:
             if clear_history:
                 logger.info("clearing history")
             else:
