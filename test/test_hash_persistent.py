@@ -260,6 +260,40 @@ class TestBenchCfgHashStability:
             include_repeats=True
         )
 
+    def test_bench_cfg_with_object_carrying_result_types_stable(self):
+        """Ensure BenchCfg.hash_persistent ignores runtime-only obj fields."""
+
+        def make_cfg(obj_payload):
+            cfg = BenchCfg()
+            cfg.bench_name = "obj_bench"
+            cfg.title = "Object-carrying result types"
+            cfg.over_time = False
+            cfg.repeats = 1
+            cfg.tag = ""
+            cfg.input_vars = []
+            cfg.result_vars = [
+                ResultReference(obj=obj_payload, doc="ref"),
+                ResultDataSet(obj=obj_payload, doc="ds"),
+                ResultVolume(obj=obj_payload, doc="vol"),
+            ]
+            cfg.const_vars = []
+            return cfg
+
+        # Two separately constructed BenchCfgs with equivalent config but
+        # different runtime obj instances should produce the same hash.
+        cfg1 = make_cfg({"value": 1})
+        cfg2 = make_cfg({"value": 1})
+        assert cfg1.hash_persistent(include_repeats=True) == cfg2.hash_persistent(
+            include_repeats=True
+        ), "BenchCfg hash should be stable with object-carrying result types"
+
+        # Changing the underlying runtime object while keeping the hashed
+        # configuration fields the same should not affect the hash.
+        cfg3 = make_cfg({"value": 999})
+        assert cfg1.hash_persistent(include_repeats=True) == cfg3.hash_persistent(
+            include_repeats=True
+        ), "BenchCfg hash should not change when only excluded obj fields differ"
+
 
 class TestSpecificVerification:
     """Explicit verification from the task description."""

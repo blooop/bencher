@@ -42,16 +42,23 @@ from bencher.utils import hash_sha1
 def _hash_slots(instance):
     """Hash all __slots__ on the result class, excluding non-deterministic attributes.
 
-    Reads __slots__ directly from the class (not inherited) and hashes all values except
-    those listed in the class-level _hash_exclude tuple. If the class has no hashable
-    slots (e.g. ResultHmap), falls back to the class name.
+    Reads __slots__ directly from the immediate class (not inherited via MRO) and hashes
+    all values except those listed in the class-level _hash_exclude tuple. This is
+    intentional: each Result* class defines its own __slots__ and is responsible for its
+    own hash. If shared slots are ever introduced via a base class, this helper would
+    need to walk the MRO to aggregate them.
+
+    The class name is always included in the hash to prevent collisions between different
+    Result* classes that share the same slot layout and values (e.g. ResultPath,
+    ResultVideo, and ResultImage all have __slots__ = ["units"] with default units="path").
     """
-    exclude = getattr(type(instance), "_hash_exclude", ())
-    slots = type(instance).__dict__.get("__slots__", ())
+    cls = type(instance)
+    exclude = getattr(cls, "_hash_exclude", ())
+    slots = cls.__dict__.get("__slots__", ())
+    if isinstance(slots, str):
+        slots = (slots,)
     values = tuple(getattr(instance, slot) for slot in slots if slot not in exclude)
-    if not values:
-        return hash_sha1((type(instance).__name__,))
-    return hash_sha1(values)
+    return hash_sha1((cls.__name__,) + values)
 
 
 class OptDir(StrEnum):
