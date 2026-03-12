@@ -79,4 +79,4 @@ def example_result_image_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    bch.run(example_result_image_over_time,save=True, level=3)
+    bch.run(example_result_image_over_time, save=True, level=3)

@@ -678,7 +678,7 @@ class BenchResultBase:
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
             ):
-                return self._pane_over_time_slider(dataset, plot_callback, result_var, **kwargs)
+                return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.container
@@ -686,9 +686,7 @@ class BenchResultBase:
     def _pane_over_time_slider(
         self,
         dataset: xr.Dataset,
-        plot_callback: Callable,
         result_var,
-        **kwargs,
     ) -> pn.Column:
         """Create a Panel slider widget for over_time with pane-type results.
 
