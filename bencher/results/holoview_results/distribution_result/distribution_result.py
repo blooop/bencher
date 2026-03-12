@@ -59,6 +59,23 @@ class DistributionResult(HoloviewResult):
             **kwargs,
         )
 
+    @staticmethod
+    def _build_distribution_overlay(df, plot_classes, kdims, var_name, result_var, title, **kwargs):
+        """Build an hv.Overlay from one or more distribution plot classes."""
+        overlay = hv.Overlay()
+        for plot_cls in plot_classes:
+            overlay *= plot_cls(
+                df,
+                kdims=kdims,
+                vdims=[var_name],
+            ).opts(
+                title=title,
+                ylabel=f"{var_name} [{result_var.units}]",
+                xrotation=30,
+                **kwargs,
+            )
+        return overlay
+
     def _plot_distribution(
         self,
         dataset: xr.Dataset,
@@ -95,32 +112,12 @@ class DistributionResult(HoloviewResult):
             holomap = hv.HoloMap(kdims=self._over_time_kdims())
             for t in da.coords["over_time"].values:
                 df_t = da.sel(over_time=t).to_dataframe().reset_index()
-                overlay = hv.Overlay()
-                for plot_cls in plot_class:
-                    overlay *= plot_cls(
-                        df_t,
-                        kdims=kdims,
-                        vdims=[var_name],
-                    ).opts(
-                        title=title,
-                        ylabel=f"{var_name} [{result_var.units}]",
-                        xrotation=30,
-                        **kwargs,
-                    )
-                holomap[t] = overlay
+                holomap[t] = self._build_distribution_overlay(
+                    df_t, plot_class, kdims, var_name, result_var, title, **kwargs
+                )
             return self._holomap_with_slider_bottom(holomap)
 
         df = dataset[var_name].to_dataframe().reset_index()
-        overlay = hv.Overlay()
-        for plot_cls in plot_class:
-            overlay *= plot_cls(
-                df,
-                kdims=kdims,
-                vdims=[var_name],
-            ).opts(
-                title=title,
-                ylabel=f"{var_name} [{result_var.units}]",
-                xrotation=30,
-                **kwargs,
-            )
-        return overlay
+        return self._build_distribution_overlay(
+            df, plot_class, kdims, var_name, result_var, title, **kwargs
+        )

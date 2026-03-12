@@ -1,5 +1,6 @@
 """Auto-generated example: 0 Float, 0 Categorical."""
 
+import random
 from typing import Any
 
 import bencher as bch
@@ -16,7 +17,7 @@ class BaselineCheck(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.baseline = 42.0
-        self.baseline += __import__("random").gauss(0, 0.15 * 5)
+        self.baseline += random.gauss(0, 0.15 * 5)
         self.baseline += self._time_offset * 10
         return super().__call__()
 
