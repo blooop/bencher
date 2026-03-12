@@ -151,7 +151,9 @@ class LineResult(HoloviewResult):
             return self._holomap_with_slider_bottom(holomap)
 
         time_widget_args = self.time_widget(title)
-        return da_plot.hvplot.line(x=x, by=by, **time_widget_args, **kwargs)
+        return da_plot.hvplot.line(
+            x=x, by=by, widget_location="bottom", **time_widget_args, **kwargs
+        )
 
     def to_line_tap_ds(
         self,

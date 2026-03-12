@@ -163,7 +163,9 @@ class HeatmapResult(HoloviewResult):
                     holomap[t] = plot_t
                 return self._holomap_with_slider_bottom(holomap)
 
-            plot = dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", title=title, **kwargs)
+            plot = dataset.hvplot.heatmap(
+                x=x, y=y, C=C, cmap="plasma", title=title, widget_location="bottom", **kwargs
+            )
             if hasattr(plot, "opts"):
                 plot = plot.opts(xrotation=30)
             return plot
