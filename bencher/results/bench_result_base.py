@@ -678,9 +678,7 @@ class BenchResultBase:
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
             ):
-                return self._pane_over_time_slider(
-                    dataset, plot_callback, result_var, **kwargs
-                )
+                return self._pane_over_time_slider(dataset, plot_callback, result_var, **kwargs)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.container
@@ -701,15 +699,19 @@ class BenchResultBase:
         """
         time_vals = list(dataset.coords["over_time"].values)
         panes_by_time = {}
-        for t in time_vals:
-            ds_t = dataset.sel(over_time=t)
-            panes_by_time[t] = plot_callback(dataset=ds_t, result_var=result_var, **kwargs)
 
         # Build a DiscreteSlider mirroring _holomap_with_slider_bottom layout
-        options = {str(pd.Timestamp(t)): t for t in time_vals}
+        over_time_dtype = dataset.coords["over_time"].dtype
+        is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
+        options = {str(pd.to_datetime(t)) if is_datetime else str(t): t for t in time_vals}
         slider = pn.widgets.DiscreteSlider(name="over_time", options=options, value=time_vals[-1])
 
         def show_pane(time_value):
+            if time_value not in panes_by_time:
+                ds_t = dataset.sel(over_time=time_value)
+                panes_by_time[time_value] = plot_callback(
+                    dataset=ds_t, result_var=result_var, **kwargs
+                )
             return panes_by_time[time_value]
 
         return pn.Column(pn.bind(show_pane, slider), slider)
