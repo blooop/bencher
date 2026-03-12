@@ -67,8 +67,12 @@ class ScatterResult(HoloviewResult):
             if self.plt_cnt_cfg.cat_cnt > 1:
                 by = [v.name for v in self.bench_cfg.input_vars[1:]]
                 subplots = False
-            return hv_ds.data.hvplot.scatter(by=by, subplots=subplots, **kwargs).opts(
-                title=self.to_plot_title()
+            return hv_ds.data.hvplot.scatter(
+                by=by,
+                subplots=subplots,
+                widget_location="bottom",
+                title=self.to_plot_title(),
+                **kwargs,
             )
         return match_res.to_panel(**kwargs)
 
