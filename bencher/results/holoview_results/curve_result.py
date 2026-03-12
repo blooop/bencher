@@ -101,4 +101,6 @@ class CurveResult(HoloviewResult):
         if std_var in dataset.data_vars:
             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
         pt = pt.opts(legend_position="right")
-        return self._holomap_with_slider_bottom(pt)
+        if self._use_holomap_for_time(dataset):
+            pt = self._holomap_with_slider_bottom(pt)
+        return pt

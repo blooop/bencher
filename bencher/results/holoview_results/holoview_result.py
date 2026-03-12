@@ -152,7 +152,7 @@ class HoloviewResult(VideoResult):
         """
         row = pn.panel(hvobj)
         if not isinstance(row, pn.Row) or len(row) < 2:
-            return row
+            return hvobj
         widget_box = row[1]
         widget_box.align = ("start", "start")
         # Default slider to the most recent (last) time point
