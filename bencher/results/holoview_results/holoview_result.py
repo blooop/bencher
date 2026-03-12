@@ -138,16 +138,21 @@ class HoloviewResult(VideoResult):
         return ["over_time"]
 
     @staticmethod
-    def _holomap_with_slider_bottom(holomap: hv.HoloMap) -> pn.Column:
-        """Wrap a HoloMap so the scrubber/slider appears below the plot.
+    def _holomap_with_slider_bottom(hvobj):
+        """Wrap a HoloViews object so any scrubber/slider appears below the plot.
 
         ``pn.pane.HoloViews(holomap, widget_location="bottom")`` does not
         embed correctly in static HTML (the widget is lost).  Instead we
-        let Panel auto-create the widget via ``pn.panel(holomap)`` (which
+        let Panel auto-create the widget via ``pn.panel(hvobj)`` (which
         produces a ``Row(plot, widget_box)``), then rearrange into a
         ``Column(plot, widget_box)`` so the slider sits underneath.
+
+        Safe to call on any HoloViews object; if no widgets are produced
+        the original object is returned unchanged.
         """
-        row = pn.panel(holomap)
+        row = pn.panel(hvobj)
+        if not isinstance(row, pn.Row) or len(row) < 2:
+            return row
         widget_box = row[1]
         widget_box.align = ("start", "start")
         # Default slider to the most recent (last) time point
