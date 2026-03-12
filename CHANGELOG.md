@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.66.0] - 2026-03-12
+
+### Added
+- Over-time slider support for BarResult: bar charts now show a time slider when `over_time=True` with multiple time points
+- Over-time slider support for DistributionResult (BoxWhisker, Violin): distribution plots now show a time slider when `over_time=True` with multiple time points
+- New meta-generated examples combining `over_time=True` with `repeats>1` for 0-1 float input configurations
+- Tests for over_time + repeats across bar, distribution, and curve plot types
+
 ## [1.65.0] - 2026-03-11
 
 ### Fixed
