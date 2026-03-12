@@ -144,9 +144,7 @@ class BarResult(HoloviewResult):
             holomap = hv.HoloMap(kdims=self._over_time_kdims())
             for t in da.coords["over_time"].values:
                 da_t = da.sel(over_time=t)
-                plot_t = da_t.hvplot.bar(
-                    x=x_dim, y=da.name, by=by, title=title, **kwargs
-                )
+                plot_t = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
                 if hasattr(plot_t, "opts"):
                     plot_t = plot_t.opts(**opts_kwargs)
                 holomap[t] = plot_t
