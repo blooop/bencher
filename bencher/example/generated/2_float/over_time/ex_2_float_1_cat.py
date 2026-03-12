@@ -4,6 +4,7 @@ from typing import Any
 
 import math
 import bencher as bch
+import random
 from datetime import datetime, timedelta
 
 
@@ -24,7 +25,7 @@ class CompressionCodec(bch.ParametrizedSweep):
         self.ratio = (
             codec_eff * (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
         )
-        self.ratio += __import__("random").gauss(0, 0.1 * 0.3)
+        self.ratio += random.gauss(0, 0.1 * 0.3)
         self.ratio += self._time_offset * 10
         return super().__call__()
 

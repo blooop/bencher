@@ -280,8 +280,8 @@ class TestCacheOperations(unittest.TestCase):
         self.assertEqual(bench_res.ds["theta"].attrs.get("units"), "rad")
 
 
-class TestMaxOverTime(unittest.TestCase):
-    """Tests for max_over_time trimming in load_history_cache."""
+class TestMaxTimeEvents(unittest.TestCase):
+    """Tests for max_time_events trimming in load_history_cache."""
 
     def setUp(self):
         self.collector = ResultCollector()
@@ -294,13 +294,13 @@ class TestMaxOverTime(unittest.TestCase):
             slices.append(ds)
         return xr.concat(slices, "over_time")
 
-    def test_max_over_time_trims_oldest(self):
-        """max_over_time should keep only the N most recent slices."""
+    def test_max_time_events_trims_oldest(self):
+        """max_time_events should keep only the N most recent slices."""
         dataset = self._make_over_time_dataset(5)
         unique_hash = f"trim-test-{uuid.uuid4()}"
 
         result = self.collector.load_history_cache(
-            dataset, unique_hash, clear_history=False, max_over_time=3
+            dataset, unique_hash, clear_history=False, max_time_events=3
         )
 
         self.assertEqual(result.sizes["over_time"], 3)
@@ -309,24 +309,24 @@ class TestMaxOverTime(unittest.TestCase):
         actual = list(result["var"].values[0])
         self.assertEqual(actual, expected)
 
-    def test_max_over_time_none_unlimited(self):
-        """max_over_time=None should not trim anything."""
+    def test_max_time_events_none_unlimited(self):
+        """max_time_events=None should not trim anything."""
         dataset = self._make_over_time_dataset(5)
         unique_hash = f"unlimited-test-{uuid.uuid4()}"
 
         result = self.collector.load_history_cache(
-            dataset, unique_hash, clear_history=False, max_over_time=None
+            dataset, unique_hash, clear_history=False, max_time_events=None
         )
 
         self.assertEqual(result.sizes["over_time"], 5)
 
-    def test_max_over_time_exact_count_no_trim(self):
-        """When over_time count equals max_over_time, no trimming occurs."""
+    def test_max_time_events_exact_count_no_trim(self):
+        """When over_time count equals max_time_events, no trimming occurs."""
         dataset = self._make_over_time_dataset(3)
         unique_hash = f"exact-test-{uuid.uuid4()}"
 
         result = self.collector.load_history_cache(
-            dataset, unique_hash, clear_history=False, max_over_time=3
+            dataset, unique_hash, clear_history=False, max_time_events=3
         )
 
         self.assertEqual(result.sizes["over_time"], 3)
@@ -334,13 +334,14 @@ class TestMaxOverTime(unittest.TestCase):
         actual = list(result["var"].values[0])
         self.assertEqual(actual, expected)
 
-    def test_max_over_time_with_clear_history(self):
-        """clear_history + max_over_time: trimming still applies to new data."""
+    def test_max_time_events_with_clear_history(self):
+        """clear_history + max_time_events: in practice clear_history yields a single slice,
+        but trimming is still correct if the incoming dataset has multiple over_time slices."""
         dataset = self._make_over_time_dataset(5)
         unique_hash = f"clear-trim-test-{uuid.uuid4()}"
 
         result = self.collector.load_history_cache(
-            dataset, unique_hash, clear_history=True, max_over_time=2
+            dataset, unique_hash, clear_history=True, max_time_events=2
         )
 
         self.assertEqual(result.sizes["over_time"], 2)
@@ -348,13 +349,29 @@ class TestMaxOverTime(unittest.TestCase):
         actual = list(result["var"].values[0])
         self.assertEqual(actual, expected)
 
-    def test_max_over_time_no_over_time_dim(self):
-        """max_over_time should be a no-op when dataset has no over_time dim."""
+    def test_max_time_events_incremental_accumulation(self):
+        """Simulates repeated plot_sweep() calls: cache should stay bounded."""
+        unique_hash = f"incremental-test-{uuid.uuid4()}"
+
+        for i in range(10):
+            single_slice = xr.Dataset({"var": (["x", "over_time"], [[float(i)]])})
+            result = self.collector.load_history_cache(
+                single_slice, unique_hash, clear_history=False, max_time_events=3
+            )
+
+        # After 10 incremental calls with max_time_events=3, only the last 3 should remain
+        self.assertEqual(result.sizes["over_time"], 3)
+        expected = [7.0, 8.0, 9.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_no_over_time_dim(self):
+        """max_time_events should be a no-op when dataset has no over_time dim."""
         dataset = xr.Dataset({"var": (["x"], [1, 2, 3])})
         unique_hash = f"nodim-test-{uuid.uuid4()}"
 
         result = self.collector.load_history_cache(
-            dataset, unique_hash, clear_history=False, max_over_time=2
+            dataset, unique_hash, clear_history=False, max_time_events=2
         )
 
         self.assertTrue(result.equals(dataset))

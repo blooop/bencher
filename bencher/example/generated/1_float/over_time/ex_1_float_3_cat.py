@@ -4,6 +4,7 @@ from typing import Any
 
 import math
 import bencher as bch
+import random
 from datetime import datetime, timedelta
 
 
@@ -32,7 +33,7 @@ class SortFullMatrix(bch.ParametrizedSweep):
             * math.log2(self.array_size + 1)
             * 0.001
         )
-        self.time += __import__("random").gauss(0, 0.1 * self.time)
+        self.time += random.gauss(0, 0.1 * self.time)
         self.time += self._time_offset * 10
         return super().__call__()
 

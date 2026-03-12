@@ -4,6 +4,7 @@ from typing import Any
 
 import math
 import bencher as bch
+import random
 from datetime import datetime, timedelta
 
 
@@ -32,7 +33,7 @@ class HashAnalysis(bch.ParametrizedSweep):
             / (1.0 + 0.3 * math.log2(self.payload_size / 64))
             * (self.iterations / 100)
         )
-        self.throughput += __import__("random").gauss(0, 0.1 * 30)
+        self.throughput += random.gauss(0, 0.1 * 30)
         self.throughput += self._time_offset * 10
         return super().__call__()
 

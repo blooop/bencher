@@ -3,6 +3,7 @@
 from typing import Any
 
 import bencher as bch
+import random
 
 
 class CacheBackend(bch.ParametrizedSweep):
@@ -15,7 +16,7 @@ class CacheBackend(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         base = {"redis": 1.2, "memcached": 1.5, "local": 0.3}[self.backend]
-        self.latency = base + __import__("random").gauss(0, 0.15 * base)
+        self.latency = base + random.gauss(0, 0.15 * base)
         return super().__call__()
 
 

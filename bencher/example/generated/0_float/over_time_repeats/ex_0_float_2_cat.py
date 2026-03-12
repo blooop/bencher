@@ -1,9 +1,9 @@
 """Auto-generated example: 0 Float, 2 Categorical."""
 
-import random
 from typing import Any
 
 import bencher as bch
+import random
 from datetime import datetime, timedelta
 
 

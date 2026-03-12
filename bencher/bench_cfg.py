@@ -60,7 +60,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         print_bench_results (bool): Print the results of the benchmark function
                                    every time it is called
         clear_history (bool): Clear historical results
-        max_over_time (int): Maximum number of over_time events to retain. None means unlimited.
+        max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
         print_pandas (bool): Print a pandas summary of the results to the console
         print_xarray (bool): Print an xarray summary of the results to the console
         serve_pandas (bool): Serve a pandas summary on the results webpage
@@ -220,7 +220,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
-    max_over_time: Optional[int] = param.Integer(
+    max_time_events: int | None = param.Integer(
         None,
         bounds=[1, None],
         allow_None=True,
