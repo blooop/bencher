@@ -706,19 +706,26 @@ class BenchResultBase:
         labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
 
         # Pre-read file contents as base64 data-URIs for each time point.
+        # Bokeh HTML-escapes the JSON blob in the HTML page, but un-escapes
+        # it at runtime via .textContent, so full HTML tags work correctly.
+        is_video = isinstance(result_var, ResultVideo)
+        mime = "video/mp4" if is_video else "image/png"
         html_list = []
         for t in time_vals:
             ds_t = dataset.sel(over_time=t)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if isinstance(result_var, ResultVideo):
-                mime = "video/mp4"
-                tag = '<video controls src="data:{mime};base64,{data}" style="background:white"/>'
-            else:
-                mime = "image/png"
-                tag = '<img src="data:{mime};base64,{data}" style="background:white"/>'
             with open(filepath, "rb") as f:
-                data = base64.b64encode(f.read()).decode()
-            html_list.append(tag.format(mime=mime, data=data))
+                b64 = base64.b64encode(f.read()).decode()
+            if is_video:
+                html_list.append(
+                    f'<video controls src="data:{mime};base64,{b64}"'
+                    ' style="background:white"/>'
+                )
+            else:
+                html_list.append(
+                    f'<img src="data:{mime};base64,{b64}"'
+                    ' style="background:white"/>'
+                )
 
         # Pure Bokeh Div + Slider with a JS callback — no Panel pane updates,
         # so no ImportedStyleSheet sharing across documents.
@@ -733,7 +740,10 @@ class BenchResultBase:
         )
         callback = CustomJS(
             args=dict(div=div, html_list=html_list, labels=labels, slider=bokeh_slider),
-            code="div.text = html_list[slider.value]; slider.title = 'over_time: ' + labels[slider.value];",
+            code=(
+                "div.text = html_list[slider.value];"
+                " slider.title = 'over_time: ' + labels[slider.value];"
+            ),
         )
         bokeh_slider.js_on_change("value", callback)
 
