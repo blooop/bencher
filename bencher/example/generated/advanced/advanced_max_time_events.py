@@ -41,8 +41,10 @@ def example_advanced_max_time_events(run_cfg: bch.BenchRunCfg | None = None) -> 
     benchable = LatencyMonitor()
     bench = benchable.to_bench(run_cfg)
 
+    # Run 5 iterations but only keep the 3 most recent thanks to max_time_events.
+    # Without the cap, all 5 time slices would accumulate in the cache.
     base_time = datetime(2024, 6, 1)
-    for i in range(3):
+    for i in range(5):
         benchable._drift = i * 3.0  # simulate gradual degradation
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
@@ -50,8 +52,8 @@ def example_advanced_max_time_events(run_cfg: bch.BenchRunCfg | None = None) -> 
             title="Service Latency",
             input_vars=["endpoint"],
             result_vars=["latency"],
-            description="max_time_events caps over_time history so only the N most "
-            "recent snapshots are retained, preventing unbounded cache growth.",
+            description="5 snapshots are recorded but max_time_events=3 trims the oldest, "
+            "so only the 3 most recent are retained.",
             run_cfg=run_cfg,
             time_src=base_time + timedelta(hours=i),
         )
