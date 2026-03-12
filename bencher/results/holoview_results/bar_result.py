@@ -145,7 +145,7 @@ class BarResult(HoloviewResult):
             for t in da.coords["over_time"].values:
                 da_t = da.sel(over_time=t)
                 plot_t = da_t.hvplot.bar(
-                    x=x_dim, y=da.name, by=by, title=title, widget_location="bottom", **kwargs
+                    x=x_dim, y=da.name, by=by, title=title, **kwargs
                 )
                 if hasattr(plot_t, "opts"):
                     plot_t = plot_t.opts(**opts_kwargs)

@@ -189,16 +189,16 @@ class LatencyMonitor(bch.ParametrizedSweep):
 run_cfg = run_cfg or bch.BenchRunCfg()
 run_cfg.over_time = True
 
-# Keep only the 4 most recent time slices in the cache.
+# Keep only the 3 most recent time slices in the cache.
 # Without this, every call to plot_sweep appends a new slice and the
 # cache grows without bound.
-run_cfg.max_time_events = 4
+run_cfg.max_time_events = 3
 
 benchable = LatencyMonitor()
 bench = benchable.to_bench(run_cfg)
 
 base_time = datetime(2024, 6, 1)
-for i in range(6):
+for i in range(3):
     benchable._drift = i * 3.0  # simulate gradual degradation
     run_cfg.clear_cache = True
     run_cfg.clear_history = i == 0
@@ -207,8 +207,7 @@ for i in range(6):
         input_vars=["endpoint"],
         result_vars=["latency"],
         description="max_time_events caps over_time history so only the N most "
-        "recent snapshots are retained. Here 6 snapshots are recorded but only "
-        "the last 4 are kept, preventing unbounded cache growth.",
+        "recent snapshots are retained, preventing unbounded cache growth.",
         run_cfg=run_cfg,
         time_src=base_time + timedelta(hours=i),
     )
