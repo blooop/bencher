@@ -81,29 +81,46 @@ class DistributionResult(HoloviewResult):
         Returns:
             A HoloViews Element representing the distribution plot.
         """
-        # Get the name of the result variable (which is the data we want to plot)
         var_name = result_var.name
-
-        # Create plot title
         title = self.title_from_ds(dataset[var_name], result_var, **kwargs)
-
-        # Convert dataset to dataframe for HoloViews
-        df = dataset[var_name].to_dataframe().reset_index()
         kdims = params_to_str(self.plt_cnt_cfg.cat_vars)
 
         if not isinstance(plot_class, list):
             plot_class = [plot_class]
 
+        use_holomap = self._use_holomap_for_time(dataset)
+
+        if use_holomap:
+            da = dataset[var_name]
+            holomap = hv.HoloMap(kdims=self._over_time_kdims())
+            for t in da.coords["over_time"].values:
+                df_t = da.sel(over_time=t).to_dataframe().reset_index()
+                overlay = hv.Overlay()
+                for plot_cls in plot_class:
+                    overlay *= plot_cls(
+                        df_t,
+                        kdims=kdims,
+                        vdims=[var_name],
+                    ).opts(
+                        title=title,
+                        ylabel=f"{var_name} [{result_var.units}]",
+                        xrotation=30,
+                        **kwargs,
+                    )
+                holomap[t] = overlay
+            return self._holomap_with_slider_bottom(holomap)
+
+        df = dataset[var_name].to_dataframe().reset_index()
         overlay = hv.Overlay()
-        for plot in plot_class:
-            overlay *= plot(
+        for plot_cls in plot_class:
+            overlay *= plot_cls(
                 df,
                 kdims=kdims,
                 vdims=[var_name],
             ).opts(
                 title=title,
                 ylabel=f"{var_name} [{result_var.units}]",
-                xrotation=30,  # Rotate x-axis labels by 30 degrees
+                xrotation=30,
                 **kwargs,
             )
         return overlay

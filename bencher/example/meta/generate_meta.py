@@ -389,7 +389,9 @@ class BenchMetaGen(bch.ParametrizedSweep):
 
         base_title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
 
-        if self.sample_over_time:
+        if self.sample_over_time and self.sample_with_repeats > 1:
+            variant = "over_time_repeats"
+        elif self.sample_over_time:
             variant = "over_time"
         elif self.sample_with_repeats > 1:
             variant = "with_repeats"
@@ -522,6 +524,12 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         description=sweep_desc,
         input_vars=[bch.p("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
+    )
+    bench.plot_sweep(
+        title="Over Time + Repeats 0-1 float (3 Snapshots, 3x repeats)",
+        description=sweep_desc,
+        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        const_vars=dict(sample_with_repeats=3, sample_over_time=True),
     )
 
     return bench
