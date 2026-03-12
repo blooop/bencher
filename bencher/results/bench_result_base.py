@@ -718,14 +718,10 @@ class BenchResultBase:
                 b64 = base64.b64encode(f.read()).decode()
             if is_video:
                 html_list.append(
-                    f'<video controls src="data:{mime};base64,{b64}"'
-                    ' style="background:white"/>'
+                    f'<video controls src="data:{mime};base64,{b64}" style="background:white"/>'
                 )
             else:
-                html_list.append(
-                    f'<img src="data:{mime};base64,{b64}"'
-                    ' style="background:white"/>'
-                )
+                html_list.append(f'<img src="data:{mime};base64,{b64}" style="background:white"/>')
 
         # Pure Bokeh Div + Slider with a JS callback — no Panel pane updates,
         # so no ImportedStyleSheet sharing across documents.
