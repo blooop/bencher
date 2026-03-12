@@ -20,7 +20,7 @@ from bencher.variables.results import ResultVar
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
-from bencher.variables.results import ResultReference, ResultDataSet
+from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo
 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
@@ -695,26 +695,51 @@ class BenchResultBase:
         Numeric plot callbacks (line, heatmap) handle over_time internally via
         hv.HoloMap.  Pane-type callbacks (images, videos) cannot use HoloMap
         because they produce Panel objects, not HoloViews elements.  This method
-        builds per-time-point panes and wraps them in a DiscreteSlider widget.
+        builds per-time-point content and swaps it via a Bokeh JS callback to
+        avoid Panel's ImportedStyleSheet document-ownership errors.
         """
-        time_vals = list(dataset.coords["over_time"].values)
-        panes_by_time = {}
+        import base64
+        from bokeh.models import CustomJS, Div
+        from bokeh.models.widgets import Slider as BokehSlider
 
-        # Build a DiscreteSlider mirroring _holomap_with_slider_bottom layout
+        time_vals = list(dataset.coords["over_time"].values)
         over_time_dtype = dataset.coords["over_time"].dtype
         is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
-        options = {str(pd.to_datetime(t)) if is_datetime else str(t): t for t in time_vals}
-        slider = pn.widgets.DiscreteSlider(name="over_time", options=options, value=time_vals[-1])
+        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
 
-        def show_pane(time_value):
-            if time_value not in panes_by_time:
-                ds_t = dataset.sel(over_time=time_value)
-                panes_by_time[time_value] = plot_callback(
-                    dataset=ds_t, result_var=result_var, **kwargs
-                )
-            return panes_by_time[time_value]
+        # Pre-read file contents as base64 data-URIs for each time point.
+        html_list = []
+        for t in time_vals:
+            ds_t = dataset.sel(over_time=t)
+            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
+            if isinstance(result_var, ResultVideo):
+                mime = "video/mp4"
+                tag = '<video controls src="data:{mime};base64,{data}" style="background:white"/>'
+            else:
+                mime = "image/png"
+                tag = '<img src="data:{mime};base64,{data}" style="background:white"/>'
+            with open(filepath, "rb") as f:
+                data = base64.b64encode(f.read()).decode()
+            html_list.append(tag.format(mime=mime, data=data))
 
-        return pn.Column(pn.bind(show_pane, slider), slider)
+        # Pure Bokeh Div + Slider with a JS callback — no Panel pane updates,
+        # so no ImportedStyleSheet sharing across documents.
+        default_idx = len(time_vals) - 1
+        div = Div(text=html_list[default_idx])
+        bokeh_slider = BokehSlider(
+            start=0,
+            end=len(time_vals) - 1,
+            value=default_idx,
+            step=1,
+            title=f"over_time: {labels[default_idx]}",
+        )
+        callback = CustomJS(
+            args=dict(div=div, html_list=html_list, labels=labels, slider=bokeh_slider),
+            code="div.text = html_list[slider.value]; slider.title = 'over_time: ' + labels[slider.value];",
+        )
+        bokeh_slider.js_on_change("value", callback)
+
+        return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve
