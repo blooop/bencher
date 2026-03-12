@@ -668,9 +668,51 @@ class BenchResultBase:
             for c in outer_container.container:
                 c[0].width = max_len * 7
         else:
+            # When over_time is active with >1 time points, the dataset still
+            # contains the over_time dimension (it was excluded from pane recursion
+            # so hvplot numeric plots can use groupby).  For pane-type results
+            # (images, videos) we need to build a Panel slider manually because
+            # they are not HoloViews objects and cannot use hv.HoloMap.
+            if (
+                self.bench_cfg.over_time
+                and "over_time" in list(dataset.sizes)
+                and dataset.sizes["over_time"] > 1
+            ):
+                return self._pane_over_time_slider(
+                    dataset, plot_callback, result_var, **kwargs
+                )
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.container
+
+    def _pane_over_time_slider(
+        self,
+        dataset: xr.Dataset,
+        plot_callback: Callable,
+        result_var,
+        **kwargs,
+    ) -> pn.Column:
+        """Create a Panel slider widget for over_time with pane-type results.
+
+        Numeric plot callbacks (line, heatmap) handle over_time internally via
+        hv.HoloMap.  Pane-type callbacks (images, videos) cannot use HoloMap
+        because they produce Panel objects, not HoloViews elements.  This method
+        builds per-time-point panes and wraps them in a DiscreteSlider widget.
+        """
+        time_vals = list(dataset.coords["over_time"].values)
+        panes_by_time = {}
+        for t in time_vals:
+            ds_t = dataset.sel(over_time=t)
+            panes_by_time[t] = plot_callback(dataset=ds_t, result_var=result_var, **kwargs)
+
+        # Build a DiscreteSlider mirroring _holomap_with_slider_bottom layout
+        options = {str(pd.Timestamp(t)): t for t in time_vals}
+        slider = pn.widgets.DiscreteSlider(name="over_time", options=options, value=time_vals[-1])
+
+        def show_pane(time_value):
+            return panes_by_time[time_value]
+
+        return pn.Column(pn.bind(show_pane, slider), slider)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve
