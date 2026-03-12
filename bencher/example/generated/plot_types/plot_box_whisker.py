@@ -2,8 +2,8 @@
 
 from typing import Any
 
-import bencher as bch
 from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
+import bencher as bch
 
 import random
 

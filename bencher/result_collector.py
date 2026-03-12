@@ -314,7 +314,7 @@ class ResultCollector:
                 else:
                     logger.info("did not detect any historical data")
 
-            if max_time_events is not None and max_time_events >= 1 and "over_time" in dataset.dims:
+            if max_time_events is not None and "over_time" in dataset.dims:
                 if dataset.sizes["over_time"] > max_time_events:
                     dataset = dataset.isel(over_time=slice(-max_time_events, None))
 

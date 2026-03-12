@@ -442,8 +442,8 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"
             )
-            noise_imports = "\nimport random" if noise_val > 0 else ""
-            imports = f"{info['imports']}{noise_imports}\nfrom datetime import datetime, timedelta"
+            noise_imports = "import random\n" if noise_val > 0 else ""
+            imports = f"{noise_imports}{info['imports']}\nfrom datetime import datetime, timedelta"
             gen.generate_example(
                 title=title,
                 output_dir=f"{self.float_vars_count}_float/{variant}",
@@ -466,7 +466,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
 
             sweep_extra_imports = list(extra_imports)
             if noise_val > 0:
-                sweep_extra_imports.append("import random")
+                sweep_extra_imports.insert(0, "import random")
 
             gen.generate_sweep_example(
                 title=title,

@@ -2,10 +2,10 @@
 
 from typing import Any
 
-import bencher as bch
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
+import bencher as bch
 
 import random
 

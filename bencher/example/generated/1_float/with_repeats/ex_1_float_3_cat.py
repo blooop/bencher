@@ -2,9 +2,9 @@
 
 from typing import Any
 
-import bencher as bch
-import math
 import random
+import math
+import bencher as bch
 
 
 class SortFullMatrix(bch.ParametrizedSweep):

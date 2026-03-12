@@ -2,8 +2,8 @@
 
 from typing import Any
 
-import bencher as bch
 import random
+import bencher as bch
 
 
 class DeploymentConfig(bch.ParametrizedSweep):

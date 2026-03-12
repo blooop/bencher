@@ -49,13 +49,10 @@ repos:
       - id: ruff-format
         types_or: [ python, pyi ]
   # Shell script linter
-  - repo: local
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.11.0
     hooks:
       - id: shellcheck
-        name: shellcheck
-        language: system
-        entry: shellcheck
-        types: [shell]
 
   # Checks for spelling mistakes
   - repo: https://github.com/codespell-project/codespell
