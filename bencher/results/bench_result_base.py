@@ -20,7 +20,7 @@ from bencher.variables.results import ResultVar
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
-from bencher.variables.results import ResultReference, ResultDataSet
+from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo
 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
@@ -668,9 +668,82 @@ class BenchResultBase:
             for c in outer_container.container:
                 c[0].width = max_len * 7
         else:
+            # When over_time is active with >1 time points, the dataset still
+            # contains the over_time dimension (it was excluded from pane recursion
+            # so hvplot numeric plots can use groupby).  For pane-type results
+            # (images, videos) we need to build a Panel slider manually because
+            # they are not HoloViews objects and cannot use hv.HoloMap.
+            if (
+                self.bench_cfg.over_time
+                and "over_time" in list(dataset.sizes)
+                and dataset.sizes["over_time"] > 1
+            ):
+                return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.container
+
+    def _pane_over_time_slider(
+        self,
+        dataset: xr.Dataset,
+        result_var,
+    ) -> pn.Column:
+        """Create a Panel slider widget for over_time with pane-type results.
+
+        Numeric plot callbacks (line, heatmap) handle over_time internally via
+        hv.HoloMap.  Pane-type callbacks (images, videos) cannot use HoloMap
+        because they produce Panel objects, not HoloViews elements.  This method
+        builds per-time-point content and swaps it via a Bokeh JS callback to
+        avoid Panel's ImportedStyleSheet document-ownership errors.
+        """
+        import base64
+        from bokeh.models import CustomJS, Div
+        from bokeh.models.widgets import Slider as BokehSlider
+
+        time_vals = list(dataset.coords["over_time"].values)
+        over_time_dtype = dataset.coords["over_time"].dtype
+        is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
+        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+
+        # Pre-read file contents as base64 data-URIs for each time point.
+        # Bokeh HTML-escapes the JSON blob in the HTML page, but un-escapes
+        # it at runtime via .textContent, so full HTML tags work correctly.
+        is_video = isinstance(result_var, ResultVideo)
+        mime = "video/mp4" if is_video else "image/png"
+        html_list = []
+        for t in time_vals:
+            ds_t = dataset.sel(over_time=t)
+            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
+            with open(filepath, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            if is_video:
+                html_list.append(
+                    f'<video controls src="data:{mime};base64,{b64}" style="background:white"/>'
+                )
+            else:
+                html_list.append(f'<img src="data:{mime};base64,{b64}" style="background:white"/>')
+
+        # Pure Bokeh Div + Slider with a JS callback — no Panel pane updates,
+        # so no ImportedStyleSheet sharing across documents.
+        default_idx = len(time_vals) - 1
+        div = Div(text=html_list[default_idx])
+        bokeh_slider = BokehSlider(
+            start=0,
+            end=len(time_vals) - 1,
+            value=default_idx,
+            step=1,
+            title=f"over_time: {labels[default_idx]}",
+        )
+        callback = CustomJS(
+            args=dict(div=div, html_list=html_list, labels=labels, slider=bokeh_slider),
+            code=(
+                "div.text = html_list[slider.value];"
+                " slider.title = 'over_time: ' + labels[slider.value];"
+            ),
+        )
+        bokeh_slider.js_on_change("value", callback)
+
+        return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve
