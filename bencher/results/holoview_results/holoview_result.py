@@ -147,10 +147,15 @@ class HoloviewResult(VideoResult):
         produces a ``Row(plot, widget_box)``), then rearrange into a
         ``Column(plot, widget_box)`` so the slider sits underneath.
 
+        Force ``DiscreteSlider`` for the *over_time* dimension so that
+        string-based ``TimeEvent`` coordinates get a slider instead of
+        the default dropdown ``Select`` widget.
+
         Safe to call on any HoloViews object; if no widgets are produced
         the original object is returned unchanged.
         """
-        row = pn.panel(hvobj)
+        # Force a slider (not a dropdown) for the over_time dimension
+        row = pn.panel(hvobj, widgets={"over_time": pn.widgets.DiscreteSlider})
         if not isinstance(row, pn.Row) or len(row) < 2:
             return hvobj
         widget_box = row[1]
