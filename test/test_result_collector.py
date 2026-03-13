@@ -377,6 +377,36 @@ class TestMaxTimeEvents(unittest.TestCase):
         self.assertTrue(result.equals(dataset))
 
 
+class TestDTypeIncompatibleHistory(unittest.TestCase):
+    """Test that load_history_cache handles dtype changes in over_time coords."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def test_datetime_then_string_over_time_no_crash(self):
+        """Switching from datetime to string over_time coords should not crash."""
+        unique_hash = f"dtype-compat-{uuid.uuid4()}"
+
+        # First run: datetime over_time coord (TimeSnapshot style)
+        ds_datetime = xr.Dataset(
+            {"var": (["x", "over_time"], [[1.0]])},
+            coords={"over_time": [np.datetime64("2024-01-01")]},
+        )
+        self.collector.load_history_cache(ds_datetime, unique_hash, clear_history=False)
+
+        # Second run: string over_time coord (TimeEvent style)
+        ds_string = xr.Dataset(
+            {"var": (["x", "over_time"], [[2.0]])},
+            coords={"over_time": ["v1.0"]},
+        )
+        result = self.collector.load_history_cache(ds_string, unique_hash, clear_history=False)
+
+        # Should not crash; old datetime data discarded, only new string data remains
+        self.assertEqual(result.sizes["over_time"], 1)
+        self.assertEqual(result["var"].values[0, 0], 2.0)
+        self.assertEqual(str(result.coords["over_time"].values[0]), "v1.0")
+
+
 class TestSetXarrayMultidim(unittest.TestCase):
     """Tests for set_xarray_multidim utility function."""
 

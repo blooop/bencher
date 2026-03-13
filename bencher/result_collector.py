@@ -310,7 +310,13 @@ class ResultCollector:
                 if bench_cfg_hash in c:
                     logger.info("loading historical data from cache")
                     ds_old = c[bench_cfg_hash]
-                    dataset = xr.concat([ds_old, dataset], "over_time")
+                    try:
+                        dataset = xr.concat([ds_old, dataset], "over_time")
+                    except (TypeError, np.exceptions.DTypePromotionError):
+                        logger.warning(
+                            "Discarding incompatible historical data "
+                            "(over_time dtype changed between runs)"
+                        )
                 else:
                     logger.info("did not detect any historical data")
 
