@@ -75,6 +75,44 @@ def _has_holomap_column(plots):
     return False
 
 
+class ZeroDimBench(bch.ParametrizedSweep):
+    """Benchmark with no input vars — 0D numeric result for over_time regression test."""
+
+    value = bch.ResultVar(units="m", doc="Value")
+
+    offset = 0.0
+
+    def __call__(self, **kwargs: Any) -> Any:
+        self.update_params_from_kwargs(**kwargs)
+        self.value = 2.844 + self.offset
+        return super().__call__()
+
+
+class TestNumericOverTimeNotRoutedToImageSlider:
+    """Regression tests: numeric ResultVar must not be routed to _pane_over_time_slider.
+
+    Commit 9279dd32 unconditionally routed all result types through the image/video
+    slider when over_time was active.  Numeric values (e.g. 2.844) were then treated
+    as file paths, causing FileNotFoundError and ValueError.
+    """
+
+    def test_0d_numeric_over_time_no_file_error(self):
+        """0 input + numeric result + over_time must not raise FileNotFoundError."""
+        benchable = ZeroDimBench()
+        res = _run_over_time(benchable, [], ["value"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+
+    def test_0d_numeric_over_time_with_repeats(self):
+        """0 input + numeric result + repeats + over_time must not raise ValueError."""
+        benchable = ZeroDimBench()
+        res = _run_over_time(benchable, [], ["value"], repeats=2, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+
+
 class TestBarResultOverTime:
     """Test BarResult with over_time slider."""
 
