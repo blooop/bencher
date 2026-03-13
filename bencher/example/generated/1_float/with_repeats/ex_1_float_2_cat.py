@@ -2,8 +2,9 @@
 
 from typing import Any
 
-import bencher as bch
+import random
 import math
+import bencher as bch
 
 
 class SortAnalysis(bch.ParametrizedSweep):
@@ -22,7 +23,7 @@ class SortAnalysis(bch.ParametrizedSweep):
         self.time = (
             algo_factor * dist_factor * self.array_size * math.log2(self.array_size + 1) * 0.001
         )
-        self.time += __import__("random").gauss(0, 0.15 * self.time)
+        self.time += random.gauss(0, 0.15 * self.time)
         return super().__call__()
 
 

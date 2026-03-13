@@ -279,7 +279,11 @@ class ResultCollector:
             c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
 
     def load_history_cache(
-        self, dataset: xr.Dataset, bench_cfg_hash: str, clear_history: bool
+        self,
+        dataset: xr.Dataset,
+        bench_cfg_hash: str,
+        clear_history: bool,
+        max_time_events: int | None = None,
     ) -> xr.Dataset:
         """Load historical data from a cache if over_time is enabled.
 
@@ -291,6 +295,8 @@ class ResultCollector:
             dataset (xr.Dataset): Freshly calculated benchmark data for the current run
             bench_cfg_hash (str): Hash of the input variables used to identify cached data
             clear_history (bool): If True, clears historical data instead of loading it
+            max_time_events (int | None): Maximum number of over_time events to retain.
+                Oldest events are trimmed. None means unlimited.
 
         Returns:
             xr.Dataset: Combined dataset with both historical and current benchmark data,
@@ -307,6 +313,10 @@ class ResultCollector:
                     dataset = xr.concat([ds_old, dataset], "over_time")
                 else:
                     logger.info("did not detect any historical data")
+
+            if max_time_events is not None and "over_time" in dataset.dims:
+                if dataset.sizes["over_time"] > max_time_events:
+                    dataset = dataset.isel(over_time=slice(-max_time_events, None))
 
             logger.info("saving data to history cache")
             c[bench_cfg_hash] = dataset

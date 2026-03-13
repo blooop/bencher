@@ -17,7 +17,7 @@ INLINE_CLASSES = {
         "call_body": ["self.baseline = 42.0"],
         "noise_body": [
             "self.baseline = 42.0",
-            "self.baseline += __import__('random').gauss(0, {noise} * 5)",
+            "self.baseline += random.gauss(0, {noise} * 5)",
         ],
     },
     (0, 1): {
@@ -36,7 +36,7 @@ INLINE_CLASSES = {
         ],
         "noise_body": [
             'base = {{"redis": 1.2, "memcached": 1.5, "local": 0.3}}[self.backend]',
-            "self.latency = base + __import__('random').gauss(0, {noise} * base)",
+            "self.latency = base + random.gauss(0, {noise} * base)",
         ],
     },
     (0, 2): {
@@ -58,7 +58,7 @@ INLINE_CLASSES = {
         "noise_body": [
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
             'region_base = {{"us-east": 500, "eu-west": 420, "ap-south": 350}}[self.region]',
-            "self.throughput = region_base * proto_factor + __import__('random').gauss(0, {noise} * 50)",
+            "self.throughput = region_base * proto_factor + random.gauss(0, {noise} * 50)",
         ],
     },
     (0, 3): {
@@ -83,7 +83,7 @@ INLINE_CLASSES = {
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
             'region_base = {{"us-east": 500, "eu-west": 420, "ap-south": 350}}[self.region]',
             'log_penalty = {{"debug": 0.7, "info": 1.0, "warn": 1.0}}[self.log_level]',
-            "self.throughput = region_base * proto_factor * log_penalty + __import__('random').gauss(0, {noise} * 50)",
+            "self.throughput = region_base * proto_factor * log_penalty + random.gauss(0, {noise} * 50)",
         ],
     },
     (1, 0): {
@@ -101,7 +101,7 @@ INLINE_CLASSES = {
         ],
         "noise_body": [
             "self.time = self.array_size * math.log2(self.array_size + 1) * 0.001",
-            "self.time += __import__('random').gauss(0, {noise} * self.time)",
+            "self.time += random.gauss(0, {noise} * self.time)",
         ],
     },
     (1, 1): {
@@ -122,7 +122,7 @@ INLINE_CLASSES = {
         "noise_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
             "self.time = algo_factor * self.array_size * math.log2(self.array_size + 1) * 0.001",
-            "self.time += __import__('random').gauss(0, {noise} * self.time)",
+            "self.time += random.gauss(0, {noise} * self.time)",
         ],
     },
     (1, 2): {
@@ -146,7 +146,7 @@ INLINE_CLASSES = {
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
             'dist_factor = {{"uniform": 1.0, "sorted": 0.6, "reversed": 1.8}}[self.distribution]',
             "self.time = algo_factor * dist_factor * self.array_size * math.log2(self.array_size + 1) * 0.001",
-            "self.time += __import__('random').gauss(0, {noise} * self.time)",
+            "self.time += random.gauss(0, {noise} * self.time)",
         ],
     },
     (1, 3): {
@@ -173,7 +173,7 @@ INLINE_CLASSES = {
             'dist_factor = {{"uniform": 1.0, "sorted": 0.6, "reversed": 1.8}}[self.distribution]',
             'stab_factor = {{"stable": 1.1, "unstable": 1.0}}[self.stability]',
             "self.time = algo_factor * dist_factor * stab_factor * self.array_size * math.log2(self.array_size + 1) * 0.001",
-            "self.time += __import__('random').gauss(0, {noise} * self.time)",
+            "self.time += random.gauss(0, {noise} * self.time)",
         ],
     },
     (2, 0): {
@@ -192,7 +192,7 @@ INLINE_CLASSES = {
         ],
         "noise_body": [
             "self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))",
-            "self.ratio += __import__('random').gauss(0, {noise} * 0.3)",
+            "self.ratio += random.gauss(0, {noise} * 0.3)",
         ],
     },
     (2, 1): {
@@ -214,7 +214,7 @@ INLINE_CLASSES = {
         "noise_body": [
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
             "self.ratio = codec_eff * (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))",
-            "self.ratio += __import__('random').gauss(0, {noise} * 0.3)",
+            "self.ratio += random.gauss(0, {noise} * 0.3)",
         ],
     },
     (2, 2): {
@@ -239,7 +239,7 @@ INLINE_CLASSES = {
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
             'effort_mult = {{"fast": 0.8, "balanced": 1.0, "max": 1.15}}[self.effort]',
             "self.ratio = codec_eff * effort_mult * (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))",
-            "self.ratio += __import__('random').gauss(0, {noise} * 0.3)",
+            "self.ratio += random.gauss(0, {noise} * 0.3)",
         ],
     },
     (3, 0): {
@@ -259,7 +259,7 @@ INLINE_CLASSES = {
         ],
         "noise_body": [
             "self.throughput = 500.0 / (1.0 + 0.5 * math.log2(self.key_size / 8)) / (1.0 + 0.3 * math.log2(self.payload_size / 64)) * (self.iterations / 100)",
-            "self.throughput += __import__('random').gauss(0, {noise} * 30)",
+            "self.throughput += random.gauss(0, {noise} * 30)",
         ],
     },
     (3, 1): {
@@ -282,7 +282,7 @@ INLINE_CLASSES = {
         "noise_body": [
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
             "self.throughput = algo_speed * 500.0 / (1.0 + 0.5 * math.log2(self.key_size / 8)) / (1.0 + 0.3 * math.log2(self.payload_size / 64)) * (self.iterations / 100)",
-            "self.throughput += __import__('random').gauss(0, {noise} * 30)",
+            "self.throughput += random.gauss(0, {noise} * 30)",
         ],
     },
     (3, 2): {
@@ -308,7 +308,7 @@ INLINE_CLASSES = {
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
             'mode_factor = {{"stream": 1.0, "block": 0.85}}[self.mode]',
             "self.throughput = algo_speed * mode_factor * 500.0 / (1.0 + 0.5 * math.log2(self.key_size / 8)) / (1.0 + 0.3 * math.log2(self.payload_size / 64)) * (self.iterations / 100)",
-            "self.throughput += __import__('random').gauss(0, {noise} * 30)",
+            "self.throughput += random.gauss(0, {noise} * 30)",
         ],
     },
 }
@@ -442,7 +442,8 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"
             )
-            imports = f"{info['imports']}\nfrom datetime import datetime, timedelta"
+            noise_imports = "import random\n" if noise_val > 0 else ""
+            imports = f"{noise_imports}{info['imports']}\nfrom datetime import datetime, timedelta"
             gen.generate_example(
                 title=title,
                 output_dir=f"{self.float_vars_count}_float/{variant}",
@@ -463,6 +464,10 @@ class BenchMetaGen(bch.ParametrizedSweep):
             if self.sample_with_repeats > 1:
                 run_kwargs["repeats"] = self.sample_with_repeats
 
+            sweep_extra_imports = list(extra_imports)
+            if noise_val > 0:
+                sweep_extra_imports.insert(0, "import random")
+
             gen.generate_sweep_example(
                 title=title,
                 output_dir=f"{self.float_vars_count}_float/{variant}",
@@ -473,7 +478,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 input_vars=repr(input_var_names),
                 result_vars=repr(result_var_names),
                 class_code=class_code,
-                extra_imports=extra_imports or None,
+                extra_imports=sweep_extra_imports or None,
                 run_kwargs=run_kwargs,
             )
 

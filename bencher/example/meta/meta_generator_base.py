@@ -109,11 +109,12 @@ if __name__ == "__main__":
             run_kwargs: Dict of kwargs for bch.run() (e.g. {"level": 4, "repeats": 10}).
             module_docstring: Optional override for the module-level docstring.
         """
-        import_lines = ["import bencher as bch"]
-        if benchable_module is not None:
-            import_lines.append(f"from {benchable_module} import {benchable_class}")
+        import_lines = []
         if extra_imports:
             import_lines.extend(extra_imports)
+        import_lines.append("import bencher as bch")
+        if benchable_module is not None:
+            import_lines.append(f"from {benchable_module} import {benchable_class}")
         imports = "\n".join(import_lines)
 
         body_lines = []

@@ -2,9 +2,8 @@
 
 from typing import Any
 
-import math
 import random
-
+import math
 import bencher as bch
 from datetime import datetime, timedelta
 
