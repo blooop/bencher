@@ -92,6 +92,7 @@ class BenchResultBase:
         self.plt_cnt_cfg = PltCntCfg()
         self.plot_inputs = []
         self.dataset_list = []
+        self.regression_report = None
 
         # self.width=600/
         # self.height=600

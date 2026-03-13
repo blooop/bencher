@@ -242,6 +242,34 @@ class BenchRunCfg(BenchPlotSrvCfg):
         doc="The date the bench run was performed",
     )
 
+    # ==================== REGRESSION DETECTION PARAMETERS ====================
+    # These parameters control automatic regression detection for over_time benchmarks
+
+    regression_detection: bool = param.Boolean(
+        False,
+        doc="Enable regression detection when over_time is True. After loading history, "
+        "statistically compare the latest run against historical data.",
+    )
+
+    regression_method: str = param.Selector(
+        default="percentage",
+        objects=["percentage", "iqr", "ttest"],
+        doc="Detection method: 'percentage' (mean comparison), "
+        "'iqr' (IQR outlier detection), 'ttest' (Welch's t-test).",
+    )
+
+    regression_threshold: float = param.Number(
+        default=5.0,
+        doc="Threshold for regression detection. For 'percentage': percent change threshold. "
+        "For 'iqr': IQR multiplier (default 1.5). For 'ttest': significance level alpha.",
+    )
+
+    regression_fail: bool = param.Boolean(
+        False,
+        doc="If True, raise RegressionError when a regression is detected. "
+        "Useful for failing CI pipelines on benchmark regressions.",
+    )
+
     def __init__(self, **params: Any) -> None:
         """Initialize BenchRunCfg with current datetime if not provided."""
         if "run_date" not in params:

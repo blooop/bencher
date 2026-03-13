@@ -25,6 +25,7 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str
 from bencher.sample_order import SampleOrder
+from bencher.regression import detect_regressions, RegressionError
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
@@ -571,6 +572,13 @@ class Bench(BenchPlotServer):
                 if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
                     bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
                     bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
+
+            if run_cfg.over_time and run_cfg.regression_detection:
+                bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
+                if bench_res.regression_report.has_regressions:
+                    logging.warning(bench_res.regression_report.summary())
+                    if run_cfg.regression_fail:
+                        raise RegressionError(bench_res.regression_report.summary())
 
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)
