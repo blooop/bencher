@@ -317,7 +317,8 @@ class ResultCollector:
                     ):
                         logger.warning(
                             "Discarding incompatible historical data "
-                            "(over_time dtype changed between runs)"
+                            "(over_time dtype changed: "
+                            f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
                         )
                     else:
                         dataset = xr.concat([ds_old, dataset], "over_time")
