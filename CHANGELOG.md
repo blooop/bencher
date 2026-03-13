@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.66.1] - 2026-03-13
+
+### Fixed
+- Fix `DTypePromotionError` crash when `over_time` coordinate type changes between runs (e.g., `time_event=None` → `time_event="v1.0"`)
+- Check `over_time` dtype compatibility before concat, discarding incompatible history with a warning instead of crashing
+- Include old/new dtypes in the warning message for easier debugging
+
 ## [1.66.0] - 2026-03-12
 
 ### Added
