@@ -400,9 +400,7 @@ class TestDTypeIncompatibleHistory(unittest.TestCase):
             coords={"over_time": ["v1.0"]},
         )
         with self.assertLogs(level="WARNING") as captured_logs:
-            result = self.collector.load_history_cache(
-                ds_string, unique_hash, clear_history=False
-            )
+            result = self.collector.load_history_cache(ds_string, unique_hash, clear_history=False)
 
         # Should warn about discarded history
         self.assertTrue(
