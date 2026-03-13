@@ -20,7 +20,7 @@ from bencher.variables.results import ResultVar
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
-from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo
+from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo, ResultImage
 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
@@ -677,6 +677,7 @@ class BenchResultBase:
                 self.bench_cfg.over_time
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
+                and isinstance(result_var, (ResultVideo, ResultImage))
             ):
                 return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
