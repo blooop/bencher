@@ -75,6 +75,22 @@ def _has_holomap_column(plots):
     return False
 
 
+def _find_over_time_widget(obj, depth=0):
+    """Recursively find the over_time widget from a Panel layout, or None."""
+    if isinstance(obj, pn.widgets.Widget) and getattr(obj, "name", None) == "over_time":
+        return obj
+    if depth > 8:
+        return None
+    try:
+        for child in obj:
+            result = _find_over_time_widget(child, depth + 1)
+            if result is not None:
+                return result
+    except TypeError:
+        pass
+    return None
+
+
 class ZeroDimBench(bch.ParametrizedSweep):
     """Benchmark with no input vars — 0D numeric result for over_time regression test."""
 
@@ -161,3 +177,18 @@ class TestCurveResultOverTime:
         assert len(plots) > 0
         # Curve with over_time should produce a Column with slider
         assert any(isinstance(p, pn.Column) for p in plots)
+
+
+class TestOverTimeWidgetIsDiscreteSlider:
+    """Verify over_time uses DiscreteSlider, not a Select dropdown."""
+
+    def test_bar_over_time_uses_discrete_slider(self):
+        """Bar chart over_time widget must be a DiscreteSlider."""
+        benchable = SimpleBench()
+        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        widget = _find_over_time_widget(plots)
+        assert widget is not None, "Expected an over_time widget in the plots"
+        assert isinstance(widget, pn.widgets.DiscreteSlider), (
+            f"Expected DiscreteSlider, got {type(widget).__name__}"
+        )
