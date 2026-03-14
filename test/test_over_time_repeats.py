@@ -75,6 +75,38 @@ def _has_holomap_column(plots):
     return False
 
 
+def _find_over_time_widget(obj, depth=0):
+    """Recursively find the over_time widget from a Panel layout, or None."""
+    if isinstance(obj, pn.widgets.Widget) and getattr(obj, "name", None) == "over_time":
+        return obj
+    if depth > 8:
+        return None
+    try:
+        for child in obj:
+            result = _find_over_time_widget(child, depth + 1)
+            if result is not None:
+                return result
+    except TypeError:
+        pass
+    return None
+
+
+def _find_all_over_time_widgets(obj, depth=0):
+    """Recursively collect *all* over_time widgets from a Panel layout."""
+    found = []
+    if isinstance(obj, pn.widgets.Widget) and getattr(obj, "name", None) == "over_time":
+        found.append(obj)
+        return found
+    if depth > 8:
+        return found
+    try:
+        for child in obj:
+            found.extend(_find_all_over_time_widgets(child, depth + 1))
+    except TypeError:
+        pass
+    return found
+
+
 class ZeroDimBench(bch.ParametrizedSweep):
     """Benchmark with no input vars — 0D numeric result for over_time regression test."""
 
@@ -161,3 +193,22 @@ class TestCurveResultOverTime:
         assert len(plots) > 0
         # Curve with over_time should produce a Column with slider
         assert any(isinstance(p, pn.Column) for p in plots)
+
+
+class TestOverTimeWidgetIsDiscreteSlider:
+    """Verify over_time uses DiscreteSlider, not a Select dropdown."""
+
+    def test_bar_over_time_uses_discrete_slider(self):
+        """All over_time widgets must be DiscreteSlider, none should be Select."""
+        benchable = SimpleBench()
+        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        widgets = _find_all_over_time_widgets(plots)
+        assert len(widgets) > 0, "Expected at least one over_time widget in the plots"
+        for widget in widgets:
+            assert isinstance(widget, pn.widgets.DiscreteSlider), (
+                f"Expected DiscreteSlider, got {type(widget).__name__}"
+            )
+            assert not isinstance(widget, pn.widgets.Select), (
+                "over_time widget must not be a Select dropdown"
+            )
