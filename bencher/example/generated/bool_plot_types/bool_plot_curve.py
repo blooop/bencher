@@ -32,4 +32,4 @@ def example_bool_plot_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_curve, level=3, repeats=5)
+    bch.run(example_bool_plot_curve, level=3, repeats=20)

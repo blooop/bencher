@@ -33,4 +33,4 @@ def example_bool_plot_surface(run_cfg: bch.BenchRunCfg | None = None) -> bch.Ben
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_surface, level=2, repeats=2)
+    bch.run(example_bool_plot_surface, level=2, repeats=10)

@@ -17,16 +17,16 @@ OUTPUT_DIR = "bool_plot_types"
 
 _HEALTH_CHECK_CAT_CODE = """\
 class HealthCheckCat(bch.ParametrizedSweep):
-    \"\"\"Check service health across backends.\"\"\"
+    \"\"\"Check service health across backends with varying reliability.\"\"\"
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
+    backend = bch.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
 
     healthy = bch.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
-        lookup = {"redis": True, "memcached": True, "local": False}
-        self.healthy = lookup[self.backend]
+        rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
+        self.healthy = random.random() < rates[self.backend]
         return super().__call__()"""
 
 _HEALTH_CHECK_FLOAT_CODE = """\
@@ -57,21 +57,6 @@ class HealthCheckFloatNoisy(bch.ParametrizedSweep):
         self.healthy = random.random() < probability
         return super().__call__()"""
 
-_HEALTH_CHECK_2D_CODE = """\
-class HealthCheck2D(bch.ParametrizedSweep):
-    \"\"\"2D health check based on two float inputs.\"\"\"
-
-    x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
-    y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
-
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        score = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
-        self.healthy = score > 0.0
-        return super().__call__()"""
-
 _HEALTH_CHECK_2D_NOISY_CODE = """\
 class HealthCheck2DNoisy(bch.ParametrizedSweep):
     \"\"\"2D health check with noise for repeated-run surface plots.\"\"\"
@@ -89,27 +74,30 @@ class HealthCheck2DNoisy(bch.ParametrizedSweep):
 
 _RELIABILITY_CAT_CODE = """\
 class ReliabilityCat(bch.ParametrizedSweep):
-    \"\"\"Service reliability check with random outcomes per repeat.\"\"\"
+    \"\"\"Service reliability check with varying pass rates across backends.\"\"\"
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
+    backend = bch.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
 
     healthy = bch.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
-        rates = {"redis": 0.95, "memcached": 0.80, "local": 0.60}
+        rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
         self.healthy = random.random() < rates[self.backend]
         return super().__call__()"""
 
-_COIN_FLIP_CODE = """\
-class CoinFlip(bch.ParametrizedSweep):
-    \"\"\"Simple coin flip with no inputs — shows distribution of True/False.\"\"\"
+_PASS_RATE_FLOAT_CODE = """\
+class PassRateFloat(bch.ParametrizedSweep):
+    \"\"\"Test pass rate that decreases with complexity.\"\"\"
 
-    heads = bch.ResultBool(doc="Whether the coin landed heads")
+    complexity = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+
+    passed = bch.ResultBool(doc="Whether the test passed")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
-        self.heads = random.random() < 0.5
+        rate = 1.0 - 0.8 * self.complexity ** 1.5
+        self.passed = random.random() < rate
         return super().__call__()"""
 
 # ---------------------------------------------------------------------------
@@ -119,8 +107,9 @@ class CoinFlip(bch.ParametrizedSweep):
 BOOL_PLOT_CONFIGS = {
     "bar": {
         "float_dims": 0,
-        "repeats": 1,
+        "repeats": 30,
         "plot_call": "res.to_bar()",
+        "extra_imports": ["import random"],
         "input_vars": '["backend"]',
         "result_vars": '["healthy"]',
         "benchable_class": "HealthCheckCat",
@@ -138,7 +127,7 @@ BOOL_PLOT_CONFIGS = {
     },
     "curve": {
         "float_dims": 1,
-        "repeats": 5,
+        "repeats": 20,
         "plot_call": "res.to_curve()",
         "input_vars": '["load"]',
         "result_vars": '["healthy"]',
@@ -148,17 +137,17 @@ BOOL_PLOT_CONFIGS = {
     },
     "heatmap": {
         "float_dims": 2,
-        "repeats": 1,
+        "repeats": 10,
         "plot_call": "res.to_heatmap()",
         "input_vars": '["x", "y"]',
         "result_vars": '["healthy"]',
-        "benchable_class": "HealthCheck2D",
-        "class_code": _HEALTH_CHECK_2D_CODE,
-        "extra_imports": ["import math"],
+        "benchable_class": "HealthCheck2DNoisy",
+        "class_code": _HEALTH_CHECK_2D_NOISY_CODE,
+        "extra_imports": ["import math", "import random"],
     },
     "surface": {
         "float_dims": 2,
-        "repeats": 2,
+        "repeats": 10,
         "plot_call": "res.to_surface()",
         "input_vars": '["x", "y"]',
         "result_vars": '["healthy"]',
@@ -168,7 +157,7 @@ BOOL_PLOT_CONFIGS = {
     },
     "violin": {
         "float_dims": 0,
-        "repeats": 10,
+        "repeats": 50,
         "plot_call": "res.to(ViolinResult)",
         "extra_imports": [
             "import random",
@@ -184,7 +173,7 @@ BOOL_PLOT_CONFIGS = {
     },
     "box_whisker": {
         "float_dims": 0,
-        "repeats": 10,
+        "repeats": 50,
         "plot_call": "res.to(BoxWhiskerResult)",
         "extra_imports": [
             "import random",
@@ -200,7 +189,7 @@ BOOL_PLOT_CONFIGS = {
     },
     "scatter_jitter": {
         "float_dims": 0,
-        "repeats": 10,
+        "repeats": 50,
         "plot_call": "res.to(ScatterJitterResult)",
         "extra_imports": [
             "import random",
@@ -215,17 +204,17 @@ BOOL_PLOT_CONFIGS = {
         "class_code": _RELIABILITY_CAT_CODE,
     },
     "histogram": {
-        "float_dims": 0,
-        "repeats": 20,
+        "float_dims": 1,
+        "repeats": 30,
         "plot_call": "res.to(HistogramResult)",
         "extra_imports": [
             "import random",
             "from bencher.results.histogram_result import HistogramResult",
         ],
-        "input_vars": "[]",
-        "result_vars": '["heads"]',
-        "benchable_class": "CoinFlip",
-        "class_code": _COIN_FLIP_CODE,
+        "input_vars": '["complexity"]',
+        "result_vars": '["passed"]',
+        "benchable_class": "PassRateFloat",
+        "class_code": _PASS_RATE_FLOAT_CODE,
     },
 }
 

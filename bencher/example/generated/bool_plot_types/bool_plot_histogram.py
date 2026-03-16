@@ -8,25 +8,28 @@ from bencher.results.histogram_result import HistogramResult
 import bencher as bch
 
 
-class CoinFlip(bch.ParametrizedSweep):
-    """Simple coin flip with no inputs — shows distribution of True/False."""
+class PassRateFloat(bch.ParametrizedSweep):
+    """Test pass rate that decreases with complexity."""
 
-    heads = bch.ResultBool(doc="Whether the coin landed heads")
+    complexity = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+
+    passed = bch.ResultBool(doc="Whether the test passed")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        self.heads = random.random() < 0.5
+        rate = 1.0 - 0.8 * self.complexity**1.5
+        self.passed = random.random() < rate
         return super().__call__()
 
 
 def example_bool_plot_histogram(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Bool Plot: Histogram."""
-    bench = CoinFlip().to_bench(run_cfg)
-    res = bench.plot_sweep(input_vars=[], result_vars=["heads"])
+    bench = PassRateFloat().to_bench(run_cfg)
+    res = bench.plot_sweep(input_vars=["complexity"], result_vars=["passed"])
     bench.report.append(res.to(HistogramResult))
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_histogram, level=3, repeats=20)
+    bch.run(example_bool_plot_histogram, level=3, repeats=30)

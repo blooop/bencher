@@ -9,15 +9,15 @@ import bencher as bch
 
 
 class ReliabilityCat(bch.ParametrizedSweep):
-    """Service reliability check with random outcomes per repeat."""
+    """Service reliability check with varying pass rates across backends."""
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
+    backend = bch.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
 
     healthy = bch.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        rates = {"redis": 0.95, "memcached": 0.80, "local": 0.60}
+        rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
         self.healthy = random.random() < rates[self.backend]
         return super().__call__()
 
@@ -32,4 +32,4 @@ def example_bool_plot_violin(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_violin, level=3, repeats=10)
+    bch.run(example_bool_plot_violin, level=3, repeats=50)
