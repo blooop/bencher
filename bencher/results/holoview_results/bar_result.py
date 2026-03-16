@@ -132,9 +132,7 @@ class BarResult(HoloviewResult):
                 plot = da.hvplot.line(
                     x="over_time", y=da.name, title=title, widget_location="bottom", **kwargs
                 )
-                if hasattr(plot, "opts"):
-                    plot = plot.opts(**opts_kwargs)
-                return plot
+                return self._apply_opts(plot, **opts_kwargs)
             # 0D + single time point: nothing meaningful to bar-chart.
             return None
 
@@ -144,14 +142,11 @@ class BarResult(HoloviewResult):
             for t in da.coords["over_time"].values:
                 da_t = da.sel(over_time=t)
                 plot_t = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
-                if hasattr(plot_t, "opts"):
-                    plot_t = plot_t.opts(**opts_kwargs)
+                plot_t = self._apply_opts(plot_t, **opts_kwargs)
                 holomap[t] = plot_t
             return self._holomap_with_slider_bottom(holomap)
 
         plot = da.hvplot.bar(
             x=x_dim, y=da.name, by=by, title=title, widget_location="bottom", **kwargs
         )
-        if hasattr(plot, "opts"):
-            plot = plot.opts(**opts_kwargs)
-        return plot
+        return self._apply_opts(plot, **opts_kwargs)

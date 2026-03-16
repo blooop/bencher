@@ -1,8 +1,11 @@
 import unittest
 import bencher as bch
 import numpy as np
+import holoviews as hv
+import panel as pn
 
 from bencher.example.meta.example_meta import BenchableObject
+from bencher.results.bench_result_base import ReduceType
 
 
 class TstBench(bch.ParametrizedSweep):
@@ -266,3 +269,207 @@ class TestBenchResultBase(unittest.TestCase):
 
         ds_filtered_names = res.select_level(ds_raw, 2, exclude_names="cat_var")
         asserts(ds_filtered_names, [0, 4], ["a", "b", "c", "d", "e"])
+
+    def _make_1d_result(self, repeats=1):
+        bench = BenchableObject().to_bench(bch.BenchRunCfg(repeats=repeats))
+        return bench.plot_sweep(
+            "test_base",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
+            run_cfg=bch.BenchRunCfg(repeats=repeats),
+            plot_callbacks=False,
+        )
+
+    def test_get_optimal_value_indices(self):
+        res = self._make_1d_result()
+        rv = res.bench_cfg.result_vars[0]
+        da = res.get_optimal_value_indices(rv)
+        self.assertIsNotNone(da)
+        import xarray as xr
+
+        self.assertIsInstance(da, xr.DataArray)
+
+    def test_get_optimal_vec(self):
+        res = self._make_1d_result()
+        rv = res.bench_cfg.result_vars[0]
+        ivs = res.bench_cfg.input_vars
+        vec = res.get_optimal_vec(rv, ivs)
+        self.assertIsInstance(vec, list)
+        self.assertEqual(len(vec), len(ivs))
+
+    def test_get_optimal_inputs_tuple(self):
+        res = self._make_1d_result()
+        rv = res.bench_cfg.result_vars[0]
+        output = res.get_optimal_inputs(rv)
+        self.assertIsInstance(output, list)
+        self.assertTrue(len(output) > 0)
+
+    def test_get_optimal_inputs_dict(self):
+        res = self._make_1d_result()
+        rv = res.bench_cfg.result_vars[0]
+        output = res.get_optimal_inputs(rv, as_dict=True)
+        self.assertIsInstance(output, dict)
+
+    def test_get_optimal_inputs_no_consts(self):
+        res = self._make_1d_result()
+        rv = res.bench_cfg.result_vars[0]
+        output = res.get_optimal_inputs(rv, keep_existing_consts=False)
+        self.assertIsInstance(output, list)
+
+    def test_get_hmap_none(self):
+        res = self._make_1d_result()
+        # No hmaps stored, should return None
+        result = res.get_hmap("nonexistent")
+        self.assertIsNone(result)
+
+    def test_to_plot_title(self):
+        res = self._make_1d_result()
+        title = res.to_plot_title()
+        self.assertIsInstance(title, str)
+        self.assertIn("distance", title)
+        self.assertIn("float1", title)
+
+    def test_to_plot_title_empty(self):
+        # Test with no input vars
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "test_base_empty",
+            input_vars=[],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        title = res.to_plot_title()
+        self.assertEqual(title, "")
+
+    def test_to_dataset_with_result_var_str(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset(result_var="distance")
+        self.assertIn("distance", ds.data_vars)
+
+    def test_to_dataset_with_result_var_param(self):
+        res = self._make_1d_result()
+        rv = res.bench_cfg.result_vars[0]
+        ds = res.to_dataset(result_var=rv)
+        self.assertIn("distance", ds.data_vars)
+
+    def test_to_dataset_reduce_none(self):
+        res = self._make_1d_result(repeats=2)
+        ds = res.to_dataset(reduce=ReduceType.NONE)
+        self.assertIn("repeat", ds.dims)
+
+    def test_to_dataset_reduce_minmax(self):
+        res = self._make_1d_result(repeats=2)
+        ds = res.to_dataset(reduce=ReduceType.MINMAX)
+        # Should have mean and range vars
+        self.assertIn("distance", ds.data_vars)
+        self.assertIn("distance_range", ds.data_vars)
+
+    def test_to_dataset_agg_mean(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
+        self.assertNotIn("float1", ds.dims)
+
+    def test_to_dataset_agg_sum(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="sum")
+        self.assertNotIn("float1", ds.dims)
+
+    def test_to_dataset_agg_max(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="max")
+        self.assertNotIn("float1", ds.dims)
+
+    def test_to_dataset_agg_min(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="min")
+        self.assertNotIn("float1", ds.dims)
+
+    def test_to_dataset_agg_median(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="median")
+        self.assertNotIn("float1", ds.dims)
+
+    def test_to_dataset_agg_missing_dim(self):
+        res = self._make_1d_result()
+        # Aggregate over non-existent dim - should warn and return unaggregated
+        ds = res.to_dataset(agg_over_dims=["nonexistent_dim"], agg_fn="mean")
+        self.assertIn("float1", ds.dims)
+
+    def test_describe_sweep(self):
+        res = self._make_1d_result()
+        desc = res.describe_sweep()
+        self.assertIsNotNone(desc)
+
+    def test_map_plot_panes(self):
+        res = self._make_1d_result()
+
+        def plot_cb(dataset, result_var, **kwargs):
+            return pn.pane.Markdown(f"# {result_var.name}")
+
+        result = res.map_plot_panes(plot_cb)
+        self.assertIsNotNone(result)
+
+    def test_to_hv_dataset_none_reduce(self):
+        res = self._make_1d_result(repeats=2)
+        hv_ds = res.to_hv_dataset(ReduceType.NONE)
+        self.assertIsInstance(hv_ds, hv.Dataset)
+
+    def test_to_pandas(self):
+        res = self._make_1d_result()
+        df = res.to_pandas()
+        self.assertIn("distance", df.columns)
+        self.assertIn("float1", df.columns)
+
+    def test_to_pandas_no_reset(self):
+        res = self._make_1d_result()
+        df = res.to_pandas(reset_index=False)
+        self.assertIn("distance", df.columns)
+
+    def test_to_xarray(self):
+        res = self._make_1d_result()
+        ds = res.to_xarray()
+        self.assertIn("distance", ds.data_vars)
+
+    def test_set_plot_size(self):
+        res = self._make_1d_result()
+        res.bench_cfg.plot_size = 500
+        kwargs = res.set_plot_size()
+        self.assertEqual(kwargs["width"], 500)
+        self.assertEqual(kwargs["height"], 500)
+
+    def test_set_plot_size_with_overrides(self):
+        res = self._make_1d_result()
+        res.bench_cfg.plot_size = 500
+        res.bench_cfg.plot_width = 700
+        res.bench_cfg.plot_height = 300
+        kwargs = res.set_plot_size()
+        self.assertEqual(kwargs["width"], 700)
+        self.assertEqual(kwargs["height"], 300)
+
+    def test_title_from_ds(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset()
+        rv = res.bench_cfg.result_vars[0]
+        title = res.title_from_ds(ds, rv)
+        self.assertIsInstance(title, str)
+
+    def test_title_from_ds_override(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset()
+        rv = res.bench_cfg.result_vars[0]
+        title = res.title_from_ds(ds, rv, title="Custom Title")
+        self.assertEqual(title, "Custom Title")
+
+    def test_title_from_ds_dataarray(self):
+        res = self._make_1d_result()
+        ds = res.to_dataset()
+        da = ds["distance"]
+        rv = res.bench_cfg.result_vars[0]
+        title = res.title_from_ds(da, rv)
+        self.assertIsInstance(title, str)
+
+    def test_result_samples(self):
+        res = self._make_1d_result()
+        samples = res.result_samples()
+        self.assertIsNotNone(samples)

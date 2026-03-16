@@ -1,0 +1,176 @@
+"""Tests for bencher/optuna_conversions.py"""
+
+import unittest
+from unittest.mock import MagicMock
+from enum import auto
+from strenum import StrEnum
+
+import optuna
+import panel as pn
+import param
+
+import bencher as bch
+from bencher.optuna_conversions import (
+    sweep_var_to_optuna_dist,
+    sweep_var_to_suggest,
+    summarise_optuna_study,
+    summarise_trial,
+)
+from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
+from bencher.variables.time import TimeSnapshot
+
+
+class SweepColor(StrEnum):
+    red = auto()
+    blue = auto()
+
+
+class SweepCfg(bch.ParametrizedSweep):
+    int_var = IntSweep(default=1, bounds=(0, 10))
+    float_var = FloatSweep(default=0.5, bounds=(0.0, 1.0))
+    enum_var = EnumSweep(SweepColor)
+    bool_var = BoolSweep(default=True)
+    string_var = StringSweep(["a", "b", "c"])
+    result = bch.ResultVar()
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.result = self.float_var * 2
+        return super().__call__()
+
+
+class TestSweepVarToOptunaDist(unittest.TestCase):
+    def test_int_sweep(self):
+        var = SweepCfg.param.int_var
+        dist = sweep_var_to_optuna_dist(var)
+        self.assertIsInstance(dist, optuna.distributions.IntDistribution)
+        self.assertEqual(dist.low, 0)
+        self.assertEqual(dist.high, 10)
+
+    def test_float_sweep(self):
+        var = SweepCfg.param.float_var
+        dist = sweep_var_to_optuna_dist(var)
+        self.assertIsInstance(dist, optuna.distributions.FloatDistribution)
+        self.assertAlmostEqual(dist.low, 0.0)
+        self.assertAlmostEqual(dist.high, 1.0)
+
+    def test_enum_sweep(self):
+        var = SweepCfg.param.enum_var
+        dist = sweep_var_to_optuna_dist(var)
+        self.assertIsInstance(dist, optuna.distributions.CategoricalDistribution)
+
+    def test_bool_sweep(self):
+        var = SweepCfg.param.bool_var
+        dist = sweep_var_to_optuna_dist(var)
+        self.assertIsInstance(dist, optuna.distributions.CategoricalDistribution)
+        self.assertEqual(dist.choices, (False, True))
+
+    def test_string_sweep(self):
+        var = SweepCfg.param.string_var
+        dist = sweep_var_to_optuna_dist(var)
+        self.assertIsInstance(dist, optuna.distributions.CategoricalDistribution)
+
+    def test_time_snapshot(self):
+        from datetime import datetime
+
+        ts = TimeSnapshot(datetime_src=datetime.now())
+        dist = sweep_var_to_optuna_dist(ts)
+        self.assertIsInstance(dist, optuna.distributions.FloatDistribution)
+
+    def test_unsupported_type(self):
+        # A plain param.Parameter is not supported
+        var = param.Parameter()
+        with self.assertRaises(ValueError):
+            sweep_var_to_optuna_dist(var)
+
+
+class TestSweepVarToSuggest(unittest.TestCase):
+    def test_int_suggest(self):
+        trial = MagicMock()
+        trial.suggest_int.return_value = 5
+        var = SweepCfg.param.int_var
+        result = sweep_var_to_suggest(var, trial)
+        self.assertEqual(result, 5)
+        trial.suggest_int.assert_called_once()
+
+    def test_float_suggest(self):
+        trial = MagicMock()
+        trial.suggest_float.return_value = 0.5
+        var = SweepCfg.param.float_var
+        result = sweep_var_to_suggest(var, trial)
+        self.assertEqual(result, 0.5)
+
+    def test_enum_suggest(self):
+        trial = MagicMock()
+        trial.suggest_categorical.return_value = SweepColor.red
+        var = SweepCfg.param.enum_var
+        result = sweep_var_to_suggest(var, trial)
+        self.assertEqual(result, SweepColor.red)
+
+    def test_bool_suggest(self):
+        trial = MagicMock()
+        trial.suggest_categorical.return_value = True
+        var = SweepCfg.param.bool_var
+        result = sweep_var_to_suggest(var, trial)
+        self.assertTrue(result)
+
+    def test_string_suggest(self):
+        trial = MagicMock()
+        trial.suggest_categorical.return_value = "a"
+        var = SweepCfg.param.string_var
+        result = sweep_var_to_suggest(var, trial)
+        self.assertEqual(result, "a")
+
+    def test_unsupported_type(self):
+        trial = MagicMock()
+        var = param.Parameter()
+        with self.assertRaises(ValueError):
+            sweep_var_to_suggest(var, trial)
+
+
+class TestCfgFromOptunaTrial(unittest.TestCase):
+    def test_creates_config(self):
+        # cfg_from_optuna_trial uses param.set_param which may not exist
+        # in newer param versions, so we test via the full optuna pipeline
+        # (bench_result_to_study) rather than calling it directly.
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test_optuna",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        # Verify the study can be created from bench results
+        study = res.bench_result_to_study(include_meta=True)
+        self.assertIsInstance(study, optuna.Study)
+        self.assertTrue(len(study.trials) > 0)
+
+
+class TestSummariseOptunaStudy(unittest.TestCase):
+    def test_summarise_study(self):
+        study = optuna.create_study(direction="minimize")
+        study.optimize(lambda trial: trial.suggest_float("x", 0, 1) ** 2, n_trials=5)
+        result = summarise_optuna_study(study)
+        self.assertIsInstance(result, pn.Column)
+        self.assertTrue(len(result) > 0)
+
+
+class TestSummariseTrial(unittest.TestCase):
+    def test_summarise_trial(self):
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+
+        study = optuna.create_study(direction="minimize")
+        study.optimize(lambda trial: trial.suggest_float("float_var", 0, 1), n_trials=3)
+        trial = study.best_trial
+        output = summarise_trial(trial, res.bench_cfg)
+        self.assertIsInstance(output, list)
+        self.assertTrue(len(output) > 0)
+        self.assertIn("Trial id:", output[0])
