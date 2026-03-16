@@ -288,7 +288,19 @@ class BenchResultBase:
                 if fn == "sum":
                     ds_out = ds_out.sum(dim=dims_present, skipna=True)
                 elif fn == "mean":
-                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+                    ds_agg_mean = ds_out.mean(dim=dims_present, skipna=True)
+                    non_std_vars = [v for v in ds_out.data_vars if not v.endswith("_std")]
+                    if non_std_vars:
+                        ds_agg_std = ds_out[non_std_vars].std(dim=dims_present, skipna=True)
+                        ds_agg_std = rename_ds(ds_agg_std, "std")
+                        # Drop pre-existing _std vars (e.g. from repeat reduction) so the
+                        # aggregation std replaces them without a merge conflict.
+                        old_std = [v for v in ds_agg_mean.data_vars if v.endswith("_std")]
+                        if old_std:
+                            ds_agg_mean = ds_agg_mean.drop_vars(old_std)
+                        ds_out = xr.merge([ds_agg_mean, ds_agg_std])
+                    else:
+                        ds_out = ds_agg_mean
                 elif fn == "max":
                     ds_out = ds_out.max(dim=dims_present, skipna=True)
                 elif fn == "min":

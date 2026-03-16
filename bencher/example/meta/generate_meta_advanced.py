@@ -16,6 +16,7 @@ ADVANCED_EXAMPLES = [
     "time_event",
     "max_time_events",
     "report_save",
+    "agg_over_time",
 ]
 
 
@@ -35,6 +36,8 @@ class MetaAdvanced(MetaGeneratorBase):
             self._generate_max_time_events()
         elif self.example == "report_save":
             self._generate_report_save()
+        elif self.example == "agg_over_time":
+            self._generate_agg_over_time()
 
         return super().__call__()
 
@@ -266,6 +269,71 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
             body=body,
             class_code=class_code,
             run_kwargs={"level": 3},
+        )
+
+    def _generate_agg_over_time(self):
+        """Aggregate over a swept dimension to produce a curve over time with error bounds."""
+        imports = "import math\nimport bencher as bch\nfrom datetime import datetime, timedelta"
+        class_code = '''\
+class ThermalSweep(bch.ParametrizedSweep):
+    """Measures heat dissipation across sensor positions over time.
+
+    When over_time=True and a float input is swept, aggregating over that
+    input (via agg_over_dims) collapses it to mean +/- std at each time
+    point. The std shows the spread across sensor positions.
+    """
+
+    position = bch.FloatSweep(
+        default=0.5, bounds=[0.0, 1.0], doc="Sensor position along rod"
+    )
+
+    temperature = bch.ResultVar(units="C", doc="Measured temperature")
+
+    _time_offset = 0.0  # set externally per snapshot
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        # Temperature varies along the rod and decays over time
+        self.temperature = (
+            80 * math.sin(math.pi * self.position)
+            * math.exp(-0.3 * self._time_offset)
+            + 20
+        )
+        return super().__call__()'''
+        body = """\
+run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg.over_time = True
+
+benchable = ThermalSweep()
+bench = benchable.to_bench(run_cfg)
+
+base_time = datetime(2024, 1, 1)
+for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
+    benchable._time_offset = offset
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    run_cfg.auto_plot = False
+    bench.plot_sweep(
+        "thermal_sweep",
+        input_vars=["position"],
+        result_vars=["temperature"],
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(seconds=i),
+    )
+
+# Aggregate over position: produces mean +/- std at each time point
+res = bench.results[-1]
+bench.report.append(res.to(bch.CurveResult, agg_over_dims=["position"]))
+"""
+        self.generate_example(
+            title="Aggregate Over Time — curve with error bounds from swept dims",
+            output_dir=OUTPUT_DIR,
+            filename="advanced_agg_over_time",
+            function_name="example_advanced_agg_over_time",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"level": 4},
         )
 
 
