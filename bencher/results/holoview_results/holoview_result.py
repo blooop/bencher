@@ -132,6 +132,19 @@ class HoloviewResult(VideoResult):
         )
 
     @staticmethod
+    def _apply_opts(plot, **opts_kwargs):
+        """Apply .opts() to a plot, handling panel.pane.HoloViews wrappers.
+
+        When hvplot is called with widget_location, it returns a panel pane
+        whose underlying .object is the actual holoviews element.
+        """
+        if hasattr(plot, "opts"):
+            return plot.opts(**opts_kwargs)
+        if hasattr(plot, "object") and hasattr(plot.object, "opts"):
+            plot.object = plot.object.opts(**opts_kwargs)
+        return plot
+
+    @staticmethod
     def _over_time_kdims() -> list:
         """Return the kdim list for over_time HoloMaps."""
         return ["over_time"]

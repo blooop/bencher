@@ -157,17 +157,14 @@ class HeatmapResult(HoloviewResult):
                     plot_t = da_t.hvplot.heatmap(
                         x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
                     )
-                    if hasattr(plot_t, "opts"):
-                        plot_t = plot_t.opts(xrotation=30)
+                    plot_t = self._apply_opts(plot_t, xrotation=30)
                     holomap[t] = plot_t
                 return self._holomap_with_slider_bottom(holomap)
 
             plot = dataset.hvplot.heatmap(
                 x=x, y=y, C=C, cmap="plasma", title=title, widget_location="bottom", **kwargs
             )
-            if hasattr(plot, "opts"):
-                plot = plot.opts(xrotation=30)
-            return plot
+            return self._apply_opts(plot, xrotation=30)
         return None
 
     def to_heatmap_container_tap_ds(

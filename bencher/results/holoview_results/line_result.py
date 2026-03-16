@@ -145,14 +145,16 @@ class LineResult(HoloviewResult):
             holomap = hv.HoloMap(kdims=self._over_time_kdims())
             for t in da_plot.coords["over_time"].values:
                 da_t = da_plot.sel(over_time=t)
-                plot_t = da_t.hvplot.line(x=x, by=by, title=title, xrotation=30, **kwargs)
+                plot_t = da_t.hvplot.line(x=x, by=by, title=title, **kwargs)
+                plot_t = self._apply_opts(plot_t, xrotation=30)
                 holomap[t] = plot_t
             return self._holomap_with_slider_bottom(holomap)
 
         time_widget_args = self.time_widget(title)
-        return da_plot.hvplot.line(
-            x=x, by=by, widget_location="bottom", xrotation=30, **time_widget_args, **kwargs
+        plot = da_plot.hvplot.line(
+            x=x, by=by, widget_location="bottom", **time_widget_args, **kwargs
         )
+        return self._apply_opts(plot, xrotation=30)
 
     def to_line_tap_ds(
         self,
