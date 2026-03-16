@@ -331,7 +331,7 @@ class TestBenchRunner(unittest.TestCase):
         source.pane.append("test_pane")
 
         initial_count = len(target.pane)
-        br._merge_reports(target, source)
+        br._merge_reports(target, source)  # pylint: disable=protected-access
         # After merge, target should have more panes
         self.assertGreater(len(target.pane), initial_count)
 
@@ -341,7 +341,7 @@ class TestBenchRunner(unittest.TestCase):
 
         br = bch.BenchRunner("test_merge_none")
         target = BenchReport("target")
-        br._merge_reports(target, None)
+        br._merge_reports(target, None)  # pylint: disable=protected-access
         # Should not crash
 
     def test_benchrunner_merge_reports_same(self):
@@ -350,7 +350,7 @@ class TestBenchRunner(unittest.TestCase):
 
         br = bch.BenchRunner("test_merge_same")
         report = BenchReport("same")
-        br._merge_reports(report, report)
+        br._merge_reports(report, report)  # pylint: disable=protected-access
         # Should not crash
 
     def test_benchrunner_name_from_callable(self):

@@ -60,10 +60,10 @@ class TestSurfaceResult(unittest.TestCase):
         self.assertIsInstance(result, pn.pane.Plotly)
 
     def test_to_surface_1d_filter_fail(self):
+        """1D data doesn't match the 2-float requirement for surface plots."""
+        from bencher.results.holoview_results.surface_result import SurfaceResult
+
         res = _run_1d_sweep()
-        result = res.to_surface(override=False)
-        # 1D doesn't match the 2-float requirement, so filter rejects
-        # With override=False it should not produce a surface plot
-        # (returns None or filter panel)
-        # The result depends on filter match; just ensure no crash
-        self.assertTrue(True)
+        result = SurfaceResult.to_surface(res, override=False)
+        # Filter rejects — returns None or a Markdown debug panel, not a Plotly surface
+        self.assertNotIsInstance(result, pn.pane.Plotly)
