@@ -1,4 +1,5 @@
-from typing import Optional
+from __future__ import annotations
+
 from functools import partial
 import panel as pn
 from param import Parameter
@@ -26,7 +27,7 @@ class VideoResult(BenchResultBase):
         container=None,
         level: int | None = None,
         **kwargs,
-    ) -> Optional[pn.pane.panel]:
+    ) -> pn.pane.panel | None:
         if hv_dataset is None:
             hv_dataset = self.to_hv_dataset(ReduceType.SQUEEZE, level=level)
         elif not isinstance(hv_dataset, hv.Dataset):

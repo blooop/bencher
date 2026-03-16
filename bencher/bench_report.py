@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import html
 import logging
 from typing import Callable
@@ -233,14 +235,14 @@ resizeIframe();
 
         .. code-block:: python
 
-            def publish_args(branch_name) -> Tuple[str, str]:
+            def publish_args(branch_name) -> tuple[str, str]:
                 return (
                     "https://github.com/blooop/bencher.git",
                     f"https://github.com/blooop/bencher/blob/{branch_name}")
 
 
         Args:
-            remote (Callable): A function the returns a tuple of the publishing urls. It must follow the signature def publish_args(branch_name) -> Tuple[str, str].  The first url is the git repo name, the second url needs to match the format for viewable html pages on your git provider.  The second url can use the argument branch_name to point to the report on a specified branch.
+            remote (Callable): A function the returns a tuple of the publishing urls. It must follow the signature def publish_args(branch_name) -> tuple[str, str].  The first url is the git repo name, the second url needs to match the format for viewable html pages on your git provider.  The second url can use the argument branch_name to point to the report on a specified branch.
 
         Returns:
             str: the url of the published report

@@ -4,9 +4,11 @@ This module provides the SweepExecutor class for managing parameter sweep execut
 job creation, and cache management in benchmark runs.
 """
 
+from __future__ import annotations
+
 import logging
 from copy import deepcopy
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable
 
 import param
 
@@ -62,15 +64,15 @@ class SweepExecutor:
             cache_size (int): Maximum cache size in bytes. Defaults to 100 GB.
         """
         self.cache_size = cache_size
-        self.sample_cache: Optional[FutureCache] = None
+        self.sample_cache: FutureCache | None = None
 
     def convert_vars_to_params(
         self,
         variable: param.Parameter | str | dict | tuple,
         var_type: str,
-        run_cfg: Optional[BenchRunCfg],
-        worker_class_instance: Optional[ParametrizedSweep] = None,
-        worker_input_cfg: Optional[ParametrizedSweep] = None,
+        run_cfg: BenchRunCfg | None,
+        worker_class_instance: ParametrizedSweep | None = None,
+        worker_input_cfg: ParametrizedSweep | None = None,
     ) -> param.Parameter:
         """Convert various input formats to param.Parameter objects.
 
@@ -86,10 +88,10 @@ class SweepExecutor:
                 - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
                 - tuple: Tuple that can be converted to a parameter
             var_type (str): Type of variable ('input', 'result', or 'const') for error messages
-            run_cfg (Optional[BenchRunCfg]): Run configuration for level settings
-            worker_class_instance (Optional[ParametrizedSweep]): The worker class instance for
+            run_cfg (BenchRunCfg | None): Run configuration for level settings
+            worker_class_instance (ParametrizedSweep | None): The worker class instance for
                 looking up parameters by name
-            worker_input_cfg (Optional[ParametrizedSweep]): The worker input configuration class
+            worker_input_cfg (ParametrizedSweep | None): The worker input configuration class
 
         Returns:
             param.Parameter: The converted parameter object
@@ -123,15 +125,15 @@ class SweepExecutor:
             )
         return variable
 
-    def define_const_inputs(self, const_vars: List[Tuple[param.Parameter, Any]]) -> Optional[dict]:
+    def define_const_inputs(self, const_vars: list[tuple[param.Parameter, Any]]) -> dict | None:
         """Convert constant variable tuples into a dictionary of name-value pairs.
 
         Args:
-            const_vars (List[Tuple[param.Parameter, Any]]): List of (parameter, value) tuples
+            const_vars (list[tuple[param.Parameter, Any]]): List of (parameter, value) tuples
                 representing constant parameters and their values
 
         Returns:
-            Optional[dict]: Dictionary mapping parameter names to their constant values,
+            dict | None: Dictionary mapping parameter names to their constant values,
                 or None if const_vars is None
         """
         constant_inputs = None

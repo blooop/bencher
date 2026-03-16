@@ -1,4 +1,5 @@
-from typing import Optional
+from __future__ import annotations
+
 from pathlib import Path
 import panel as pn
 
@@ -15,7 +16,7 @@ class VideoControls:
             return vid
         return pn.pane.Markdown(f"video does not exist {path}")
 
-    def video_controls(self) -> Optional[pn.Column]:
+    def video_controls(self) -> pn.Column | None:
         def play_vid(_):  # pragma: no cover
             for r in self.vid_p:
                 r.paused = False

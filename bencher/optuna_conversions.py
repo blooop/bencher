@@ -1,4 +1,5 @@
-from typing import List
+from __future__ import annotations
+
 import logging
 
 import optuna
@@ -58,7 +59,7 @@ def param_importance(bench_cfg: BenchCfg, study: optuna.Study) -> pn.Row:
 
 
 # BENCH_CFG
-def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> List[str]:
+def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> list[str]:
     """Given a trial produce a string summary of the best results
 
     Args:
@@ -66,7 +67,7 @@ def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> List[str]:
         bench_cfg (BenchCfg): info about the trial
 
     Returns:
-        List[str]: Summary of trial
+        list[str]: Summary of trial
     """
     sep = "    "
     output = []

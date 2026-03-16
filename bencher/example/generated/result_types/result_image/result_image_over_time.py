@@ -17,11 +17,10 @@ def _polygon_points(radius, sides, start_angle=0.0):
     return points
 
 
-def _draw_polygon_image(points, color, linewidth, size=200, offset=(0, 0)):
+def _draw_polygon_image(points, color, linewidth, size=200):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    ox, oy = offset
-    scaled = [((p[0] + 1) * size / 2 + ox, (1 - p[1]) * size / 2 + oy) for p in points]
+    scaled = [((p[0] + 1) * size / 2, (1 - p[1]) * size / 2) for p in points]
     draw.line(scaled, fill=color, width=int(linewidth))
     return img
 
@@ -35,13 +34,10 @@ class PolygonRenderer(bch.ParametrizedSweep):
     polygon = bch.ResultImage(doc="Rendered polygon image")
     area = bch.ResultVar("u^2", doc="Polygon area")
 
-    _start_angle = 0.0
-    _offset = (0, 0)
-
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        points = _polygon_points(self.radius, self.sides, start_angle=self._start_angle)
-        img = _draw_polygon_image(points, self.color, linewidth=3, offset=self._offset)
+        points = _polygon_points(self.radius, self.sides)
+        img = _draw_polygon_image(points, self.color, linewidth=3)
         filepath = bch.gen_image_path("polygon")
         img.save(filepath, "PNG")
         self.polygon = str(filepath)
@@ -58,13 +54,8 @@ def example_result_image_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bc
     benchable = PolygonRenderer()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)
-    colors = ["red", "green", "blue"]
-    offsets = [(0, 0), (15, -10), (-10, 15)]
     for i, radius in enumerate([0.3, 0.6, 0.9]):
         benchable.radius = radius
-        benchable.color = colors[i]
-        benchable._start_angle = i * 30.0
-        benchable._offset = offsets[i]
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         bench.plot_sweep(
@@ -79,4 +70,4 @@ def example_result_image_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    bch.run(example_result_image_over_time, save=True, level=3)
+    bch.run(example_result_image_over_time, level=3)

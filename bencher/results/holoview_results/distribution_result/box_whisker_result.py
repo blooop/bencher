@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Any
+from typing import Any
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -27,20 +27,20 @@ class BoxWhiskerResult(DistributionResult):
     """
 
     def to_plot(
-        self, result_var: Optional[Parameter] = None, override: bool = True, **kwargs: Any
-    ) -> Optional[pn.panel]:
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
+    ) -> pn.panel | None:
         """Generates a box and whisker plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a box plot
         and then passes the filtered data to to_boxplot_ds for rendering.
 
         Args:
-            result_var (Optional[Parameter]): The result variable to plot. If None, uses the default.
+            result_var (Parameter | None): The result variable to plot. If None, uses the default.
             override (bool): Whether to override filter restrictions. Defaults to True.
             **kwargs (Any): Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the box plot if data is appropriate,
+            pn.panel | None: A panel containing the box plot if data is appropriate,
             otherwise returns filter match results.
         """
         return self.to_distribution_plot(
