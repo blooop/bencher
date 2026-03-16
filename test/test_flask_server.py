@@ -32,11 +32,16 @@ class TestFlaskServer(unittest.TestCase):
 
     def test_run_flask_in_thread(self):
         import time
+        import urllib.request
+        import urllib.error
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Use a high port to avoid conflicts
+            test_file = Path(tmpdir) / "health.txt"
+            test_file.write_text("ok")
+
             run_flask_in_thread(directory=tmpdir, port=18901)
-            # Give the thread a moment to start
             time.sleep(0.5)
-            # The server should be running (we can't easily verify the thread
-            # but we can verify it didn't crash)
+
+            # Verify the server is actually serving requests
+            with urllib.request.urlopen("http://127.0.0.1:18901/health.txt") as resp:
+                self.assertEqual(resp.read(), b"ok")

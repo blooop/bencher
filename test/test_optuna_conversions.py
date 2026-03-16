@@ -6,6 +6,7 @@ from enum import auto
 from strenum import StrEnum
 
 import optuna
+import panel as pn
 import param
 
 import bencher as bch
@@ -173,6 +174,3 @@ class TestSummariseTrial(unittest.TestCase):
         self.assertIsInstance(output, list)
         self.assertTrue(len(output) > 0)
         self.assertIn("Trial id:", output[0])
-
-
-import panel as pn  # noqa: E402

@@ -336,22 +336,24 @@ class TestBenchRunner(unittest.TestCase):
         self.assertGreater(len(target.pane), initial_count)
 
     def test_benchrunner_merge_reports_none(self):
-        """Test _merge_reports with None source."""
+        """Test _merge_reports with None source leaves target unchanged."""
         from bencher.bench_report import BenchReport
 
         br = bch.BenchRunner("test_merge_none")
         target = BenchReport("target")
+        initial_count = len(target.pane)
         br._merge_reports(target, None)  # pylint: disable=protected-access
-        # Should not crash
+        self.assertEqual(len(target.pane), initial_count)
 
     def test_benchrunner_merge_reports_same(self):
-        """Test _merge_reports when target is source."""
+        """Test _merge_reports when target is source leaves target unchanged."""
         from bencher.bench_report import BenchReport
 
         br = bch.BenchRunner("test_merge_same")
         report = BenchReport("same")
+        initial_count = len(report.pane)
         br._merge_reports(report, report)  # pylint: disable=protected-access
-        # Should not crash
+        self.assertEqual(len(report.pane), initial_count)
 
     def test_benchrunner_name_from_callable(self):
         """Test that BenchRunner auto-names from a callable."""

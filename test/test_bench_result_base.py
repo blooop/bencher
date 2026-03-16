@@ -280,21 +280,14 @@ class TestBenchResultBase(unittest.TestCase):
             plot_callbacks=False,
         )
 
-    def _make_2d_result(self, repeats=1):
-        bench = BenchableObject().to_bench(bch.BenchRunCfg(repeats=repeats))
-        return bench.plot_sweep(
-            "test_base_2d",
-            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
-            result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=repeats),
-            plot_callbacks=False,
-        )
-
     def test_get_optimal_value_indices(self):
         res = self._make_1d_result()
         rv = res.bench_cfg.result_vars[0]
         da = res.get_optimal_value_indices(rv)
         self.assertIsNotNone(da)
+        import xarray as xr
+
+        self.assertIsInstance(da, xr.DataArray)
 
     def test_get_optimal_vec(self):
         res = self._make_1d_result()
@@ -401,7 +394,7 @@ class TestBenchResultBase(unittest.TestCase):
         res = self._make_1d_result()
         # Aggregate over non-existent dim - should warn and return unaggregated
         ds = res.to_dataset(agg_over_dims=["nonexistent_dim"], agg_fn="mean")
-        self.assertIsNotNone(ds)
+        self.assertIn("float1", ds.dims)
 
     def test_describe_sweep(self):
         res = self._make_1d_result()
