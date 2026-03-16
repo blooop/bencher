@@ -109,9 +109,7 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
     from bencher.example.meta.generate_meta_workflows import example_meta_workflows
 
-    # Regression example excluded from docs generation — it runs 5 over_time snapshots
-    # which is too slow for the RTD build. The standalone example_regression.py still works.
-    # from bencher.example.meta.generate_meta_regression import example_meta_regression
+    from bencher.example.meta.generate_meta_regression import example_meta_regression
     from bencher.example.meta.generate_meta_yaml import example_meta_yaml
 
     example_meta()
@@ -126,7 +124,7 @@ def generate_python_files():
     example_meta_workflows()
     example_meta_advanced()
     example_meta_bool_plot_types()
-    # example_meta_regression()
+    example_meta_regression()
     example_meta_yaml()
 
     # Write __init__.py files so generated examples are importable
@@ -372,7 +370,7 @@ SECTIONS = {
     "Workflows": "workflows",
     "YAML Sweeps": "yaml",
     "Advanced Patterns": "advanced",
-    # "Regression Detection": "regression",  # excluded from RTD — too slow (5 over_time snapshots)
+    "Regression Detection": "regression",
 }
 
 
