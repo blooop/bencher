@@ -28,15 +28,17 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
     run_cfg.regression_detection = True
     run_cfg.regression_method = "percentage"
     run_cfg.regression_fail = False
-    run_cfg.auto_plot = False
-    run_cfg.headless = True
 
     bench = bch.Bench("regression_percentage", DegradingBenchmark(), run_cfg=run_cfg)
 
     # Simulate 5 time snapshots with increasing degradation
     for i in range(5):
         DegradingBenchmark.run_number = i
-        res = bench.plot_sweep(plot_callbacks=False)
+        res = bench.plot_sweep(
+            input_vars=[],
+            result_vars=["latency", "throughput"],
+            title=f"Snapshot {i}",
+        )
         bench.sample_cache = None  # reset for next run
 
     # Print the regression report from the last result

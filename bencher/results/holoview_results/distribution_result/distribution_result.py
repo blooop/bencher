@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Callable, Any, Type
+from typing import Callable, Any
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -27,10 +27,10 @@ class DistributionResult(HoloviewResult):
     def to_distribution_plot(
         self,
         plot_method: Callable[[xr.Dataset, Parameter, Any], hv.Element],
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         **kwargs: Any,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a distribution plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for distribution plots
@@ -80,7 +80,7 @@ class DistributionResult(HoloviewResult):
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        plot_class: Type[hv.Selection1DExpr],
+        plot_class: type[hv.Selection1DExpr],
         **kwargs: Any,
     ) -> hv.Element:
         """Prepares data for distribution plots and creates the plot.

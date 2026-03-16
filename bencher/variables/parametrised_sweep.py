@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from functools import partial
-from typing import List, Tuple, Any
+from typing import Any
 from param import Parameter, Parameterized
 import holoviews as hv
 import panel as pn
@@ -55,7 +57,7 @@ class ParametrizedSweep(Parameterized):
         self.param.update(**used_params)
 
     @classmethod
-    def get_input_and_results(cls, include_name: bool = False) -> Tuple[dict, dict]:
+    def get_input_and_results(cls, include_name: bool = False) -> tuple[dict, dict]:
         """Get dictionaries of input parameters and result parameters
 
         Args:
@@ -63,7 +65,7 @@ class ParametrizedSweep(Parameterized):
             include_name (bool): Include the name parameter that all parametrised classes have. Default False
 
         Returns:
-            Tuple[dict, dict]: a tuple containing the inputs and result parameters as dictionaries
+            tuple[dict, dict]: A tuple containing the inputs and result parameters as dictionaries
         """
         inputs = {}
         results = {}
@@ -95,11 +97,11 @@ class ParametrizedSweep(Parameterized):
         return output
 
     @classmethod
-    def get_inputs_only(cls) -> List[Parameter]:
+    def get_inputs_only(cls) -> list[Parameter]:
         """Return a list of input parameters
 
         Returns:
-            List[param.Parameter]: A list of input parameters
+            list[param.Parameter]: A list of input parameters
         """
         return list(cls.get_input_and_results().inputs.values())
 
@@ -110,8 +112,8 @@ class ParametrizedSweep(Parameterized):
     @classmethod
     def get_input_defaults(
         cls,
-        override_defaults: List | None = None,
-    ) -> List[Tuple[Parameter, Any]]:
+        override_defaults: list | None = None,
+    ) -> list[tuple[Parameter, Any]]:
         inp = cls.get_inputs_only()
         if override_defaults is None:
             override_defaults = []
@@ -135,18 +137,18 @@ class ParametrizedSweep(Parameterized):
         return defaults
 
     @classmethod
-    def get_results_only(cls) -> List[Parameter]:
+    def get_results_only(cls) -> list[Parameter]:
         """Return a list of result parameters
 
         Returns:
-            List[param.Parameter]: A list of result parameters
+            list[param.Parameter]: A list of result parameters
         """
         return list(cls.get_input_and_results().results.values())
 
     @classmethod
     def get_inputs_as_dims(
-        self, compute_values=False, remove_dims: str | List[str] | None = None
-    ) -> List[hv.Dimension]:
+        self, compute_values=False, remove_dims: str | list[str] | None = None
+    ) -> list[hv.Dimension]:
         inputs = self.get_inputs_only()
 
         if remove_dims is not None:
@@ -161,7 +163,7 @@ class ParametrizedSweep(Parameterized):
         self,
         callback=None,
         name=None,
-        remove_dims: str | List[str] | None = None,
+        remove_dims: str | list[str] | None = None,
         result_var: str | None = None,
     ) -> hv.DynamicMap:
         if callback is None:
@@ -188,7 +190,7 @@ class ParametrizedSweep(Parameterized):
         )
         main.show()
 
-    def to_holomap(self, callback, remove_dims: str | List[str] | None = None) -> hv.DynamicMap:
+    def to_holomap(self, callback, remove_dims: str | list[str] | None = None) -> hv.DynamicMap:
         return hv.HoloMap(
             hv.DynamicMap(
                 callback=callback,

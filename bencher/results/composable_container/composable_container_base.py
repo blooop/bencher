@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from enum import auto
-from typing import Any, List
+from typing import Any
 from dataclasses import dataclass, field
 from strenum import StrEnum
 from bencher.results.float_formatter import FormatFloat
@@ -31,7 +33,7 @@ class ComposableContainerBase:
     """A base class for renderer backends.  A composable renderer"""
 
     compose_method: ComposeType = ComposeType.right
-    container: List[Any] = field(default_factory=list)
+    container: list[Any] = field(default_factory=list)
     label_len: int = 0
 
     @staticmethod

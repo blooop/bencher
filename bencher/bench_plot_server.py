@@ -1,8 +1,9 @@
 """A server for display plots of benchmark results"""
 
+from __future__ import annotations
+
 import logging
 import os
-from typing import List, Tuple
 from threading import Thread
 
 import panel as pn
@@ -42,14 +43,14 @@ class BenchPlotServer:
 
         return self.serve(bench_name, plots_instance, port=plot_cfg.port, show=plot_cfg.show)
 
-    def load_data_from_cache(self, bench_name: str) -> Tuple[BenchCfg, List[pn.panel]] | None:
+    def load_data_from_cache(self, bench_name: str) -> tuple[BenchCfg, list[pn.panel]] | None:
         """Load previously calculated benchmark data from the database and start a plot server to display it
 
         Args:
             bench_name (str): The name of the benchmark and output folder for the figures
 
         Returns:
-            Tuple[BenchCfg, List[pn.panel]] | None: benchmark result data and any additional panels
+            tuple[BenchCfg, list[pn.panel]] | None: benchmark result data and any additional panels
 
         Raises:
             FileNotFoundError: No data found was found in the database to plot
@@ -81,7 +82,7 @@ class BenchPlotServer:
     def serve(
         self,
         bench_name: str,
-        plots_instance: List[pn.panel],
+        plots_instance: list[pn.panel],
         port: int | None = None,
         show: bool = True,
     ) -> Thread:
@@ -90,7 +91,7 @@ class BenchPlotServer:
 
         Args:
             bench_cfg (BenchCfg): benchmark results
-            plots_instance (List[pn.panel]): list of panel objects to display
+            plots_instance (list[pn.panel]): list of panel objects to display
             port (int): use a fixed port to launch the server
         """
 

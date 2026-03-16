@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import List, Any, Tuple, Optional, Literal, Callable
+from typing import Any, Literal, Callable
 from enum import Enum, auto
 import numpy as np
 import xarray as xr
@@ -20,7 +22,7 @@ from bencher.variables.results import ResultVar
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
-from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo
+from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo, ResultImage
 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
@@ -314,16 +316,16 @@ class BenchResultBase:
     def get_optimal_vec(
         self,
         result_var: ParametrizedSweep,
-        input_vars: List[ParametrizedSweep],
-    ) -> List[Any]:
+        input_vars: list[ParametrizedSweep],
+    ) -> list[Any]:
         """Get the optimal values from the sweep as a vector.
 
         Args:
             result_var (bch.ParametrizedSweep): Optimal values of this result variable
-            input_vars (List[bch.ParametrizedSweep]): Define which input vars values are returned in the vector
+            input_vars (list[bch.ParametrizedSweep]): Define which input vars values are returned in the vector
 
         Returns:
-            List[Any]: A vector of optimal values for the desired input vector
+            list[Any]: A vector of optimal values for the desired input vector
         """
 
         da = self.get_optimal_value_indices(result_var)
@@ -362,7 +364,7 @@ class BenchResultBase:
         result_var: ParametrizedSweep,
         keep_existing_consts: bool = True,
         as_dict: bool = False,
-    ) -> Tuple[ParametrizedSweep, Any] | dict[ParametrizedSweep, Any]:
+    ) -> tuple[ParametrizedSweep, Any] | dict[ParametrizedSweep, Any]:
         """Get a list of tuples of optimal variable names and value pairs, that can be fed in as constant values to subsequent parameter sweeps
 
         Args:
@@ -371,7 +373,7 @@ class BenchResultBase:
             as_dict (bool): return value as a dictionary
 
         Returns:
-            Tuple[bch.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
+            tuple[bch.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
         """
         da = self.get_optimal_value_indices(result_var)
         if keep_existing_consts:
@@ -428,7 +430,7 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> List[ResultVar]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[ResultVar]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(
@@ -436,7 +438,7 @@ class BenchResultBase:
         plot_callback: Callable,
         result_var: ParametrizedSweep | None = None,
         row: EmptyContainer | None = None,
-    ) -> Optional[pn.Row]:
+    ) -> pn.Row | None:
         if row is None:
             row = EmptyContainer(pn.Row(name=self.to_plot_title()))
         for rv in self.get_results_var_list(result_var):
@@ -494,7 +496,7 @@ class BenchResultBase:
         zip_results=False,
         reduce: ReduceType | None = None,
         **kwargs,
-    ) -> Optional[pn.Row]:
+    ) -> pn.Row | None:
         if hv_dataset is None:
             hv_dataset = self.to_hv_dataset(reduce=reduce)
 
@@ -540,7 +542,7 @@ class BenchResultBase:
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         # Initialize default filters if not provided to avoid shared mutable defaults
         if float_range is None:
             float_range = VarRange(0, None)
@@ -678,6 +680,7 @@ class BenchResultBase:
                 self.bench_cfg.over_time
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
+                and isinstance(result_var, (ResultVideo, ResultImage))
             ):
                 return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
@@ -794,15 +797,15 @@ class BenchResultBase:
     def select_level(
         dataset: xr.Dataset,
         level: int,
-        include_types: List[type] | None = None,
-        exclude_names: List[str] | None = None,
+        include_types: list[type] | None = None,
+        exclude_names: list[str] | None = None,
     ) -> xr.Dataset:
         """Given a dataset, return a reduced dataset that only contains data from a specified level.  By default all types of variables are filtered at the specified level.  If you only want to get a reduced level for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
             dataset (xr.Dataset): dataset to filter
             level (int): desired data resolution level
-            include_types (List[type], optional): Only filter data of these types. Defaults to None.
-            exclude_names (List[str], optional): Only filter data with these variable names. Defaults to None.
+            include_types (list[type], optional): Only filter data of these types. Defaults to None.
+            exclude_names (list[str], optional): Only filter data with these variable names. Defaults to None.
 
         Returns:
             xr.Dataset: A reduced dataset at the specified level

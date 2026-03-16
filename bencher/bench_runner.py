@@ -1,4 +1,6 @@
-from typing import Callable, List, Protocol, Union, runtime_checkable
+from __future__ import annotations
+
+from typing import Callable, Protocol, runtime_checkable
 import logging
 import warnings
 import inspect
@@ -29,7 +31,7 @@ class BenchableV2(Protocol):
 
 
 # Accept both versions during transition
-Benchable = Union[BenchableV1, BenchableV2]
+Benchable = BenchableV1 | BenchableV2
 
 
 class BenchRunner:
@@ -263,7 +265,7 @@ class BenchRunner:
         save: bool = False,
         grouped: bool = False,
         cache_results: bool = True,
-    ) -> List[BenchCfg]:
+    ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
 
         This function provides a single entry point for benchmark runs:
@@ -290,7 +292,7 @@ class BenchRunner:
             cache_results (bool, optional): Use the sample cache to reused previous results. Defaults to True.
 
         Returns:
-            List[BenchCfg]: A list of benchmark configuration objects with results
+            list[BenchCfg]: A list of benchmark configuration objects with results
         """
         # Handle deprecation warnings for legacy parameters
         if min_level is not None:

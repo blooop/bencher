@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -23,7 +22,7 @@ class BarResult(HoloviewResult):
 
     def to_plot(
         self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         return self.to_bar(result_var, override, **kwargs)
 
     def to_bar(
@@ -32,7 +31,7 @@ class BarResult(HoloviewResult):
         override: bool = True,
         target_dimension: int = 2,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a bar chart from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a bar chart
@@ -45,7 +44,7 @@ class BarResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
+            pn.panel | None: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
         # When over_time is active, allow 0 inputs so 0D+0cat+over_time can produce
