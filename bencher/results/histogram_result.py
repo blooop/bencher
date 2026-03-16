@@ -7,6 +7,7 @@ import xarray as xr
 
 from bencher.results.video_result import VideoResult
 from bencher.results.bench_result_base import ReduceType
+from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import ResultVar
@@ -56,7 +57,7 @@ class HistogramResult(VideoResult):
         Returns:
             hvplot.element.Histogram: A histogram visualization of the benchmark data distribution.
         """
-        return dataset.hvplot(
+        plot = dataset.hvplot(
             kind="hist",
             y=[result_var.name],
             ylabel="count",
@@ -65,3 +66,4 @@ class HistogramResult(VideoResult):
             title=f"{result_var.name} vs Count",
             **kwargs,
         )
+        return HoloviewResult._apply_opts(plot, xrotation=30)  # pylint: disable=protected-access
