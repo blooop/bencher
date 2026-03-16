@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from collections.abc import Mapping, Sequence
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Any, Dict
+from typing import Any
 
 import numpy as np
 from param import Integer, Number, Selector
@@ -47,11 +49,11 @@ class SweepSelector(Selector, SweepBase):
         else:
             self.samples = samples
 
-    def values(self) -> List[Any]:
+    def values(self) -> list[Any]:
         """Return all the values for the parameter sweep.
 
         Returns:
-            List[Any]: A list of parameter values to sweep through
+            list[Any]: A list of parameter values to sweep through
         """
         return self.indices_to_samples(self.samples, self.objects)
 
@@ -187,7 +189,7 @@ class StringSweep(SweepSelector):
 
     def __init__(
         self,
-        string_list: List[str],
+        string_list: list[str],
         units: str = "ul",
         samples: int | None = None,
         **params,
@@ -252,7 +254,7 @@ class EnumSweep(SweepSelector):
     __slots__ = shared_slots
 
     def __init__(
-        self, enum_type: Enum | List[Enum], units: str = "ul", samples: int | None = None, **params
+        self, enum_type: Enum | list[Enum], units: str = "ul", samples: int | None = None, **params
     ):
         # The enum can either be an Enum type or a list of enums
         list_of_enums = isinstance(enum_type, list)
@@ -402,15 +404,15 @@ class YamlSweep(SweepSelector):
         with Path(path_str).open("r", encoding="utf-8") as stream:
             return yaml.safe_load(stream)
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         key_list = list(self._entries.keys())
         return self.indices_to_samples(self.samples, key_list)
 
-    def items(self) -> List[tuple[str, Any]]:
+    def items(self) -> list[tuple[str, Any]]:
         selected_keys = self.keys()
         return [(key, self._entries[key].value()) for key in selected_keys]
 
-    def values(self) -> List[Any]:
+    def values(self) -> list[Any]:
         selected_keys = self.keys()
         return [self._entries[key] for key in selected_keys]
 
@@ -437,7 +439,7 @@ class IntSweep(Integer, SweepBase):
     Attributes:
         units (str): The units of measurement for the parameter
         samples (int): The number of samples to take from the range
-        sample_values (List[int], optional): Specific integer values to use as samples instead of
+        sample_values (list[int], optional): Specific integer values to use as samples instead of
             generating them from bounds. If provided, overrides the samples parameter.
     """
 
@@ -447,7 +449,7 @@ class IntSweep(Integer, SweepBase):
         self,
         units: str = "ul",
         samples: int | None = None,
-        sample_values: List[int] | None = None,
+        sample_values: list[int] | None = None,
         **params,
     ):
         SweepBase.__init__(self)
@@ -469,14 +471,14 @@ class IntSweep(Integer, SweepBase):
             if "default" not in params:
                 self.default = sample_values[0]
 
-    def values(self) -> List[int]:
+    def values(self) -> list[int]:
         """Return all the values for the parameter sweep.
 
         If sample_values is provided, returns those values. Otherwise generates values
         within the specified bounds.
 
         Returns:
-            List[int]: A list of integer values to sweep through
+            list[int]: A list of integer values to sweep through
         """
         sample_values = (
             self.sample_values
@@ -514,7 +516,7 @@ class FloatSweep(Number, SweepBase):
     Attributes:
         units (str): The units of measurement for the parameter
         samples (int): The number of samples to take from the range
-        sample_values (List[float], optional): Specific float values to use as samples instead of
+        sample_values (list[float], optional): Specific float values to use as samples instead of
             generating them from bounds. If provided, overrides the samples parameter.
         step (float, optional): Step size between samples when generating values from bounds
     """
@@ -525,7 +527,7 @@ class FloatSweep(Number, SweepBase):
         self,
         units: str = "ul",
         samples: int = 10,
-        sample_values: List[float] | None = None,
+        sample_values: list[float] | None = None,
         step: float | None = None,
         **params,
     ):
@@ -543,14 +545,14 @@ class FloatSweep(Number, SweepBase):
             if "default" not in params:
                 self.default = sample_values[0]
 
-    def values(self) -> List[float]:
+    def values(self) -> list[float]:
         """Return all the values for the parameter sweep.
 
         If sample_values is provided, returns those values. Otherwise generates values
         within the specified bounds, either using linspace (when step is None) or arange.
 
         Returns:
-            List[float]: A list of float values to sweep through
+            list[float]: A list of float values to sweep through
         """
         samps = self.samples
         if self.sample_values is None:
@@ -582,21 +584,21 @@ def box(name: str, center: float, width: float) -> FloatSweep:
 
 def p(
     name: str,
-    values: List[Any] | None = None,
+    values: list[Any] | None = None,
     samples: int | None = None,
     max_level: int | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a parameter dictionary with optional values, samples, and max_level.
 
     Args:
         name (str): The name of the parameter.
-        values (List[Any], optional): A list of values for the parameter. Defaults to None.
+        values (list[Any], optional): A list of values for the parameter. Defaults to None.
         samples (int, optional): The number of samples. Must be greater than 0 if provided. Defaults to None.
         max_level (int, optional): The maximum level. Must be greater than 0 if provided. Defaults to None.
 
     Returns:
-        Dict[str, Any]: A dictionary containing the parameter details.
+        dict[str, Any]: A dictionary containing the parameter details.
     """
     if max_level is not None and max_level <= 0:
         raise ValueError("max_level must be greater than 0")
@@ -613,7 +615,7 @@ def with_level(arr: list, level: int) -> list:
     sampling to it, returning the resulting values.
 
     Args:
-        arr (list): List of values to sample from
+        arr (list): list of values to sample from
         level (int): The sampling level to apply (higher levels provide more samples)
 
     Returns:

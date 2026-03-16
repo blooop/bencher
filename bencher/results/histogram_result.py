@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -16,7 +15,7 @@ from bencher.variables.results import ResultVar
 class HistogramResult(VideoResult):
     def to_plot(
         self, result_var: Parameter | None = None, target_dimension: int = 2, **kwargs
-    ) -> Optional[pn.pane.Pane]:
+    ) -> pn.pane.Pane | None:
         """Generates a histogram plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a histogram
@@ -28,7 +27,7 @@ class HistogramResult(VideoResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.pane.Pane]: A panel containing the histogram if data is appropriate,
+            pn.pane.Pane | None: A panel containing the histogram if data is appropriate,
                                   otherwise returns filter match results.
         """
         return self.filter(

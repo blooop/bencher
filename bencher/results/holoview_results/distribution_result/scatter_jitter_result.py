@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Any
+from typing import Any
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -32,12 +32,12 @@ class ScatterJitterResult(DistributionResult):
 
     def to_plot(
         self,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         jitter: float = 0.1,
-        target_dimension: Optional[int] = None,
+        target_dimension: int | None = None,
         **kwargs: Any,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a scatter jitter plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a scatter plot

@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List
 import pytest
 from bencher.results.laxtex_result import (
     latex_text,
@@ -14,7 +15,7 @@ from bencher.results.laxtex_result import (
 @dataclass
 class MockVar:
     name: str
-    _values: List
+    _values: list
 
     def values(self):
         return self._values
@@ -22,8 +23,8 @@ class MockVar:
 
 @dataclass
 class MockBenchConfig:
-    all_vars: List[MockVar]
-    result_vars: List[MockVar]
+    all_vars: list[MockVar]
+    result_vars: list[MockVar]
 
 
 def test_latex_text():

@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
 from param import Parameter
 import plotly.graph_objs as go
@@ -36,7 +35,7 @@ class SurfaceResult(HoloviewResult):
 
     def to_plot(
         self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> Optional[pn.pane.Pane]:
+    ) -> pn.pane.Pane | None:
         """Generates a 3D surface plot from benchmark data.
 
         This is a convenience method that calls to_surface() with the same parameters.
@@ -47,7 +46,7 @@ class SurfaceResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.pane.Pane]: A panel containing the surface plot if data is appropriate,
+            pn.pane.Pane | None: A panel containing the surface plot if data is appropriate,
                                    otherwise returns filter match results.
         """
         return self.to_surface(result_var=result_var, override=override, **kwargs)
@@ -58,7 +57,7 @@ class SurfaceResult(HoloviewResult):
         override: bool = True,
         target_dimension: int = 2,
         **kwargs,
-    ) -> Optional[pn.pane.Pane]:
+    ) -> pn.pane.Pane | None:
         """Generates a 3D surface plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a surface plot
@@ -71,7 +70,7 @@ class SurfaceResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.pane.Pane]: A panel containing the surface plot if data is appropriate,
+            pn.pane.Pane | None: A panel containing the surface plot if data is appropriate,
                                    otherwise returns filter match results.
         """
         return self.filter(
@@ -95,7 +94,7 @@ class SurfaceResult(HoloviewResult):
         alpha: float = 0.3,
         width: int = 600,
         height: int = 600,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Creates a 3D surface plot from the provided dataset.
 
         Uses plotly directly (like VolumeResult) to avoid HoloViews backend
@@ -111,7 +110,7 @@ class SurfaceResult(HoloviewResult):
             height (int, optional): Plot height in pixels. Defaults to 600.
 
         Returns:
-            Optional[pn.panel]: A panel containing the surface plot if data matches criteria,
+            pn.panel | None: A panel containing the surface plot if data matches criteria,
                                otherwise returns filter match results.
         """
         matches_res = PlotFilter(

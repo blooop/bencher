@@ -1,4 +1,6 @@
-from typing import Optional, List, Callable
+from __future__ import annotations
+
+from typing import Callable
 from copy import deepcopy
 import panel as pn
 import xarray as xr
@@ -23,7 +25,7 @@ class VideoSummaryResult(BenchResultBase):
         reverse: bool = True,
         result_types=(ResultImage,),
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         return self.to_video_grid(
             result_var=result_var,
             result_types=result_types,
@@ -39,19 +41,19 @@ class VideoSummaryResult(BenchResultBase):
         pane_collection: pn.pane = None,
         time_sequence_dimension=0,
         target_duration: float | None = None,
-        compose_method_list: List | None = None,
+        compose_method_list: list | None = None,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Returns the results compiled into a video
 
         Args:
             result_var (Parameter, optional): The result var to plot. Defaults to None.
             result_types (tuple, optional): The types of result var to convert to video. Defaults to (ResultImage,).
             collection (pn.pane, optional): If there are multiple results, use this collection to stack them. Defaults to pn.Row().
-            compose_method_list (List: optional): Defines how each of the dimensions is composed in the video. ie, concatenate the videos horizontally, vertically, sequentially or alpha overlay. Seee bch.ComposeType for the options.
+            compose_method_list (list: optional): Defines how each of the dimensions is composed in the video. ie, concatenate the videos horizontally, vertically, sequentially or alpha overlay. Seee bch.ComposeType for the options.
 
         Returns:
-            Optional[pn.panel]: a panel pane with a video of all results concatenated together
+            pn.panel | None: a panel pane with a video of all results concatenated together
         """
         plot_filter = PlotFilter(
             float_range=VarRange(0, None),
@@ -91,7 +93,7 @@ class VideoSummaryResult(BenchResultBase):
         time_sequence_dimension=0,
         video_controls: VideoControls | None = None,
         target_duration: float | None = None,
-        compose_method_list: List | None = None,
+        compose_method_list: list | None = None,
         target_dimension: int = 0,
         **kwargs,
     ):
@@ -107,12 +109,12 @@ class VideoSummaryResult(BenchResultBase):
             time_sequence_dimension (int, optional): The dimension to use for time sequencing. Defaults to 0.
             video_controls (VideoControls, optional): Controls for video playback. If None, creates default controls.
             target_duration (float, optional): Target duration for the video in seconds.
-            compose_method_list (List, optional): List of composition methods for combining panes.
+            compose_method_list (list, optional): list of composition methods for combining panes.
             target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 0.
             **kwargs: Additional keyword arguments passed to video rendering.
 
         Returns:
-            Optional[pn.pane.HTML]: A video container with playback controls if successful, None otherwise.
+            pn.pane.HTML | None: A video container with playback controls if successful, None otherwise.
         """
         cvc = self._to_video_panes_ds(
             dataset,
@@ -148,7 +150,7 @@ class VideoSummaryResult(BenchResultBase):
         dataset: xr.Dataset,
         first_compose_method: ComposeType = ComposeType.down,
         time_sequence_dimension: int = 0,
-    ) -> List[ComposeType]:
+    ) -> list[ComposeType]:
         """ "Given a dataset, chose an order for composing the results.  By default will flip between right and down and the last dimension will be a time sequence.
 
         Args:
@@ -157,7 +159,7 @@ class VideoSummaryResult(BenchResultBase):
             time_sequence_dimension (int, optional): The dimension to start time sequencing instead of composing in space. Defaults to 0.
 
         Returns:
-            List[ComposeType]: A list of composition methods for composing the dataset result
+            list[ComposeType]: A list of composition methods for composing the dataset result
         """
 
         num_dims = len(dataset.sizes)

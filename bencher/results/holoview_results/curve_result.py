@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -22,7 +21,7 @@ class CurveResult(HoloviewResult):
 
     def to_plot(
         self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> Optional[hv.Curve]:
+    ) -> hv.Curve | None:
         """Generates a curve plot from benchmark data.
 
         This is a convenience method that calls to_curve() with the same parameters.
@@ -33,7 +32,7 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[hv.Curve]: A curve plot if data is appropriate,
+            hv.Curve | None: A curve plot if data is appropriate,
                               otherwise returns filter match results.
         """
         return self.to_curve(result_var=result_var, override=override, **kwargs)
@@ -57,7 +56,7 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[hv.Curve]: A curve plot if data is appropriate,
+            hv.Curve | None: A curve plot if data is appropriate,
                               otherwise returns filter match results.
         """
         return self.filter(
@@ -73,9 +72,7 @@ class CurveResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_curve_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> Optional[hv.Curve]:
+    def to_curve_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs) -> hv.Curve | None:
         """Creates a curve plot from the provided dataset.
 
         Given a filtered dataset, this method generates a curve visualization showing
@@ -89,7 +86,7 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the curve plot options.
 
         Returns:
-            Optional[hv.Curve]: A curve plot with optional standard deviation spread.
+            hv.Curve | None: A curve plot with optional standard deviation spread.
         """
         var = result_var.name
         std_var = f"{var}_std"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -28,7 +28,7 @@ def run(
     publish: bool = False,
     grouped: bool = False,
     cache_results: bool = True,
-) -> List[BenchCfg]:
+) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
 
     Handles three cases:
@@ -52,7 +52,7 @@ def run(
         cache_results: Use sample cache for previous results. Defaults to True.
 
     Returns:
-        List[BenchCfg]: A list of benchmark configuration objects with results.
+        list[BenchCfg]: A list of benchmark configuration objects with results.
     """
     from bencher.bench_runner import BenchRunner
 
