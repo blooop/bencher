@@ -42,7 +42,7 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     base_time = datetime(2024, 1, 1)
     for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
-        benchable._time_offset = offset
+        benchable._time_offset = offset  # pylint: disable=protected-access
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         bench.plot_sweep(
