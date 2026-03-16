@@ -71,6 +71,7 @@ class ScatterResult(HoloviewResult):
                 subplots=subplots,
                 widget_location="bottom",
                 title=self.to_plot_title(),
+                xrotation=30,
                 **kwargs,
             )
         return match_res.to_panel(**kwargs)

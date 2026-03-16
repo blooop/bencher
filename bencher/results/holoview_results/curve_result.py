@@ -94,7 +94,7 @@ class CurveResult(HoloviewResult):
 
         hvds = hv.Dataset(dataset)
         pt = hv.Overlay()
-        pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
+        pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, xrotation=30, **kwargs)
         if std_var in dataset.data_vars:
             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
         pt = pt.opts(legend_position="right")
