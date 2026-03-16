@@ -288,6 +288,101 @@ class TestBenchRunner(unittest.TestCase):
         # Function should still have been added
         self.assertIn(bench_fn, bench_runner.bench_fns)
 
+    def test_benchrunner_grouped(self):
+        """Test running benchmarks in grouped mode."""
+        bench_runner = bch.BenchRunner("test_grouped")
+        bench_runner.add_bench(SimpleBenchClass())
+        results = bench_runner.run(level=2, repeats=1, grouped=True)
+        self.assertTrue(len(results) > 0)
+
+    def test_benchrunner_v2_signature(self):
+        """Test that BenchRunner handles V2 (single-arg) benchmark functions."""
+
+        def v2_benchmark(run_cfg: bch.BenchRunCfg) -> bch.BenchCfg:
+            bench = bch.Bench("v2_test", SimpleBenchClassFloat(), run_cfg=run_cfg)
+            return bench.plot_sweep("v2_sweep")
+
+        bench_runner = bch.BenchRunner("test_v2")
+        bench_runner.add(v2_benchmark)
+        results = bench_runner.run(level=2, repeats=1)
+        self.assertEqual(len(results), 1)
+
+    def test_benchrunner_progressive_levels(self):
+        """Test progressive level runs."""
+        executed = []
+
+        def tracking_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
+            executed.append(run_cfg.level)
+            bench = bch.Bench("track", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("track_sweep")
+
+        br = bch.BenchRunner("test_progressive")
+        br.add(tracking_benchmark)
+        br.run(level=2, max_level=3, repeats=1)
+        self.assertEqual(sorted(executed), [2, 3])
+
+    def test_benchrunner_merge_reports(self):
+        """Test the _merge_reports method."""
+        from bencher.bench_report import BenchReport
+
+        br = bch.BenchRunner("test_merge")
+        target = BenchReport("target")
+        source = BenchReport("source")
+        source.pane.append("test_pane")
+
+        initial_count = len(target.pane)
+        br._merge_reports(target, source)
+        # After merge, target should have more panes
+        self.assertGreater(len(target.pane), initial_count)
+
+    def test_benchrunner_merge_reports_none(self):
+        """Test _merge_reports with None source."""
+        from bencher.bench_report import BenchReport
+
+        br = bch.BenchRunner("test_merge_none")
+        target = BenchReport("target")
+        br._merge_reports(target, None)
+        # Should not crash
+
+    def test_benchrunner_merge_reports_same(self):
+        """Test _merge_reports when target is source."""
+        from bencher.bench_report import BenchReport
+
+        br = bch.BenchRunner("test_merge_same")
+        report = BenchReport("same")
+        br._merge_reports(report, report)
+        # Should not crash
+
+    def test_benchrunner_name_from_callable(self):
+        """Test that BenchRunner auto-names from a callable."""
+
+        def my_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
+            bench = bch.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("test")
+
+        br = bch.BenchRunner(my_benchmark)
+        self.assertEqual(br.name, "my_benchmark")
+        self.assertEqual(len(br.bench_fns), 1)
+
+    def test_benchrunner_add_chaining(self):
+        """Test that add() supports method chaining."""
+        br = bch.BenchRunner("test_chain")
+        result = br.add(Mock())
+        self.assertIs(result, br)
+
+    def test_benchrunner_show_no_results(self):
+        """Test that show() raises with no results."""
+        br = bch.BenchRunner("test_show_empty")
+        with self.assertRaises(RuntimeError):
+            br.show()
+
+    def test_benchrunner_shutdown(self):
+        """Test shutdown method."""
+        br = bch.BenchRunner("test_shutdown")
+        br.servers = [Mock()]
+        br.shutdown()
+        self.assertEqual(len(br.servers), 0)
+
     # Tests that bch.BenchRunner can handle empty list of Benchable functions
     # def test_benchrunner_handle_empty_list(self):
 
