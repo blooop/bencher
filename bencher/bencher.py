@@ -509,6 +509,10 @@ class Bench(BenchPlotServer):
             self.cache_size = cache_size_bytes
             self._executor.cache_size = cache_size_bytes
             self._collector.cache_size = cache_size_bytes
+            # Invalidate existing sample cache so it gets recreated with the new size
+            if self.sample_cache is not None:
+                self.sample_cache.close()
+                self._executor.sample_cache = None
 
         # Filter run_cfg parameters to only those that can override bench_cfg
         # (param 2.3 enforces constant parameters that cannot be overridden)

@@ -149,6 +149,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
     cache_size: int = param.Integer(
         default=None,
         allow_None=True,
+        bounds=(1, None),
         doc="Maximum size of the disk cache in megabytes (MB). If None, uses the default (100 GB).",
     )
 
