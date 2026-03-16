@@ -14,15 +14,15 @@ class DegradingBenchmark(bch.ParametrizedSweep):
     latency = bch.ResultVar(units="ms", direction=bch.OptDir.minimize)
     throughput = bch.ResultVar(units="ops/s", direction=bch.OptDir.maximize)
 
-    # Instance counter shared across calls in each run
-    _run_number = 0
+    # Counter shared across calls in each run
+    run_number = 0
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         # latency increases each run (regression for minimize)
-        self.latency = 10.0 + DegradingBenchmark._run_number * 5.0
+        self.latency = 10.0 + DegradingBenchmark.run_number * 5.0
         # throughput decreases each run (regression for maximize)
-        self.throughput = 100.0 - DegradingBenchmark._run_number * 15.0
+        self.throughput = 100.0 - DegradingBenchmark.run_number * 15.0
         return super().__call__(**kwargs)
 
 
@@ -43,7 +43,7 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     # Simulate 5 time snapshots with increasing degradation
     for i in range(5):
-        DegradingBenchmark._run_number = i
+        DegradingBenchmark.run_number = i
         res = bench.plot_sweep(plot_callbacks=False)
         bench.sample_cache = None  # reset for next run
 

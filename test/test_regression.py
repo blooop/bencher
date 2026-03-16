@@ -235,19 +235,15 @@ class TestDetectRegressions:
         """Create minimal bench_cfg and run_cfg mocks."""
 
         class FakeBenchCfg:
-            pass
+            def __init__(self, result_vars):
+                self.result_vars = result_vars
 
         class FakeRunCfg:
-            pass
+            def __init__(self, method, threshold):
+                self.regression_method = method
+                self.regression_threshold = threshold
 
-        bench_cfg = FakeBenchCfg()
-        bench_cfg.result_vars = result_vars
-
-        run_cfg = FakeRunCfg()
-        run_cfg.regression_method = method
-        run_cfg.regression_threshold = threshold
-
-        return bench_cfg, run_cfg
+        return FakeBenchCfg(result_vars), FakeRunCfg(method, threshold)
 
     def test_no_over_time_dim(self):
         ds = xr.Dataset({"x": (["repeat"], [1.0, 2.0])})
@@ -403,17 +399,16 @@ class _SimpleBench(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-_degrade_counter = 0
+_degrade_state = {"counter": 0}
 
 
 class _DegradingBench(bch.ParametrizedSweep):
     out_val = bch.ResultVar(units="s", direction=bch.OptDir.minimize)
 
     def __call__(self, **kwargs):
-        global _degrade_counter
         self.update_params_from_kwargs(**kwargs)
-        _degrade_counter += 1
-        self.out_val = float(_degrade_counter) * 100.0
+        _degrade_state["counter"] += 1
+        self.out_val = float(_degrade_state["counter"]) * 100.0
         return super().__call__(**kwargs)
 
 
@@ -440,8 +435,7 @@ class TestEndToEnd:
 
     def test_regression_fail_raises(self):
         """Verify that regression_fail=True raises RegressionError."""
-        global _degrade_counter
-        _degrade_counter = 0
+        _degrade_state["counter"] = 0
 
         run_cfg = bch.BenchRunCfg()
         run_cfg.over_time = True
