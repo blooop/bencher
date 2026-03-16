@@ -390,7 +390,7 @@ class YamlSweep(SweepSelector):
         )
 
     @staticmethod
-    def _load_yaml(path: Path) -> Mapping[str, Any]:
+    def _load_yaml(path: Path) -> Any:
         with path.open("r", encoding="utf-8") as stream:
             data = yaml.safe_load(stream)
         return data if data is not None else {}
