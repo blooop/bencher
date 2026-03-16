@@ -63,4 +63,4 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_regression,save=True)
+    bch.run(example_regression, save=True)
