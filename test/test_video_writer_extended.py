@@ -78,6 +78,10 @@ class TestVideoWriterConvertAndExtract(unittest.TestCase):
             self.assertEqual(output, output_path.as_posix())
             self.assertTrue(output_path.exists())
 
+    def test_extract_frame_nonexistent_source(self):
+        with self.assertRaises(OSError):
+            VideoWriter.extract_frame("/nonexistent/path/video.mp4", time=0.0)
+
     def test_convert_to_compatible_format(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             video_path = self._create_test_video(tmpdir)
