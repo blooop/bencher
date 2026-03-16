@@ -72,6 +72,12 @@ class RegressionReport:
         return "\n".join(lines)
 
 
+def _clean_1d(a: np.ndarray) -> np.ndarray:
+    """Flatten to 1-D float and remove NaNs."""
+    flat = np.asarray(a, dtype=float).ravel()
+    return flat[~np.isnan(flat)]
+
+
 def _safe_change_percent(current: float, baseline: float) -> float:
     """Calculate percentage change, handling zero baseline gracefully."""
     if baseline == 0:
@@ -90,7 +96,21 @@ def _is_regression(change_percent: float, direction: OptDir) -> bool:
     return True  # OptDir.none — any significant change is a regression
 
 
+def _exceeds_directional_threshold(
+    change_percent: float,
+    threshold_percent: float,
+    direction: OptDir,
+) -> bool:
+    """Check if change exceeds threshold in the direction-appropriate sense."""
+    if direction == OptDir.minimize:
+        return change_percent > threshold_percent
+    if direction == OptDir.maximize:
+        return change_percent < -threshold_percent
+    return abs(change_percent) > threshold_percent
+
+
 def detect_percentage(
+    variable: str,
     historical: np.ndarray,
     current: np.ndarray,
     threshold_percent: float = 5.0,
@@ -101,31 +121,24 @@ def detect_percentage(
     curr_mean = float(np.nanmean(current))
     change = _safe_change_percent(curr_mean, hist_mean)
 
-    if direction == OptDir.none:
-        exceeds = abs(change) > threshold_percent
-    elif direction == OptDir.minimize:
-        exceeds = change > threshold_percent
-    elif direction == OptDir.maximize:
-        exceeds = change < -threshold_percent
-    else:
-        exceeds = abs(change) > threshold_percent
-
+    exceeds = _exceeds_directional_threshold(change, threshold_percent, direction)
     regressed = exceeds and _is_regression(change, direction)
 
     return RegressionResult(
-        variable="",
+        variable=variable,
         method="percentage",
         regressed=regressed,
         current_value=curr_mean,
         baseline_value=hist_mean,
         change_percent=change,
         threshold=threshold_percent,
-        direction=str(direction),
+        direction=direction.value,
         details=f"Change {change:+.2f}% vs threshold {threshold_percent}%",
     )
 
 
 def detect_iqr(
+    variable: str,
     historical_time_means: np.ndarray,
     current: np.ndarray,
     iqr_scale: float = 1.5,
@@ -134,19 +147,24 @@ def detect_iqr(
     """IQR outlier detection using per-time-point means from history.
 
     Args:
+        variable: Name of the result variable being checked.
         historical_time_means: Array of per-time-point mean values from history.
         current: Current run values (will be averaged).
         iqr_scale: Multiplier for IQR to define outlier bounds (default 1.5).
         direction: Optimization direction from the result variable.
     """
-    clean = historical_time_means[~np.isnan(historical_time_means)]
+    clean = _clean_1d(historical_time_means)
     curr_mean = float(np.nanmean(current))
 
     if len(clean) < 4:
         # Not enough time points for robust IQR; fall back to percentage using
         # the default percentage threshold so the comparison stays meaningful.
         return detect_percentage(
-            clean, current, threshold_percent=_METHOD_DEFAULTS["percentage"], direction=direction
+            variable,
+            clean,
+            current,
+            threshold_percent=_METHOD_DEFAULTS["percentage"],
+            direction=direction,
         )
 
     q1 = float(np.percentile(clean, 25))
@@ -162,32 +180,33 @@ def detect_iqr(
     regressed = outside_bounds and _is_regression(change, direction)
 
     return RegressionResult(
-        variable="",
+        variable=variable,
         method="iqr",
         regressed=regressed,
         current_value=curr_mean,
         baseline_value=hist_mean,
         change_percent=change,
         threshold=iqr_scale,
-        direction=str(direction),
+        direction=direction.value,
         details=f"IQR bounds [{lower:.4g}, {upper:.4g}], current={curr_mean:.4g}",
     )
 
 
 def detect_ttest(
+    variable: str,
     historical: np.ndarray,
     current: np.ndarray,
     alpha: float = 0.05,
     direction: OptDir = OptDir.minimize,
 ) -> RegressionResult:
     """Welch's t-test between historical and current samples."""
-    hist_clean = historical[~np.isnan(historical)]
-    curr_clean = current[~np.isnan(current)]
+    hist_clean = _clean_1d(historical)
+    curr_clean = _clean_1d(current)
 
     if len(hist_clean) < 2 or len(curr_clean) < 2:
         # Fall back to percentage with alpha-based threshold
         return detect_percentage(
-            hist_clean, curr_clean, threshold_percent=alpha * 100, direction=direction
+            variable, hist_clean, curr_clean, threshold_percent=alpha * 100, direction=direction
         )
 
     from scipy.stats import ttest_ind
@@ -207,14 +226,14 @@ def detect_ttest(
     regressed = pvalue < alpha
 
     return RegressionResult(
-        variable="",
+        variable=variable,
         method="ttest",
         regressed=regressed,
         current_value=curr_mean,
         baseline_value=hist_mean,
         change_percent=change,
         threshold=alpha,
-        direction=str(direction),
+        direction=direction.value,
         details=f"t-stat={stat:.4g}, p-value={pvalue:.4g}, alpha={alpha}",
     )
 
@@ -261,38 +280,33 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         direction = rv.direction if hasattr(rv, "direction") else OptDir.none
 
         # Split: historical = all but last, current = last
-        current_da = da.isel(over_time=-1)
-        historical_da = da.isel(over_time=slice(None, -1))
-
-        current_vals = current_da.values.flatten().astype(float)
-        historical_vals = historical_da.values.flatten().astype(float)
-
-        # Remove NaNs for validity check
-        current_clean = current_vals[~np.isnan(current_vals)]
-        historical_clean = historical_vals[~np.isnan(historical_vals)]
+        current_clean = _clean_1d(da.isel(over_time=-1).values)
+        historical_clean = _clean_1d(da.isel(over_time=slice(None, -1)).values)
 
         if len(current_clean) == 0 or len(historical_clean) == 0:
             continue
 
         if method == "percentage":
-            result = detect_percentage(historical_clean, current_clean, threshold, direction)
+            result = detect_percentage(
+                var_name, historical_clean, current_clean, threshold, direction
+            )
         elif method == "iqr":
-            # Compute per-time-point means for IQR
-            time_means = []
-            for t in range(n_times - 1):
-                t_vals = da.isel(over_time=t).values.flatten().astype(float)
-                t_clean = t_vals[~np.isnan(t_vals)]
-                if len(t_clean) > 0:
-                    time_means.append(float(np.nanmean(t_clean)))
-            time_means_arr = np.array(time_means)
-            result = detect_iqr(time_means_arr, current_clean, threshold, direction)
+            # Reduce all dims except over_time to get per-time-point means
+            reduce_dims = [d for d in da.dims if d != "over_time"]
+            time_means_arr = (
+                da.isel(over_time=slice(None, -1))
+                .mean(dim=reduce_dims, skipna=True)
+                .values.astype(float)
+            )
+            result = detect_iqr(var_name, time_means_arr, current_clean, threshold, direction)
         elif method == "ttest":
-            result = detect_ttest(historical_clean, current_clean, threshold, direction)
+            result = detect_ttest(var_name, historical_clean, current_clean, threshold, direction)
         else:
             logging.warning(f"Unknown regression method '{method}', falling back to percentage")
-            result = detect_percentage(historical_clean, current_clean, threshold, direction)
+            result = detect_percentage(
+                var_name, historical_clean, current_clean, threshold, direction
+            )
 
-        result.variable = var_name
         report.results.append(result)
 
     return report

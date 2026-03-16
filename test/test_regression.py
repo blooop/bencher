@@ -24,20 +24,26 @@ class TestDetectPercentage:
     def test_no_regression_within_threshold(self):
         hist = np.array([100.0, 102.0, 98.0, 101.0])
         curr = np.array([101.0, 103.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.minimize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.minimize
+        )
         assert not result.regressed
 
     def test_regression_above_threshold_minimize(self):
         hist = np.array([100.0, 100.0, 100.0])
         curr = np.array([110.0, 112.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.minimize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.minimize
+        )
         assert result.regressed
         assert result.change_percent > 5.0
 
     def test_regression_below_threshold_maximize(self):
         hist = np.array([100.0, 100.0, 100.0])
         curr = np.array([90.0, 88.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.maximize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.maximize
+        )
         assert result.regressed
         assert result.change_percent < -5.0
 
@@ -45,40 +51,50 @@ class TestDetectPercentage:
         """For minimize, a decrease is an improvement, not a regression."""
         hist = np.array([100.0, 100.0])
         curr = np.array([80.0, 82.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.minimize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.minimize
+        )
         assert not result.regressed
 
     def test_improvement_not_regression_maximize(self):
         """For maximize, an increase is an improvement, not a regression."""
         hist = np.array([100.0, 100.0])
         curr = np.array([120.0, 118.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.maximize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.maximize
+        )
         assert not result.regressed
 
     def test_direction_none_any_change(self):
         hist = np.array([100.0, 100.0])
         curr = np.array([110.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.none)
+        result = detect_percentage("x", hist, curr, threshold_percent=5.0, direction=OptDir.none)
         assert result.regressed
 
     def test_zero_baseline(self):
         hist = np.array([0.0, 0.0])
         curr = np.array([1.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.minimize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.minimize
+        )
         assert result.regressed
         assert result.change_percent == float("inf")
 
     def test_zero_baseline_zero_current(self):
         hist = np.array([0.0, 0.0])
         curr = np.array([0.0])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.minimize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.minimize
+        )
         assert not result.regressed
         assert result.change_percent == 0.0
 
     def test_nan_handling(self):
         hist = np.array([100.0, np.nan, 100.0])
         curr = np.array([100.0, np.nan])
-        result = detect_percentage(hist, curr, threshold_percent=5.0, direction=OptDir.minimize)
+        result = detect_percentage(
+            "x", hist, curr, threshold_percent=5.0, direction=OptDir.minimize
+        )
         assert not result.regressed
 
 
@@ -89,26 +105,26 @@ class TestDetectIqr:
     def test_within_bounds(self):
         time_means = np.array([100.0, 101.0, 99.0, 100.5, 98.5])
         curr = np.array([101.0])
-        result = detect_iqr(time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
+        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
         assert not result.regressed
 
     def test_outlier_above_minimize(self):
         time_means = np.array([10.0, 10.1, 10.2, 10.0, 9.9])
         curr = np.array([20.0])
-        result = detect_iqr(time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
+        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
         assert result.regressed
 
     def test_outlier_below_maximize(self):
         time_means = np.array([10.0, 10.1, 10.2, 10.0, 9.9])
         curr = np.array([1.0])
-        result = detect_iqr(time_means, curr, iqr_scale=1.5, direction=OptDir.maximize)
+        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.maximize)
         assert result.regressed
 
     def test_fallback_with_few_points(self):
         """With <4 historical time points, should fall back to percentage."""
         time_means = np.array([100.0, 101.0])
         curr = np.array([200.0])
-        result = detect_iqr(time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
+        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
         assert result.method == "percentage"  # fell back
         assert result.regressed
 
@@ -121,34 +137,36 @@ class TestDetectTtest:
         rng = np.random.RandomState(42)
         hist = rng.normal(100, 1, 30)
         curr = rng.normal(100, 1, 30)
-        result = detect_ttest(hist, curr, alpha=0.05, direction=OptDir.minimize)
+        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
         assert not result.regressed
 
     def test_significant_increase_minimize(self):
         rng = np.random.RandomState(42)
         hist = rng.normal(100, 1, 30)
         curr = rng.normal(110, 1, 30)
-        result = detect_ttest(hist, curr, alpha=0.05, direction=OptDir.minimize)
+        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
         assert result.regressed
 
     def test_significant_decrease_maximize(self):
         rng = np.random.RandomState(42)
         hist = rng.normal(100, 1, 30)
         curr = rng.normal(90, 1, 30)
-        result = detect_ttest(hist, curr, alpha=0.05, direction=OptDir.maximize)
+        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.maximize)
         assert result.regressed
 
     def test_fallback_single_sample(self):
         hist = np.array([100.0])
         curr = np.array([200.0])
-        result = detect_ttest(hist, curr, alpha=0.05, direction=OptDir.minimize)
-        assert result.method == "percentage"  # fell back
+        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
+        assert result.method == "percentage"  # fell back to percentage-based check
+        assert result.regressed  # still correctly detected as regression
+        assert result.change_percent > 0.0  # percentage change indicates degradation for minimize
 
     def test_direction_none_two_sided(self):
         rng = np.random.RandomState(42)
         hist = rng.normal(100, 1, 30)
         curr = rng.normal(110, 1, 30)
-        result = detect_ttest(hist, curr, alpha=0.05, direction=OptDir.none)
+        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.none)
         assert result.regressed
 
 
@@ -341,9 +359,9 @@ class TestDetectRegressions:
     def test_result_bool_supported(self):
         values = np.array(
             [
-                [0.0, 0.0],
-                [0.0, 0.0],
-                [1.0, 1.0],
+                [0.0, 0.0],  # baseline
+                [0.0, 0.0],  # still good
+                [1.0, 1.0],  # regression for direction=OptDir.minimize
             ]
         )
         ds = self._make_dataset(n_times=3, n_repeats=2, values=values)
@@ -352,8 +370,16 @@ class TestDetectRegressions:
         rv = ResultBool(units="ratio", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv])
+
         report = detect_regressions(ds, bench_cfg, run_cfg)
+
         assert len(report.results) == 1
+        assert report.has_regressions is True
+
+        result = report.results[0]
+        assert isinstance(result.regressed, bool)
+        assert result.regressed is True
+        assert result.method is not None
 
 
 # ── RegressionError ────────────────────────────────────────────────────────
