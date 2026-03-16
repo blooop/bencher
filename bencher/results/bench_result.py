@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Optional, Any, Literal
+from typing import Any, Literal
 import logging
 import panel as pn
 from param import Parameter
@@ -68,7 +68,7 @@ class BenchResult(
     def to(
         self,
         result_type: BenchResult,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         reduce: ReduceType | None = None,
         # Aggregation controls (applied in filter())
@@ -98,14 +98,14 @@ class BenchResult(
         return result_instance.to_plot(**plot_kwargs)
 
     @staticmethod
-    def default_plot_callbacks() -> List[callable]:
+    def default_plot_callbacks() -> list[callable]:
         """Get the default list of plot callback functions.
 
         These callbacks are used by default in the to_auto method if no specific
         plot list is provided.
 
         Returns:
-            List[callable]: A list of plotting callback functions
+            list[callable]: A list of plotting callback functions
         """
         return [
             # VideoSummaryResult.to_video_summary, #quite expensive so not turned on by default
@@ -123,11 +123,11 @@ class BenchResult(
         ]
 
     @staticmethod
-    def plotly_callbacks() -> List[callable]:
+    def plotly_callbacks() -> list[callable]:
         """Get the list of Plotly-specific callback functions.
 
         Returns:
-            List[callable]: A list of Plotly-based visualization callback functions
+            list[callable]: A list of Plotly-based visualization callback functions
         """
         return [SurfaceResult.to_surface, VolumeResult.to_volume]
 
@@ -146,23 +146,23 @@ class BenchResult(
 
     def to_auto(
         self,
-        plot_list: List[callable] | None = None,
-        remove_plots: List[callable] | None = None,
+        plot_list: list[callable] | None = None,
+        remove_plots: list[callable] | None = None,
         default_container=pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
         **kwargs,
-    ) -> List[pn.panel]:
+    ) -> list[pn.panel]:
         """Automatically generate plots based on the provided plot callbacks.
 
         Args:
-            plot_list (List[callable], optional): List of plot callback functions to use. Defaults to None.
-            remove_plots (List[callable], optional): List of plot callback functions to exclude. Defaults to None.
+            plot_list (list[callable], optional): List of plot callback functions to use. Defaults to None.
+            remove_plots (list[callable], optional): List of plot callback functions to exclude. Defaults to None.
             default_container (type, optional): Default container type for the plots. Defaults to pn.Column.
             override (bool, optional): Whether to override unsupported plots. Defaults to False.
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
-            List[pn.panel]: A list of panel objects containing the generated plots.
+            list[pn.panel]: A list of panel objects containing the generated plots.
         """
         self.plt_cnt_cfg.print_debug = False
         plot_list = listify(plot_list)

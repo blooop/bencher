@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import List
 from copy import deepcopy
 
 import numpy as np
@@ -28,11 +27,11 @@ from bencher.optuna_conversions import (
 
 
 class OptunaResult(BenchResultBase):
-    def to_optuna_plots(self, **kwargs) -> List[pn.pane.panel]:
+    def to_optuna_plots(self, **kwargs) -> list[pn.pane.panel]:
         """Create an optuna summary from the benchmark results
 
         Returns:
-            List[pn.pane.panel]: A list of optuna plot summarising the benchmark process
+            list[pn.pane.panel]: A list of optuna plot summarising the benchmark process
         """
 
         return self.collect_optuna_plots(**kwargs)
@@ -47,7 +46,7 @@ class OptunaResult(BenchResultBase):
         self,
         worker,
         n_trials=100,
-        extra_results: List[OptunaResult] | None = None,
+        extra_results: list[OptunaResult] | None = None,
         sampler=None,
     ):
         directions = []
@@ -177,7 +176,7 @@ class OptunaResult(BenchResultBase):
 
     def collect_optuna_plots(
         self, pareto_width: float | None = None, pareto_height: float | None = None
-    ) -> List[pn.pane.panel]:
+    ) -> list[pn.pane.panel]:
         """Use optuna to plot various summaries of the optimisation
 
         Args:
@@ -185,7 +184,7 @@ class OptunaResult(BenchResultBase):
             bench_cfg (BenchCfg): Benchmark config with options used to generate the study
 
         Returns:
-            List[pn.pane.Pane]: A list of plots
+            list[pn.pane.Pane]: A list of plots
         """
 
         self.studies = [self.bench_result_to_study(True)]

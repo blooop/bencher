@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 import unittest
 from hypothesis import given, settings, strategies as st
@@ -6,7 +8,6 @@ from datetime import datetime
 
 from strenum import StrEnum
 from enum import auto
-from typing import List
 from param import Parameter
 from itertools import combinations
 
@@ -99,8 +100,8 @@ class TestAllCombinations(unittest.TestCase):
 
     def run_bencher_over_time(
         self,
-        input_vars: List[Parameter],
-        result_vars: List[bch.ResultVar],
+        input_vars: list[Parameter],
+        result_vars: list[bch.ResultVar],
         repeats: int,
     ):
         """Base function used to run benchers with a set of inputs,results and repeats over time"""
@@ -129,15 +130,15 @@ class TestAllCombinations(unittest.TestCase):
     )
     def test_all_input_combinations_over_time_hyp(
         self,
-        input_vars: List[Parameter],
-        result_vars: List[bch.ResultVar],
+        input_vars: list[Parameter],
+        result_vars: list[bch.ResultVar],
         repeats: int,
     ):
         """Use hypothesis to enumerate combinations of inputs to bencher
 
         Args:
-            input_vars (List[Parameter]): all possible sets of inputs
-            result_vars (List[bch.ResultVar]): all possible sets of results
+            input_vars (list[Parameter]): all possible sets of inputs
+            result_vars (list[bch.ResultVar]): all possible sets of results
             repeats (int): 1 or 2 repeats (more than 2 repeats hits the same code as 2 repeats)
         """
         self.run_bencher_over_time(input_vars, result_vars, repeats)

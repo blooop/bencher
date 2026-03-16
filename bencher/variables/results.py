@@ -26,8 +26,10 @@ IMPORTANT — hash_persistent() contract:
     Adding a new class without proper hashing will fail CI.
 """
 
+from __future__ import annotations
+
 from enum import auto
-from typing import List, Callable, Any, Optional
+from typing import Callable, Any
 from functools import partial
 import panel as pn
 import param
@@ -159,7 +161,7 @@ class ResultVec(param.List):
             index = idx
         return f"{self.name}_{index}"
 
-    def index_names(self) -> List[str]:
+    def index_names(self) -> list[str]:
         """Returns a list of all the xarray column names for the result vector
 
         Returns:
@@ -183,11 +185,11 @@ class ResultHmap(param.Parameter):
 
 
 def curve(
-    x_vals: List[float],
-    y_vals: List[float],
+    x_vals: list[float],
+    y_vals: list[float],
     x_name: str,
     y_name: str,
-    label: Optional[str] = None,
+    label: str | None = None,
     **kwargs,
 ) -> hv.Curve:
     label = label or y_name

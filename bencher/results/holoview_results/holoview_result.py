@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import List, Optional
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -63,14 +62,14 @@ class HoloviewResult(VideoResult):
         """
         return self.to_hv_dataset(reduce).to(hv_type, **kwargs)
 
-    def overlay_plots(self, plot_callback: callable) -> Optional[hv.Overlay | pn.Row]:
+    def overlay_plots(self, plot_callback: callable) -> hv.Overlay | pn.Row | None:
         """Create an overlay of plots by applying a callback to each result variable.
 
         Args:
             plot_callback (callable): Function to apply to each result variable to create a plot.
 
         Returns:
-            Optional[hv.Overlay | pn.Row]: An overlay of plots or Row of plots, or None if no results.
+            hv.Overlay | pn.Row | None: An overlay of plots or Row of plots, or None if no results.
         """
         results = []
         markdown_results = pn.Row()
@@ -90,14 +89,14 @@ class HoloviewResult(VideoResult):
             return markdown_results
         return None
 
-    def layout_plots(self, plot_callback: callable) -> Optional[hv.Layout]:
+    def layout_plots(self, plot_callback: callable) -> hv.Layout | None:
         """Create a layout of plots by applying a callback to each result variable.
 
         Args:
             plot_callback (callable): Function to apply to each result variable to create a plot.
 
         Returns:
-            Optional[hv.Layout]: A layout of plots or None if no results.
+            hv.Layout | None: A layout of plots or None if no results.
         """
         if len(self.bench_cfg.result_vars) > 0:
             pt = hv.Layout()
@@ -195,7 +194,7 @@ class HoloviewResult(VideoResult):
         result_var: Parameter | None = None,
         result_types: tuple | None = (ResultVar,),
         **kwargs,
-    ) -> Optional[pn.pane.panel]:
+    ) -> pn.pane.panel | None:
         """Convert the data to a HoloViews container with specified dimensions and options.
 
         Args:
@@ -207,7 +206,7 @@ class HoloviewResult(VideoResult):
             **kwargs: Additional visualization options.
 
         Returns:
-            Optional[pn.pane.panel]: A panel containing the visualization, or None if no valid results.
+            pn.pane.panel | None: A panel containing the visualization, or None if no valid results.
         """
         return self.map_plot_panes(
             partial(self.hv_container_ds, container=container),
@@ -233,19 +232,19 @@ class HoloviewResult(VideoResult):
 
     def setup_results_and_containers(
         self,
-        result_var_plots: Parameter | List[Parameter],
-        container: type | List[type] | None = None,
+        result_var_plots: Parameter | list[Parameter],
+        container: type | list[type] | None = None,
         **kwargs,
-    ) -> tuple[List[Parameter], List[pn.pane.panel]]:
+    ) -> tuple[list[Parameter], list[pn.pane.panel]]:
         """Set up appropriate containers for result variables.
 
         Args:
-            result_var_plots (Parameter | List[Parameter]): Result variables to visualize.
-            container (type | List[type], optional): Container types to use. Defaults to None.
+            result_var_plots (Parameter | list[Parameter]): Result variables to visualize.
+            container (type | list[type], optional): Container types to use. Defaults to None.
             **kwargs: Additional options to pass to the container constructors.
 
         Returns:
-            tuple[List[Parameter], List[pn.pane.panel]]: Tuple containing:
+            tuple[list[Parameter], list[pn.pane.panel]]: Tuple containing:
                 - List of result variables
                 - List of initialized container instances
         """
@@ -311,11 +310,11 @@ class HoloviewResult(VideoResult):
         """
         return hv.HoloMap(self.to_nd_layout(name)).opts(shared_axes=False)
 
-    def to_holomap_list(self, hmap_names: List[str] | None = None) -> pn.Column:
+    def to_holomap_list(self, hmap_names: list[str] | None = None) -> pn.Column:
         """Create a column of HoloMaps from multiple named maps.
 
         Args:
-            hmap_names (List[str], optional): List of HoloMap names to include.
+            hmap_names (list[str], optional): list of HoloMap names to include.
                 If None, uses all result_hmaps. Defaults to None.
 
         Returns:
@@ -368,11 +367,11 @@ class HoloviewResult(VideoResult):
 
         return hv.DynamicMap(cb, kdims=kdims)
 
-    def to_grid(self, inputs: List[str] | None = None) -> hv.GridSpace:
+    def to_grid(self, inputs: list[str] | None = None) -> hv.GridSpace:
         """Create a grid visualization from a HoloMap.
 
         Args:
-            inputs (List[str], optional): Input variable names to use for the grid dimensions.
+            inputs (list[str], optional): Input variable names to use for the grid dimensions.
                 If None, uses bench_cfg.inputs_as_str(). Defaults to None.
 
         Returns:

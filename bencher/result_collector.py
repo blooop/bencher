@@ -4,10 +4,12 @@ This module provides the ResultCollector class for managing benchmark results,
 including xarray dataset operations, caching, and metadata management.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from itertools import product
-from typing import Any, List, Tuple
+from typing import Any
 
 import numpy as np
 import xarray as xr
@@ -40,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 def set_xarray_multidim(
-    data_array: xr.DataArray, index_tuple: Tuple[int, ...], value: Any
+    data_array: xr.DataArray, index_tuple: tuple[int, ...], value: Any
 ) -> xr.DataArray:
     """Set a value in a multi-dimensional xarray at the specified index position.
 
@@ -49,7 +51,7 @@ def set_xarray_multidim(
 
     Args:
         data_array (xr.DataArray): The data array to modify
-        index_tuple (Tuple[int, ...]): The index coordinates as a tuple
+        index_tuple (tuple[int, ...]): The index coordinates as a tuple
         value (Any): The value to set at the specified position
 
     Returns:
@@ -81,7 +83,7 @@ class ResultCollector:
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> Tuple[BenchResult, List[Tuple], List[str]]:
+    ) -> tuple[BenchResult, list[tuple], list[str]]:
         """Initialize an n-dimensional xarray dataset from benchmark configuration parameters.
 
         This function creates the data structures needed to store benchmark results based on
@@ -94,7 +96,7 @@ class ResultCollector:
             time_src (datetime | str): Timestamp or event name for the benchmark run
 
         Returns:
-            Tuple[BenchResult, List[Tuple], List[str]]:
+            tuple[BenchResult, list[tuple], list[str]]:
                 - A BenchResult object with the initialized dataset
                 - A list of function input tuples (index, value pairs)
                 - A list of dimension names for the dataset
@@ -145,7 +147,7 @@ class ResultCollector:
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> List[IntSweep]:
+    ) -> list[IntSweep]:
         """Define extra meta variables for tracking benchmark execution details.
 
         This function creates variables that aren't passed to the worker function but are stored
@@ -159,7 +161,7 @@ class ResultCollector:
                 tracking
 
         Returns:
-            List[IntSweep]: A list of additional parameter variables to include in the benchmark
+            list[IntSweep]: A list of additional parameter variables to include in the benchmark
         """
         bench_cfg.iv_repeat = IntSweep(
             default=repeats,
@@ -250,7 +252,7 @@ class ResultCollector:
                 bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
 
     def cache_results(
-        self, bench_res: BenchResult, bench_cfg_hash: str, bench_cfg_hashes: List[str]
+        self, bench_res: BenchResult, bench_cfg_hash: str, bench_cfg_hashes: list[str]
     ) -> None:
         """Cache benchmark results for future retrieval.
 
@@ -261,7 +263,7 @@ class ResultCollector:
         Args:
             bench_res (BenchResult): The benchmark result to cache
             bench_cfg_hash (str): The hash value to use as the cache key
-            bench_cfg_hashes (List[str]): List to append the hash to (modified in place)
+            bench_cfg_hashes (list[str]): List to append the hash to (modified in place)
         """
         with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
             logger.info(f"saving results with key: {bench_cfg_hash}")
