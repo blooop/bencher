@@ -15,6 +15,54 @@ class TstBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
+class TestAggOverDimsStd(unittest.TestCase):
+    """Test that agg_over_dims with mean produces _std variables."""
+
+    def test_mean_agg_produces_std(self):
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_std_test",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
+        self.assertIn("distance_std", ds.data_vars)
+        self.assertIn("distance", ds.data_vars)
+        # std must be non-negative
+        self.assertTrue((ds["distance_std"].values >= 0).all())
+
+    def test_mean_agg_replaces_repeat_std(self):
+        """When repeats > 1, agg std should replace the repeat-based std."""
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_std_repeat_test",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bch.BenchRunCfg(repeats=2),
+            plot_callbacks=False,
+        )
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
+        self.assertIn("distance_std", ds.data_vars)
+        # Should only have one distance_std, not a conflict
+        std_vars = [v for v in ds.data_vars if v.endswith("_std")]
+        self.assertEqual(std_vars, ["distance_std"])
+
+    def test_sum_agg_no_std(self):
+        """Non-mean aggregations should not produce _std variables."""
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_sum_test",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        ds = res.to_dataset(agg_over_dims=["float1"], agg_fn="sum")
+        self.assertNotIn("distance_std", ds.data_vars)
+
+
 class TestBenchResultBase(unittest.TestCase):
     def test_to_dataset(self):
         bench = BenchableObject().to_bench()
