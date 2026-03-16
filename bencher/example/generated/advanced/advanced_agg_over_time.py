@@ -6,6 +6,7 @@ import math
 import bencher as bch
 from datetime import datetime, timedelta
 
+
 class ThermalPlate(bch.ParametrizedSweep):
     """Measures temperature across a 2D plate that cools over time.
 
@@ -15,12 +16,8 @@ class ThermalPlate(bch.ParametrizedSweep):
     decays, with error bounds from the spatial variation across the grid.
     """
 
-    x = bch.FloatSweep(
-        default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate"
-    )
-    y = bch.FloatSweep(
-        default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate"
-    )
+    x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate")
+    y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate")
 
     temperature = bch.ResultVar(units="C", doc="Measured temperature")
 
@@ -30,7 +27,9 @@ class ThermalPlate(bch.ParametrizedSweep):
         self.update_params_from_kwargs(**kwargs)
         # Hot spot at centre, decaying over time
         self.temperature = (
-            100 * math.sin(math.pi * self.x) * math.sin(math.pi * self.y)
+            100
+            * math.sin(math.pi * self.x)
+            * math.sin(math.pi * self.y)
             * math.exp(-0.3 * self._time_offset)
             + 20
         )
