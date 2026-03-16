@@ -5,6 +5,7 @@ import html
 import importlib
 import io
 import os
+import signal
 import shutil
 import subprocess
 from pathlib import Path
@@ -157,6 +158,13 @@ def _find_example_function(mod):
     return None
 
 
+EXAMPLE_TIMEOUT_SECONDS = int(os.environ.get("BENCHER_EXAMPLE_TIMEOUT", "120"))
+
+
+def _timeout_handler(signum, frame):
+    raise TimeoutError("Example exceeded time limit")
+
+
 def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, page=None):
     """Run a Python example, save HTML report, write RST doc page.
 
@@ -179,8 +187,25 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
         run_cfg.use_optuna = run_kwargs["use_optuna"]
-    print(f"Running {py_file}...")
-    bench = example_fn(run_cfg)
+    print(f"Running {py_file} (timeout={EXAMPLE_TIMEOUT_SECONDS}s)...")
+
+    prev_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(EXAMPLE_TIMEOUT_SECONDS)
+    try:
+        bench = example_fn(run_cfg)
+    except TimeoutError:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, prev_handler)
+        print(f"ERROR: {py_file} timed out after {EXAMPLE_TIMEOUT_SECONDS}s, skipping")
+        return None
+    except Exception as e:  # pylint: disable=broad-except
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, prev_handler)
+        print(f"ERROR: {py_file} failed: {e}, skipping")
+        return None
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, prev_handler)
 
     # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
     reports_output_dir = REPORTS_EXTRA_DIR / rel.parent
