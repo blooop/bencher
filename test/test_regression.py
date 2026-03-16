@@ -120,6 +120,13 @@ class TestDetectIqr:
         result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.maximize)
         assert result.regressed
 
+    def test_improvement_not_regression_minimize(self):
+        """For minimize, an outlier below bounds is an improvement, not a regression."""
+        time_means = np.array([10.0, 10.1, 10.2, 10.0, 9.9])
+        curr = np.array([1.0])  # well below — improvement for minimize
+        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
+        assert not result.regressed
+
     def test_fallback_with_few_points(self):
         """With <4 historical time points, should fall back to percentage."""
         time_means = np.array([100.0, 101.0])
@@ -352,6 +359,86 @@ class TestDetectRegressions:
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions
 
+    def test_multiple_result_vars_mixed(self):
+        """Multiple result vars: one regressed, one not."""
+        values_a = np.array([[100.0], [100.0], [200.0]])  # regresses
+        values_b = np.array([[50.0], [50.0], [51.0]])  # stable
+        ds = xr.Dataset(
+            {
+                "metric_a": (["over_time", "repeat"], values_a),
+                "metric_b": (["over_time", "repeat"], values_b),
+            },
+            coords={"over_time": np.arange(3), "repeat": [0]},
+        )
+        from bencher.variables.results import ResultVar
+
+        rv_a = ResultVar(units="s", direction=OptDir.minimize)
+        rv_a.name = "metric_a"
+        rv_b = ResultVar(units="s", direction=OptDir.minimize)
+        rv_b.name = "metric_b"
+        bench_cfg, run_cfg = self._make_cfg([rv_a, rv_b], method="percentage", threshold=5.0)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert len(report.results) == 2
+        assert report.has_regressions
+        names = {r.variable: r.regressed for r in report.results}
+        assert names["metric_a"] is True
+        assert names["metric_b"] is False
+
+    def test_unknown_method_falls_back_to_percentage(self):
+        """Unknown regression method should fall back to percentage detection."""
+        values = np.array([[100.0, 100.0], [100.0, 100.0], [200.0, 200.0]])
+        ds = self._make_dataset(n_times=3, n_repeats=2, values=values)
+        from bencher.variables.results import ResultVar
+
+        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="bogus", threshold=5.0)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.has_regressions
+        assert report.results[0].method == "percentage"
+
+    def test_var_not_in_dataset_skipped(self):
+        """Result var not present in dataset should be silently skipped."""
+        values = np.array([[100.0, 100.0], [200.0, 200.0]])
+        ds = self._make_dataset(n_times=2, n_repeats=2, values=values)
+        from bencher.variables.results import ResultVar
+
+        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv.name = "nonexistent"
+        bench_cfg, run_cfg = self._make_cfg([rv])
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert len(report.results) == 0
+
+    def test_non_numeric_result_var_skipped(self):
+        """Non-numeric result types (e.g. ResultImage) should be skipped."""
+        values = np.array([[100.0, 100.0], [200.0, 200.0]])
+        ds = self._make_dataset(n_times=2, n_repeats=2, values=values)
+        from bencher.variables.results import ResultImage
+
+        rv = ResultImage(doc="test image")
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv])
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert len(report.results) == 0
+
+    def test_custom_threshold_overrides_default(self):
+        """Explicit threshold should override the per-method default."""
+        # 10% change — regresses with threshold=5, not with threshold=15
+        values = np.array([[100.0, 100.0], [100.0, 100.0], [110.0, 110.0]])
+        ds = self._make_dataset(n_times=3, n_repeats=2, values=values)
+        from bencher.variables.results import ResultVar
+
+        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+
+        bench_cfg_strict, run_cfg_strict = self._make_cfg([rv], method="percentage", threshold=5.0)
+        report_strict = detect_regressions(ds, bench_cfg_strict, run_cfg_strict)
+        assert report_strict.has_regressions
+
+        bench_cfg_loose, run_cfg_loose = self._make_cfg([rv], method="percentage", threshold=15.0)
+        report_loose = detect_regressions(ds, bench_cfg_loose, run_cfg_loose)
+        assert not report_loose.has_regressions
+
     def test_result_bool_supported(self):
         values = np.array(
             [
@@ -432,6 +519,22 @@ class TestEndToEnd:
 
         assert res2.regression_report is not None
         assert not res2.regression_report.has_regressions
+
+    def test_detection_disabled_leaves_report_none(self):
+        """When regression_detection=False, regression_report should stay None."""
+        run_cfg = bch.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 1
+        run_cfg.regression_detection = False
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+
+        bench = bch.Bench("test_regression_disabled", _SimpleBench(), run_cfg=run_cfg)
+        bench.plot_sweep(plot_callbacks=False)
+        bench.sample_cache = None
+        res2 = bench.plot_sweep(plot_callbacks=False)
+
+        assert res2.regression_report is None
 
     def test_regression_fail_raises(self):
         """Verify that regression_fail=True raises RegressionError."""
