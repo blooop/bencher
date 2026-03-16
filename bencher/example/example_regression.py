@@ -5,6 +5,8 @@ time snapshots. Shows how regression detection identifies the degradation
 and reports it.
 """
 
+from datetime import datetime, timedelta
+
 import bencher as bch
 
 
@@ -41,10 +43,17 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     bench = bch.Bench("example_regression", DegradingBenchmark(), run_cfg=run_cfg)
 
+    base_time = datetime(2024, 1, 1)
     # Simulate 5 time snapshots with increasing degradation
     for i in range(5):
         DegradingBenchmark.run_number = i
-        res = bench.plot_sweep(plot_callbacks=False)
+        run_cfg.clear_cache = True
+        run_cfg.clear_history = i == 0
+        res = bench.plot_sweep(
+            plot_callbacks=False,
+            run_cfg=run_cfg,
+            time_src=base_time + timedelta(seconds=i),
+        )
         bench.sample_cache = None  # reset for next run
 
     # Access the regression report from the last result

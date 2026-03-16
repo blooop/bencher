@@ -3,6 +3,7 @@
 from typing import Any
 
 import bencher as bch
+from datetime import datetime, timedelta
 
 
 class DegradingBenchmark(bch.ParametrizedSweep):
@@ -31,13 +32,18 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
 
     bench = bch.Bench("regression_percentage", DegradingBenchmark(), run_cfg=run_cfg)
 
+    base_time = datetime(2024, 1, 1)
     # Simulate 5 time snapshots with increasing degradation
     for i in range(5):
         DegradingBenchmark.run_number = i
+        run_cfg.clear_cache = True
+        run_cfg.clear_history = i == 0
         res = bench.plot_sweep(
             input_vars=[],
             result_vars=["latency", "throughput"],
             title=f"Snapshot {i}",
+            run_cfg=run_cfg,
+            time_src=base_time + timedelta(seconds=i),
         )
         bench.sample_cache = None  # reset for next run
 
