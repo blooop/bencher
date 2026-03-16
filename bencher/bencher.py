@@ -504,6 +504,12 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
+        if run_cfg.cache_size is not None:
+            cache_size_bytes = run_cfg.cache_size * 1_000_000
+            self.cache_size = cache_size_bytes
+            self._executor.cache_size = cache_size_bytes
+            self._collector.cache_size = cache_size_bytes
+
         # Filter run_cfg parameters to only those that can override bench_cfg
         # (param 2.3 enforces constant parameters that cannot be overridden)
         run_cfg_values, missing_keys, constant_keys = self.filter_overridable_params(

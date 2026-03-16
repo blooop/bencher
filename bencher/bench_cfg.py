@@ -146,6 +146,12 @@ class BenchRunCfg(BenchPlotSrvCfg):
         False, doc="Do not attempt to calculate benchmarks if no results are found in the cache"
     )
 
+    cache_size: int = param.Integer(
+        default=None,
+        allow_None=True,
+        doc="Maximum size of the disk cache in megabytes (MB). If None, uses the default (100 GB).",
+    )
+
     # ==================== DISPLAY PARAMETERS ====================
     # These parameters control console output and reporting
 
