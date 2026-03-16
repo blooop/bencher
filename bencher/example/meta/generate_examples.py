@@ -107,6 +107,7 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
     from bencher.example.meta.generate_meta_workflows import example_meta_workflows
+    from bencher.example.meta.generate_meta_yaml import example_meta_yaml
 
     example_meta()
     example_meta_result_types()
@@ -119,6 +120,7 @@ def generate_python_files():
     example_meta_optimization()
     example_meta_workflows()
     example_meta_advanced()
+    example_meta_yaml()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -360,6 +362,7 @@ SECTIONS = {
     "Constant Variables": "const_vars",
     "Statistics": "statistics",
     "Workflows": "workflows",
+    "YAML Sweeps": "yaml",
     "Advanced Patterns": "advanced",
 }
 
