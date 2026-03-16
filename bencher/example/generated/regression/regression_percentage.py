@@ -6,18 +6,23 @@ import bencher as bch
 from datetime import datetime, timedelta
 
 
-class DegradingBenchmark(bch.ParametrizedSweep):
-    """A benchmark whose latency degrades over successive runs."""
+class ServerBenchmark(bch.ParametrizedSweep):
+    """A server benchmark whose response time degrades over successive releases."""
 
-    latency = bch.ResultVar(units="ms", direction=bch.OptDir.minimize)
-    throughput = bch.ResultVar(units="ops/s", direction=bch.OptDir.maximize)
+    connections = bch.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
+    payload_kb = bch.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
+
+    response_time = bch.ResultVar(units="ms", direction=bch.OptDir.minimize)
+    throughput = bch.ResultVar(units="req/s", direction=bch.OptDir.maximize)
 
     _time_offset = 0.0  # set externally per snapshot
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        self.latency = 10.0 + self._time_offset * 5.0
-        self.throughput = 100.0 - self._time_offset * 15.0
+        base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
+        leak = 1.0 + self._time_offset * 0.12  # memory leak grows per release
+        self.response_time = base_rt * leak
+        self.throughput = 1000.0 / self.response_time
         return super().__call__()
 
 
@@ -30,7 +35,7 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
     run_cfg.regression_method = "percentage"
     run_cfg.regression_fail = False
 
-    benchable = DegradingBenchmark()
+    benchable = ServerBenchmark()
     bench = benchable.to_bench(run_cfg)
 
     base_time = datetime(2024, 1, 1)
@@ -41,8 +46,8 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
         run_cfg.auto_plot = False
         bench.plot_sweep(
             "regression_detection",
-            input_vars=[],
-            result_vars=["latency", "throughput"],
+            input_vars=["connections", "payload_kb"],
+            result_vars=["response_time", "throughput"],
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
         )
