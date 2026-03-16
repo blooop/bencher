@@ -1,9 +1,9 @@
-"""Demo: aggregate over a swept dimension to produce a curve over time with error bounds.
+"""Demo: aggregate a 2D sweep down to a scalar curve over time with error bounds.
 
-When ``over_time=True`` and a float input is swept, aggregating over that input
-(via ``agg_over_dims``) collapses it to mean +/- std at each time point.  The
-resulting ``CurveResult`` shows how the aggregate metric evolves over time with
-error bounds derived from the spread across the swept values.
+A 2D parameter sweep (float1 x float2) is run at each time snapshot.  The report
+first shows the raw 2D heatmap with an over_time slider, then shows both sweep
+dimensions collapsed via ``agg_over_dims`` into a single mean +/- std per time
+point — a curve showing how the plate-wide average evolves over time.
 
 Run:
     python bencher/example/example_agg_over_time.py
@@ -33,14 +33,20 @@ def example_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         run_cfg.auto_plot = False
         bench.plot_sweep(
             "agg_over_time",
-            input_vars=["float1"],
+            input_vars=["float1", "float2"],
             result_vars=["distance"],
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
         )
 
     res = bench.results[-1]
-    bench.report.append(res.to(bch.CurveResult, agg_over_dims=["float1"]))
+
+    # 1) Raw 2D heatmap with over_time slider
+    bench.report.append(res.to(bch.HeatmapResult))
+
+    # 2) Aggregated: collapse both sweep dims to scalar mean +/- std over time
+    bench.report.append(res.to(bch.CurveResult, agg_over_dims=["float1", "float2"]))
+
     return bench
 
 

@@ -272,19 +272,23 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
         )
 
     def _generate_agg_over_time(self):
-        """Aggregate over a swept dimension to produce a curve over time with error bounds."""
+        """Aggregate a 2D sweep down to a scalar curve over time with error bounds."""
         imports = "import math\nimport bencher as bch\nfrom datetime import datetime, timedelta"
         class_code = '''\
-class ThermalSweep(bch.ParametrizedSweep):
-    """Measures heat dissipation across sensor positions over time.
+class ThermalPlate(bch.ParametrizedSweep):
+    """Measures temperature across a 2D plate that cools over time.
 
-    When over_time=True and a float input is swept, aggregating over that
-    input (via agg_over_dims) collapses it to mean +/- std at each time
-    point. The std shows the spread across sensor positions.
+    A 2D sweep (x, y) is run at each time snapshot. Both dimensions are
+    then collapsed via agg_over_dims, producing a single mean +/- std per
+    time point. The curve shows how the plate-wide average temperature
+    decays, with error bounds from the spatial variation across the grid.
     """
 
-    position = bch.FloatSweep(
-        default=0.5, bounds=[0.0, 1.0], doc="Sensor position along rod"
+    x = bch.FloatSweep(
+        default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate"
+    )
+    y = bch.FloatSweep(
+        default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate"
     )
 
     temperature = bch.ResultVar(units="C", doc="Measured temperature")
@@ -293,9 +297,9 @@ class ThermalSweep(bch.ParametrizedSweep):
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
-        # Temperature varies along the rod and decays over time
+        # Hot spot at centre, decaying over time
         self.temperature = (
-            80 * math.sin(math.pi * self.position)
+            100 * math.sin(math.pi * self.x) * math.sin(math.pi * self.y)
             * math.exp(-0.3 * self._time_offset)
             + 20
         )
@@ -304,7 +308,7 @@ class ThermalSweep(bch.ParametrizedSweep):
 run_cfg = run_cfg or bch.BenchRunCfg()
 run_cfg.over_time = True
 
-benchable = ThermalSweep()
+benchable = ThermalPlate()
 bench = benchable.to_bench(run_cfg)
 
 base_time = datetime(2024, 1, 1)
@@ -314,19 +318,23 @@ for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
     run_cfg.clear_history = i == 0
     run_cfg.auto_plot = False
     bench.plot_sweep(
-        "thermal_sweep",
-        input_vars=["position"],
+        "thermal_plate",
+        input_vars=["x", "y"],
         result_vars=["temperature"],
         run_cfg=run_cfg,
         time_src=base_time + timedelta(seconds=i),
     )
 
-# Aggregate over position: produces mean +/- std at each time point
 res = bench.results[-1]
-bench.report.append(res.to(bch.CurveResult, agg_over_dims=["position"]))
+
+# 1) Raw 2D heatmap with over_time slider
+bench.report.append(res.to(bch.HeatmapResult))
+
+# 2) Aggregate the full 2D grid down to a scalar: mean +/- std at each time point
+bench.report.append(res.to(bch.CurveResult, agg_over_dims=["x", "y"]))
 """
         self.generate_example(
-            title="Aggregate Over Time — curve with error bounds from swept dims",
+            title="Aggregate Over Time — 2D sweep to scalar curve with error bounds",
             output_dir=OUTPUT_DIR,
             filename="advanced_agg_over_time",
             function_name="example_advanced_agg_over_time",
