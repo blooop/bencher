@@ -155,8 +155,8 @@ class BenchResult(
         """Automatically generate plots based on the provided plot callbacks.
 
         Args:
-            plot_list (list[callable], optional): list of plot callback functions to use. Defaults to None.
-            remove_plots (list[callable], optional): list of plot callback functions to exclude. Defaults to None.
+            plot_list (list[callable], optional): List of plot callback functions to use. Defaults to None.
+            remove_plots (list[callable], optional): List of plot callback functions to exclude. Defaults to None.
             default_container (type, optional): Default container type for the plots. Defaults to pn.Column.
             override (bool, optional): Whether to override unsupported plots. Defaults to False.
             **kwargs: Additional keyword arguments for plot configuration.

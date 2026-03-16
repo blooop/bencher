@@ -350,10 +350,10 @@ def params_to_str(param_list: list[param.Parameter]) -> list[str]:
     """Convert a list of param.Parameter objects to a list of their names.
 
     Args:
-        param_list (list[param.Parameter]): list of parameter objects
+        param_list (list[param.Parameter]): List of parameter objects
 
     Returns:
-        list[str]: list of parameter names
+        list[str]: List of parameter names
     """
     return [get_name(i) for i in param_list]
 

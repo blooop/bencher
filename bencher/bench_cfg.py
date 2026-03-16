@@ -470,7 +470,7 @@ class BenchCfg(BenchRunCfg):
         """Get a list of input variable names.
 
         Returns:
-            list[str]: list of the names of input variables
+            list[str]: List of the names of input variables
         """
         return [i.name for i in self.input_vars]
 
@@ -644,7 +644,7 @@ class BenchCfg(BenchRunCfg):
                           Defaults to False.
 
         Returns:
-            list[Any]: list of result variable names or objects that are optimization targets
+            list[Any]: List of result variable names or objects that are optimization targets
         """
         targets = []
         for rv in self.result_vars:

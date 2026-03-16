@@ -244,9 +244,9 @@ class HoloviewResult(VideoResult):
             **kwargs: Additional options to pass to the container constructors.
 
         Returns:
-            tuple[list[Parameter], list[pn.pane.panel]]: tuple containing:
-                - list of result variables
-                - list of initialized container instances
+            tuple[list[Parameter], list[pn.pane.panel]]: Tuple containing:
+                - List of result variables
+                - List of initialized container instances
         """
         result_var_plots = listify(result_var_plots)
         if container is None:

@@ -263,7 +263,7 @@ class ResultCollector:
         Args:
             bench_res (BenchResult): The benchmark result to cache
             bench_cfg_hash (str): The hash value to use as the cache key
-            bench_cfg_hashes (list[str]): list to append the hash to (modified in place)
+            bench_cfg_hashes (list[str]): List to append the hash to (modified in place)
         """
         with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
             logger.info(f"saving results with key: {bench_cfg_hash}")

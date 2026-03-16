@@ -109,7 +109,7 @@ class VideoSummaryResult(BenchResultBase):
             time_sequence_dimension (int, optional): The dimension to use for time sequencing. Defaults to 0.
             video_controls (VideoControls, optional): Controls for video playback. If None, creates default controls.
             target_duration (float, optional): Target duration for the video in seconds.
-            compose_method_list (list, optional): list of composition methods for combining panes.
+            compose_method_list (list, optional): List of composition methods for combining panes.
             target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 0.
             **kwargs: Additional keyword arguments passed to video rendering.
 

@@ -86,8 +86,8 @@ class SweepExecutor:
                 - param.Parameter: Already a parameter object
                 - str: Name of a parameter in the worker_class_instance
                 - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
-                - tuple: tuple that can be converted to a parameter
-            var_type (str): type of variable ('input', 'result', or 'const') for error messages
+                - tuple: Tuple that can be converted to a parameter
+            var_type (str): Type of variable ('input', 'result', or 'const') for error messages
             run_cfg (BenchRunCfg | None): Run configuration for level settings
             worker_class_instance (ParametrizedSweep | None): The worker class instance for
                 looking up parameters by name
@@ -129,7 +129,7 @@ class SweepExecutor:
         """Convert constant variable tuples into a dictionary of name-value pairs.
 
         Args:
-            const_vars (list[tuple[param.Parameter, Any]]): list of (parameter, value) tuples
+            const_vars (list[tuple[param.Parameter, Any]]): List of (parameter, value) tuples
                 representing constant parameters and their values
 
         Returns:

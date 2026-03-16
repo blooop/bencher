@@ -65,7 +65,7 @@ class ParametrizedSweep(Parameterized):
             include_name (bool): Include the name parameter that all parametrised classes have. Default False
 
         Returns:
-            tuple[dict, dict]: a tuple containing the inputs and result parameters as dictionaries
+            tuple[dict, dict]: A tuple containing the inputs and result parameters as dictionaries
         """
         inputs = {}
         results = {}
