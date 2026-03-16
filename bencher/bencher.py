@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from itertools import product, combinations
 
 from param import Parameter
-from typing import Callable, List, Optional, Tuple, Any
+from typing import Callable, Any
 from copy import deepcopy
 import param
 import xarray as xr
@@ -25,6 +27,7 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str
 from bencher.sample_order import SampleOrder
+from bencher.regression import detect_regressions, RegressionError
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
@@ -176,16 +179,16 @@ class Bench(BenchPlotServer):
     def sweep_sequential(
         self,
         title: str = "",
-        input_vars: List[ParametrizedSweep] | None = None,
-        result_vars: List[ParametrizedSweep] | None = None,
-        const_vars: List[ParametrizedSweep] | None = None,
+        input_vars: list[ParametrizedSweep] | None = None,
+        result_vars: list[ParametrizedSweep] | None = None,
+        const_vars: list[ParametrizedSweep] | None = None,
         optimise_var: ParametrizedSweep | None = None,
         run_cfg: BenchRunCfg | None = None,
         group_size: int = 1,
         iterations: int = 1,
         relationship_cb: Callable | None = None,
-        plot_callbacks: List[Callable] | bool | None = None,
-    ) -> List[BenchResult]:
+        plot_callbacks: list[Callable] | bool | None = None,
+    ) -> list[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
         This method performs sweeps on combinations of input variables, potentially
@@ -193,10 +196,10 @@ class Bench(BenchPlotServer):
 
         Args:
             title (str, optional): Base title for all the benchmark sweeps. Defaults to "".
-            input_vars (List[ParametrizedSweep], optional): Input variables to sweep through.
+            input_vars (list[ParametrizedSweep], optional): Input variables to sweep through.
                 If None, defaults to all input variables from the worker class instance.
-            result_vars (List[ParametrizedSweep], optional): Result variables to collect. Defaults to None.
-            const_vars (List[ParametrizedSweep], optional): Variables to keep constant. Defaults to None.
+            result_vars (list[ParametrizedSweep], optional): Result variables to collect. Defaults to None.
+            const_vars (list[ParametrizedSweep], optional): Variables to keep constant. Defaults to None.
             optimise_var (ParametrizedSweep, optional): Variable to optimize on each sweep iteration.
                 The optimal value will be used as constant input for subsequent sweeps. Defaults to None.
             run_cfg (BenchRunCfg, optional): Run configuration. Defaults to None.
@@ -204,11 +207,11 @@ class Bench(BenchPlotServer):
             iterations (int, optional): Number of optimization iterations to perform. Defaults to 1.
             relationship_cb (Callable, optional): Function to determine how to group variables for sweeping.
                 Defaults to itertools.combinations if None.
-            plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting or bool to enable/disable.
+            plot_callbacks (list[Callable] | bool, optional): Callbacks for plotting or bool to enable/disable.
                 Defaults to None.
 
         Returns:
-            List[BenchResult]: A list of results from all the sweep runs
+            list[BenchResult]: A list of results from all the sweep runs
         """
         if relationship_cb is None:
             relationship_cb = combinations
@@ -237,16 +240,16 @@ class Bench(BenchPlotServer):
     def plot_sweep(
         self,
         title: str | None = None,
-        input_vars: List[ParametrizedSweep] | None = None,
-        result_vars: List[ParametrizedSweep] | None = None,
-        const_vars: List[ParametrizedSweep] | None = None,
+        input_vars: list[ParametrizedSweep] | None = None,
+        result_vars: list[ParametrizedSweep] | None = None,
+        const_vars: list[ParametrizedSweep] | None = None,
         time_src: datetime | None = None,
         description: str | None = None,
         post_description: str | None = None,
         pass_repeat: bool = False,
         tag: str = "",
         run_cfg: BenchRunCfg | None = None,
-        plot_callbacks: List[Callable] | bool | None = None,
+        plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
@@ -257,11 +260,11 @@ class Bench(BenchPlotServer):
         Args:
             title (str, optional): The title of the benchmark. If None, a title will be
                 generated based on the input variables. Defaults to None.
-            input_vars (List[ParametrizedSweep], optional): Variables to sweep through in the benchmark.
+            input_vars (list[ParametrizedSweep], optional): Variables to sweep through in the benchmark.
                 If None and worker_class_instance exists, uses input variables from it. Defaults to None.
-            result_vars (List[ParametrizedSweep], optional): Variables to collect results for.
+            result_vars (list[ParametrizedSweep], optional): Variables to collect results for.
                 If None and worker_class_instance exists, uses result variables from it. Defaults to None.
-            const_vars (List[ParametrizedSweep], optional): Variables to keep constant with specified values.
+            const_vars (list[ParametrizedSweep], optional): Variables to keep constant with specified values.
                 If None and worker_class_instance exists, uses default input values. Defaults to None.
             time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.
                 Defaults to None, which will use the current time.
@@ -273,7 +276,7 @@ class Bench(BenchPlotServer):
             tag (str, optional): Tag to group different benchmarks together. Defaults to "".
             run_cfg (BenchRunCfg, optional): Configuration for how the benchmarks are run.
                 If None, uses the instance's run_cfg or creates a default one. Defaults to None.
-            plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting results.
+            plot_callbacks (list[Callable] | bool, optional): Callbacks for plotting results.
                 If True, uses default plotting. If False, disables plotting.
                 If a list, uses the provided callbacks. Defaults to None.
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
@@ -440,7 +443,7 @@ class Bench(BenchPlotServer):
     @staticmethod
     def filter_overridable_params(
         bench_cfg: BenchCfg, run_cfg: BenchRunCfg
-    ) -> Tuple[dict, List[str], List[str]]:
+    ) -> tuple[dict, list[str], list[str]]:
         """Filter run_cfg parameters to only those that can override bench_cfg.
 
         Param 2.3 enforces constant Parameters (e.g. the implicit `name`), which cannot
@@ -504,6 +507,16 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
+        if run_cfg.cache_size is not None:
+            cache_size_bytes = run_cfg.cache_size * 1_000_000
+            self.cache_size = cache_size_bytes
+            self._executor.cache_size = cache_size_bytes
+            self._collector.cache_size = cache_size_bytes
+            # Invalidate existing sample cache so it gets recreated with the new size
+            if self.sample_cache is not None:
+                self.sample_cache.close()
+                self._executor.sample_cache = None
+
         # Filter run_cfg parameters to only those that can override bench_cfg
         # (param 2.3 enforces constant parameters that cannot be overridden)
         run_cfg_values, missing_keys, constant_keys = self.filter_overridable_params(
@@ -565,12 +578,23 @@ class Bench(BenchPlotServer):
             # use the hash of the inputs to look up historical values in the cache
             if run_cfg.over_time:
                 bench_res.ds = self.load_history_cache(
-                    bench_res.ds, bench_cfg_hash, run_cfg.clear_history
+                    bench_res.ds, bench_cfg_hash, run_cfg.clear_history, run_cfg.max_time_events
                 )
                 # sync the over_time meta variable with the actual accumulated values
                 if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
                     bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
                     bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
+
+            # Regression detection runs after load_history_cache (which merges the current
+            # run into the dataset) but before cache_results. The dataset already contains
+            # the current run as the last over_time entry, so detect_regressions splits at
+            # isel(over_time=-1) for current vs all prior entries for historical.
+            if run_cfg.over_time and run_cfg.regression_detection:
+                bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
+                if bench_res.regression_report.has_regressions:
+                    logging.warning(bench_res.regression_report.summary())
+                    if run_cfg.regression_fail:
+                        raise RegressionError(bench_res.regression_report.summary())
 
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)
@@ -591,7 +615,7 @@ class Bench(BenchPlotServer):
         self,
         variable: param.Parameter | str | dict | tuple,
         var_type: str,
-        run_cfg: Optional[BenchRunCfg],
+        run_cfg: BenchRunCfg | None,
     ) -> param.Parameter:
         """Convert various input formats (str, dict, tuple) to param.Parameter objects."""
         return self._executor.convert_vars_to_params(
@@ -627,24 +651,30 @@ class Bench(BenchPlotServer):
     #     return BenchPlotServer().plot_server(self.bench_name, run_cfg, pane)
 
     def load_history_cache(
-        self, dataset: xr.Dataset, bench_cfg_hash: str, clear_history: bool
+        self,
+        dataset: xr.Dataset,
+        bench_cfg_hash: str,
+        clear_history: bool,
+        max_time_events: int | None = None,
     ) -> xr.Dataset:
         """Load and concatenate historical benchmark data from cache."""
-        return self._collector.load_history_cache(dataset, bench_cfg_hash, clear_history)
+        return self._collector.load_history_cache(
+            dataset, bench_cfg_hash, clear_history, max_time_events
+        )
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, List[tuple], List[str]]:
+    ) -> tuple[BenchResult, list[tuple], list[str]]:
         """Initialize n-dimensional xarray dataset for storing benchmark results."""
         return self._collector.setup_dataset(bench_cfg, time_src)
 
-    def define_const_inputs(self, const_vars: List[Tuple[param.Parameter, Any]]) -> Optional[dict]:
+    def define_const_inputs(self, const_vars: list[tuple[param.Parameter, Any]]) -> dict | None:
         """Convert constant variable tuples into a name-value dictionary."""
         return self._executor.define_const_inputs(const_vars)
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> List[IntSweep]:
+    ) -> list[IntSweep]:
         """Define meta variables (repeat count, timestamps) for benchmark tracking."""
         return self._collector.define_extra_vars(bench_cfg, repeats, time_src)
 
@@ -816,7 +846,7 @@ class Bench(BenchPlotServer):
         branch_name = f"{self.bench_name}_{self.run_cfg.run_tag}"
         return self.report.publish(remote_callback, branch_name=branch_name)
 
-    def get_result_vars(self, as_str: bool = True) -> List[str | ParametrizedSweep]:
+    def get_result_vars(self, as_str: bool = True) -> list[str | ParametrizedSweep]:
         """
         Retrieve the result variables from the worker class instance.
 
@@ -826,7 +856,7 @@ class Bench(BenchPlotServer):
                            Default is True.
 
         Returns:
-            List[str | ParametrizedSweep]: A list of result variables, either as strings or in their original form.
+            list[str | ParametrizedSweep]: A list of result variables, either as strings or in their original form.
 
         Raises:
             RuntimeError: If the worker class instance is not set.
@@ -840,7 +870,7 @@ class Bench(BenchPlotServer):
     def to(
         self,
         result_type: BenchResult,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         **kwargs: Any,
     ) -> BenchResult:
@@ -857,7 +887,7 @@ class Bench(BenchPlotServer):
     def add(
         self,
         result_type: BenchResult,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         **kwargs: Any,
     ):

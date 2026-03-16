@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import List, Any, Tuple, Optional, Literal, Callable
+from typing import Any, Literal, Callable
 from enum import Enum, auto
 import numpy as np
 import xarray as xr
@@ -20,7 +22,7 @@ from bencher.variables.results import ResultVar, ResultBool
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
-from bencher.variables.results import ResultReference, ResultDataSet
+from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo, ResultImage
 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
@@ -92,6 +94,7 @@ class BenchResultBase:
         self.plt_cnt_cfg = PltCntCfg()
         self.plot_inputs = []
         self.dataset_list = []
+        self.regression_report = None
 
         # self.width=600/
         # self.height=600
@@ -286,7 +289,20 @@ class BenchResultBase:
                 if fn == "sum":
                     ds_out = ds_out.sum(dim=dims_present, skipna=True)
                 elif fn == "mean":
-                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+                    ds_agg_mean = ds_out.mean(dim=dims_present, skipna=True)
+                    non_std_vars = [v for v in ds_out.data_vars if not v.endswith("_std")]
+                    if non_std_vars:
+                        ds_agg_std = ds_out[non_std_vars].std(dim=dims_present, skipna=True)
+                        ds_agg_std = rename_ds(ds_agg_std, "std")
+                        # Drop pre-existing _std vars that will be replaced by the
+                        # aggregation std (e.g. from repeat reduction) to avoid merge conflicts.
+                        expected_std = {f"{v}_std" for v in non_std_vars}
+                        old_std = [v for v in ds_agg_mean.data_vars if v in expected_std]
+                        if old_std:
+                            ds_agg_mean = ds_agg_mean.drop_vars(old_std)
+                        ds_out = xr.merge([ds_agg_mean, ds_agg_std])
+                    else:
+                        ds_out = ds_agg_mean
                 elif fn == "max":
                     ds_out = ds_out.max(dim=dims_present, skipna=True)
                 elif fn == "min":
@@ -313,16 +329,16 @@ class BenchResultBase:
     def get_optimal_vec(
         self,
         result_var: ParametrizedSweep,
-        input_vars: List[ParametrizedSweep],
-    ) -> List[Any]:
+        input_vars: list[ParametrizedSweep],
+    ) -> list[Any]:
         """Get the optimal values from the sweep as a vector.
 
         Args:
             result_var (bch.ParametrizedSweep): Optimal values of this result variable
-            input_vars (List[bch.ParametrizedSweep]): Define which input vars values are returned in the vector
+            input_vars (list[bch.ParametrizedSweep]): Define which input vars values are returned in the vector
 
         Returns:
-            List[Any]: A vector of optimal values for the desired input vector
+            list[Any]: A vector of optimal values for the desired input vector
         """
 
         da = self.get_optimal_value_indices(result_var)
@@ -361,7 +377,7 @@ class BenchResultBase:
         result_var: ParametrizedSweep,
         keep_existing_consts: bool = True,
         as_dict: bool = False,
-    ) -> Tuple[ParametrizedSweep, Any] | dict[ParametrizedSweep, Any]:
+    ) -> tuple[ParametrizedSweep, Any] | dict[ParametrizedSweep, Any]:
         """Get a list of tuples of optimal variable names and value pairs, that can be fed in as constant values to subsequent parameter sweeps
 
         Args:
@@ -370,7 +386,7 @@ class BenchResultBase:
             as_dict (bool): return value as a dictionary
 
         Returns:
-            Tuple[bch.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
+            tuple[bch.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
         """
         da = self.get_optimal_value_indices(result_var)
         if keep_existing_consts:
@@ -427,7 +443,7 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> List[ResultVar]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[ResultVar]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(
@@ -435,7 +451,7 @@ class BenchResultBase:
         plot_callback: Callable,
         result_var: ParametrizedSweep | None = None,
         row: EmptyContainer | None = None,
-    ) -> Optional[pn.Row]:
+    ) -> pn.Row | None:
         if row is None:
             row = EmptyContainer(pn.Row(name=self.to_plot_title()))
         for rv in self.get_results_var_list(result_var):
@@ -493,7 +509,7 @@ class BenchResultBase:
         zip_results=False,
         reduce: ReduceType | None = None,
         **kwargs,
-    ) -> Optional[pn.Row]:
+    ) -> pn.Row | None:
         if hv_dataset is None:
             hv_dataset = self.to_hv_dataset(reduce=reduce)
 
@@ -544,7 +560,7 @@ class BenchResultBase:
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         # Initialize default filters if not provided to avoid shared mutable defaults
         if float_range is None:
             float_range = VarRange(0, None)
@@ -673,9 +689,83 @@ class BenchResultBase:
             for c in outer_container.container:
                 c[0].width = max_len * 7
         else:
+            # When over_time is active with >1 time points, the dataset still
+            # contains the over_time dimension (it was excluded from pane recursion
+            # so hvplot numeric plots can use groupby).  For pane-type results
+            # (images, videos) we need to build a Panel slider manually because
+            # they are not HoloViews objects and cannot use hv.HoloMap.
+            if (
+                self.bench_cfg.over_time
+                and "over_time" in list(dataset.sizes)
+                and dataset.sizes["over_time"] > 1
+                and isinstance(result_var, (ResultVideo, ResultImage))
+            ):
+                return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.container
+
+    def _pane_over_time_slider(
+        self,
+        dataset: xr.Dataset,
+        result_var,
+    ) -> pn.Column:
+        """Create a Panel slider widget for over_time with pane-type results.
+
+        Numeric plot callbacks (line, heatmap) handle over_time internally via
+        hv.HoloMap.  Pane-type callbacks (images, videos) cannot use HoloMap
+        because they produce Panel objects, not HoloViews elements.  This method
+        builds per-time-point content and swaps it via a Bokeh JS callback to
+        avoid Panel's ImportedStyleSheet document-ownership errors.
+        """
+        import base64
+        from bokeh.models import CustomJS, Div
+        from bokeh.models.widgets import Slider as BokehSlider
+
+        time_vals = list(dataset.coords["over_time"].values)
+        over_time_dtype = dataset.coords["over_time"].dtype
+        is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
+        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+
+        # Pre-read file contents as base64 data-URIs for each time point.
+        # Bokeh HTML-escapes the JSON blob in the HTML page, but un-escapes
+        # it at runtime via .textContent, so full HTML tags work correctly.
+        is_video = isinstance(result_var, ResultVideo)
+        mime = "video/mp4" if is_video else "image/png"
+        html_list = []
+        for t in time_vals:
+            ds_t = dataset.sel(over_time=t)
+            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
+            with open(filepath, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            if is_video:
+                html_list.append(
+                    f'<video controls src="data:{mime};base64,{b64}" style="background:white"/>'
+                )
+            else:
+                html_list.append(f'<img src="data:{mime};base64,{b64}" style="background:white"/>')
+
+        # Pure Bokeh Div + Slider with a JS callback — no Panel pane updates,
+        # so no ImportedStyleSheet sharing across documents.
+        default_idx = len(time_vals) - 1
+        div = Div(text=html_list[default_idx])
+        bokeh_slider = BokehSlider(
+            start=0,
+            end=len(time_vals) - 1,
+            value=default_idx,
+            step=1,
+            title=f"over_time: {labels[default_idx]}",
+        )
+        callback = CustomJS(
+            args=dict(div=div, html_list=html_list, labels=labels, slider=bokeh_slider),
+            code=(
+                "div.text = html_list[slider.value];"
+                " slider.title = 'over_time: ' + labels[slider.value];"
+            ),
+        )
+        bokeh_slider.js_on_change("value", callback)
+
+        return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve
@@ -725,15 +815,15 @@ class BenchResultBase:
     def select_level(
         dataset: xr.Dataset,
         level: int,
-        include_types: List[type] | None = None,
-        exclude_names: List[str] | None = None,
+        include_types: list[type] | None = None,
+        exclude_names: list[str] | None = None,
     ) -> xr.Dataset:
         """Given a dataset, return a reduced dataset that only contains data from a specified level.  By default all types of variables are filtered at the specified level.  If you only want to get a reduced level for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
             dataset (xr.Dataset): dataset to filter
             level (int): desired data resolution level
-            include_types (List[type], optional): Only filter data of these types. Defaults to None.
-            exclude_names (List[str], optional): Only filter data with these variable names. Defaults to None.
+            include_types (list[type], optional): Only filter data of these types. Defaults to None.
+            exclude_names (list[str], optional): Only filter data with these variable names. Defaults to None.
 
         Returns:
             xr.Dataset: A reduced dataset at the specified level

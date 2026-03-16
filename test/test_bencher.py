@@ -406,3 +406,24 @@ class TestBencher(unittest.TestCase):
                 result_vars=[ExampleBenchCfg.param.out_sin],
                 const_vars=[(ExampleBenchCfg.offset, 0.1)],  # forgot to use param here
             )
+
+    def test_cache_size_propagation(self) -> None:
+        """Check that cache_size from BenchRunCfg propagates to bench internals."""
+        bench = self.create_bench()
+        cache_size_mb = 500
+        expected_bytes = cache_size_mb * 1_000_000
+
+        bench.plot_sweep(
+            title="test_cache_size",
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=BenchRunCfg(cache_size=cache_size_mb, auto_plot=False),
+        )
+
+        self.assertEqual(bench.cache_size, expected_bytes)
+        self.assertEqual(bench._executor.cache_size, expected_bytes)  # pylint: disable=protected-access
+        self.assertEqual(bench._collector.cache_size, expected_bytes)  # pylint: disable=protected-access
+        self.assertEqual(
+            bench._executor.sample_cache.size_limit,  # pylint: disable=protected-access
+            expected_bytes,
+        )

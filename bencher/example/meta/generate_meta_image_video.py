@@ -156,6 +156,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "result_image_mixed",
             "result_image_to_video",
             "result_image_composable",
+            "result_image_over_time",
         ],
         doc="Rich example to generate",
     )
@@ -168,6 +169,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "result_image_mixed": self._gen_mixed,
             "result_image_to_video": self._gen_to_video,
             "result_image_composable": self._gen_composable,
+            "result_image_over_time": self._gen_over_time,
         }[name]
         generator()
         return super().__call__()
@@ -246,6 +248,41 @@ class MetaImageVideoRich(MetaGeneratorBase):
             output_dir=f"{OUTPUT_DIR}/result_image",
             filename="result_image_to_video",
             function_name="example_result_image_to_video",
+            imports=imports,
+            body=body,
+            class_code=_IMAGE_CLASS_CODE,
+            run_kwargs={"level": 3},
+        )
+
+    # -- Image over_time slider ------------------------------------------------
+
+    def _gen_over_time(self):
+        imports = "\n".join(
+            ["import bencher as bch", "from datetime import datetime, timedelta"] + _EXTRA_IMPORTS
+        )
+        body = (
+            "run_cfg = run_cfg or bch.BenchRunCfg()\n"
+            "run_cfg.over_time = True\n"
+            "benchable = PolygonRenderer()\n"
+            "bench = benchable.to_bench(run_cfg)\n"
+            "_base_time = datetime(2000, 1, 1)\n"
+            "for i, radius in enumerate([0.3, 0.6, 0.9]):\n"
+            "    benchable.radius = radius\n"
+            "    run_cfg.clear_cache = True\n"
+            "    run_cfg.clear_history = i == 0\n"
+            "    bench.plot_sweep(\n"
+            '        "Image Over Time",\n'
+            '        input_vars=["sides"],\n'
+            '        result_vars=["polygon"],\n'
+            "        run_cfg=run_cfg,\n"
+            "        time_src=_base_time + timedelta(seconds=i),\n"
+            "    )\n"
+        )
+        self.generate_example(
+            title="ResultImage: Over Time Slider",
+            output_dir=f"{OUTPUT_DIR}/result_image",
+            filename="result_image_over_time",
+            function_name="example_result_image_over_time",
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
@@ -343,6 +380,7 @@ def example_meta_image_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
                     "result_image_mixed",
                     "result_image_to_video",
                     "result_image_composable",
+                    "result_image_over_time",
                 ],
             ),
         ],

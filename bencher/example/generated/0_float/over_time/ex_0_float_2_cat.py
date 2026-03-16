@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import random
 import bencher as bch
 from datetime import datetime, timedelta
 
@@ -20,7 +21,7 @@ class NetworkConfig(bch.ParametrizedSweep):
         self.update_params_from_kwargs(**kwargs)
         proto_factor = {"http": 1.0, "grpc": 1.8}[self.protocol]
         region_base = {"us-east": 500, "eu-west": 420, "ap-south": 350}[self.region]
-        self.throughput = region_base * proto_factor + __import__("random").gauss(0, 0.1 * 50)
+        self.throughput = region_base * proto_factor + random.gauss(0, 0.1 * 50)
         self.throughput += self._time_offset * 10
         return super().__call__()
 

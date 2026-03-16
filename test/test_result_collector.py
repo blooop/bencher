@@ -280,6 +280,162 @@ class TestCacheOperations(unittest.TestCase):
         self.assertEqual(bench_res.ds["theta"].attrs.get("units"), "rad")
 
 
+class TestMaxTimeEvents(unittest.TestCase):
+    """Tests for max_time_events trimming in load_history_cache."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def _make_over_time_dataset(self, n_slices):
+        """Create a dataset with n over_time slices."""
+        slices = []
+        for i in range(n_slices):
+            ds = xr.Dataset({"var": (["x", "over_time"], [[float(i)]])})
+            slices.append(ds)
+        return xr.concat(slices, "over_time")
+
+    def test_max_time_events_trims_oldest(self):
+        """max_time_events should keep only the N most recent slices."""
+        dataset = self._make_over_time_dataset(5)
+        unique_hash = f"trim-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=3
+        )
+
+        self.assertEqual(result.sizes["over_time"], 3)
+        # Should keep the last 3 slices (values 2, 3, 4)
+        expected = [2.0, 3.0, 4.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_none_unlimited(self):
+        """max_time_events=None should not trim anything."""
+        dataset = self._make_over_time_dataset(5)
+        unique_hash = f"unlimited-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=None
+        )
+
+        self.assertEqual(result.sizes["over_time"], 5)
+
+    def test_max_time_events_exact_count_no_trim(self):
+        """When over_time count equals max_time_events, no trimming occurs."""
+        dataset = self._make_over_time_dataset(3)
+        unique_hash = f"exact-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=3
+        )
+
+        self.assertEqual(result.sizes["over_time"], 3)
+        expected = [0.0, 1.0, 2.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_with_clear_history(self):
+        """clear_history + max_time_events: in practice clear_history yields a single slice,
+        but trimming is still correct if the incoming dataset has multiple over_time slices."""
+        dataset = self._make_over_time_dataset(5)
+        unique_hash = f"clear-trim-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=True, max_time_events=2
+        )
+
+        self.assertEqual(result.sizes["over_time"], 2)
+        expected = [3.0, 4.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_incremental_accumulation(self):
+        """Simulates repeated plot_sweep() calls: cache should stay bounded."""
+        unique_hash = f"incremental-test-{uuid.uuid4()}"
+
+        for i in range(10):
+            single_slice = xr.Dataset({"var": (["x", "over_time"], [[float(i)]])})
+            result = self.collector.load_history_cache(
+                single_slice, unique_hash, clear_history=False, max_time_events=3
+            )
+
+        # After 10 incremental calls with max_time_events=3, only the last 3 should remain
+        self.assertEqual(result.sizes["over_time"], 3)
+        expected = [7.0, 8.0, 9.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_no_over_time_dim(self):
+        """max_time_events should be a no-op when dataset has no over_time dim."""
+        dataset = xr.Dataset({"var": (["x"], [1, 2, 3])})
+        unique_hash = f"nodim-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=2
+        )
+
+        self.assertTrue(result.equals(dataset))
+
+
+class TestDTypeIncompatibleHistory(unittest.TestCase):
+    """Test that load_history_cache handles dtype changes in over_time coords."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def test_datetime_then_string_over_time_no_crash(self):
+        """Switching from datetime to string over_time coords should not crash."""
+        unique_hash = f"dtype-compat-{uuid.uuid4()}"
+
+        # First run: datetime over_time coord (TimeSnapshot style)
+        ds_datetime = xr.Dataset(
+            {"var": (["x", "over_time"], [[1.0]])},
+            coords={"over_time": [np.datetime64("2024-01-01")]},
+        )
+        self.collector.load_history_cache(ds_datetime, unique_hash, clear_history=False)
+
+        # Second run: string over_time coord (TimeEvent style)
+        ds_string = xr.Dataset(
+            {"var": (["x", "over_time"], [[2.0]])},
+            coords={"over_time": ["v1.0"]},
+        )
+        with self.assertLogs(level="WARNING") as captured_logs:
+            result = self.collector.load_history_cache(ds_string, unique_hash, clear_history=False)
+
+        # Should warn about discarded history
+        self.assertTrue(
+            any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
+        )
+        # Old data discarded, result matches the new dataset exactly
+        self.assertTrue(result.equals(ds_string))
+
+    def test_string_then_datetime_over_time_no_crash(self):
+        """Switching from string to datetime over_time coords should not crash."""
+        unique_hash = f"dtype-compat-reverse-{uuid.uuid4()}"
+
+        # First run: string over_time coord (TimeEvent style)
+        ds_string = xr.Dataset(
+            {"var": (["x", "over_time"], [[1.0]])},
+            coords={"over_time": ["v1.0"]},
+        )
+        self.collector.load_history_cache(ds_string, unique_hash, clear_history=False)
+
+        # Second run: datetime over_time coord (TimeSnapshot style)
+        ds_datetime = xr.Dataset(
+            {"var": (["x", "over_time"], [[2.0]])},
+            coords={"over_time": [np.datetime64("2024-06-15")]},
+        )
+        with self.assertLogs(level="WARNING") as captured_logs:
+            result = self.collector.load_history_cache(
+                ds_datetime, unique_hash, clear_history=False
+            )
+
+        self.assertTrue(
+            any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
+        )
+        self.assertTrue(result.equals(ds_datetime))
+
+
 class TestSetXarrayMultidim(unittest.TestCase):
     """Tests for set_xarray_multidim utility function."""
 

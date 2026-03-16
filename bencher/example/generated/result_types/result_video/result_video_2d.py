@@ -7,6 +7,7 @@ import math
 import bencher as bch
 import numpy as np
 from PIL import Image, ImageDraw
+import bencher as bch
 
 
 def _polygon_points(radius, sides, start_angle=0.0):

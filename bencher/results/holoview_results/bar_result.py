@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
+import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -22,7 +22,7 @@ class BarResult(HoloviewResult):
 
     def to_plot(
         self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         return self.to_bar(result_var, override, **kwargs)
 
     def to_bar(
@@ -31,7 +31,7 @@ class BarResult(HoloviewResult):
         override: bool = True,
         target_dimension: int = 2,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a bar chart from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a bar chart
@@ -44,7 +44,7 @@ class BarResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
+            pn.panel | None: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
         # When over_time is active, allow 0 inputs so 0D+0cat+over_time can produce
@@ -124,16 +124,24 @@ class BarResult(HoloviewResult):
         if not non_time_dims and "over_time" in da.dims:
             if use_holomap:
                 # 0D + 0cat + over_time (multiple time points): line chart with time on x-axis.
-                plot = da.hvplot.line(x="over_time", y=da.name, title=title, **kwargs)
-                if hasattr(plot, "opts"):
-                    plot = plot.opts(**opts_kwargs)
-                return plot
+                plot = da.hvplot.line(
+                    x="over_time", y=da.name, title=title, widget_location="bottom", **kwargs
+                )
+                return self._apply_opts(plot, **opts_kwargs)
             # 0D + single time point: nothing meaningful to bar-chart.
             return None
 
-        # No over_time slider needed: either no over_time, single time point,
-        # or over_time is the only dim (used as x-axis directly).
-        plot = da.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
-        if hasattr(plot, "opts"):
-            plot = plot.opts(**opts_kwargs)
-        return plot
+        if use_holomap:
+            # Build per-time-point bar charts with an over_time slider
+            holomap = hv.HoloMap(kdims=self._over_time_kdims())
+            for t in da.coords["over_time"].values:
+                da_t = da.sel(over_time=t)
+                plot_t = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
+                plot_t = self._apply_opts(plot_t, **opts_kwargs)
+                holomap[t] = plot_t
+            return self._holomap_with_slider_bottom(holomap)
+
+        plot = da.hvplot.bar(
+            x=x_dim, y=da.name, by=by, title=title, widget_location="bottom", **kwargs
+        )
+        return self._apply_opts(plot, **opts_kwargs)

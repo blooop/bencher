@@ -2,8 +2,8 @@
 
 from typing import Any
 
+import random
 import math
-
 import bencher as bch
 
 
@@ -22,7 +22,7 @@ class CompressionCodec(bch.ParametrizedSweep):
         self.ratio = (
             codec_eff * (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
         )
-        self.ratio += __import__("random").gauss(0, 0.15 * 0.3)
+        self.ratio += random.gauss(0, 0.15 * 0.3)
         return super().__call__()
 
 

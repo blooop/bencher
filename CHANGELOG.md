@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.66.3] - 2026-03-14
+
+### Fixed
+- Force `DiscreteSlider` widget for the `over_time` dimension so string-based `TimeEvent` coordinates get a slider instead of a dropdown
+
+## [1.66.2] - 2026-03-13
+
+### Fixed
+- Fix over_time bar chart broken by unconditional image slider routing — numeric `ResultVar` types were incorrectly routed to `_pane_over_time_slider`, causing `FileNotFoundError` and `ValueError`
+
+## [1.66.1] - 2026-03-13
+
+### Fixed
+- Fix `DTypePromotionError` crash when `over_time` coordinate type changes between runs (e.g., `time_event=None` → `time_event="v1.0"`)
+- Check `over_time` dtype compatibility before concat, discarding incompatible history with a warning instead of crashing
+- Include old/new dtypes in the warning message for easier debugging
+
+## [1.66.0] - 2026-03-12
+
+### Added
+- Over-time slider support for BarResult: bar charts now show a time slider when `over_time=True` with multiple time points
+- Over-time slider support for DistributionResult (BoxWhisker, Violin): distribution plots now show a time slider when `over_time=True` with multiple time points
+- New meta-generated examples combining `over_time=True` with `repeats>1` for 0-1 float input configurations
+- Tests for over_time + repeats across bar, distribution, and curve plot types
+
 ## [1.65.0] - 2026-03-11
 
 ### Fixed

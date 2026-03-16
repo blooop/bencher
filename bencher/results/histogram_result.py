@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -8,6 +7,7 @@ import xarray as xr
 
 from bencher.results.video_result import VideoResult
 from bencher.results.bench_result_base import ReduceType
+from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import ResultVar
@@ -16,7 +16,7 @@ from bencher.variables.results import ResultVar
 class HistogramResult(VideoResult):
     def to_plot(
         self, result_var: Parameter | None = None, target_dimension: int = 2, **kwargs
-    ) -> Optional[pn.pane.Pane]:
+    ) -> pn.pane.Pane | None:
         """Generates a histogram plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a histogram
@@ -28,7 +28,7 @@ class HistogramResult(VideoResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.pane.Pane]: A panel containing the histogram if data is appropriate,
+            pn.pane.Pane | None: A panel containing the histogram if data is appropriate,
                                   otherwise returns filter match results.
         """
         return self.filter(
@@ -57,7 +57,7 @@ class HistogramResult(VideoResult):
         Returns:
             hvplot.element.Histogram: A histogram visualization of the benchmark data distribution.
         """
-        return dataset.hvplot(
+        plot = dataset.hvplot(
             kind="hist",
             y=[result_var.name],
             ylabel="count",
@@ -66,3 +66,4 @@ class HistogramResult(VideoResult):
             title=f"{result_var.name} vs Count",
             **kwargs,
         )
+        return HoloviewResult._apply_opts(plot, xrotation=30)  # pylint: disable=protected-access

@@ -2,8 +2,8 @@
 
 from typing import Any
 
+import random
 import math
-
 import bencher as bch
 
 
@@ -27,7 +27,7 @@ class HashComparison(bch.ParametrizedSweep):
             / (1.0 + 0.3 * math.log2(self.payload_size / 64))
             * (self.iterations / 100)
         )
-        self.throughput += __import__("random").gauss(0, 0.15 * 30)
+        self.throughput += random.gauss(0, 0.15 * 30)
         return super().__call__()
 
 

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Any, Tuple
+from typing import Any
 from copy import deepcopy
 
 import numpy as np
@@ -16,7 +16,7 @@ shared_slots = ["units", "samples"]
 
 def describe_variable(
     v: Parameterized, include_samples: bool, value: Any | None = None
-) -> List[str]:
+) -> list[str]:
     """Generate a string description of a variable
 
     Args:
@@ -56,11 +56,11 @@ class SweepBase(param.Parameter):
 
     def values(
         self,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """All sweep classes must implement this method. This generates sample values from based on the parameters bounds and sample number.
 
         Returns:
-            List[Any]: A list of samples from the variable
+            list[Any]: A list of samples from the variable
         """
         raise NotImplementedError
 
@@ -145,14 +145,14 @@ class SweepBase(param.Parameter):
         output.samples = len(sample_values)  # pylint: disable = attribute-defined-outside-init
         return output
 
-    def with_const(self, const_value: Any) -> Tuple[SweepBase, Any]:
+    def with_const(self, const_value: Any) -> tuple[SweepBase, Any]:
         """Create a new instance of SweepBase with a constant value.
 
         Args:
             const_value (Any): The constant value to be associated with the new instance.
 
         Returns:
-            Tuple[SweepBase, Any]: A tuple containing the new instance of SweepBase and the constant value.
+            tuple[SweepBase, Any]: A tuple containing the new instance of SweepBase and the constant value.
         """
         return (deepcopy(self), const_value)
 

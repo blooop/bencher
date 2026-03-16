@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Callable, Any, Type
+from typing import Callable, Any
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -27,10 +27,10 @@ class DistributionResult(HoloviewResult):
     def to_distribution_plot(
         self,
         plot_method: Callable[[xr.Dataset, Parameter, Any], hv.Element],
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         **kwargs: Any,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a distribution plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for distribution plots
@@ -59,11 +59,28 @@ class DistributionResult(HoloviewResult):
             **kwargs,
         )
 
+    @staticmethod
+    def _build_distribution_overlay(df, plot_classes, kdims, var_name, result_var, title, **kwargs):
+        """Build an hv.Overlay from one or more distribution plot classes."""
+        overlay = hv.Overlay()
+        for plot_cls in plot_classes:
+            overlay *= plot_cls(
+                df,
+                kdims=kdims,
+                vdims=[var_name],
+            ).opts(
+                title=title,
+                ylabel=f"{var_name} [{result_var.units}]",
+                xrotation=30,
+                **kwargs,
+            )
+        return overlay
+
     def _plot_distribution(
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        plot_class: Type[hv.Selection1DExpr],
+        plot_class: type[hv.Selection1DExpr],
         **kwargs: Any,
     ) -> hv.Element:
         """Prepares data for distribution plots and creates the plot.
@@ -81,29 +98,26 @@ class DistributionResult(HoloviewResult):
         Returns:
             A HoloViews Element representing the distribution plot.
         """
-        # Get the name of the result variable (which is the data we want to plot)
         var_name = result_var.name
-
-        # Create plot title
         title = self.title_from_ds(dataset[var_name], result_var, **kwargs)
-
-        # Convert dataset to dataframe for HoloViews
-        df = dataset[var_name].to_dataframe().reset_index()
         kdims = params_to_str(self.plt_cnt_cfg.cat_vars)
 
         if not isinstance(plot_class, list):
             plot_class = [plot_class]
 
-        overlay = hv.Overlay()
-        for plot in plot_class:
-            overlay *= plot(
-                df,
-                kdims=kdims,
-                vdims=[var_name],
-            ).opts(
-                title=title,
-                ylabel=f"{var_name} [{result_var.units}]",
-                xrotation=30,  # Rotate x-axis labels by 30 degrees
-                **kwargs,
-            )
-        return overlay
+        use_holomap = self._use_holomap_for_time(dataset)
+
+        if use_holomap:
+            da = dataset[var_name]
+            holomap = hv.HoloMap(kdims=self._over_time_kdims())
+            for t in da.coords["over_time"].values:
+                df_t = da.sel(over_time=t).to_dataframe().reset_index()
+                holomap[t] = self._build_distribution_overlay(
+                    df_t, plot_class, kdims, var_name, result_var, title, **kwargs
+                )
+            return self._holomap_with_slider_bottom(holomap)
+
+        df = dataset[var_name].to_dataframe().reset_index()
+        return self._build_distribution_overlay(
+            df, plot_class, kdims, var_name, result_var, title, **kwargs
+        )

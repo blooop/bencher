@@ -14,7 +14,9 @@ OUTPUT_DIR = "advanced"
 ADVANCED_EXAMPLES = [
     "cache_patterns",
     "time_event",
+    "max_time_events",
     "report_save",
+    "agg_over_time",
 ]
 
 
@@ -30,8 +32,12 @@ class MetaAdvanced(MetaGeneratorBase):
             self._generate_cache_patterns()
         elif self.example == "time_event":
             self._generate_time_event()
+        elif self.example == "max_time_events":
+            self._generate_max_time_events()
         elif self.example == "report_save":
             self._generate_report_save()
+        elif self.example == "agg_over_time":
+            self._generate_agg_over_time()
 
         return super().__call__()
 
@@ -157,6 +163,71 @@ for i, event_name in enumerate(events):
             run_kwargs={"level": 3},
         )
 
+    def _generate_max_time_events(self):
+        """Demonstrate max_time_events to cap over_time history."""
+        imports = "import random\nimport bencher as bch\nfrom datetime import datetime, timedelta"
+        class_code = '''\
+class LatencyMonitor(bch.ParametrizedSweep):
+    """Simulates a service latency monitor that drifts over time.
+
+    When tracking metrics over_time, history grows without bound by default.
+    Setting max_time_events on BenchRunCfg caps the number of retained
+    time slices, keeping only the most recent ones.
+    """
+
+    endpoint = bch.StringSweep(
+        ["/api/users", "/api/orders"], doc="API endpoint"
+    )
+
+    latency = bch.ResultVar(units="ms", doc="Response latency")
+
+    _drift = 0.0  # set externally per snapshot
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        base = {"/api/users": 45, "/api/orders": 120}[self.endpoint]
+        self.latency = base + self._drift + random.gauss(0, 5)
+        return super().__call__()'''
+        body = """\
+run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg.over_time = True
+
+# Keep only the 3 most recent time slices in the cache.
+# Without this, every call to plot_sweep appends a new slice and the
+# cache grows without bound.
+run_cfg.max_time_events = 3
+
+benchable = LatencyMonitor()
+bench = benchable.to_bench(run_cfg)
+
+# Run 5 iterations but only keep the 3 most recent thanks to max_time_events.
+# Without the cap, all 5 time slices would accumulate in the cache.
+base_time = datetime(2024, 6, 1)
+for i in range(5):
+    benchable._drift = i * 3.0  # simulate gradual degradation
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    bench.plot_sweep(
+        title="Service Latency",
+        input_vars=["endpoint"],
+        result_vars=["latency"],
+        description="5 snapshots are recorded but max_time_events=3 trims the oldest, "
+        "so only the 3 most recent are retained.",
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(hours=i),
+    )
+"""
+        self.generate_example(
+            title="Max Time Events — cap over_time history",
+            output_dir=OUTPUT_DIR,
+            filename="advanced_max_time_events",
+            function_name="example_advanced_max_time_events",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"level": 3},
+        )
+
     def _generate_report_save(self):
         """B8: Report customization and saving."""
         imports = "import bencher as bch"
@@ -198,6 +269,79 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
             body=body,
             class_code=class_code,
             run_kwargs={"level": 3},
+        )
+
+    def _generate_agg_over_time(self):
+        """Aggregate a 2D sweep down to a scalar curve over time with error bounds."""
+        imports = "import math\nimport bencher as bch\nfrom datetime import datetime, timedelta"
+        class_code = '''\
+class ThermalPlate(bch.ParametrizedSweep):
+    """Measures temperature across a 2D plate that cools over time.
+
+    A 2D sweep (x, y) is run at each time snapshot. Both dimensions are
+    then collapsed via agg_over_dims, producing a single mean +/- std per
+    time point. The curve shows how the plate-wide average temperature
+    decays, with error bounds from the spatial variation across the grid.
+    """
+
+    x = bch.FloatSweep(
+        default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate"
+    )
+    y = bch.FloatSweep(
+        default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate"
+    )
+
+    temperature = bch.ResultVar(units="C", doc="Measured temperature")
+
+    _time_offset = 0.0  # set externally per snapshot
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        # Hot spot at centre, decaying over time
+        self.temperature = (
+            100 * math.sin(math.pi * self.x) * math.sin(math.pi * self.y)
+            * math.exp(-0.3 * self._time_offset)
+            + 20
+        )
+        return super().__call__()'''
+        body = """\
+run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg.over_time = True
+
+benchable = ThermalPlate()
+bench = benchable.to_bench(run_cfg)
+
+base_time = datetime(2024, 1, 1)
+for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
+    benchable._time_offset = offset
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    run_cfg.auto_plot = False
+    bench.plot_sweep(
+        "thermal_plate",
+        input_vars=["x", "y"],
+        result_vars=["temperature"],
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(seconds=i),
+    )
+
+res = bench.results[-1]
+
+# 1) Raw 2D heatmap with over_time slider
+bench.report.append(res.to(bch.HeatmapResult))
+
+# 2) Aggregate the full 2D grid down to a scalar: mean +/- std at each time point
+bench.report.append(res.to(bch.CurveResult, agg_over_dims=["x", "y"]))
+"""
+        self.generate_example(
+            title="Aggregate Over Time — 2D sweep to scalar curve with error bounds",
+            output_dir=OUTPUT_DIR,
+            filename="advanced_agg_over_time",
+            function_name="example_advanced_agg_over_time",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"level": 4},
         )
 
 

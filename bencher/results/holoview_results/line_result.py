@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import List, Optional
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -34,7 +33,7 @@ class LineResult(HoloviewResult):
         override: bool = True,
         use_tap: bool | None = None,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a line plot from benchmark data.
 
         This is a convenience method that calls to_line() with the same parameters.
@@ -49,7 +48,7 @@ class LineResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the line plot if data is appropriate,
+            pn.panel | None: A panel containing the line plot if data is appropriate,
                               otherwise returns filter match results.
         """
         return self.to_line(
@@ -71,7 +70,7 @@ class LineResult(HoloviewResult):
         override: bool = True,
         use_tap: bool | None = None,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a line plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a line plot
@@ -89,7 +88,7 @@ class LineResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the line plot if data is appropriate,
+            pn.panel | None: A panel containing the line plot if data is appropriate,
                               otherwise returns filter match results.
         """
         if tap_var is None:
@@ -147,17 +146,21 @@ class LineResult(HoloviewResult):
             for t in da_plot.coords["over_time"].values:
                 da_t = da_plot.sel(over_time=t)
                 plot_t = da_t.hvplot.line(x=x, by=by, title=title, **kwargs)
+                plot_t = self._apply_opts(plot_t, xrotation=30)
                 holomap[t] = plot_t
             return self._holomap_with_slider_bottom(holomap)
 
         time_widget_args = self.time_widget(title)
-        return da_plot.hvplot.line(x=x, by=by, **time_widget_args, **kwargs)
+        plot = da_plot.hvplot.line(
+            x=x, by=by, widget_location="bottom", **time_widget_args, **kwargs
+        )
+        return self._apply_opts(plot, xrotation=30)
 
     def to_line_tap_ds(
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        result_var_plots: List[Parameter] | None = None,
+        result_var_plots: list[Parameter] | None = None,
         container: pn.pane.panel = pn.pane.panel,
         **kwargs,
     ) -> pn.Row:
@@ -169,7 +172,7 @@ class LineResult(HoloviewResult):
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
             result_var (Parameter): The primary result variable to plot in the line plot.
-            result_var_plots (List[Parameter], optional): Additional result variables to display when a point is tapped.
+            result_var_plots (list[Parameter], optional): Additional result variables to display when a point is tapped.
             container (pn.pane.panel, optional): Container to display tapped information.
             **kwargs: Additional keyword arguments passed to the line plot options.
 

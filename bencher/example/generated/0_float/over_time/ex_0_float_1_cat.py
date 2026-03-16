@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import random
 import bencher as bch
 from datetime import datetime, timedelta
 
@@ -18,7 +19,7 @@ class CacheBackend(bch.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         base = {"redis": 1.2, "memcached": 1.5, "local": 0.3}[self.backend]
-        self.latency = base + __import__("random").gauss(0, 0.1 * base)
+        self.latency = base + random.gauss(0, 0.1 * base)
         self.latency += self._time_offset * 10
         return super().__call__()
 

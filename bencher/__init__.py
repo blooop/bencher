@@ -87,6 +87,7 @@ except ModuleNotFoundError as e:
     pass
 
 
+from .regression import RegressionResult, RegressionReport, RegressionError
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
