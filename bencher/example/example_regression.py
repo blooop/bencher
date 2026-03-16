@@ -35,7 +35,6 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     run_cfg.repeats = 2
     run_cfg.regression_detection = True
     run_cfg.regression_method = "percentage"
-    run_cfg.regression_threshold = 5.0
     run_cfg.regression_fail = False
     run_cfg.auto_plot = False
     run_cfg.headless = True

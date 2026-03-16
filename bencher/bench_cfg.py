@@ -259,9 +259,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     regression_threshold: float = param.Number(
-        default=5.0,
-        doc="Threshold for regression detection. For 'percentage': percent change threshold. "
-        "For 'iqr': IQR multiplier (default 1.5). For 'ttest': significance level alpha.",
+        default=None,
+        allow_None=True,
+        doc="Threshold for regression detection. Interpretation depends on method: "
+        "'percentage' = percent change (default 5.0), "
+        "'iqr' = IQR multiplier (default 1.5), "
+        "'ttest' = significance level alpha (default 0.05). "
+        "If None, the per-method default is used automatically.",
     )
 
     regression_fail: bool = param.Boolean(

@@ -9,12 +9,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import List
 
 import numpy as np
 import xarray as xr
 
 from bencher.variables.results import OptDir, ResultVar, ResultBool
+
+# Default thresholds per method — used when the user hasn't explicitly set a threshold.
+_METHOD_DEFAULTS = {
+    "percentage": 5.0,  # percent change
+    "iqr": 1.5,  # IQR multiplier
+    "ttest": 0.05,  # significance level alpha
+}
 
 
 class RegressionError(Exception):
@@ -40,14 +46,14 @@ class RegressionResult:
 class RegressionReport:
     """Aggregates regression results for all variables in a benchmark."""
 
-    results: List[RegressionResult] = field(default_factory=list)
+    results: list[RegressionResult] = field(default_factory=list)
 
     @property
     def has_regressions(self) -> bool:
         return any(r.regressed for r in self.results)
 
     @property
-    def regressed_variables(self) -> List[RegressionResult]:
+    def regressed_variables(self) -> list[RegressionResult]:
         return [r for r in self.results if r.regressed]
 
     def summary(self) -> str:
@@ -79,10 +85,9 @@ def _is_regression(change_percent: float, direction: OptDir) -> bool:
     """Determine if a change constitutes a regression given the optimization direction."""
     if direction == OptDir.minimize:
         return change_percent > 0  # higher is worse
-    elif direction == OptDir.maximize:
+    if direction == OptDir.maximize:
         return change_percent < 0  # lower is worse
-    else:  # OptDir.none
-        return True  # any significant change is a regression
+    return True  # OptDir.none — any significant change is a regression
 
 
 def detect_percentage(
@@ -138,9 +143,10 @@ def detect_iqr(
     curr_mean = float(np.nanmean(current))
 
     if len(clean) < 4:
-        # Fall back to percentage with iqr_scale as threshold
+        # Not enough time points for robust IQR; fall back to percentage using
+        # the default percentage threshold so the comparison stays meaningful.
         return detect_percentage(
-            clean, current, threshold_percent=iqr_scale * 10, direction=direction
+            clean, current, threshold_percent=_METHOD_DEFAULTS["percentage"], direction=direction
         )
 
     q1 = float(np.percentile(clean, 25))
@@ -152,14 +158,8 @@ def detect_iqr(
     hist_mean = float(np.nanmean(clean))
     change = _safe_change_percent(curr_mean, hist_mean)
 
-    if direction == OptDir.minimize:
-        exceeds = curr_mean > upper
-    elif direction == OptDir.maximize:
-        exceeds = curr_mean < lower
-    else:
-        exceeds = curr_mean > upper or curr_mean < lower
-
-    regressed = exceeds
+    outside_bounds = curr_mean > upper or curr_mean < lower
+    regressed = outside_bounds and _is_regression(change, direction)
 
     return RegressionResult(
         variable="",
@@ -244,6 +244,10 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
 
     method = run_cfg.regression_method
     threshold = run_cfg.regression_threshold
+
+    # Use per-method default when no explicit threshold is provided.
+    if threshold is None:
+        threshold = _METHOD_DEFAULTS.get(method, 5.0)
 
     for rv in bench_cfg.result_vars:
         if not isinstance(rv, (ResultVar, ResultBool)):

@@ -213,7 +213,7 @@ class TestDetectRegressions:
         return ds
 
     @staticmethod
-    def _make_cfg(result_vars, method="percentage", threshold=5.0):
+    def _make_cfg(result_vars, method="percentage", threshold=None):
         """Create minimal bench_cfg and run_cfg mocks."""
 
         class FakeBenchCfg:
@@ -239,7 +239,7 @@ class TestDetectRegressions:
 
         class FakeRun:
             regression_method = "percentage"
-            regression_threshold = 5.0
+            regression_threshold = None
 
         report = detect_regressions(ds, FakeCfg(), FakeRun())
         assert not report.has_regressions
@@ -399,7 +399,6 @@ class TestEndToEnd:
         run_cfg.repeats = 2
         run_cfg.regression_detection = True
         run_cfg.regression_method = "percentage"
-        run_cfg.regression_threshold = 5.0
         run_cfg.regression_fail = False
         run_cfg.auto_plot = False
         run_cfg.headless = True
@@ -423,7 +422,6 @@ class TestEndToEnd:
         run_cfg.repeats = 1
         run_cfg.regression_detection = True
         run_cfg.regression_method = "percentage"
-        run_cfg.regression_threshold = 5.0
         run_cfg.regression_fail = True
         run_cfg.auto_plot = False
         run_cfg.headless = True
