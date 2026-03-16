@@ -3,7 +3,6 @@
 from typing import Any
 
 import math
-import bencher as bch
 
 import bencher as bch
 

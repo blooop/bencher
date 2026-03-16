@@ -4,7 +4,6 @@ from typing import Any
 
 import math
 
-import bencher as bch
 import numpy as np
 from PIL import Image, ImageDraw
 import bencher as bch

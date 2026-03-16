@@ -4,8 +4,8 @@ from typing import Any
 
 import random
 
-import bencher as bch
 from bencher.results.histogram_result import HistogramResult
+import bencher as bch
 
 
 class CoinFlip(bch.ParametrizedSweep):
