@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from enum import Enum
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -390,19 +389,11 @@ class YamlSweep(SweepSelector):
             **params,
         )
 
-    @classmethod
-    def _load_yaml(cls, path: Path) -> Mapping[str, Any]:
-        resolved = path.resolve()
-        stat = path.stat()
-        data = cls._read_yaml(str(resolved), stat.st_mtime_ns, stat.st_size)
-        return data if data is not None else {}
-
     @staticmethod
-    @lru_cache(maxsize=64)
-    def _read_yaml(path_str: str, modified_ns: int, size: int) -> Any:
-        _ = modified_ns, size  # values are part of the cache key
-        with Path(path_str).open("r", encoding="utf-8") as stream:
-            return yaml.safe_load(stream)
+    def _load_yaml(path: Path) -> Mapping[str, Any]:
+        with path.open("r", encoding="utf-8") as stream:
+            data = yaml.safe_load(stream)
+        return data if data is not None else {}
 
     def keys(self) -> list[str]:
         key_list = list(self._entries.keys())
