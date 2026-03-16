@@ -62,7 +62,6 @@ for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
     benchable._time_offset = offset
     run_cfg.clear_cache = True
     run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = False
     bench.plot_sweep(
         "regression_detection",
         input_vars=[],

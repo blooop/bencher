@@ -38,7 +38,6 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = False
         bench.plot_sweep(
             "regression_detection",
             input_vars=[],
