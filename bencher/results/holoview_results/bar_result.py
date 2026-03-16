@@ -68,11 +68,6 @@ class BarResult(HoloviewResult):
                 "result_types": (ResultVar,),
             },
             {
-                "repeats_range": VarRange(1, 1),
-                "reduce": ReduceType.SQUEEZE,
-                "result_types": (ResultBool,),
-            },
-            {
                 "repeats_range": VarRange(2, None),
                 "reduce": ReduceType.REDUCE,
                 "result_types": (ResultBool,),

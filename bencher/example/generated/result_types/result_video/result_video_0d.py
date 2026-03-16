@@ -3,6 +3,7 @@
 from typing import Any
 
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
 import bencher as bch

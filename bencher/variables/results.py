@@ -45,15 +45,12 @@ _PARAM_MODULES = frozenset({"param", "param.parameters", "param.parameterized"})
 
 
 def _hash_slots(instance):
-    """Hash all __slots__ on the result class, excluding non-deterministic attributes.
+    """Hash all __slots__ from the class hierarchy, excluding non-deterministic attributes.
 
-    Reads __slots__ directly from the immediate class (not inherited via MRO) and hashes
-    all values except those listed in the class-level _hash_exclude tuple. This is
-    intentional: each Result* class defines its own __slots__ and is responsible for its
-    own hash.
-
-    A defensive check ensures no intermediate base class (between the concrete Result*
-    class and the param framework) defines __slots__ that would be silently missed.
+    Walks the MRO from the concrete class up to (but not including) param framework
+    base classes, collecting __slots__ from each ancestor. This supports Result class
+    inheritance (e.g. ResultBool extends ResultVar). Attributes listed in _hash_exclude
+    on any class in the hierarchy are skipped.
 
     The class name is always included in the hash to prevent collisions between different
     Result* classes that share the same slot layout and values (e.g. ResultPath,
@@ -61,23 +58,28 @@ def _hash_slots(instance):
     """
     cls = type(instance)
 
-    # Guard: ensure no intermediate bencher base class has __slots__ we'd miss.
-    for ancestor in cls.__mro__[1:]:
-        if getattr(ancestor, "__module__", "") in _PARAM_MODULES or ancestor is object:
+    # Collect _hash_exclude from the entire hierarchy
+    exclude = set()
+    for klass in cls.__mro__:
+        if getattr(klass, "__module__", "") in _PARAM_MODULES or klass is object:
             break
-        ancestor_slots = ancestor.__dict__.get("__slots__", ())
-        if ancestor_slots:
-            raise TypeError(
-                f"_hash_slots({cls.__name__}): intermediate base class {ancestor.__name__} "
-                f"defines __slots__ = {ancestor_slots} which would be silently ignored. "
-                "Update _hash_slots to walk the MRO or move slots to the leaf class."
-            )
+        exclude.update(getattr(klass, "_hash_exclude", ()))
 
-    exclude = getattr(cls, "_hash_exclude", ())
-    slots = cls.__dict__.get("__slots__", ())
-    if isinstance(slots, str):
-        slots = (slots,)
-    values = tuple(getattr(instance, slot) for slot in slots if slot not in exclude)
+    # Collect __slots__ from the entire bencher class hierarchy (deduplicating)
+    all_slots = []
+    seen = set()
+    for klass in cls.__mro__:
+        if getattr(klass, "__module__", "") in _PARAM_MODULES or klass is object:
+            break
+        slots = klass.__dict__.get("__slots__", ())
+        if isinstance(slots, str):
+            slots = (slots,)
+        for slot in slots:
+            if slot not in seen and slot not in exclude:
+                seen.add(slot)
+                all_slots.append(slot)
+
+    values = tuple(getattr(instance, slot) for slot in all_slots)
     return hash_sha1((cls.__name__,) + values)
 
 
@@ -107,25 +109,13 @@ class ResultVar(Number):
         return _hash_slots(self)
 
 
-class ResultBool(Number):
-    """A class to represent result variables and the desired optimisation direction"""
-
-    __slots__ = ["units", "direction"]
+class ResultBool(ResultVar):
+    """A ResultVar subclass for boolean (0/1) results with bounds locked to [0, 1]."""
 
     def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
-        params.setdefault("default", default)
-        Number.__init__(self, **params)
-        assert isinstance(units, str)
-        self.units = units
-        self.direction = direction
+        super().__init__(units=units, direction=direction, allow_None=True, **params)
+        self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
-
-    def as_dim(self) -> hv.Dimension:
-        return hv.Dimension((self.name, self.name), unit=self.units)
-
-    def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return _hash_slots(self)
 
 
 class ResultVec(param.List):

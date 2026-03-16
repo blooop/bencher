@@ -34,6 +34,7 @@ from bencher.variables.results import (
     ResultVec,
     ResultVideo,
     ResultVolume,
+    _PARAM_MODULES,
 )
 from bencher.bench_cfg import BenchCfg
 
@@ -58,6 +59,33 @@ def _make_instance(cls):
     return cls(doc="test")
 
 
+def _collect_mro_slots(cls):
+    """Collect all __slots__ from the bencher class hierarchy (matching _hash_slots behavior)."""
+    all_slots = []
+    seen = set()
+    for klass in cls.__mro__:
+        if getattr(klass, "__module__", "") in _PARAM_MODULES or klass is object:
+            break
+        slots = klass.__dict__.get("__slots__", ())
+        if isinstance(slots, str):
+            slots = (slots,)
+        for slot in slots:
+            if slot not in seen:
+                seen.add(slot)
+                all_slots.append(slot)
+    return all_slots
+
+
+def _collect_mro_excludes(cls):
+    """Collect all _hash_exclude entries from the bencher class hierarchy."""
+    exclude = set()
+    for klass in cls.__mro__:
+        if getattr(klass, "__module__", "") in _PARAM_MODULES or klass is object:
+            break
+        exclude.update(getattr(klass, "_hash_exclude", ()))
+    return exclude
+
+
 # Auto-discovered list — any new Result* class will appear here automatically
 ALL_DISCOVERED_CLASSES = _discover_all_result_classes()
 
@@ -72,8 +100,8 @@ class TestSlotCoverage:
 
     @pytest.mark.parametrize("cls", ALL_DISCOVERED_CLASSES, ids=lambda c: c.__name__)
     def test_all_slots_accounted_for(self, cls):
-        slots = set(cls.__dict__.get("__slots__", ()))
-        exclude = set(getattr(cls, "_hash_exclude", ()))
+        slots = set(_collect_mro_slots(cls))
+        exclude = _collect_mro_excludes(cls)
         # _hash_exclude entries must actually be slots
         extra_excludes = exclude - slots
         assert not extra_excludes, (
@@ -96,9 +124,9 @@ class TestSlotCoverage:
     @pytest.mark.parametrize("cls", ALL_DISCOVERED_CLASSES, ids=lambda c: c.__name__)
     def test_hashed_slots_affect_hash(self, cls):
         """Every non-excluded slot must actually affect the hash value."""
-        slots = list(cls.__dict__.get("__slots__", ()))
-        exclude = set(getattr(cls, "_hash_exclude", ()))
-        hashed_slots = [s for s in slots if s not in exclude]
+        all_slots = _collect_mro_slots(cls)
+        exclude = _collect_mro_excludes(cls)
+        hashed_slots = [s for s in all_slots if s not in exclude]
         if not hashed_slots:
             pytest.skip(f"{cls.__name__} has no hashed slots (uses class name fallback)")
         r1 = _make_instance(cls)

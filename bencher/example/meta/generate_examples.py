@@ -98,6 +98,7 @@ def generate_python_files():
 
     from bencher.example.meta.generate_meta import example_meta
     from bencher.example.meta.generate_meta_advanced import example_meta_advanced
+    from bencher.example.meta.generate_meta_bool_plot_types import example_meta_bool_plot_types
     from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_image_video import example_meta_image_video
@@ -124,6 +125,7 @@ def generate_python_files():
     example_meta_optimization()
     example_meta_workflows()
     example_meta_advanced()
+    example_meta_bool_plot_types()
     # example_meta_regression()
     example_meta_yaml()
 
@@ -361,6 +363,7 @@ SECTIONS = {
     "3 Float Inputs (Over Time)": "3_float/over_time",
     "Result Types": "result_types",
     "Plot Types": "plot_types",
+    "Bool Plot Types": "bool_plot_types",
     "Optimization": "optimization",
     "Sampling Strategies": "sampling",
     "Composable Containers": "composable_containers",

@@ -3,6 +3,7 @@
 from typing import Any
 
 import random
+
 import bencher as bch
 
 

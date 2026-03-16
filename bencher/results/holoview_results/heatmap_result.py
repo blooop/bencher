@@ -119,7 +119,7 @@ class HeatmapResult(HoloviewResult):
             panel_range=VarRange(0, None),
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar),
+            result_types=(ResultVar,),
             override=override,
             **kwargs,
         )

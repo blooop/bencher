@@ -39,7 +39,7 @@ class HistogramResult(VideoResult):
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar),
+            result_types=(ResultVar,),
             **kwargs,
         )
 

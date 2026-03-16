@@ -4,6 +4,7 @@ from typing import Any
 
 import math
 import random
+
 import bencher as bch
 
 
