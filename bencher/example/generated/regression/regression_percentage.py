@@ -12,13 +12,13 @@ class DegradingBenchmark(bch.ParametrizedSweep):
     latency = bch.ResultVar(units="ms", direction=bch.OptDir.minimize)
     throughput = bch.ResultVar(units="ops/s", direction=bch.OptDir.maximize)
 
-    run_number = 0
+    _time_offset = 0.0  # set externally per snapshot
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        self.latency = 10.0 + DegradingBenchmark.run_number * 5.0
-        self.throughput = 100.0 - DegradingBenchmark.run_number * 15.0
-        return super().__call__(**kwargs)
+        self.latency = 10.0 + self._time_offset * 5.0
+        self.throughput = 100.0 - self._time_offset * 15.0
+        return super().__call__()
 
 
 def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
@@ -30,30 +30,28 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
     run_cfg.regression_method = "percentage"
     run_cfg.regression_fail = False
 
-    bench = bch.Bench("regression_percentage", DegradingBenchmark(), run_cfg=run_cfg)
+    benchable = DegradingBenchmark()
+    bench = benchable.to_bench(run_cfg)
 
     base_time = datetime(2024, 1, 1)
-    # Simulate 5 time snapshots with increasing degradation
-    for i in range(5):
-        DegradingBenchmark.run_number = i
+    for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
+        benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        res = bench.plot_sweep(
+        run_cfg.auto_plot = False
+        bench.plot_sweep(
+            "regression_detection",
             input_vars=[],
             result_vars=["latency", "throughput"],
-            title=f"Snapshot {i}",
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
         )
-        bench.sample_cache = None  # reset for next run
 
-    # Print the regression report from the last result
+    res = bench.results[-1]
     report = res.regression_report
     if report is not None:
         print("\n" + report.summary())
         print(f"\nRegressed variables: {[r.variable for r in report.regressed_variables]}")
-    else:
-        print("No regression report (need at least 2 time points)")
 
     return bench
 
