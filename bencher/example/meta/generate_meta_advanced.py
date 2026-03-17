@@ -14,6 +14,7 @@ OUTPUT_DIR = "advanced"
 ADVANCED_EXAMPLES = [
     "cache_patterns",
     "time_event",
+    "git_time_event",
     "max_time_events",
     "report_save",
     "agg_over_time",
@@ -32,6 +33,8 @@ class MetaAdvanced(MetaGeneratorBase):
             self._generate_cache_patterns()
         elif self.example == "time_event":
             self._generate_time_event()
+        elif self.example == "git_time_event":
+            self._generate_git_time_event()
         elif self.example == "max_time_events":
             self._generate_max_time_events()
         elif self.example == "report_save":
@@ -157,6 +160,58 @@ for i, event_name in enumerate(events):
             output_dir=OUTPUT_DIR,
             filename="advanced_time_event",
             function_name="example_advanced_time_event",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"level": 3},
+        )
+
+    def _generate_git_time_event(self):
+        """Git commit time event example."""
+        imports = "import bencher as bch"
+        class_code = '''\
+class ServerLatency(bch.ParametrizedSweep):
+    """Simulates server latency measurements across endpoints.
+
+    Use ``bch.git_time_event()`` as the ``time_src`` argument to
+    ``plot_sweep`` to label each over_time slider tick with the commit
+    date and short hash, e.g. ``"2024-06-15 abc1234d"``.  This lets you
+    trace benchmark results back to the exact code that produced them.
+    """
+
+    endpoint = bch.StringSweep(
+        ["/api/users", "/api/orders", "/api/health"], doc="API endpoint"
+    )
+
+    latency = bch.ResultVar(units="ms", doc="Response latency")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
+        return super().__call__()'''
+        body = """\
+run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg.over_time = True
+
+bench = ServerLatency().to_bench(run_cfg)
+
+# git_time_event() returns a string like "2024-06-15 abc1234d".
+# Pass it as time_src so each commit gets its own slider tick.
+bench.plot_sweep(
+    title="Latency by Endpoint",
+    input_vars=["endpoint"],
+    result_vars=["latency"],
+    description="Demonstrates git_time_event() for labelling over_time "
+    "slider ticks with the commit date and short hash.",
+    run_cfg=run_cfg,
+    time_src=bch.git_time_event(),
+)
+"""
+        self.generate_example(
+            title="Git Time Event — date + commit hash slider labels",
+            output_dir=OUTPUT_DIR,
+            filename="advanced_git_time_event",
+            function_name="example_advanced_git_time_event",
             imports=imports,
             body=body,
             class_code=class_code,

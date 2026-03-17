@@ -570,9 +570,12 @@ class Bench(BenchPlotServer):
                     if run_cfg.only_plot:
                         raise FileNotFoundError("Was not able to load the results to plot!")
 
+        if run_cfg.time_event is not None:
+            time_src = run_cfg.time_event
+        elif isinstance(time_src, str):
+            bench_cfg.time_event = time_src
+
         if calculate_results:
-            if run_cfg.time_event is not None:
-                time_src = run_cfg.time_event
             bench_res = self.calculate_benchmark_results(
                 bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
             )
