@@ -70,26 +70,18 @@ for i, offset in enumerate(releases):
     benchable._time_offset = offset
     run_cfg.clear_cache = True
     run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = False
+    run_cfg.auto_plot = i == len(releases) - 1
     bench.plot_sweep(
         "regression_detection",
         input_vars=["connections", "payload_kb"],
         result_vars=["response_time", "throughput"],
         run_cfg=run_cfg,
         time_src=base_time + timedelta(seconds=i),
+        agg_over_dims=["connections", "payload_kb"],
     )
 
-res = bench.results[-1]
-
-# 2D heatmap with over_time slider
-bench.report.append(res.to(bch.HeatmapResult))
-
-# Aggregated curve: collapse sweep dims to scalar mean +/- std over time
-bench.report.append(
-    res.to(bch.CurveResult, agg_over_dims=["connections", "payload_kb"])
-)
-
 # Regression report
+res = bench.results[-1]
 report = res.regression_report
 if report is not None:
     print("\\n" + report.summary())

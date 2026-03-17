@@ -251,6 +251,8 @@ class Bench(BenchPlotServer):
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
+        agg_over_dims: list[str] | None = None,
+        agg_fn: str = "mean",
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -413,9 +415,7 @@ class Bench(BenchPlotServer):
                 result_vars_only.append(i)
 
         if post_description is None:
-            post_description = (
-                "## Results Description\nPlease set post_description to explain these results"
-            )
+            post_description = ""
 
         if plot_callbacks is None:
             if self.plot_callbacks is not None and len(self.plot_callbacks) == 0:
@@ -437,6 +437,8 @@ class Bench(BenchPlotServer):
             pass_repeat=pass_repeat,
             tag=run_cfg.run_tag + tag,
             plot_callbacks=plot_callbacks,
+            agg_over_dims=agg_over_dims,
+            agg_fn=agg_fn,
         )
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
@@ -606,6 +608,17 @@ class Bench(BenchPlotServer):
 
         if bench_cfg.auto_plot:
             self.report.append_result(bench_res)
+
+            if bench_cfg.agg_over_dims:
+                from bencher.results.holoview_results.curve_result import CurveResult
+
+                self.report.append(
+                    bench_res.to(
+                        CurveResult,
+                        agg_over_dims=bench_cfg.agg_over_dims,
+                        agg_fn=bench_cfg.agg_fn,
+                    )
+                )
 
         self.results.append(bench_res)
         return bench_res
