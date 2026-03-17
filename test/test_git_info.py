@@ -46,8 +46,8 @@ class TestGitTimeEvent(unittest.TestCase):
             run_cfg=run_cfg,
             plot_callbacks=False,
         )
-        ot = str(res.ds.coords["over_time"].values[0])
-        self.assertRegex(ot, r"\d{4}-\d{2}-\d{2} [0-9a-f]{8}")
+        over_time_val = str(res.ds.coords["over_time"].values[0])
+        self.assertRegex(over_time_val, r"\d{4}-\d{2}-\d{2} [0-9a-f]{8}")
 
 
 if __name__ == "__main__":
