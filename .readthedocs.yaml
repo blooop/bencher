@@ -33,8 +33,8 @@ build:
       # Install Chromium browser binary for playwright thumbnail screenshots
       - playwright install chromium
     pre_build:
-      # Generate Python example files, run them, save HTML reports, and create RST docs
-      - python bencher/example/meta/generate_examples.py
+      # Generate thumbnail screenshots from pre-committed HTML reports
+      - python bencher/example/meta/generate_thumbnails.py
 
 # Build documentation in the "docs/" directory with Sphinx
 conda:

@@ -9,10 +9,10 @@ import bencher as bch
 class ServerLatency(bch.ParametrizedSweep):
     """Simulates server latency measurements across endpoints.
 
-    Use ``bch.git_time_event()`` as the ``time_event`` to label each
-    over_time slider tick with the commit date and short hash, e.g.
-    ``"2024-06-15 abc1234d"``.  This lets you trace benchmark results
-    back to the exact code that produced them.
+    Use ``bch.git_time_event()`` as the ``time_src`` argument to
+    ``plot_sweep`` to label each over_time slider tick with the commit
+    date and short hash, e.g. ``"2024-06-15 abc1234d"``.  This lets you
+    trace benchmark results back to the exact code that produced them.
     """
 
     endpoint = bch.StringSweep(["/api/users", "/api/orders", "/api/health"], doc="API endpoint")
@@ -31,13 +31,10 @@ def example_advanced_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> b
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
 
-    # git_time_event() returns a string like "2024-06-15 abc1234d".
-    # Each time this script runs on a different commit, a new slider
-    # tick is added so you can see how results change across commits.
-    run_cfg.time_event = bch.git_time_event()
-
     bench = ServerLatency().to_bench(run_cfg)
 
+    # git_time_event() returns a string like "2024-06-15 abc1234d".
+    # Pass it as time_src so each commit gets its own slider tick.
     bench.plot_sweep(
         title="Latency by Endpoint",
         input_vars=["endpoint"],
@@ -45,6 +42,7 @@ def example_advanced_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> b
         description="Demonstrates git_time_event() for labelling over_time "
         "slider ticks with the commit date and short hash.",
         run_cfg=run_cfg,
+        time_src=bch.git_time_event(),
     )
 
     return bench

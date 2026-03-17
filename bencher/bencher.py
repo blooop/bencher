@@ -573,6 +573,8 @@ class Bench(BenchPlotServer):
         if calculate_results:
             if run_cfg.time_event is not None:
                 time_src = run_cfg.time_event
+            elif isinstance(time_src, str):
+                bench_cfg.time_event = time_src
             bench_res = self.calculate_benchmark_results(
                 bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
             )

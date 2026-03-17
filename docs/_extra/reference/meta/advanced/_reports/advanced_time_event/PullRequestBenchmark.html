@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Report</title>
+<style>
+body { margin:0; font-family:sans-serif; }
+.tab-bar { display:flex; gap:2px; background:#e0e0e0; padding:4px; }
+.tab-btn { padding:8px 16px; border:none; cursor:pointer; background:#ccc; font-size:14px; }
+.tab-btn.active { background:#fff; font-weight:bold; }
+iframe { width:100%; border:none; }
+</style></head><body>
+<div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this, '_tabs/PR_Benchmark.html')">PR Benchmark</button>
+<button class="tab-btn" onclick="switchTab(this, '_tabs/PR_Benchmark_1.html')">PR Benchmark</button>
+<button class="tab-btn" onclick="switchTab(this, '_tabs/PR_Benchmark_2.html')">PR Benchmark</button>
+</div>
+<iframe id="content" src="_tabs/PR_Benchmark.html"></iframe>
+<script>
+function switchTab(btn, src) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('content').src = src;
+}
+function resizeIframe() {
+  var f = document.getElementById('content');
+  f.style.height = (window.innerHeight - f.getBoundingClientRect().top) + 'px';
+}
+window.addEventListener('resize', resizeIframe);
+document.getElementById('content').addEventListener('load', resizeIframe);
+resizeIframe();
+</script></body></html>

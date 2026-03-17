@@ -1,0 +1,42 @@
+1 Float Input (Over Time)
+=========================
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+
+   ex_1_float_0_cat
+   ex_1_float_1_cat
+   ex_1_float_2_cat
+   ex_1_float_3_cat
+
+.. raw:: html
+
+   <div class="gallery-container">
+   <div class="gallery-grid">
+   <a class="gallery-card" href="ex_1_float_0_cat.html">
+     <div class="gallery-thumb-wrap">
+       <img class="gallery-thumb" src="../../_thumbs/1_float/over_time/ex_1_float_0_cat.png" loading="lazy" alt="Ex 1 Float 0 Cat">
+     </div>
+     <div class="gallery-card-title">Ex 1 Float 0 Cat</div>
+   </a>
+   <a class="gallery-card" href="ex_1_float_1_cat.html">
+     <div class="gallery-thumb-wrap">
+       <img class="gallery-thumb" src="../../_thumbs/1_float/over_time/ex_1_float_1_cat.png" loading="lazy" alt="Ex 1 Float 1 Cat">
+     </div>
+     <div class="gallery-card-title">Ex 1 Float 1 Cat</div>
+   </a>
+   <a class="gallery-card" href="ex_1_float_2_cat.html">
+     <div class="gallery-thumb-wrap">
+       <img class="gallery-thumb" src="../../_thumbs/1_float/over_time/ex_1_float_2_cat.png" loading="lazy" alt="Ex 1 Float 2 Cat">
+     </div>
+     <div class="gallery-card-title">Ex 1 Float 2 Cat</div>
+   </a>
+   <a class="gallery-card" href="ex_1_float_3_cat.html">
+     <div class="gallery-thumb-wrap">
+       <img class="gallery-thumb" src="../../_thumbs/1_float/over_time/ex_1_float_3_cat.png" loading="lazy" alt="Ex 1 Float 3 Cat">
+     </div>
+     <div class="gallery-card-title">Ex 1 Float 3 Cat</div>
+   </a>
+   </div>
+   </div>
