@@ -168,7 +168,7 @@ for i, event_name in enumerate(events):
 
     def _generate_git_time_event(self):
         """Git commit time event example."""
-        imports = "import math\nimport bencher as bch"
+        imports = "import bencher as bch"
         class_code = '''\
 class ServerLatency(bch.ParametrizedSweep):
     """Simulates server latency measurements across endpoints.
@@ -187,8 +187,7 @@ class ServerLatency(bch.ParametrizedSweep):
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
-        base = {"/api/users": 45, "/api/orders": 120, "/api/health": 5}[self.endpoint]
-        self.latency = base + 10 * math.sin(hash(self.endpoint))
+        self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
         return super().__call__()'''
         body = """\
 run_cfg = run_cfg or bch.BenchRunCfg()

@@ -8,10 +8,17 @@ from bencher.git_info import git_time_event
 
 
 class TestGitTimeEvent(unittest.TestCase):
-    def test_returns_date_and_hash_in_repo(self):
-        result = git_time_event()
-        # We're in a git repo, so should get "YYYY-MM-DD abcdefgh"
-        self.assertRegex(result, r"\d{4}-\d{2}-\d{2} [0-9a-f]{8}")
+    def test_returns_date_and_hash(self):
+        def fake(cmd, **_kwargs):
+            if "rev-parse" in cmd:
+                return b"abc1234def5678901234567890abcdef12345678\n"
+            if "log" in cmd:
+                return b"2024-06-15T12:00:00+00:00\n"
+            return b""
+
+        with mock.patch("subprocess.check_output", side_effect=fake):
+            result = git_time_event()
+        self.assertEqual(result, "2024-06-15 abc1234d")
 
     def test_returns_empty_outside_repo(self):
         with mock.patch(

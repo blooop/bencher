@@ -2,7 +2,6 @@
 
 from typing import Any
 
-import math
 import bencher as bch
 
 
@@ -21,8 +20,7 @@ class ServerLatency(bch.ParametrizedSweep):
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        base = {"/api/users": 45, "/api/orders": 120, "/api/health": 5}[self.endpoint]
-        self.latency = base + 10 * math.sin(hash(self.endpoint))
+        self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
         return super().__call__()
 
 
