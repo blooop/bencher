@@ -38,8 +38,11 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
     benchable = ServerBenchmark()
     bench = benchable.to_bench(run_cfg)
 
+    # Simulate 7 server releases: stable at first, then a memory leak kicks in
+    releases = [0.0, 0.1, 0.0, 0.5, 1.5, 3.0, 5.0]
+
     base_time = datetime(2024, 1, 1)
-    for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
+    for i, offset in enumerate(releases):
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
@@ -54,13 +57,20 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
 
     res = bench.results[-1]
 
-    # Append auto plots from the final accumulated result (all 5 time points)
-    bench.report.append(res.to_auto_plots())
+    # 2D heatmap with over_time slider
+    bench.report.append(res.to(bch.HeatmapResult))
 
+    # Aggregated curve: collapse sweep dims to scalar mean +/- std over time
+    bench.report.append(res.to(bch.CurveResult, agg_over_dims=["connections", "payload_kb"]))
+
+    # Regression report
     report = res.regression_report
     if report is not None:
         print("\n" + report.summary())
-        print(f"\nRegressed variables: {[r.variable for r in report.regressed_variables]}")
+        regressed = [r.variable for r in report.regressed_variables]
+        if regressed:
+            lines = [report.summary(), "", f"Regressed variables: {regressed}"]
+            bench.report.append_markdown("\n".join(lines), name="Regression Report")
 
     return bench
 
