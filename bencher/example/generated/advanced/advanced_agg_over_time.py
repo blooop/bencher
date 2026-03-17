@@ -45,11 +45,12 @@ def example_advanced_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bc
     bench = benchable.to_bench(run_cfg)
 
     base_time = datetime(2024, 1, 1)
-    for i, offset in enumerate([0.0, 1.0, 2.0, 3.0, 4.0]):
+    time_offsets = [0.0, 1.0, 2.0, 3.0, 4.0]
+    for i, offset in enumerate(time_offsets):
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = i == len([0.0, 1.0, 2.0, 3.0, 4.0]) - 1
+        run_cfg.auto_plot = i == len(time_offsets) - 1
         bench.plot_sweep(
             "thermal_plate",
             input_vars=["x", "y"],
