@@ -31,7 +31,7 @@ class MetaRegression(MetaGeneratorBase):
 
     def _generate_percentage(self):
         """Percentage-based regression detection over time."""
-        imports = "import bencher as bch\nfrom datetime import datetime, timedelta"
+        imports = "from typing import Any\nfrom datetime import datetime, timedelta\n\nimport bencher as bch"
         class_code = '''\
 class ServerBenchmark(bch.ParametrizedSweep):
     """A server benchmark whose response time degrades over successive releases."""

@@ -5,10 +5,15 @@ from __future__ import annotations
 import subprocess
 
 
-def _git(cmd: list[str], repo_path: str | None = None) -> str:
+def _run_git(args: list[str], repo_path: str | None = None) -> str:
+    """Run a git subcommand and return its stripped stdout, or empty string on failure."""
     try:
         return (
-            subprocess.check_output(cmd, cwd=repo_path, stderr=subprocess.DEVNULL).decode().strip()
+            subprocess.check_output(  # noqa: S603
+                ["git", *args], cwd=repo_path, stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
         )
     except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         return ""
@@ -25,11 +30,11 @@ def git_time_event(repo_path: str | None = None) -> str:
     Falls back to just the short hash if the commit date is unavailable,
     or an empty string if not inside a git repository.
     """
-    commit = _git(["git", "rev-parse", "HEAD"], repo_path)
+    commit = _run_git(["rev-parse", "HEAD"], repo_path)
     if not commit:
         return ""
     short = commit[:8]
-    date = _git(["git", "log", "-1", "--format=%cI"], repo_path)
+    date = _run_git(["log", "-1", "--format=%cI"], repo_path)
     date_part = date.split("T")[0] if date else ""
     if date_part:
         return f"{date_part} {short}"

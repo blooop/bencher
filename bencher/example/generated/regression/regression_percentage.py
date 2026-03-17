@@ -1,9 +1,9 @@
 """Auto-generated example: Regression detection — percentage threshold over time."""
 
 from typing import Any
+from datetime import datetime, timedelta
 
 import bencher as bch
-from datetime import datetime, timedelta
 
 
 class ServerBenchmark(bch.ParametrizedSweep):
