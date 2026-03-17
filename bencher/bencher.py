@@ -251,6 +251,7 @@ class Bench(BenchPlotServer):
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
+        agg_over_dims: list[str] | None = None,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -437,6 +438,7 @@ class Bench(BenchPlotServer):
             pass_repeat=pass_repeat,
             tag=run_cfg.run_tag + tag,
             plot_callbacks=plot_callbacks,
+            agg_over_dims=agg_over_dims,
         )
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
@@ -606,6 +608,14 @@ class Bench(BenchPlotServer):
 
         if bench_cfg.auto_plot:
             self.report.append_result(bench_res)
+
+        # Auto-append aggregated views (CurveResult + BandResult) when agg_over_dims is set
+        if bench_cfg.auto_plot and bench_cfg.agg_over_dims:
+            from bencher.results.holoview_results.curve_result import CurveResult
+            from bencher.results.holoview_results.band_result import BandResult
+
+            self.report.append(bench_res.to(CurveResult, agg_over_dims=bench_cfg.agg_over_dims))
+            self.report.append(bench_res.to(BandResult, agg_over_dims=bench_cfg.agg_over_dims))
 
         self.results.append(bench_res)
         return bench_res

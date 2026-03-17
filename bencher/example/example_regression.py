@@ -85,7 +85,10 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     #    the bounds established by the early stable releases.
     bench.report.append(res.to(bch.CurveResult, agg_over_dims=["connections", "payload_kb"]))
 
-    # 3) Regression report
+    # 3) Percentile bands: the outlier tail reveals regression before the mean does
+    bench.report.append(res.to(bch.BandResult, agg_over_dims=["connections", "payload_kb"]))
+
+    # 4) Regression report
     report = res.regression_report
     if report is not None:
         print("\n" + report.summary())

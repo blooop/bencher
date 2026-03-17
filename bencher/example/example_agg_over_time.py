@@ -1,9 +1,14 @@
-"""Demo: aggregate a 2D sweep down to a scalar curve over time with error bounds.
+"""Demo: aggregate a 2D sweep to visualise distribution evolution over time.
 
-A 2D parameter sweep (float1 x float2) is run at each time snapshot.  The report
-first shows the raw 2D heatmap with an over_time slider, then shows both sweep
-dimensions collapsed via ``agg_over_dims`` into a single mean +/- std per time
-point — a curve showing how the plate-wide average evolves over time.
+A 2D parameter sweep (float1 x float2) is run at each time snapshot.  Early on
+the spatial variation is uniform (tight distribution).  Over time a hot spot
+develops at one corner, making the distribution increasingly skewed — the mean
+barely moves but the spread and tail grow dramatically.
+
+Three views are shown:
+1. Raw 2D heatmap with an over_time slider — explore each snapshot.
+2. CurveResult (mean +/- std) — the classic scalar summary over time.
+3. BandResult (percentile bands) — reveals the growing skew that mean +/- std hides.
 
 Run:
     python bencher/example/example_agg_over_time.py
@@ -46,6 +51,10 @@ def example_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     # 2) Aggregated: collapse both sweep dims to scalar mean +/- std over time
     bench.report.append(res.to(bch.CurveResult, agg_over_dims=["float1", "float2"]))
+
+    # 3) Percentile bands: shows full distribution shape over time — reveals
+    #    skew and tail behaviour that mean +/- std cannot capture
+    bench.report.append(res.to(bch.BandResult, agg_over_dims=["float1", "float2"]))
 
     return bench
 

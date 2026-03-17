@@ -454,6 +454,13 @@ class BenchCfg(BenchRunCfg):
         doc="A callable that takes a BenchResult and returns panel representation of the results",
     )
 
+    agg_over_dims = param.List(
+        default=None,
+        doc="Dimension names to aggregate over when auto-appending aggregated views. "
+        "When set, run_sweep will automatically append CurveResult (mean +/- std) "
+        "and BandResult (percentile bands) with these dims collapsed.",
+    )
+
     def __init__(self, **params: Any) -> None:
         """Initialize a BenchCfg with the given parameters.
 

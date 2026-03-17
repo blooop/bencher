@@ -18,6 +18,8 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
 
     All intermediate snapshots disable plotting. Only the final result (which
     has the full accumulated history) is manually added to the report.
+    When input_vars are present, aggregated CurveResult and BandResult views
+    are automatically appended to show how the distribution evolves over time.
 
     Explicit time_src values are passed to simulate realistic usage where
     plot_sweep calls are naturally spaced apart in time.
@@ -38,7 +40,15 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
         )
-    bench.report.append_result(bench.results[-1])
+
+    res = bench.results[-1]
+    bench.report.append_result(res)
+
+    # Auto-aggregate: collapse sweep dims to show distribution evolution over time
+    if input_vars:
+        dim_names = input_vars if isinstance(input_vars[0], str) else [v.name for v in input_vars]
+        bench.report.append(res.to(bch.CurveResult, agg_over_dims=dim_names))
+        bench.report.append(res.to(bch.BandResult, agg_over_dims=dim_names))
 
 
 def example_over_time_0D(run_cfg: bch.BenchRunCfg | None = None, report=None) -> bch.Bench:
