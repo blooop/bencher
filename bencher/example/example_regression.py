@@ -66,29 +66,18 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         benchable._time_offset = offset  # pylint: disable=protected-access
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = False
+        run_cfg.auto_plot = i == len(releases) - 1
         bench.plot_sweep(
             "regression_detection",
             input_vars=["connections", "payload_kb"],
             result_vars=["response_time", "throughput"],
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
+            agg_over_dims=["connections", "payload_kb"],
         )
 
+    # Regression report
     res = bench.results[-1]
-
-    # 1) 2D heatmap with over_time slider — scrub through each release snapshot
-    bench.report.append(res.to(bch.HeatmapResult))
-
-    # 2) Aggregated curve: collapse sweep dims to scalar mean +/- std over time.
-    #    This trend line makes it visually clear when the metric goes outside
-    #    the bounds established by the early stable releases.
-    bench.report.append(res.to(bch.CurveResult, agg_over_dims=["connections", "payload_kb"]))
-
-    # 3) Percentile bands: the outlier tail reveals regression before the mean does
-    bench.report.append(res.to(bch.BandResult, agg_over_dims=["connections", "payload_kb"]))
-
-    # 4) Regression report
     report = res.regression_report
     if report is not None:
         print("\n" + report.summary())
