@@ -30,22 +30,15 @@ def example_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         benchable._time_offset = offset  # pylint: disable=protected-access
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = False
+        run_cfg.auto_plot = i == len(time_offsets) - 1
         bench.plot_sweep(
             "agg_over_time",
             input_vars=["float1", "float2"],
             result_vars=["distance"],
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
+            agg_over_dims=["float1", "float2"],
         )
-
-    res = bench.results[-1]
-
-    # 1) Raw 2D heatmap with over_time slider
-    bench.report.append(res.to(bch.HeatmapResult))
-
-    # 2) Aggregated: collapse both sweep dims to scalar mean +/- std over time
-    bench.report.append(res.to(bch.CurveResult, agg_over_dims=["float1", "float2"]))
 
     return bench
 

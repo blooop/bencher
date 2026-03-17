@@ -49,22 +49,15 @@ def example_advanced_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bc
         benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = False
+        run_cfg.auto_plot = i == len([0.0, 1.0, 2.0, 3.0, 4.0]) - 1
         bench.plot_sweep(
             "thermal_plate",
             input_vars=["x", "y"],
             result_vars=["temperature"],
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
+            agg_over_dims=["x", "y"],
         )
-
-    res = bench.results[-1]
-
-    # 1) Raw 2D heatmap with over_time slider
-    bench.report.append(res.to(bch.HeatmapResult))
-
-    # 2) Aggregate the full 2D grid down to a scalar: mean +/- std at each time point
-    bench.report.append(res.to(bch.CurveResult, agg_over_dims=["x", "y"]))
 
     return bench
 
