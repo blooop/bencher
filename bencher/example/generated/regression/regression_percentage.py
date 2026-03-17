@@ -1,16 +1,9 @@
-"""Example demonstrating benchmark regression detection.
+"""Auto-generated example: Regression detection — percentage threshold over time."""
 
-Simulates a web server benchmarked across concurrent connections and payload
-size. Over successive releases a memory leak degrades response times and
-throughput. The first releases are stable, then performance degrades until
-metrics clearly exceed acceptable bounds. Shows several time snapshots (heatmap
-slider and aggregated trend curve) so the regression is visually obvious.
-"""
-
-from datetime import datetime, timedelta
 from typing import Any
 
 import bencher as bch
+from datetime import datetime, timedelta
 
 
 class ServerBenchmark(bch.ParametrizedSweep):
@@ -33,12 +26,8 @@ class ServerBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Run a benchmark with regression detection over several time snapshots.
-
-    Stable releases are followed by progressively worse degradation so the
-    aggregated trend curve clearly shows when metrics go outside bounds.
-    """
+def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """Regression detection — percentage threshold over time."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 2
@@ -50,20 +39,11 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = benchable.to_bench(run_cfg)
 
     # Simulate 7 server releases: stable at first, then a memory leak kicks in
-    # offset 0 = baseline performance; higher offset = worse leak
-    releases = [
-        0.0,  # v1.0 — baseline
-        0.1,  # v1.1 — stable
-        0.0,  # v1.2 — stable
-        0.5,  # v1.3 — small degradation begins
-        1.5,  # v1.4 — leak worsens
-        3.0,  # v1.5 — clearly outside bounds
-        5.0,  # v1.6 — severe regression
-    ]
+    releases = [0.0, 0.1, 0.0, 0.5, 1.5, 3.0, 5.0]
 
     base_time = datetime(2024, 1, 1)
     for i, offset in enumerate(releases):
-        benchable._time_offset = offset  # pylint: disable=protected-access
+        benchable._time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         run_cfg.auto_plot = False
@@ -77,27 +57,23 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     res = bench.results[-1]
 
-    # 1) 2D heatmap with over_time slider — scrub through each release snapshot
+    # 2D heatmap with over_time slider
     bench.report.append(res.to(bch.HeatmapResult))
 
-    # 2) Aggregated curve: collapse sweep dims to scalar mean +/- std over time.
-    #    This trend line makes it visually clear when the metric goes outside
-    #    the bounds established by the early stable releases.
+    # Aggregated curve: collapse sweep dims to scalar mean +/- std over time
     bench.report.append(res.to(bch.CurveResult, agg_over_dims=["connections", "payload_kb"]))
 
-    # 3) Regression report
+    # Regression report
     report = res.regression_report
     if report is not None:
         print("\n" + report.summary())
         regressed = [r.variable for r in report.regressed_variables]
         if regressed:
-            lines = [report.summary(), "", f"**Regressed variables:** {regressed}"]
+            lines = [report.summary(), "", f"Regressed variables: {regressed}"]
             bench.report.append_markdown("\n".join(lines), name="Regression Report")
-        else:
-            bench.report.append_markdown(report.summary(), name="Regression Report")
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_regression, save=True)
+    bch.run(example_regression_percentage)
