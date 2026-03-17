@@ -459,10 +459,10 @@ class BenchCfg(BenchRunCfg):
         doc="Dimensions to aggregate over. When set, an additional aggregated result "
         "(e.g. CurveResult with mean ± std) is automatically appended to the report.",
     )
-    agg_fn = param.String(
+    agg_fn = param.ObjectSelector(
         default="mean",
-        doc="Aggregation function to use when agg_over_dims is set. "
-        "One of: mean, sum, max, min, median.",
+        objects=["mean", "sum", "max", "min", "median"],
+        doc="Aggregation function to use when agg_over_dims is set.",
     )
 
     def __init__(self, **params: Any) -> None:

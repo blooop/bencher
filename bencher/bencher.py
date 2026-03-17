@@ -609,16 +609,16 @@ class Bench(BenchPlotServer):
         if bench_cfg.auto_plot:
             self.report.append_result(bench_res)
 
-        if bench_cfg.agg_over_dims:
-            from bencher.results.holoview_results.curve_result import CurveResult
+            if bench_cfg.agg_over_dims:
+                from bencher.results.holoview_results.curve_result import CurveResult
 
-            self.report.append(
-                bench_res.to(
-                    CurveResult,
-                    agg_over_dims=bench_cfg.agg_over_dims,
-                    agg_fn=bench_cfg.agg_fn,
+                self.report.append(
+                    bench_res.to(
+                        CurveResult,
+                        agg_over_dims=bench_cfg.agg_over_dims,
+                        agg_fn=bench_cfg.agg_fn,
+                    )
                 )
-            )
 
         self.results.append(bench_res)
         return bench_res
