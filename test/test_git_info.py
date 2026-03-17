@@ -24,7 +24,7 @@ class TestGitTimeEvent(unittest.TestCase):
             self.assertEqual(git_time_event(), "")
 
     def test_falls_back_to_hash_without_date(self):
-        def fake(cmd, cwd=None, stderr=None):
+        def fake(cmd, **_kwargs):
             if "rev-parse" in cmd:
                 return b"a" * 40 + b"\n"
             if "log" in cmd:
