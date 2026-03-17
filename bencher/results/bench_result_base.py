@@ -181,17 +181,16 @@ class BenchResultBase:
         """
 
         if reduce == ReduceType.NONE:
-            kdims = [i.name for i in self.bench_cfg.all_vars]
-            return hv.Dataset(
-                self.to_dataset(
-                    reduce,
-                    result_var=result_var,
-                    level=level,
-                    agg_over_dims=agg_over_dims,
-                    agg_fn=agg_fn,
-                ),
-                kdims=kdims,
+            ds_out = self.to_dataset(
+                reduce,
+                result_var=result_var,
+                level=level,
+                agg_over_dims=agg_over_dims,
+                agg_fn=agg_fn,
             )
+            # Filter kdims to only those that survived aggregation
+            kdims = [i.name for i in self.bench_cfg.all_vars if i.name in ds_out.dims]
+            return hv.Dataset(ds_out, kdims=kdims)
         return hv.Dataset(
             self.to_dataset(
                 reduce,
