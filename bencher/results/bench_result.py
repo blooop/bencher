@@ -20,6 +20,7 @@ from bencher.results.holoview_results.distribution_result.scatter_jitter_result 
 from bencher.results.holoview_results.bar_result import BarResult
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.curve_result import CurveResult
+from bencher.results.holoview_results.band_result import BandResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.histogram_result import HistogramResult
@@ -38,6 +39,7 @@ class BenchResult(
     BarResult,
     HeatmapResult,
     CurveResult,
+    BandResult,
     SurfaceResult,
     HoloviewResult,
     HistogramResult,

@@ -456,8 +456,9 @@ class BenchCfg(BenchRunCfg):
 
     agg_over_dims = param.List(
         default=None,
-        doc="Dimensions to aggregate over. When set, an additional aggregated result "
-        "(e.g. CurveResult with mean ± std) is automatically appended to the report.",
+        doc="Dimension names to aggregate over when auto-appending aggregated views. "
+        "When set, run_sweep will automatically append CurveResult (mean +/- std) "
+        "and BandResult (percentile bands) with these dims collapsed.",
     )
     agg_fn = param.ObjectSelector(
         default="mean",

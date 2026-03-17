@@ -57,6 +57,7 @@ from bencher.results.holoview_results.bar_result import BarResult
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.curve_result import CurveResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
+from bencher.results.holoview_results.band_result import BandResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.holoview_results.table_result import TableResult
