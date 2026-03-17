@@ -22,13 +22,12 @@ def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Track benchmark results over time using the current git commit as the time label.
 
     ``git_time_event()`` returns a string like ``"2024-06-15 abc1234d"`` combining the commit
-    date and short hash.  Pass it as ``time_event`` with ``over_time=True`` so the slider
-    shows which commit produced each data point.
+    date and short hash.  Pass it as ``time_src`` to ``plot_sweep`` so the slider shows which
+    commit produced each data point.
     """
 
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
-    run_cfg.time_event = bch.git_time_event()
 
     bench = ServerLatency().to_bench(run_cfg)
 
@@ -38,6 +37,7 @@ def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         result_vars=["latency"],
         description=example_git_time_event.__doc__,
         run_cfg=run_cfg,
+        time_src=bch.git_time_event(),
     )
     return bench
 
