@@ -116,6 +116,34 @@ class TestResolveAggregate(unittest.TestCase):
             resolve_aggregate(2.5, self.vars3)
 
 
+class TestHandleDeprecatedAggOverDims(unittest.TestCase):
+    """Tests for the deprecated agg_over_dims alias."""
+
+    def test_agg_over_dims_forwards_to_aggregate(self):
+        from bencher.utils import _handle_deprecated_agg_over_dims
+
+        with self.assertWarns(DeprecationWarning):
+            result = _handle_deprecated_agg_over_dims(None, ["x", "y"])
+        self.assertEqual(result, ["x", "y"])
+
+    def test_aggregate_takes_precedence(self):
+        from bencher.utils import _handle_deprecated_agg_over_dims
+
+        with self.assertWarns(DeprecationWarning):
+            result = _handle_deprecated_agg_over_dims(True, ["x", "y"])
+        self.assertIs(result, True)
+
+    def test_no_warning_when_agg_over_dims_is_none(self):
+        import warnings
+
+        from bencher.utils import _handle_deprecated_agg_over_dims
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = _handle_deprecated_agg_over_dims(True, None)
+        self.assertIs(result, True)
+
+
 class TestResolveAggregateIntegration(unittest.TestCase):
     """Integration: verify aggregate=True matches explicit dim list via plot_sweep."""
 

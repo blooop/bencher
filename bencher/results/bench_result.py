@@ -26,7 +26,7 @@ from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.dataset_result import DataSetResult
-from bencher.utils import listify, resolve_aggregate
+from bencher.utils import listify, resolve_aggregate, _handle_deprecated_agg_over_dims
 
 
 class BenchResult(
@@ -76,6 +76,7 @@ class BenchResult(
         # Aggregation controls (applied in filter())
         aggregate: bool | int | list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
+        agg_over_dims: list[str] | None = None,
         **kwargs: Any,
     ) -> BenchResult:
         """Return the current instance of BenchResult.
@@ -83,6 +84,7 @@ class BenchResult(
         Returns:
             BenchResult: The current instance of the benchmark result
         """
+        aggregate = _handle_deprecated_agg_over_dims(aggregate, agg_over_dims)
         input_var_names = [iv.name for iv in self.bench_cfg.input_vars]
         agg_over_dims = resolve_aggregate(aggregate, input_var_names)
 
