@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.68.0"
+version = "1.69.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -160,7 +160,9 @@ dev-use-local = "./scripts/devcontainer_use_local.sh"
 generate-examples = "python -c \"from bencher.example.meta.generate_examples import generate_python_files; generate_python_files()\""
 # Generate + run + produce docs (HTML reports + RST)
 generate-docs = "python bencher/example/meta/generate_examples.py"
-docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = ["generate-docs"] }
+docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = [
+    "generate-docs",
+] }
 
 
 #demos
@@ -170,7 +172,7 @@ demo_rerun = "python3 bencher/example/example_rerun.py"
 
 [tool.pylint]
 extension-pkg-whitelist = ["numpy", "scipy"]
-jobs = 16                                    #detect number of cores
+jobs = 16                                                  #detect number of cores
 ignore-paths = ["docs/.*", "bencher/example/generated/.*"]
 
 [tool.pylint.'MESSAGES CONTROL']
