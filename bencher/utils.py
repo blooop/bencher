@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 from functools import partial
 from typing import Callable, Any
+import warnings
 import logging
 import os
 import tempfile
@@ -287,6 +288,83 @@ def gen_rerun_data_path(rrd_name: str = "rrd", filetype: str = ".rrd") -> str:
         str: Absolute path to a unique rerun data file location
     """
     return gen_path(rrd_name, "rrd", filetype)
+
+
+def resolve_aggregate(
+    aggregate: bool | int | list[str] | None,
+    input_var_names: list[str] | None = None,
+) -> list[str] | None:
+    """Resolve the ``aggregate`` convenience parameter into a list of dimension names.
+
+    Args:
+        aggregate: Aggregation specification.
+            - None / False: no aggregation
+            - True: aggregate all input dims (requires input_var_names)
+            - int N: aggregate last N input dims (requires input_var_names)
+            - list[str]: aggregate exactly these dims (validated only when
+              input_var_names is provided)
+        input_var_names: Names of input variables (in order).  When None,
+            list[str] values pass through without validation and True/int
+            raise ValueError (no context to resolve against).
+
+    Returns:
+        List of dimension names to aggregate over, or None.
+
+    Raises:
+        ValueError: If int is out of range, list contains unknown names, or
+            True/int used without input_var_names.
+        TypeError: If aggregate is an unsupported type.
+    """
+    if aggregate is None or aggregate is False:
+        return None
+    if aggregate is True:
+        if input_var_names is None:
+            raise ValueError("aggregate=True requires input_var_names")
+        return list(input_var_names)
+    if isinstance(aggregate, int):
+        if input_var_names is None:
+            raise ValueError("aggregate=<int> requires input_var_names")
+        if aggregate < 1:
+            raise ValueError(f"aggregate must be >= 1, got {aggregate}")
+        if aggregate > len(input_var_names):
+            raise ValueError(
+                f"aggregate={aggregate} exceeds number of input vars ({len(input_var_names)})"
+            )
+        return list(input_var_names[-aggregate:])
+    if isinstance(aggregate, list):
+        non_str = [v for v in aggregate if not isinstance(v, str)]
+        if non_str:
+            bad_types = sorted({type(v).__name__ for v in non_str})
+            raise TypeError(f"aggregate list elements must be str, got element types {bad_types}")
+        if input_var_names is not None:
+            unknown = set(aggregate) - set(input_var_names)
+            if unknown:
+                raise ValueError(f"aggregate contains unknown input var names: {sorted(unknown)}")
+        return list(aggregate)
+    raise TypeError(
+        f"aggregate must be bool, int, list[str], or None, got {type(aggregate).__name__}"
+    )
+
+
+def _handle_deprecated_agg_over_dims(
+    aggregate: bool | int | list[str] | None,
+    agg_over_dims: list[str] | None,
+) -> bool | int | list[str] | None:
+    """Merge the deprecated ``agg_over_dims`` kwarg into ``aggregate``.
+
+    If both are supplied, ``aggregate`` wins and a warning is emitted.
+    If only ``agg_over_dims`` is supplied, it is forwarded as ``aggregate``
+    with a deprecation warning.
+    """
+    if agg_over_dims is not None:
+        warnings.warn(
+            "agg_over_dims is deprecated, use aggregate instead",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        if aggregate is None:
+            return agg_over_dims
+    return aggregate
 
 
 def callable_name(any_callable: Callable[..., Any]) -> str:

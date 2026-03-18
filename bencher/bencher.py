@@ -25,7 +25,7 @@ from bencher.variables.results import ResultHmap
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str
+from bencher.utils import params_to_str, resolve_aggregate, _handle_deprecated_agg_over_dims
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
 
@@ -188,6 +188,9 @@ class Bench(BenchPlotServer):
         iterations: int = 1,
         relationship_cb: Callable | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
+        aggregate: bool | int | list[str] | None = None,
+        agg_fn: str = "mean",
+        agg_over_dims: list[str] | None = None,
     ) -> list[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
@@ -215,6 +218,7 @@ class Bench(BenchPlotServer):
         """
         if relationship_cb is None:
             relationship_cb = combinations
+        aggregate = _handle_deprecated_agg_over_dims(aggregate, agg_over_dims)
         if input_vars is None:
             input_vars = self.worker_class_instance.get_inputs_only()
         results = []
@@ -230,6 +234,8 @@ class Bench(BenchPlotServer):
                     const_vars=const_vars,
                     run_cfg=run_cfg,
                     plot_callbacks=plot_callbacks,
+                    aggregate=aggregate,
+                    agg_fn=agg_fn,
                 )
 
                 if optimise_var is not None:
@@ -251,8 +257,9 @@ class Bench(BenchPlotServer):
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
-        agg_over_dims: list[str] | None = None,
+        aggregate: bool | int | list[str] | None = None,
         agg_fn: str = "mean",
+        agg_over_dims: list[str] | None = None,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -424,6 +431,10 @@ class Bench(BenchPlotServer):
                 plot_callbacks = self.plot_callbacks
         elif isinstance(plot_callbacks, bool):
             plot_callbacks = [BenchResult.to_auto_plots] if plot_callbacks else []
+
+        aggregate = _handle_deprecated_agg_over_dims(aggregate, agg_over_dims)
+        input_var_names = [i.name for i in input_vars_in]
+        agg_over_dims = resolve_aggregate(aggregate, input_var_names)
 
         bench_cfg = BenchCfg(
             input_vars=input_vars_in,
@@ -612,19 +623,11 @@ class Bench(BenchPlotServer):
         if bench_cfg.auto_plot:
             self.report.append_result(bench_res)
 
-        # Auto-append aggregated views (CurveResult + BandResult) when agg_over_dims is set
+        # Auto-append aggregated BandResult (percentile bands + scatter) when agg_over_dims is set
         if bench_cfg.auto_plot and bench_cfg.agg_over_dims:
-            from bencher.results.holoview_results.curve_result import CurveResult
             from bencher.results.holoview_results.band_result import BandResult
 
-            self.report.append(
-                bench_res.to(
-                    CurveResult,
-                    agg_over_dims=bench_cfg.agg_over_dims,
-                    agg_fn=bench_cfg.agg_fn,
-                )
-            )
-            self.report.append(bench_res.to(BandResult, agg_over_dims=bench_cfg.agg_over_dims))
+            self.report.append(bench_res.to(BandResult, aggregate=bench_cfg.agg_over_dims))
 
         self.results.append(bench_res)
         return bench_res

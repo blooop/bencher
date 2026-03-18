@@ -334,7 +334,7 @@ class ThermalPlate(bch.ParametrizedSweep):
     """Measures temperature across a 2D plate that cools over time.
 
     A 2D sweep (x, y) is run at each time snapshot. Both dimensions are
-    then collapsed via agg_over_dims, producing a single mean +/- std per
+    then collapsed via aggregate=True, producing a single mean +/- std per
     time point. The curve shows how the plate-wide average temperature
     decays, with error bounds from the spatial variation across the grid.
     """
@@ -379,7 +379,7 @@ for i, offset in enumerate(time_offsets):
         result_vars=["temperature"],
         run_cfg=run_cfg,
         time_src=base_time + timedelta(seconds=i),
-        agg_over_dims=["x", "y"],
+        aggregate=True,
     )
 """
         self.generate_example(

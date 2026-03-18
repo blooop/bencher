@@ -42,7 +42,7 @@ def example_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
             result_vars=["distance"],
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
-            agg_over_dims=["float1", "float2"],
+            aggregate=True,
         )
 
     return bench

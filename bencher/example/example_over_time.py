@@ -46,9 +46,8 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
 
     # Auto-aggregate: collapse sweep dims to show distribution evolution over time
     if input_vars:
-        dim_names = input_vars if isinstance(input_vars[0], str) else [v.name for v in input_vars]
-        bench.report.append(res.to(bch.CurveResult, agg_over_dims=dim_names))
-        bench.report.append(res.to(bch.BandResult, agg_over_dims=dim_names))
+        bench.report.append(res.to(bch.CurveResult, aggregate=True))
+        bench.report.append(res.to(bch.BandResult, aggregate=True))
 
 
 def example_over_time_0D(run_cfg: bch.BenchRunCfg | None = None, report=None) -> bch.Bench:
