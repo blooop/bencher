@@ -46,16 +46,19 @@ class TestResolveAggregate(unittest.TestCase):
         self.assertEqual(resolve_aggregate(3, self.vars3), ["x", "y", "z"])
 
     def test_int_exceeds_length(self):
-        with self.assertRaises(ValueError, msg="aggregate=4 exceeds"):
+        with self.assertRaises(ValueError) as cm:
             resolve_aggregate(4, self.vars3)
+        self.assertIn("aggregate=4 exceeds", str(cm.exception))
 
     def test_int_zero(self):
-        with self.assertRaises(ValueError, msg="must be >= 1"):
+        with self.assertRaises(ValueError) as cm:
             resolve_aggregate(0, self.vars3)
+        self.assertIn("must be >= 1", str(cm.exception))
 
     def test_int_negative(self):
-        with self.assertRaises(ValueError, msg="must be >= 1"):
+        with self.assertRaises(ValueError) as cm:
             resolve_aggregate(-1, self.vars3)
+        self.assertIn("must be >= 1", str(cm.exception))
 
     # --- list[str]: named dims ---
 
@@ -69,11 +72,38 @@ class TestResolveAggregate(unittest.TestCase):
         self.assertEqual(resolve_aggregate(["y"], self.vars3), ["y"])
 
     def test_list_unknown_name(self):
-        with self.assertRaises(ValueError, msg="unknown input var names"):
+        with self.assertRaises(ValueError) as cm:
             resolve_aggregate(["x", "bogus"], self.vars3)
+        self.assertIn("unknown input var names", str(cm.exception))
 
     def test_list_empty(self):
         self.assertEqual(resolve_aggregate([], self.vars3), [])
+
+    def test_list_non_string_elements(self):
+        with self.assertRaises(TypeError) as cm:
+            resolve_aggregate([1, 2], self.vars3)
+        self.assertIn("aggregate list elements must be str", str(cm.exception))
+
+    def test_list_mixed_elements(self):
+        with self.assertRaises(TypeError) as cm:
+            resolve_aggregate(["x", 42], self.vars3)
+        self.assertIn("aggregate list elements must be str", str(cm.exception))
+
+    # --- input_var_names=None ---
+
+    def test_true_with_none_input_var_names(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(True, None)
+        self.assertIn("requires input_var_names", str(cm.exception))
+
+    def test_int_with_none_input_var_names(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(2, None)
+        self.assertIn("requires input_var_names", str(cm.exception))
+
+    def test_list_with_none_input_var_names_passes_through(self):
+        """When input_var_names is None, list aggregate is returned unvalidated."""
+        self.assertEqual(resolve_aggregate(["x", "bogus"], None), ["x", "bogus"])
 
     # --- type errors ---
 

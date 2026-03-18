@@ -331,6 +331,10 @@ def resolve_aggregate(
             )
         return list(input_var_names[-aggregate:])
     if isinstance(aggregate, list):
+        non_str = [v for v in aggregate if not isinstance(v, str)]
+        if non_str:
+            bad_types = sorted({type(v).__name__ for v in non_str})
+            raise TypeError(f"aggregate list elements must be str, got element types {bad_types}")
         if input_var_names is not None:
             unknown = set(aggregate) - set(input_var_names)
             if unknown:
