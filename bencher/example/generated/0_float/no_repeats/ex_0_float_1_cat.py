@@ -4,6 +4,7 @@ from typing import Any
 
 import bencher as bch
 
+
 class CacheBackend(bch.ParametrizedSweep):
     """Compares latency across different cache backends."""
 
@@ -21,7 +22,7 @@ class CacheBackend(bch.ParametrizedSweep):
 def example_no_repeats_0_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 1 Categorical."""
     bench = CacheBackend().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=['backend'], result_vars=['latency'])
+    bench.plot_sweep(input_vars=["backend"], result_vars=["latency"])
 
     return bench
 
