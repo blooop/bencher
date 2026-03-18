@@ -623,11 +623,13 @@ class Bench(BenchPlotServer):
         if bench_cfg.auto_plot:
             self.report.append_result(bench_res)
 
-        # Auto-append aggregated BandResult into the same tab, right after the main plots
+        # Insert aggregated BandResult at the top of the tab, before main plots
         if bench_cfg.auto_plot and bench_cfg.agg_over_dims:
             from bencher.results.holoview_results.band_result import BandResult
 
-            self.report.append(bench_res.to(BandResult, aggregate=bench_cfg.agg_over_dims))
+            agg_plot = bench_res.to(BandResult, aggregate=bench_cfg.agg_over_dims)
+            if agg_plot is not None:
+                self.report.pane[-1].insert(0, agg_plot)
 
         self.results.append(bench_res)
         return bench_res
