@@ -216,8 +216,7 @@ class BenchResult(
             dims = ", ".join(self.bench_cfg.agg_over_dims)
             plot_cols.append(
                 pn.pane.Markdown(
-                    f"### Aggregated View\n"
-                    f"Mean and percentile bands aggregated over: **{dims}**"
+                    f"### Aggregated View\nMean and percentile bands aggregated over: **{dims}**"
                 )
             )
             plot_cols.append(self.to(BandResult, aggregate=self.bench_cfg.agg_over_dims))
