@@ -4,7 +4,6 @@ from typing import Any
 
 import bencher as bch
 
-
 class NetworkConfig(bch.ParametrizedSweep):
     """Measures throughput across protocol and region combinations."""
 
@@ -24,7 +23,7 @@ class NetworkConfig(bch.ParametrizedSweep):
 def example_no_repeats_0_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 2 Categorical."""
     bench = NetworkConfig().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["protocol", "region"], result_vars=["throughput"])
+    bench.plot_sweep(input_vars=['protocol', 'region'], result_vars=['throughput'])
 
     return bench
 

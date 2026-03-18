@@ -6,7 +6,6 @@ import math
 
 import bencher as bch
 
-
 class CompressionBench(bch.ParametrizedSweep):
     """Measures compression ratio across block size and input entropy."""
 
@@ -24,7 +23,7 @@ class CompressionBench(bch.ParametrizedSweep):
 def example_no_repeats_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """2 Float, 0 Categorical."""
     bench = CompressionBench().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["block_size", "entropy"], result_vars=["ratio"])
+    bench.plot_sweep(input_vars=['block_size', 'entropy'], result_vars=['ratio'])
 
     return bench
 

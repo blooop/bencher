@@ -4,7 +4,6 @@ from typing import Any
 
 import bencher as bch
 
-
 class BaselineCheck(bch.ParametrizedSweep):
     """Measures a fixed baseline metric with no swept parameters."""
 
@@ -19,7 +18,7 @@ class BaselineCheck(bch.ParametrizedSweep):
 def example_no_repeats_0_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 0 Categorical."""
     bench = BaselineCheck().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=[], result_vars=["baseline"])
+    bench.plot_sweep(input_vars=[], result_vars=['baseline'])
 
     return bench
 

@@ -6,7 +6,6 @@ import math
 
 import bencher as bch
 
-
 class SortComparison(bch.ParametrizedSweep):
     """Compares sort duration across array sizes and algorithms."""
 
@@ -25,7 +24,7 @@ class SortComparison(bch.ParametrizedSweep):
 def example_no_repeats_1_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """1 Float, 1 Categorical."""
     bench = SortComparison().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["array_size", "algorithm"], result_vars=["time"])
+    bench.plot_sweep(input_vars=['array_size', 'algorithm'], result_vars=['time'])
 
     return bench
 

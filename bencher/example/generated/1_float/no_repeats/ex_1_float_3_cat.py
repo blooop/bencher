@@ -6,7 +6,6 @@ import math
 
 import bencher as bch
 
-
 class SortFullMatrix(bch.ParametrizedSweep):
     """Full sort matrix: size, algorithm, distribution, and order."""
 
@@ -22,23 +21,14 @@ class SortFullMatrix(bch.ParametrizedSweep):
         algo_factor = {"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}[self.algorithm]
         dist_factor = {"uniform": 1.0, "sorted": 0.6, "reversed": 1.8}[self.distribution]
         stab_factor = {"stable": 1.1, "unstable": 1.0}[self.stability]
-        self.time = (
-            algo_factor
-            * dist_factor
-            * stab_factor
-            * self.array_size
-            * math.log2(self.array_size + 1)
-            * 0.001
-        )
+        self.time = algo_factor * dist_factor * stab_factor * self.array_size * math.log2(self.array_size + 1) * 0.001
         return super().__call__()
 
 
 def example_no_repeats_1_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """1 Float, 3 Categorical."""
     bench = SortFullMatrix().to_bench(run_cfg)
-    bench.plot_sweep(
-        input_vars=["array_size", "algorithm", "distribution", "stability"], result_vars=["time"]
-    )
+    bench.plot_sweep(input_vars=['array_size', 'algorithm', 'distribution', 'stability'], result_vars=['time'])
 
     return bench
 

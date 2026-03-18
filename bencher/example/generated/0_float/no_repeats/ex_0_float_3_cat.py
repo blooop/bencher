@@ -4,7 +4,6 @@ from typing import Any
 
 import bencher as bch
 
-
 class DeploymentConfig(bch.ParametrizedSweep):
     """Full config matrix: protocol, region, and log level."""
 
@@ -26,7 +25,7 @@ class DeploymentConfig(bch.ParametrizedSweep):
 def example_no_repeats_0_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """0 Float, 3 Categorical."""
     bench = DeploymentConfig().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["protocol", "region", "log_level"], result_vars=["throughput"])
+    bench.plot_sweep(input_vars=['protocol', 'region', 'log_level'], result_vars=['throughput'])
 
     return bench
 

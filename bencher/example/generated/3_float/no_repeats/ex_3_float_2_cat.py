@@ -6,7 +6,6 @@ import math
 
 import bencher as bch
 
-
 class HashAnalysis(bch.ParametrizedSweep):
     """Hash analysis: key size, payload, iterations, algorithm, and mode."""
 
@@ -22,24 +21,14 @@ class HashAnalysis(bch.ParametrizedSweep):
         self.update_params_from_kwargs(**kwargs)
         algo_speed = {"sha256": 1.0, "blake2": 1.4, "md5": 1.8}[self.algorithm]
         mode_factor = {"stream": 1.0, "block": 0.85}[self.mode]
-        self.throughput = (
-            algo_speed
-            * mode_factor
-            * 500.0
-            / (1.0 + 0.5 * math.log2(self.key_size / 8))
-            / (1.0 + 0.3 * math.log2(self.payload_size / 64))
-            * (self.iterations / 100)
-        )
+        self.throughput = algo_speed * mode_factor * 500.0 / (1.0 + 0.5 * math.log2(self.key_size / 8)) / (1.0 + 0.3 * math.log2(self.payload_size / 64)) * (self.iterations / 100)
         return super().__call__()
 
 
 def example_no_repeats_3_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """3 Float, 2 Categorical."""
     bench = HashAnalysis().to_bench(run_cfg)
-    bench.plot_sweep(
-        input_vars=["key_size", "payload_size", "iterations", "algorithm", "mode"],
-        result_vars=["throughput"],
-    )
+    bench.plot_sweep(input_vars=['key_size', 'payload_size', 'iterations', 'algorithm', 'mode'], result_vars=['throughput'])
 
     return bench
 

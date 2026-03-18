@@ -334,9 +334,7 @@ def resolve_aggregate(
         if input_var_names is not None:
             unknown = set(aggregate) - set(input_var_names)
             if unknown:
-                raise ValueError(
-                    f"aggregate contains unknown input var names: {sorted(unknown)}"
-                )
+                raise ValueError(f"aggregate contains unknown input var names: {sorted(unknown)}")
         return list(aggregate)
     raise TypeError(
         f"aggregate must be bool, int, list[str], or None, got {type(aggregate).__name__}"
