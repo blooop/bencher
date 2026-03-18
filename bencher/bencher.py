@@ -620,14 +620,14 @@ class Bench(BenchPlotServer):
 
         bench_res.post_setup()
 
-        if bench_cfg.auto_plot:
-            self.report.append_result(bench_res)
-
-        # Auto-append aggregated BandResult (percentile bands + scatter) when agg_over_dims is set
+        # Auto-append aggregated BandResult (percentile bands + scatter) before main plots
         if bench_cfg.auto_plot and bench_cfg.agg_over_dims:
             from bencher.results.holoview_results.band_result import BandResult
 
             self.report.append(bench_res.to(BandResult, aggregate=bench_cfg.agg_over_dims))
+
+        if bench_cfg.auto_plot:
+            self.report.append_result(bench_res)
 
         self.results.append(bench_res)
         return bench_res
