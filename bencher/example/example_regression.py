@@ -73,7 +73,7 @@ def example_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
             result_vars=["response_time", "throughput"],
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
-            agg_over_dims=["connections", "payload_kb"],
+            aggregate=True,
         )
 
     # Regression report

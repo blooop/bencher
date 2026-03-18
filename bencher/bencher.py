@@ -25,7 +25,7 @@ from bencher.variables.results import ResultHmap
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str
+from bencher.utils import params_to_str, resolve_aggregate
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
 
@@ -188,6 +188,8 @@ class Bench(BenchPlotServer):
         iterations: int = 1,
         relationship_cb: Callable | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
+        aggregate: bool | int | list[str] | None = None,
+        agg_fn: str = "mean",
     ) -> list[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
@@ -230,6 +232,8 @@ class Bench(BenchPlotServer):
                     const_vars=const_vars,
                     run_cfg=run_cfg,
                     plot_callbacks=plot_callbacks,
+                    aggregate=aggregate,
+                    agg_fn=agg_fn,
                 )
 
                 if optimise_var is not None:
@@ -251,7 +255,7 @@ class Bench(BenchPlotServer):
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
-        agg_over_dims: list[str] | None = None,
+        aggregate: bool | int | list[str] | None = None,
         agg_fn: str = "mean",
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
@@ -424,6 +428,9 @@ class Bench(BenchPlotServer):
                 plot_callbacks = self.plot_callbacks
         elif isinstance(plot_callbacks, bool):
             plot_callbacks = [BenchResult.to_auto_plots] if plot_callbacks else []
+
+        input_var_names = [i.name for i in input_vars_in]
+        agg_over_dims = resolve_aggregate(aggregate, input_var_names)
 
         bench_cfg = BenchCfg(
             input_vars=input_vars_in,
@@ -620,11 +627,11 @@ class Bench(BenchPlotServer):
             self.report.append(
                 bench_res.to(
                     CurveResult,
-                    agg_over_dims=bench_cfg.agg_over_dims,
+                    aggregate=bench_cfg.agg_over_dims,
                     agg_fn=bench_cfg.agg_fn,
                 )
             )
-            self.report.append(bench_res.to(BandResult, agg_over_dims=bench_cfg.agg_over_dims))
+            self.report.append(bench_res.to(BandResult, aggregate=bench_cfg.agg_over_dims))
 
         self.results.append(bench_res)
         return bench_res
