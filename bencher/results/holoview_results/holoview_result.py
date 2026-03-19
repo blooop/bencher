@@ -22,44 +22,6 @@ hv.extension("bokeh", "plotly")
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
 
-# JS snippet that runs after Bokeh renders to set the over_time slider to the
-# last position.  It finds the Panel State model among document roots, extracts
-# the Bokeh Slider model ID from State.widgets, and sets slider.value = slider.end.
-_OVER_TIME_INIT_JS = """\
-<script>
-(function() {
-  function _initOverTimeSlider() {
-    if (typeof Bokeh === "undefined" || !Bokeh.documents || !Bokeh.documents.length) {
-      setTimeout(_initOverTimeSlider, 50);
-      return;
-    }
-    var doc = Bokeh.documents[0];
-    var roots = doc.roots();
-    for (var i = 0; i < roots.length; i++) {
-      var root = roots[i];
-      if (root.state != null && root.widgets != null && root.values != null) {
-        var wids = root.widgets instanceof Map
-          ? Array.from(root.widgets.keys())
-          : Object.keys(root.widgets);
-        for (var j = 0; j < wids.length; j++) {
-          var slider = doc.get_model_by_id(wids[j]);
-          if (slider && slider.end != null && slider.step === 1) {
-            slider.value = slider.end;
-          }
-        }
-        break;
-      }
-    }
-  }
-  setTimeout(_initOverTimeSlider, 100);
-})();
-</script>"""
-
-
-def _over_time_init_last_script():
-    """Return a zero-size HTML pane containing the init-to-last JS snippet."""
-    return pn.pane.HTML(_OVER_TIME_INIT_JS, width=0, height=0, margin=0)
-
 
 class HoloviewResult(VideoResult):
     @staticmethod
@@ -201,16 +163,14 @@ class HoloviewResult(VideoResult):
         string-based ``TimeEvent`` coordinates get a slider instead of
         the default dropdown ``Select`` widget.
 
-        The slider defaults to the most recent (last) time point via a
-        client-side script that fires after Bokeh renders.  We must NOT
-        set ``w.value`` in Python because Panel's embed system stores an
-        empty patch for the initial widget value — making that position
-        unreachable when the user slides back to it.  Instead we keep the
-        Python default (first value) so every position gets a real patch,
-        then use JS to switch to the last position on page load.
-
         Safe to call on any HoloViews object; if no widgets are produced
         the original object is returned unchanged.
+
+        The slider defaults to the most recent (last) time point.  We keep
+        the Python-side value at its default (first) so that Panel's embed
+        system generates non-empty JSON patches for every position.  A
+        small JS snippet then moves the slider to the last position once
+        the page has rendered, which triggers the embedded patch callback.
         """
         # Force a slider (not a dropdown) for the over_time dimension
         row = pn.panel(hvobj, widgets={"over_time": pn.widgets.DiscreteSlider})
@@ -219,13 +179,55 @@ class HoloviewResult(VideoResult):
         widget_box = row[1]
         widget_box.align = ("start", "start")
 
-        # Build a JS snippet that sets the slider to the last position once
-        # Bokeh has finished rendering.  This triggers the existing
-        # change:value callback which calls State.set_state(), applying the
-        # correct patch for the last time point.
-        init_script = _over_time_init_last_script()
+        # Count slider positions so the JS snippet knows the target value.
+        n_positions = 0
+        for w in widget_box:
+            if hasattr(w, "name") and w.name == "over_time" and hasattr(w, "options") and w.options:
+                opts = w.options.values() if isinstance(w.options, dict) else w.options
+                n_positions = len(list(opts))
+                break
 
-        return pn.Column(row[0], widget_box, init_script)
+        # JS that finds the Bokeh Slider model and sets value = end.
+        # In Panel's embed mode this triggers the CustomJS callback that
+        # calls State.set_state(), applying the pre-computed patch.
+        if n_positions > 1:
+            init_js = pn.pane.HTML(
+                """\
+<script>
+(function() {
+  var attempts = 0;
+  function _setSliderToEnd() {
+    attempts++;
+    if (attempts > 50) return;
+    if (typeof Bokeh === "undefined" || !Bokeh.documents || !Bokeh.documents.length) {
+      setTimeout(_setSliderToEnd, 100);
+      return;
+    }
+    var doc = Bokeh.documents[0];
+    var found = false;
+    doc._all_models.forEach(function(model) {
+      if (!found && model.end != null && model.start != null
+          && model.value != null && model.step === 1) {
+        model.value = model.end;
+        found = true;
+      }
+    });
+    if (!found) setTimeout(_setSliderToEnd, 100);
+  }
+  if (document.readyState === "complete") {
+    setTimeout(_setSliderToEnd, 50);
+  } else {
+    window.addEventListener("load", function() { setTimeout(_setSliderToEnd, 50); });
+  }
+})();
+</script>""",
+                width=0,
+                height=0,
+                margin=0,
+            )
+            return pn.Column(row[0], widget_box, init_js)
+
+        return pn.Column(row[0], widget_box)
 
     def hv_container_ds(
         self,
