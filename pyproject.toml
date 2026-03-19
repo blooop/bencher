@@ -169,6 +169,9 @@ docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs"
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
 
+#performance tracking
+perf = "python3 bencher/example/example_performance.py"
+
 
 [tool.pylint]
 extension-pkg-whitelist = ["numpy", "scipy"]
