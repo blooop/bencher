@@ -194,8 +194,12 @@ class HoloviewResult(VideoResult):
         # For static HTML embeds, inject JS to move the slider to the last
         # position after Bokeh renders.  In Panel's embed mode this triggers
         # the CustomJS callback that calls State.set_state(), applying the
-        # pre-computed patch.  We match the Bokeh slider by its title
-        # ("over_time") so unrelated sliders on the page are not affected.
+        # pre-computed patch.
+        #
+        # Panel's DiscreteSlider renders the label ("over_time: <b>…</b>")
+        # in a separate Div and sets the Bokeh Slider's title to ''.  So we
+        # find the slider through the Panel State model's widgets map, which
+        # explicitly tracks registered widget model IDs.
         if over_time_slider is not None and last_option is not None:
             init_js = pn.pane.HTML(
                 """\
@@ -220,16 +224,23 @@ class HoloviewResult(VideoResult):
       if (found) break;
       var view = Bokeh.index[keys[i]];
       if (!view || !view.model || !view.model.document) continue;
-      var iter = view.model.document._all_models.values();
-      var entry = iter.next();
-      while (!entry.done) {
-        var m = entry.value;
-        if (m.title === "over_time" && m.end != null && m.value != null) {
-          m.value = m.end;
-          found = true;
-          break;
+      var doc = view.model.document;
+      // Find the Panel State root which holds registered widget IDs
+      var roots = doc.roots();
+      for (var r = 0; r < roots.length; r++) {
+        var root = roots[r];
+        if (root.state == null || root.widgets == null) continue;
+        var wids = root.widgets instanceof Map
+          ? Array.from(root.widgets.keys())
+          : Object.keys(root.widgets);
+        for (var j = 0; j < wids.length; j++) {
+          var slider = doc.get_model_by_id(wids[j]);
+          if (slider && slider.end != null && slider.value != null) {
+            slider.value = slider.end;
+            found = true;
+          }
         }
-        entry = iter.next();
+        break;
       }
     }
     if (!found) setTimeout(_setSliderToEnd, POLL_MS);
