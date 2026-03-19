@@ -16,11 +16,6 @@ from bencher.example.meta.example_meta import BenchableObject
 def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=None):
     """Helper: run several time snapshots for a single sweep configuration.
 
-    All intermediate snapshots disable plotting. Only the final result (which
-    has the full accumulated history) is manually added to the report.
-    When input_vars are present, aggregated CurveResult and BandResult views
-    are automatically appended to show how the distribution evolves over time.
-
     Explicit time_src values are passed to simulate realistic usage where
     plot_sweep calls are naturally spaced apart in time.
     """
@@ -32,22 +27,15 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
         benchable._time_offset = offset  # pylint: disable=protected-access
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = False
+        run_cfg.auto_plot = i == len(time_offsets) - 1
         bench.plot_sweep(
             title,
             input_vars=input_vars,
             result_vars=result_vars,
             run_cfg=run_cfg,
             time_src=base_time + timedelta(seconds=i),
+            aggregate=True if input_vars else None,
         )
-
-    res = bench.results[-1]
-    bench.report.append_result(res)
-
-    # Auto-aggregate: collapse sweep dims to show distribution evolution over time
-    if input_vars:
-        bench.report.append(res.to(bch.CurveResult, aggregate=True))
-        bench.report.append(res.to(bch.BandResult, aggregate=True))
 
 
 def example_over_time_0D(run_cfg: bch.BenchRunCfg | None = None, report=None) -> bch.Bench:
