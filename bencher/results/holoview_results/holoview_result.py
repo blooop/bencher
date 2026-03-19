@@ -22,6 +22,44 @@ hv.extension("bokeh", "plotly")
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
 
+# JS snippet that runs after Bokeh renders to set the over_time slider to the
+# last position.  It finds the Panel State model among document roots, extracts
+# the Bokeh Slider model ID from State.widgets, and sets slider.value = slider.end.
+_OVER_TIME_INIT_JS = """\
+<script>
+(function() {
+  function _initOverTimeSlider() {
+    if (typeof Bokeh === "undefined" || !Bokeh.documents || !Bokeh.documents.length) {
+      setTimeout(_initOverTimeSlider, 50);
+      return;
+    }
+    var doc = Bokeh.documents[0];
+    var roots = doc.roots();
+    for (var i = 0; i < roots.length; i++) {
+      var root = roots[i];
+      if (root.state != null && root.widgets != null && root.values != null) {
+        var wids = root.widgets instanceof Map
+          ? Array.from(root.widgets.keys())
+          : Object.keys(root.widgets);
+        for (var j = 0; j < wids.length; j++) {
+          var slider = doc.get_model_by_id(wids[j]);
+          if (slider && slider.end != null && slider.step === 1) {
+            slider.value = slider.end;
+          }
+        }
+        break;
+      }
+    }
+  }
+  setTimeout(_initOverTimeSlider, 100);
+})();
+</script>"""
+
+
+def _over_time_init_last_script():
+    """Return a zero-size HTML pane containing the init-to-last JS snippet."""
+    return pn.pane.HTML(_OVER_TIME_INIT_JS, width=0, height=0, margin=0)
+
 
 class HoloviewResult(VideoResult):
     @staticmethod
@@ -163,6 +201,14 @@ class HoloviewResult(VideoResult):
         string-based ``TimeEvent`` coordinates get a slider instead of
         the default dropdown ``Select`` widget.
 
+        The slider defaults to the most recent (last) time point via a
+        client-side script that fires after Bokeh renders.  We must NOT
+        set ``w.value`` in Python because Panel's embed system stores an
+        empty patch for the initial widget value — making that position
+        unreachable when the user slides back to it.  Instead we keep the
+        Python default (first value) so every position gets a real patch,
+        then use JS to switch to the last position on page load.
+
         Safe to call on any HoloViews object; if no widgets are produced
         the original object is returned unchanged.
         """
@@ -172,12 +218,14 @@ class HoloviewResult(VideoResult):
             return hvobj
         widget_box = row[1]
         widget_box.align = ("start", "start")
-        # Default slider to the most recent (last) time point
-        for w in widget_box:
-            if hasattr(w, "name") and w.name == "over_time" and hasattr(w, "options") and w.options:
-                opts = w.options.values() if isinstance(w.options, dict) else w.options
-                w.value = list(opts)[-1]
-        return pn.Column(row[0], widget_box)
+
+        # Build a JS snippet that sets the slider to the last position once
+        # Bokeh has finished rendering.  This triggers the existing
+        # change:value callback which calls State.set_state(), applying the
+        # correct patch for the last time point.
+        init_script = _over_time_init_last_script()
+
+        return pn.Column(row[0], widget_box, init_script)
 
     def hv_container_ds(
         self,
