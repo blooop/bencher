@@ -70,9 +70,7 @@ class BandResult(HoloviewResult):
         use_holomap = self._use_holomap_for_time(dataset)
 
         if use_holomap:
-            return self._band_over_time(
-                dataset, var, explicit_title, agg_over_dims, **kwargs
-            )
+            return self._band_over_time(dataset, var, explicit_title, agg_over_dims, **kwargs)
 
         # Without over_time: find a continuous x-axis from remaining dims
         return self._band_static(dataset, var, explicit_title, agg_over_dims, **kwargs)
