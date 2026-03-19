@@ -179,40 +179,60 @@ class HoloviewResult(VideoResult):
         widget_box = row[1]
         widget_box.align = ("start", "start")
 
-        # Count slider positions so the JS snippet knows the target value.
-        n_positions = 0
+        # Find the over_time slider and its last option value.
+        over_time_slider = None
+        last_option = None
         for w in widget_box:
             if hasattr(w, "name") and w.name == "over_time" and hasattr(w, "options") and w.options:
                 opts = w.options.values() if isinstance(w.options, dict) else w.options
-                n_positions = len(list(opts))
+                opts = list(opts)
+                if len(opts) > 1:
+                    over_time_slider = w
+                    last_option = opts[-1]
                 break
 
-        # JS that finds the Bokeh Slider model and sets value = end.
-        # In Panel's embed mode this triggers the CustomJS callback that
-        # calls State.set_state(), applying the pre-computed patch.
-        if n_positions > 1:
+        # For static HTML embeds, inject JS to move the slider to the last
+        # position after Bokeh renders.  In Panel's embed mode this triggers
+        # the CustomJS callback that calls State.set_state(), applying the
+        # pre-computed patch.  We match the Bokeh slider by its title
+        # ("over_time") so unrelated sliders on the page are not affected.
+        if over_time_slider is not None and last_option is not None:
             init_js = pn.pane.HTML(
                 """\
 <script>
 (function() {
+  // Poll until Bokeh finishes rendering.  50 attempts * 100 ms = 5 s
+  // which is generous for even large embedded documents.
+  var MAX_ATTEMPTS = 50;
+  var POLL_MS = 100;
   var attempts = 0;
   function _setSliderToEnd() {
     attempts++;
-    if (attempts > 50) return;
-    if (typeof Bokeh === "undefined" || !Bokeh.documents || !Bokeh.documents.length) {
-      setTimeout(_setSliderToEnd, 100);
+    if (attempts > MAX_ATTEMPTS) return;
+    if (typeof Bokeh === "undefined"
+        || !Bokeh.index || !Object.keys(Bokeh.index).length) {
+      setTimeout(_setSliderToEnd, POLL_MS);
       return;
     }
-    var doc = Bokeh.documents[0];
     var found = false;
-    doc._all_models.forEach(function(model) {
-      if (!found && model.end != null && model.start != null
-          && model.value != null && model.step === 1) {
-        model.value = model.end;
-        found = true;
+    var keys = Object.keys(Bokeh.index);
+    for (var i = 0; i < keys.length; i++) {
+      if (found) break;
+      var view = Bokeh.index[keys[i]];
+      if (!view || !view.model || !view.model.document) continue;
+      var iter = view.model.document._all_models.values();
+      var entry = iter.next();
+      while (!entry.done) {
+        var m = entry.value;
+        if (m.title === "over_time" && m.end != null && m.value != null) {
+          m.value = m.end;
+          found = true;
+          break;
+        }
+        entry = iter.next();
       }
-    });
-    if (!found) setTimeout(_setSliderToEnd, 100);
+    }
+    if (!found) setTimeout(_setSliderToEnd, POLL_MS);
   }
   if (document.readyState === "complete") {
     setTimeout(_setSliderToEnd, 50);
