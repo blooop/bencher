@@ -63,21 +63,25 @@ class BandResult(HoloviewResult):
         # band_agg_dims is passed through from to_band to avoid filter pre-aggregation
         agg_over_dims = kwargs.pop("band_agg_dims", None)
 
-        title = self.title_from_ds(dataset, result_var, **kwargs)
+        # Preserve explicit title if provided; otherwise defer to _band_* methods
+        # which build a title reflecting only the x-axis (not aggregated dims).
+        explicit_title = kwargs.pop("title", None)
 
         use_holomap = self._use_holomap_for_time(dataset)
 
         if use_holomap:
-            return self._band_over_time(dataset, var, title, agg_over_dims, **kwargs)
+            return self._band_over_time(
+                dataset, var, explicit_title, agg_over_dims, **kwargs
+            )
 
         # Without over_time: find a continuous x-axis from remaining dims
-        return self._band_static(dataset, var, title, agg_over_dims, **kwargs)
+        return self._band_static(dataset, var, explicit_title, agg_over_dims, **kwargs)
 
     def _band_over_time(
         self,
         dataset: xr.Dataset,
         var: str,
-        title: str,
+        title: str | None,
         agg_over_dims: list[str] | None,
         **kwargs,
     ) -> hv.Overlay | None:
@@ -92,6 +96,11 @@ class BandResult(HoloviewResult):
         sample_dims = [d for d in da.dims if d != "over_time"]
         if agg_over_dims:
             sample_dims = [d for d in sample_dims if d in agg_over_dims or d == "repeat"]
+
+        if title is None:
+            agg_names = [d for d in sample_dims if d != "repeat"]
+            agg_str = ", ".join(agg_names) if agg_names else "repeat"
+            title = f"{var} vs over_time (aggregated over {agg_str})"
         if not sample_dims:
             return None
 
@@ -127,7 +136,7 @@ class BandResult(HoloviewResult):
         self,
         dataset: xr.Dataset,
         var: str,
-        title: str,
+        title: str | None,
         agg_over_dims: list[str] | None,
         **kwargs,
     ) -> hv.Overlay | None:
@@ -145,6 +154,10 @@ class BandResult(HoloviewResult):
 
         x_dim = candidate_x[0]
         sample_dims = [d for d in all_dims if d != x_dim]
+        if title is None:
+            agg_names = [d for d in sample_dims if d != "repeat"]
+            agg_str = ", ".join(agg_names) if agg_names else "repeat"
+            title = f"{var} vs {x_dim} (aggregated over {agg_str})"
         if not sample_dims:
             return None
 
