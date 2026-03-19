@@ -165,6 +165,12 @@ class HoloviewResult(VideoResult):
 
         Safe to call on any HoloViews object; if no widgets are produced
         the original object is returned unchanged.
+
+        The slider defaults to the most recent (last) time point.  We keep
+        the Python-side value at its default (first) so that Panel's embed
+        system generates non-empty JSON patches for every position.  A
+        small JS snippet then moves the slider to the last position once
+        the page has rendered, which triggers the embedded patch callback.
         """
         # Force a slider (not a dropdown) for the over_time dimension
         row = pn.panel(hvobj, widgets={"over_time": pn.widgets.DiscreteSlider})
@@ -172,11 +178,75 @@ class HoloviewResult(VideoResult):
             return hvobj
         widget_box = row[1]
         widget_box.align = ("start", "start")
-        # Default slider to the most recent (last) time point
+
+        # Find the over_time slider and its last option value.
+        over_time_slider = None
+        last_option = None
         for w in widget_box:
             if hasattr(w, "name") and w.name == "over_time" and hasattr(w, "options") and w.options:
                 opts = w.options.values() if isinstance(w.options, dict) else w.options
-                w.value = list(opts)[-1]
+                opts = list(opts)
+                if len(opts) > 1:
+                    over_time_slider = w
+                    last_option = opts[-1]
+                break
+
+        # For static HTML embeds, inject JS to move the slider to the last
+        # position after Bokeh renders.  In Panel's embed mode this triggers
+        # the CustomJS callback that calls State.set_state(), applying the
+        # pre-computed patch.  We match the Bokeh slider by its title
+        # ("over_time") so unrelated sliders on the page are not affected.
+        if over_time_slider is not None and last_option is not None:
+            init_js = pn.pane.HTML(
+                """\
+<script>
+(function() {
+  // Poll until Bokeh finishes rendering.  50 attempts * 100 ms = 5 s
+  // which is generous for even large embedded documents.
+  var MAX_ATTEMPTS = 50;
+  var POLL_MS = 100;
+  var attempts = 0;
+  function _setSliderToEnd() {
+    attempts++;
+    if (attempts > MAX_ATTEMPTS) return;
+    if (typeof Bokeh === "undefined"
+        || !Bokeh.index || !Object.keys(Bokeh.index).length) {
+      setTimeout(_setSliderToEnd, POLL_MS);
+      return;
+    }
+    var found = false;
+    var keys = Object.keys(Bokeh.index);
+    for (var i = 0; i < keys.length; i++) {
+      if (found) break;
+      var view = Bokeh.index[keys[i]];
+      if (!view || !view.model || !view.model.document) continue;
+      var iter = view.model.document._all_models.values();
+      var entry = iter.next();
+      while (!entry.done) {
+        var m = entry.value;
+        if (m.title === "over_time" && m.end != null && m.value != null) {
+          m.value = m.end;
+          found = true;
+          break;
+        }
+        entry = iter.next();
+      }
+    }
+    if (!found) setTimeout(_setSliderToEnd, POLL_MS);
+  }
+  if (document.readyState === "complete") {
+    setTimeout(_setSliderToEnd, 50);
+  } else {
+    window.addEventListener("load", function() { setTimeout(_setSliderToEnd, 50); });
+  }
+})();
+</script>""",
+                width=0,
+                height=0,
+                margin=0,
+            )
+            return pn.Column(row[0], widget_box, init_js)
+
         return pn.Column(row[0], widget_box)
 
     def hv_container_ds(
