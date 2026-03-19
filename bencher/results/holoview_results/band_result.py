@@ -270,5 +270,5 @@ class BandResult(HoloviewResult):
             ).opts(color="grey", alpha=0.3, size=3)
             overlay = overlay * scatter
 
-        overlay = overlay.opts(title=title, xrotation=30, legend_position="right")
+        overlay = overlay.opts(title=title, xrotation=30, ylabel=var, legend_position="right")
         return overlay
