@@ -1269,8 +1269,8 @@ packages:
   requires_python: '>=3.10'
 - pypi: ./
   name: holobench
-  version: 1.70.1
-  sha256: 8b6bc0ea34d12a497415c86dabcd4cd584e7b69ecd183189586feae4961da705
+  version: 1.70.2
+  sha256: b2cae18becb423df25927a3513e260d5221d744ec62b131ce61387378a82ba69
   requires_dist:
   - holoviews>=1.15,<=1.22.1
   - numpy>=1.0,<=2.4.1
