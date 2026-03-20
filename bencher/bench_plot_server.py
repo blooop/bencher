@@ -99,14 +99,14 @@ class BenchPlotServer:
         for logger in ["tornado", "bokeh"]:
             logging.getLogger(logger).setLevel(logging.WARNING)
 
+        serve_kwargs = dict(
+            title=bench_name,
+            threaded=True,
+            show=show,
+            address="0.0.0.0",
+            websocket_origin=["*"],
+        )
         if port is not None:
-            return pn.serve(
-                plots_instance,
-                title=bench_name,
-                websocket_origin=["*"],
-                port=port,
-                threaded=True,
-                show=show,
-            )
+            serve_kwargs["port"] = port
 
-        return pn.serve(plots_instance, title=bench_name, threaded=True, show=show)
+        return pn.serve(plots_instance, **serve_kwargs)

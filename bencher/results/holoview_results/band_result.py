@@ -67,13 +67,17 @@ class BandResult(HoloviewResult):
         # which build a title reflecting only the x-axis (not aggregated dims).
         explicit_title = kwargs.pop("title", None)
 
+        units = getattr(result_var, "units", "") or ""
+
         use_holomap = self._use_holomap_for_time(dataset)
 
         if use_holomap:
-            return self._band_over_time(dataset, var, explicit_title, agg_over_dims, **kwargs)
+            return self._band_over_time(
+                dataset, var, explicit_title, agg_over_dims, units=units, **kwargs
+            )
 
         # Without over_time: find a continuous x-axis from remaining dims
-        return self._band_static(dataset, var, explicit_title, agg_over_dims, **kwargs)
+        return self._band_static(dataset, var, explicit_title, agg_over_dims, units=units, **kwargs)
 
     def _band_over_time(
         self,
@@ -81,6 +85,7 @@ class BandResult(HoloviewResult):
         var: str,
         title: str | None,
         agg_over_dims: list[str] | None,
+        units: str = "",
         **kwargs,
     ) -> hv.Overlay | None:
         """Build percentile bands with time on x-axis."""
@@ -127,6 +132,7 @@ class BandResult(HoloviewResult):
             var,
             title,
             x_dim="over_time",
+            units=units,
             **kwargs,
         )
 
@@ -136,6 +142,7 @@ class BandResult(HoloviewResult):
         var: str,
         title: str | None,
         agg_over_dims: list[str] | None,
+        units: str = "",
         **kwargs,
     ) -> hv.Overlay | None:
         """Build percentile bands over a non-time continuous axis."""
@@ -183,6 +190,7 @@ class BandResult(HoloviewResult):
             var,
             title,
             x_dim=x_dim,
+            units=units,
             **kwargs,
         )
 
@@ -236,6 +244,7 @@ class BandResult(HoloviewResult):
         var: str,
         title: str,
         x_dim: str = "x",
+        units: str = "",
         **_kwargs,
     ) -> hv.Overlay:
         """Construct the overlay of Area bands + median Curve + scatter points.
@@ -248,7 +257,7 @@ class BandResult(HoloviewResult):
         band_outer = hv.Area(
             (x_coords, p10, p90),
             kdims=[x_dim],
-            vdims=["p10", "p90"],
+            vdims=[f"{var}_p10", f"{var}_p90"],
             label="10th\u201390th pctl",
         ).opts(alpha=0.2, color="steelblue", line_alpha=0)
 
@@ -256,7 +265,7 @@ class BandResult(HoloviewResult):
         band_inner = hv.Area(
             (x_coords, p25, p75),
             kdims=[x_dim],
-            vdims=["p25", "p75"],
+            vdims=[f"{var}_p25", f"{var}_p75"],
             label="25th\u201375th pctl",
         ).opts(alpha=0.4, color="steelblue", line_alpha=0)
 
@@ -281,5 +290,6 @@ class BandResult(HoloviewResult):
             ).opts(color="grey", alpha=0.3, size=3)
             overlay = overlay * scatter
 
-        overlay = overlay.opts(title=title, xrotation=30, ylabel=var, legend_position="right")
+        ylabel = f"{var} [{units}]" if units else var
+        overlay = overlay.opts(title=title, xrotation=30, ylabel=ylabel, legend_position="right")
         return overlay
