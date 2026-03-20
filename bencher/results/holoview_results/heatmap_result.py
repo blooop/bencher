@@ -154,10 +154,10 @@ class HeatmapResult(HoloviewResult):
                 holomap = hv.HoloMap(kdims=self._over_time_kdims())
                 for t in da.coords["over_time"].values:
                     da_t = da.sel(over_time=t)
-                    plot_t = da_t.hvplot.heatmap(
-                        x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
+                    df_t = da_t.to_dataframe().reset_index()
+                    plot_t = hv.HeatMap(df_t, kdims=[x, y], vdims=[C]).opts(
+                        cmap="plasma", title=title, xrotation=30, **kwargs
                     )
-                    plot_t = self._apply_opts(plot_t, xrotation=30)
                     holomap[t] = plot_t
                 return self._holomap_with_slider_bottom(holomap)
 

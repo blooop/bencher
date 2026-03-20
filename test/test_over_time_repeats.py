@@ -182,7 +182,7 @@ class TestDistributionResultOverTime:
 
 
 class TestCurveResultOverTime:
-    """Test CurveResult with over_time slider (already works, verify)."""
+    """Test CurveResult with over_time slider."""
 
     def test_curve_over_time_with_repeats(self):
         """1 float + 1 cat + repeats + over_time -> curve with slider."""
@@ -193,6 +193,46 @@ class TestCurveResultOverTime:
         assert len(plots) > 0
         # Curve with over_time should produce a Column with slider
         assert any(isinstance(p, pn.Column) for p in plots)
+
+    def test_curve_over_time_no_repeats(self):
+        """1 float + 1 cat + over_time without repeats must not crash."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+
+
+class TestHeatmapResultOverTime:
+    """Test HeatmapResult with over_time slider."""
+
+    def test_heatmap_over_time_no_repeats(self):
+        """1 float + 1 cat + over_time -> heatmap with slider, no crash."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+
+    def test_heatmap_over_time_with_repeats(self):
+        """1 float + 1 cat + repeats + over_time -> heatmap with slider."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+        assert any(isinstance(p, pn.Column) for p in plots)
+
+
+class TestOptunaResultOverTime:
+    """Test OptunaResult with over_time (pandas Timestamp handling)."""
+
+    def test_optuna_plots_over_time(self):
+        """to_optuna_plots() must not crash when over_time=True (pandas Timestamps)."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
+        optuna_plots = res.to_optuna_plots()
+        assert optuna_plots is not None
 
 
 class TestOverTimeWidgetIsDiscreteSlider:
