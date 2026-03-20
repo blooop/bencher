@@ -19,9 +19,9 @@ class ServerLatency(bch.ParametrizedSweep):
 def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Track benchmark results over time using the current git commit as the time label.
 
-    ``git_time_event()`` returns a string like ``"2024-06-15 abc1234d"`` combining the commit
-    date and short hash.  Pass it as ``time_src`` to ``plot_sweep`` so the slider shows which
-    commit produced each data point.
+    ``git_time_event()`` returns a string like ``"2024-06-15 14:59 abc1234d"`` combining
+    wall-clock time and short hash.  Pass it as ``time_src`` to ``plot_sweep`` so the slider
+    shows which run and commit produced each data point.
     """
 
     run_cfg = run_cfg or bch.BenchRunCfg()
