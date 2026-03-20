@@ -103,6 +103,7 @@ py313 = ["py313", "test", "rerun"]
 agent-iterate = { depends-on = [
     "generate-docs",
     "ci",
+    "perf-track",
     "git-commit-all",
     "fix-commit-push",
 ] }
@@ -121,6 +122,8 @@ dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = [
 ] }
 prek = "prek run -a"
 prek-update = "prek autoupdate"
+perf = "python bencher/example/example_self_benchmark.py"
+perf-track = "python -c \"from bencher.example.example_self_benchmark import example_self_benchmark_over_time; example_self_benchmark_over_time()\""
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"

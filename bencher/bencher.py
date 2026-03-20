@@ -28,6 +28,7 @@ from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str, resolve_aggregate, _handle_deprecated_agg_over_dims
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
+from bencher.sweep_timings import SweepTimings, phase_timer
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
@@ -520,6 +521,11 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
+        import time as _time
+
+        timings = SweepTimings()
+        sweep_t0 = _time.perf_counter()
+
         if run_cfg.cache_size is not None:
             cache_size_bytes = run_cfg.cache_size * 1_000_000
             self.cache_size = cache_size_bytes
@@ -557,29 +563,33 @@ class Bench(BenchPlotServer):
         # does not include repeats in hash as sample_hash already includes repeat as part of the per sample hash
         bench_cfg_sample_hash = bench_cfg.hash_persistent(False)
 
-        if self.sample_cache is None:
-            self.sample_cache = self.init_sample_cache(run_cfg)
-        if bench_cfg.clear_sample_cache:
-            self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
+        with phase_timer() as elapsed:
+            if self.sample_cache is None:
+                self.sample_cache = self.init_sample_cache(run_cfg)
+            if bench_cfg.clear_sample_cache:
+                self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
+        timings.sample_cache_init_ms = elapsed()
 
         calculate_results = True
-        with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-            if run_cfg.clear_cache:
-                c.delete(bench_cfg_hash)
-                logging.info("cleared cache")
-            elif run_cfg.cache_results:
-                logging.info(
-                    f"checking for previously calculated results with key: {bench_cfg_hash}"
-                )
-                if bench_cfg_hash in c:
-                    logging.info(f"loading cached results from key: {bench_cfg_hash}")
-                    bench_res = c[bench_cfg_hash]
-                    # if not over_time:  # if over time we always want to calculate results
-                    calculate_results = False
-                else:
-                    logging.info("did not detect results in cache")
-                    if run_cfg.only_plot:
-                        raise FileNotFoundError("Was not able to load the results to plot!")
+        with phase_timer() as elapsed:
+            with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
+                if run_cfg.clear_cache:
+                    c.delete(bench_cfg_hash)
+                    logging.info("cleared cache")
+                elif run_cfg.cache_results:
+                    logging.info(
+                        f"checking for previously calculated results with key: {bench_cfg_hash}"
+                    )
+                    if bench_cfg_hash in c:
+                        logging.info(f"loading cached results from key: {bench_cfg_hash}")
+                        bench_res = c[bench_cfg_hash]
+                        # if not over_time:  # if over time we always want to calculate results
+                        calculate_results = False
+                    else:
+                        logging.info("did not detect results in cache")
+                        if run_cfg.only_plot:
+                            raise FileNotFoundError("Was not able to load the results to plot!")
+        timings.cache_check_ms = elapsed()
 
         if run_cfg.time_event is not None:
             time_src = run_cfg.time_event
@@ -588,18 +598,23 @@ class Bench(BenchPlotServer):
 
         if calculate_results:
             bench_res = self.calculate_benchmark_results(
-                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
+                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order, timings
             )
 
             # use the hash of the inputs to look up historical values in the cache
             if run_cfg.over_time:
-                bench_res.ds = self.load_history_cache(
-                    bench_res.ds, bench_cfg_hash, run_cfg.clear_history, run_cfg.max_time_events
-                )
-                # sync the over_time meta variable with the actual accumulated values
-                if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
-                    bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
-                    bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
+                with phase_timer() as elapsed:
+                    bench_res.ds = self.load_history_cache(
+                        bench_res.ds,
+                        bench_cfg_hash,
+                        run_cfg.clear_history,
+                        run_cfg.max_time_events,
+                    )
+                    # sync the over_time meta variable with the actual accumulated values
+                    if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
+                        bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
+                        bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
+                timings.history_merge_ms = elapsed()
 
             # Regression detection runs after load_history_cache (which merges the current
             # run into the dataset) but before cache_results. The dataset already contains
@@ -618,7 +633,12 @@ class Bench(BenchPlotServer):
         logging.info(self.sample_cache.stats())
         self.sample_cache.close()
 
-        bench_res.post_setup()
+        with phase_timer() as elapsed:
+            bench_res.post_setup()
+        timings.post_setup_ms = elapsed()
+
+        timings.total_ms = (_time.perf_counter() - sweep_t0) * 1000.0
+        bench_res.timings = timings
 
         if bench_cfg.auto_plot:
             self.report.append_result(bench_res)
@@ -701,6 +721,7 @@ class Bench(BenchPlotServer):
         bench_cfg_sample_hash: str,
         bench_run_cfg: BenchRunCfg,
         sample_order: SampleOrder = SampleOrder.INORDER,
+        timings: SweepTimings | None = None,
     ) -> BenchResult:
         """Execute the benchmark runs and collect results into an n-dimensional array.
 
@@ -713,75 +734,90 @@ class Bench(BenchPlotServer):
             time_src (datetime | str): Timestamp or event name for the benchmark run
             bench_cfg_sample_hash (str): Hash of the benchmark configuration without repeats
             bench_run_cfg (BenchRunCfg): Configuration for how the benchmark should be executed
+            timings (SweepTimings, optional): Timing collector to populate. Defaults to None.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
         """
-        bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
-        # Adjust only the sampling traversal; leave dims/plotting unchanged
-        if sample_order == SampleOrder.REVERSED:
-            total_dims = len(dims_name)
-            num_input_dims = len(bench_res.bench_cfg.input_vars)
+        if timings is None:
+            timings = SweepTimings()
 
-            # Extract coordinate values from the dataset to rebuild the Cartesian product
-            dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
-            dim_indices = [list(range(len(v))) for v in dim_values]
+        with phase_timer() as elapsed:
+            bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
+            # Adjust only the sampling traversal; leave dims/plotting unchanged
+            if sample_order == SampleOrder.REVERSED:
+                total_dims = len(dims_name)
+                num_input_dims = len(bench_res.bench_cfg.input_vars)
 
-            # Build iteration order: reverse the input portion only
-            iter_order = list(range(num_input_dims))[::-1] + list(range(num_input_dims, total_dims))
+                # Extract coordinate values from the dataset to rebuild the Cartesian product
+                dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
+                dim_indices = [list(range(len(v))) for v in dim_values]
 
-            # Generate product in iter_order and map back to original order
-            ordered = []
-            for idx_ord, val_ord in zip(
-                product(*[dim_indices[i] for i in iter_order]),
-                product(*[dim_values[i] for i in iter_order]),
-            ):
-                idx_orig = [None] * total_dims
-                val_orig = [None] * total_dims
-                for j, pos in enumerate(iter_order):
-                    idx_orig[pos] = idx_ord[j]
-                    val_orig[pos] = val_ord[j]
-                ordered.append((tuple(idx_orig), tuple(val_orig)))
+                # Build iteration order: reverse the input portion only
+                iter_order = list(range(num_input_dims))[::-1] + list(
+                    range(num_input_dims, total_dims)
+                )
 
-            func_inputs = ordered
-        bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
-        constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
+                # Generate product in iter_order and map back to original order
+                ordered = []
+                for idx_ord, val_ord in zip(
+                    product(*[dim_indices[i] for i in iter_order]),
+                    product(*[dim_values[i] for i in iter_order]),
+                ):
+                    idx_orig = [None] * total_dims
+                    val_orig = [None] * total_dims
+                    for j, pos in enumerate(iter_order):
+                        idx_orig[pos] = idx_ord[j]
+                        val_orig[pos] = val_ord[j]
+                    ordered.append((tuple(idx_orig), tuple(val_orig)))
+
+                func_inputs = ordered
+            bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
+            constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
+        timings.dataset_setup_ms = elapsed()
+
         callcount = 1
-
         results_list = []
         jobs = []
 
-        for idx_tuple, function_input_vars in func_inputs:
-            job = WorkerJob(
-                function_input_vars,
-                idx_tuple,
-                dims_name,
-                constant_inputs,
-                bench_cfg_sample_hash,
-                bench_res.bench_cfg.tag,
-            )
-            job.setup_hashes()
-            jobs.append(job)
+        with phase_timer() as elapsed:
+            for idx_tuple, function_input_vars in func_inputs:
+                job = WorkerJob(
+                    function_input_vars,
+                    idx_tuple,
+                    dims_name,
+                    constant_inputs,
+                    bench_cfg_sample_hash,
+                    bench_res.bench_cfg.tag,
+                )
+                job.setup_hashes()
+                jobs.append(job)
 
-            jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
-            worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
-            cache_job = Job(
-                job_id=jid,
-                function=worker,
-                job_args=job.function_input,
-                job_key=job.function_input_signature_pure,
-                tag=job.tag,
-            )
-            result = self.sample_cache.submit(cache_job)
-            results_list.append(result)
-            callcount += 1
+                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
+                worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
+                cache_job = Job(
+                    job_id=jid,
+                    function=worker,
+                    job_args=job.function_input,
+                    job_key=job.function_input_signature_pure,
+                    tag=job.tag,
+                )
+                result = self.sample_cache.submit(cache_job)
+                results_list.append(result)
+                callcount += 1
 
-            if bench_run_cfg.executor == Executors.SERIAL:
-                self.store_results(result, bench_res, job, bench_run_cfg)
+                # For serial execution, store results immediately so that
+                # completed results are cached to disk before later jobs
+                # may crash.
+                if bench_run_cfg.executor == Executors.SERIAL:
+                    self.store_results(result, bench_res, job, bench_run_cfg)
+        timings.job_submission_ms = elapsed()
 
-        if bench_run_cfg.executor != Executors.SERIAL:
-            for job, res in zip(jobs, results_list):
-                self.store_results(res, bench_res, job, bench_run_cfg)
+        with phase_timer() as elapsed:
+            if bench_run_cfg.executor != Executors.SERIAL:
+                for job, res in zip(jobs, results_list):
+                    self.store_results(res, bench_res, job, bench_run_cfg)
+        timings.job_execution_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:
             self.add_metadata_to_dataset(bench_res, inp)
