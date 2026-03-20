@@ -30,15 +30,9 @@ class DummyPlannerSweep(bch.ParametrizedSweep):
     )
 
     # Constants (not swept)
-    planning_attempts = bch.IntSweep(
-        default=1, bounds=[1, 10], doc="Number of planning attempts."
-    )
-    goal_bias = bch.FloatSweep(
-        default=0.05, bounds=[0.0, 1.0], doc="OMPL goal bias."
-    )
-    ompl_range = bch.FloatSweep(
-        default=0.0, bounds=[0.0, 1.0], doc="OMPL sampling step size."
-    )
+    planning_attempts = bch.IntSweep(default=1, bounds=[1, 10], doc="Number of planning attempts.")
+    goal_bias = bch.FloatSweep(default=0.05, bounds=[0.0, 1.0], doc="OMPL goal bias.")
+    ompl_range = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="OMPL sampling step size.")
 
     # Result variables
     planning_success = bch.ResultVar(units="ratio", doc="Whether planning succeeded (1/0).")
