@@ -9,12 +9,10 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: "performance-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   benchmark:
@@ -30,8 +28,7 @@ jobs:
           frozen: true
 
       - name: Run performance benchmarks
-        run: |
-          pixi run python bencher/example/example_performance.py
+        run: pixi run perf
 
       - name: Upload benchmark report
         uses: actions/upload-artifact@v4

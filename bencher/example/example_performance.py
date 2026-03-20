@@ -7,8 +7,8 @@ performance regressions over time. Run locally or via CI to publish to GitHub Pa
 """
 
 import math
-import time
 import tempfile
+import time
 from copy import deepcopy
 
 import bencher as bch
@@ -31,6 +31,17 @@ def _fresh_cfg():
     cfg = bch.BenchRunCfg()
     cfg.auto_plot = False
     return cfg
+
+
+def _perf_run_cfg(run_cfg):
+    """Create a run_cfg suitable for performance benchmarks (no caching of outer results)."""
+    if run_cfg is not None:
+        run_cfg = deepcopy(run_cfg)
+    else:
+        run_cfg = bch.BenchRunCfg()
+    run_cfg.cache_samples = False
+    run_cfg.only_hash_tag = False
+    return run_cfg
 
 
 # ── Benchmark: sweep execution time ────────────────────────────────────────
@@ -134,35 +145,21 @@ class ResultGenerationPerformance(bch.ParametrizedSweep):
 # ── Example entry points ───────────────────────────────────────────────────
 def example_sweep_performance(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark parameter sweep execution time."""
-    if run_cfg is not None:
-        run_cfg = deepcopy(run_cfg)
-        run_cfg.cache_samples = False
-        run_cfg.only_hash_tag = False
-    bench = SweepPerformance().to_bench(run_cfg)
-    bench.plot_sweep(
-        result_vars=["sweep_1d_time_ms", "sweep_2d_time_ms"],
-    )
+    bench = SweepPerformance().to_bench(_perf_run_cfg(run_cfg))
+    bench.plot_sweep(result_vars=["sweep_1d_time_ms", "sweep_2d_time_ms"])
     return bench
 
 
 def example_cache_performance(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark cache hit vs miss performance."""
-    if run_cfg is not None:
-        run_cfg = deepcopy(run_cfg)
-        run_cfg.cache_samples = False
-        run_cfg.only_hash_tag = False
-    bench = CachePerformance().to_bench(run_cfg)
+    bench = CachePerformance().to_bench(_perf_run_cfg(run_cfg))
     bench.plot_sweep(result_vars=["cold_time_ms", "warm_time_ms", "speedup"])
     return bench
 
 
 def example_result_generation_performance(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """Benchmark result visualization and save performance."""
-    if run_cfg is not None:
-        run_cfg = deepcopy(run_cfg)
-        run_cfg.cache_samples = False
-        run_cfg.only_hash_tag = False
-    bench = ResultGenerationPerformance().to_bench(run_cfg)
+    bench = ResultGenerationPerformance().to_bench(_perf_run_cfg(run_cfg))
     bench.plot_sweep(result_vars=["plot_time_ms", "save_time_ms"])
     return bench
 
@@ -176,4 +173,11 @@ def example_performance(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_performance, level=2, show=False, save=True)
+    run_cfg = bch.BenchRunCfg()
+    run_cfg.cache_samples = False
+    run_cfg.only_hash_tag = False
+    bench_runner = bch.BenchRunner("performance_benchmarks", run_cfg=run_cfg)
+    bench_runner.add(example_sweep_performance)
+    bench_runner.add(example_cache_performance)
+    bench_runner.add(example_result_generation_performance)
+    bench_runner.run(level=2, show=False, save=True, grouped=True)
