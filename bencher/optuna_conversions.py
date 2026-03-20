@@ -156,15 +156,48 @@ def cfg_from_optuna_trial(
 def summarise_optuna_study(study: optuna.study.Study) -> pn.pane.panel:
     """Summarise an optuna study in a panel format"""
     row = pn.Column(name="Optimisation Results")
-    row.append(plot_optimization_history(study))
-    row.append(plot_param_importances(study))
-    try:
-        row.append(plot_pareto_front(study))
-    except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
+    n_objectives = len(study.directions)
+    is_multi = n_objectives >= 2
 
-    row.append(
-        pn.pane.Markdown(f"```\nBest value: {study.best_value}\nParams: {study.best_params}```")
-    )
+    if is_multi:
+        # Multi-objective: plot_optimization_history and plot_param_importances
+        # require an explicit target callback.
+        for idx in range(n_objectives):
+            target_name = f"Objective {idx}"
+            try:
+                row.append(
+                    plot_optimization_history(
+                        study,
+                        target=lambda t, i=idx: t.values[i],
+                        target_name=target_name,
+                    )
+                )
+            except Exception as e:  # pylint: disable=broad-except
+                logging.exception(e)
+            try:
+                row.append(
+                    plot_param_importances(
+                        study,
+                        target=lambda t, i=idx: t.values[i],
+                        target_name=target_name,
+                    )
+                )
+            except Exception as e:  # pylint: disable=broad-except
+                logging.exception(e)
+        try:
+            row.append(plot_pareto_front(study))
+        except Exception as e:  # pylint: disable=broad-except
+            logging.exception(e)
+        row.append(
+            pn.pane.Markdown(f"```\nPareto-front size: {len(study.best_trials)}```")
+        )
+    else:
+        row.append(plot_optimization_history(study))
+        row.append(plot_param_importances(study))
+        row.append(
+            pn.pane.Markdown(
+                f"```\nBest value: {study.best_value}\nParams: {study.best_params}```"
+            )
+        )
 
     return row
