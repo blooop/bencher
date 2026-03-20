@@ -123,8 +123,11 @@ class OptunaResult(BenchResultBase):
             values = []
             for i in all_vars:
                 if type(i) is TimeSnapshot:
-                    if type(row[1][i.name]) is np.datetime64:
-                        params[i.name] = row[1][i.name].timestamp()
+                    val = row[1][i.name]
+                    if hasattr(val, "timestamp"):
+                        params[i.name] = val.timestamp()
+                    elif isinstance(val, np.datetime64):
+                        params[i.name] = val.astype("datetime64[s]").astype(float)
                 elif type(i) is BoolSweep:
                     # Handle boolean values that may have been converted to strings
                     val = row[1][i.name]
