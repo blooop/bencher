@@ -11,7 +11,7 @@ from bencher.variables.inputs import (
     StringSweep,
     YamlSweep,
 )
-from bencher.variables.time import TimeSnapshot
+from bencher.variables.time import TimeSnapshot, TimeEvent
 
 
 class PltCntCfg(param.Parameterized):
@@ -56,7 +56,7 @@ class PltCntCfg(param.Parameterized):
 
         for iv in bench_cfg.input_vars:
             type_allocated = False
-            if isinstance(iv, (IntSweep, FloatSweep, TimeSnapshot)):
+            if isinstance(iv, (IntSweep, FloatSweep, TimeSnapshot, TimeEvent)):
                 # if "IntSweep" in typestr or "FloatSweep" in typestr:
                 plt_cnt_cfg.float_vars.append(iv)
                 type_allocated = True
