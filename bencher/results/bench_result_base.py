@@ -135,7 +135,7 @@ class BenchResultBase:
         if bench_cfg.over_time and "over_time" in self.ds.coords:
             if bench_cfg.time_event is not None:
                 self.ds.coords["over_time"] = [
-                    "\n".join(wrap(str(t), 20)) for t in self.ds.coords["over_time"].values
+                    "\n".join(wrap(str(t), 30)) for t in self.ds.coords["over_time"].values
                 ]
             else:
                 time_values = self.ds.coords["over_time"].values
