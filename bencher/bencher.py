@@ -28,6 +28,7 @@ from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str, resolve_aggregate, _handle_deprecated_agg_over_dims
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
+from bencher.perf_tracker import PerfTracker
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
@@ -520,108 +521,135 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
-        if run_cfg.cache_size is not None:
-            cache_size_bytes = run_cfg.cache_size * 1_000_000
-            self.cache_size = cache_size_bytes
-            self._executor.cache_size = cache_size_bytes
-            self._collector.cache_size = cache_size_bytes
-            # Invalidate existing sample cache so it gets recreated with the new size
-            if self.sample_cache is not None:
-                self.sample_cache.close()
-                self._executor.sample_cache = None
+        tracker = PerfTracker()
 
-        # Filter run_cfg parameters to only those that can override bench_cfg
-        # (param 2.3 enforces constant parameters that cannot be overridden)
-        run_cfg_values, missing_keys, constant_keys = self.filter_overridable_params(
-            bench_cfg, run_cfg
-        )
+        with tracker.phase("cache_setup"):
+            if run_cfg.cache_size is not None:
+                cache_size_bytes = run_cfg.cache_size * 1_000_000
+                self.cache_size = cache_size_bytes
+                self._executor.cache_size = cache_size_bytes
+                self._collector.cache_size = cache_size_bytes
+                # Invalidate existing sample cache so it gets recreated with the new size
+                if self.sample_cache is not None:
+                    self.sample_cache.close()
+                    self._executor.sample_cache = None
 
-        if missing_keys:
-            logging.warning(
-                "Run configuration contains parameters that do not exist on "
-                "the bench configuration and were ignored: %s",
-                sorted(missing_keys),
+        with tracker.phase("config"):
+            # Filter run_cfg parameters to only those that can override bench_cfg
+            # (param 2.3 enforces constant parameters that cannot be overridden)
+            run_cfg_values, missing_keys, constant_keys = self.filter_overridable_params(
+                bench_cfg, run_cfg
             )
 
-        if constant_keys:
-            logging.warning(
-                "Attempted to override constant bench parameters from run "
-                "configuration; these were ignored: %s",
-                sorted(constant_keys),
-            )
-
-        bench_cfg.param.update(run_cfg_values)
-        bench_cfg_hash = bench_cfg.hash_persistent(True)
-        bench_cfg.hash_value = bench_cfg_hash
-
-        # does not include repeats in hash as sample_hash already includes repeat as part of the per sample hash
-        bench_cfg_sample_hash = bench_cfg.hash_persistent(False)
-
-        if self.sample_cache is None:
-            self.sample_cache = self.init_sample_cache(run_cfg)
-        if bench_cfg.clear_sample_cache:
-            self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
-
-        calculate_results = True
-        with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-            if run_cfg.clear_cache:
-                c.delete(bench_cfg_hash)
-                logging.info("cleared cache")
-            elif run_cfg.cache_results:
-                logging.info(
-                    f"checking for previously calculated results with key: {bench_cfg_hash}"
+            if missing_keys:
+                logging.warning(
+                    "Run configuration contains parameters that do not exist on "
+                    "the bench configuration and were ignored: %s",
+                    sorted(missing_keys),
                 )
-                if bench_cfg_hash in c:
-                    logging.info(f"loading cached results from key: {bench_cfg_hash}")
-                    bench_res = c[bench_cfg_hash]
-                    # if not over_time:  # if over time we always want to calculate results
-                    calculate_results = False
-                else:
-                    logging.info("did not detect results in cache")
-                    if run_cfg.only_plot:
-                        raise FileNotFoundError("Was not able to load the results to plot!")
+
+            if constant_keys:
+                logging.warning(
+                    "Attempted to override constant bench parameters from run "
+                    "configuration; these were ignored: %s",
+                    sorted(constant_keys),
+                )
+
+            bench_cfg.param.update(run_cfg_values)
+            bench_cfg_hash = bench_cfg.hash_persistent(True)
+            bench_cfg.hash_value = bench_cfg_hash
+
+            # does not include repeats in hash as sample_hash already includes repeat as part of the per sample hash
+            bench_cfg_sample_hash = bench_cfg.hash_persistent(False)
+
+        with tracker.phase("sample_cache_init"):
+            if self.sample_cache is None:
+                self.sample_cache = self.init_sample_cache(run_cfg)
+            if bench_cfg.clear_sample_cache:
+                self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
+
+        with tracker.phase("cache_lookup"):
+            calculate_results = True
+            with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
+                if run_cfg.clear_cache:
+                    c.delete(bench_cfg_hash)
+                    logging.info("cleared cache")
+                elif run_cfg.cache_results:
+                    logging.info(
+                        f"checking for previously calculated results with key: {bench_cfg_hash}"
+                    )
+                    if bench_cfg_hash in c:
+                        logging.info(f"loading cached results from key: {bench_cfg_hash}")
+                        bench_res = c[bench_cfg_hash]
+                        # if not over_time:  # if over time we always want to calculate results
+                        calculate_results = False
+                    else:
+                        logging.info("did not detect results in cache")
+                        if run_cfg.only_plot:
+                            raise FileNotFoundError("Was not able to load the results to plot!")
 
         if run_cfg.time_event is not None:
             time_src = run_cfg.time_event
         elif isinstance(time_src, str):
             bench_cfg.time_event = time_src
 
-        if calculate_results:
-            bench_res = self.calculate_benchmark_results(
-                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
-            )
-
-            # use the hash of the inputs to look up historical values in the cache
-            if run_cfg.over_time:
-                bench_res.ds = self.load_history_cache(
-                    bench_res.ds, bench_cfg_hash, run_cfg.clear_history, run_cfg.max_time_events
+        with tracker.phase("calculate"):
+            if calculate_results:
+                bench_res = self.calculate_benchmark_results(
+                    bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
                 )
-                # sync the over_time meta variable with the actual accumulated values
-                if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
-                    bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
-                    bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
 
-            # Regression detection runs after load_history_cache (which merges the current
-            # run into the dataset) but before cache_results. The dataset already contains
-            # the current run as the last over_time entry, so detect_regressions splits at
-            # isel(over_time=-1) for current vs all prior entries for historical.
-            if run_cfg.over_time and run_cfg.regression_detection:
-                bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
-                if bench_res.regression_report.has_regressions:
-                    logging.warning(bench_res.regression_report.summary())
-                    if run_cfg.regression_fail:
-                        raise RegressionError(bench_res.regression_report.summary())
+                # use the hash of the inputs to look up historical values in the cache
+                if run_cfg.over_time:
+                    bench_res.ds = self.load_history_cache(
+                        bench_res.ds,
+                        bench_cfg_hash,
+                        run_cfg.clear_history,
+                        run_cfg.max_time_events,
+                    )
+                    # sync the over_time meta variable with the actual accumulated values
+                    if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
+                        bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
+                        bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
 
-            self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
-            self.cache_results(bench_res, bench_cfg_hash)
+                # Regression detection runs after load_history_cache (which merges the current
+                # run into the dataset) but before cache_results. The dataset already contains
+                # the current run as the last over_time entry, so detect_regressions splits at
+                # isel(over_time=-1) for current vs all prior entries for historical.
+                if run_cfg.over_time and run_cfg.regression_detection:
+                    bench_res.regression_report = detect_regressions(
+                        bench_res.ds, bench_cfg, run_cfg
+                    )
+                    if bench_res.regression_report.has_regressions:
+                        logging.warning(bench_res.regression_report.summary())
+                        if run_cfg.regression_fail:
+                            raise RegressionError(bench_res.regression_report.summary())
+
+                self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
+                self.cache_results(bench_res, bench_cfg_hash)
 
         logging.info(self.sample_cache.stats())
         self.sample_cache.close()
 
-        bench_res.post_setup()
+        with tracker.phase("post_setup"):
+            bench_res.post_setup()
 
-        if bench_cfg.auto_plot:
-            self.report.append_result(bench_res)
+        with tracker.phase("plot_append"):
+            if bench_cfg.auto_plot:
+                self.report.append_result(bench_res)
+
+        perf_report = tracker.report()
+        # Merge sub-phases from calculate_benchmark_results into the top-level report
+        if hasattr(bench_res, "perf_report") and bench_res.perf_report is not None:
+            calc_idx = next(
+                (i for i, p in enumerate(perf_report.phases) if p.name == "calculate"), None
+            )
+            insert_pos = (calc_idx + 1) if calc_idx is not None else len(perf_report.phases)
+            for sub_phase in bench_res.perf_report.phases:
+                perf_report.phases.insert(insert_pos, sub_phase)
+                insert_pos += 1
+        bench_res.perf_report = perf_report
+        logging.info(bench_res.perf_report.summary())
 
         self.results.append(bench_res)
         return bench_res
@@ -717,75 +745,84 @@ class Bench(BenchPlotServer):
         Returns:
             BenchResult: An object containing all the benchmark data and results
         """
-        bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
-        # Adjust only the sampling traversal; leave dims/plotting unchanged
-        if sample_order == SampleOrder.REVERSED:
-            total_dims = len(dims_name)
-            num_input_dims = len(bench_res.bench_cfg.input_vars)
+        calc_tracker = PerfTracker()
 
-            # Extract coordinate values from the dataset to rebuild the Cartesian product
-            dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
-            dim_indices = [list(range(len(v))) for v in dim_values]
+        with calc_tracker.phase("calculate.dataset_setup"):
+            bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
+            # Adjust only the sampling traversal; leave dims/plotting unchanged
+            if sample_order == SampleOrder.REVERSED:
+                total_dims = len(dims_name)
+                num_input_dims = len(bench_res.bench_cfg.input_vars)
 
-            # Build iteration order: reverse the input portion only
-            iter_order = list(range(num_input_dims))[::-1] + list(range(num_input_dims, total_dims))
+                # Extract coordinate values from the dataset to rebuild the Cartesian product
+                dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
+                dim_indices = [list(range(len(v))) for v in dim_values]
 
-            # Generate product in iter_order and map back to original order
-            ordered = []
-            for idx_ord, val_ord in zip(
-                product(*[dim_indices[i] for i in iter_order]),
-                product(*[dim_values[i] for i in iter_order]),
-            ):
-                idx_orig = [None] * total_dims
-                val_orig = [None] * total_dims
-                for j, pos in enumerate(iter_order):
-                    idx_orig[pos] = idx_ord[j]
-                    val_orig[pos] = val_ord[j]
-                ordered.append((tuple(idx_orig), tuple(val_orig)))
+                # Build iteration order: reverse the input portion only
+                iter_order = list(range(num_input_dims))[::-1] + list(
+                    range(num_input_dims, total_dims)
+                )
 
-            func_inputs = ordered
-        bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
-        constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
-        callcount = 1
+                # Generate product in iter_order and map back to original order
+                ordered = []
+                for idx_ord, val_ord in zip(
+                    product(*[dim_indices[i] for i in iter_order]),
+                    product(*[dim_values[i] for i in iter_order]),
+                ):
+                    idx_orig = [None] * total_dims
+                    val_orig = [None] * total_dims
+                    for j, pos in enumerate(iter_order):
+                        idx_orig[pos] = idx_ord[j]
+                        val_orig[pos] = val_ord[j]
+                    ordered.append((tuple(idx_orig), tuple(val_orig)))
 
-        results_list = []
-        jobs = []
+                func_inputs = ordered
 
-        for idx_tuple, function_input_vars in func_inputs:
-            job = WorkerJob(
-                function_input_vars,
-                idx_tuple,
-                dims_name,
-                constant_inputs,
-                bench_cfg_sample_hash,
-                bench_res.bench_cfg.tag,
-            )
-            job.setup_hashes()
-            jobs.append(job)
+        with calc_tracker.phase("calculate.job_submission"):
+            bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
+            constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
+            callcount = 1
 
-            jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
-            worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
-            cache_job = Job(
-                job_id=jid,
-                function=worker,
-                job_args=job.function_input,
-                job_key=job.function_input_signature_pure,
-                tag=job.tag,
-            )
-            result = self.sample_cache.submit(cache_job)
-            results_list.append(result)
-            callcount += 1
+            results_list = []
+            jobs = []
 
-            if bench_run_cfg.executor == Executors.SERIAL:
-                self.store_results(result, bench_res, job, bench_run_cfg)
+            for idx_tuple, function_input_vars in func_inputs:
+                job = WorkerJob(
+                    function_input_vars,
+                    idx_tuple,
+                    dims_name,
+                    constant_inputs,
+                    bench_cfg_sample_hash,
+                    bench_res.bench_cfg.tag,
+                )
+                job.setup_hashes()
+                jobs.append(job)
 
-        if bench_run_cfg.executor != Executors.SERIAL:
-            for job, res in zip(jobs, results_list):
-                self.store_results(res, bench_res, job, bench_run_cfg)
+                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
+                worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
+                cache_job = Job(
+                    job_id=jid,
+                    function=worker,
+                    job_args=job.function_input,
+                    job_key=job.function_input_signature_pure,
+                    tag=job.tag,
+                )
+                result = self.sample_cache.submit(cache_job)
+                results_list.append(result)
+                callcount += 1
 
-        for inp in bench_res.bench_cfg.all_vars:
-            self.add_metadata_to_dataset(bench_res, inp)
+                if bench_run_cfg.executor == Executors.SERIAL:
+                    self.store_results(result, bench_res, job, bench_run_cfg)
 
+        with calc_tracker.phase("calculate.result_collection"):
+            if bench_run_cfg.executor != Executors.SERIAL:
+                for job, res in zip(jobs, results_list):
+                    self.store_results(res, bench_res, job, bench_run_cfg)
+
+            for inp in bench_res.bench_cfg.all_vars:
+                self.add_metadata_to_dataset(bench_res, inp)
+
+        bench_res.perf_report = calc_tracker.report()
         return bench_res
 
     def store_results(

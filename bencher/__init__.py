@@ -89,6 +89,7 @@ except ModuleNotFoundError as e:
 
 
 from .regression import RegressionResult, RegressionReport, RegressionError
+from .perf_tracker import PerfTracker, PerfReport
 from .git_info import git_time_event
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep

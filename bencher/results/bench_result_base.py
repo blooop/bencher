@@ -95,6 +95,7 @@ class BenchResultBase:
         self.plot_inputs = []
         self.dataset_list = []
         self.regression_report = None
+        self.perf_report = None
 
         # self.width=600/
         # self.height=600
