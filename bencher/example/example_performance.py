@@ -169,10 +169,10 @@ def example_performance(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    run_cfg = bch.BenchRunCfg()
-    run_cfg.cache_samples = False
-    run_cfg.only_hash_tag = False
-    bench_runner = bch.BenchRunner("performance_benchmarks", run_cfg=run_cfg)
+    main_cfg = bch.BenchRunCfg()
+    main_cfg.cache_samples = False
+    main_cfg.only_hash_tag = False
+    bench_runner = bch.BenchRunner("performance_benchmarks", run_cfg=main_cfg)
     bench_runner.add(example_sweep_performance)
     bench_runner.add(example_cache_performance)
     bench_runner.add(example_result_generation_performance)
