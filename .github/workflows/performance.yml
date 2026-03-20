@@ -37,6 +37,13 @@ jobs:
           name: benchmark-report
           path: reports/
 
+      # The gh-pages branch has a .gitignore (copied from main) that ignores
+      # index.html. peaceiris/actions-gh-pages uses "git add --all" which
+      # respects .gitignore, silently skipping index.html. Adding a negating
+      # .gitignore inside reports/ overrides the root rule in the destination.
+      - name: Ensure reports not blocked by gitignore
+        run: printf '!index.html\n' > reports/.gitignore
+
       # Deploy main branch reports to latest/
       - name: Deploy to GitHub Pages (main)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

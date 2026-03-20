@@ -3,8 +3,8 @@ cachedir/
 unique_names/
 
 # Generated HTML output files
-index.html
-reports/
+/index.html
+/reports/
 
 
 # Byte-compiled / optimized / DLL files
