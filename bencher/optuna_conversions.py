@@ -104,12 +104,9 @@ def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseD
     if iv_type == BoolSweep:
         return optuna.distributions.CategoricalDistribution([False, True])
     if iv_type == TimeSnapshot:
-        # return optuna.distributions.IntDistribution(0, sys.maxsize)
         return optuna.distributions.FloatDistribution(0, 1e20)
-        # return optuna.distributions.CategoricalDistribution([])
-    # elif iv_type == TimeEvent:
-    #     pass
-    # return optuna.distributions.CategoricalDistribution(["now"])
+    if iv_type == TimeEvent:
+        return optuna.distributions.CategoricalDistribution(var.values())
 
     raise ValueError(f"This input type {iv_type} is not supported")
 

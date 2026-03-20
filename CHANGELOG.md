@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.70.4] - 2026-03-20
+
+### Fixed
+- Fix curve plots using string-typed over_time (TimeEvent) as x-axis instead of the float input variable — explicitly set kdims in `to_curve_ds` to match `to_line_ds` behavior
+- Classify TimeEvent as continuous in plot config so it is treated like TimeSnapshot for plotting
+- Add TimeEvent support in optuna conversions and trial building
+
+### Removed
+- Remove vestigial `iv_time_event` field from BenchCfg (was never populated)
+
 ## [1.70.2] - 2026-03-20
 
 ### Fixed
