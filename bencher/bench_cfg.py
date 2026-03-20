@@ -232,6 +232,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
         doc="Maximum number of over_time events to retain. Oldest events are trimmed. None means unlimited.",
     )
 
+    max_time_window: int = param.Integer(
+        15,
+        bounds=[1, 50],
+        doc="Maximum window size for time aggregation slider. Controls how many "
+        "previous time events can be pooled in per-time-point plots.",
+    )
+
     time_event: str | None = param.String(
         None,
         doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",

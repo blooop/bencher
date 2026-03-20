@@ -109,13 +109,14 @@ class DistributionResult(HoloviewResult):
 
         if use_holomap:
             da = dataset[var_name]
-            holomap = hv.HoloMap(kdims=self._over_time_kdims())
-            for t in da.coords["over_time"].values:
-                df_t = da.sel(over_time=t).to_dataframe().reset_index()
-                holomap[t] = self._build_distribution_overlay(
-                    df_t, plot_class, kdims, var_name, result_var, title, **kwargs
+
+            def make_dist(da_window):
+                df = da_window.to_dataframe().reset_index()
+                return self._build_distribution_overlay(
+                    df, plot_class, kdims, var_name, result_var, title, **kwargs
                 )
-            return self._holomap_with_slider_bottom(holomap)
+
+            return self._build_time_holomap_raw(da, make_dist)
 
         df = dataset[var_name].to_dataframe().reset_index()
         return self._build_distribution_overlay(

@@ -142,13 +142,13 @@ class LineResult(HoloviewResult):
         title = self.title_from_ds(da_plot, result_var, **kwargs)
 
         if self._use_holomap_for_time(dataset):
-            holomap = hv.HoloMap(kdims=self._over_time_kdims())
-            for t in da_plot.coords["over_time"].values:
-                da_t = da_plot.sel(over_time=t)
+
+            def make_line(ds_t):
+                da_t = ds_t[result_var.name]
                 plot_t = da_t.hvplot.line(x=x, by=by, title=title, **kwargs)
-                plot_t = self._apply_opts(plot_t, xrotation=30)
-                holomap[t] = plot_t
-            return self._holomap_with_slider_bottom(holomap)
+                return self._apply_opts(plot_t, xrotation=30)
+
+            return self._build_time_holomap(dataset, result_var.name, make_line)
 
         time_widget_args = self.time_widget(title)
         plot = da_plot.hvplot.line(

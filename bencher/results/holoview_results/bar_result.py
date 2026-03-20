@@ -1,6 +1,5 @@
 from __future__ import annotations
 import panel as pn
-import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -132,14 +131,13 @@ class BarResult(HoloviewResult):
             return None
 
         if use_holomap:
-            # Build per-time-point bar charts with an over_time slider
-            holomap = hv.HoloMap(kdims=self._over_time_kdims())
-            for t in da.coords["over_time"].values:
-                da_t = da.sel(over_time=t)
+
+            def make_bar(ds_t):
+                da_t = ds_t[da.name]
                 plot_t = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
-                plot_t = self._apply_opts(plot_t, **opts_kwargs)
-                holomap[t] = plot_t
-            return self._holomap_with_slider_bottom(holomap)
+                return self._apply_opts(plot_t, **opts_kwargs)
+
+            return self._build_time_holomap(dataset, da.name, make_bar)
 
         plot = da.hvplot.bar(
             x=x_dim, y=da.name, by=by, title=title, widget_location="bottom", **kwargs

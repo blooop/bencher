@@ -150,7 +150,7 @@ class HoloviewResult(VideoResult):
         return ["over_time"]
 
     @staticmethod
-    def _holomap_with_slider_bottom(hvobj):
+    def _holomap_with_slider_bottom(hvobj, widgets=None):
         """Wrap a HoloViews object so any scrubber/slider appears below the plot.
 
         ``pn.pane.HoloViews(holomap, widget_location="bottom")`` does not
@@ -172,8 +172,9 @@ class HoloviewResult(VideoResult):
         small JS snippet then moves the slider to the last position once
         the page has rendered, which triggers the embedded patch callback.
         """
-        # Force a slider (not a dropdown) for the over_time dimension
-        row = pn.panel(hvobj, widgets={"over_time": pn.widgets.DiscreteSlider})
+        if widgets is None:
+            widgets = {"over_time": pn.widgets.DiscreteSlider}
+        row = pn.panel(hvobj, widgets=widgets)
         if not isinstance(row, pn.Row) or len(row) < 2:
             return hvobj
         widget_box = row[1]
@@ -259,6 +260,112 @@ class HoloviewResult(VideoResult):
             return pn.Column(row[0], widget_box, init_js)
 
         return pn.Column(row[0], widget_box)
+
+    @staticmethod
+    def _apply_rolling_window(dataset, k, result_var_name):
+        """Apply a rolling mean of window size *k* over the ``over_time`` dimension.
+
+        For the mean variable, computes a simple rolling average.  For the
+        corresponding ``_std`` variable (if present), uses the law of total
+        variance: ``pooled_std = sqrt(mean(var_i) + var(mean_i))``.
+
+        Returns a new :class:`xr.Dataset` with the windowed variables; other
+        data variables are copied unchanged.
+        """
+        if k <= 1:
+            return dataset
+
+        times = dataset.coords["over_time"].values
+        n_time = len(times)
+        mean_var = result_var_name
+        std_var = f"{result_var_name}_std"
+        has_std = std_var in dataset.data_vars
+
+        mean_da = dataset[mean_var]
+        new_ds = dataset.copy()
+
+        rolled_means = []
+        for i in range(n_time):
+            start = max(0, i - k + 1)
+            window = mean_da.isel(over_time=slice(start, i + 1))
+            rolled_means.append(window.mean(dim="over_time"))
+        new_ds[mean_var] = xr.concat(rolled_means, dim="over_time").assign_coords(over_time=times)
+
+        if has_std:
+            std_da = dataset[std_var]
+            rolled_stds = []
+            for i in range(n_time):
+                start = max(0, i - k + 1)
+                mean_window = mean_da.isel(over_time=slice(start, i + 1))
+                std_window = std_da.isel(over_time=slice(start, i + 1))
+                mean_of_vars = (std_window**2).mean(dim="over_time")
+                var_of_means = mean_window.var(dim="over_time")
+                rolled_stds.append((mean_of_vars + var_of_means) ** 0.5)
+            new_ds[std_var] = xr.concat(rolled_stds, dim="over_time").assign_coords(over_time=times)
+
+        return new_ds
+
+    def _build_time_holomap(self, dataset, result_var_name, make_plot_fn, max_window=None):
+        """Build a 2-D ``HoloMap`` keyed by ``(over_time, window_size)``.
+
+        For each window size *K* (1 … *max_k*), applies a rolling mean over
+        the last *K* time points and lets *make_plot_fn(ds_t)* produce the
+        plot for a single-time-point dataset slice.
+        """
+        if max_window is None:
+            max_window = getattr(self.bench_cfg, "max_time_window", 15)
+
+        times = dataset.coords["over_time"].values
+        n_time = len(times)
+        max_k = min(n_time, max_window)
+
+        kdims = self._over_time_kdims() + [hv.Dimension("window_size", label="Window Size")]
+        holomap = hv.HoloMap(kdims=kdims)
+
+        for k in range(1, max_k + 1):
+            ds_k = self._apply_rolling_window(dataset, k, result_var_name)
+            for t in ds_k.coords["over_time"].values:
+                ds_t = ds_k.sel(over_time=t)
+                holomap[t, k] = make_plot_fn(ds_t)
+
+        return self._holomap_with_slider_bottom(
+            holomap,
+            widgets={
+                "over_time": pn.widgets.DiscreteSlider,
+                "window_size": pn.widgets.DiscreteSlider,
+            },
+        )
+
+    def _build_time_holomap_raw(self, da, make_plot_fn, max_window=None):
+        """Build a 2-D ``HoloMap`` for unreduced data (distribution plots).
+
+        For each window size *K*, concatenates raw samples from the last *K*
+        time points.  *make_plot_fn(da_window)* produces the plot from the
+        multi-time-point :class:`xr.DataArray`.
+        """
+        if max_window is None:
+            max_window = getattr(self.bench_cfg, "max_time_window", 15)
+
+        times = da.coords["over_time"].values
+        n_time = len(times)
+        max_k = min(n_time, max_window)
+
+        kdims = self._over_time_kdims() + [hv.Dimension("window_size", label="Window Size")]
+        holomap = hv.HoloMap(kdims=kdims)
+
+        for k in range(1, max_k + 1):
+            for i, t in enumerate(times):
+                start = max(0, i - k + 1)
+                da_window = da.isel(over_time=slice(start, i + 1))
+                holomap[t, k] = make_plot_fn(da_window)
+
+        return self._holomap_with_slider_bottom(
+            holomap,
+            widgets={
+                "over_time": pn.widgets.DiscreteSlider,
+                "window_size": pn.widgets.DiscreteSlider,
+            },
+        )
 
     def hv_container_ds(
         self,

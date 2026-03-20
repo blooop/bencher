@@ -92,6 +92,20 @@ class CurveResult(HoloviewResult):
         std_var = f"{var}_std"
         title = self.title_from_ds(dataset, result_var, **kwargs)
 
+        if self._use_holomap_for_time(dataset):
+
+            def make_curve(ds_t):
+                hvds_t = hv.Dataset(ds_t)
+                pt = hv.Overlay()
+                pt *= hvds_t.to(hv.Curve, vdims=var, label=var).opts(
+                    title=title, xrotation=30, **kwargs
+                )
+                if std_var in ds_t.data_vars:
+                    pt *= hvds_t.to(hv.Spread, vdims=[var, std_var])
+                return pt.opts(legend_position="right")
+
+            return self._build_time_holomap(dataset, var, make_curve)
+
         hvds = hv.Dataset(dataset)
         pt = hv.Overlay()
         x_kdim = self.plt_cnt_cfg.float_vars[0].name
@@ -100,7 +114,4 @@ class CurveResult(HoloviewResult):
         )
         if std_var in dataset.data_vars:
             pt *= hvds.to(hv.Spread, vdims=[var, std_var])
-        pt = pt.opts(legend_position="right")
-        if self._use_holomap_for_time(dataset):
-            pt = self._holomap_with_slider_bottom(pt)
-        return pt
+        return pt.opts(legend_position="right")
