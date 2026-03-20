@@ -13,6 +13,7 @@ OUTPUT_DIR = "performance"
 
 PERFORMANCE_EXAMPLES = [
     "self_benchmark",
+    "self_benchmark_over_time",
 ]
 
 
@@ -26,20 +27,87 @@ class MetaPerformance(MetaGeneratorBase):
 
         if self.example == "self_benchmark":
             self._generate_self_benchmark()
+        elif self.example == "self_benchmark_over_time":
+            self._generate_self_benchmark_over_time()
 
         return super().__call__()
 
     def _generate_self_benchmark(self):
         """Generate the self-benchmark example."""
         imports = "import bencher as bch"
-        class_code = '''\
+
+        body = """\
+bench = BencherSelfBenchmark().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=["num_samples"],
+    result_vars=["total_ms", "dataset_setup_ms", "job_submission_ms", "job_execution_ms"],
+    title="Phase Timing vs Problem Size",
+)
+bench.plot_sweep(
+    input_vars=["num_samples"],
+    result_vars=["throughput"],
+    title="Throughput vs Problem Size",
+)
+bench.plot_sweep(
+    input_vars=["num_samples", "use_cache"],
+    result_vars=["total_ms"],
+    title="Cache Impact on Total Time",
+)
+"""
+
+        self.generate_example(
+            title="Bencher self-introspection: overhead vs problem size",
+            output_dir=OUTPUT_DIR,
+            filename="self_benchmark",
+            function_name="example_self_benchmark",
+            imports=imports,
+            body=body,
+            class_code=_SHARED_CLASS_CODE,
+        )
+
+    def _generate_self_benchmark_over_time(self):
+        """Generate the over-time self-benchmark example."""
+        imports = "import bencher as bch"
+
+        body = """\
+run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg.over_time = True
+run_cfg.auto_plot = False
+time_src = bch.git_time_event()
+bench = BencherSelfBenchmark().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=["num_samples"],
+    result_vars=["total_ms", "dataset_setup_ms", "job_submission_ms", "job_execution_ms"],
+    title="Overhead Over Time: Phase Timing",
+    time_src=time_src,
+)
+bench.plot_sweep(
+    input_vars=["num_samples"],
+    result_vars=["throughput"],
+    title="Overhead Over Time: Throughput",
+    time_src=time_src,
+)
+"""
+
+        self.generate_example(
+            title="Bencher self-introspection: overhead tracked over time",
+            output_dir=OUTPUT_DIR,
+            filename="self_benchmark_over_time",
+            function_name="example_self_benchmark_over_time",
+            imports=imports,
+            body=body,
+            class_code=_SHARED_CLASS_CODE,
+        )
+
+
+_SHARED_CLASS_CODE = '''\
 class TrivialWorkload(bch.ParametrizedSweep):
     """A near-zero-cost worker so we measure framework overhead, not compute."""
 
     x = bch.FloatSweep(default=0, bounds=[0, 1], samples=2)
     result = bch.ResultVar(units="v", doc="trivial output")
 
-    def __call__(self, **kwargs: Any) -> Any:
+    def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.result = self.x * 2
         return super().__call__(**kwargs)
@@ -65,7 +133,7 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
     sample_cache_init_ms = bch.ResultVar(units="ms", doc="Sample cache initialization time")
     throughput = bch.ResultVar(units="samples/s", doc="Samples processed per second")
 
-    def __call__(self, **kwargs: Any) -> Any:
+    def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
 
         workload = TrivialWorkload()
@@ -94,35 +162,6 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
         self.throughput = (self.num_samples / t.total_ms * 1000) if t.total_ms > 0 else 0
 
         return super().__call__(**kwargs)'''
-
-        body = """\
-bench = BencherSelfBenchmark().to_bench(run_cfg)
-bench.plot_sweep(
-    input_vars=["num_samples"],
-    result_vars=["total_ms", "dataset_setup_ms", "job_submission_ms", "job_execution_ms"],
-    title="Phase Timing vs Problem Size",
-)
-bench.plot_sweep(
-    input_vars=["num_samples"],
-    result_vars=["throughput"],
-    title="Throughput vs Problem Size",
-)
-bench.plot_sweep(
-    input_vars=["num_samples", "use_cache"],
-    result_vars=["total_ms"],
-    title="Cache Impact on Total Time",
-)
-"""
-
-        self.generate_example(
-            title="Bencher self-introspection: overhead vs problem size",
-            output_dir=OUTPUT_DIR,
-            filename="self_benchmark",
-            function_name="example_self_benchmark",
-            imports=imports,
-            body=body,
-            class_code=class_code,
-        )
 
 
 def example_meta_performance():

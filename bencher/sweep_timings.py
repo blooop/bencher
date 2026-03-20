@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 
 @dataclass
@@ -27,7 +27,7 @@ class SweepTimings:
 
     def summary(self) -> dict[str, float]:
         """Return all phase timings as a dict."""
-        return {k: getattr(self, k) for k in self.__dataclass_fields__}
+        return {f.name: getattr(self, f.name) for f in fields(self)}
 
 
 @contextmanager

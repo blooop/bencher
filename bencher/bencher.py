@@ -805,13 +805,16 @@ class Bench(BenchPlotServer):
                 result = self.sample_cache.submit(cache_job)
                 results_list.append(result)
                 callcount += 1
+
+                # For serial execution, store results immediately so that
+                # completed results are cached to disk before later jobs
+                # may crash.
+                if bench_run_cfg.executor == Executors.SERIAL:
+                    self.store_results(result, bench_res, job, bench_run_cfg)
         timings.job_submission_ms = elapsed()
 
         with phase_timer() as elapsed:
-            if bench_run_cfg.executor == Executors.SERIAL:
-                for job, res in zip(jobs, results_list):
-                    self.store_results(res, bench_res, job, bench_run_cfg)
-            else:
+            if bench_run_cfg.executor != Executors.SERIAL:
                 for job, res in zip(jobs, results_list):
                     self.store_results(res, bench_res, job, bench_run_cfg)
         timings.job_execution_ms = elapsed()

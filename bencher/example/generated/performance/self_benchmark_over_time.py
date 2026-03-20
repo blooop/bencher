@@ -1,15 +1,6 @@
-"""Bencher self-introspection: benchmarks bencher's own overhead across problem sizes.
+"""Auto-generated example: Bencher self-introspection: overhead tracked over time."""
 
-This example uses bencher to benchmark itself, sweeping over the number of parameter
-samples and measuring the framework's timing for each phase of a sweep. The results
-reveal how overhead scales with problem size, helping identify optimization targets.
-
-When run with ``over_time=True`` (see ``example_self_benchmark_over_time``), results
-accumulate across commits so you can track framework performance regressions.
-
-Run locally:
-    python bencher/example/example_self_benchmark.py
-"""
+from typing import Any
 
 import bencher as bch
 
@@ -20,7 +11,7 @@ class TrivialWorkload(bch.ParametrizedSweep):
     x = bch.FloatSweep(default=0, bounds=[0, 1], samples=2)
     result = bch.ResultVar(units="v", doc="trivial output")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         self.result = self.x * 2
         return super().__call__(**kwargs)
@@ -37,7 +28,7 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
     )
     use_cache = bch.BoolSweep(default=False, doc="Whether sample caching is enabled")
 
-    # Result variables — one per timing phase
+    # Result variables - one per timing phase
     total_ms = bch.ResultVar(units="ms", doc="Total sweep wall-clock time")
     dataset_setup_ms = bch.ResultVar(units="ms", doc="Dataset initialization time")
     job_submission_ms = bch.ResultVar(units="ms", doc="Job creation and submission time")
@@ -46,7 +37,7 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
     sample_cache_init_ms = bch.ResultVar(units="ms", doc="Sample cache initialization time")
     throughput = bch.ResultVar(units="samples/s", doc="Samples processed per second")
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
         workload = TrivialWorkload()
@@ -75,62 +66,28 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_self_benchmark(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Benchmark bencher's own overhead across problem sizes."""
-    bench = BencherSelfBenchmark().to_bench(run_cfg)
-    bench.plot_sweep(
-        input_vars=["num_samples"],
-        result_vars=[
-            "total_ms",
-            "dataset_setup_ms",
-            "job_submission_ms",
-            "job_execution_ms",
-        ],
-        title="Bencher Self-Benchmark: Phase Timing vs Problem Size",
-    )
-    bench.plot_sweep(
-        input_vars=["num_samples"],
-        result_vars=["throughput"],
-        title="Bencher Self-Benchmark: Throughput vs Problem Size",
-    )
-    bench.plot_sweep(
-        input_vars=["num_samples", "use_cache"],
-        result_vars=["total_ms"],
-        title="Bencher Self-Benchmark: Cache Impact",
-    )
-    return bench
-
-
-def example_self_benchmark_over_time(
-    run_cfg: bch.BenchRunCfg | None = None,
-) -> bch.Bench:
-    """Track bencher's overhead over time, accumulating results across commits."""
+def example_self_benchmark_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """Bencher self-introspection: overhead tracked over time."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.auto_plot = False
-
     time_src = bch.git_time_event()
-
     bench = BencherSelfBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["num_samples"],
-        result_vars=[
-            "total_ms",
-            "dataset_setup_ms",
-            "job_submission_ms",
-            "job_execution_ms",
-        ],
-        title="Bencher Overhead Over Time: Phase Timing",
+        result_vars=["total_ms", "dataset_setup_ms", "job_submission_ms", "job_execution_ms"],
+        title="Overhead Over Time: Phase Timing",
         time_src=time_src,
     )
     bench.plot_sweep(
         input_vars=["num_samples"],
         result_vars=["throughput"],
-        title="Bencher Overhead Over Time: Throughput",
+        title="Overhead Over Time: Throughput",
         time_src=time_src,
     )
+
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_self_benchmark)
+    bch.run(example_self_benchmark_over_time)
