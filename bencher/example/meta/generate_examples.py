@@ -111,6 +111,7 @@ def generate_python_files():
 
     from bencher.example.meta.generate_meta_regression import example_meta_regression
     from bencher.example.meta.generate_meta_yaml import example_meta_yaml
+    from bencher.example.meta.generate_meta_performance import example_meta_performance
 
     example_meta()
     example_meta_result_types()
@@ -126,6 +127,7 @@ def generate_python_files():
     example_meta_bool_plot_types()
     example_meta_regression()
     example_meta_yaml()
+    example_meta_performance()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -371,6 +373,7 @@ SECTIONS = {
     "YAML Sweeps": "yaml",
     "Advanced Patterns": "advanced",
     "Regression Detection": "regression",
+    "Performance": "performance",
 }
 
 
