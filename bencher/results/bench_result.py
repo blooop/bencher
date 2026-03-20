@@ -58,6 +58,7 @@ class BenchResult(
         VolumeResult.__init__(self, bench_cfg)
         HoloviewResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
+        self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
 
     @classmethod
     def from_existing(cls, original: BenchResult) -> BenchResult:

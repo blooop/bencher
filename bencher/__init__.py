@@ -100,6 +100,7 @@ from .results.video_result import VideoResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg
 from .job import Executors
+from .sweep_timings import SweepTimings
 from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
 from .factories import create_bench, create_bench_runner
