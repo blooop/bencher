@@ -91,10 +91,7 @@ class OptunaResult(BenchResultBase):
         if include_meta:
             # df = self.to_pandas()
             df = self.to_dataset(reduce=ReduceType.NONE).to_dataframe().reset_index()
-            all_vars = []
-            for v in self.bench_cfg.all_vars:
-                if type(v) is not TimeEvent:
-                    all_vars.append(v)
+            all_vars = list(self.bench_cfg.all_vars)
 
             print("All vars", all_vars)
         else:
@@ -125,6 +122,8 @@ class OptunaResult(BenchResultBase):
                 if type(i) is TimeSnapshot:
                     if type(row[1][i.name]) is np.datetime64:
                         params[i.name] = row[1][i.name].timestamp()
+                elif type(i) is TimeEvent:
+                    params[i.name] = str(row[1][i.name])
                 elif type(i) is BoolSweep:
                     # Handle boolean values that may have been converted to strings
                     val = row[1][i.name]
