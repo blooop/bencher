@@ -170,7 +170,9 @@ demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
 
 #performance tracking
-perf = "python3 bencher/example/example_performance.py"
+test-timing-xml = "pytest --junit-xml=test-results.xml"
+test-timing-report = "python3 bencher/test_timing_report.py test-results.xml reports"
+perf = { depends-on = ["test-timing-xml", "test-timing-report"] }
 
 
 [tool.pylint]
