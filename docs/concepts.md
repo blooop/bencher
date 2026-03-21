@@ -72,6 +72,7 @@ making them introspectable and hashable.
 Result types declare what a benchmark function returns:
 
 - `ResultVar` — a numeric scalar with units and an optimization direction (minimize/maximize)
+- `ResultBool` — a boolean result (stored as 0/1 numeric)
 - `ResultVec` — a fixed-size numeric vector
 - `ResultImage` — a file path to an image
 - `ResultVideo` — a file path to a video
