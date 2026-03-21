@@ -5,23 +5,23 @@ Shows optimization direction, Optuna integration, and multi-objective Pareto.
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "optimization"
 
 CLASS_CODE = "\n".join(
     [
-        "class ServerOptimizer(bch.ParametrizedSweep):",
+        "class ServerOptimizer(bn.ParametrizedSweep):",
         '    """Optimizes server configuration for performance vs cost tradeoff."""',
         "",
-        '    cpu_cores = bch.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
-        '    memory_gb = bch.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
+        '    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
+        '    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
         "",
-        '    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance score (maximize)")',
-        '    cost = bch.ResultVar("$/hr", bch.OptDir.minimize, doc="Hourly cost (minimize)")',
+        '    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance score (maximize)")',
+        '    cost = bn.ResultVar("$/hr", bn.OptDir.minimize, doc="Hourly cost (minimize)")',
         "",
-        '    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
+        '    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
         "",
         "    def __call__(self, **kwargs):",
         "        self.update_params_from_kwargs(**kwargs)",
@@ -38,8 +38,8 @@ CLASS_CODE = "\n".join(
 class MetaOptimization(MetaGeneratorBase):
     """Generate Python examples demonstrating optimization features."""
 
-    n_objectives = bch.IntSweep(default=1, bounds=(1, 2), doc="Number of objectives")
-    input_dims = bch.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
+    n_objectives = bn.IntSweep(default=1, bounds=(1, 2), doc="Number of objectives")
+    input_dims = bn.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -99,14 +99,14 @@ class MetaOptimization(MetaGeneratorBase):
         return super().__call__()
 
 
-def example_meta_optimization(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_optimization(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaOptimization().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Optimization",
         input_vars=[
-            bch.p("n_objectives", [1, 2]),
-            bch.p("input_dims", [1, 2]),
+            bn.p("n_objectives", [1, 2]),
+            bn.p("input_dims", [1, 2]),
         ],
     )
 
@@ -114,4 +114,4 @@ def example_meta_optimization(run_cfg: bch.BenchRunCfg | None = None) -> bch.Ben
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_optimization)
+    bn.run(example_meta_optimization)

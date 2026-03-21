@@ -6,7 +6,7 @@ import math
 
 import numpy as np
 from PIL import Image, ImageDraw
-import bencher as bch
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):
@@ -25,17 +25,17 @@ def _draw_polygon_image(points, color, linewidth, size=200):
     return img
 
 
-class PolygonAnimator(bch.ParametrizedSweep):
+class PolygonAnimator(bn.ParametrizedSweep):
     """Renders rotating polygon animations."""
 
-    sides = bch.IntSweep(default=4, bounds=(3, 7), doc="Number of polygon sides")
-    speed = bch.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
-    animation = bch.ResultVideo(doc="Rotating polygon video")
-    frame_snapshot = bch.ResultImage(doc="Last frame snapshot")
+    sides = bn.IntSweep(default=4, bounds=(3, 7), doc="Number of polygon sides")
+    speed = bn.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
+    animation = bn.ResultVideo(doc="Rotating polygon video")
+    frame_snapshot = bn.ResultImage(doc="Last frame snapshot")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        vid_writer = bch.VideoWriter()
+        vid_writer = bn.VideoWriter()
         num_frames = 8
         for i in range(num_frames):
             angle = self.speed * (360.0 * i / num_frames)
@@ -43,11 +43,11 @@ class PolygonAnimator(bch.ParametrizedSweep):
             img = _draw_polygon_image(points, "white", linewidth=3, size=200)
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
-        self.frame_snapshot = bch.VideoWriter.extract_frame(self.animation)
+        self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)
         return super().__call__()
 
 
-def example_result_video_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_video_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Result Video: 1D input."""
     bench = PolygonAnimator().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["sides"], result_vars=["animation"])
@@ -56,4 +56,4 @@ def example_result_video_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench
 
 
 if __name__ == "__main__":
-    bch.run(example_result_video_1d, level=3)
+    bn.run(example_result_video_1d, level=3)

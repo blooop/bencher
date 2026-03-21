@@ -6,7 +6,7 @@ Each generated example is fully self-contained with an inline class definition.
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "plot_types"
@@ -20,12 +20,12 @@ _DEFAULT_MODULE = "bencher.example.meta.example_meta"
 _BENCHABLE_MODULE = "bencher.example.meta.benchable_objects"
 
 _CACHE_COMPARE_CODE = """\
-class CacheCompare(bch.ParametrizedSweep):
+class CacheCompare(bn.ParametrizedSweep):
     \"\"\"Compare response distance across cache backends.\"\"\"
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
+    backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bch.ResultVar("m", doc="Response distance metric")
+    distance = bn.ResultVar("m", doc="Response distance metric")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -37,12 +37,12 @@ _LATENCY_PROFILE_CODE = """\
 import math
 
 
-class LatencyProfile(bch.ParametrizedSweep):
+class LatencyProfile(bn.ParametrizedSweep):
     \"\"\"Latency as a function of load.\"\"\"
 
-    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bch.ResultVar("m", doc="Latency distance metric")
+    distance = bn.ResultVar("m", doc="Latency distance metric")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -54,13 +54,13 @@ import math
 import random
 
 
-class LatencyNoisyProfile(bch.ParametrizedSweep):
+class LatencyNoisyProfile(bn.ParametrizedSweep):
     \"\"\"Latency with noise as a function of load.\"\"\"
 
-    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0])
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bch.ResultVar("m", doc="Latency distance metric")
+    distance = bn.ResultVar("m", doc="Latency distance metric")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -70,12 +70,12 @@ class LatencyNoisyProfile(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _THROUGHPUT_COMPARE_CODE = """\
-class ThroughputCompare(bch.ParametrizedSweep):
+class ThroughputCompare(bn.ParametrizedSweep):
     \"\"\"Throughput comparison across backends.\"\"\"
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
+    backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bch.ResultVar("m", doc="Throughput distance metric")
+    distance = bn.ResultVar("m", doc="Throughput distance metric")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -87,13 +87,13 @@ _HEATMAP_DEMO_CODE = """\
 import math
 
 
-class HeatmapDemo(bch.ParametrizedSweep):
+class HeatmapDemo(bn.ParametrizedSweep):
     \"\"\"2D heatmap of a trigonometric surface.\"\"\"
 
-    x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
-    y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bch.ResultVar("m", doc="Surface height")
+    distance = bn.ResultVar("m", doc="Surface height")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -104,13 +104,13 @@ _SURFACE_DEMO_CODE = """\
 import math
 
 
-class SurfaceDemo(bch.ParametrizedSweep):
+class SurfaceDemo(bn.ParametrizedSweep):
     \"\"\"3D surface of a trigonometric function.\"\"\"
 
-    x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
-    y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bch.ResultVar("m", doc="Surface height")
+    distance = bn.ResultVar("m", doc="Surface height")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -121,13 +121,13 @@ _JITTER_DEMO_CODE = """\
 import random
 
 
-class JitterDemo(bch.ParametrizedSweep):
+class JitterDemo(bn.ParametrizedSweep):
     \"\"\"Jitter distribution across cache backends.\"\"\"
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0])
+    backend = bn.StringSweep(["redis", "memcached", "local"])
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bch.ResultVar("m", doc="Jittered distance metric")
+    distance = bn.ResultVar("m", doc="Jittered distance metric")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -141,13 +141,13 @@ _SCATTER_JITTER_DEMO_CODE = """\
 import random
 
 
-class ScatterJitterDemo(bch.ParametrizedSweep):
+class ScatterJitterDemo(bn.ParametrizedSweep):
     \"\"\"Scatter with jitter across cache backends.\"\"\"
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0])
+    backend = bn.StringSweep(["redis", "memcached", "local"])
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bch.ResultVar("m", doc="Jittered distance metric")
+    distance = bn.ResultVar("m", doc="Jittered distance metric")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -277,7 +277,7 @@ PLOT_NAMES = list(PLOT_CONFIGS.keys())
 class MetaPlotTypes(MetaGeneratorBase):
     """Generate Python examples demonstrating each plot type."""
 
-    plot_type = bch.StringSweep(PLOT_NAMES, doc="Plot type to demonstrate")
+    plot_type = bn.StringSweep(PLOT_NAMES, doc="Plot type to demonstrate")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -318,16 +318,16 @@ class MetaPlotTypes(MetaGeneratorBase):
         return super().__call__()
 
 
-def example_meta_plot_types(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_plot_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaPlotTypes().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Plot Types",
-        input_vars=[bch.p("plot_type", PLOT_NAMES)],
+        input_vars=[bn.p("plot_type", PLOT_NAMES)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_plot_types)
+    bn.run(example_meta_plot_types)

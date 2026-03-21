@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-import bencher as bch
+import bencher as bn
 from bencher.regression import (
     RegressionError,
     RegressionReport,
@@ -477,8 +477,8 @@ class TestRegressionError:
 # ── End-to-end with Bench ─────────────────────────────────────────────────
 
 
-class _SimpleBench(bch.ParametrizedSweep):
-    out_val = bch.ResultVar(units="s", direction=bch.OptDir.minimize)
+class _SimpleBench(bn.ParametrizedSweep):
+    out_val = bn.ResultVar(units="s", direction=bn.OptDir.minimize)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -489,8 +489,8 @@ class _SimpleBench(bch.ParametrizedSweep):
 _degrade_state = {"counter": 0}
 
 
-class _DegradingBench(bch.ParametrizedSweep):
-    out_val = bch.ResultVar(units="s", direction=bch.OptDir.minimize)
+class _DegradingBench(bn.ParametrizedSweep):
+    out_val = bn.ResultVar(units="s", direction=bn.OptDir.minimize)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -502,7 +502,7 @@ class _DegradingBench(bch.ParametrizedSweep):
 class TestEndToEnd:
     def test_plot_sweep_with_regression_detection(self):
         """Full end-to-end test: run plot_sweep with over_time and regression_detection."""
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
         run_cfg.over_time = True
         run_cfg.repeats = 2
         run_cfg.regression_detection = True
@@ -511,7 +511,7 @@ class TestEndToEnd:
         run_cfg.auto_plot = False
         run_cfg.headless = True
 
-        bench = bch.Bench("test_regression_e2e", _SimpleBench(), run_cfg=run_cfg)
+        bench = bn.Bench("test_regression_e2e", _SimpleBench(), run_cfg=run_cfg)
         # Run twice to get 2 time points with same values — no regression
         bench.plot_sweep(plot_callbacks=False)
         bench.sample_cache = None  # reset cache for new run
@@ -522,14 +522,14 @@ class TestEndToEnd:
 
     def test_detection_disabled_leaves_report_none(self):
         """When regression_detection=False, regression_report should stay None."""
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
         run_cfg.over_time = True
         run_cfg.repeats = 1
         run_cfg.regression_detection = False
         run_cfg.auto_plot = False
         run_cfg.headless = True
 
-        bench = bch.Bench("test_regression_disabled", _SimpleBench(), run_cfg=run_cfg)
+        bench = bn.Bench("test_regression_disabled", _SimpleBench(), run_cfg=run_cfg)
         bench.plot_sweep(plot_callbacks=False)
         bench.sample_cache = None
         res2 = bench.plot_sweep(plot_callbacks=False)
@@ -540,7 +540,7 @@ class TestEndToEnd:
         """Verify that regression_fail=True raises RegressionError."""
         _degrade_state["counter"] = 0
 
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
         run_cfg.over_time = True
         run_cfg.repeats = 1
         run_cfg.regression_detection = True
@@ -549,9 +549,9 @@ class TestEndToEnd:
         run_cfg.auto_plot = False
         run_cfg.headless = True
 
-        bench = bch.Bench("test_regression_fail", _DegradingBench(), run_cfg=run_cfg)
+        bench = bn.Bench("test_regression_fail", _DegradingBench(), run_cfg=run_cfg)
         bench.plot_sweep(plot_callbacks=False)
         bench.sample_cache = None
 
-        with pytest.raises(bch.RegressionError):
+        with pytest.raises(bn.RegressionError):
             bench.plot_sweep(plot_callbacks=False)

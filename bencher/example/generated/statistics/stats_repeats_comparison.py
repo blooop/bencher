@@ -1,15 +1,15 @@
 """Auto-generated example: Repeats Comparison: 1 vs 5 vs 20 repeats on a categorical sweep."""
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_stats_repeats_comparison(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_stats_repeats_comparison(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Repeats Comparison: 1 vs 5 vs 20 repeats on a categorical sweep."""
     bench = BenchableObject().to_bench(run_cfg)
     for n_repeats in [1, 5, 20]:
         noise = 0.3 if n_repeats > 1 else 0.0
-        sweep_cfg = bch.BenchRunCfg()
+        sweep_cfg = bn.BenchRunCfg()
         sweep_cfg.level = 3
         sweep_cfg.repeats = n_repeats
         bench.plot_sweep(
@@ -24,4 +24,4 @@ def example_stats_repeats_comparison(run_cfg: bch.BenchRunCfg | None = None) -> 
 
 
 if __name__ == "__main__":
-    bch.run(example_stats_repeats_comparison)
+    bn.run(example_stats_repeats_comparison)

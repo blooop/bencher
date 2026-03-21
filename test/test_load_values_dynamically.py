@@ -1,10 +1,10 @@
-import bencher as bch
+import bencher as bn
 import param
 import pytest
 
 
 class DummyCfg(param.Parameterized):
-    state_id = bch.StringSweep(["__initialising__"], doc="Group/state identifier to render.")
+    state_id = bn.StringSweep(["__initialising__"], doc="Group/state identifier to render.")
 
 
 def test_update_options_basic():

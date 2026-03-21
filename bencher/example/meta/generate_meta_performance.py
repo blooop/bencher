@@ -7,7 +7,7 @@ performance tracking across commits via the documentation gallery.
 import inspect
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.example_self_benchmark import BencherSelfBenchmark, TrivialWorkload
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -22,7 +22,7 @@ PERFORMANCE_EXAMPLES = [
 class MetaPerformance(MetaGeneratorBase):
     """Generate Python examples for bencher self-introspection."""
 
-    example = bch.StringSweep(PERFORMANCE_EXAMPLES, doc="Which performance example to generate")
+    example = bn.StringSweep(PERFORMANCE_EXAMPLES, doc="Which performance example to generate")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -36,7 +36,7 @@ class MetaPerformance(MetaGeneratorBase):
 
     def _generate_self_benchmark(self):
         """Generate the self-benchmark example."""
-        imports = "import bencher as bch"
+        imports = "import bencher as bn"
 
         body = """\
 bench = BencherSelfBenchmark().to_bench(run_cfg)
@@ -69,13 +69,13 @@ bench.plot_sweep(
 
     def _generate_self_benchmark_over_time(self):
         """Generate the over-time self-benchmark example."""
-        imports = "import bencher as bch"
+        imports = "import bencher as bn"
 
         body = """\
-run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg = run_cfg or bn.BenchRunCfg()
 run_cfg.over_time = True
 run_cfg.auto_plot = False
-time_src = bch.git_time_event()
+time_src = bn.git_time_event()
 bench = BencherSelfBenchmark().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["num_samples"],

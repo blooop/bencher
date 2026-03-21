@@ -1,7 +1,7 @@
 import unittest
 
 from bencher.example.benchmark_data import AllSweepVars, PostprocessFn
-import bencher as bch
+import bencher as bn
 from hypothesis import given, strategies as st
 
 
@@ -27,7 +27,7 @@ class TestSweepBase(unittest.TestCase):
         """Check that setting a const returns the right const"""
 
         explorer = AllSweepVars()
-        bench = bch.Bench("tst_cnst", explorer.__call__)
+        bench = bn.Bench("tst_cnst", explorer.__call__)
 
         consts = explorer.get_input_defaults()
         consts_len = len(consts)
@@ -51,7 +51,7 @@ class TestSweepBase(unittest.TestCase):
         """Check that setting a const returns the right const"""
 
         explorer = AllSweepVars()
-        bch.Bench("tst_cnst", explorer)
+        bn.Bench("tst_cnst", explorer)
 
         consts = explorer.get_input_defaults()
         const_override = explorer.get_input_defaults([AllSweepVars.param.var_float.with_const(2)])
@@ -137,8 +137,8 @@ class TestSweepBase(unittest.TestCase):
     def test_float_step(self):
         step = 0.0001
 
-        class FloatDim(bch.ParametrizedSweep):
-            var_float = bch.FloatSweep(bounds=(0, 0.001), step=step)
+        class FloatDim(bn.ParametrizedSweep):
+            var_float = bn.FloatSweep(bounds=(0, 0.001), step=step)
 
         dim = FloatDim.param.var_float.as_dim(False)
         self.assertEqual(dim.step, step)
@@ -162,14 +162,14 @@ class TestSweepBase(unittest.TestCase):
 
     @given(st.floats(min_value=0.1, allow_nan=False, allow_infinity=False))
     def test_levels_float(self, upper) -> None:
-        var_float = bch.FloatSweep(bounds=(0, upper))
+        var_float = bn.FloatSweep(bounds=(0, upper))
         self.sweep_up_to(var_float, float)
 
     def test_level_limits(self):
         asv = AllSweepVars()
 
-        bench = bch.Bench("test_level_limits", asv)
-        run_cfg = bch.BenchRunCfg()
+        bench = bn.Bench("test_level_limits", asv)
+        run_cfg = bn.BenchRunCfg()
 
         run_cfg.level = 4
         res = bench.plot_sweep("asv", input_vars=[AllSweepVars.param.var_float], run_cfg=run_cfg)
@@ -197,7 +197,7 @@ class TestSweepBase(unittest.TestCase):
 
     # @given(st.integers(min_value=0), st.integers(min_value=1,max_value=10))
     # def test_levels_int(self, start, var_range):
-    #     var_int = bch.IntSweep(default=start, bounds=(start, start + var_range))
+    #     var_int = bn.IntSweep(default=start, bounds=(start, start + var_range))
     #     self.sweep_up_to(var_int, int, level=5)
 
 

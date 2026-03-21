@@ -5,15 +5,15 @@ from typing import Any
 import random
 
 from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
-import bencher as bch
+import bencher as bn
 
 
-class ReliabilityCat(bch.ParametrizedSweep):
+class ReliabilityCat(bn.ParametrizedSweep):
     """Service reliability check with varying pass rates across backends."""
 
-    backend = bch.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
+    backend = bn.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -22,7 +22,7 @@ class ReliabilityCat(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_bool_plot_violin(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_plot_violin(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Bool Plot: Violin."""
     bench = ReliabilityCat().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["backend"], result_vars=["healthy"])
@@ -32,4 +32,4 @@ def example_bool_plot_violin(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_violin, level=3, repeats=50)
+    bn.run(example_bool_plot_violin, level=3, repeats=50)

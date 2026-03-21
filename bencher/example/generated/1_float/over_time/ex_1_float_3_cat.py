@@ -4,19 +4,19 @@ from typing import Any
 
 import random
 import math
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class SortFullMatrix(bch.ParametrizedSweep):
+class SortFullMatrix(bn.ParametrizedSweep):
     """Full sort matrix: size, algorithm, distribution, and order."""
 
-    array_size = bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
-    algorithm = bch.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
-    distribution = bch.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")
-    stability = bch.StringSweep(["stable", "unstable"], doc="Sort stability")
+    array_size = bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
+    algorithm = bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
+    distribution = bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")
+    stability = bn.StringSweep(["stable", "unstable"], doc="Sort stability")
 
-    time = bch.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultVar(units="ms", doc="Sort duration")
 
     _time_offset = 0.0
 
@@ -38,9 +38,9 @@ class SortFullMatrix(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_1_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_1_float_3_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """1 Float, 3 Categorical."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     benchable = SortFullMatrix()
     bench = benchable.to_bench(run_cfg)
@@ -61,4 +61,4 @@ def example_over_time_1_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_1_float_3_cat, level=4)
+    bn.run(example_over_time_1_float_3_cat, level=4)

@@ -9,14 +9,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import bencher as bch
+import bencher as bn
 
 
 GENERATED_DIR = Path("bencher/example/generated")
 
 
 def _extract_run_kwargs(py_file: Path) -> dict:
-    """Extract kwargs from bch.run() call in __main__ block."""
+    """Extract kwargs from bn.run() call in __main__ block."""
     source = py_file.read_text()
     tree = ast.parse(source)
     for node in ast.walk(tree):
@@ -25,7 +25,7 @@ def _extract_run_kwargs(py_file: Path) -> dict:
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "run"
             and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "bch"
+            and node.func.value.id == "bn"
         ):
             kwargs = {}
             for kw in node.keywords:
@@ -176,7 +176,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
         return None
 
     run_kwargs = _extract_run_kwargs(py_file)
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.level = run_kwargs.get("level", 4)
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:

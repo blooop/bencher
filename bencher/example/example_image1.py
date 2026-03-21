@@ -1,4 +1,4 @@
-import bencher as bch
+import bencher as bn
 import numpy as np
 import math
 from PIL import Image, ImageDraw
@@ -12,26 +12,26 @@ def polygon_points(radius: float, sides: int, start_angle: float):
     return points
 
 
-class BenchPolygons(bch.ParametrizedSweep):
-    sides = bch.IntSweep(default=3, bounds=(3, 7))
-    radius = bch.FloatSweep(default=1, bounds=(0.2, 1))
-    linewidth = bch.FloatSweep(default=1, bounds=(1, 10))
-    linestyle = bch.StringSweep(["solid", "dashed", "dotted"])
-    color = bch.StringSweep(["red", "green", "blue"])
-    start_angle = bch.FloatSweep(default=0, bounds=[0, 360])
-    polygon = bch.ResultImage()
-    polygon_small = bch.ResultImage()
+class BenchPolygons(bn.ParametrizedSweep):
+    sides = bn.IntSweep(default=3, bounds=(3, 7))
+    radius = bn.FloatSweep(default=1, bounds=(0.2, 1))
+    linewidth = bn.FloatSweep(default=1, bounds=(1, 10))
+    linestyle = bn.StringSweep(["solid", "dashed", "dotted"])
+    color = bn.StringSweep(["red", "green", "blue"])
+    start_angle = bn.FloatSweep(default=0, bounds=[0, 360])
+    polygon = bn.ResultImage()
+    polygon_small = bn.ResultImage()
 
-    area = bch.ResultVar()
-    side_length = bch.ResultVar()
+    area = bn.ResultVar()
+    side_length = bn.ResultVar()
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         points = polygon_points(self.radius, self.sides, self.start_angle)
-        filepath = bch.gen_image_path("polygon")
+        filepath = bn.gen_image_path("polygon")
         self.polygon = self.points_to_polygon_png(points, filepath, dpi=30)
         self.polygon_small = self.points_to_polygon_png(
-            points, bch.gen_image_path("polygon"), dpi=10
+            points, bn.gen_image_path("polygon"), dpi=10
         )
         # Verify filepaths are being returned
         assert isinstance(self.polygon, str), f"Expected string filepath, got {type(self.polygon)}"
@@ -56,7 +56,7 @@ class BenchPolygons(bch.ParametrizedSweep):
         return str(filename)
 
 
-def example_image_vid_sequential1(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_image_vid_sequential1(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = BenchPolygons().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["sides"])
 
@@ -66,7 +66,7 @@ def example_image_vid_sequential1(run_cfg: bch.BenchRunCfg | None = None) -> bch
 
 
 if __name__ == "__main__":
-    ex_run_cfg = bch.BenchRunCfg()
+    ex_run_cfg = bn.BenchRunCfg()
     ex_run_cfg.cache_samples = True
     ex_run_cfg.overwrite_sample_cache = True
-    bch.run(example_image_vid_sequential1, level=3, run_cfg=ex_run_cfg)
+    bn.run(example_image_vid_sequential1, level=3, run_cfg=ex_run_cfg)

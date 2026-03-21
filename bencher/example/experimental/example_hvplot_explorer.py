@@ -1,9 +1,9 @@
 # THIS IS NOT A WORKING EXAMPLE YET
 # pylint: disable=duplicate-code
-import bencher as bch
+import bencher as bn
 from bencher.example.benchmark_data import ExampleBenchCfg
 
-bench = bch.Bench("Bencher_Example_Simple", ExampleBenchCfg())
+bench = bn.Bench("Bencher_Example_Simple", ExampleBenchCfg())
 
 
 if __name__ == "__main__":
@@ -27,12 +27,12 @@ if __name__ == "__main__":
             return out
         """,
         post_description="Here you can see the output plot of sin theta between 0 and pi.  In the tabs at the top you can also view 3 tabular representations of the data",
-        run_cfg=bch.BenchRunCfg(
+        run_cfg=bn.BenchRunCfg(
             auto_plot=True,
             cache_results=False,
             repeats=2,
         ),
     )
 
-    bench.add(bch.ExplorerResult)
+    bench.add(bn.ExplorerResult)
     bench.report.show()

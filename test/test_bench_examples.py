@@ -1,5 +1,5 @@
 import unittest
-import bencher as bch
+import bencher as bn
 
 from bencher.example.meta.example_meta import example_meta
 
@@ -13,8 +13,8 @@ class TestBenchExamples(unittest.TestCase):
         super().__init__(*args, **kwargs)
         self.generate_all = False
 
-    def create_run_cfg(self) -> bch.BenchRunCfg:
-        cfg = bch.BenchRunCfg()
+    def create_run_cfg(self) -> bn.BenchRunCfg:
+        cfg = bn.BenchRunCfg()
         if not self.generate_all:
             cfg.repeats = 2
             cfg.level = 2

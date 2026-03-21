@@ -4,17 +4,17 @@ from typing import Any
 
 import random
 import math
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class CompressionBench(bch.ParametrizedSweep):
+class CompressionBench(bn.ParametrizedSweep):
     """Measures compression ratio across block size and input entropy."""
 
-    block_size = bch.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
-    entropy = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
+    block_size = bn.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
+    entropy = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
 
-    ratio = bch.ResultVar(units="x", doc="Compression ratio")
+    ratio = bn.ResultVar(units="x", doc="Compression ratio")
 
     _time_offset = 0.0
 
@@ -26,9 +26,9 @@ class CompressionBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_2_float_0_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """2 Float, 0 Categorical."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     benchable = CompressionBench()
     bench = benchable.to_bench(run_cfg)
@@ -49,4 +49,4 @@ def example_over_time_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_2_float_0_cat, level=4)
+    bn.run(example_over_time_2_float_0_cat, level=4)

@@ -6,7 +6,7 @@ Each generated example is fully self-contained with an inline class definition.
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "bool_plot_types"
@@ -16,12 +16,12 @@ OUTPUT_DIR = "bool_plot_types"
 # ---------------------------------------------------------------------------
 
 _HEALTH_CHECK_CAT_CODE = """\
-class HealthCheckCat(bch.ParametrizedSweep):
+class HealthCheckCat(bn.ParametrizedSweep):
     \"\"\"Check service health across backends with varying reliability.\"\"\"
 
-    backend = bch.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
+    backend = bn.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -30,12 +30,12 @@ class HealthCheckCat(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _HEALTH_CHECK_FLOAT_CODE = """\
-class HealthCheckFloat(bch.ParametrizedSweep):
+class HealthCheckFloat(bn.ParametrizedSweep):
     \"\"\"Check if service health exceeds a threshold.\"\"\"
 
-    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -44,12 +44,12 @@ class HealthCheckFloat(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _HEALTH_CHECK_FLOAT_NOISY_CODE = """\
-class HealthCheckFloatNoisy(bch.ParametrizedSweep):
+class HealthCheckFloatNoisy(bn.ParametrizedSweep):
     \"\"\"Check health with noise — repeated runs produce different outcomes.\"\"\"
 
-    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -58,13 +58,13 @@ class HealthCheckFloatNoisy(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _HEALTH_CHECK_2D_NOISY_CODE = """\
-class HealthCheck2DNoisy(bch.ParametrizedSweep):
+class HealthCheck2DNoisy(bn.ParametrizedSweep):
     \"\"\"2D health check with noise for repeated-run surface plots.\"\"\"
 
-    x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
-    y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -73,12 +73,12 @@ class HealthCheck2DNoisy(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _RELIABILITY_CAT_CODE = """\
-class ReliabilityCat(bch.ParametrizedSweep):
+class ReliabilityCat(bn.ParametrizedSweep):
     \"\"\"Service reliability check with varying pass rates across backends.\"\"\"
 
-    backend = bch.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
+    backend = bn.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -87,12 +87,12 @@ class ReliabilityCat(bch.ParametrizedSweep):
         return super().__call__()"""
 
 _PASS_RATE_FLOAT_CODE = """\
-class PassRateFloat(bch.ParametrizedSweep):
+class PassRateFloat(bn.ParametrizedSweep):
     \"\"\"Test pass rate that decreases with complexity.\"\"\"
 
-    complexity = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    complexity = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    passed = bch.ResultBool(doc="Whether the test passed")
+    passed = bn.ResultBool(doc="Whether the test passed")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -224,7 +224,7 @@ BOOL_PLOT_NAMES = list(BOOL_PLOT_CONFIGS.keys())
 class MetaBoolPlotTypes(MetaGeneratorBase):
     """Generate Python examples demonstrating ResultBool with each plot type."""
 
-    plot_type = bch.StringSweep(BOOL_PLOT_NAMES, doc="Plot type to demonstrate with ResultBool")
+    plot_type = bn.StringSweep(BOOL_PLOT_NAMES, doc="Plot type to demonstrate with ResultBool")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -259,16 +259,16 @@ class MetaBoolPlotTypes(MetaGeneratorBase):
         return super().__call__()
 
 
-def example_meta_bool_plot_types(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_bool_plot_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaBoolPlotTypes().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Bool Plot Types",
-        input_vars=[bch.p("plot_type", BOOL_PLOT_NAMES)],
+        input_vars=[bn.p("plot_type", BOOL_PLOT_NAMES)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_bool_plot_types)
+    bn.run(example_meta_bool_plot_types)

@@ -7,14 +7,14 @@ from typing import Any
 import holoviews as hv
 import panel as pn
 
-import bencher as bch
+import bencher as bn
 
 
-class SimpleBench(bch.ParametrizedSweep):
+class SimpleBench(bn.ParametrizedSweep):
     """Minimal benchmark for testing over_time + repeats."""
 
-    backend = bch.StringSweep(["redis", "local"], doc="Backend")
-    latency = bch.ResultVar(units="ms", doc="Latency")
+    backend = bn.StringSweep(["redis", "local"], doc="Backend")
+    latency = bn.ResultVar(units="ms", doc="Latency")
 
     offset = 0.0
 
@@ -25,12 +25,12 @@ class SimpleBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-class FloatBench(bch.ParametrizedSweep):
+class FloatBench(bn.ParametrizedSweep):
     """Benchmark with one float input for curve tests."""
 
-    size = bch.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
-    backend = bch.StringSweep(["redis", "local"], doc="Backend")
-    time = bch.ResultVar(units="ms", doc="Duration")
+    size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
+    backend = bn.StringSweep(["redis", "local"], doc="Backend")
+    time = bn.ResultVar(units="ms", doc="Duration")
 
     offset = 0.0
 
@@ -43,7 +43,7 @@ class FloatBench(bch.ParametrizedSweep):
 
 def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3):
     """Helper to run a benchmark over multiple time points."""
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = repeats
     bench = benchable.to_bench(run_cfg)
@@ -107,10 +107,10 @@ def _find_all_over_time_widgets(obj, depth=0):
     return found
 
 
-class ZeroDimBench(bch.ParametrizedSweep):
+class ZeroDimBench(bn.ParametrizedSweep):
     """Benchmark with no input vars — 0D numeric result for over_time regression test."""
 
-    value = bch.ResultVar(units="m", doc="Value")
+    value = bn.ResultVar(units="m", doc="Value")
 
     offset = 0.0
 

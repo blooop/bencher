@@ -9,7 +9,7 @@ import optuna
 import panel as pn
 import param
 
-import bencher as bch
+import bencher as bn
 from bencher.optuna_conversions import (
     sweep_var_to_optuna_dist,
     sweep_var_to_suggest,
@@ -25,13 +25,13 @@ class SweepColor(StrEnum):
     blue = auto()
 
 
-class SweepCfg(bch.ParametrizedSweep):
+class SweepCfg(bn.ParametrizedSweep):
     int_var = IntSweep(default=1, bounds=(0, 10))
     float_var = FloatSweep(default=0.5, bounds=(0.0, 1.0))
     enum_var = EnumSweep(SweepColor)
     bool_var = BoolSweep(default=True)
     string_var = StringSweep(["a", "b", "c"])
-    result = bch.ResultVar()
+    result = bn.ResultVar()
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -138,7 +138,7 @@ class TestCfgFromOptunaTrial(unittest.TestCase):
             "test_optuna",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
         # Verify the study can be created from bench results
@@ -163,7 +163,7 @@ class TestSummariseTrial(unittest.TestCase):
             "test",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 

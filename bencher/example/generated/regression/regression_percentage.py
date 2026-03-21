@@ -3,17 +3,17 @@
 from typing import Any
 from datetime import datetime, timedelta
 
-import bencher as bch
+import bencher as bn
 
 
-class ServerBenchmark(bch.ParametrizedSweep):
+class ServerBenchmark(bn.ParametrizedSweep):
     """A server benchmark whose response time degrades over successive releases."""
 
-    connections = bch.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
-    payload_kb = bch.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
+    connections = bn.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
+    payload_kb = bn.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
 
-    response_time = bch.ResultVar(units="ms", direction=bch.OptDir.minimize)
-    throughput = bch.ResultVar(units="req/s", direction=bch.OptDir.maximize)
+    response_time = bn.ResultVar(units="ms", direction=bn.OptDir.minimize)
+    throughput = bn.ResultVar(units="req/s", direction=bn.OptDir.maximize)
 
     _time_offset = 0.0  # set externally per snapshot
 
@@ -26,9 +26,9 @@ class ServerBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Regression detection — percentage threshold over time."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 2
     run_cfg.regression_detection = True
@@ -70,4 +70,4 @@ def example_regression_percentage(run_cfg: bch.BenchRunCfg | None = None) -> bch
 
 
 if __name__ == "__main__":
-    bch.run(example_regression_percentage)
+    bn.run(example_regression_percentage)

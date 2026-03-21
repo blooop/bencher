@@ -5,7 +5,7 @@ Shows how to use const_vars to fix parameters at specific values while sweeping 
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "const_vars"
@@ -13,19 +13,19 @@ OUTPUT_DIR = "const_vars"
 EXAMPLES = ["slice", "compare", "categorical", "noise"]
 
 SERVER_BENCHMARK_CLASS_CODE = '''\
-class ServerBenchmark(bch.ParametrizedSweep):
+class ServerBenchmark(bn.ParametrizedSweep):
     """Simulates server performance metrics under varying load conditions."""
 
-    cpu_load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="CPU load factor")
-    memory_pct = bch.FloatSweep(default=50, bounds=[10, 90], doc="Memory usage percentage")
-    disk_io = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Disk I/O pressure")
-    cache_enabled = bch.BoolSweep(default=True, doc="Whether caching is enabled")
-    backend = bch.StringSweep(["postgres", "mysql", "sqlite"], doc="Database backend")
-    log_level = bch.StringSweep(["debug", "info", "warn"], doc="Logging verbosity")
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+    cpu_load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="CPU load factor")
+    memory_pct = bn.FloatSweep(default=50, bounds=[10, 90], doc="Memory usage percentage")
+    disk_io = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Disk I/O pressure")
+    cache_enabled = bn.BoolSweep(default=True, doc="Whether caching is enabled")
+    backend = bn.StringSweep(["postgres", "mysql", "sqlite"], doc="Database backend")
+    log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging verbosity")
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    latency = bch.ResultVar(units="ms", doc="Request latency")
-    throughput = bch.ResultVar(units="req/s", doc="Request throughput")
+    latency = bn.ResultVar(units="ms", doc="Request latency")
+    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -50,7 +50,7 @@ class ServerBenchmark(bch.ParametrizedSweep):
 class MetaConstVars(MetaGeneratorBase):
     """Generate Python examples demonstrating const_vars usage."""
 
-    example = bch.StringSweep(EXAMPLES, doc="Which const_vars example to generate")
+    example = bn.StringSweep(EXAMPLES, doc="Which const_vars example to generate")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -84,7 +84,7 @@ class MetaConstVars(MetaGeneratorBase):
 
     def _gen_compare(self):
         """Compare the same sweep at different fixed values of memory_pct."""
-        imports = "import bencher as bch"
+        imports = "import bencher as bn"
         body = (
             "bench = ServerBenchmark().to_bench(run_cfg)\n"
             "for mem_val in [20, 50, 80]:\n"
@@ -108,7 +108,7 @@ class MetaConstVars(MetaGeneratorBase):
 
     def _gen_categorical(self):
         """Fix cache_enabled while sweeping cpu_load and backend."""
-        imports = "import bencher as bch"
+        imports = "import bencher as bn"
         body = (
             "bench = ServerBenchmark().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"
@@ -152,16 +152,16 @@ class MetaConstVars(MetaGeneratorBase):
         )
 
 
-def example_meta_const_vars(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_const_vars(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaConstVars().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Constant Variables",
-        input_vars=[bch.p("example", EXAMPLES)],
+        input_vars=[bn.p("example", EXAMPLES)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_const_vars)
+    bn.run(example_meta_const_vars)

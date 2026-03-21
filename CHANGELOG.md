@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.71.0] - 2026-03-21
+
+### Changed
+- Rename import alias convention from `import bencher as bch` to `import bencher as bn` across all examples and tests
+- Rename `test/test_bch_p.py` to `test/test_bn_p.py`
+- Update AST check in `generate_examples.py` to match new `bn` alias
+
 ## [1.70.4] - 2026-03-20
 
 ### Fixed

@@ -9,17 +9,17 @@ from enum import auto
 
 from strenum import StrEnum
 
-import bencher as bch
+import bencher as bn
 
 
 # define a class with the output variables you want to benchmark. It must inherit from ParametrizedSweep (which inherits from param.Parametrized). Param is a python library that allows you to track metadata about parameters.  I would recommend reading at least the intro: https://param.holoviz.org/.  I have extended param with some extra metadata such is the units of the variable so that it can automatically be plotted.
-class OutputCfg(bch.ParametrizedSweep):
+class OutputCfg(bn.ParametrizedSweep):
     """A class for defining what variables the benchmark function returns and metadata on those variables"""
 
     # Documenting the variable here with enables automatic summaries of what has been benchmarked.
     # This made up example uses accuracy as an example, but the variable defined here can be any metric that is important for the performance of a system.  You can also define the direction of the optimisation i.e. to minimise or maximise the metric.
-    accuracy = bch.ResultVar(
-        units="%", direction=bch.OptDir.maximize, doc="The accuracy of the algorithm."
+    accuracy = bn.ResultVar(
+        units="%", direction=bn.OptDir.maximize, doc="The accuracy of the algorithm."
     )
 
 
@@ -37,15 +37,15 @@ class AlgoSetting(StrEnum):
 
 
 # define a class with the input variables you want to benchmark.  It must inherit from ParametrizeSweep. This class defines a struct that is passed to the benchmark function.  The function must be pure and so we define it as a staticmethod that takes an InputCfg class and returns an OutputCfg class. By accepting and returning parametrized classes the metadata about what the relationship between the input and output are easy to track.
-class InputCfg(bch.ParametrizedSweep):
+class InputCfg(bn.ParametrizedSweep):
     # The variables must be defined as one of the Sweep types, i.e, FloatSweep, IntSweep, EnumSweep from bencher.bench_vars
     # theta = FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=30)
 
     # Define sweep variables by passing in an enum class name. The first element of the enum is the default by convention, but you can override the default in the constructor
-    algo_setting_enum = bch.EnumSweep(AlgoSetting, default=AlgoSetting.poor)
+    algo_setting_enum = bn.EnumSweep(AlgoSetting, default=AlgoSetting.poor)
 
     # In this case there are no units so its marked as unitless or ul. You can define how many evenly distributed samples to sample the parameter with
-    algo_setting_float = bch.FloatSweep(
+    algo_setting_float = bn.FloatSweep(
         default=0.0,
         bounds=[0.0, 6.0],
         doc="This represents a continuous input value to your function that affects the desired output in a way you want to characterise.",
@@ -77,7 +77,7 @@ class InputCfg(bch.ParametrizedSweep):
 
 if __name__ == "__main__":
     # pass the objective function you have defined to bencher.  This benchmark function can be reused for multiple sweeps.  You also need to pass the inputCfg to the bencher so that it can process the metadata about the input configuration.
-    bench = bch.Bench("Bencher_Example_Categorical", InputCfg.bench_function, InputCfg)
+    bench = bn.Bench("Bencher_Example_Categorical", InputCfg.bench_function, InputCfg)
 
     # Bencher needs to know the metadata of the variable in order to automatically sweep and plot it, so it is passed by using param's metadata syntax.  InputCfg.param.* is how to access the metadata defined in the class description.  Unfortunately vscode autocomplete doesn't work with params metaclass machinery so you will need to look at the class definition to get a list of possible settings. Define what parameter you want to sweep over and the result variable you want to plot.  If you pass 1 input, it will perform a 1D sweep over that dimension and plot a line or a bar graph of the result (depending on if that variable on continuous or discrete).  In this example we are going to sweep the enum variable and record the accuracy.
     bench.plot_sweep(
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         description="""Sample all the values in enum setting and record the resulting accuracy.  The algo_setting_float is not mentioned in the inputs and so it takes the default value that was set in the InputCfg class.  Repeats=10 so the benchmark function is called 10 times serially.  This is why the function must be pure, if a past call to the function affects the future call to the function (through global side effects) any statistics you calculate will not be correct. 
         """,
         post_description="Here you can see the affect of each setting on the output and the optimum is clearly the best.",
-        run_cfg=bch.BenchRunCfg(repeats=10),
+        run_cfg=bn.BenchRunCfg(repeats=10),
     )
 
     # There is also a floating point input setting that affects the performance of the algorithm.  By passing only the float setting, the InputCfg class will use the default setting of the categorical value so you can understand the float setting in isolation
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         description="""Perform a 1D sweep over the continuous variable algo_setting_float taking sweep the bounds and number of samples from the InputCfg class definition.  The algo_setting_enum is not mentioned in the inputs and so it takes the default value that was set in the InputCfg class.  Repeats=10 so the benchmark function is called 10 times serially.  
         """,
         post_description="The plot shows the output is affected by the float input in a continuous way with a peak around 1.5",
-        run_cfg=bch.BenchRunCfg(repeats=10),
+        run_cfg=bn.BenchRunCfg(repeats=10),
     )
 
     # This sweep is a combination of the previous two sweeps
@@ -112,7 +112,7 @@ if __name__ == "__main__":
         description="""Perform a 2D sweep over the enum and continuous variable to see how they act together.  Here the setting use_optuna=True so additional graphs a plotted at the end. 
         """,
         post_description="In this example function the two input settings combine in a linear and predictable way, so the best combination of settings is enum = AlgoSetting.optimum and float = 1.33.  Setting use_optuna=True adds a plot of how much each input parameter affects the metric and a printout of the best parameter values found during the sweep.  If the value for repeat is high it is an indication there is something wrong with your benchmark function. The repeat should have no affect on the value of the function if calls to the function are independent.  This can be useful to detect undesired side effects in your code",
-        run_cfg=bch.BenchRunCfg(repeats=10, use_optuna=True, serve_xarray=True, serve_pandas=True),
+        run_cfg=bn.BenchRunCfg(repeats=10, use_optuna=True, serve_xarray=True, serve_pandas=True),
     )
 
     # In the last example we track the value of the categorical values over time.
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         This shows the basic features of bencher.  These examples are purposefully simplified to demonstrate its features in isolation and don't reeally show the real advantages of bencher.  If you only have a few inputs and outputs its not that complicated to throw together some plots of performance.  The power of bencher is that when you have a system with many moving parts that all interact with each other, teasing apart those influences becomes much harder because the parameter spaces combine quite quickly into a high dimensional mess. Bencher makes it easier to experiment with different combination of inputs to gain an intuition of the system performance. Bencher can plot up to 6D input natively and you can add custom plots if you have exotic data types or state spaces [WIP]. 
         """,
         post_description="",
-        run_cfg=bch.BenchRunCfg(repeats=10, over_time=True, clear_history=False),
+        run_cfg=bn.BenchRunCfg(repeats=10, over_time=True, clear_history=False),
     )
 
     # launch web server and view

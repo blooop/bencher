@@ -1,36 +1,36 @@
 import unittest
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject, FunctionVariant
 
 
 class TestBenchMeta(unittest.TestCase):
     def test_repeats_equal(self):
-        bench = bch.Bench("bench", BenchableObject())
+        bench = bn.Bench("bench", BenchableObject())
 
         res1 = bench.plot_sweep(
-            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bch.BenchRunCfg(repeats=1)
+            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bn.BenchRunCfg(repeats=1)
         )
 
         res1_eq = bench.plot_sweep(
-            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bch.BenchRunCfg(repeats=1)
+            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bn.BenchRunCfg(repeats=1)
         )
 
         res2 = bench.plot_sweep(
-            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bch.BenchRunCfg(repeats=2)
+            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bn.BenchRunCfg(repeats=2)
         )
 
         self.assertTrue(
-            res1.to_dataset(bch.ReduceType.NONE).identical(res1_eq.to_dataset(bch.ReduceType.NONE)),
+            res1.to_dataset(bn.ReduceType.NONE).identical(res1_eq.to_dataset(bn.ReduceType.NONE)),
             "created with identical settings so should be equal",
         )
 
         self.assertFalse(
-            res1.to_dataset(bch.ReduceType.NONE).identical(res2.to_dataset(bch.ReduceType.NONE)),
+            res1.to_dataset(bn.ReduceType.NONE).identical(res2.to_dataset(bn.ReduceType.NONE)),
             "different number of repeats so should not be equal",
         )
 
-        res1_ds = res1.to_dataset(bch.ReduceType.SQUEEZE)
-        res2_ds = res2.to_dataset(bch.ReduceType.REDUCE)
+        res1_ds = res1.to_dataset(bn.ReduceType.SQUEEZE)
+        res2_ds = res2.to_dataset(bn.ReduceType.REDUCE)
 
         self.assertFalse(
             res1_ds.identical(res2_ds), "should not be equal because of std_dev column"

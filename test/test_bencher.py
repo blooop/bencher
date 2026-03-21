@@ -22,7 +22,7 @@ def get_hash_isolated_process() -> bytes:
         [
             "python3",
             "-c",
-            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bch;cfg1 = bch.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
+            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bn;cfg1 = bn.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
         ],
         stdout=subprocess.PIPE,
         check=False,

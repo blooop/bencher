@@ -8,16 +8,16 @@ Demonstrates:
 
 import numpy as np
 
-import bencher as bch
+import bencher as bn
 
 
-class Rastrigin(bch.ParametrizedSweep):
+class Rastrigin(bn.ParametrizedSweep):
     """A 2-D Rastrigin function — classic optimization benchmark."""
 
-    x = bch.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
-    y = bch.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
+    x = bn.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
+    y = bn.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
 
-    loss = bch.ResultVar("ul", bch.OptDir.minimize)
+    loss = bn.ResultVar("ul", bn.OptDir.minimize)
 
     def __call__(self, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -30,10 +30,10 @@ class Rastrigin(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_optimize(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_optimize(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Demonstrate the first-class optimization API."""
     cfg = Rastrigin()
-    bench = bch.Bench("OptimizeExample", cfg, run_cfg=run_cfg)
+    bench = bn.Bench("OptimizeExample", cfg, run_cfg=run_cfg)
 
     # --- 1. Direct optimization -----------------------------------------
     result = bench.optimize(n_trials=30, plot=True)
@@ -60,15 +60,15 @@ def example_optimize(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     return bench
 
 
-def example_optimize_one_liner(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_optimize_one_liner(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """One-liner convenience via ``to_optimize()``."""
     result = Rastrigin().to_optimize(n_trials=50, run_cfg=run_cfg)
     print(result.summary())
     # Return a bench for consistency with the docs generator
-    bench = bch.Bench("OptimizeOneLiner", Rastrigin(), run_cfg=run_cfg)
+    bench = bn.Bench("OptimizeOneLiner", Rastrigin(), run_cfg=run_cfg)
     bench.report.append(result.to_panel())
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_optimize)
+    bn.run(example_optimize)

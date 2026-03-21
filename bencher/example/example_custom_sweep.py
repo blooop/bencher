@@ -1,18 +1,16 @@
-import bencher as bch
+import bencher as bn
 
 
-class Square(bch.ParametrizedSweep):
+class Square(bn.ParametrizedSweep):
     """An example of a datatype with an integer and float parameter"""
 
-    x = bch.FloatSweep(
+    x = bn.FloatSweep(
         sample_values=[2, 3, 4, 7, 8, 9],
         doc="An example of a user defines set of sweep values",
     )
-    y = bch.IntSweep(
-        sample_values=[1, 2, 6], doc="An example of a user defines set of sweep values"
-    )
+    y = bn.IntSweep(sample_values=[1, 2, 6], doc="An example of a user defines set of sweep values")
 
-    result = bch.ResultVar("ul", doc="Square of x")
+    result = bn.ResultVar("ul", doc="Square of x")
 
     def __call__(self, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -20,7 +18,7 @@ class Square(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_custom_sweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_custom_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """This example shows how to define a custom set of value to sample from instead of a uniform sweep
 
     Args:
@@ -30,8 +28,8 @@ def example_custom_sweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         Bench: results of the parameter sweep
     """
 
-    bencher = bch.Bench("benchmarking_example_custom_sweep", Square(), run_cfg=run_cfg)
-    # bencher = bch.Bench("benchmarking_example_custom_sweep", call,run_cfg=run_cfg)
+    bencher = bn.Bench("benchmarking_example_custom_sweep", Square(), run_cfg=run_cfg)
+    # bencher = bn.Bench("benchmarking_example_custom_sweep", call,run_cfg=run_cfg)
 
     # here we sample the input variable theta and plot the value of output1. The (noisy) function is sampled 20 times so you can see the distribution
 
@@ -51,7 +49,7 @@ def example_custom_sweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(
+    bn.run(
         example_custom_sweep,
-        run_cfg=bch.BenchRunCfg(run_tag="example_tag1", print_meta=True),
+        run_cfg=bn.BenchRunCfg(run_tag="example_tag1", print_meta=True),
     )

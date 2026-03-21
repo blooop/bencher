@@ -1,4 +1,4 @@
-import bencher as bch
+import bencher as bn
 import numpy as np
 import math
 from PIL import Image, ImageDraw
@@ -12,20 +12,20 @@ def polygon_points(radius: float, sides: int, start_angle: float):
     return points
 
 
-class BenchPolygons(bch.ParametrizedSweep):
-    sides = bch.IntSweep(default=3, bounds=(3, 7))
-    radius = bch.FloatSweep(default=1, bounds=(0.2, 1))
-    linewidth = bch.FloatSweep(default=1, bounds=(1, 10))
-    color = bch.StringSweep(["red", "green", "blue"])
-    start_angle = bch.FloatSweep(default=0, bounds=[0, 360])
-    polygon = bch.ResultImage()
-    area = bch.ResultVar()
-    side_length = bch.ResultVar()
+class BenchPolygons(bn.ParametrizedSweep):
+    sides = bn.IntSweep(default=3, bounds=(3, 7))
+    radius = bn.FloatSweep(default=1, bounds=(0.2, 1))
+    linewidth = bn.FloatSweep(default=1, bounds=(1, 10))
+    color = bn.StringSweep(["red", "green", "blue"])
+    start_angle = bn.FloatSweep(default=0, bounds=[0, 360])
+    polygon = bn.ResultImage()
+    area = bn.ResultVar()
+    side_length = bn.ResultVar()
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         points = polygon_points(self.radius, self.sides, self.start_angle)
-        filepath = bch.gen_image_path("polygon")
+        filepath = bn.gen_image_path("polygon")
         self.polygon = self.points_to_polygon_png(points, filepath)
         # Verify filepath is being returned
         assert isinstance(self.polygon, str), f"Expected string filepath, got {type(self.polygon)}"
@@ -51,16 +51,16 @@ class BenchPolygons(bch.ParametrizedSweep):
         return str(filename)
 
 
-def example_image(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_image(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     run_cfg.cache_results = False
-    bench = bch.Bench("polygons", BenchPolygons(), run_cfg=run_cfg)
+    bench = bn.Bench("polygons", BenchPolygons(), run_cfg=run_cfg)
 
     bench.result_vars = ["polygon", "area"]
 
-    bench.add_plot_callback(bch.BenchResult.to_sweep_summary)
-    # bench.add_plot_callback(bch.BenchResult.to_auto, level=2)
-    bench.add_plot_callback(bch.BenchResult.to_panes, level=3)
-    # bench.add_plot_callback(bch.BenchResult.to_panes)
+    bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
+    # bench.add_plot_callback(bn.BenchResult.to_auto, level=2)
+    bench.add_plot_callback(bn.BenchResult.to_panes, level=3)
+    # bench.add_plot_callback(bn.BenchResult.to_panes)
 
     sweep_vars = ["sides", "radius", "linewidth", "color"]
 
@@ -78,4 +78,4 @@ def example_image(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_image, level=3)
+    bn.run(example_image, level=3)
