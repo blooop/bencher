@@ -30,7 +30,7 @@ from bencher.variables.results import ResultHmap
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str, resolve_aggregate, _handle_deprecated_agg_over_dims
+from bencher.utils import params_to_str, resolve_aggregate
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
 from bencher.sweep_timings import SweepTimings, phase_timer
@@ -196,7 +196,6 @@ class Bench(BenchPlotServer):
         plot_callbacks: list[Callable] | bool | None = None,
         aggregate: bool | int | list[str] | None = None,
         agg_fn: str = "mean",
-        agg_over_dims: list[str] | None = None,
     ) -> list[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
@@ -224,7 +223,6 @@ class Bench(BenchPlotServer):
         """
         if relationship_cb is None:
             relationship_cb = combinations
-        aggregate = _handle_deprecated_agg_over_dims(aggregate, agg_over_dims)
         if input_vars is None:
             input_vars = self.worker_class_instance.get_inputs_only()
         results = []
@@ -265,7 +263,6 @@ class Bench(BenchPlotServer):
         sample_order: SampleOrder = SampleOrder.INORDER,
         aggregate: bool | int | list[str] | None = None,
         agg_fn: str = "mean",
-        agg_over_dims: list[str] | None = None,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -438,7 +435,6 @@ class Bench(BenchPlotServer):
         elif isinstance(plot_callbacks, bool):
             plot_callbacks = [BenchResult.to_auto_plots] if plot_callbacks else []
 
-        aggregate = _handle_deprecated_agg_over_dims(aggregate, agg_over_dims)
         input_var_names = [i.name for i in input_vars_in]
         agg_over_dims = resolve_aggregate(aggregate, input_var_names)
 
