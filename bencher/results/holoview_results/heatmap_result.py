@@ -153,10 +153,10 @@ class HeatmapResult(HoloviewResult):
 
                 def make_heatmap(ds_t):
                     da_t = ds_t[C]
-                    plot_t = da_t.hvplot.heatmap(
-                        x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
+                    df_t = da_t.to_dataframe().reset_index()
+                    return hv.HeatMap(df_t, kdims=[x, y], vdims=[C]).opts(
+                        cmap="plasma", title=title, xrotation=30, **kwargs
                     )
-                    return self._apply_opts(plot_t, xrotation=30)
 
                 return self._build_time_holomap(dataset, C, make_heatmap)
 

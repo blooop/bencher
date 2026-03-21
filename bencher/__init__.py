@@ -96,6 +96,7 @@ from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 from .sample_order import SampleOrder
 from .caching import CachedParams
 from .results.bench_result import BenchResult
+from .results.optimize_result import OptimizeResult
 from .results.video_result import VideoResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg

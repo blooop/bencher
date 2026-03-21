@@ -34,10 +34,6 @@ pixi install
 echo "🔧 Setting up prek hooks..."
 pixi run prek install || echo "⚠️  Prek installation skipped (optional)"
 
-# Set up git merge driver for lockfiles
-echo "🔧 Configuring git merge driver..."
-pixi run setup-git-merge-driver || true
-
 echo "✅ Environment setup complete!"
 echo ""
 echo "Available pixi tasks:"

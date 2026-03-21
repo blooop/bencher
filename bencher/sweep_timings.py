@@ -19,11 +19,19 @@ class SweepTimings:
     cache_check_ms: float = 0.0
     sample_cache_init_ms: float = 0.0
     dataset_setup_ms: float = 0.0
-    job_submission_ms: float = 0.0
-    job_execution_ms: float = 0.0
+    job_submission_ms: float = 0.0  #: Job object creation (consistent across executors)
+    job_execution_ms: float = 0.0  #: Job submission, execution, and result storage
     history_merge_ms: float = 0.0
     post_setup_ms: float = 0.0
-    total_ms: float = 0.0
+    total_ms: float = 0.0  #: Sum of all phase timings above
+
+    def compute_total(self) -> float:
+        """Compute total_ms as the sum of all phase timing fields."""
+        return sum(
+            getattr(self, f.name)
+            for f in fields(self)
+            if f.name != "total_ms" and f.name.endswith("_ms")
+        )
 
     def summary(self) -> dict[str, float]:
         """Return all phase timings as a dict."""
