@@ -67,11 +67,11 @@ def _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names):
 
 
 class OptunaResult(BenchResultBase):
-    def to_optuna_plots(self, **kwargs) -> list[pn.pane.panel]:
-        """Create an optuna summary from the benchmark results
+    def to_optuna_plots(self, **kwargs) -> pn.pane.panel:
+        """Create an optuna summary from the benchmark results.
 
         Returns:
-            list[pn.pane.panel]: A list of optuna plot summarising the benchmark process
+            pn.pane.panel: A panel widget with optuna visualisations.
         """
 
         return self.collect_optuna_plots(**kwargs)
