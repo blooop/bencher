@@ -1,4 +1,83 @@
-# Plan: Rename `bencher` to `holobench` and `bch` to `hb`
+# Rename Plans
+
+Two plans live here — the **simple alias rename** (`bch` → `bn`) that can ship now, and the **full package rename** (`bencher` → `holobench`) that is shelved for later.
+
+---
+
+# Plan A: Rename import alias `bch` → `bn`
+
+## Context
+
+The codebase uses `import bencher as bch` everywhere. Renaming the alias to `bn` is a low-risk cosmetic change — no package rename, no directory moves, no config changes. Just a find-and-replace of a local variable convention across example and test files.
+
+## Scope
+
+- ~293 files: `import bencher as bch` → `import bencher as bn`
+- ~2,446 occurrences: `bch.` → `bn.`
+- Meta generator templates that emit code with `bch.` → `bn.`
+- `generate_examples.py:28` AST check: `"bch"` → `"bn"`
+- Rename `test/test_bch_p.py` → `test/test_bn_p.py`
+- Regenerate `bencher/example/generated/` files
+
+## What does NOT change
+
+- Package directory stays `bencher/`
+- All `from bencher.X import Y` imports stay the same
+- pyproject.toml, setup.py, setup.cfg, MANIFEST.in — untouched
+- docs/conf.py, .readthedocs.yaml — untouched
+- Class names (`Bench`, `BenchRunner`, etc.) — unchanged
+- `bch_fn` variable in `bench_runner.py` — stays as-is (it means "benchmark function", not a module alias)
+- CHANGELOG historical references — untouched
+
+## Steps
+
+### Step 1: Bulk replace `import bencher as bch` and `bch.`
+```bash
+find . -name '*.py' -not -path './.pixi/*' | xargs sed -i 's/import bencher as bch/import bencher as bn/g'
+find . -name '*.py' -not -path './.pixi/*' | xargs sed -i 's/\bbch\./bn./g'
+```
+
+### Step 2: Update meta generator templates
+- `bencher/example/meta/meta_generator_base.py` — `"import bencher as bch"` → `"import bencher as bn"`, and `bch.` → `bn.` in template strings
+- `bencher/example/meta/generate_meta.py` — INLINE_CLASSES dict entries
+- `bencher/example/meta/generate_examples.py:28` — `node.func.value.id == "bch"` → `"bn"`
+- Other `generate_meta_*.py` files with embedded code strings
+
+### Step 3: Rename test file
+```bash
+git mv test/test_bch_p.py test/test_bn_p.py
+```
+
+### Step 4: Delete and regenerate generated examples
+```bash
+rm bencher/example/generated/ex_*.py
+pixi run generate-examples
+```
+
+### Step 5: Update CLAUDE.md and AGENTS.md
+Change any `import bencher as bch` / `bch.` references in developer documentation.
+
+### Step 6: Validate
+```bash
+pixi run ci
+```
+Verify:
+- `grep -r 'as bch' --include='*.py' . | grep -v .pixi | grep -v CHANGELOG` returns zero results
+- `grep -r '\bbch\.' --include='*.py' . | grep -v .pixi | grep -v CHANGELOG | grep -v bch_fn` returns zero results
+
+## Gotchas
+
+| Risk | Detail | Mitigation |
+|------|--------|------------|
+| **`bch_fn` variable** | 4 uses in bench_runner.py — not a module alias | `\bbch\.` regex doesn't match `bch_fn` (underscore not dot). Safe. |
+| **Meta generator strings** | `sed` will catch `bch.` in string literals too, which is what we want | Verify templates manually after sed |
+| **AST check** | `generate_examples.py` checks `node.func.value.id == "bch"` | Must update to `"bn"` or generated files won't be detected |
+| **CHANGELOG** | Has `bch.run()` references | Leave historical entries alone |
+| **Docs notebooks** | Generated .ipynb may reference `bch.` | Regenerate with `pixi run generate-docs` |
+
+---
+
+# Plan B: Full package rename `bencher` → `holobench` (SHELVED)
 
 ## Context
 
