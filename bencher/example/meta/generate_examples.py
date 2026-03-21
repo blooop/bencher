@@ -357,22 +357,37 @@ def generate_section_index(
 # Groups with title=None have their sections rendered at the top level.
 SECTION_GROUPS = [
     (
-        None,
+        "0 Float Inputs",
         [
-            ("0 Float Inputs", "0_float/no_repeats"),
-            ("0 Float Inputs (Repeated)", "0_float/with_repeats"),
-            ("0 Float Inputs (Over Time)", "0_float/over_time"),
-            ("0 Float Inputs (Over Time + Repeated)", "0_float/over_time_repeats"),
-            ("1 Float Input", "1_float/no_repeats"),
-            ("1 Float Input (Repeated)", "1_float/with_repeats"),
-            ("1 Float Input (Over Time)", "1_float/over_time"),
-            ("1 Float Input (Over Time + Repeated)", "1_float/over_time_repeats"),
-            ("2 Float Inputs", "2_float/no_repeats"),
-            ("2 Float Inputs (Repeated)", "2_float/with_repeats"),
-            ("2 Float Inputs (Over Time)", "2_float/over_time"),
-            ("3 Float Inputs", "3_float/no_repeats"),
-            ("3 Float Inputs (Repeated)", "3_float/with_repeats"),
-            ("3 Float Inputs (Over Time)", "3_float/over_time"),
+            ("No Repeats", "0_float/no_repeats"),
+            ("Repeated", "0_float/with_repeats"),
+            ("Over Time", "0_float/over_time"),
+            ("Over Time + Repeated", "0_float/over_time_repeats"),
+        ],
+    ),
+    (
+        "1 Float Input",
+        [
+            ("No Repeats", "1_float/no_repeats"),
+            ("Repeated", "1_float/with_repeats"),
+            ("Over Time", "1_float/over_time"),
+            ("Over Time + Repeated", "1_float/over_time_repeats"),
+        ],
+    ),
+    (
+        "2 Float Inputs",
+        [
+            ("No Repeats", "2_float/no_repeats"),
+            ("Repeated", "2_float/with_repeats"),
+            ("Over Time", "2_float/over_time"),
+        ],
+    ),
+    (
+        "3 Float Inputs",
+        [
+            ("No Repeats", "3_float/no_repeats"),
+            ("Repeated", "3_float/with_repeats"),
+            ("Over Time", "3_float/over_time"),
         ],
     ),
     (
