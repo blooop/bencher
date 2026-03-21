@@ -22,6 +22,8 @@ hv.extension("bokeh", "plotly")
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
 
+_AGG_TITLE = "All Time Points (aggregated)"
+
 
 class HoloviewResult(VideoResult):
     @staticmethod
@@ -166,11 +168,10 @@ class HoloviewResult(VideoResult):
         Safe to call on any HoloViews object; if no widgets are produced
         the original object is returned unchanged.
 
-        The slider defaults to the most recent (last) time point.  We keep
-        the Python-side value at its default (first) so that Panel's embed
-        system generates non-empty JSON patches for every position.  A
-        small JS snippet then moves the slider to the last position once
-        the page has rendered, which triggers the embedded patch callback.
+        The slider defaults to the most recent (last) time point by
+        setting the widget value in Python.  Panel's embed system computes
+        JSON patches relative to this default, so every other position
+        gets a valid patch and the last position is the initial state.
         """
         if widgets is None:
             widgets = {"over_time": pn.widgets.DiscreteSlider}
@@ -180,84 +181,14 @@ class HoloviewResult(VideoResult):
         widget_box = row[1]
         widget_box.align = ("start", "start")
 
-        # Find the over_time slider and its last option value.
-        over_time_slider = None
-        last_option = None
+        # Set the over_time slider to the last (most recent) time point.
         for w in widget_box:
             if hasattr(w, "name") and w.name == "over_time" and hasattr(w, "options") and w.options:
                 opts = w.options.values() if isinstance(w.options, dict) else w.options
                 opts = list(opts)
                 if len(opts) > 1:
-                    over_time_slider = w
-                    last_option = opts[-1]
+                    w.value = opts[-1]
                 break
-
-        # For static HTML embeds, inject JS to move the slider to the last
-        # position after Bokeh renders.  In Panel's embed mode this triggers
-        # the CustomJS callback that calls State.set_state(), applying the
-        # pre-computed patch.
-        #
-        # Panel's DiscreteSlider renders the label ("over_time: <b>…</b>")
-        # in a separate Div and sets the Bokeh Slider's title to ''.  So we
-        # find the slider through the Panel State model's widgets map, which
-        # explicitly tracks registered widget model IDs.
-        if over_time_slider is not None and last_option is not None:
-            init_js = pn.pane.HTML(
-                """\
-<script>
-(function() {
-  // Poll until Bokeh finishes rendering.  50 attempts * 100 ms = 5 s
-  // which is generous for even large embedded documents.
-  var MAX_ATTEMPTS = 50;
-  var POLL_MS = 100;
-  var attempts = 0;
-  function _setSliderToEnd() {
-    attempts++;
-    if (attempts > MAX_ATTEMPTS) return;
-    if (typeof Bokeh === "undefined"
-        || !Bokeh.index || !Object.keys(Bokeh.index).length) {
-      setTimeout(_setSliderToEnd, POLL_MS);
-      return;
-    }
-    var found = false;
-    var keys = Object.keys(Bokeh.index);
-    for (var i = 0; i < keys.length; i++) {
-      if (found) break;
-      var view = Bokeh.index[keys[i]];
-      if (!view || !view.model || !view.model.document) continue;
-      var doc = view.model.document;
-      // Find the Panel State root which holds registered widget IDs
-      var roots = doc.roots();
-      for (var r = 0; r < roots.length; r++) {
-        var root = roots[r];
-        if (root.state == null || root.widgets == null) continue;
-        var wids = root.widgets instanceof Map
-          ? Array.from(root.widgets.keys())
-          : Object.keys(root.widgets);
-        for (var j = 0; j < wids.length; j++) {
-          var slider = doc.get_model_by_id(wids[j]);
-          if (slider && slider.end != null && slider.value != null) {
-            slider.value = slider.end;
-            found = true;
-          }
-        }
-        break;
-      }
-    }
-    if (!found) setTimeout(_setSliderToEnd, POLL_MS);
-  }
-  if (document.readyState === "complete") {
-    setTimeout(_setSliderToEnd, 50);
-  } else {
-    window.addEventListener("load", function() { setTimeout(_setSliderToEnd, 50); });
-  }
-})();
-</script>""",
-                width=0,
-                height=0,
-                margin=0,
-            )
-            return pn.Column(row[0], widget_box, init_js)
 
         return pn.Column(row[0], widget_box)
 
@@ -306,66 +237,76 @@ class HoloviewResult(VideoResult):
         return new_ds
 
     def _build_time_holomap(self, dataset, result_var_name, make_plot_fn, max_window=None):
-        """Build a 2-D ``HoloMap`` keyed by ``(over_time, window_size)``.
+        """Build per-time-point HoloMap + a static aggregated plot.
 
-        For each window size *K* (1 … *max_k*), applies a rolling mean over
-        the last *K* time points and lets *make_plot_fn(ds_t)* produce the
-        plot for a single-time-point dataset slice.
+        Returns a ``pn.Column`` containing:
+
+        1. An *N*-entry ``HoloMap`` with a time slider (one plot per snapshot).
+        2. A static plot showing data averaged over **all** time points.
+
+        This avoids the *O(N×K)* state explosion of a 2-D
+        ``(over_time × window_size)`` HoloMap while still letting the user
+        compare individual snapshots to the overall trend.
         """
-        if max_window is None:
-            max_window = getattr(self.bench_cfg, "max_time_window", 15)
+        _ = max_window  # reserved for future use
 
         times = dataset.coords["over_time"].values
         n_time = len(times)
-        max_k = min(n_time, max_window)
 
-        kdims = self._over_time_kdims() + [hv.Dimension("window_size", label="Window Size")]
+        # ── Per-time-point HoloMap with slider ──
+        kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
-        for k in range(1, max_k + 1):
-            ds_k = self._apply_rolling_window(dataset, k, result_var_name)
-            for t in ds_k.coords["over_time"].values:
-                ds_t = ds_k.sel(over_time=t)
-                holomap[t, k] = make_plot_fn(ds_t)
+        for t in times:
+            ds_t = dataset.sel(over_time=t)
+            holomap[t] = make_plot_fn(ds_t)
 
-        return self._holomap_with_slider_bottom(
-            holomap,
-            widgets={
-                "over_time": pn.widgets.DiscreteSlider,
-                "window_size": pn.widgets.DiscreteSlider,
-            },
-        )
+        slider_pane = self._holomap_with_slider_bottom(holomap)
+
+        # ── Tabs: aggregated (default) | per-time-point slider ──
+        if n_time > 1:
+            ds_agg = self._apply_rolling_window(dataset, n_time, result_var_name)
+            ds_agg_last = ds_agg.sel(over_time=times[-1])
+            agg_plot = make_plot_fn(ds_agg_last)
+            return pn.Tabs(
+                ("Per Time Point", slider_pane),
+                (_AGG_TITLE, pn.Column(agg_plot)),
+            )
+
+        return slider_pane
 
     def _build_time_holomap_raw(self, da, make_plot_fn, max_window=None):
-        """Build a 2-D ``HoloMap`` for unreduced data (distribution plots).
+        """Build per-time-point HoloMap + a static aggregated plot for distributions.
 
-        For each window size *K*, concatenates raw samples from the last *K*
-        time points.  *make_plot_fn(da_window)* produces the plot from the
-        multi-time-point :class:`xr.DataArray`.
+        Returns ``pn.Tabs`` with two tabs:
+
+        1. **Per Time Point** — HoloMap with a time slider (shown by default).
+        2. **All Time Points (aggregated)** — all samples pooled.
         """
-        if max_window is None:
-            max_window = getattr(self.bench_cfg, "max_time_window", 15)
+        _ = max_window  # reserved for future use
 
         times = da.coords["over_time"].values
         n_time = len(times)
-        max_k = min(n_time, max_window)
 
-        kdims = self._over_time_kdims() + [hv.Dimension("window_size", label="Window Size")]
+        # ── Per-time-point HoloMap with slider ──
+        kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
-        for k in range(1, max_k + 1):
-            for i, t in enumerate(times):
-                start = max(0, i - k + 1)
-                da_window = da.isel(over_time=slice(start, i + 1))
-                holomap[t, k] = make_plot_fn(da_window)
+        for i, t in enumerate(times):
+            da_t = da.isel(over_time=slice(i, i + 1))
+            holomap[t] = make_plot_fn(da_t)
 
-        return self._holomap_with_slider_bottom(
-            holomap,
-            widgets={
-                "over_time": pn.widgets.DiscreteSlider,
-                "window_size": pn.widgets.DiscreteSlider,
-            },
-        )
+        slider_pane = self._holomap_with_slider_bottom(holomap)
+
+        # ── Tabs: per-time-point (default) | aggregated ──
+        if n_time > 1:
+            agg_plot = make_plot_fn(da)
+            return pn.Tabs(
+                ("Per Time Point", slider_pane),
+                (_AGG_TITLE, pn.Column(agg_plot)),
+            )
+
+        return slider_pane
 
     def hv_container_ds(
         self,

@@ -63,6 +63,7 @@ def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
             description=example_git_time_event.__doc__,
             run_cfg=run_cfg,
             time_src=time_label,
+            aggregate=True,
         )
     return bench
 
