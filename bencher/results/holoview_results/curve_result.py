@@ -72,51 +72,6 @@ class CurveResult(HoloviewResult):
             **kwargs,
         )
 
-    def _build_curve_overlay(
-        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> hv.Overlay:
-        """Build a Curve (+ optional Spread) overlay from a dataset without over_time."""
-        var = result_var.name
-        std_var = f"{var}_std"
-        has_spread = std_var in dataset.data_vars
-        title = self.title_from_ds(dataset, result_var, **kwargs)
-
-        # Determine the float (continuous) kdim for the x-axis so that
-        # categorical dims become groupby dimensions automatically.
-        float_names = [fv.name for fv in self.plt_cnt_cfg.float_vars]
-        ds_dims = list(dataset.dims)
-        kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
-        groupby = [d for d in ds_dims if d not in kdims]
-
-        # Convert to DataFrame to avoid holoviews xarray backend issues
-        # with unaccounted coordinates on multi-dimensional datasets.
-        df = dataset.to_dataframe().reset_index()
-
-        vdims = [var, std_var] if has_spread else [var]
-        hvds = hv.Dataset(df, kdims=kdims + groupby, vdims=vdims)
-
-        if not groupby:
-            pt = hv.Overlay()
-            pt *= hv.Curve(hvds, kdims=kdims, vdims=var, label=var).opts(
-                title=title, xrotation=30, **kwargs
-            )
-            if has_spread:
-                pt *= hv.Spread(hvds, kdims=kdims, vdims=[var, std_var])
-            return pt.opts(legend_position="right")
-
-        # With groupby: iterate over groups manually to build a flat Overlay
-        # (not a HoloMap) so this can safely be nested inside an outer HoloMap.
-        pt = hv.Overlay()
-        for key, group_df in df.groupby(groupby):
-            label = str(key) if not isinstance(key, tuple) else ", ".join(str(k) for k in key)
-            group_hvds = hv.Dataset(group_df, kdims=kdims, vdims=vdims)
-            pt *= hv.Curve(group_hvds, kdims=kdims, vdims=var, label=label).opts(
-                xrotation=30, **kwargs
-            )
-            if has_spread:
-                pt *= hv.Spread(group_hvds, kdims=kdims, vdims=[var, std_var])
-        return pt.opts(title=title, legend_position="right")
-
     def to_curve_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs) -> hv.Curve | None:
         """Creates a curve plot from the provided dataset.
 
@@ -137,10 +92,11 @@ class CurveResult(HoloviewResult):
             hv.Curve | None: A curve plot with optional standard deviation spread.
         """
         if self._use_holomap_for_time(dataset):
-            holomap = hv.HoloMap(kdims=self._over_time_kdims())
-            for t in dataset.coords["over_time"].values:
-                ds_t = dataset.sel(over_time=t)
-                holomap[t] = self._build_curve_overlay(ds_t, result_var, **kwargs)
-            return self._holomap_with_slider_bottom(holomap)
+            var = result_var.name
+
+            def make_curve(ds_t):
+                return self._build_curve_overlay(ds_t, result_var, **kwargs)
+
+            return self._build_time_holomap(dataset, var, make_curve)
 
         return self._build_curve_overlay(dataset, result_var, **kwargs)
