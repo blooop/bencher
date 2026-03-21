@@ -249,9 +249,9 @@ class TestSummariseTrial(unittest.TestCase):
         study.optimize(lambda trial: trial.suggest_float("float_var", 0, 1), n_trials=3)
         trial = study.best_trial
         output = summarise_trial(trial, res.bench_cfg)
-        self.assertIsInstance(output, list)
-        self.assertTrue(len(output) > 0)
-        self.assertIn("Trial id:", output[0])
+        self.assertIsInstance(output, str)
+        self.assertIn("Trial", output)
+        self.assertIn("|", output)  # markdown table markers
 
 
 class TestOptunaGridSearch(unittest.TestCase):

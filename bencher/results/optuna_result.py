@@ -10,14 +10,17 @@ import panel as pn
 from optuna.visualization import (
     plot_param_importances,
     plot_pareto_front,
+    plot_optimization_history,
+    plot_contour,
+    plot_parallel_coordinate,
 )
 from bencher.utils import hmap_canonical_input
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.inputs import BoolSweep
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
-
-# from bencher.results.bench_result_base import BenchResultBase
 from bencher.optuna_conversions import (
+    _append_safe,
+    _make_target,
     sweep_var_to_optuna_dist,
     summarise_trial,
     param_importance,
@@ -224,91 +227,132 @@ class OptunaResult(BenchResultBase):
 
     def collect_optuna_plots(
         self, pareto_width: float | None = None, pareto_height: float | None = None
-    ) -> list[pn.pane.panel]:
-        """Use optuna to plot various summaries of the optimisation
-
-        Args:
-            study (optuna.Study): The study to plot
-            bench_cfg (BenchCfg): Benchmark config with options used to generate the study
+    ) -> pn.pane.panel:
+        """Use optuna to plot various summaries of the optimisation.
 
         Returns:
-            list[pn.pane.Pane]: A list of plots
+            pn.pane.panel: A panel widget (Column or Tabs) with optuna visualisations.
         """
 
         self.studies = [self.bench_result_to_study(True)]
-        titles = ["# Analysis"]
+        tab_names = ["Analysis"]
         if self.bench_cfg.repeats > 1:
             self.studies.append(self.bench_result_to_study(False))
-            titles = [
-                "# Parameter Importance With Repeats",
-                "# Parameter Importance Without Repeats",
-            ]
+            tab_names = ["With Repeats", "Without Repeats"]
 
-        study_repeats_pane = pn.Row()
-        for study, title in zip(self.studies, titles):
+        study_panes = []
+        for study, tab_name in zip(self.studies, tab_names):
             study_pane = pn.Column()
             target_names = self.bench_cfg.optuna_targets()
-            param_str = []
+            n_inputs = len(self.bench_cfg.input_vars)
 
-            study_pane.append(pn.pane.Markdown(title))
+            # --- Optimization Overview ---
+            study_pane.append(pn.pane.Markdown(f"# {tab_name}"))
 
             if len(target_names) > 1:
+                study_pane.append(pn.pane.Markdown("## Pareto Front"))
                 if len(target_names) <= 3:
-                    study_pane.append(
-                        plot_pareto_front(
-                            study,
-                            target_names=target_names,
-                            include_dominated_trials=False,
-                        )
+                    _append_safe(
+                        study_pane,
+                        plot_pareto_front,
+                        study,
+                        target_names=target_names,
+                        include_dominated_trials=False,
                     )
                 else:
-                    print("plotting pareto front of first 3 result variables")
-                    study_pane.append(
-                        plot_pareto_front(
-                            study,
-                            targets=lambda t: (t.values[0], t.values[1], t.values[2]),
-                            target_names=target_names[:3],
-                            include_dominated_trials=False,
-                        )
+                    _append_safe(
+                        study_pane,
+                        plot_pareto_front,
+                        study,
+                        targets=lambda t: (t.values[0], t.values[1], t.values[2]),
+                        target_names=target_names[:3],
+                        include_dominated_trials=False,
                     )
                     if pareto_width is not None:
                         study_pane[-1].width = pareto_width
                     if pareto_height is not None:
                         study_pane[-1].height = pareto_height
+
+                # Optimization history per objective
+                study_pane.append(pn.pane.Markdown("## Optimization History"))
+                for idx, tgt in enumerate(target_names):
+                    _append_safe(
+                        study_pane,
+                        plot_optimization_history,
+                        study,
+                        target=_make_target(idx),
+                        target_name=tgt,
+                    )
+
+                # Parameter importance
+                study_pane.append(pn.pane.Markdown("## Parameter Importance"))
                 try:
                     study_pane.append(param_importance(self.bench_cfg, study))
-                    param_str.append(
-                        f"    Number of trials on the Pareto front: {len(study.best_trials)}"
-                    )
                 except RuntimeError as e:
-                    study_pane.append(f"Error generating parameter importance: {str(e)}")
-
-                for t in study.best_trials:
-                    param_str.extend(summarise_trial(t, self.bench_cfg))
+                    study_pane.append(
+                        pn.pane.Markdown(f"*Error generating parameter importance: {e}*")
+                    )
 
             else:
-                # cols.append(plot_optimization_history(study)) #TODO, maybe more clever when this is plotted?
+                # Single objective
+                study_pane.append(pn.pane.Markdown("## Optimization History"))
+                _append_safe(study_pane, plot_optimization_history, study)
 
-                # If there is only 1 parameter then there is no point is plotting relative importance.  Only worth plotting if there are multiple repeats of the same value so that you can compare the parameter vs to repeat to get a sense of the how much chance affects the results
-                # if bench_cfg.repeats > 1 and len(bench_cfg.input_vars) > 1:  #old code, not sure if its right
-                if len(self.bench_cfg.input_vars) > 1:
-                    study_pane.append(plot_param_importances(study, target_name=target_names[0]))
+                if n_inputs > 1:
+                    study_pane.append(pn.pane.Markdown("## Parameter Importance"))
+                    _append_safe(
+                        study_pane,
+                        plot_param_importances,
+                        study,
+                        target_name=target_names[0],
+                    )
 
-                param_str.extend(summarise_trial(study.best_trial, self.bench_cfg))
+            # --- Parameter Interactions ---
+            if n_inputs >= 2:
+                study_pane.append(pn.pane.Markdown("## Parameter Interactions"))
+                if len(target_names) > 1:
+                    for idx, tgt in enumerate(target_names):
+                        _append_safe(
+                            study_pane,
+                            plot_parallel_coordinate,
+                            study,
+                            target=_make_target(idx),
+                            target_name=tgt,
+                        )
+                        _append_safe(
+                            study_pane,
+                            plot_contour,
+                            study,
+                            target=_make_target(idx),
+                            target_name=tgt,
+                        )
+                else:
+                    _append_safe(study_pane, plot_parallel_coordinate, study)
+                    _append_safe(study_pane, plot_contour, study)
 
-            kwargs = {"height": 500, "scroll": True} if len(param_str) > 30 else {}
+            # --- Best Parameters ---
+            study_pane.append(pn.pane.Markdown("## Best Parameters"))
 
-            param_str = "\n".join(param_str)
-            study_pane.append(
-                pn.Row(
-                    pn.pane.Markdown(f"## Best Parameters\n```text\n{param_str}"),
-                    **kwargs,
-                ),
-            )
+            if len(target_names) > 1:
+                best_trials = study.best_trials
+                study_pane.append(pn.pane.Markdown(f"**Pareto front size:** {len(best_trials)}"))
+                display_trials = best_trials[:10]
+                trial_md = "\n\n".join(summarise_trial(t, self.bench_cfg) for t in display_trials)
+                if len(best_trials) > 10:
+                    trial_md += f"\n\n*... and {len(best_trials) - 10} more trials*"
+                study_pane.append(pn.pane.Markdown(trial_md))
+            else:
+                study_pane.append(
+                    pn.pane.Markdown(summarise_trial(study.best_trial, self.bench_cfg))
+                )
 
-            study_repeats_pane.append(study_pane)
+            study_panes.append(study_pane)
 
-        return study_repeats_pane
+        if len(study_panes) == 1:
+            return study_panes[0]
+        return pn.Tabs(
+            *((name, pane) for name, pane in zip(tab_names, study_panes)),
+        )
 
     # def extract_study_to_dataset(study: optuna.Study, bench_cfg: BenchCfg) -> BenchCfg:
     #     """Extract an optuna study into an xarray dataset for easy plotting

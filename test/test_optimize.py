@@ -205,7 +205,7 @@ class TestSummariseOptunaStudy:
         # Find Markdown panes and check their content
         md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]
         combined = " ".join(md_texts)
-        assert "Best value" in combined
+        assert "Best objective value" in combined
 
     def test_multi_objective_panel_no_best_value_error(self):
         """Multi-objective panel should not call study.best_value (which raises)."""

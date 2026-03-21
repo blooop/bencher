@@ -9,6 +9,8 @@ from optuna.visualization import (
     plot_param_importances,
     plot_pareto_front,
     plot_optimization_history,
+    plot_parallel_coordinate,
+    plot_slice,
 )
 
 from bencher.bench_cfg import BenchCfg
@@ -53,39 +55,48 @@ def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> o
 
 
 # BENCH_CFG
-def param_importance(bench_cfg: BenchCfg, study: optuna.Study) -> pn.Row:
+def param_importance(bench_cfg: BenchCfg, study: optuna.Study) -> pn.Column:
     col_importance = pn.Column()
-    for tgt in bench_cfg.optuna_targets():
+    for idx, tgt in enumerate(bench_cfg.optuna_targets()):
+
+        def target(t, i=idx):
+            return t.values[i]
+
         col_importance.append(
             pn.Column(
-                pn.pane.Markdown(f"## Parameter importance for: {tgt}"),
-                plot_param_importances(study, target=lambda t: t.values[0], target_name=tgt),
+                pn.pane.Markdown(f"### Parameter importance for: {tgt}"),
+                plot_param_importances(study, target=target, target_name=tgt),
             )
         )
     return col_importance
 
 
 # BENCH_CFG
-def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> list[str]:
-    """Given a trial produce a string summary of the best results
+def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> str:
+    """Given a trial produce a markdown summary of the best results.
 
     Args:
         trial (optuna.trial): trial to summarise
         bench_cfg (BenchCfg): info about the trial
 
     Returns:
-        list[str]: Summary of trial
+        str: Markdown-formatted summary of the trial
     """
-    sep = "    "
-    output = []
-    output.append(f"Trial id:{trial.number}:")
-    output.append(f"{sep}Inputs:")
+    lines = [f"#### Trial {trial.number}", ""]
+    lines.append("| Parameter | Value |")
+    lines.append("|-----------|-------|")
     for k, v in trial.params.items():
-        output.append(f"{sep}{sep}{k}:{v}")
-    output.append(f"{sep}Results:")
+        lines.append(f"| {k} | {v} |")
+    lines.append("")
+    lines.append("| Result | Value |")
+    lines.append("|--------|-------|")
     for it, rv in enumerate(bench_cfg.optuna_targets()):
-        output.append(f"{sep}{sep}{rv}:{trial.values[it]}")
-    return output
+        val = trial.values[it]
+        if isinstance(val, float):
+            lines.append(f"| {rv} | {val:.6g} |")
+        else:
+            lines.append(f"| {rv} | {val} |")
+    return "\n".join(lines)
 
 
 def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseDistribution:
@@ -158,6 +169,15 @@ def cfg_from_optuna_trial(
     return cfg
 
 
+def _make_target(idx: int):
+    """Create a target function that extracts the idx-th objective value from a trial."""
+
+    def target(t):
+        return t.values[idx]
+
+    return target
+
+
 def _append_safe(row, plot_fn, *args, **kwargs):
     """Append a plot to *row*, logging any exception instead of propagating."""
     try:
@@ -166,30 +186,75 @@ def _append_safe(row, plot_fn, *args, **kwargs):
         logging.exception(e)
 
 
-def summarise_optuna_study(study: optuna.study.Study) -> pn.pane.panel:
-    """Summarise an optuna study in a panel format"""
-    row = pn.Column(name="Optimisation Results")
+def summarise_optuna_study(
+    study: optuna.study.Study, target_names: list[str] | None = None
+) -> pn.pane.panel:
+    """Summarise an optuna study in a panel format.
+
+    Args:
+        study: The optuna study to summarise.
+        target_names: Optional names for each objective. Falls back to "Objective N".
+    """
+    col = pn.Column(name="Optimisation Results")
     n_objectives = len(study.directions)
     is_multi = n_objectives >= 2
 
+    col.append(pn.pane.Markdown("## Optimization History"))
     if is_multi:
         for idx in range(n_objectives):
-            target_name = f"Objective {idx}"
-
-            def target(t, i=idx):
-                return t.values[i]
-
+            name = target_names[idx] if target_names and idx < len(target_names) else f"Obj {idx}"
             _append_safe(
-                row, plot_optimization_history, study, target=target, target_name=target_name
+                col, plot_optimization_history, study, target=_make_target(idx), target_name=name
             )
-            _append_safe(row, plot_param_importances, study, target=target, target_name=target_name)
-
-        _append_safe(row, plot_pareto_front, study)
-        summary = f"Pareto-front size: {len(study.best_trials)}"
     else:
-        _append_safe(row, plot_optimization_history, study)
-        _append_safe(row, plot_param_importances, study)
-        summary = f"Best value: {study.best_value}\nParams: {study.best_params}"
+        _append_safe(col, plot_optimization_history, study)
 
-    row.append(pn.pane.Markdown(f"```\n{summary}```"))
-    return row
+    col.append(pn.pane.Markdown("## Parameter Importance"))
+    if is_multi:
+        for idx in range(n_objectives):
+            name = target_names[idx] if target_names and idx < len(target_names) else f"Obj {idx}"
+            _append_safe(
+                col, plot_param_importances, study, target=_make_target(idx), target_name=name
+            )
+    else:
+        _append_safe(col, plot_param_importances, study)
+
+    # Parameter interactions
+    n_params = len(study.trials[0].params) if study.trials else 0
+    if n_params >= 2:
+        col.append(pn.pane.Markdown("## Parameter Interactions"))
+        if is_multi:
+            for idx in range(n_objectives):
+                name = (
+                    target_names[idx] if target_names and idx < len(target_names) else f"Obj {idx}"
+                )
+                _append_safe(
+                    col,
+                    plot_parallel_coordinate,
+                    study,
+                    target=_make_target(idx),
+                    target_name=name,
+                )
+                _append_safe(col, plot_slice, study, target=_make_target(idx), target_name=name)
+        else:
+            _append_safe(col, plot_parallel_coordinate, study)
+            _append_safe(col, plot_slice, study)
+
+    if is_multi:
+        _append_safe(col, plot_pareto_front, study)
+
+    # Summary section
+    col.append(pn.pane.Markdown("## Summary"))
+    if is_multi:
+        col.append(pn.pane.Markdown(f"**Pareto-front size:** {len(study.best_trials)}"))
+    else:
+        summary_lines = [
+            "| Parameter | Value |",
+            "|-----------|-------|",
+        ]
+        for k, v in study.best_params.items():
+            summary_lines.append(f"| {k} | {v} |")
+        summary_lines.append("")
+        summary_lines.append(f"**Best objective value:** {study.best_value}")
+        col.append(pn.pane.Markdown("\n".join(summary_lines)))
+    return col

@@ -66,7 +66,7 @@ class OptimizeResult:
 
     def to_panel(self) -> pn.pane.panel:
         """Panel visualization reusing the existing ``summarise_optuna_study`` helper."""
-        return summarise_optuna_study(self.study)
+        return summarise_optuna_study(self.study, target_names=self.target_names)
 
     # ------------------------------------------------------------------
     # Text summary
