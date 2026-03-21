@@ -1,5 +1,6 @@
 from __future__ import annotations
 from copy import deepcopy
+from itertools import product as iter_product
 
 import numpy as np
 import optuna
@@ -24,6 +25,42 @@ from bencher.optuna_conversions import (
     summarise_optuna_study,
     sweep_var_to_suggest,
 )
+
+
+def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
+    """Evaluate worker across all combinations of non-optimized vars and return mean results."""
+    non_opt_value_lists = [iv.values() for iv in non_opt_vars]
+    all_results = []
+    for combo in iter_product(*non_opt_value_lists):
+        call_kwargs = dict(opt_kwargs)
+        for iv, val in zip(non_opt_vars, combo):
+            call_kwargs[iv.name] = val
+        all_results.append(worker(**call_kwargs))
+
+    aggregated = []
+    for rv in result_vars:
+        values = [res[rv.name] for res in all_results]
+        arr = np.asarray(values)
+        if not np.issubdtype(arr.dtype, np.number):
+            raise TypeError(
+                f"Result variable '{rv.name}' must be numeric to aggregate over "
+                f"non-optimized variable combinations, but got dtype {arr.dtype}"
+            )
+        aggregated.append(float(np.mean(arr)))
+    return tuple(aggregated)
+
+
+def _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names):
+    """Group DataFrame by optimized vars and average target columns over non-optimized vars."""
+    if not (non_opt_vars and opt_vars and target_names):
+        return df
+    group_cols = [v.name for v in opt_vars if v.name in df.columns]
+    if not group_cols:
+        return df
+    agg_cols = [t for t in target_names if t in df.columns]
+    if not agg_cols:
+        return df
+    return df.groupby(group_cols, as_index=False)[agg_cols].mean()
 
 
 class OptunaResult(BenchResultBase):
@@ -66,8 +103,7 @@ class OptunaResult(BenchResultBase):
             if len(res.ds.sizes) > 0:
                 study.add_trials(res.bench_results_to_optuna_trials(True))
 
-        opt_vars = self.bench_cfg.optimized_input_vars
-        non_opt_vars = self.bench_cfg.non_optimized_input_vars
+        opt_vars, non_opt_vars = self.bench_cfg.partition_input_vars(self.bench_cfg.input_vars)
 
         if not opt_vars:
             raise ValueError(
@@ -75,27 +111,15 @@ class OptunaResult(BenchResultBase):
             )
 
         def wrapped(trial) -> tuple:
-            kwargs = {}
-            for iv in opt_vars:
-                kwargs[iv.name] = sweep_var_to_suggest(iv, trial)
+            kwargs = {iv.name: sweep_var_to_suggest(iv, trial) for iv in opt_vars}
 
             if not non_opt_vars:
                 result = worker(**kwargs)
                 return tuple(result[rv.name] for rv in self.bench_cfg.result_vars)
 
-            # Evaluate across all combinations of non-optimized vars, average results
-            from itertools import product as iter_product
-
-            non_opt_value_lists = [iv.values() for iv in non_opt_vars]
-            all_outputs = []
-            for combo in iter_product(*non_opt_value_lists):
-                call_kwargs = dict(kwargs)
-                for iv, val in zip(non_opt_vars, combo):
-                    call_kwargs[iv.name] = val
-                result = worker(**call_kwargs)
-                all_outputs.append([result[rv.name] for rv in self.bench_cfg.result_vars])
-            aggregated = np.mean(all_outputs, axis=0)
-            return tuple(aggregated)
+            return _evaluate_over_non_optimized(
+                worker, kwargs, non_opt_vars, self.bench_cfg.result_vars
+            )
 
         study.optimize(wrapped, n_trials=n_trials)
         return study
@@ -118,19 +142,15 @@ class OptunaResult(BenchResultBase):
 
         df.dropna(inplace=True)
 
-        # Partition into optimized and non-optimized vars
-        opt_vars = [v for v in all_vars if getattr(v, "optimize", True)]
-        non_opt_vars = [v for v in all_vars if not getattr(v, "optimize", True)]
-
+        opt_vars, non_opt_vars = self.bench_cfg.partition_input_vars(all_vars)
         target_names = self.bench_cfg.optuna_targets()
 
-        # If there are non-optimized vars, group by optimized vars and average results
-        if non_opt_vars and opt_vars and target_names:
-            group_cols = [v.name for v in opt_vars if v.name in df.columns]
-            if group_cols:
-                agg_cols = [t for t in target_names if t in df.columns]
-                if agg_cols:
-                    df = df.groupby(group_cols, as_index=False)[agg_cols].mean()
+        if not opt_vars:
+            raise ValueError(
+                "At least one input variable must have optimize=True for Optuna optimization."
+            )
+
+        df = _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names)
 
         distributions = {}
         for i in opt_vars:

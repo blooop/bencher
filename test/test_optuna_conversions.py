@@ -84,6 +84,37 @@ class TestOptimizeFlag(unittest.TestCase):
         f2 = f.with_samples(5)
         self.assertFalse(f2.optimize)
 
+    def test_yaml_sweep_optimize_default_and_override(self):
+        from pathlib import Path
+        from bencher.variables.inputs import YamlSweep
+
+        yaml_path = (
+            Path(__file__).resolve().parent.parent / "bencher/example/example_yaml_sweep_list.yaml"
+        )
+        default_yaml = YamlSweep(yaml_path)
+        self.assertTrue(default_yaml.optimize)
+
+        disabled_yaml = YamlSweep(yaml_path, optimize=False)
+        self.assertFalse(disabled_yaml.optimize)
+
+    def test_selector_sweep_deepcopy_and_with_samples(self):
+        from copy import deepcopy
+
+        s = StringSweep(["a", "b", "c"], optimize=False)
+        s_copy = deepcopy(s)
+        self.assertFalse(s_copy.optimize)
+
+        s_sampled = s.with_samples(2)
+        self.assertFalse(s_sampled.optimize)
+
+        e = EnumSweep(SweepColor, optimize=False)
+        e_copy = deepcopy(e)
+        self.assertFalse(e_copy.optimize)
+
+        b = BoolSweep(optimize=False)
+        b_copy = deepcopy(b)
+        self.assertFalse(b_copy.optimize)
+
 
 class TestSweepVarToOptunaDist(unittest.TestCase):
     def test_int_sweep(self):
