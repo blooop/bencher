@@ -1,4 +1,4 @@
-## Intro
+# Introduction
 
 Bencher is a tool to make it easy to benchmark the interactions between the input parameters
 to your algorithm and its resulting performance on a set of metrics. It calculates the
@@ -6,9 +6,9 @@ to your algorithm and its resulting performance on a set of metrics. It calculat
 evaluates your function at every combination, and automatically selects appropriate
 visualizations based on the types of your parameters.
 
-For the design philosophy behind Bencher, see [Concepts](concepts.md).
+For the design philosophy behind Bencher, see [A Grammar of Benchmarking](concepts.md).
 
-## How It Works
+## Getting Started
 
 Parameters are defined using the [param](https://param.holoviz.org/) library as a config class
 with metadata describing the bounds of the search space. You define a benchmarking function that
@@ -22,12 +22,14 @@ you can also pass in a callback to customize plotting.
 
 Results are stored in a persistent cache so that past evaluations are reused automatically.
 
-## Assumptions
+### Input Types
 
 Input types should be one of the basic datatypes (bool, int, float, str, enum, datetime) so
 that the data can be hashed, cached, and processed with xarray and plotting functions. You can
 use class inheritance to define hierarchical parameter configuration classes that are reused
 in larger configurations.
+
+### Pure Functions
 
 Bencher is designed to work with stochastic pure functions with no side effects. It assumes that
 when the objective function is given the same inputs, it will return the same output +/- random
