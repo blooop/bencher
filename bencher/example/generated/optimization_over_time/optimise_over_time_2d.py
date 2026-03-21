@@ -1,4 +1,4 @@
-"""Auto-generated example: Optimization Over Time: 2D input."""
+"""Auto-generated example: Optimise Over Time: 2D input."""
 
 from typing import Any
 
@@ -30,8 +30,8 @@ class ServerOptimizer(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optim_over_time_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Optimization Over Time: 2D input."""
+def example_optimise_over_time_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """Optimise Over Time: 2D input."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 3
@@ -58,4 +58,4 @@ def example_optim_over_time_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Be
 
 
 if __name__ == "__main__":
-    bch.run(example_optim_over_time_2d, level=2)
+    bch.run(example_optimise_over_time_2d, level=2)

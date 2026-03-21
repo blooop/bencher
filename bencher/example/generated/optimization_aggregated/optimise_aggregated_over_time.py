@@ -1,4 +1,4 @@
-"""Auto-generated example: Aggregated Optimization (Over Time)."""
+"""Auto-generated example: Aggregated Optimisation (Over Time)."""
 
 from typing import Any
 
@@ -30,8 +30,8 @@ class AlgorithmBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optim_aggregated_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Aggregated Optimization (Over Time)."""
+def example_optimise_aggregated_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """Aggregated Optimisation (Over Time)."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 3
@@ -56,4 +56,4 @@ def example_optim_aggregated_over_time(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_optim_aggregated_over_time, level=3)
+    bch.run(example_optimise_aggregated_over_time, level=3)

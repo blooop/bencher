@@ -1,4 +1,4 @@
-"""Auto-generated example: Aggregated Optimization."""
+"""Auto-generated example: Aggregated Optimisation."""
 
 from typing import Any
 
@@ -29,8 +29,8 @@ class AlgorithmBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optim_aggregated(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Aggregated Optimization."""
+def example_optimise_aggregated(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """Aggregated Optimisation."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.use_optuna = True
     bench = AlgorithmBench().to_bench(run_cfg)
@@ -46,4 +46,4 @@ def example_optim_aggregated(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
 
 
 if __name__ == "__main__":
-    bch.run(example_optim_aggregated, level=3, repeats=3)
+    bch.run(example_optimise_aggregated, level=3, repeats=3)
