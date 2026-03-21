@@ -120,7 +120,7 @@ override automatic selection with explicit `.to_*()` calls on the result object.
 
 ### Composition
 
-The `ComposableContainer` framework handles spatial layout of multi-dimensional results. It
+The `ComposableContainerBase` framework handles spatial layout of multi-dimensional results. It
 supports four composition methods:
 
 - **right** — append horizontally (row)
@@ -168,7 +168,7 @@ simultaneously. It indexes into a predefined sample count table:
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Samples | 1 | 2 | 3 | 5 | 9 | 17 | 33 | 65 | 129 | 257 | 513 | 1025 |
 
-The progression roughly doubles after level 3, following a `2^(n-1) + 1` pattern. Samples are
+The progression roughly doubles at each level (e.g. 5, 9, 17, 33, 65, ...). Samples are
 distributed evenly across each parameter's range using `numpy.linspace`, so increasing the
 level refines the resolution uniformly.
 
