@@ -22,6 +22,8 @@ hv.extension("bokeh", "plotly")
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
 
+_AGG_TITLE = "All Time Points (aggregated)"
+
 
 class HoloviewResult(VideoResult):
     @staticmethod
@@ -150,7 +152,7 @@ class HoloviewResult(VideoResult):
         return ["over_time"]
 
     @staticmethod
-    def _holomap_with_slider_bottom(hvobj):
+    def _holomap_with_slider_bottom(hvobj, widgets=None):
         """Wrap a HoloViews object so any scrubber/slider appears below the plot.
 
         ``pn.pane.HoloViews(holomap, widget_location="bottom")`` does not
@@ -166,99 +168,165 @@ class HoloviewResult(VideoResult):
         Safe to call on any HoloViews object; if no widgets are produced
         the original object is returned unchanged.
 
-        The slider defaults to the most recent (last) time point.  We keep
-        the Python-side value at its default (first) so that Panel's embed
-        system generates non-empty JSON patches for every position.  A
-        small JS snippet then moves the slider to the last position once
-        the page has rendered, which triggers the embedded patch callback.
+        The slider defaults to the most recent (last) time point by
+        setting the widget value in Python.  Panel's embed system computes
+        JSON patches relative to this default, so every other position
+        gets a valid patch and the last position is the initial state.
         """
-        # Force a slider (not a dropdown) for the over_time dimension
-        row = pn.panel(hvobj, widgets={"over_time": pn.widgets.DiscreteSlider})
+        if widgets is None:
+            widgets = {"over_time": pn.widgets.DiscreteSlider}
+        row = pn.panel(hvobj, widgets=widgets)
         if not isinstance(row, pn.Row) or len(row) < 2:
             return hvobj
         widget_box = row[1]
         widget_box.align = ("start", "start")
 
-        # Find the over_time slider and its last option value.
-        over_time_slider = None
-        last_option = None
+        # Set the over_time slider to the last (most recent) time point.
         for w in widget_box:
             if hasattr(w, "name") and w.name == "over_time" and hasattr(w, "options") and w.options:
                 opts = w.options.values() if isinstance(w.options, dict) else w.options
                 opts = list(opts)
                 if len(opts) > 1:
-                    over_time_slider = w
-                    last_option = opts[-1]
+                    w.value = opts[-1]
                 break
 
-        # For static HTML embeds, inject JS to move the slider to the last
-        # position after Bokeh renders.  In Panel's embed mode this triggers
-        # the CustomJS callback that calls State.set_state(), applying the
-        # pre-computed patch.
-        #
-        # Panel's DiscreteSlider renders the label ("over_time: <b>…</b>")
-        # in a separate Div and sets the Bokeh Slider's title to ''.  So we
-        # find the slider through the Panel State model's widgets map, which
-        # explicitly tracks registered widget model IDs.
-        if over_time_slider is not None and last_option is not None:
-            init_js = pn.pane.HTML(
-                """\
-<script>
-(function() {
-  // Poll until Bokeh finishes rendering.  50 attempts * 100 ms = 5 s
-  // which is generous for even large embedded documents.
-  var MAX_ATTEMPTS = 50;
-  var POLL_MS = 100;
-  var attempts = 0;
-  function _setSliderToEnd() {
-    attempts++;
-    if (attempts > MAX_ATTEMPTS) return;
-    if (typeof Bokeh === "undefined"
-        || !Bokeh.index || !Object.keys(Bokeh.index).length) {
-      setTimeout(_setSliderToEnd, POLL_MS);
-      return;
-    }
-    var found = false;
-    var keys = Object.keys(Bokeh.index);
-    for (var i = 0; i < keys.length; i++) {
-      if (found) break;
-      var view = Bokeh.index[keys[i]];
-      if (!view || !view.model || !view.model.document) continue;
-      var doc = view.model.document;
-      // Find the Panel State root which holds registered widget IDs
-      var roots = doc.roots();
-      for (var r = 0; r < roots.length; r++) {
-        var root = roots[r];
-        if (root.state == null || root.widgets == null) continue;
-        var wids = root.widgets instanceof Map
-          ? Array.from(root.widgets.keys())
-          : Object.keys(root.widgets);
-        for (var j = 0; j < wids.length; j++) {
-          var slider = doc.get_model_by_id(wids[j]);
-          if (slider && slider.end != null && slider.value != null) {
-            slider.value = slider.end;
-            found = true;
-          }
-        }
-        break;
-      }
-    }
-    if (!found) setTimeout(_setSliderToEnd, POLL_MS);
-  }
-  if (document.readyState === "complete") {
-    setTimeout(_setSliderToEnd, 50);
-  } else {
-    window.addEventListener("load", function() { setTimeout(_setSliderToEnd, 50); });
-  }
-})();
-</script>""",
-                width=0,
-                height=0,
-                margin=0,
-            )
-            return pn.Column(row[0], widget_box, init_js)
-
         return pn.Column(row[0], widget_box)
+
+    def _build_curve_overlay(
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+    ) -> hv.Overlay:
+        """Build a Curve (+ optional Spread) overlay for a single time slice or aggregated data.
+
+        When ``_std`` exists in the dataset the spread band is rendered
+        automatically.  This is used by both the curve renderer and the
+        line renderer (for aggregated data that gained ``_std`` from
+        ``_mean_over_time``).
+        """
+        var = result_var.name
+        std_var = f"{var}_std"
+        has_spread = std_var in dataset.data_vars
+        title = self.title_from_ds(dataset, result_var, **kwargs)
+
+        float_names = [fv.name for fv in self.plt_cnt_cfg.float_vars]
+        ds_dims = list(dataset.dims)
+        kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
+        groupby = [d for d in ds_dims if d not in kdims]
+
+        df = dataset.to_dataframe().reset_index()
+
+        vdims = [var, std_var] if has_spread else [var]
+        hvds = hv.Dataset(df, kdims=kdims + groupby, vdims=vdims)
+
+        if not groupby:
+            pt = hv.Overlay()
+            pt *= hv.Curve(hvds, kdims=kdims, vdims=var, label=var).opts(
+                title=title, xrotation=30, **kwargs
+            )
+            if has_spread:
+                pt *= hv.Spread(hvds, kdims=kdims, vdims=[var, std_var])
+            return pt.opts(legend_position="right")
+
+        pt = hv.Overlay()
+        for key, group_df in df.groupby(groupby):
+            label = str(key) if not isinstance(key, tuple) else ", ".join(str(k) for k in key)
+            group_hvds = hv.Dataset(group_df, kdims=kdims, vdims=vdims)
+            pt *= hv.Curve(group_hvds, kdims=kdims, vdims=var, label=label).opts(
+                xrotation=30, **kwargs
+            )
+            if has_spread:
+                pt *= hv.Spread(group_hvds, kdims=kdims, vdims=[var, std_var])
+        return pt.opts(title=title, legend_position="right")
+
+    @staticmethod
+    def _mean_over_time(dataset, result_var_name):
+        """Average a dataset across all time points.
+
+        Always produces a ``_std`` variable so that downstream renderers
+        (e.g. curve spread, error bars) can visualise the aggregation
+        uncertainty.  When a per-time-point ``_std`` already exists the
+        pooled standard deviation is computed via the law of total
+        variance; otherwise the standard deviation of the means across
+        time points is used.
+        """
+        std_var = f"{result_var_name}_std"
+        new_ds = dataset.mean(dim="over_time")
+        var_of_means = dataset[result_var_name].var(dim="over_time")
+        if std_var in dataset.data_vars:
+            mean_of_vars = (dataset[std_var] ** 2).mean(dim="over_time")
+            new_ds[std_var] = (mean_of_vars + var_of_means) ** 0.5
+        else:
+            new_ds[std_var] = var_of_means**0.5
+        return new_ds
+
+    def _build_time_holomap(self, dataset, result_var_name, make_plot_fn):
+        """Build per-time-point HoloMap + a static aggregated plot.
+
+        ``make_plot_fn`` receives a Dataset *without* the ``over_time``
+        dimension.  The aggregated dataset produced by ``_mean_over_time``
+        always contains a ``_std`` variable; callbacks that are
+        ``_std``-aware (e.g. delegating to ``_build_curve_overlay``) will
+        automatically render spread bands on the aggregated tab.
+
+        Returns ``pn.Tabs`` with two tabs:
+
+        1. **Per Time Point** — *N*-entry HoloMap with a time slider.
+        2. **All Time Points (aggregated)** — data averaged over every snapshot.
+        """
+        times = dataset.coords["over_time"].values
+        n_time = len(times)
+
+        kdims = self._over_time_kdims()
+        holomap = hv.HoloMap(kdims=kdims)
+
+        for t in times:
+            ds_t = dataset.sel(over_time=t)
+            holomap[t] = make_plot_fn(ds_t)
+
+        slider_pane = self._holomap_with_slider_bottom(holomap)
+
+        if n_time > 1:
+            ds_agg = self._mean_over_time(dataset, result_var_name)
+            agg_plot = make_plot_fn(ds_agg)
+            return pn.Tabs(
+                ("Per Time Point", slider_pane),
+                (_AGG_TITLE, pn.Column(agg_plot)),
+            )
+
+        return slider_pane
+
+    def _build_time_holomap_raw(self, da, make_plot_fn):
+        """Build per-time-point HoloMap + a static aggregated plot for distributions.
+
+        *make_plot_fn* receives a DataArray that **retains** the ``over_time``
+        dimension (a single-element slice for per-time-point entries, or the
+        full array for the aggregated tab).  Callers should flatten via
+        ``.to_dataframe().reset_index()`` or equivalent.
+
+        Returns ``pn.Tabs`` with two tabs:
+
+        1. **Per Time Point** — HoloMap with a time slider (shown by default).
+        2. **All Time Points (aggregated)** — all samples pooled.
+        """
+        times = da.coords["over_time"].values
+        n_time = len(times)
+
+        kdims = self._over_time_kdims()
+        holomap = hv.HoloMap(kdims=kdims)
+
+        for i, t in enumerate(times):
+            da_t = da.isel(over_time=slice(i, i + 1))
+            holomap[t] = make_plot_fn(da_t)
+
+        slider_pane = self._holomap_with_slider_bottom(holomap)
+
+        if n_time > 1:
+            agg_plot = make_plot_fn(da)
+            return pn.Tabs(
+                ("Per Time Point", slider_pane),
+                (_AGG_TITLE, pn.Column(agg_plot)),
+            )
+
+        return slider_pane
 
     def hv_container_ds(
         self,

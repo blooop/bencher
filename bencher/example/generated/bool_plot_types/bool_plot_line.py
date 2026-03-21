@@ -4,15 +4,15 @@ from typing import Any
 
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class HealthCheckFloat(bch.ParametrizedSweep):
+class HealthCheckFloat(bn.ParametrizedSweep):
     """Check if service health exceeds a threshold."""
 
-    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -21,7 +21,7 @@ class HealthCheckFloat(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_bool_plot_line(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_plot_line(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Bool Plot: Line."""
     bench = HealthCheckFloat().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["load"], result_vars=["healthy"])
@@ -31,4 +31,4 @@ def example_bool_plot_line(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_line, level=3)
+    bn.run(example_bool_plot_line, level=3)

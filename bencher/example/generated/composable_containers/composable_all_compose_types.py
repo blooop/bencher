@@ -5,7 +5,7 @@ from typing import Any
 import math
 import numpy as np
 from PIL import Image, ImageDraw
-import bencher as bch
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):
@@ -24,21 +24,21 @@ def _draw_polygon_image(points, color, linewidth, size=200):
     return img
 
 
-class BenchableImageResult(bch.ParametrizedSweep):
+class BenchableImageResult(bn.ParametrizedSweep):
     """Lightweight polygon renderer for composable container demos."""
 
-    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
-    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
-    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")
+    sides = bn.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
+    radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
+    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
 
-    polygon = bch.ResultImage(doc="Rendered polygon image")
-    area = bch.ResultVar("u^2", doc="Polygon area")
+    polygon = bn.ResultImage(doc="Rendered polygon image")
+    area = bn.ResultVar("u^2", doc="Polygon area")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
-        filepath = bch.gen_image_path("polygon")
+        filepath = bn.gen_image_path("polygon")
         img.save(filepath, "PNG")
         self.polygon = str(filepath)
         self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (
@@ -50,25 +50,25 @@ class BenchableImageResult(bch.ParametrizedSweep):
 class _ComposeTypeSweep(BenchableImageResult):
     """Sweep all ComposeType values in a single benchmark."""
 
-    compose_method = bch.EnumSweep(
-        bch.ComposeType,
-        default=bch.ComposeType.right,
+    compose_method = bn.EnumSweep(
+        bn.ComposeType,
+        default=bn.ComposeType.right,
         doc="Composition method",
     )
-    composed_video = bch.ResultVideo(doc="Composed video output")
+    composed_video = bn.ResultVideo(doc="Composed video output")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        vid = bch.ComposableContainerVideo()
+        vid = bn.ComposableContainerVideo()
         for i in range(5):
             angle = 360.0 * i / 5
             points = _polygon_points(self.radius, self.sides, start_angle=angle)
             img = _draw_polygon_image(points, self.color, linewidth=3)
-            filepath = bch.gen_image_path("all_types")
+            filepath = bn.gen_image_path("all_types")
             img.save(filepath, "PNG")
             vid.append(str(filepath))
         self.composed_video = vid.to_video(
-            bch.RenderCfg(
+            bn.RenderCfg(
                 compose_method=self.compose_method,
                 max_frame_duration=1.0 / 10.0,
             )
@@ -76,19 +76,19 @@ class _ComposeTypeSweep(BenchableImageResult):
         return self.get_results_values_as_dict()
 
 
-def example_composable_all_compose_types(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_composable_all_compose_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Composable Container: All ComposeTypes Compared."""
     bench = _ComposeTypeSweep().to_bench(run_cfg)
     bench.plot_sweep(
         title="Composable Container: All ComposeTypes",
         input_vars=[
-            bch.p(
+            bn.p(
                 "compose_method",
                 [
-                    bch.ComposeType.right,
-                    bch.ComposeType.down,
-                    bch.ComposeType.sequence,
-                    bch.ComposeType.overlay,
+                    bn.ComposeType.right,
+                    bn.ComposeType.down,
+                    bn.ComposeType.sequence,
+                    bn.ComposeType.overlay,
                 ],
             )
         ],
@@ -99,4 +99,4 @@ def example_composable_all_compose_types(run_cfg: bch.BenchRunCfg | None = None)
 
 
 if __name__ == "__main__":
-    bch.run(example_composable_all_compose_types, level=2)
+    bn.run(example_composable_all_compose_types, level=2)

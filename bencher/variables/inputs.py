@@ -38,7 +38,9 @@ class SweepSelector(Selector, SweepBase):
 
     __slots__ = shared_slots
 
-    def __init__(self, units: str = "ul", samples: int | None = None, **params):
+    def __init__(
+        self, units: str = "ul", samples: int | None = None, optimize: bool = True, **params
+    ):
         SweepBase.__init__(self)
         Selector.__init__(self, **params)
 
@@ -47,6 +49,7 @@ class SweepSelector(Selector, SweepBase):
             self.samples = len(self.objects)
         else:
             self.samples = samples
+        self.optimize = optimize
 
     def values(self) -> list[Any]:
         """Return all the values for the parameter sweep.
@@ -163,12 +166,18 @@ class BoolSweep(SweepSelector):
     """
 
     def __init__(
-        self, units: str = "ul", samples: int | None = None, default: bool = True, **params
+        self,
+        units: str = "ul",
+        samples: int | None = None,
+        default: bool = True,
+        optimize: bool = True,
+        **params,
     ):
         SweepSelector.__init__(
             self,
             units=units,
             samples=samples,
+            optimize=optimize,
             default=default,
             objects=[True, False] if default else [False, True],
             **params,
@@ -191,6 +200,7 @@ class StringSweep(SweepSelector):
         string_list: list[str],
         units: str = "ul",
         samples: int | None = None,
+        optimize: bool = True,
         **params,
     ):
         SweepSelector.__init__(
@@ -199,6 +209,7 @@ class StringSweep(SweepSelector):
             instantiate=True,
             units=units,
             samples=samples,
+            optimize=optimize,
             **params,
         )
 
@@ -253,7 +264,12 @@ class EnumSweep(SweepSelector):
     __slots__ = shared_slots
 
     def __init__(
-        self, enum_type: Enum | list[Enum], units: str = "ul", samples: int | None = None, **params
+        self,
+        enum_type: Enum | list[Enum],
+        units: str = "ul",
+        samples: int | None = None,
+        optimize: bool = True,
+        **params,
     ):
         # The enum can either be an Enum type or a list of enums
         list_of_enums = isinstance(enum_type, list)
@@ -264,6 +280,7 @@ class EnumSweep(SweepSelector):
             instantiate=True,
             units=units,
             samples=samples,
+            optimize=optimize,
             **params,
         )
         if not list_of_enums:  # Grab the docs from the enum type def
@@ -347,6 +364,7 @@ class YamlSweep(SweepSelector):
         units: str = "ul",
         samples: int | None = None,
         default_key: str | None = None,
+        optimize: bool = True,
         **params,
     ):
         path = Path(yaml_path)
@@ -385,6 +403,7 @@ class YamlSweep(SweepSelector):
             instantiate=False,
             units=units,
             samples=samples,
+            optimize=optimize,
             default=default_value,
             **params,
         )
@@ -441,12 +460,14 @@ class IntSweep(Integer, SweepBase):
         units: str = "ul",
         samples: int | None = None,
         sample_values: list[int] | None = None,
+        optimize: bool = True,
         **params,
     ):
         SweepBase.__init__(self)
         Integer.__init__(self, **params)
 
         self.units = units
+        self.optimize = optimize
 
         if sample_values is None:
             if samples is None:
@@ -520,12 +541,14 @@ class FloatSweep(Number, SweepBase):
         samples: int = 10,
         sample_values: list[float] | None = None,
         step: float | None = None,
+        optimize: bool = True,
         **params,
     ):
         SweepBase.__init__(self)
         Number.__init__(self, step=step, **params)
 
         self.units = units
+        self.optimize = optimize
 
         self.sample_values = sample_values
 

@@ -1,23 +1,23 @@
-"""Auto-generated example: Optimization: 1 objective(s), 2D input."""
+"""Auto-generated example: Optimise 1 objective(s), 2D input."""
 
 from typing import Any
 
 import math
 import random
 
-import bencher as bch
+import bencher as bn
 
 
-class ServerOptimizer(bch.ParametrizedSweep):
+class ServerOptimizer(bn.ParametrizedSweep):
     """Optimizes server configuration for performance vs cost tradeoff."""
 
-    cpu_cores = bch.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")
-    memory_gb = bch.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")
+    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")
+    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")
 
-    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance score (maximize)")
-    cost = bch.ResultVar("$/hr", bch.OptDir.minimize, doc="Hourly cost (minimize)")
+    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance score (maximize)")
+    cost = bn.ResultVar("$/hr", bn.OptDir.minimize, doc="Hourly cost (minimize)")
 
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -29,9 +29,9 @@ class ServerOptimizer(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optim_1obj_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Optimization: 1 objective(s), 2D input."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+def example_optimise_1_objective_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    """Optimise 1 objective(s), 2D input."""
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.use_optuna = True
     bench = ServerOptimizer().to_bench(run_cfg)
     res = bench.plot_sweep(
@@ -47,4 +47,4 @@ def example_optim_1obj_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_optim_1obj_2d, level=2, repeats=3)
+    bn.run(example_optimise_1_objective_2d, level=2, repeats=3)

@@ -2,16 +2,16 @@
 
 # pylint: disable=duplicate-code
 
-import bencher as bch
+import bencher as bn
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """This example shows how to manually set time events as a string so that progress can be monitored over time"""
 
-    bencher = bch.Bench(
+    bencher = bn.Bench(
         "benchmarking_example_categorical1D",
         ExampleBenchCfg(),
         run_cfg=run_cfg,
@@ -33,9 +33,9 @@ def example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     return bencher
 
 
-def run_example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def run_example_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
     run_cfg.repeats = 1
     run_cfg.print_pandas = True
     run_cfg.over_time = True
@@ -58,4 +58,4 @@ def run_example_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(run_example_time_event)
+    bn.run(run_example_time_event)

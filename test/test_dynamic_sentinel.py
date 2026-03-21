@@ -1,13 +1,13 @@
-import bencher as bch
+import bencher as bn
 import param
 
 
 class DynCfg(param.Parameterized):
-    state_id = bch.StringSweep.dynamic(doc="State selector placeholder")
+    state_id = bn.StringSweep.dynamic(doc="State selector placeholder")
 
 
 class DynCfgCustomPH(param.Parameterized):
-    state_id = bch.StringSweep.dynamic(doc="State selector placeholder", placeholder="Pick one")
+    state_id = bn.StringSweep.dynamic(doc="State selector placeholder", placeholder="Pick one")
 
 
 def test_dynamic_placeholder_initial():

@@ -6,7 +6,7 @@ features previously only shown in hand-written examples.
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "advanced"
@@ -24,7 +24,7 @@ ADVANCED_EXAMPLES = [
 class MetaAdvanced(MetaGeneratorBase):
     """Generate Python examples demonstrating advanced patterns."""
 
-    example = bch.StringSweep(ADVANCED_EXAMPLES, doc="Which advanced example to generate")
+    example = bn.StringSweep(ADVANCED_EXAMPLES, doc="Which advanced example to generate")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -46,9 +46,9 @@ class MetaAdvanced(MetaGeneratorBase):
 
     def _generate_cache_patterns(self):
         """B3: Cache and context patterns."""
-        imports = "import math\nimport random\nimport bencher as bch"
+        imports = "import math\nimport random\nimport bencher as bn"
         class_code = '''\
-class NoisySensor(bch.ParametrizedSweep):
+class NoisySensor(bn.ParametrizedSweep):
     """Simulates a sensor with configurable noise.
 
     Demonstrates cache_samples and run_tag usage. When cache_samples is True,
@@ -56,13 +56,13 @@ class NoisySensor(bch.ParametrizedSweep):
     repeated if the run is interrupted.
     """
 
-    temperature = bch.FloatSweep(
+    temperature = bn.FloatSweep(
         default=25.0, bounds=[0.0, 100.0], doc="Sensor temperature", units="C"
     )
 
-    reading = bch.ResultVar(units="V", doc="Sensor voltage reading")
+    reading = bn.ResultVar(units="V", doc="Sensor voltage reading")
 
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -71,7 +71,7 @@ class NoisySensor(bch.ParametrizedSweep):
             self.reading += random.gauss(0, self.noise_scale)
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg = run_cfg or bn.BenchRunCfg()
 
 # run_tag partitions the cache so different experiment runs don't collide.
 run_cfg.run_tag = "sensor_v1"
@@ -107,9 +107,9 @@ bench.plot_sweep(
 
     def _generate_time_event(self):
         """B7: TimeEvent example."""
-        imports = "import bencher as bch"
+        imports = "import bencher as bn"
         class_code = '''\
-class PullRequestBenchmark(bch.ParametrizedSweep):
+class PullRequestBenchmark(bn.ParametrizedSweep):
     """Tracks benchmark metrics across discrete events (e.g. pull requests).
 
     TimeEvent lets you label each run with a string (like a PR number or
@@ -117,11 +117,11 @@ class PullRequestBenchmark(bch.ParametrizedSweep):
     CI pipelines where you want to track performance across commits.
     """
 
-    workload = bch.StringSweep(
+    workload = bn.StringSweep(
         ["light", "medium", "heavy"], doc="Workload intensity"
     )
 
-    throughput = bch.ResultVar(units="req/s", doc="Requests per second")
+    throughput = bn.ResultVar(units="req/s", doc="Requests per second")
 
     _event_idx = 0  # set externally per event
 
@@ -132,7 +132,7 @@ class PullRequestBenchmark(bch.ParametrizedSweep):
         self.throughput = base + self._event_idx * 30
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg = run_cfg or bn.BenchRunCfg()
 run_cfg.over_time = True
 
 benchable = PullRequestBenchmark()
@@ -168,29 +168,29 @@ for i, event_name in enumerate(events):
 
     def _generate_git_time_event(self):
         """Git commit time event example."""
-        imports = "import bencher as bch"
+        imports = "import bencher as bn"
         class_code = '''\
-class ServerLatency(bch.ParametrizedSweep):
+class ServerLatency(bn.ParametrizedSweep):
     """Simulates server latency measurements across endpoints.
 
-    Use ``bch.git_time_event()`` as the ``time_src`` argument to
+    Use ``bn.git_time_event()`` as the ``time_src`` argument to
     ``plot_sweep`` to label each over_time slider tick with the commit
     date and short hash, e.g. ``"2024-06-15 abc1234d"``.  This lets you
     trace benchmark results back to the exact code that produced them.
     """
 
-    endpoint = bch.StringSweep(
+    endpoint = bn.StringSweep(
         ["/api/users", "/api/orders", "/api/health"], doc="API endpoint"
     )
 
-    latency = bch.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultVar(units="ms", doc="Response latency")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg = run_cfg or bn.BenchRunCfg()
 run_cfg.over_time = True
 
 bench = ServerLatency().to_bench(run_cfg)
@@ -204,7 +204,7 @@ bench.plot_sweep(
     description="Demonstrates git_time_event() for labelling over_time "
     "slider ticks with the commit date and short hash.",
     run_cfg=run_cfg,
-    time_src=bch.git_time_event(),
+    time_src=bn.git_time_event(),
 )
 """
         self.generate_example(
@@ -220,9 +220,9 @@ bench.plot_sweep(
 
     def _generate_max_time_events(self):
         """Demonstrate max_time_events to cap over_time history."""
-        imports = "import random\nimport bencher as bch\nfrom datetime import datetime, timedelta"
+        imports = "import random\nimport bencher as bn\nfrom datetime import datetime, timedelta"
         class_code = '''\
-class LatencyMonitor(bch.ParametrizedSweep):
+class LatencyMonitor(bn.ParametrizedSweep):
     """Simulates a service latency monitor that drifts over time.
 
     When tracking metrics over_time, history grows without bound by default.
@@ -230,11 +230,11 @@ class LatencyMonitor(bch.ParametrizedSweep):
     time slices, keeping only the most recent ones.
     """
 
-    endpoint = bch.StringSweep(
+    endpoint = bn.StringSweep(
         ["/api/users", "/api/orders"], doc="API endpoint"
     )
 
-    latency = bch.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultVar(units="ms", doc="Response latency")
 
     _drift = 0.0  # set externally per snapshot
 
@@ -244,7 +244,7 @@ class LatencyMonitor(bch.ParametrizedSweep):
         self.latency = base + self._drift + random.gauss(0, 5)
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg = run_cfg or bn.BenchRunCfg()
 run_cfg.over_time = True
 
 # Keep only the 3 most recent time slices in the cache.
@@ -285,13 +285,13 @@ for i in range(5):
 
     def _generate_report_save(self):
         """B8: Report customization and saving."""
-        imports = "import bencher as bch"
+        imports = "import bencher as bn"
         class_code = '''\
-class QuadraticFit(bch.ParametrizedSweep):
+class QuadraticFit(bn.ParametrizedSweep):
     """A simple quadratic function for demonstrating report features."""
 
-    x = bch.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
-    y = bch.ResultVar(units="ul", doc="Quadratic output")
+    x = bn.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
+    y = bn.ResultVar(units="ul", doc="Quadratic output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -328,9 +328,9 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
 
     def _generate_agg_over_time(self):
         """Aggregate a 2D sweep down to a scalar curve over time with error bounds."""
-        imports = "import math\nimport bencher as bch\nfrom datetime import datetime, timedelta"
+        imports = "import math\nimport bencher as bn\nfrom datetime import datetime, timedelta"
         class_code = '''\
-class ThermalPlate(bch.ParametrizedSweep):
+class ThermalPlate(bn.ParametrizedSweep):
     """Measures temperature across a 2D plate that cools over time.
 
     A 2D sweep (x, y) is run at each time snapshot. Both dimensions are
@@ -339,14 +339,14 @@ class ThermalPlate(bch.ParametrizedSweep):
     decays, with error bounds from the spatial variation across the grid.
     """
 
-    x = bch.FloatSweep(
+    x = bn.FloatSweep(
         default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate"
     )
-    y = bch.FloatSweep(
+    y = bn.FloatSweep(
         default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate"
     )
 
-    temperature = bch.ResultVar(units="C", doc="Measured temperature")
+    temperature = bn.ResultVar(units="C", doc="Measured temperature")
 
     _time_offset = 0.0  # set externally per snapshot
 
@@ -360,7 +360,7 @@ class ThermalPlate(bch.ParametrizedSweep):
         )
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg = run_cfg or bn.BenchRunCfg()
 run_cfg.over_time = True
 
 benchable = ThermalPlate()
@@ -394,16 +394,16 @@ for i, offset in enumerate(time_offsets):
         )
 
 
-def example_meta_advanced(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_advanced(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaAdvanced().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Advanced Patterns",
-        input_vars=[bch.p("example", ADVANCED_EXAMPLES)],
+        input_vars=[bn.p("example", ADVANCED_EXAMPLES)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_advanced)
+    bn.run(example_meta_advanced)

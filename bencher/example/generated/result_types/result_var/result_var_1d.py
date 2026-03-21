@@ -4,16 +4,16 @@ from typing import Any
 
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class ResponseTimer(bch.ParametrizedSweep):
+class ResponseTimer(bn.ParametrizedSweep):
     """Measures HTTP request latency across endpoints and concurrency levels."""
 
-    endpoint = bch.StringSweep(["api/users", "api/orders"], doc="API endpoint")
-    concurrency = bch.FloatSweep(default=50, bounds=[1, 100], doc="Concurrent requests")
+    endpoint = bn.StringSweep(["api/users", "api/orders"], doc="API endpoint")
+    concurrency = bn.FloatSweep(default=50, bounds=[1, 100], doc="Concurrent requests")
 
-    latency = bch.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultVar(units="ms", doc="Response latency")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -22,7 +22,7 @@ class ResponseTimer(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_var_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_var_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Result Var: 1D input."""
     bench = ResponseTimer().to_bench(run_cfg)
     bench.plot_sweep(
@@ -35,4 +35,4 @@ def example_result_var_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_result_var_1d, level=3)
+    bn.run(example_result_var_1d, level=3)

@@ -2,18 +2,18 @@
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 
 import math
 
 
-class SurfaceDemo(bch.ParametrizedSweep):
+class SurfaceDemo(bn.ParametrizedSweep):
     """3D surface of a trigonometric function."""
 
-    x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
-    y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bch.ResultVar("m", doc="Surface height")
+    distance = bn.ResultVar("m", doc="Surface height")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -21,7 +21,7 @@ class SurfaceDemo(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_plot_surface(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_plot_surface(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Plot Type: Surface."""
     bench = SurfaceDemo().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["x", "y"], result_vars=["distance"])
@@ -31,4 +31,4 @@ def example_plot_surface(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_plot_surface, level=2)
+    bn.run(example_plot_surface, level=2)

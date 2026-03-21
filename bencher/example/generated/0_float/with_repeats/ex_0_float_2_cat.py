@@ -4,16 +4,16 @@ from typing import Any
 
 import random
 
-import bencher as bch
+import bencher as bn
 
 
-class NetworkConfig(bch.ParametrizedSweep):
+class NetworkConfig(bn.ParametrizedSweep):
     """Measures throughput across protocol and region combinations."""
 
-    protocol = bch.StringSweep(["http", "grpc"], doc="Network protocol")
-    region = bch.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
+    protocol = bn.StringSweep(["http", "grpc"], doc="Network protocol")
+    region = bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
 
-    throughput = bch.ResultVar(units="req/s", doc="Request throughput")
+    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -23,7 +23,7 @@ class NetworkConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_0_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_0_float_2_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 2 Categorical."""
     bench = NetworkConfig().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["protocol", "region"], result_vars=["throughput"])
@@ -32,4 +32,4 @@ def example_with_repeats_0_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_0_float_2_cat, level=4, repeats=10)
+    bn.run(example_with_repeats_0_float_2_cat, level=4, repeats=10)

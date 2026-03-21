@@ -34,7 +34,7 @@ def git_time_event(repo_path: str | None = None) -> str:
     For fork-safety in multithreaded environments (ROS 2, DDS, etc.),
     call this at module level before starting background threads::
 
-        _TIME_EVENT = bch.git_time_event()  # safe: no threads yet
+        _TIME_EVENT = bn.git_time_event()  # safe: no threads yet
 
     Falls back to just the timestamp if not inside a git repository.
     """

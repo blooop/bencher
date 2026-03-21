@@ -4,15 +4,15 @@ from typing import Any
 
 import random
 
-import bencher as bch
+import bencher as bn
 
 
-class HealthCheckCat(bch.ParametrizedSweep):
+class HealthCheckCat(bn.ParametrizedSweep):
     """Check service health across backends with varying reliability."""
 
-    backend = bch.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
+    backend = bn.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -21,7 +21,7 @@ class HealthCheckCat(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_bool_plot_bar(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_plot_bar(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Bool Plot: Bar."""
     bench = HealthCheckCat().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["backend"], result_vars=["healthy"])
@@ -31,4 +31,4 @@ def example_bool_plot_bar(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_bar, level=3, repeats=30)
+    bn.run(example_bool_plot_bar, level=3, repeats=30)

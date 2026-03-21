@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.71.0] - 2026-03-21
+
+### Added
+- Bencher self-introspection: `SweepTimings` instruments `Bench.run_sweep()` to measure phase-level overhead (dataset setup, job submission, execution, cache checks, etc.) (#793)
+- `example_self_benchmark` and `example_self_benchmark_over_time` examples for profiling bencher's own overhead (#793)
+
+### Changed
+- Rename import alias convention from `import bencher as bch` to `import bencher as bn` across all examples and tests
+- Rename `test/test_bch_p.py` to `test/test_bn_p.py`
+- Update AST check in `generate_examples.py` to match new `bn` alias
+
+### Fixed
+- Fix `ValueError` crash in `to_optuna_plots()` when `over_time=True` — `TimeSnapshot` param conversion only handled `np.datetime64` but pandas returns `pd.Timestamp` (#792)
+- Fix `summarise_optuna_study` for single-objective studies — no longer calls `plot_pareto_front` which requires ≥2 objectives (#795)
+- Fix `summarise_optuna_study` for multi-objective studies — passes explicit `target` callbacks to `plot_optimization_history` (#795)
+- Fix `sweep_var_to_suggest` fall-through for TimeSnapshot/TimeEvent — now explicitly returns `None` instead of raising `ValueError` (#796)
+- Auto-compute `total_ms` in `SweepTimings` and add `inspect` fallback (#796)
+
 ## [1.70.4] - 2026-03-20
 
 ### Fixed

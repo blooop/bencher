@@ -1,15 +1,15 @@
 from pathlib import Path
 import pytest
 from bencher.variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
-import bencher as bch
+import bencher as bn
 
 
 # A module-scope class for the BenchRunner integration test must be picklable.
 class MySingletonSweep(ParametrizedSweepSingleton):
     """Simple singleton sweep used to validate BenchRunner reruns."""
 
-    theta = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3, doc="angle")
-    result = bch.ResultVar()
+    theta = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3, doc="angle")
+    result = bn.ResultVar()
 
     def __init__(self):
         if self.init_singleton():
@@ -22,7 +22,7 @@ class MySingletonSweep(ParametrizedSweepSingleton):
         return super().__call__(**kwargs)
 
 
-def benchable_singleton_fn(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
+def benchable_singleton_fn(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
     sweep = MySingletonSweep()
     bench = sweep.to_bench(run_cfg, report=report)
     # Disable plotting to avoid hvplot/xarray requirements in headless tests
@@ -30,7 +30,7 @@ def benchable_singleton_fn(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) ->
     return bench.plot_sweep(plot_callbacks=False)
 
 
-def benchable_singleton_fn_v2(run_cfg: bch.BenchRunCfg) -> bch.BenchCfg:
+def benchable_singleton_fn_v2(run_cfg: bn.BenchRunCfg) -> bn.BenchCfg:
     sweep = MySingletonSweep()
     bench = sweep.to_bench(run_cfg=run_cfg)
     return bench.plot_sweep(plot_callbacks=False)
@@ -102,8 +102,8 @@ def test_benchrunner_rerun_with_singleton():
     singleton_before = MySingletonSweep()
 
     # Use a fixed run_tag so naming is deterministic and cache isolation is explicit
-    run_cfg = bch.BenchRunCfg(run_tag="singleton_rerun_test")
-    br = bch.BenchRunner(name="singleton_runner", run_cfg=run_cfg)
+    run_cfg = bn.BenchRunCfg(run_tag="singleton_rerun_test")
+    br = bn.BenchRunner(name="singleton_runner", run_cfg=run_cfg)
     br.add(benchable_singleton_fn)
 
     # First run
@@ -126,8 +126,8 @@ def test_benchrunner_rerun_with_singleton():
 
 def test_singleton_report_save_and_pickling():
     # Ensure running and saving the report works and the result is pickled
-    run_cfg = bch.BenchRunCfg(run_tag="singleton_save_test")
-    br = bch.BenchRunner(name="singleton_runner_save", run_cfg=run_cfg)
+    run_cfg = bn.BenchRunCfg(run_tag="singleton_save_test")
+    br = bn.BenchRunner(name="singleton_runner_save", run_cfg=run_cfg)
     br.add(benchable_singleton_fn)
 
     # Run and save report; also exercises diskcache pickling of results
@@ -164,8 +164,8 @@ def test_singleton_init_failure_consistency():
 
 
 def test_single_argument_benchable_supported():
-    run_cfg = bch.BenchRunCfg(run_tag="singleton_single_arg_test")
-    br = bch.BenchRunner(name="singleton_runner_v2", run_cfg=run_cfg)
+    run_cfg = bn.BenchRunCfg(run_tag="singleton_single_arg_test")
+    br = bn.BenchRunner(name="singleton_runner_v2", run_cfg=run_cfg)
     br.add(benchable_singleton_fn_v2)
 
     results = br.run(level=1, repeats=1, cache_results=False)

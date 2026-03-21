@@ -1,13 +1,13 @@
 # pylint: disable=duplicate-code
 
 
-import bencher as bch
+import bencher as bn
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_floats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_floats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example of how to perform a parameter sweep for floating point variables
 
     Args:
@@ -16,7 +16,7 @@ def example_floats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     Returns:
         Bench: results of the parameter sweep
     """
-    bench = bch.Bench("Bencher_Example_Floats", ExampleBenchCfg(), run_cfg=run_cfg)
+    bench = bn.Bench("Bencher_Example_Floats", ExampleBenchCfg(), run_cfg=run_cfg)
 
     with open("README.md", "r", encoding="utf-8") as file:
         readme = file.read()
@@ -82,4 +82,4 @@ def example_floats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_floats, repeats=2, save=True)
+    bn.run(example_floats, repeats=2, save=True)

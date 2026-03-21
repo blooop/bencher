@@ -688,6 +688,23 @@ class BenchCfg(BenchRunCfg):
             col.append(pn.pane.Markdown("## Results:"))
         return col
 
+    @staticmethod
+    def partition_input_vars(vars_) -> tuple[list, list]:
+        """Split variables into (optimized, non-optimized) based on the optimize flag."""
+        opt = [v for v in vars_ if getattr(v, "optimize", True)]
+        non_opt = [v for v in vars_ if not getattr(v, "optimize", True)]
+        return opt, non_opt
+
+    @property
+    def optimized_input_vars(self) -> list:
+        """Return input variables where optimize=True (suggested by Optuna)."""
+        return self.partition_input_vars(self.input_vars or [])[0]
+
+    @property
+    def non_optimized_input_vars(self) -> list:
+        """Return input variables where optimize=False (swept/aggregated, not suggested)."""
+        return self.partition_input_vars(self.input_vars or [])[1]
+
     def optuna_targets(self, as_var: bool = False) -> list[Any]:
         """Get the list of result variables that are optimization targets.
 

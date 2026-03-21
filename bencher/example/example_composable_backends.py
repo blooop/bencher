@@ -7,7 +7,7 @@ composition strategies using both the Panel and Video backends.
 import numpy as np
 from PIL import Image, ImageDraw
 
-import bencher as bch
+import bencher as bn
 
 
 def _make_color_block(color: str, label: str, size: int = 80) -> str:
@@ -17,29 +17,29 @@ def _make_color_block(color: str, label: str, size: int = 80) -> str:
     img = Image.new("RGB", (size, size), rgb)
     draw = ImageDraw.Draw(img)
     draw.text((4, 4), label, fill=(255, 255, 255))
-    path = bch.gen_image_path(f"block_{color}_{label}")
+    path = bn.gen_image_path(f"block_{color}_{label}")
     img.save(path, "PNG")
     return str(path)
 
 
-class ComposeDemo(bch.ParametrizedSweep):
+class ComposeDemo(bn.ParametrizedSweep):
     """Sweep over ComposeType to show all composition strategies."""
 
-    compose = bch.EnumSweep(bch.ComposeType, doc="Composition method")
-    color = bch.StringSweep(["red", "green", "blue"], doc="Block color")
+    compose = bn.EnumSweep(bn.ComposeType, doc="Composition method")
+    color = bn.StringSweep(["red", "green", "blue"], doc="Block color")
 
-    result_image = bch.ResultImage(doc="Composed image output")
+    result_image = bn.ResultImage(doc="Composed image output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
 
         imgs = [_make_color_block(self.color, f"{i}") for i in range(3)]
 
-        vid = bch.ComposableContainerVideo()
+        vid = bn.ComposableContainerVideo()
         for img_path in imgs:
             vid.append(img_path)
 
-        render_cfg = bch.RenderCfg(
+        render_cfg = bn.RenderCfg(
             compose_method=self.compose,
             duration=2.0,
             duration_target=False,
@@ -47,13 +47,13 @@ class ComposeDemo(bch.ParametrizedSweep):
         clip = vid.render(render_cfg)
         frame = clip.get_frame(0)
         frame_img = Image.fromarray(np.uint8(frame))
-        out_path = bch.gen_image_path("composed")
+        out_path = bn.gen_image_path("composed")
         frame_img.save(out_path, "PNG")
         self.result_image = str(out_path)
         return super().__call__()
 
 
-def example_composable_backends(run_cfg: bch.BenchRunCfg = None, report: bch.BenchReport = None):
+def example_composable_backends(run_cfg: bn.BenchRunCfg = None, report: bn.BenchReport = None):
     bench = ComposeDemo().to_bench(run_cfg, report)
     bench.plot_sweep(
         title="Composable Container Backends",
@@ -64,4 +64,4 @@ def example_composable_backends(run_cfg: bch.BenchRunCfg = None, report: bch.Ben
 
 
 if __name__ == "__main__":
-    bch.run(example_composable_backends, level=2)
+    bn.run(example_composable_backends, level=2)

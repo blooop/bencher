@@ -4,17 +4,17 @@ This example shows how boolean success/failure results are displayed
 both with and without repeats.
 """
 
-import bencher as bch
+import bencher as bn
 from bencher.example.example_cat2_scatter_jitter import ProgrammingBenchmark
 
 
-class SimpleBoolBenchmark(bch.ParametrizedSweep):
+class SimpleBoolBenchmark(bn.ParametrizedSweep):
     """Simple benchmark class that generates deterministic boolean results."""
 
-    threshold = bch.FloatSweep(default=0.5, bounds=[0.1, 0.9], doc="Threshold value for success")
-    complexity = bch.IntSweep(default=5, bounds=[1, 10], doc="Complexity level")
+    threshold = bn.FloatSweep(default=0.5, bounds=[0.1, 0.9], doc="Threshold value for success")
+    complexity = bn.IntSweep(default=5, bounds=[1, 10], doc="Complexity level")
 
-    is_successful = bch.ResultBool(doc="Whether the operation was successful")
+    is_successful = bn.ResultBool(doc="Whether the operation was successful")
 
     def __call__(self, **kwargs) -> dict:
         """Execute the parameter sweep for the given inputs.
@@ -35,7 +35,7 @@ class SimpleBoolBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_bool_result_no_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_result_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example showing boolean result visualization without repeats.
 
     This demonstrates how ResultBool values work with no repetition:
@@ -46,10 +46,10 @@ def example_bool_result_no_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
         run_cfg: Configuration for the benchmark run
 
     Returns:
-        bch.Bench: The benchmark object with results
+        bn.Bench: The benchmark object with results
     """
     if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
 
     # Explicitly set repeats to 1 to avoid averaging
     run_cfg.repeats = 1
@@ -71,7 +71,7 @@ def example_bool_result_no_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
     return bench
 
 
-def example_bool_result_categorical_no_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_result_categorical_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example showing boolean result visualization with categorical variables and no repeats.
 
     This demonstrates how ResultBool values work with categorical inputs without averaging:
@@ -82,11 +82,11 @@ def example_bool_result_categorical_no_repeats(run_cfg: bch.BenchRunCfg | None =
         run_cfg: Configuration for the benchmark run
 
     Returns:
-        bch.Bench: The benchmark object with results
+        bn.Bench: The benchmark object with results
     """
 
     if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
 
     # Explicitly set repeats to 1 to avoid averaging
     run_cfg.repeats = 1
@@ -102,7 +102,7 @@ def example_bool_result_categorical_no_repeats(run_cfg: bch.BenchRunCfg | None =
     return bench
 
 
-def example_bool_result_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_result_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example showing boolean result visualization with 1 input dimension.
 
     This demonstrates how ResultBool values work with single input:
@@ -113,7 +113,7 @@ def example_bool_result_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         run_cfg: Configuration for the benchmark run
 
     Returns:
-        bch.Bench: The benchmark object with results
+        bn.Bench: The benchmark object with results
     """
 
     bench = ProgrammingBenchmark().to_bench(run_cfg)
@@ -127,7 +127,7 @@ def example_bool_result_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     return bench
 
 
-def example_bool_result_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_result_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example showing boolean result visualization with 2 input dimensions.
 
     This demonstrates how ResultBool values work with two categorical inputs:
@@ -138,7 +138,7 @@ def example_bool_result_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         run_cfg: Configuration for the benchmark run
 
     Returns:
-        bch.Bench: The benchmark object with results
+        bn.Bench: The benchmark object with results
     """
 
     bench = ProgrammingBenchmark().to_bench(run_cfg)
@@ -153,7 +153,7 @@ def example_bool_result_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bench_runner = bch.BenchRunner()
+    bench_runner = bn.BenchRunner()
     bench_runner.add(example_bool_result_no_repeats)
     bench_runner.add(example_bool_result_categorical_no_repeats)
     bench_runner.add(example_bool_result_1d)

@@ -11,7 +11,7 @@ from bencher.utils import hash_sha1
 
 # slots that are shared across all Sweep classes
 # param and slots don't work easily with multiple inheritance so define here
-shared_slots = ["units", "samples"]
+shared_slots = ["units", "samples", "optimize"]
 
 
 def describe_variable(
