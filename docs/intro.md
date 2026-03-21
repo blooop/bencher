@@ -42,7 +42,7 @@ Define your search space with typed sweep classes:
 - `StringSweep` — categorical string values
 - `YamlSweep` — configurations loaded from a YAML file
 
-Input types should be basic datatypes so that the data can be hashed, cached, and processed with xarray. See the [Parameters](concepts.md#parameters-input-space) section in A Grammar of Benchmarking for details.
+Input types should be basic datatypes so that the data can be hashed, cached, and processed with xarray. See the [Bencher's Primitives](concepts.md#benchers-primitives) section in A Grammar of Benchmarking for details.
 
 ## Result Types
 

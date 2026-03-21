@@ -424,23 +424,25 @@ def _flat_sections():
         yield from sections
 
 
-# Flat view used by section index generation and toctree
-SECTIONS = dict(_flat_sections())
+# Flat view used by section index generation and toctree.
+# Keyed by rel_path (unique) rather than title (may repeat across groups).
+SECTIONS = {rel_path: title for title, rel_path in _flat_sections()}
 
 
 def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
     """Generate a single gallery.rst page with PNG thumbnail cards grouped by section."""
     from collections import OrderedDict
 
-    # Build lookup: section_title -> {rel_path, examples}
+    # Build lookup: rel_path -> {title, rel_path, examples}
+    # Keyed by rel_path (unique) rather than title (may repeat across groups).
     section_lookup = OrderedDict()
     for title, rel_path in _flat_sections():
-        section_lookup[title] = {"rel_path": rel_path, "examples": []}
+        section_lookup[rel_path] = {"title": title, "rel_path": rel_path, "examples": []}
 
     for meta in examples_metadata:
-        for title, rel_path in _flat_sections():
+        for _title, rel_path in _flat_sections():
             if _match_section(meta["section_rel"], rel_path):
-                section_lookup[title]["examples"].append(meta)
+                section_lookup[rel_path]["examples"].append(meta)
                 break
 
     lines = [
@@ -457,7 +459,7 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
 
     for group_title, sections in SECTION_GROUPS:
         # Check if this group has any examples at all
-        group_has_examples = any(section_lookup[sec_title]["examples"] for sec_title, _ in sections)
+        group_has_examples = any(section_lookup[rel_path]["examples"] for _, rel_path in sections)
         if not group_has_examples:
             continue
 
@@ -468,8 +470,8 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         section_tag = "h4" if group_title else "h3"
         subsection_tag = "h5" if group_title else "h4"
 
-        for section_title, _rel_path in sections:
-            info = section_lookup[section_title]
+        for section_title, rel_path in sections:
+            info = section_lookup[rel_path]
             if not info["examples"]:
                 continue
             lines.append(
@@ -542,12 +544,12 @@ def generate_all() -> list[Path]:
     # Phase 3: Generate section index files
     meta_by_section = {}
     for meta in examples_metadata:
-        for _title, rel_path in SECTIONS.items():
+        for rel_path in SECTIONS:
             if _match_section(meta["section_rel"], rel_path):
                 meta_by_section.setdefault(rel_path, []).append(meta)
                 break
 
-    for title, rel_path in SECTIONS.items():
+    for rel_path, title in SECTIONS.items():
         section_dir = META_DOCS_DIR / rel_path
         if section_dir.exists():
             generate_section_index(section_dir, title, meta_by_section.get(rel_path, []), rel_path)
