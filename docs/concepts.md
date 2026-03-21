@@ -168,13 +168,24 @@ simultaneously. It indexes into a predefined sample count table:
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Samples | 1 | 2 | 3 | 5 | 9 | 17 | 33 | 65 | 129 | 257 | 513 | 1025 |
 
-The progression roughly doubles at each level (e.g. 5, 9, 17, 33, 65, ...). Samples are
-distributed evenly across each parameter's range using `numpy.linspace`, so increasing the
-level refines the resolution uniformly.
+From level 4 onward, the count follows the formula `2^(level-2) + 1`: level 4 gives
+`2^2 + 1 = 5`, level 5 gives `2^3 + 1 = 9`, level 6 gives `2^4 + 1 = 17`, and so on.
+Samples are distributed evenly across each parameter's range using `numpy.linspace`.
+
+The `2n - 1` relationship between consecutive counts is deliberate. Because each level has
+exactly twice-minus-one the samples of the previous level, the new samples land at the
+midpoints between existing ones. For example, on a `[0, 1]` range:
+
+- **Level 5** (9 samples): 0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0
+- **Level 6** (17 samples): 0, 0.0625, 0.125, 0.1875, 0.25, ...
+
+Every sample from level 5 appears at an even index in the level 6 grid. The odd indices are
+new points filling the gaps between previous samples. This is binary subdivision — the same
+principle used in multigrid methods and progressive image rendering.
 
 This enables a natural workflow: start at a low level for quick iteration, then increase for
-publication-quality results. Since the sample points at level N are a superset of those at
-level N-1 (approximately), cached results from earlier runs are reused automatically.
+publication-quality results. Because higher levels are strict supersets of lower ones, cached
+results from earlier runs are reused automatically — you only pay for the new midpoints.
 
 ## Connections to Related Ideas
 
