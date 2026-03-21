@@ -103,4 +103,4 @@ def example_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_over_time, show=False, save=True)
+    bn.run(example_over_time, save=True)

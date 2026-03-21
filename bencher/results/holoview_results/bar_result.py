@@ -1,6 +1,5 @@
 from __future__ import annotations
 import panel as pn
-import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -122,24 +121,18 @@ class BarResult(HoloviewResult):
         )
 
         if not non_time_dims and "over_time" in da.dims:
-            if use_holomap:
-                # 0D + 0cat + over_time (multiple time points): line chart with time on x-axis.
-                plot = da.hvplot.line(
-                    x="over_time", y=da.name, title=title, widget_location="bottom", **kwargs
-                )
-                return self._apply_opts(plot, **opts_kwargs)
-            # 0D + single time point: nothing meaningful to bar-chart.
+            # 0D + over_time: LineResult handles the time-series line and
+            # HistogramResult handles per-time-point tabs.
             return None
 
         if use_holomap:
-            # Build per-time-point bar charts with an over_time slider
-            holomap = hv.HoloMap(kdims=self._over_time_kdims())
-            for t in da.coords["over_time"].values:
-                da_t = da.sel(over_time=t)
+
+            def make_bar(ds_t):
+                da_t = ds_t[da.name]
                 plot_t = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
-                plot_t = self._apply_opts(plot_t, **opts_kwargs)
-                holomap[t] = plot_t
-            return self._holomap_with_slider_bottom(holomap)
+                return self._apply_opts(plot_t, **opts_kwargs)
+
+            return self._build_time_holomap(dataset, da.name, make_bar)
 
         plot = da.hvplot.bar(
             x=x_dim, y=da.name, by=by, title=title, widget_location="bottom", **kwargs

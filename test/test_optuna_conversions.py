@@ -15,6 +15,7 @@ from bencher.optuna_conversions import (
     sweep_var_to_suggest,
     summarise_optuna_study,
     summarise_trial,
+    optuna_grid_search,
 )
 from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
 from bencher.variables.time import TimeSnapshot
@@ -37,6 +38,83 @@ class SweepCfg(bn.ParametrizedSweep):
         self.update_params_from_kwargs(**kwargs)
         self.result = self.float_var * 2
         return super().__call__()
+
+
+class TestOptimizeFlag(unittest.TestCase):
+    """Tests for the optimize flag on sweep variables."""
+
+    def test_default_optimize_true_for_input_types(self):
+        self.assertTrue(SweepCfg.param.int_var.optimize)
+        self.assertTrue(SweepCfg.param.float_var.optimize)
+        self.assertTrue(SweepCfg.param.enum_var.optimize)
+        self.assertTrue(SweepCfg.param.bool_var.optimize)
+        self.assertTrue(SweepCfg.param.string_var.optimize)
+
+    def test_default_optimize_false_for_time_types(self):
+        from datetime import datetime
+
+        ts = TimeSnapshot(datetime_src=datetime.now())
+        self.assertFalse(ts.optimize)
+
+        from bencher.variables.time import TimeEvent
+
+        time_ev = TimeEvent(time_event="ev1")
+        self.assertFalse(time_ev.optimize)
+
+    def test_explicit_optimize_false(self):
+        f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+        self.assertFalse(f.optimize)
+        i = IntSweep(default=1, bounds=(0, 10), optimize=False)
+        self.assertFalse(i.optimize)
+        s = StringSweep(["a", "b"], optimize=False)
+        self.assertFalse(s.optimize)
+        e = EnumSweep(SweepColor, optimize=False)
+        self.assertFalse(e.optimize)
+        b = BoolSweep(optimize=False)
+        self.assertFalse(b.optimize)
+
+    def test_deepcopy_preserves_flag(self):
+        from copy import deepcopy
+
+        f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+        f_copy = deepcopy(f)
+        self.assertFalse(f_copy.optimize)
+
+    def test_with_samples_preserves_flag(self):
+        f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+        f2 = f.with_samples(5)
+        self.assertFalse(f2.optimize)
+
+    def test_yaml_sweep_optimize_default_and_override(self):
+        from pathlib import Path
+        from bencher.variables.inputs import YamlSweep
+
+        yaml_path = (
+            Path(__file__).resolve().parent.parent / "bencher/example/example_yaml_sweep_list.yaml"
+        )
+        default_yaml = YamlSweep(yaml_path)
+        self.assertTrue(default_yaml.optimize)
+
+        disabled_yaml = YamlSweep(yaml_path, optimize=False)
+        self.assertFalse(disabled_yaml.optimize)
+
+    def test_selector_sweep_deepcopy_and_with_samples(self):
+        from copy import deepcopy
+
+        s = StringSweep(["a", "b", "c"], optimize=False)
+        s_copy = deepcopy(s)
+        self.assertFalse(s_copy.optimize)
+
+        s_sampled = s.with_samples(2)
+        self.assertFalse(s_sampled.optimize)
+
+        e = EnumSweep(SweepColor, optimize=False)
+        e_copy = deepcopy(e)
+        self.assertFalse(e_copy.optimize)
+
+        b = BoolSweep(optimize=False)
+        b_copy = deepcopy(b)
+        self.assertFalse(b_copy.optimize)
 
 
 class TestSweepVarToOptunaDist(unittest.TestCase):
@@ -174,3 +252,35 @@ class TestSummariseTrial(unittest.TestCase):
         self.assertIsInstance(output, list)
         self.assertTrue(len(output) > 0)
         self.assertIn("Trial id:", output[0])
+
+
+class TestOptunaGridSearch(unittest.TestCase):
+    def test_default_excludes_optimize_false(self):
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test_grid",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        study = optuna_grid_search(res.bench_cfg)
+        # repeat has optimize=False, should not be in search space
+        search_space = study.sampler._search_space  # pylint: disable=protected-access
+        self.assertNotIn("repeat", search_space)
+
+    def test_trial_vars_includes_all(self):
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test_grid_vars",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=2),
+            plot_callbacks=False,
+        )
+        trial_vars = list(res.bench_cfg.all_vars)
+        study = optuna_grid_search(res.bench_cfg, trial_vars=trial_vars)
+        # When trial_vars provided, all vars should be in search space
+        search_space = study.sampler._search_space  # pylint: disable=protected-access
+        self.assertIn("repeat", search_space)
+        self.assertIn("float_var", search_space)

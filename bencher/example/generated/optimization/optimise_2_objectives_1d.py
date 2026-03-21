@@ -1,4 +1,4 @@
-"""Auto-generated example: Optimization: 1 objective(s), 1D input."""
+"""Auto-generated example: Optimise 2 objective(s), 1D input."""
 
 from typing import Any
 
@@ -29,17 +29,17 @@ class ServerOptimizer(bn.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optim_1obj_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Optimization: 1 objective(s), 1D input."""
+def example_optimise_2_objectives_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    """Optimise 2 objective(s), 1D input."""
     run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.use_optuna = True
     bench = ServerOptimizer().to_bench(run_cfg)
     res = bench.plot_sweep(
         input_vars=["cpu_cores"],
-        result_vars=["performance"],
+        result_vars=["performance", "cost"],
         const_vars=dict(noise_scale=0.1),
-        description="Single-objective optimization over 1D input space using Optuna. The optimizer searches for the parameter combination that maximizes performance.",
-        post_description="The Optuna importance plot shows which input parameters most affect the objective.",
+        description="Multi-objective optimization over 1D input space using Optuna. The optimizer finds the Pareto front trading off performance vs cost.",
+        post_description="The Pareto front shows optimal trade-offs — no point can improve one objective without worsening the other.",
     )
     bench.report.append(res.to_optuna_plots())
 
@@ -47,4 +47,4 @@ def example_optim_1obj_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_optim_1obj_1d, level=3, repeats=3)
+    bn.run(example_optimise_2_objectives_1d, level=3, repeats=3)
