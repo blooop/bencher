@@ -5,6 +5,7 @@ import html
 import importlib
 import io
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -541,7 +542,7 @@ def generate_all() -> list[Path]:
         if group_title is None:
             continue
 
-        group_slug = group_title.lower().replace(" ", "_")
+        group_slug = re.sub(r"[^a-z0-9]+", "_", group_title.lower()).strip("_")
         group_index_dir = META_DOCS_DIR / group_slug
         group_index_dir.mkdir(parents=True, exist_ok=True)
 
@@ -610,7 +611,7 @@ def generate_all() -> list[Path]:
     used_paths = set()
     for group_title, sections in SECTION_GROUPS:
         if group_title:
-            group_slug = group_title.lower().replace(" ", "_")
+            group_slug = re.sub(r"[^a-z0-9]+", "_", group_title.lower()).strip("_")
             group_index = META_DOCS_DIR / group_slug / "index.rst"
             if group_index.exists():
                 meta_index_entries.append(f"   {group_slug}/index")
