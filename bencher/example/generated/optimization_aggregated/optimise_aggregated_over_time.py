@@ -41,7 +41,7 @@ def example_optimise_aggregated_over_time(run_cfg: bn.BenchRunCfg | None = None)
     for i in range(3):
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        res = bench.plot_sweep(
+        bench.plot_sweep(
             "over_time",
             input_vars=["algorithm", "learning_rate"],
             result_vars=["loss"],

@@ -42,7 +42,7 @@ def example_optimise_over_time_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
         benchable._drift = float(i)
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
-        res = bench.plot_sweep(
+        bench.plot_sweep(
             "over_time",
             input_vars=["cpu_cores", "memory_gb"],
             result_vars=["performance"],
