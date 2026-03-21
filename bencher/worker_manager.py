@@ -99,6 +99,12 @@ class WorkerManager:
                 self.worker = worker
             else:
                 self.worker = partial(worker_cfg_wrapper, worker, worker_input_cfg)
+            # If the worker is a bound method of a ParametrizedSweep, extract
+            # the instance so that input/result variables can be auto-detected
+            # (e.g. when calling optimize() without explicit vars).
+            bound_self = getattr(worker, "__self__", None)
+            if bound_self is not None and isinstance(bound_self, ParametrizedSweep):
+                self.worker_class_instance = bound_self
             logger.info(f"setting worker {worker}")
         self.worker_input_cfg = worker_input_cfg
 
