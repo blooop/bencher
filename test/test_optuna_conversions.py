@@ -58,8 +58,8 @@ class TestOptimizeFlag(unittest.TestCase):
 
         from bencher.variables.time import TimeEvent
 
-        te = TimeEvent(time_event="ev1")
-        self.assertFalse(te.optimize)
+        time_ev = TimeEvent(time_event="ev1")
+        self.assertFalse(time_ev.optimize)
 
     def test_explicit_optimize_false(self):
         f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
