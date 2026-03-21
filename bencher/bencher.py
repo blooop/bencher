@@ -634,15 +634,7 @@ class Bench(BenchPlotServer):
             bench_res.post_setup()
         timings.post_setup_ms = elapsed()
 
-        timings.total_ms = (
-            timings.sample_cache_init_ms
-            + timings.cache_check_ms
-            + timings.dataset_setup_ms
-            + timings.job_submission_ms
-            + timings.job_execution_ms
-            + timings.history_merge_ms
-            + timings.post_setup_ms
-        )
+        timings.total_ms = timings.compute_total()
         bench_res.timings = timings
 
         if bench_cfg.auto_plot:

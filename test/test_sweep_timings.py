@@ -49,15 +49,8 @@ def test_bench_result_has_timings():
 
     # total_ms should equal the sum of all phase timings
     t = res.timings
-    expected_total = (
-        t.cache_check_ms
-        + t.sample_cache_init_ms
-        + t.dataset_setup_ms
-        + t.job_submission_ms
-        + t.job_execution_ms
-        + t.history_merge_ms
-        + t.post_setup_ms
-    )
+    summary = t.summary()
+    expected_total = sum(v for k, v in summary.items() if k != "total_ms")
     assert t.total_ms == expected_total
 
 

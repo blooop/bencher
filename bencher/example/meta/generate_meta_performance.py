@@ -103,8 +103,18 @@ bench.plot_sweep(
 
 
 def _get_shared_class_code():
-    """Extract class source from the canonical module to avoid duplication."""
-    return inspect.getsource(TrivialWorkload) + "\n\n" + inspect.getsource(BencherSelfBenchmark)
+    """Extract class source from the canonical module to avoid duplication.
+
+    Falls back to reading the source file directly if inspect.getsource is
+    unavailable (e.g. zipapp or compiled distributions).
+    """
+    try:
+        return inspect.getsource(TrivialWorkload) + "\n\n" + inspect.getsource(BencherSelfBenchmark)
+    except OSError:
+        import importlib.resources
+
+        src = importlib.resources.files("bencher.example").joinpath("example_self_benchmark.py")
+        return src.read_text(encoding="utf-8")
 
 
 def example_meta_performance():

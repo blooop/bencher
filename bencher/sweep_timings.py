@@ -25,6 +25,14 @@ class SweepTimings:
     post_setup_ms: float = 0.0
     total_ms: float = 0.0  #: Sum of all phase timings above
 
+    def compute_total(self) -> float:
+        """Compute total_ms as the sum of all phase timing fields."""
+        return sum(
+            getattr(self, f.name)
+            for f in fields(self)
+            if f.name != "total_ms" and f.name.endswith("_ms")
+        )
+
     def summary(self) -> dict[str, float]:
         """Return all phase timings as a dict."""
         return {f.name: getattr(self, f.name) for f in fields(self)}
