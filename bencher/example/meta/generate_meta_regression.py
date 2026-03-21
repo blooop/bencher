@@ -6,7 +6,7 @@ regressions in over-time benchmarks.
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "regression"
@@ -19,7 +19,7 @@ REGRESSION_EXAMPLES = [
 class MetaRegression(MetaGeneratorBase):
     """Generate Python examples demonstrating regression detection."""
 
-    example = bch.StringSweep(REGRESSION_EXAMPLES, doc="Which regression example to generate")
+    example = bn.StringSweep(REGRESSION_EXAMPLES, doc="Which regression example to generate")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -31,16 +31,16 @@ class MetaRegression(MetaGeneratorBase):
 
     def _generate_percentage(self):
         """Percentage-based regression detection over time."""
-        imports = "from typing import Any\nfrom datetime import datetime, timedelta\n\nimport bencher as bch"
+        imports = "from typing import Any\nfrom datetime import datetime, timedelta\n\nimport bencher as bn"
         class_code = '''\
-class ServerBenchmark(bch.ParametrizedSweep):
+class ServerBenchmark(bn.ParametrizedSweep):
     """A server benchmark whose response time degrades over successive releases."""
 
-    connections = bch.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
-    payload_kb = bch.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
+    connections = bn.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
+    payload_kb = bn.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
 
-    response_time = bch.ResultVar(units="ms", direction=bch.OptDir.minimize)
-    throughput = bch.ResultVar(units="req/s", direction=bch.OptDir.maximize)
+    response_time = bn.ResultVar(units="ms", direction=bn.OptDir.minimize)
+    throughput = bn.ResultVar(units="req/s", direction=bn.OptDir.maximize)
 
     _time_offset = 0.0  # set externally per snapshot
 
@@ -52,7 +52,7 @@ class ServerBenchmark(bch.ParametrizedSweep):
         self.throughput = 1000.0 / self.response_time
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bch.BenchRunCfg()
+run_cfg = run_cfg or bn.BenchRunCfg()
 run_cfg.over_time = True
 run_cfg.repeats = 2
 run_cfg.regression_detection = True
@@ -101,16 +101,16 @@ if report is not None:
         )
 
 
-def example_meta_regression(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_regression(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaRegression().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Regression Detection",
-        input_vars=[bch.p("example", REGRESSION_EXAMPLES)],
+        input_vars=[bn.p("example", REGRESSION_EXAMPLES)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_regression)
+    bn.run(example_meta_regression)

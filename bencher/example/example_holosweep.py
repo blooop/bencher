@@ -3,7 +3,7 @@
 # pylint: disable=duplicate-code,unused-argument
 
 
-import bencher as bch
+import bencher as bn
 import math
 import random
 import numpy as np
@@ -28,24 +28,22 @@ class Function(StrEnum):
         return getattr(np, self.removeprefix("fn_"))(arg)
 
 
-class PlotFunctions(bch.ParametrizedSweep):
-    phase = bch.FloatSweep(
-        default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5
-    )
+class PlotFunctions(bn.ParametrizedSweep):
+    phase = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
 
-    freq = bch.FloatSweep(default=1, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
+    freq = bn.FloatSweep(default=1, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
 
-    theta = bch.FloatSweep(
+    theta = bn.FloatSweep(
         default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=10
     )
 
-    compute_fn = bch.EnumSweep(Function)
+    compute_fn = bn.EnumSweep(Function)
 
     # RESULT VARS
-    fn_output = bch.ResultVar(units="v", doc="sin of theta with some noise")
-    out_sum = bch.ResultVar(units="v", doc="The sum")
-    ref = bch.ResultReference()
-    holomap = bch.ResultHmap()
+    fn_output = bn.ResultVar(units="v", doc="sin of theta with some noise")
+    out_sum = bn.ResultVar(units="v", doc="The sum")
+    ref = bn.ResultReference()
+    holomap = bn.ResultHmap()
 
     def __call__(self, plot=True, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -56,7 +54,7 @@ class PlotFunctions(bch.ParametrizedSweep):
         )
 
         self.holomap = self.plot_holo(plot)
-        self.ref = bch.ResultReference(self.ref)
+        self.ref = bn.ResultReference(self.ref)
 
         return self.get_results_values_as_dict()
 
@@ -69,7 +67,7 @@ class PlotFunctions(bch.ParametrizedSweep):
         return None
 
 
-def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_holosweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example using the new one-arg bench signature: bench(run_cfg).
 
     A report is created internally by Bench when not provided.
@@ -95,4 +93,4 @@ def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 if __name__ == "__main__":
     PlotFunctions().to_gui()
-    bch.run(example_holosweep, level=6, cache_results=False)
+    bn.run(example_holosweep, level=6, cache_results=False)

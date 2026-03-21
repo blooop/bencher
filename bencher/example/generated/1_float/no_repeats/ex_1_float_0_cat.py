@@ -4,15 +4,15 @@ from typing import Any
 
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class SortBenchmark(bch.ParametrizedSweep):
+class SortBenchmark(bn.ParametrizedSweep):
     """Measures sort duration across array sizes."""
 
-    array_size = bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
+    array_size = bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
 
-    time = bch.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultVar(units="ms", doc="Sort duration")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -20,7 +20,7 @@ class SortBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_no_repeats_1_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_no_repeats_1_float_0_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """1 Float, 0 Categorical."""
     bench = SortBenchmark().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["array_size"], result_vars=["time"])
@@ -29,4 +29,4 @@ def example_no_repeats_1_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> 
 
 
 if __name__ == "__main__":
-    bch.run(example_no_repeats_1_float_0_cat, level=4)
+    bn.run(example_no_repeats_1_float_0_cat, level=4)

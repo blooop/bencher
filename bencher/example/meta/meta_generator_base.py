@@ -1,14 +1,14 @@
 import textwrap
 
-import bencher as bch
+import bencher as bn
 
 from .generate_examples import GENERATED_DIR
 
 
-class MetaGeneratorBase(bch.ParametrizedSweep):
+class MetaGeneratorBase(bn.ParametrizedSweep):
     """Shared base class for meta-generators that produce Python example files."""
 
-    plots = bch.ResultReference(units="int")
+    plots = bn.ResultReference(units="int")
 
     def generate_example(
         self,
@@ -32,7 +32,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
             imports: Import lines placed at the top of the file.
             body: Unindented function body lines. Indentation is applied automatically.
             class_code: Optional class definition emitted between imports and function.
-            run_kwargs: Dict of keyword args for ``bch.run()`` in ``__main__``
+            run_kwargs: Dict of keyword args for ``bn.run()`` in ``__main__``
                         (e.g. ``{"level": 4, "repeats": 10}``).
         """
         if run_kwargs is None:
@@ -56,14 +56,14 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
 {imports}{class_block}
 
 
-def {function_name}(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def {function_name}(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """{title}."""
 {indented_body}
     return bench
 
 
 if __name__ == "__main__":
-    bch.run({function_name}{kwargs_str})
+    bn.run({function_name}{kwargs_str})
 '''
         fpath = GENERATED_DIR / output_dir / f"{filename}.py"
         fpath.parent.mkdir(parents=True, exist_ok=True)
@@ -106,13 +106,13 @@ if __name__ == "__main__":
             post_sweep_line: Optional line after plot_sweep (e.g. 'res.to_bar()').
             run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
             extra_imports: Optional list of additional import lines.
-            run_kwargs: Dict of kwargs for bch.run() (e.g. {"level": 4, "repeats": 10}).
+            run_kwargs: Dict of kwargs for bn.run() (e.g. {"level": 4, "repeats": 10}).
             module_docstring: Optional override for the module-level docstring.
         """
         import_lines = []
         if extra_imports:
             import_lines.extend(extra_imports)
-        import_lines.append("import bencher as bch")
+        import_lines.append("import bencher as bn")
         if benchable_module is not None:
             import_lines.append(f"from {benchable_module} import {benchable_class}")
 
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
         body_lines = []
         if run_cfg_lines:
-            body_lines.append("run_cfg = run_cfg or bch.BenchRunCfg()")
+            body_lines.append("run_cfg = run_cfg or bn.BenchRunCfg()")
             body_lines.extend(run_cfg_lines)
 
         body_lines.append(f"bench = {benchable_class}().to_bench(run_cfg)")

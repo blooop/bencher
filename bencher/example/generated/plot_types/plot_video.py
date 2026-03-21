@@ -1,10 +1,10 @@
 """Auto-generated example: Plot Type: Video."""
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.benchable_objects import BenchableVideoResult
 
 
-def example_plot_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_plot_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Plot Type: Video."""
     bench = BenchableVideoResult().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["sides"], result_vars=["animation"])
@@ -14,4 +14,4 @@ def example_plot_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_plot_video, level=3)
+    bn.run(example_plot_video, level=3)

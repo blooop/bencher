@@ -6,23 +6,23 @@ over-time importance analysis, and optimize=False aggregation.
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "optimization"
 
 CLASS_CODE = "\n".join(
     [
-        "class ServerOptimizer(bch.ParametrizedSweep):",
+        "class ServerOptimizer(bn.ParametrizedSweep):",
         '    """Optimizes server configuration for performance vs cost tradeoff."""',
         "",
-        '    cpu_cores = bch.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
-        '    memory_gb = bch.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
+        '    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
+        '    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
         "",
-        '    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance score (maximize)")',
-        '    cost = bch.ResultVar("$/hr", bch.OptDir.minimize, doc="Hourly cost (minimize)")',
+        '    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance score (maximize)")',
+        '    cost = bn.ResultVar("$/hr", bn.OptDir.minimize, doc="Hourly cost (minimize)")',
         "",
-        '    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
+        '    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
         "",
         "    def __call__(self, **kwargs):",
         "        self.update_params_from_kwargs(**kwargs)",
@@ -38,15 +38,15 @@ CLASS_CODE = "\n".join(
 # Class with a _drift field for over_time examples (performance degrades over time)
 CLASS_CODE_OVERTIME = "\n".join(
     [
-        "class ServerOptimizer(bch.ParametrizedSweep):",
+        "class ServerOptimizer(bn.ParametrizedSweep):",
         '    """Optimizes server config — performance drifts over time."""',
         "",
-        '    cpu_cores = bch.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
-        '    memory_gb = bch.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
+        '    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
+        '    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
         "",
-        '    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance score")',
+        '    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance score")',
         "",
-        '    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
+        '    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
         "",
         "    _drift = 0.0",
         "",
@@ -63,17 +63,17 @@ CLASS_CODE_OVERTIME = "\n".join(
 # Class with optimize=False on a categorical var for aggregation examples
 CLASS_CODE_AGG = "\n".join(
     [
-        "class AlgorithmBench(bch.ParametrizedSweep):",
+        "class AlgorithmBench(bn.ParametrizedSweep):",
         '    """Finds best learning rate across algorithms (aggregated)."""',
         "",
-        "    algorithm = bch.StringSweep(",
+        "    algorithm = bn.StringSweep(",
         '        ["gradient_descent", "adam", "rmsprop"],',
         '        doc="Optimization algorithm",',
         "        optimize=False,  # sweep but don't optimize — aggregate results",
         "    )",
-        '    learning_rate = bch.FloatSweep(default=0.01, bounds=[0.001, 1.0], doc="Learning rate")',
+        '    learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0], doc="Learning rate")',
         "",
-        '    loss = bch.ResultVar("loss", bch.OptDir.minimize, doc="Training loss (minimize)")',
+        '    loss = bn.ResultVar("loss", bn.OptDir.minimize, doc="Training loss (minimize)")',
         "",
         "    def __call__(self, **kwargs):",
         "        self.update_params_from_kwargs(**kwargs)",
@@ -89,8 +89,8 @@ CLASS_CODE_AGG = "\n".join(
 class MetaOptimization(MetaGeneratorBase):
     """Generate Python examples demonstrating optimization features."""
 
-    n_objectives = bch.IntSweep(default=1, bounds=(1, 2), doc="Number of objectives")
-    input_dims = bch.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
+    n_objectives = bn.IntSweep(default=1, bounds=(1, 2), doc="Number of objectives")
+    input_dims = bn.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -158,7 +158,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
     revealing whether measurement noise or temporal drift affects results.
     """
 
-    input_dims = bch.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
+    input_dims = bn.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -184,7 +184,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
         )
 
         body_lines = [
-            "run_cfg = run_cfg or bch.BenchRunCfg()",
+            "run_cfg = run_cfg or bn.BenchRunCfg()",
             "run_cfg.over_time = True",
             "run_cfg.repeats = 3",
             "benchable = ServerOptimizer()",
@@ -214,7 +214,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
             function_name=function_name,
             imports=(
                 "import math\nimport random\nfrom datetime import datetime, timedelta"
-                "\n\nimport bencher as bch"
+                "\n\nimport bencher as bn"
             ),
             body="\n".join(body_lines) + "\n",
             class_code=CLASS_CODE_OVERTIME,
@@ -231,7 +231,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
     finds the best learning_rate by averaging loss across all algorithms.
     """
 
-    with_over_time = bch.BoolSweep(default=False, doc="Include over_time dimension")
+    with_over_time = bn.BoolSweep(default=False, doc="Include over_time dimension")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -251,7 +251,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
             )
 
             body_lines = [
-                "run_cfg = run_cfg or bch.BenchRunCfg()",
+                "run_cfg = run_cfg or bn.BenchRunCfg()",
                 "run_cfg.over_time = True",
                 "run_cfg.repeats = 3",
                 "benchable = AlgorithmBench()",
@@ -279,7 +279,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 function_name=function_name,
                 imports=(
                     "import math\nimport random\nfrom datetime import datetime, timedelta"
-                    "\n\nimport bencher as bch"
+                    "\n\nimport bencher as bn"
                 ),
                 body="\n".join(body_lines) + "\n",
                 class_code=CLASS_CODE_AGG,
@@ -321,41 +321,41 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
         return super().__call__()
 
 
-def example_meta_optimization(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_optimization(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaOptimization().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Optimization",
         input_vars=[
-            bch.p("n_objectives", [1, 2]),
-            bch.p("input_dims", [1, 2]),
+            bn.p("n_objectives", [1, 2]),
+            bn.p("input_dims", [1, 2]),
         ],
     )
 
     return bench
 
 
-def example_meta_optimization_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_optimization_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaOptimizationOverTime().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Optimization Over Time",
-        input_vars=[bch.p("input_dims", [1, 2])],
+        input_vars=[bn.p("input_dims", [1, 2])],
     )
 
     return bench
 
 
-def example_meta_optimization_aggregated(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_optimization_aggregated(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaOptimizationAggregated().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Optimization Aggregated",
-        input_vars=[bch.p("with_over_time", [False, True])],
+        input_vars=[bn.p("with_over_time", [False, True])],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_optimization)
+    bn.run(example_meta_optimization)

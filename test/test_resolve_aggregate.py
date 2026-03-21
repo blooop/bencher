@@ -149,11 +149,11 @@ class TestResolveAggregateIntegration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        import bencher as bch
+        import bencher as bn
         from bencher.example.meta.example_meta import BenchableObject
 
         bench = BenchableObject().to_bench()
-        run_cfg = bch.BenchRunCfg(repeats=1, auto_plot=False)
+        run_cfg = bn.BenchRunCfg(repeats=1, auto_plot=False)
 
         cls.res_explicit = bench.plot_sweep(
             "agg_explicit",
@@ -183,7 +183,7 @@ class TestResolveAggregateIntegration(unittest.TestCase):
 
     def test_aggregate_int_selects_last_n(self):
         """aggregate=1 should select only the last input dim."""
-        import bencher as bch
+        import bencher as bn
         from bencher.example.meta.example_meta import BenchableObject
 
         bench = BenchableObject().to_bench()
@@ -191,7 +191,7 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             "agg_int",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1, auto_plot=False),
+            run_cfg=bn.BenchRunCfg(repeats=1, auto_plot=False),
             plot_callbacks=False,
             aggregate=1,
         )

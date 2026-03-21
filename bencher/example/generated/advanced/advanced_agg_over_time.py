@@ -3,11 +3,11 @@
 from typing import Any
 
 import math
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class ThermalPlate(bch.ParametrizedSweep):
+class ThermalPlate(bn.ParametrizedSweep):
     """Measures temperature across a 2D plate that cools over time.
 
     A 2D sweep (x, y) is run at each time snapshot. Both dimensions are
@@ -16,10 +16,10 @@ class ThermalPlate(bch.ParametrizedSweep):
     decays, with error bounds from the spatial variation across the grid.
     """
 
-    x = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate")
-    y = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate")
+    x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate")
+    y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate")
 
-    temperature = bch.ResultVar(units="C", doc="Measured temperature")
+    temperature = bn.ResultVar(units="C", doc="Measured temperature")
 
     _time_offset = 0.0  # set externally per snapshot
 
@@ -36,9 +36,9 @@ class ThermalPlate(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_advanced_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_advanced_agg_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Aggregate Over Time — 2D sweep to scalar curve with error bounds."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
 
     benchable = ThermalPlate()
@@ -64,4 +64,4 @@ def example_advanced_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    bch.run(example_advanced_agg_over_time, level=4)
+    bn.run(example_advanced_agg_over_time, level=4)

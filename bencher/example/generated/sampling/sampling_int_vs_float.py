@@ -4,16 +4,16 @@ from typing import Any
 
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class IntFloatCompare(bch.ParametrizedSweep):
+class IntFloatCompare(bn.ParametrizedSweep):
     """Compares integer vs float sweep behaviour."""
 
-    int_input = bch.IntSweep(default=5, bounds=[0, 10], doc="Discrete integer input")
-    float_input = bch.FloatSweep(default=5.0, bounds=[0.0, 10.0], doc="Continuous float input")
+    int_input = bn.IntSweep(default=5, bounds=[0, 10], doc="Discrete integer input")
+    float_input = bn.FloatSweep(default=5.0, bounds=[0.0, 10.0], doc="Continuous float input")
 
-    output = bch.ResultVar("ul", doc="Computed output")
+    output = bn.ResultVar("ul", doc="Computed output")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -21,7 +21,7 @@ class IntFloatCompare(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_sampling_int_vs_float(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_sampling_int_vs_float(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Sampling: Int Vs Float."""
     bench = IntFloatCompare().to_bench(run_cfg)
     bench.plot_sweep(
@@ -34,4 +34,4 @@ def example_sampling_int_vs_float(run_cfg: bch.BenchRunCfg | None = None) -> bch
 
 
 if __name__ == "__main__":
-    bch.run(example_sampling_int_vs_float, level=3)
+    bn.run(example_sampling_int_vs_float, level=3)

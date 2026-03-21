@@ -50,7 +50,7 @@ class VideoSummaryResult(BenchResultBase):
             result_var (Parameter, optional): The result var to plot. Defaults to None.
             result_types (tuple, optional): The types of result var to convert to video. Defaults to (ResultImage,).
             collection (pn.pane, optional): If there are multiple results, use this collection to stack them. Defaults to pn.Row().
-            compose_method_list (list: optional): Defines how each of the dimensions is composed in the video. ie, concatenate the videos horizontally, vertically, sequentially or alpha overlay. Seee bch.ComposeType for the options.
+            compose_method_list (list: optional): Defines how each of the dimensions is composed in the video. ie, concatenate the videos horizontally, vertically, sequentially or alpha overlay. Seee bn.ComposeType for the options.
 
         Returns:
             pn.panel | None: a panel pane with a video of all results concatenated together

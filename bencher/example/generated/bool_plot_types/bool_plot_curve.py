@@ -5,15 +5,15 @@ from typing import Any
 import math
 import random
 
-import bencher as bch
+import bencher as bn
 
 
-class HealthCheckFloatNoisy(bch.ParametrizedSweep):
+class HealthCheckFloatNoisy(bn.ParametrizedSweep):
     """Check health with noise — repeated runs produce different outcomes."""
 
-    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -22,7 +22,7 @@ class HealthCheckFloatNoisy(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_bool_plot_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_plot_curve(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Bool Plot: Curve."""
     bench = HealthCheckFloatNoisy().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["load"], result_vars=["healthy"])
@@ -32,4 +32,4 @@ def example_bool_plot_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_curve, level=3, repeats=20)
+    bn.run(example_bool_plot_curve, level=3, repeats=20)

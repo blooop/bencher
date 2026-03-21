@@ -33,10 +33,10 @@ def run(
     """Run a benchmark target with sensible defaults.
 
     Handles three cases:
-    1. Callable (e.g. ``bch.run(example_fn)``) — wraps in BenchRunner.
-    2. ParametrizedSweep subclass (e.g. ``bch.run(SimpleFloat)``) — instantiates, calls
+    1. Callable (e.g. ``bn.run(example_fn)``) — wraps in BenchRunner.
+    2. ParametrizedSweep subclass (e.g. ``bn.run(SimpleFloat)``) — instantiates, calls
        ``to_bench()`` + ``plot_sweep()``.
-    3. ParametrizedSweep instance (e.g. ``bch.run(SimpleFloat())``) — same as above
+    3. ParametrizedSweep instance (e.g. ``bn.run(SimpleFloat())``) — same as above
        without instantiation.
 
     Args:

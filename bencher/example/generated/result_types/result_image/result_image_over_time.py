@@ -2,7 +2,7 @@
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 import math
 import numpy as np
@@ -25,20 +25,20 @@ def _draw_polygon_image(points, color, linewidth, size=200):
     return img
 
 
-class PolygonRenderer(bch.ParametrizedSweep):
+class PolygonRenderer(bn.ParametrizedSweep):
     """Renders polygon images with configurable sides, radius, and color."""
 
-    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
-    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
-    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")
-    polygon = bch.ResultImage(doc="Rendered polygon image")
-    area = bch.ResultVar("u^2", doc="Polygon area")
+    sides = bn.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
+    radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
+    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
+    polygon = bn.ResultImage(doc="Rendered polygon image")
+    area = bn.ResultVar("u^2", doc="Polygon area")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
-        filepath = bch.gen_image_path("polygon")
+        filepath = bn.gen_image_path("polygon")
         img.save(filepath, "PNG")
         self.polygon = str(filepath)
         self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (
@@ -47,9 +47,9 @@ class PolygonRenderer(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_image_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_image_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """ResultImage: Over Time Slider."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     benchable = PolygonRenderer()
     bench = benchable.to_bench(run_cfg)
@@ -70,4 +70,4 @@ def example_result_image_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    bch.run(example_result_image_over_time, level=3)
+    bn.run(example_result_image_over_time, level=3)

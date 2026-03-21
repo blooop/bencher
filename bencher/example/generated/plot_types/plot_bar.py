@@ -2,15 +2,15 @@
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 
 
-class CacheCompare(bch.ParametrizedSweep):
+class CacheCompare(bn.ParametrizedSweep):
     """Compare response distance across cache backends."""
 
-    backend = bch.StringSweep(["redis", "memcached", "local"])
+    backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bch.ResultVar("m", doc="Response distance metric")
+    distance = bn.ResultVar("m", doc="Response distance metric")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -19,7 +19,7 @@ class CacheCompare(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_plot_bar(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_plot_bar(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Plot Type: Bar."""
     bench = CacheCompare().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["backend"], result_vars=["distance"])
@@ -29,4 +29,4 @@ def example_plot_bar(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_plot_bar, level=3)
+    bn.run(example_plot_bar, level=3)

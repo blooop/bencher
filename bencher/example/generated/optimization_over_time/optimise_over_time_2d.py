@@ -6,18 +6,18 @@ import math
 import random
 from datetime import datetime, timedelta
 
-import bencher as bch
+import bencher as bn
 
 
-class ServerOptimizer(bch.ParametrizedSweep):
+class ServerOptimizer(bn.ParametrizedSweep):
     """Optimizes server config — performance drifts over time."""
 
-    cpu_cores = bch.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")
-    memory_gb = bch.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")
+    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")
+    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")
 
-    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance score")
+    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance score")
 
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
     _drift = 0.0
 
@@ -30,9 +30,9 @@ class ServerOptimizer(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optimise_over_time_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_optimise_over_time_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Optimise Over Time: 2D input."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 3
     benchable = ServerOptimizer()
@@ -58,4 +58,4 @@ def example_optimise_over_time_2d(run_cfg: bch.BenchRunCfg | None = None) -> bch
 
 
 if __name__ == "__main__":
-    bch.run(example_optimise_over_time_2d, level=2)
+    bn.run(example_optimise_over_time_2d, level=2)

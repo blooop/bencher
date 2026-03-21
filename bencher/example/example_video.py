@@ -1,4 +1,4 @@
-import bencher as bch
+import bencher as bn
 import numpy as np
 from PIL import Image
 import colorcet as cc
@@ -19,20 +19,20 @@ def apply_colormap(data: npt.NDArray) -> npt.NDArray:
     return colors[indices]
 
 
-class TuringPattern(bch.ParametrizedSweep):
-    alpha = bch.FloatSweep(default=2.8e-4, bounds=(2e-4, 5e-3))
-    beta = bch.FloatSweep(default=5e-3, bounds=(1e-3, 9e-3))
-    tau = bch.FloatSweep(default=0.1, bounds=(0.01, 0.5))
-    k = bch.FloatSweep(default=-0.005, bounds=(-0.01, 0.01))
+class TuringPattern(bn.ParametrizedSweep):
+    alpha = bn.FloatSweep(default=2.8e-4, bounds=(2e-4, 5e-3))
+    beta = bn.FloatSweep(default=5e-3, bounds=(1e-3, 9e-3))
+    tau = bn.FloatSweep(default=0.1, bounds=(0.01, 0.5))
+    k = bn.FloatSweep(default=-0.005, bounds=(-0.01, 0.01))
 
-    size = bch.IntSweep(default=30, bounds=(30, 200), doc="size of the 2D grid")
-    time = bch.FloatSweep(default=20.0, bounds=(1, 100), doc="total time of simulation")
-    dt = bch.FloatSweep(default=0.001, doc="simulation time step")
+    size = bn.IntSweep(default=30, bounds=(30, 200), doc="size of the 2D grid")
+    time = bn.FloatSweep(default=20.0, bounds=(1, 100), doc="total time of simulation")
+    dt = bn.FloatSweep(default=0.001, doc="simulation time step")
 
-    video = bch.ResultVideo()
-    score = bch.ResultVar()
-    img = bch.ResultImage()
-    img_extracted = bch.ResultImage()
+    video = bn.ResultVideo()
+    score = bn.ResultVar()
+    img = bn.ResultImage()
+    img_extracted = bn.ResultImage()
 
     def laplacian(self, Z, dx):
         Ztop = Z[0:-2, 1:-1]
@@ -71,7 +71,7 @@ class TuringPattern(bch.ParametrizedSweep):
         U = np.random.rand(self.size, self.size)
         V = np.random.rand(self.size, self.size)
 
-        vid_writer = bch.VideoWriter()
+        vid_writer = bn.VideoWriter()
         for i in range(n):
             self.update(U, V, dx)
             if i % 500 == 0:
@@ -83,15 +83,15 @@ class TuringPattern(bch.ParametrizedSweep):
                 rgb_alpha = np.array(img)
                 vid_writer.append(rgb_alpha)
 
-        self.img = bch.add_image(rgb_alpha)
+        self.img = bn.add_image(rgb_alpha)
         self.video = vid_writer.write()
-        self.img_extracted = bch.video_writer.VideoWriter.extract_frame(self.video)
+        self.img_extracted = bn.video_writer.VideoWriter.extract_frame(self.video)
         print("img path", self.img_extracted)
         self.score = self.alpha + self.beta
         return super().__call__()
 
 
-def example_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = TuringPattern().to_bench(run_cfg)
 
     bench.plot_sweep(
@@ -103,17 +103,17 @@ def example_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     return bench
 
 
-def example_video_tap(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:  # pragma: no cover
+def example_video_tap(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:  # pragma: no cover
     bench = TuringPattern().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["alpha", "beta"])
 
-    bench.report.append(res.to_video_grid(result_types=(bch.ResultVideo)))
+    bench.report.append(res.to_video_grid(result_types=(bn.ResultVideo)))
 
     res = bench.plot_sweep(input_vars=["alpha"])
     bench.report.append(
         res.to_video_grid(
-            result_types=(bch.ResultVideo),
-            compose_method_list=[bch.ComposeType.right],
+            result_types=(bn.ResultVideo),
+            compose_method_list=[bn.ComposeType.right],
         )
     )
 
@@ -123,4 +123,4 @@ def example_video_tap(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:  # p
 
 
 if __name__ == "__main__":
-    bch.run(example_video_tap, level=2)
+    bn.run(example_video_tap, level=2)

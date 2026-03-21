@@ -1,4 +1,4 @@
-import bencher as bch
+import bencher as bn
 
 from bencher.example.example_categorical import example_categorical
 from bencher.example.example_floats import example_floats
@@ -21,9 +21,9 @@ from bencher.example.example_sample_cache import example_sample_cache
 
 
 if __name__ == "__main__":
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.overwrite_sample_cache = True
-    bench_runner = bch.BenchRunner("bencher_examples", run_cfg=run_cfg)
+    bench_runner = bn.BenchRunner("bencher_examples", run_cfg=run_cfg)
 
     bench_runner.add(example_categorical)
     bench_runner.add(example_floats)

@@ -3,15 +3,15 @@
 from typing import Any
 
 import math
-import bencher as bch
+import bencher as bn
 
 
-class CustomSampler(bch.ParametrizedSweep):
+class CustomSampler(bn.ParametrizedSweep):
     """Demonstrates custom sample value selection."""
 
-    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
 
-    latency = bch.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultVar(units="ms", doc="Response latency")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -19,17 +19,17 @@ class CustomSampler(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_sampling_custom_values(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_sampling_custom_values(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Sampling: Custom Values."""
     bench = CustomSampler().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=[bch.p("load", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],
+        input_vars=[bn.p("load", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],
         result_vars=["latency"],
-        description="Custom sample values let you pick exact points to evaluate. Use bch.p() to override a variable's sweep values.",
+        description="Custom sample values let you pick exact points to evaluate. Use bn.p() to override a variable's sweep values.",
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_sampling_custom_values, level=3)
+    bn.run(example_sampling_custom_values, level=3)

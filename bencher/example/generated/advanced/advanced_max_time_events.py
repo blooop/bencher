@@ -3,11 +3,11 @@
 from typing import Any
 
 import random
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class LatencyMonitor(bch.ParametrizedSweep):
+class LatencyMonitor(bn.ParametrizedSweep):
     """Simulates a service latency monitor that drifts over time.
 
     When tracking metrics over_time, history grows without bound by default.
@@ -15,9 +15,9 @@ class LatencyMonitor(bch.ParametrizedSweep):
     time slices, keeping only the most recent ones.
     """
 
-    endpoint = bch.StringSweep(["/api/users", "/api/orders"], doc="API endpoint")
+    endpoint = bn.StringSweep(["/api/users", "/api/orders"], doc="API endpoint")
 
-    latency = bch.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultVar(units="ms", doc="Response latency")
 
     _drift = 0.0  # set externally per snapshot
 
@@ -28,9 +28,9 @@ class LatencyMonitor(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_advanced_max_time_events(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_advanced_max_time_events(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Max Time Events — cap over_time history."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
 
     # Keep only the 3 most recent time slices in the cache.
@@ -62,4 +62,4 @@ def example_advanced_max_time_events(run_cfg: bch.BenchRunCfg | None = None) -> 
 
 
 if __name__ == "__main__":
-    bch.run(example_advanced_max_time_events, level=3)
+    bn.run(example_advanced_max_time_events, level=3)

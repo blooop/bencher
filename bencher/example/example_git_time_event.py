@@ -4,7 +4,7 @@ Simulates server latency that drifts upward over successive runs and has per-cal
 noise.  The "All Time Points (aggregated)" tab pools every snapshot into a single
 plot so the distribution is smoother than any individual time point.
 
-In production you would pass ``time_src=bch.git_time_event()`` to label each run
+In production you would pass ``time_src=bn.git_time_event()`` to label each run
 with the current date and git commit hash.  Here we synthesise timestamps so the
 example is self-contained and reproducible without a real git history.
 """
@@ -12,18 +12,18 @@ example is self-contained and reproducible without a real git history.
 import random
 from datetime import datetime, timedelta
 
-import bencher as bch
+import bencher as bn
 
 # Base latencies that will be shifted by a time-dependent trend
 _BASE_LATENCY = {"/api/users": 48.0, "/api/orders": 125.0, "/api/health": 8.0}
 
 
-class ServerLatency(bch.ParametrizedSweep):
+class ServerLatency(bn.ParametrizedSweep):
     """Simulates server latency measurements across endpoints with noise and drift."""
 
-    endpoint = bch.StringSweep(["/api/users", "/api/orders", "/api/health"], doc="API endpoint")
+    endpoint = bn.StringSweep(["/api/users", "/api/orders", "/api/health"], doc="API endpoint")
 
-    latency = bch.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultVar(units="ms", doc="Response latency")
 
     # Plain attribute (not a param sweep variable) — set per-run by the example harness
     drift = 0.0
@@ -36,7 +36,7 @@ class ServerLatency(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_git_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Track benchmark results over time with timestamped runs.
 
     Simulates five successive runs with increasing latency drift so the trend
@@ -44,12 +44,12 @@ def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     noise — switch to the **All Time Points (aggregated)** tab to see the
     distribution built from every snapshot's samples.
 
-    In a real workflow, pass ``time_src=bch.git_time_event()`` to label each
+    In a real workflow, pass ``time_src=bn.git_time_event()`` to label each
     run with the current date and short git hash.
     """
 
     random.seed(42)
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 5
 
@@ -74,4 +74,4 @@ def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_git_time_event, save=True)
+    bn.run(example_git_time_event, save=True)

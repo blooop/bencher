@@ -1,6 +1,6 @@
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 # Registry of inline class templates keyed by (float_count, cat_count).
@@ -9,10 +9,10 @@ INLINE_CLASSES = {
     (0, 0): {
         "class_name": "BaselineCheck",
         "class_doc": "Measures a fixed baseline metric with no swept parameters.",
-        "imports": "import bencher as bch",
+        "imports": "import bencher as bn",
         "params": {},
         "result_vars": {
-            "baseline": 'bch.ResultVar(units="ms", doc="Baseline latency")',
+            "baseline": 'bn.ResultVar(units="ms", doc="Baseline latency")',
         },
         "call_body": ["self.baseline = 42.0"],
         "noise_body": [
@@ -23,12 +23,12 @@ INLINE_CLASSES = {
     (0, 1): {
         "class_name": "CacheBackend",
         "class_doc": "Compares latency across different cache backends.",
-        "imports": "import bencher as bch",
+        "imports": "import bencher as bn",
         "params": {
-            "backend": 'bch.StringSweep(["redis", "memcached", "local"], doc="Cache backend")',
+            "backend": 'bn.StringSweep(["redis", "memcached", "local"], doc="Cache backend")',
         },
         "result_vars": {
-            "latency": 'bch.ResultVar(units="ms", doc="Cache lookup latency")',
+            "latency": 'bn.ResultVar(units="ms", doc="Cache lookup latency")',
         },
         "call_body": [
             'base = {{"redis": 1.2, "memcached": 1.5, "local": 0.3}}[self.backend]',
@@ -42,13 +42,13 @@ INLINE_CLASSES = {
     (0, 2): {
         "class_name": "NetworkConfig",
         "class_doc": "Measures throughput across protocol and region combinations.",
-        "imports": "import bencher as bch",
+        "imports": "import bencher as bn",
         "params": {
-            "protocol": 'bch.StringSweep(["http", "grpc"], doc="Network protocol")',
-            "region": 'bch.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")',
+            "protocol": 'bn.StringSweep(["http", "grpc"], doc="Network protocol")',
+            "region": 'bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")',
         },
         "result_vars": {
-            "throughput": 'bch.ResultVar(units="req/s", doc="Request throughput")',
+            "throughput": 'bn.ResultVar(units="req/s", doc="Request throughput")',
         },
         "call_body": [
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
@@ -64,14 +64,14 @@ INLINE_CLASSES = {
     (0, 3): {
         "class_name": "DeploymentConfig",
         "class_doc": "Full config matrix: protocol, region, and log level.",
-        "imports": "import bencher as bch",
+        "imports": "import bencher as bn",
         "params": {
-            "protocol": 'bch.StringSweep(["http", "grpc"], doc="Network protocol")',
-            "region": 'bch.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")',
-            "log_level": 'bch.StringSweep(["debug", "info", "warn"], doc="Logging level")',
+            "protocol": 'bn.StringSweep(["http", "grpc"], doc="Network protocol")',
+            "region": 'bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")',
+            "log_level": 'bn.StringSweep(["debug", "info", "warn"], doc="Logging level")',
         },
         "result_vars": {
-            "throughput": 'bch.ResultVar(units="req/s", doc="Request throughput")',
+            "throughput": 'bn.ResultVar(units="req/s", doc="Request throughput")',
         },
         "call_body": [
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
@@ -89,12 +89,12 @@ INLINE_CLASSES = {
     (1, 0): {
         "class_name": "SortBenchmark",
         "class_doc": "Measures sort duration across array sizes.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "array_size": 'bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
+            "array_size": 'bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
         },
         "result_vars": {
-            "time": 'bch.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
         },
         "call_body": [
             "self.time = self.array_size * math.log2(self.array_size + 1) * 0.001",
@@ -107,13 +107,13 @@ INLINE_CLASSES = {
     (1, 1): {
         "class_name": "SortComparison",
         "class_doc": "Compares sort duration across array sizes and algorithms.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "array_size": 'bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
-            "algorithm": 'bch.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
+            "array_size": 'bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
+            "algorithm": 'bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
         },
         "result_vars": {
-            "time": 'bch.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -128,14 +128,14 @@ INLINE_CLASSES = {
     (1, 2): {
         "class_name": "SortAnalysis",
         "class_doc": "Sort analysis across size, algorithm, and data distribution.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "array_size": 'bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
-            "algorithm": 'bch.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
-            "distribution": 'bch.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")',
+            "array_size": 'bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
+            "algorithm": 'bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
+            "distribution": 'bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")',
         },
         "result_vars": {
-            "time": 'bch.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -152,15 +152,15 @@ INLINE_CLASSES = {
     (1, 3): {
         "class_name": "SortFullMatrix",
         "class_doc": "Full sort matrix: size, algorithm, distribution, and order.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "array_size": 'bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
-            "algorithm": 'bch.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
-            "distribution": 'bch.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")',
-            "stability": 'bch.StringSweep(["stable", "unstable"], doc="Sort stability")',
+            "array_size": 'bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
+            "algorithm": 'bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
+            "distribution": 'bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")',
+            "stability": 'bn.StringSweep(["stable", "unstable"], doc="Sort stability")',
         },
         "result_vars": {
-            "time": 'bch.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -179,13 +179,13 @@ INLINE_CLASSES = {
     (2, 0): {
         "class_name": "CompressionBench",
         "class_doc": "Measures compression ratio across block size and input entropy.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "block_size": 'bch.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")',
-            "entropy": 'bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
+            "block_size": 'bn.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")',
+            "entropy": 'bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
         },
         "result_vars": {
-            "ratio": 'bch.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
         },
         "call_body": [
             "self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))",
@@ -198,14 +198,14 @@ INLINE_CLASSES = {
     (2, 1): {
         "class_name": "CompressionCodec",
         "class_doc": "Compression ratio across block size, entropy, and codec.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "block_size": 'bch.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")',
-            "entropy": 'bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
-            "codec": 'bch.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")',
+            "block_size": 'bn.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")',
+            "entropy": 'bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
+            "codec": 'bn.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")',
         },
         "result_vars": {
-            "ratio": 'bch.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
         },
         "call_body": [
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
@@ -220,15 +220,15 @@ INLINE_CLASSES = {
     (2, 2): {
         "class_name": "CompressionSuite",
         "class_doc": "Compression suite: block size, entropy, codec, and level.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "block_size": 'bch.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")',
-            "entropy": 'bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
-            "codec": 'bch.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")',
-            "effort": 'bch.StringSweep(["fast", "balanced", "max"], doc="Compression effort")',
+            "block_size": 'bn.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")',
+            "entropy": 'bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
+            "codec": 'bn.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")',
+            "effort": 'bn.StringSweep(["fast", "balanced", "max"], doc="Compression effort")',
         },
         "result_vars": {
-            "ratio": 'bch.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
         },
         "call_body": [
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
@@ -245,14 +245,14 @@ INLINE_CLASSES = {
     (3, 0): {
         "class_name": "HashBenchmark",
         "class_doc": "Hash throughput across key size, payload size, and iterations.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "key_size": 'bch.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")',
-            "payload_size": 'bch.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")',
-            "iterations": 'bch.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
+            "key_size": 'bn.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")',
+            "payload_size": 'bn.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")',
+            "iterations": 'bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
         },
         "result_vars": {
-            "throughput": 'bch.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             "self.throughput = 500.0 / (1.0 + 0.5 * math.log2(self.key_size / 8)) / (1.0 + 0.3 * math.log2(self.payload_size / 64)) * (self.iterations / 100)",
@@ -265,15 +265,15 @@ INLINE_CLASSES = {
     (3, 1): {
         "class_name": "HashComparison",
         "class_doc": "Hash throughput across key size, payload, iterations, and algorithm.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "key_size": 'bch.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")',
-            "payload_size": 'bch.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")',
-            "iterations": 'bch.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
-            "algorithm": 'bch.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")',
+            "key_size": 'bn.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")',
+            "payload_size": 'bn.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")',
+            "iterations": 'bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
+            "algorithm": 'bn.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")',
         },
         "result_vars": {
-            "throughput": 'bch.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
@@ -288,16 +288,16 @@ INLINE_CLASSES = {
     (3, 2): {
         "class_name": "HashAnalysis",
         "class_doc": "Hash analysis: key size, payload, iterations, algorithm, and mode.",
-        "imports": "import math\nimport bencher as bch",
+        "imports": "import math\nimport bencher as bn",
         "params": {
-            "key_size": 'bch.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")',
-            "payload_size": 'bch.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")',
-            "iterations": 'bch.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
-            "algorithm": 'bch.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")',
-            "mode": 'bch.StringSweep(["stream", "block"], doc="Processing mode")',
+            "key_size": 'bn.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")',
+            "payload_size": 'bn.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")',
+            "iterations": 'bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
+            "algorithm": 'bn.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")',
+            "mode": 'bn.StringSweep(["stream", "block"], doc="Processing mode")',
         },
         "result_vars": {
-            "throughput": 'bch.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
@@ -316,7 +316,7 @@ INLINE_CLASSES = {
 
 def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset=False):
     """Build the inline class source code from an INLINE_CLASSES entry."""
-    cls_lines = [f"class {info['class_name']}(bch.ParametrizedSweep):"]
+    cls_lines = [f"class {info['class_name']}(bn.ParametrizedSweep):"]
     cls_lines.append(f'    """{info["class_doc"]}"""')
     cls_lines.append("")
 
@@ -359,21 +359,21 @@ def _get_input_var_names(info, float_count, cat_count):
     return float_vars[:float_count] + cat_vars[:cat_count]
 
 
-class BenchMetaGen(bch.ParametrizedSweep):
+class BenchMetaGen(bn.ParametrizedSweep):
     """This class uses bencher to display the multidimensional types bencher can represent"""
 
-    float_vars_count = bch.IntSweep(
+    float_vars_count = bn.IntSweep(
         default=0, bounds=(0, 3), doc="The number of floating point variables that are swept"
     )
-    categorical_vars_count = bch.IntSweep(
+    categorical_vars_count = bn.IntSweep(
         default=0, bounds=(0, 3), doc="The number of categorical variables that are swept"
     )
 
-    sample_with_repeats = bch.IntSweep(default=1, bounds=(1, 100))
-    sample_over_time = bch.BoolSweep(default=False)
-    level = bch.IntSweep(default=2, units="level", bounds=(2, 5))
+    sample_with_repeats = bn.IntSweep(default=1, bounds=(1, 100))
+    sample_over_time = bn.BoolSweep(default=False)
+    level = bn.IntSweep(default=2, units="level", bounds=(2, 5))
 
-    plots = bch.ResultReference(units="int")
+    plots = bn.ResultReference(units="int")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -406,9 +406,9 @@ class BenchMetaGen(bch.ParametrizedSweep):
 
         gen = MetaGeneratorBase()
 
-        # Extract extra imports (everything except "import bencher as bch")
+        # Extract extra imports (everything except "import bencher as bn")
         extra_imports = [
-            line for line in info["imports"].split("\n") if line and line != "import bencher as bch"
+            line for line in info["imports"].split("\n") if line and line != "import bencher as bn"
         ]
 
         if self.sample_over_time:
@@ -426,7 +426,7 @@ class BenchMetaGen(bch.ParametrizedSweep):
                 run_cfg_lines.append(f"run_cfg.repeats = {self.sample_with_repeats}")
 
             body = (
-                "run_cfg = run_cfg or bch.BenchRunCfg()\n" + "\n".join(run_cfg_lines) + "\n"
+                "run_cfg = run_cfg or bn.BenchRunCfg()\n" + "\n".join(run_cfg_lines) + "\n"
                 f"benchable = {info['class_name']}()\n"
                 f"bench = benchable.to_bench(run_cfg)\n"
                 f"_base_time = datetime(2000, 1, 1)\n"
@@ -485,55 +485,55 @@ class BenchMetaGen(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = BenchMetaGen().to_bench(run_cfg)
 
     sweep_desc = (
         """Plot gallery showing all combinations of float and categorical input variables"""
     )
 
-    few_cats = bch.p("categorical_vars_count", [0, 1, 2])
+    few_cats = bn.p("categorical_vars_count", [0, 1, 2])
 
     bench.plot_sweep(
         title="Single Sample (0-1 float vars)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=1, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Single Sample (2-3 float vars)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [2, 3]), few_cats],
+        input_vars=[bn.p("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=1, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Repeated Samples (10x)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=10, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Repeated Samples (3x)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [2, 3]), few_cats],
+        input_vars=[bn.p("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=3, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Over Time 0-1 float (3 Snapshots)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
     )
     bench.plot_sweep(
         title="Over Time 2-3 float (3 Snapshots)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [2, 3]), few_cats],
+        input_vars=[bn.p("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
     )
     bench.plot_sweep(
         title="Over Time + Repeats 0-1 float (3 Snapshots, 3x repeats)",
         description=sweep_desc,
-        input_vars=[bch.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=3, sample_over_time=True),
     )
 
@@ -541,4 +541,4 @@ def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_meta)
+    bn.run(example_meta)

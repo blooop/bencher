@@ -1,13 +1,13 @@
 """Example of how to perform a parameter sweep for categorical variables"""
 
-import bencher as bch
+import bencher as bn
 
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_float_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example of how to perform a parameter sweep for categorical variables
 
     Args:
@@ -16,7 +16,7 @@ def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     Returns:
         Bench: results of the parameter sweep
     """
-    bench = bch.Bench(
+    bench = bn.Bench(
         "Bencher_Example_Float_Cat",
         ExampleBenchCfg(),
         run_cfg=run_cfg,
@@ -61,9 +61,9 @@ def example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     return bench
 
 
-def run_example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def run_example_float_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
     run_cfg.repeats = 2
     run_cfg.over_time = True
     run_cfg.clear_cache = True
@@ -79,4 +79,4 @@ def run_example_float_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(run_example_float_cat)
+    bn.run(run_example_float_cat)

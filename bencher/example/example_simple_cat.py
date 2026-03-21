@@ -2,13 +2,13 @@
 
 # pylint: disable=duplicate-code
 
-import bencher as bch
+import bencher as bn
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_1D_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_1D_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """This example shows how to sample a 1 dimensional categorical variable and plot the result of passing that parameter sweep to the benchmarking function
 
     Args:
@@ -19,7 +19,7 @@ def example_1D_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     """
 
     explorer = ExampleBenchCfg()
-    bench = bch.Bench(
+    bench = bn.Bench(
         "benchmarking_example_categorical1D",
         ExampleBenchCfg(),
         run_cfg=run_cfg,
@@ -38,4 +38,4 @@ def example_1D_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_1D_cat, repeats=10)
+    bn.run(example_1D_cat, repeats=10)

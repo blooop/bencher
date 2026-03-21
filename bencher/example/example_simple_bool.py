@@ -1,18 +1,18 @@
 """This file has some examples for how to perform basic benchmarking parameter sweeps"""
 
-import bencher as bch
+import bencher as bn
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_1D_bool(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_1D_bool(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Sample a 1D boolean input and visualise the resulting success metric."""
 
     if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
 
-    bench = bch.Bench(
+    bench = bn.Bench(
         "benchmarking_example_categorical1D",
         ExampleBenchCfg(),
     )
@@ -25,10 +25,10 @@ def example_1D_bool(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
         description=example_1D_bool.__doc__,
         run_cfg=run_cfg,
     )
-    bench.add(bch.BarResult)
+    bench.add(bn.BarResult)
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_1D_bool, repeats=20)
+    bn.run(example_1D_bool, repeats=20)

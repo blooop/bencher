@@ -2,22 +2,22 @@
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 
 
-class ServerBenchmark(bch.ParametrizedSweep):
+class ServerBenchmark(bn.ParametrizedSweep):
     """Simulates server performance metrics under varying load conditions."""
 
-    cpu_load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="CPU load factor")
-    memory_pct = bch.FloatSweep(default=50, bounds=[10, 90], doc="Memory usage percentage")
-    disk_io = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Disk I/O pressure")
-    cache_enabled = bch.BoolSweep(default=True, doc="Whether caching is enabled")
-    backend = bch.StringSweep(["postgres", "mysql", "sqlite"], doc="Database backend")
-    log_level = bch.StringSweep(["debug", "info", "warn"], doc="Logging verbosity")
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+    cpu_load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="CPU load factor")
+    memory_pct = bn.FloatSweep(default=50, bounds=[10, 90], doc="Memory usage percentage")
+    disk_io = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Disk I/O pressure")
+    cache_enabled = bn.BoolSweep(default=True, doc="Whether caching is enabled")
+    backend = bn.StringSweep(["postgres", "mysql", "sqlite"], doc="Database backend")
+    log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging verbosity")
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    latency = bch.ResultVar(units="ms", doc="Request latency")
-    throughput = bch.ResultVar(units="req/s", doc="Request throughput")
+    latency = bn.ResultVar(units="ms", doc="Request latency")
+    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -39,7 +39,7 @@ class ServerBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_const_vars_noise(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_const_vars_noise(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Const Vars: Setting Non-Default Configuration."""
     bench = ServerBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
@@ -52,4 +52,4 @@ def example_const_vars_noise(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
 
 
 if __name__ == "__main__":
-    bch.run(example_const_vars_noise, level=3)
+    bn.run(example_const_vars_noise, level=3)

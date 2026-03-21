@@ -40,15 +40,15 @@ class TestGitTimeEvent(unittest.TestCase):
 
     def test_used_as_time_src(self):
         """git_time_event() works as time_src in plot_sweep."""
-        import bencher as bch
+        import bencher as bn
         from bencher.example.benchmark_data import ExampleBenchCfg
 
-        bench = bch.Bench("test_git", ExampleBenchCfg())
-        run_cfg = bch.BenchRunCfg(over_time=True)
+        bench = bn.Bench("test_git", ExampleBenchCfg())
+        run_cfg = bn.BenchRunCfg(over_time=True)
         res = bench.plot_sweep(
             input_vars=[ExampleBenchCfg.param.theta],
             run_cfg=run_cfg,
-            time_src=bch.git_time_event(),
+            time_src=bn.git_time_event(),
             plot_callbacks=False,
         )
         over_time_val = str(res.ds.coords["over_time"].values[0])

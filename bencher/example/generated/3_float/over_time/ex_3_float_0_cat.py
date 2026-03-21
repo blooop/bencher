@@ -4,18 +4,18 @@ from typing import Any
 
 import random
 import math
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class HashBenchmark(bch.ParametrizedSweep):
+class HashBenchmark(bn.ParametrizedSweep):
     """Hash throughput across key size, payload size, and iterations."""
 
-    key_size = bch.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")
-    payload_size = bch.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")
-    iterations = bch.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")
+    key_size = bn.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")
+    payload_size = bn.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")
+    iterations = bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")
 
-    throughput = bch.ResultVar(units="MB/s", doc="Hash throughput")
+    throughput = bn.ResultVar(units="MB/s", doc="Hash throughput")
 
     _time_offset = 0.0
 
@@ -32,9 +32,9 @@ class HashBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_3_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_3_float_0_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """3 Float, 0 Categorical."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     benchable = HashBenchmark()
     bench = benchable.to_bench(run_cfg)
@@ -55,4 +55,4 @@ def example_over_time_3_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_3_float_0_cat, level=4)
+    bn.run(example_over_time_3_float_0_cat, level=4)
