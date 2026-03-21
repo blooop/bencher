@@ -169,6 +169,7 @@ class ResultCollector:
             samples=repeats,
             units="repeats",
             doc="The number of times a sample was measured",
+            optimize=False,
         )
         bench_cfg.iv_repeat.name = "repeat"
         extra_vars = [bench_cfg.iv_repeat]
