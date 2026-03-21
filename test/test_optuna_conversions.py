@@ -15,6 +15,7 @@ from bencher.optuna_conversions import (
     sweep_var_to_suggest,
     summarise_optuna_study,
     summarise_trial,
+    optuna_grid_search,
 )
 from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
 from bencher.variables.time import TimeSnapshot
@@ -251,3 +252,35 @@ class TestSummariseTrial(unittest.TestCase):
         self.assertIsInstance(output, list)
         self.assertTrue(len(output) > 0)
         self.assertIn("Trial id:", output[0])
+
+
+class TestOptunaGridSearch(unittest.TestCase):
+    def test_default_excludes_optimize_false(self):
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test_grid",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        study = optuna_grid_search(res.bench_cfg)
+        # repeat has optimize=False, should not be in search space
+        search_space = study.sampler._search_space  # pylint: disable=protected-access
+        self.assertNotIn("repeat", search_space)
+
+    def test_trial_vars_includes_all(self):
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test_grid_vars",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=2),
+            plot_callbacks=False,
+        )
+        trial_vars = list(res.bench_cfg.all_vars)
+        study = optuna_grid_search(res.bench_cfg, trial_vars=trial_vars)
+        # When trial_vars provided, all vars should be in search space
+        search_space = study.sampler._search_space  # pylint: disable=protected-access
+        self.assertIn("repeat", search_space)
+        self.assertIn("float_var", search_space)

@@ -46,11 +46,25 @@ class TestOptunaResult(unittest.TestCase):
         self.assertIsInstance(trials, list)
         self.assertGreater(len(trials), 0)
         self.assertIsInstance(trials[0], optuna.trial.FrozenTrial)
+        # include_meta=True should include repeat as a trial parameter
+        self.assertIn("repeat", trials[0].params)
 
     def test_bench_results_to_optuna_trials_without_meta(self):
         trials = self.res_1d.bench_results_to_optuna_trials(include_meta=False)
         self.assertIsInstance(trials, list)
         self.assertGreater(len(trials), 0)
+        # include_meta=False should NOT include repeat
+        self.assertNotIn("repeat", trials[0].params)
+
+    def test_include_meta_true_no_aggregation(self):
+        """include_meta=True should produce one trial per raw data point (no aggregation)."""
+        trials_meta = self.res_2d_r2.bench_results_to_optuna_trials(include_meta=True)
+        trials_no_meta = self.res_2d_r2.bench_results_to_optuna_trials(include_meta=False)
+        # With repeats=2, meta trials should have ~2x as many entries
+        self.assertGreater(len(trials_meta), len(trials_no_meta))
+        # All meta trials should have repeat as a parameter
+        for t in trials_meta:
+            self.assertIn("repeat", t.params)
 
     def test_bench_result_to_study(self):
         study = self.res_1d.bench_result_to_study(include_meta=True)
@@ -249,7 +263,7 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
             res.to_optuna_from_results(cfg, n_trials=5)
 
     def test_all_optimize_false_raises_in_trials(self):
-        """bench_results_to_optuna_trials should also raise when all vars have optimize=False."""
+        """include_meta=False should raise when all input vars have optimize=False."""
         cfg = _AllFalseCfg()
         bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
@@ -262,3 +276,22 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             res.bench_results_to_optuna_trials(include_meta=False)
+
+    def test_all_optimize_false_include_meta_true_succeeds(self):
+        """include_meta=True should succeed even when all input vars have optimize=False,
+        because importance analysis uses all vars regardless of optimize flag."""
+        cfg = _AllFalseCfg()
+        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        res = bench.plot_sweep(
+            "test_all_false_meta",
+            input_vars=["x"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+
+        trials = res.bench_results_to_optuna_trials(include_meta=True)
+        self.assertGreater(len(trials), 0)
+        # x and repeat should both appear as trial params
+        self.assertIn("x", trials[0].params)
+        self.assertIn("repeat", trials[0].params)

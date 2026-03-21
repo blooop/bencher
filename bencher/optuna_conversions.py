@@ -21,19 +21,25 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 
 # BENCH_CFG
-def optuna_grid_search(bench_cfg: BenchCfg) -> optuna.Study:
+def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> optuna.Study:
     """use optuna to perform a grid search
 
     Args:
         bench_cfg (BenchCfg): setting for grid search
+        trial_vars (list | None): If provided, use these variables for the search space.
+            Otherwise, filter bench_cfg.all_vars by optimize=True.
 
     Returns:
         optuna.Study: results of grid search
     """
     search_space = {}
-    for iv in bench_cfg.all_vars:
-        if getattr(iv, "optimize", True):
+    if trial_vars is not None:
+        for iv in trial_vars:
             search_space[iv.name] = iv.values()
+    else:
+        for iv in bench_cfg.all_vars:
+            if getattr(iv, "optimize", True):
+                search_space[iv.name] = iv.values()
     directions = []
     for rv in bench_cfg.optuna_targets(True):
         directions.append(rv.direction)

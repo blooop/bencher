@@ -101,7 +101,7 @@ class OptunaResult(BenchResultBase):
         results_list = extra_results if extra_results is not None else [self]
         for res in results_list:
             if len(res.ds.sizes) > 0:
-                study.add_trials(res.bench_results_to_optuna_trials(True))
+                study.add_trials(res.bench_results_to_optuna_trials(False))
 
         opt_vars, non_opt_vars = self.bench_cfg.partition_input_vars(self.bench_cfg.input_vars)
 
@@ -128,39 +128,44 @@ class OptunaResult(BenchResultBase):
         """Convert an xarray dataset to optuna trials so optuna can further optimise or plot.
 
         Args:
-            include_meta (bool): Whether to include meta variables (time, repeat).
+            include_meta (bool): When True, include all variables (inputs + meta like repeat
+                and over_time) as trial parameters for importance analysis. When False, use
+                only input variables with partition/aggregation via the optimize flag.
 
         Returns:
             list[optuna.trial.FrozenTrial]: Optuna trials derived from benchmark results.
         """
+        target_names = self.bench_cfg.optuna_targets()
+
         if include_meta:
+            # Importance analysis: every raw data point becomes a trial with all vars
             df = self.to_dataset(reduce=ReduceType.NONE).to_dataframe().reset_index()
-            all_vars = list(self.bench_cfg.all_vars)
+            trial_vars = list(self.bench_cfg.all_vars)
         else:
-            all_vars = self.bench_cfg.input_vars
+            # Optimization mode: partition by optimize flag, aggregate non-optimized
+            input_vars = self.bench_cfg.input_vars
             df = self.to_dataset(reduce=ReduceType.AUTO).to_dataframe().reset_index()
+            opt_vars, non_opt_vars = self.bench_cfg.partition_input_vars(input_vars)
+
+            if not opt_vars:
+                raise ValueError(
+                    "At least one input variable must have optimize=True for Optuna optimization."
+                )
+
+            df = _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names)
+            trial_vars = opt_vars
 
         df.dropna(inplace=True)
 
-        opt_vars, non_opt_vars = self.bench_cfg.partition_input_vars(all_vars)
-        target_names = self.bench_cfg.optuna_targets()
-
-        if not opt_vars:
-            raise ValueError(
-                "At least one input variable must have optimize=True for Optuna optimization."
-            )
-
-        df = _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names)
-
         distributions = {}
-        for i in opt_vars:
+        for i in trial_vars:
             distributions[i.name] = sweep_var_to_optuna_dist(i)
 
         trials = []
         for row in df.iterrows():
             params = {}
             values = []
-            for i in opt_vars:
+            for i in trial_vars:
                 if isinstance(i, TimeSnapshot):
                     val = row[1][i.name]
                     if hasattr(val, "timestamp") and not (hasattr(val, "isnull") and val.isnull()):
@@ -194,7 +199,8 @@ class OptunaResult(BenchResultBase):
 
     def bench_result_to_study(self, include_meta: bool) -> optuna.Study:
         trials = self.bench_results_to_optuna_trials(include_meta)
-        study = optuna_grid_search(self.bench_cfg)
+        trial_vars = list(self.bench_cfg.all_vars) if include_meta else None
+        study = optuna_grid_search(self.bench_cfg, trial_vars=trial_vars)
         optuna.logging.set_verbosity(optuna.logging.CRITICAL)
         import warnings
 
@@ -207,7 +213,7 @@ class OptunaResult(BenchResultBase):
         return study
 
     def get_best_trial_params(self, canonical=False):
-        studies = self.bench_result_to_study(True)
+        studies = self.bench_result_to_study(False)
         out = studies.best_trials[0].params
         if canonical:
             return hmap_canonical_input(out)
