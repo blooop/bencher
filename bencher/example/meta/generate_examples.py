@@ -540,34 +540,67 @@ def generate_all() -> list[Path]:
     for group_title, sections in SECTION_GROUPS:
         if group_title is None:
             continue
-        child_entries = []
+
+        group_slug = group_title.lower().replace(" ", "_")
+        group_index_dir = META_DOCS_DIR / group_slug
+        group_index_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build toctree entries (relative from group index dir)
+        toc_entries = []
         for _sec_title, rel_path in sections:
             section_dir = META_DOCS_DIR / rel_path
             if (section_dir / "index.rst").exists():
-                child_entries.append(f"   {Path(rel_path).name}/index")
-        if not child_entries:
+                toc_entries.append(f"   ../{rel_path}/index")
+        if not toc_entries:
             continue
-        # Find the common parent directory for the group's sections
-        group_dir = META_DOCS_DIR / Path(sections[0][1]).parent
-        if group_dir == META_DOCS_DIR:
-            # Sections are at the top level — write a group index alongside them
-            group_slug = group_title.lower().replace(" ", "_")
-            group_index_dir = META_DOCS_DIR / group_slug
-            group_index_dir.mkdir(parents=True, exist_ok=True)
-            # Recompute relative paths from the group index directory
-            child_entries = []
-            for _sec_title, rel_path in sections:
-                section_dir = META_DOCS_DIR / rel_path
-                if (section_dir / "index.rst").exists():
-                    child_entries.append(f"   ../{rel_path}/index")
-            if not child_entries:
-                continue
-            underline = "=" * len(group_title)
-            group_index = (
-                f"{group_title}\n{underline}\n\n"
-                ".. toctree::\n   :maxdepth: 1\n\n" + "\n".join(child_entries) + "\n"
-            )
-            (group_index_dir / "index.rst").write_text(group_index, encoding="utf-8")
+
+        underline = "=" * len(group_title)
+        # Thumbs path relative from the group index directory
+        thumbs_prefix = "../_thumbs"
+
+        lines = [
+            group_title,
+            underline,
+            "",
+            ".. toctree::",
+            "   :hidden:",
+            "   :maxdepth: 1",
+            "",
+            "\n".join(toc_entries),
+            "",
+        ]
+
+        # Add gallery cards grouped by subsection
+        group_examples = []
+        for _sec_title, rel_path in sections:
+            group_examples.extend(meta_by_section.get(rel_path, []))
+
+        if group_examples:
+            lines += [
+                ".. raw:: html",
+                "",
+                '   <div class="gallery-container">',
+            ]
+            for sec_title, rel_path in sections:
+                sec_examples = meta_by_section.get(rel_path, [])
+                if not sec_examples:
+                    continue
+                lines.append(f'   <h3 class="gallery-section-title">{html.escape(sec_title)}</h3>')
+                lines.append('   <div class="gallery-grid">')
+                lines += _render_gallery_cards(
+                    sec_examples,
+                    href_fn=lambda ex: f"../{ex['rst_rel']}.html",
+                    thumb_src_fn=lambda ex, pfx=thumbs_prefix: (
+                        f"{pfx}/{ex['section_rel']}/{ex['stem']}.png"
+                    ),
+                )
+                lines.append("   </div>")
+            lines += [
+                "   </div>",
+                "",
+            ]
+
+        (group_index_dir / "index.rst").write_text("\n".join(lines), encoding="utf-8")
 
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)
