@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import numbers
 
 import optuna
 import panel as pn
@@ -58,14 +59,10 @@ def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> o
 def param_importance(bench_cfg: BenchCfg, study: optuna.Study) -> pn.Column:
     col_importance = pn.Column()
     for idx, tgt in enumerate(bench_cfg.optuna_targets()):
-
-        def target(t, i=idx):
-            return t.values[i]
-
         col_importance.append(
             pn.Column(
                 pn.pane.Markdown(f"### Parameter importance for: {tgt}"),
-                plot_param_importances(study, target=target, target_name=tgt),
+                plot_param_importances(study, target=_make_target(idx), target_name=tgt),
             )
         )
     return col_importance
@@ -92,7 +89,7 @@ def summarise_trial(trial: optuna.trial, bench_cfg: BenchCfg) -> str:
     lines.append("|--------|-------|")
     for it, rv in enumerate(bench_cfg.optuna_targets()):
         val = trial.values[it]
-        if isinstance(val, float):
+        if isinstance(val, numbers.Real):
             lines.append(f"| {rv} | {val:.6g} |")
         else:
             lines.append(f"| {rv} | {val} |")
@@ -199,6 +196,10 @@ def summarise_optuna_study(
     n_objectives = len(study.directions)
     is_multi = n_objectives >= 2
 
+    if not study.trials:
+        col.append(pn.pane.Markdown("*No completed trials to summarise.*"))
+        return col
+
     col.append(pn.pane.Markdown("## Optimization History"))
     if is_multi:
         for idx in range(n_objectives):
@@ -220,7 +221,7 @@ def summarise_optuna_study(
         _append_safe(col, plot_param_importances, study)
 
     # Parameter interactions
-    n_params = len(study.trials[0].params) if study.trials else 0
+    n_params = len({k for t in study.trials for k in t.params}) if study.trials else 0
     if n_params >= 2:
         col.append(pn.pane.Markdown("## Parameter Interactions"))
         if is_multi:
