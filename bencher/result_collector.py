@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from itertools import product
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -39,6 +40,113 @@ from bencher.job import JobFuture
 DEFAULT_CACHE_SIZE_BYTES = int(100e9)
 
 logger = logging.getLogger(__name__)
+
+
+_NETCDF_ATTR_TYPES = (str, int, float, bytes, np.ndarray, np.number, list, tuple)
+
+
+def _clean_attrs(attrs: dict) -> dict:
+    """Keep only netCDF-serialisable attributes."""
+    return {k: v for k, v in attrs.items() if isinstance(v, _NETCDF_ATTR_TYPES)}
+
+
+def _sanitize_for_netcdf(dataset: xr.Dataset) -> xr.Dataset:
+    """Rebuild dataset so every variable is backed by a plain numpy array.
+
+    pandas 3.0 / xarray 2025+ can wrap string coordinates in
+    ArrowStringArray whose dtype (``StringDtype``) is incompatible with
+    netCDF's CF encoder.  Reconstructing from ``.values`` (which always
+    returns an ``ndarray``) and stripping non-serialisable attrs fixes both
+    issues.
+    """
+
+    def _force_numpy(values, to_bytes=False):
+        """Ensure values is a plain numpy ndarray."""
+        if to_bytes:
+            # Convert strings → bytes to avoid pandas ArrowStringArray wrapping
+            return np.array([v if isinstance(v, bytes) else str(v).encode() for v in values])
+        if isinstance(values, np.ndarray):
+            return values
+        return np.asarray(values)
+
+    data_vars = {}
+    for name, var in dataset.data_vars.items():
+        data_vars[name] = (var.dims, _force_numpy(var.values), _clean_attrs(var.attrs))
+
+    coords = {}
+    for name, coord in dataset.coords.items():
+        # String-like coords (including pandas ArrowStringArray) must become
+        # bytes to avoid netCDF serialisation failures
+        is_string = not isinstance(coord.dtype, np.dtype) or coord.dtype.kind in ("U", "O")
+        coords[name] = (
+            coord.dims,
+            _force_numpy(coord.values, to_bytes=is_string),
+            _clean_attrs(coord.attrs),
+        )
+
+    return xr.Dataset(data_vars=data_vars, coords=coords, attrs=_clean_attrs(dataset.attrs))
+
+
+class _DiskcacheStore:
+    """History store backed by diskcache."""
+
+    def __init__(self, bench_cfg_hash: str, cache_size: int):
+        self._hash = bench_cfg_hash
+        self._cache_size = cache_size
+        self._cache = None
+
+    def __enter__(self):
+        self._cache = Cache("cachedir/history", size_limit=self._cache_size)
+        return self
+
+    def __exit__(self, *exc):
+        self._cache.close()
+
+    def load(self) -> xr.Dataset | None:
+        logger.info(f"checking historical key: {self._hash}")
+        if self._hash in self._cache:
+            logger.info("loading historical data from cache")
+            return self._cache[self._hash]
+        logger.info("did not detect any historical data")
+        return None
+
+    def save(self, dataset: xr.Dataset) -> None:
+        logger.info("saving data to history cache")
+        self._cache[self._hash] = dataset
+
+    def clear(self) -> None:
+        pass  # diskcache: just don't load; save will overwrite
+
+
+class _NetCDFStore:
+    """History store backed by netCDF files on disk."""
+
+    def __init__(self, history_dir: str, bench_cfg_hash: str):
+        self._dir = Path(history_dir)
+        self._path = self._dir / f"{bench_cfg_hash}.nc"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        pass
+
+    def load(self) -> xr.Dataset | None:
+        logger.info(f"checking historical file: {self._path}")
+        if self._path.exists():
+            logger.info("loading historical data from netCDF")
+            return xr.load_dataset(self._path)
+        logger.info("no historical netCDF file found")
+        return None
+
+    def save(self, dataset: xr.Dataset) -> None:
+        self._dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"saving history to netCDF: {self._path}")
+        dataset.to_netcdf(self._path)
+
+    def clear(self) -> None:
+        if self._path.exists():
+            self._path.unlink()
 
 
 def set_xarray_multidim(
@@ -287,53 +395,62 @@ class ResultCollector:
         bench_cfg_hash: str,
         clear_history: bool,
         max_time_events: int | None = None,
+        history_dir: str | None = None,
     ) -> xr.Dataset:
-        """Load historical data from a cache if over_time is enabled.
+        """Load historical data, concatenate with current run, and save back.
 
-        This method is used to retrieve and concatenate historical benchmark data from the cache
-        when tracking performance over time. If clear_history is True, it will clear any existing
-        historical data instead of loading it.
+        Uses netCDF files when ``history_dir`` is set, otherwise diskcache.
 
         Args:
-            dataset (xr.Dataset): Freshly calculated benchmark data for the current run
-            bench_cfg_hash (str): Hash of the input variables used to identify cached data
-            clear_history (bool): If True, clears historical data instead of loading it
-            max_time_events (int | None): Maximum number of over_time events to retain.
+            dataset: Freshly calculated benchmark data for the current run
+            bench_cfg_hash: Hash of the input variables used to identify cached data
+            clear_history: If True, clears historical data instead of loading it
+            max_time_events: Maximum number of over_time events to retain.
                 Oldest events are trimmed. None means unlimited.
+            history_dir: Directory for netCDF-based history persistence.
+                When set, reads/writes ``{history_dir}/{bench_cfg_hash}.nc`` instead of
+                diskcache.
 
         Returns:
-            xr.Dataset: Combined dataset with both historical and current benchmark data,
+            Combined dataset with both historical and current benchmark data,
                 or just the current data if no history exists or history is cleared
         """
-        with Cache("cachedir/history", size_limit=self.cache_size) as c:
+        if history_dir is not None:
+            store = _NetCDFStore(history_dir, bench_cfg_hash)
+            # Sanitize for netCDF compat (Arrow dtypes → bytes) before concat
+            dataset = _sanitize_for_netcdf(dataset)
+        else:
+            store = _DiskcacheStore(bench_cfg_hash, self.cache_size)
+
+        with store:
+            ds_old = None
             if clear_history:
                 logger.info("clearing history")
+                store.clear()
             else:
-                logger.info(f"checking historical key: {bench_cfg_hash}")
-                if bench_cfg_hash in c:
-                    logger.info("loading historical data from cache")
-                    ds_old = c[bench_cfg_hash]
-                    if (
-                        "over_time" in ds_old.dims
-                        and "over_time" in dataset.dims
-                        and ds_old["over_time"].dtype != dataset["over_time"].dtype
-                    ):
-                        logger.warning(
-                            "Discarding incompatible historical data "
-                            "(over_time dtype changed: "
-                            f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
-                        )
-                    else:
-                        dataset = xr.concat([ds_old, dataset], "over_time")
+                ds_old = store.load()
+
+            # Concat with history and trim
+            if ds_old is not None:
+                if (
+                    "over_time" in ds_old.dims
+                    and "over_time" in dataset.dims
+                    and ds_old["over_time"].dtype != dataset["over_time"].dtype
+                ):
+                    logger.warning(
+                        "Discarding incompatible historical data "
+                        "(over_time dtype changed: "
+                        f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
+                    )
                 else:
-                    logger.info("did not detect any historical data")
+                    dataset = xr.concat([ds_old, dataset], "over_time")
 
             if max_time_events is not None and "over_time" in dataset.dims:
                 if dataset.sizes["over_time"] > max_time_events:
                     dataset = dataset.isel(over_time=slice(-max_time_events, None))
 
-            logger.info("saving data to history cache")
-            c[bench_cfg_hash] = dataset
+            store.save(dataset)
+
         return dataset
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: Any) -> None:

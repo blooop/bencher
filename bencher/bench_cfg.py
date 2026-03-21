@@ -232,6 +232,14 @@ class BenchRunCfg(BenchPlotSrvCfg):
         doc="Maximum number of over_time events to retain. Oldest events are trimmed. None means unlimited.",
     )
 
+    history_dir: str | None = param.String(
+        None,
+        allow_None=True,
+        doc="Directory for file-based over_time history (netCDF). "
+        "When set, history is read/written as .nc files here instead of diskcache. "
+        "Useful for committing history to version control.",
+    )
+
     time_event: str | None = param.String(
         None,
         doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",
