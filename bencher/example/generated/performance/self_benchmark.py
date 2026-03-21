@@ -28,7 +28,7 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
     )
     use_cache = bch.BoolSweep(default=False, doc="Whether sample caching is enabled")
 
-    # Result variables - one per timing phase
+    # Result variables — one per timing phase
     total_ms = bch.ResultVar(units="ms", doc="Total sweep wall-clock time")
     dataset_setup_ms = bch.ResultVar(units="ms", doc="Dataset initialization time")
     job_submission_ms = bch.ResultVar(units="ms", doc="Job creation and submission time")

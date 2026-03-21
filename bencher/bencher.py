@@ -521,10 +521,7 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
-        import time as _time
-
         timings = SweepTimings()
-        sweep_t0 = _time.perf_counter()
 
         if run_cfg.cache_size is not None:
             cache_size_bytes = run_cfg.cache_size * 1_000_000
@@ -637,7 +634,15 @@ class Bench(BenchPlotServer):
             bench_res.post_setup()
         timings.post_setup_ms = elapsed()
 
-        timings.total_ms = (_time.perf_counter() - sweep_t0) * 1000.0
+        timings.total_ms = (
+            timings.sample_cache_init_ms
+            + timings.cache_check_ms
+            + timings.dataset_setup_ms
+            + timings.job_submission_ms
+            + timings.job_execution_ms
+            + timings.history_merge_ms
+            + timings.post_setup_ms
+        )
         bench_res.timings = timings
 
         if bench_cfg.auto_plot:
@@ -779,6 +784,7 @@ class Bench(BenchPlotServer):
         callcount = 1
         results_list = []
         jobs = []
+        cache_jobs = []
 
         with phase_timer() as elapsed:
             for idx_tuple, function_input_vars in func_inputs:
@@ -795,25 +801,27 @@ class Bench(BenchPlotServer):
 
                 jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
                 worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
-                cache_job = Job(
-                    job_id=jid,
-                    function=worker,
-                    job_args=job.function_input,
-                    job_key=job.function_input_signature_pure,
-                    tag=job.tag,
+                cache_jobs.append(
+                    Job(
+                        job_id=jid,
+                        function=worker,
+                        job_args=job.function_input,
+                        job_key=job.function_input_signature_pure,
+                        tag=job.tag,
+                    )
                 )
+                callcount += 1
+        timings.job_submission_ms = elapsed()
+
+        with phase_timer() as elapsed:
+            for job, cache_job in zip(jobs, cache_jobs):
                 result = self.sample_cache.submit(cache_job)
                 results_list.append(result)
-                callcount += 1
-
                 # For serial execution, store results immediately so that
                 # completed results are cached to disk before later jobs
                 # may crash.
                 if bench_run_cfg.executor == Executors.SERIAL:
                     self.store_results(result, bench_res, job, bench_run_cfg)
-        timings.job_submission_ms = elapsed()
-
-        with phase_timer() as elapsed:
             if bench_run_cfg.executor != Executors.SERIAL:
                 for job, res in zip(jobs, results_list):
                     self.store_results(res, bench_res, job, bench_run_cfg)
