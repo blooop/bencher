@@ -102,7 +102,11 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_image_video import example_meta_image_video
-    from bencher.example.meta.generate_meta_optimization import example_meta_optimization
+    from bencher.example.meta.generate_meta_optimization import (
+        example_meta_optimization,
+        example_meta_optimization_over_time,
+        example_meta_optimization_aggregated,
+    )
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
@@ -122,6 +126,8 @@ def generate_python_files():
     example_meta_statistics()
     example_meta_const_vars()
     example_meta_optimization()
+    example_meta_optimization_over_time()
+    example_meta_optimization_aggregated()
     example_meta_workflows()
     example_meta_advanced()
     example_meta_bool_plot_types()
@@ -346,49 +352,79 @@ def generate_section_index(
     index_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-SECTIONS = {
-    "0 Float Inputs": "0_float/no_repeats",
-    "0 Float Inputs (Repeated)": "0_float/with_repeats",
-    "0 Float Inputs (Over Time)": "0_float/over_time",
-    "0 Float Inputs (Over Time + Repeated)": "0_float/over_time_repeats",
-    "1 Float Input": "1_float/no_repeats",
-    "1 Float Input (Repeated)": "1_float/with_repeats",
-    "1 Float Input (Over Time)": "1_float/over_time",
-    "1 Float Input (Over Time + Repeated)": "1_float/over_time_repeats",
-    "2 Float Inputs": "2_float/no_repeats",
-    "2 Float Inputs (Repeated)": "2_float/with_repeats",
-    "2 Float Inputs (Over Time)": "2_float/over_time",
-    "3 Float Inputs": "3_float/no_repeats",
-    "3 Float Inputs (Repeated)": "3_float/with_repeats",
-    "3 Float Inputs (Over Time)": "3_float/over_time",
-    "Result Types": "result_types",
-    "Plot Types": "plot_types",
-    "Bool Plot Types": "bool_plot_types",
-    "Optimization": "optimization",
-    "Sampling Strategies": "sampling",
-    "Composable Containers": "composable_containers",
-    "Constant Variables": "const_vars",
-    "Statistics": "statistics",
-    "Workflows": "workflows",
-    "YAML Sweeps": "yaml",
-    "Advanced Patterns": "advanced",
-    "Regression Detection": "regression",
-    "Performance": "performance",
-}
+# Gallery hierarchy: list of (group_title | None, [(section_title, rel_path), ...])
+# Groups with title=None have their sections rendered at the top level.
+SECTION_GROUPS = [
+    (
+        None,
+        [
+            ("0 Float Inputs", "0_float/no_repeats"),
+            ("0 Float Inputs (Repeated)", "0_float/with_repeats"),
+            ("0 Float Inputs (Over Time)", "0_float/over_time"),
+            ("0 Float Inputs (Over Time + Repeated)", "0_float/over_time_repeats"),
+            ("1 Float Input", "1_float/no_repeats"),
+            ("1 Float Input (Repeated)", "1_float/with_repeats"),
+            ("1 Float Input (Over Time)", "1_float/over_time"),
+            ("1 Float Input (Over Time + Repeated)", "1_float/over_time_repeats"),
+            ("2 Float Inputs", "2_float/no_repeats"),
+            ("2 Float Inputs (Repeated)", "2_float/with_repeats"),
+            ("2 Float Inputs (Over Time)", "2_float/over_time"),
+            ("3 Float Inputs", "3_float/no_repeats"),
+            ("3 Float Inputs (Repeated)", "3_float/with_repeats"),
+            ("3 Float Inputs (Over Time)", "3_float/over_time"),
+        ],
+    ),
+    (
+        "Optimisation",
+        [
+            ("Basic", "optimization"),
+            ("Over Time", "optimization_over_time"),
+            ("Aggregated", "optimization_aggregated"),
+        ],
+    ),
+    (
+        None,
+        [
+            ("Result Types", "result_types"),
+            ("Plot Types", "plot_types"),
+            ("Bool Plot Types", "bool_plot_types"),
+            ("Sampling Strategies", "sampling"),
+            ("Composable Containers", "composable_containers"),
+            ("Constant Variables", "const_vars"),
+            ("Statistics", "statistics"),
+            ("Workflows", "workflows"),
+            ("YAML Sweeps", "yaml"),
+            ("Advanced Patterns", "advanced"),
+            ("Regression Detection", "regression"),
+            ("Performance", "performance"),
+        ],
+    ),
+]
+
+
+def _flat_sections():
+    """Yield (section_title, rel_path) pairs from SECTION_GROUPS."""
+    for _group_title, sections in SECTION_GROUPS:
+        yield from sections
+
+
+# Flat view used by section index generation and toctree
+SECTIONS = dict(_flat_sections())
 
 
 def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
     """Generate a single gallery.rst page with PNG thumbnail cards grouped by section."""
     from collections import OrderedDict
 
-    grouped = OrderedDict()
-    for title, rel_path in SECTIONS.items():
-        grouped[title] = {"rel_path": rel_path, "examples": []}
+    # Build lookup: section_title -> {rel_path, examples}
+    section_lookup = OrderedDict()
+    for title, rel_path in _flat_sections():
+        section_lookup[title] = {"rel_path": rel_path, "examples": []}
 
     for meta in examples_metadata:
-        for title, rel_path in SECTIONS.items():
+        for title, rel_path in _flat_sections():
             if _match_section(meta["section_rel"], rel_path):
-                grouped[title]["examples"].append(meta)
+                section_lookup[title]["examples"].append(meta)
                 break
 
     lines = [
@@ -403,18 +439,35 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         '   <div class="gallery-container">',
     ]
 
-    for section_title, info in grouped.items():
-        if not info["examples"]:
+    for group_title, sections in SECTION_GROUPS:
+        # Check if this group has any examples at all
+        group_has_examples = any(section_lookup[sec_title]["examples"] for sec_title, _ in sections)
+        if not group_has_examples:
             continue
-        lines.append(f'   <h3 class="gallery-section-title">{html.escape(section_title)}</h3>')
-        lines += _render_subgrouped_gallery(
-            info["examples"],
-            info["rel_path"],
-            href_fn=lambda ex: f"{ex['rst_rel']}.html",
-            thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
-            heading_tag="h4",
-            heading_class="gallery-subsection-title",
-        )
+
+        # Emit group heading if present
+        if group_title:
+            lines.append(f'   <h2 class="gallery-group-title">{html.escape(group_title)}</h2>')
+
+        section_tag = "h4" if group_title else "h3"
+        subsection_tag = "h5" if group_title else "h4"
+
+        for section_title, _rel_path in sections:
+            info = section_lookup[section_title]
+            if not info["examples"]:
+                continue
+            lines.append(
+                f'   <{section_tag} class="gallery-section-title">'
+                f"{html.escape(section_title)}</{section_tag}>"
+            )
+            lines += _render_subgrouped_gallery(
+                info["examples"],
+                info["rel_path"],
+                href_fn=lambda ex: f"{ex['rst_rel']}.html",
+                thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
+                heading_tag=subsection_tag,
+                heading_class="gallery-subsection-title",
+            )
 
     lines.append("   </div>")
     lines.append("")
@@ -483,15 +536,59 @@ def generate_all() -> list[Path]:
         if section_dir.exists():
             generate_section_index(section_dir, title, meta_by_section.get(rel_path, []), rel_path)
 
+    # Generate group index pages for hierarchical groups
+    for group_title, sections in SECTION_GROUPS:
+        if group_title is None:
+            continue
+        child_entries = []
+        for _sec_title, rel_path in sections:
+            section_dir = META_DOCS_DIR / rel_path
+            if (section_dir / "index.rst").exists():
+                child_entries.append(f"   {Path(rel_path).name}/index")
+        if not child_entries:
+            continue
+        # Find the common parent directory for the group's sections
+        group_dir = META_DOCS_DIR / Path(sections[0][1]).parent
+        if group_dir == META_DOCS_DIR:
+            # Sections are at the top level — write a group index alongside them
+            group_slug = group_title.lower().replace(" ", "_")
+            group_index_dir = META_DOCS_DIR / group_slug
+            group_index_dir.mkdir(parents=True, exist_ok=True)
+            # Recompute relative paths from the group index directory
+            child_entries = []
+            for _sec_title, rel_path in sections:
+                section_dir = META_DOCS_DIR / rel_path
+                if (section_dir / "index.rst").exists():
+                    child_entries.append(f"   ../{rel_path}/index")
+            if not child_entries:
+                continue
+            underline = "=" * len(group_title)
+            group_index = (
+                f"{group_title}\n{underline}\n\n"
+                ".. toctree::\n   :maxdepth: 1\n\n" + "\n".join(child_entries) + "\n"
+            )
+            (group_index_dir / "index.rst").write_text(group_index, encoding="utf-8")
+
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)
 
-    # Generate top-level meta index
+    # Generate top-level meta index with hierarchy
     meta_index_entries = []
-    for rel_path in SECTIONS.values():
-        section_dir = META_DOCS_DIR / rel_path
-        if (section_dir / "index.rst").exists():
-            meta_index_entries.append(f"   {rel_path}/index")
+    used_paths = set()
+    for group_title, sections in SECTION_GROUPS:
+        if group_title:
+            group_slug = group_title.lower().replace(" ", "_")
+            group_index = META_DOCS_DIR / group_slug / "index.rst"
+            if group_index.exists():
+                meta_index_entries.append(f"   {group_slug}/index")
+                for _, rel_path in sections:
+                    used_paths.add(rel_path)
+        else:
+            for _, rel_path in sections:
+                section_dir = META_DOCS_DIR / rel_path
+                if (section_dir / "index.rst").exists() and rel_path not in used_paths:
+                    meta_index_entries.append(f"   {rel_path}/index")
+                    used_paths.add(rel_path)
 
     entries_str = "\n".join(meta_index_entries)
     meta_index = f"""Reference Gallery

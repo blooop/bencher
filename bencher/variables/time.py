@@ -62,6 +62,7 @@ class TimeSnapshot(TimeBase):
                 **params,
             )
         self.units = units
+        self.optimize = False
         if samples is None:
             self.samples = len(self.objects)
         else:
@@ -87,6 +88,7 @@ class TimeEvent(TimeBase):
             **params,
         )
         self.units = units
+        self.optimize = False
         if samples is None:
             self.samples = len(self.objects)
         else:

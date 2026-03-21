@@ -1,4 +1,4 @@
-"""Auto-generated example: Optimization: 1 objective(s), 1D input."""
+"""Auto-generated example: Optimise 1 objective(s), 1D input."""
 
 from typing import Any
 
@@ -29,8 +29,8 @@ class ServerOptimizer(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optim_1obj_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Optimization: 1 objective(s), 1D input."""
+def example_optimise_1_objective_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+    """Optimise 1 objective(s), 1D input."""
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.use_optuna = True
     bench = ServerOptimizer().to_bench(run_cfg)
@@ -47,4 +47,4 @@ def example_optim_1obj_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_optim_1obj_1d, level=3, repeats=3)
+    bch.run(example_optimise_1_objective_1d, level=3, repeats=3)
