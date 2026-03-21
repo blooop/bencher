@@ -44,5 +44,5 @@
         "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
         "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
     ],
-    "postCreateCommand": "sudo chown vscode .pixi && pixi install"
+    "postCreateCommand": "sudo chown vscode .pixi && pixi install && pixi run prek-install"
 }
