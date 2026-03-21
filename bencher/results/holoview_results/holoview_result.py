@@ -193,50 +193,22 @@ class HoloviewResult(VideoResult):
         return pn.Column(row[0], widget_box)
 
     @staticmethod
-    def _apply_rolling_window(dataset, k, result_var_name):
-        """Apply a rolling mean of window size *k* over the ``over_time`` dimension.
+    def _mean_over_time(dataset, result_var_name):
+        """Average a dataset across all time points.
 
-        For the mean variable, computes a simple rolling average.  For the
-        corresponding ``_std`` variable (if present), uses the law of total
-        variance: ``pooled_std = sqrt(mean(var_i) + var(mean_i))``.
-
-        Returns a new :class:`xr.Dataset` with the windowed variables; other
-        data variables are copied unchanged.
+        Computes the mean of *result_var_name* and, when a corresponding
+        ``_std`` variable exists, the pooled standard deviation via the
+        law of total variance.
         """
-        if k <= 1:
-            return dataset
-
-        times = dataset.coords["over_time"].values
-        n_time = len(times)
-        mean_var = result_var_name
         std_var = f"{result_var_name}_std"
-        has_std = std_var in dataset.data_vars
-
-        mean_da = dataset[mean_var]
-        new_ds = dataset.copy()
-
-        rolled_means = []
-        for i in range(n_time):
-            start = max(0, i - k + 1)
-            window = mean_da.isel(over_time=slice(start, i + 1))
-            rolled_means.append(window.mean(dim="over_time"))
-        new_ds[mean_var] = xr.concat(rolled_means, dim="over_time").assign_coords(over_time=times)
-
-        if has_std:
-            std_da = dataset[std_var]
-            rolled_stds = []
-            for i in range(n_time):
-                start = max(0, i - k + 1)
-                mean_window = mean_da.isel(over_time=slice(start, i + 1))
-                std_window = std_da.isel(over_time=slice(start, i + 1))
-                mean_of_vars = (std_window**2).mean(dim="over_time")
-                var_of_means = mean_window.var(dim="over_time")
-                rolled_stds.append((mean_of_vars + var_of_means) ** 0.5)
-            new_ds[std_var] = xr.concat(rolled_stds, dim="over_time").assign_coords(over_time=times)
-
+        new_ds = dataset.mean(dim="over_time")
+        if std_var in dataset.data_vars:
+            mean_of_vars = (dataset[std_var] ** 2).mean(dim="over_time")
+            var_of_means = dataset[result_var_name].var(dim="over_time")
+            new_ds[std_var] = (mean_of_vars + var_of_means) ** 0.5
         return new_ds
 
-    def _build_time_holomap(self, dataset, result_var_name, make_plot_fn, max_window=None):
+    def _build_time_holomap(self, dataset, result_var_name, make_plot_fn):
         """Build per-time-point HoloMap + a static aggregated plot.
 
         Returns ``pn.Tabs`` with two tabs:
@@ -244,12 +216,9 @@ class HoloviewResult(VideoResult):
         1. **Per Time Point** — *N*-entry HoloMap with a time slider.
         2. **All Time Points (aggregated)** — data averaged over every snapshot.
         """
-        _ = max_window  # reserved for future use
-
         times = dataset.coords["over_time"].values
         n_time = len(times)
 
-        # ── Per-time-point HoloMap with slider ──
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
@@ -259,11 +228,9 @@ class HoloviewResult(VideoResult):
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        # ── Tabs: aggregated (default) | per-time-point slider ──
         if n_time > 1:
-            ds_agg = self._apply_rolling_window(dataset, n_time, result_var_name)
-            ds_agg_last = ds_agg.sel(over_time=times[-1])
-            agg_plot = make_plot_fn(ds_agg_last)
+            ds_agg = self._mean_over_time(dataset, result_var_name)
+            agg_plot = make_plot_fn(ds_agg)
             return pn.Tabs(
                 ("Per Time Point", slider_pane),
                 (_AGG_TITLE, pn.Column(agg_plot)),
@@ -271,7 +238,7 @@ class HoloviewResult(VideoResult):
 
         return slider_pane
 
-    def _build_time_holomap_raw(self, da, make_plot_fn, max_window=None):
+    def _build_time_holomap_raw(self, da, make_plot_fn):
         """Build per-time-point HoloMap + a static aggregated plot for distributions.
 
         Returns ``pn.Tabs`` with two tabs:
@@ -279,12 +246,9 @@ class HoloviewResult(VideoResult):
         1. **Per Time Point** — HoloMap with a time slider (shown by default).
         2. **All Time Points (aggregated)** — all samples pooled.
         """
-        _ = max_window  # reserved for future use
-
         times = da.coords["over_time"].values
         n_time = len(times)
 
-        # ── Per-time-point HoloMap with slider ──
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
@@ -294,7 +258,6 @@ class HoloviewResult(VideoResult):
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        # ── Tabs: per-time-point (default) | aggregated ──
         if n_time > 1:
             agg_plot = make_plot_fn(da)
             return pn.Tabs(
