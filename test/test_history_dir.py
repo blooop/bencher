@@ -160,6 +160,8 @@ class TestHistoryDirNetCDF:
         assert reloaded.sizes["over_time"] == 2
         labels = _over_time_labels(reloaded)
         assert labels == ["v0.1.0", "v0.2.0"]
+        # On-disk dtype should be byte-like (netCDF stores as fixed-width bytes)
+        assert reloaded["over_time"].dtype.kind == "S"
         reloaded.close()
 
     def test_creates_directory_if_missing(self):
