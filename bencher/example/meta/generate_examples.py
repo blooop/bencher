@@ -352,51 +352,79 @@ def generate_section_index(
     index_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-SECTIONS = {
-    "0 Float Inputs": "0_float/no_repeats",
-    "0 Float Inputs (Repeated)": "0_float/with_repeats",
-    "0 Float Inputs (Over Time)": "0_float/over_time",
-    "0 Float Inputs (Over Time + Repeated)": "0_float/over_time_repeats",
-    "1 Float Input": "1_float/no_repeats",
-    "1 Float Input (Repeated)": "1_float/with_repeats",
-    "1 Float Input (Over Time)": "1_float/over_time",
-    "1 Float Input (Over Time + Repeated)": "1_float/over_time_repeats",
-    "2 Float Inputs": "2_float/no_repeats",
-    "2 Float Inputs (Repeated)": "2_float/with_repeats",
-    "2 Float Inputs (Over Time)": "2_float/over_time",
-    "3 Float Inputs": "3_float/no_repeats",
-    "3 Float Inputs (Repeated)": "3_float/with_repeats",
-    "3 Float Inputs (Over Time)": "3_float/over_time",
-    "Result Types": "result_types",
-    "Plot Types": "plot_types",
-    "Bool Plot Types": "bool_plot_types",
-    "Optimization": "optimization",
-    "Optimization (Over Time)": "optimization_over_time",
-    "Optimization (Aggregated)": "optimization_aggregated",
-    "Sampling Strategies": "sampling",
-    "Composable Containers": "composable_containers",
-    "Constant Variables": "const_vars",
-    "Statistics": "statistics",
-    "Workflows": "workflows",
-    "YAML Sweeps": "yaml",
-    "Advanced Patterns": "advanced",
-    "Regression Detection": "regression",
-    "Performance": "performance",
-}
+# Gallery hierarchy: list of (group_title | None, [(section_title, rel_path), ...])
+# Groups with title=None have their sections rendered at the top level.
+SECTION_GROUPS = [
+    (
+        None,
+        [
+            ("0 Float Inputs", "0_float/no_repeats"),
+            ("0 Float Inputs (Repeated)", "0_float/with_repeats"),
+            ("0 Float Inputs (Over Time)", "0_float/over_time"),
+            ("0 Float Inputs (Over Time + Repeated)", "0_float/over_time_repeats"),
+            ("1 Float Input", "1_float/no_repeats"),
+            ("1 Float Input (Repeated)", "1_float/with_repeats"),
+            ("1 Float Input (Over Time)", "1_float/over_time"),
+            ("1 Float Input (Over Time + Repeated)", "1_float/over_time_repeats"),
+            ("2 Float Inputs", "2_float/no_repeats"),
+            ("2 Float Inputs (Repeated)", "2_float/with_repeats"),
+            ("2 Float Inputs (Over Time)", "2_float/over_time"),
+            ("3 Float Inputs", "3_float/no_repeats"),
+            ("3 Float Inputs (Repeated)", "3_float/with_repeats"),
+            ("3 Float Inputs (Over Time)", "3_float/over_time"),
+        ],
+    ),
+    (
+        "Optimisation",
+        [
+            ("Basic", "optimization"),
+            ("Over Time", "optimization_over_time"),
+            ("Aggregated", "optimization_aggregated"),
+        ],
+    ),
+    (
+        None,
+        [
+            ("Result Types", "result_types"),
+            ("Plot Types", "plot_types"),
+            ("Bool Plot Types", "bool_plot_types"),
+            ("Sampling Strategies", "sampling"),
+            ("Composable Containers", "composable_containers"),
+            ("Constant Variables", "const_vars"),
+            ("Statistics", "statistics"),
+            ("Workflows", "workflows"),
+            ("YAML Sweeps", "yaml"),
+            ("Advanced Patterns", "advanced"),
+            ("Regression Detection", "regression"),
+            ("Performance", "performance"),
+        ],
+    ),
+]
+
+
+def _flat_sections():
+    """Yield (section_title, rel_path) pairs from SECTION_GROUPS."""
+    for _group_title, sections in SECTION_GROUPS:
+        yield from sections
+
+
+# Flat view used by section index generation and toctree
+SECTIONS = dict(_flat_sections())
 
 
 def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
     """Generate a single gallery.rst page with PNG thumbnail cards grouped by section."""
     from collections import OrderedDict
 
-    grouped = OrderedDict()
-    for title, rel_path in SECTIONS.items():
-        grouped[title] = {"rel_path": rel_path, "examples": []}
+    # Build lookup: section_title -> {rel_path, examples}
+    section_lookup = OrderedDict()
+    for title, rel_path in _flat_sections():
+        section_lookup[title] = {"rel_path": rel_path, "examples": []}
 
     for meta in examples_metadata:
-        for title, rel_path in SECTIONS.items():
+        for title, rel_path in _flat_sections():
             if _match_section(meta["section_rel"], rel_path):
-                grouped[title]["examples"].append(meta)
+                section_lookup[title]["examples"].append(meta)
                 break
 
     lines = [
@@ -411,18 +439,35 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         '   <div class="gallery-container">',
     ]
 
-    for section_title, info in grouped.items():
-        if not info["examples"]:
+    for group_title, sections in SECTION_GROUPS:
+        # Check if this group has any examples at all
+        group_has_examples = any(section_lookup[sec_title]["examples"] for sec_title, _ in sections)
+        if not group_has_examples:
             continue
-        lines.append(f'   <h3 class="gallery-section-title">{html.escape(section_title)}</h3>')
-        lines += _render_subgrouped_gallery(
-            info["examples"],
-            info["rel_path"],
-            href_fn=lambda ex: f"{ex['rst_rel']}.html",
-            thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
-            heading_tag="h4",
-            heading_class="gallery-subsection-title",
-        )
+
+        # Emit group heading if present
+        if group_title:
+            lines.append(f'   <h2 class="gallery-group-title">{html.escape(group_title)}</h2>')
+
+        section_tag = "h4" if group_title else "h3"
+        subsection_tag = "h5" if group_title else "h4"
+
+        for section_title, _rel_path in sections:
+            info = section_lookup[section_title]
+            if not info["examples"]:
+                continue
+            lines.append(
+                f'   <{section_tag} class="gallery-section-title">'
+                f"{html.escape(section_title)}</{section_tag}>"
+            )
+            lines += _render_subgrouped_gallery(
+                info["examples"],
+                info["rel_path"],
+                href_fn=lambda ex: f"{ex['rst_rel']}.html",
+                thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
+                heading_tag=subsection_tag,
+                heading_class="gallery-subsection-title",
+            )
 
     lines.append("   </div>")
     lines.append("")
