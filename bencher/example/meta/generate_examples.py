@@ -102,7 +102,11 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_image_video import example_meta_image_video
-    from bencher.example.meta.generate_meta_optimization import example_meta_optimization
+    from bencher.example.meta.generate_meta_optimization import (
+        example_meta_optimization,
+        example_meta_optimization_over_time,
+        example_meta_optimization_aggregated,
+    )
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
@@ -122,6 +126,8 @@ def generate_python_files():
     example_meta_statistics()
     example_meta_const_vars()
     example_meta_optimization()
+    example_meta_optimization_over_time()
+    example_meta_optimization_aggregated()
     example_meta_workflows()
     example_meta_advanced()
     example_meta_bool_plot_types()
@@ -365,6 +371,8 @@ SECTIONS = {
     "Plot Types": "plot_types",
     "Bool Plot Types": "bool_plot_types",
     "Optimization": "optimization",
+    "Optimization (Over Time)": "optimization_over_time",
+    "Optimization (Aggregated)": "optimization_aggregated",
     "Sampling Strategies": "sampling",
     "Composable Containers": "composable_containers",
     "Constant Variables": "const_vars",
