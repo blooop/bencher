@@ -45,6 +45,17 @@ class TestOptimizeBoundMethod(unittest.TestCase):
         bench = bn.Bench("test", plain_fn)
         self.assertIsNone(bench.worker_class_instance)
 
+    def test_worker_class_instance_none_for_non_sweep_bound_method(self):
+        """worker_class_instance should remain None for a non-ParametrizedSweep bound method."""
+
+        class NonSweep:
+            def worker(self):
+                return {"output": 2.0}
+
+        obj = NonSweep()
+        bench = bn.Bench("test", obj.worker)
+        self.assertIsNone(bench.worker_class_instance)
+
     def test_bn_run_with_optimise(self):
         """bn.run() with optimise parameter should work for bound-method benchmarks."""
         from bencher.example.optuna.example_optuna import optuna_rastrigin
