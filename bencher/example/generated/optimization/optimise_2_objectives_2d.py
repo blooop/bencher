@@ -31,20 +31,17 @@ class ServerOptimizer(bn.ParametrizedSweep):
 
 def example_optimise_2_objectives_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Optimise 2 objective(s), 2D input."""
-    run_cfg = run_cfg or bn.BenchRunCfg()
-    run_cfg.use_optuna = True
     bench = ServerOptimizer().to_bench(run_cfg)
-    res = bench.plot_sweep(
+    bench.plot_sweep(
         input_vars=["cpu_cores", "memory_gb"],
         result_vars=["performance", "cost"],
         const_vars=dict(noise_scale=0.1),
         description="Multi-objective optimization over 2D input space using Optuna. The optimizer finds the Pareto front trading off performance vs cost.",
         post_description="The Pareto front shows optimal trade-offs — no point can improve one objective without worsening the other.",
     )
-    bench.report.append(res.to_optuna_plots())
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_optimise_2_objectives_2d, level=2, repeats=3)
+    bn.run(example_optimise_2_objectives_2d, level=2, repeats=3, optimise=30)

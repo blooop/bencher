@@ -143,9 +143,7 @@ class MetaOptimization(MetaGeneratorBase):
             const_vars="dict(noise_scale=0.1)",
             description=description,
             post_description=post_description,
-            post_sweep_line="res.to_optuna_plots()",
-            run_cfg_lines=["run_cfg.use_optuna = True"],
-            run_kwargs={"level": level, "repeats": 3},
+            run_kwargs={"level": level, "repeats": 3, "optimise": 30},
         )
 
         return super().__call__()
@@ -204,7 +202,6 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
             "        run_cfg=run_cfg,",
             "        time_src=_base_time + timedelta(seconds=i),",
             "    )",
-            "bench.report.append(res.to_optuna_plots())",
         ]
 
         self.generate_example(
@@ -218,7 +215,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
             ),
             body="\n".join(body_lines) + "\n",
             class_code=CLASS_CODE_OVERTIME,
-            run_kwargs={"level": 2},
+            run_kwargs={"level": 2, "optimise": 30},
         )
 
         return super().__call__()
@@ -269,7 +266,6 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 "        run_cfg=run_cfg,",
                 "        time_src=_base_time + timedelta(seconds=i),",
                 "    )",
-                "bench.report.append(res.to_optuna_plots())",
             ]
 
             self.generate_example(
@@ -283,7 +279,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 ),
                 body="\n".join(body_lines) + "\n",
                 class_code=CLASS_CODE_AGG,
-                run_kwargs={"level": 3},
+                run_kwargs={"level": 3, "optimise": 30},
             )
         else:
             filename = "optimise_aggregated"
@@ -313,9 +309,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 result_vars='["loss"]',
                 description=description,
                 post_description=post_description,
-                post_sweep_line="res.to_optuna_plots()",
-                run_cfg_lines=["run_cfg.use_optuna = True"],
-                run_kwargs={"level": 3, "repeats": 3},
+                run_kwargs={"level": 3, "repeats": 3, "optimise": 30},
             )
 
         return super().__call__()
