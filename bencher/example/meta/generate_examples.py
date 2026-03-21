@@ -536,15 +536,59 @@ def generate_all() -> list[Path]:
         if section_dir.exists():
             generate_section_index(section_dir, title, meta_by_section.get(rel_path, []), rel_path)
 
+    # Generate group index pages for hierarchical groups
+    for group_title, sections in SECTION_GROUPS:
+        if group_title is None:
+            continue
+        child_entries = []
+        for _sec_title, rel_path in sections:
+            section_dir = META_DOCS_DIR / rel_path
+            if (section_dir / "index.rst").exists():
+                child_entries.append(f"   {Path(rel_path).name}/index")
+        if not child_entries:
+            continue
+        # Find the common parent directory for the group's sections
+        group_dir = META_DOCS_DIR / Path(sections[0][1]).parent
+        if group_dir == META_DOCS_DIR:
+            # Sections are at the top level — write a group index alongside them
+            group_slug = group_title.lower().replace(" ", "_")
+            group_index_dir = META_DOCS_DIR / group_slug
+            group_index_dir.mkdir(parents=True, exist_ok=True)
+            # Recompute relative paths from the group index directory
+            child_entries = []
+            for _sec_title, rel_path in sections:
+                section_dir = META_DOCS_DIR / rel_path
+                if (section_dir / "index.rst").exists():
+                    child_entries.append(f"   ../{rel_path}/index")
+            if not child_entries:
+                continue
+            underline = "=" * len(group_title)
+            group_index = (
+                f"{group_title}\n{underline}\n\n"
+                ".. toctree::\n   :maxdepth: 1\n\n" + "\n".join(child_entries) + "\n"
+            )
+            (group_index_dir / "index.rst").write_text(group_index, encoding="utf-8")
+
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)
 
-    # Generate top-level meta index
+    # Generate top-level meta index with hierarchy
     meta_index_entries = []
-    for rel_path in SECTIONS.values():
-        section_dir = META_DOCS_DIR / rel_path
-        if (section_dir / "index.rst").exists():
-            meta_index_entries.append(f"   {rel_path}/index")
+    used_paths = set()
+    for group_title, sections in SECTION_GROUPS:
+        if group_title:
+            group_slug = group_title.lower().replace(" ", "_")
+            group_index = META_DOCS_DIR / group_slug / "index.rst"
+            if group_index.exists():
+                meta_index_entries.append(f"   {group_slug}/index")
+                for _, rel_path in sections:
+                    used_paths.add(rel_path)
+        else:
+            for _, rel_path in sections:
+                section_dir = META_DOCS_DIR / rel_path
+                if (section_dir / "index.rst").exists() and rel_path not in used_paths:
+                    meta_index_entries.append(f"   {rel_path}/index")
+                    used_paths.add(rel_path)
 
     entries_str = "\n".join(meta_index_entries)
     meta_index = f"""Reference Gallery
