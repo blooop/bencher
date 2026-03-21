@@ -1,7 +1,8 @@
 """Example showing how to use git_time_event() for over_time sliders with date+commit labels.
 
 Simulates server latency that drifts upward over successive runs and has per-call
-noise so that distribution plots become smoother as the window size slider is increased.
+noise.  The "All Time Points (aggregated)" tab pools every snapshot into a single
+plot so the distribution is smoother than any individual time point.
 """
 
 import random
@@ -39,9 +40,9 @@ def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     shows which run and commit produced each data point.
 
     Each successive run adds a small upward drift so the trend is visible when
-    scrubbing the time slider.  Repeats add per-call Gaussian noise — increase
-    the **Window Size** slider to pool neighbouring time points and watch the
-    distribution tighten.
+    scrubbing the time slider.  Repeats add per-call Gaussian noise — switch
+    to the **All Time Points (aggregated)** tab to see the distribution built
+    from every snapshot's samples.
     """
 
     run_cfg = run_cfg or bch.BenchRunCfg()

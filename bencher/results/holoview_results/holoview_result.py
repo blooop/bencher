@@ -239,14 +239,10 @@ class HoloviewResult(VideoResult):
     def _build_time_holomap(self, dataset, result_var_name, make_plot_fn, max_window=None):
         """Build per-time-point HoloMap + a static aggregated plot.
 
-        Returns a ``pn.Column`` containing:
+        Returns ``pn.Tabs`` with two tabs:
 
-        1. An *N*-entry ``HoloMap`` with a time slider (one plot per snapshot).
-        2. A static plot showing data averaged over **all** time points.
-
-        This avoids the *O(N×K)* state explosion of a 2-D
-        ``(over_time × window_size)`` HoloMap while still letting the user
-        compare individual snapshots to the overall trend.
+        1. **Per Time Point** — *N*-entry HoloMap with a time slider.
+        2. **All Time Points (aggregated)** — data averaged over every snapshot.
         """
         _ = max_window  # reserved for future use
 
