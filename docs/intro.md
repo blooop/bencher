@@ -6,11 +6,11 @@ Define a `ParametrizedSweep` class with typed input parameters and result variab
 
 ```python
 import math
-import bencher as bch
+import bencher as bn
 
-class SimpleFloat(bch.ParametrizedSweep):
-    theta = bch.FloatSweep(default=0, bounds=[0, math.pi], units="rad", samples=30)
-    out_sin = bch.ResultVar(units="v", doc="sin of theta")
+class SimpleFloat(bn.ParametrizedSweep):
+    theta = bn.FloatSweep(default=0, bounds=[0, math.pi], units="rad", samples=30)
+    out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -20,6 +20,14 @@ class SimpleFloat(bch.ParametrizedSweep):
 bench = SimpleFloat().to_bench()
 bench.plot_sweep()
 ```
+
+Or use `bn.run()` for the same thing with less boilerplate:
+
+```python
+bn.run(SimpleFloat, level=3)
+```
+
+`bn.run()` accepts a `ParametrizedSweep` class, an instance, or a function. It handles `to_bench()`, `plot_sweep()`, and serving the report automatically.
 
 Bencher computes the Cartesian product of all input parameters, evaluates your function at every combination, caches the results, and automatically selects appropriate visualizations based on parameter types.
 
@@ -66,7 +74,13 @@ No code changes to plotting logic are needed — the type signature of your para
 Sample each point multiple times to get a statistical distribution:
 
 ```python
-bench.plot_sweep(run_cfg=bch.BenchRunCfg(repeats=10))
+bn.run(SimpleFloat, level=3, repeats=10)
+```
+
+Or with the manual API:
+
+```python
+bench.plot_sweep(run_cfg=bn.BenchRunCfg(repeats=10))
 ```
 
 With repeats, plots automatically show mean +/- standard deviation. See the [Repeated](reference/meta/0_float/with_repeats/index) gallery sections for examples.
@@ -75,47 +89,68 @@ Bencher assumes your function is a stochastic pure function — given the same i
 
 ## Tracking Over Time
 
-Track how results change across successive runs:
+Track how results change across successive runs by calling `plot_sweep()` multiple times with different `time_src` values:
 
 ```python
-run_cfg = bch.BenchRunCfg(over_time=True, repeats=3)
-bench.plot_sweep(run_cfg=run_cfg, time_src=bch.git_time_event())
+run_cfg = bn.BenchRunCfg(over_time=True, repeats=3)
+benchable = MyBench()
+bench = benchable.to_bench(run_cfg)
+
+for i in range(5):
+    bench.plot_sweep(
+        input_vars=["param1"],
+        result_vars=["metric"],
+        run_cfg=run_cfg,
+        time_src=bn.git_time_event(),  # or a datetime
+    )
 ```
 
-Each run adds a time slider to the plots. See the [Over Time](reference/meta/0_float/over_time/index) and [Over Time + Repeated](reference/meta/0_float/over_time_repeats/index) gallery sections.
+Each run adds a time slider to the plots. When combined with repeats, the Optuna importance analysis shows both `repeat` and `over_time` alongside input parameters — revealing whether measurement noise or temporal drift dominates. See the [Over Time](reference/meta/0_float/over_time/index) and [Over Time + Repeated](reference/meta/0_float/over_time_repeats/index) gallery sections.
 
 ## Optimisation
 
-### Automatic Importance Analysis
+### Parameter Importance Analysis
 
-When `use_optuna=True`, Bencher integrates with [Optuna](https://optuna.org/) for parameter importance analysis and optimisation:
+When `use_optuna=True`, Bencher integrates with [Optuna](https://optuna.org/) for parameter importance analysis:
 
 ```python
-run_cfg = bch.BenchRunCfg(use_optuna=True, repeats=3)
-res = bench.plot_sweep(run_cfg=run_cfg)
-res.to_optuna_plots()  # parameter importance, Pareto fronts
+bn.run(MyBench, level=3, repeats=3, optimise=30)
 ```
 
-See the [Optimisation](reference/meta/optimisation/index) gallery section.
+Or with the manual API:
+
+```python
+run_cfg = bn.BenchRunCfg(use_optuna=True, repeats=3)
+res = bench.plot_sweep(run_cfg=run_cfg)
+bench.report.append(res.to_optuna_plots())
+```
+
+The importance plots show which parameters matter most, including `repeat` (measurement noise) and `over_time` (temporal drift) when present. See the [Optimisation](reference/meta/optimisation/index) gallery section.
 
 ### Aggregated Optimisation
 
 Mark a variable with `optimize=False` to sweep it without optimising — Optuna averages results across its values:
 
 ```python
-algorithm = bch.StringSweep(["adam", "sgd", "rmsprop"], optimize=False)
-learning_rate = bch.FloatSweep(default=0.01, bounds=[0.001, 1.0])
+class MyBench(bn.ParametrizedSweep):
+    algorithm = bn.StringSweep(["adam", "sgd", "rmsprop"], optimize=False)
+    learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0])
+    loss = bn.ResultVar("loss", bn.OptDir.minimize)
 ```
 
-Optuna only suggests `learning_rate` and reports the mean loss across all algorithms. See the [Aggregated](reference/meta/optimization_aggregated/index) examples.
+Optuna only suggests `learning_rate` and reports the mean loss across all algorithms. This finds settings that work best **across** categories rather than the best (category, setting) pair. See the [Aggregated](reference/meta/optimization_aggregated/index) examples.
 
 ### Direct Optimisation API
 
-Use `bench.optimize()` or the one-liner `to_optimize()` for direct optimisation:
+Use `bench.optimize()` or the one-liner `to_optimize()` for direct optimisation without a grid sweep:
 
 ```python
+# One-liner
 result = MyBench().to_optimize(n_trials=50)
 print(result.summary())
+
+# Or via bn.run() — runs a grid sweep then optimises with 30 extra trials
+bn.run(MyBench, level=3, optimise=30)
 ```
 
 ## Composable Containers
