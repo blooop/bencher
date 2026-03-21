@@ -14,7 +14,12 @@ from contextlib import suppress
 from functools import partial
 import panel as pn
 
+import optuna
+
 from bencher.worker_job import WorkerJob
+from bencher.results.optimize_result import OptimizeResult
+from bencher.optuna_conversions import sweep_var_to_suggest, sweep_var_to_optuna_dist
+from bencher.variables.sweep_base import hash_sha1
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
@@ -918,6 +923,303 @@ class Bench(BenchPlotServer):
                 return [i.name for i in self.worker_class_instance.get_results_only()]
             return self.worker_class_instance.get_results_only()
         raise RuntimeError("Worker class instance not set")
+
+    # ------------------------------------------------------------------
+    # First-class optimization API
+    # ------------------------------------------------------------------
+
+    def optimize(
+        self,
+        title: str | None = None,
+        input_vars=None,
+        result_vars=None,
+        const_vars=None,
+        n_trials: int = 100,
+        sampler: optuna.samplers.BaseSampler | None = None,
+        warm_start: bool = True,
+        tag: str = "",
+        run_cfg: BenchRunCfg | None = None,
+        plot: bool = True,
+    ) -> OptimizeResult:
+        """Run optuna optimization directly — no full grid sweep required.
+
+        Args:
+            title: Study name. Auto-generated when *None*.
+            input_vars: Input variables to optimize over.  Detected from
+                ``worker_class_instance`` when *None*.
+            result_vars: Result variables (objectives).  Detected when *None*.
+            const_vars: Constant variables.  Detected when *None*.
+            n_trials: Number of new optuna trials to run.
+            sampler: Optuna sampler.  Defaults to ``TPESampler``.
+            warm_start: Seed the study with previously cached evaluations.
+            tag: Cache tag (same semantics as ``plot_sweep``).
+            run_cfg: Run configuration.  Defaults to ``BenchRunCfg()``.
+            plot: If *True*, append visualisation to ``self.report``.
+
+        Returns:
+            OptimizeResult wrapping the completed ``optuna.Study``.
+        """
+        if run_cfg is None:
+            run_cfg = deepcopy(self.run_cfg) if self.run_cfg is not None else BenchRunCfg()
+
+        # --- resolve variables (mirrors plot_sweep logic) ---------------
+        input_vars_in, result_vars_in, const_vars_in = self._resolve_optimize_vars(
+            input_vars, result_vars, const_vars, run_cfg
+        )
+        constant_inputs = self.define_const_inputs(const_vars_in) or {}
+
+        if title is None:
+            title = "Optimize " + " vs ".join(iv.name for iv in input_vars_in)
+
+        # --- build lightweight BenchCfg for metadata --------------------
+        result_hmaps = [r for r in result_vars_in if isinstance(r, ResultHmap)]
+        result_vars_only = [r for r in result_vars_in if not isinstance(r, ResultHmap)]
+
+        bench_cfg = BenchCfg(
+            input_vars=input_vars_in,
+            result_vars=result_vars_only,
+            result_hmaps=result_hmaps,
+            const_vars=const_vars_in,
+            bench_name=self.bench_name,
+            title=title,
+            tag=run_cfg.run_tag + tag,
+        )
+
+        # --- (re)initialize sample cache for reading + writing -----------
+        if self.sample_cache is not None:
+            with suppress(Exception):
+                self.sample_cache.close()
+        run_cfg_for_cache = deepcopy(run_cfg)
+        run_cfg_for_cache.overwrite_sample_cache = False
+        self.sample_cache = self.init_sample_cache(run_cfg_for_cache)
+
+        # --- determine optimisation directions --------------------------
+        targets = bench_cfg.optuna_targets(as_var=True)
+        if not targets:
+            raise ValueError(
+                "No result variables with an optimization direction found. "
+                "Set direction=OptDir.minimize or OptDir.maximize on your ResultVar."
+            )
+        directions = [t.direction for t in targets]
+        target_names = [t.name for t in targets]
+
+        # --- create study -----------------------------------------------
+        if sampler is None:
+            sampler = optuna.samplers.TPESampler()
+        study = optuna.create_study(
+            sampler=sampler,
+            directions=directions,
+            study_name=title,
+        )
+
+        # --- warm-start from cache / prior results ----------------------
+        n_warm = 0
+        if warm_start:
+            n_warm = self._warm_start_from_cache(
+                study, bench_cfg, input_vars_in, constant_inputs, target_names
+            )
+
+        # --- run optimisation -------------------------------------------
+        objective = self._make_optuna_objective(
+            input_vars_in, constant_inputs, target_names, bench_cfg.tag
+        )
+        study.optimize(objective, n_trials=n_trials)
+
+        # --- clean up cache -------------------------------------------------
+        logging.info(self.sample_cache.stats())
+        self.sample_cache.close()
+
+        result = OptimizeResult(
+            study=study,
+            n_warm_start_trials=n_warm,
+            n_new_trials=n_trials,
+            target_names=target_names,
+        )
+
+        if plot:
+            self.report.append(result.to_panel())
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Private helpers for optimize()
+    # ------------------------------------------------------------------
+
+    def _resolve_optimize_vars(self, input_vars, result_vars, const_vars, run_cfg):
+        """Deep-copy and convert variable lists to param.Parameter objects."""
+        input_vars_in = deepcopy(input_vars)
+        result_vars_in = deepcopy(result_vars)
+        const_vars_in = deepcopy(const_vars)
+
+        if self.worker_class_instance is not None:
+            if input_vars_in is None:
+                input_vars_in = (
+                    deepcopy(self.input_vars)
+                    if self.input_vars is not None
+                    else self.worker_class_instance.get_inputs_only()
+                )
+            if result_vars_in is None:
+                result_vars_in = (
+                    deepcopy(self.result_vars)
+                    if self.result_vars is not None
+                    else self.get_result_vars(as_str=False)
+                )
+            if const_vars_in is None:
+                const_vars_in = (
+                    deepcopy(self.const_vars)
+                    if self.const_vars is not None
+                    else self.worker_class_instance.get_input_defaults()
+                )
+        else:
+            input_vars_in = input_vars_in or []
+            result_vars_in = result_vars_in or []
+            const_vars_in = const_vars_in or []
+
+        def _convert_seq(seq, kind):
+            return [self.convert_vars_to_params(v, kind, run_cfg) for v in seq]
+
+        input_vars_in = _convert_seq(input_vars_in, "input")
+        result_vars_in = _convert_seq(result_vars_in, "result")
+
+        if isinstance(const_vars_in, dict):
+            const_vars_in = list(const_vars_in.items())
+        const_vars_in = [
+            (self.convert_vars_to_params(k, "const", run_cfg), v) for k, v in const_vars_in
+        ]
+
+        # Remove inputs that appear in const_vars
+        input_names = {iv.name for iv in input_vars_in}
+        const_vars_in = [c for c in const_vars_in if c[0].name not in input_names]
+
+        return input_vars_in, result_vars_in, const_vars_in
+
+    @staticmethod
+    def _build_cache_key(inputs: dict, tag: str) -> str:
+        """Build a deterministic cache key from an input dict and tag."""
+        return hash_sha1((sorted(inputs.items()), tag))
+
+    def _warm_from_results(self, study: optuna.Study) -> int:
+        """Seed *study* from in-memory BenchResult objects. Returns count added."""
+        added = 0
+        for res in self.results:
+            try:
+                if len(res.ds.sizes) > 0:
+                    trials = res.bench_results_to_optuna_trials(True)
+                    study.add_trials(trials)
+                    added += len(trials)
+            except Exception:  # pylint: disable=broad-except
+                pass
+        return added
+
+    def _warm_from_sample_cache(
+        self,
+        study: optuna.Study,
+        bench_cfg: BenchCfg,
+        input_vars: list,
+        constant_inputs: dict,
+        target_names: list[str],
+    ) -> int:
+        """Seed *study* from the on-disk sample cache. Returns count added."""
+        cache = self.sample_cache.cache
+        if cache is None or len(cache) == 0:
+            return 0
+
+        distributions = {iv.name: sweep_var_to_optuna_dist(iv) for iv in input_vars}
+
+        iv_grid_values = []
+        iv_names = []
+        for iv in input_vars:
+            try:
+                vals = list(iv.values())
+            except Exception:  # pylint: disable=broad-except
+                continue
+            iv_grid_values.append(vals)
+            iv_names.append(iv.name)
+
+        if not iv_grid_values:
+            return 0
+
+        added = 0
+        resolved_tag = bench_cfg.tag
+
+        for combo in product(*iv_grid_values):
+            input_dict = dict(zip(iv_names, combo))
+            input_dict.update(constant_inputs)
+            input_dict["repeat"] = 1
+
+            key = self._build_cache_key(input_dict, resolved_tag)
+
+            if key in cache:
+                result_dict = cache[key]
+                if not isinstance(result_dict, dict):
+                    continue
+                values = []
+                skip = False
+                for tn in target_names:
+                    if tn not in result_dict:
+                        skip = True
+                        break
+                    values.append(result_dict[tn])
+                if skip:
+                    continue
+
+                params = dict(zip(iv_names, combo))
+                try:
+                    trial = optuna.trial.create_trial(
+                        params=params,
+                        distributions=distributions,
+                        values=values,
+                    )
+                    study.add_trial(trial)
+                    added += 1
+                except Exception:  # pylint: disable=broad-except
+                    pass
+
+        return added
+
+    def _warm_start_from_cache(
+        self,
+        study: optuna.Study,
+        bench_cfg: BenchCfg,
+        input_vars: list,
+        constant_inputs: dict,
+        target_names: list[str],
+    ) -> int:
+        """Seed *study* with cached evaluations. Returns count of added trials."""
+        added = self._warm_from_results(study)
+        added += self._warm_from_sample_cache(
+            study, bench_cfg, input_vars, constant_inputs, target_names
+        )
+        return added
+
+    def _make_optuna_objective(self, input_vars, constant_inputs, target_names, tag):
+        """Return an objective function compatible with ``study.optimize()``."""
+
+        def objective(trial: optuna.trial.Trial):
+            kwargs = {}
+            for iv in input_vars:
+                kwargs[iv.name] = sweep_var_to_suggest(iv, trial)
+
+            full_input = dict(kwargs)
+            full_input.update(constant_inputs)
+            full_input["repeat"] = 1
+
+            cache_key = self._build_cache_key(full_input, tag)
+
+            job = Job(
+                job_id=f"optimize:trial_{trial.number}",
+                function=self.worker,
+                job_args=kwargs,
+                job_key=cache_key,
+                tag=tag,
+            )
+            job_future = self.sample_cache.submit(job)
+            result_dict = job_future.result()
+
+            output = [result_dict[tn] for tn in target_names]
+            return tuple(output) if len(output) > 1 else output[0]
+
+        return objective
 
     def to(
         self,

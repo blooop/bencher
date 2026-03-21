@@ -149,18 +149,38 @@ def cfg_from_optuna_trial(
     return cfg
 
 
-def summarise_optuna_study(study: optuna.study.Study) -> pn.pane.panel:
-    """Summarise an optuna study in a panel format"""
-    row = pn.Column(name="Optimisation Results")
-    row.append(plot_optimization_history(study))
-    row.append(plot_param_importances(study))
+def _append_safe(row, plot_fn, *args, **kwargs):
+    """Append a plot to *row*, logging any exception instead of propagating."""
     try:
-        row.append(plot_pareto_front(study))
+        row.append(plot_fn(*args, **kwargs))
     except Exception as e:  # pylint: disable=broad-except
         logging.exception(e)
 
-    row.append(
-        pn.pane.Markdown(f"```\nBest value: {study.best_value}\nParams: {study.best_params}```")
-    )
 
+def summarise_optuna_study(study: optuna.study.Study) -> pn.pane.panel:
+    """Summarise an optuna study in a panel format"""
+    row = pn.Column(name="Optimisation Results")
+    n_objectives = len(study.directions)
+    is_multi = n_objectives >= 2
+
+    if is_multi:
+        for idx in range(n_objectives):
+            target_name = f"Objective {idx}"
+
+            def target(t, i=idx):
+                return t.values[i]
+
+            _append_safe(
+                row, plot_optimization_history, study, target=target, target_name=target_name
+            )
+            _append_safe(row, plot_param_importances, study, target=target, target_name=target_name)
+
+        _append_safe(row, plot_pareto_front, study)
+        summary = f"Pareto-front size: {len(study.best_trials)}"
+    else:
+        _append_safe(row, plot_optimization_history, study)
+        _append_safe(row, plot_param_importances, study)
+        summary = f"Best value: {study.best_value}\nParams: {study.best_params}"
+
+    row.append(pn.pane.Markdown(f"```\n{summary}```"))
     return row
