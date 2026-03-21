@@ -103,12 +103,21 @@ class LineResult(HoloviewResult):
                 self.to_line_tap_ds, result_var_plots=tap_var, container=tap_container
             )
 
+        # When over_time is active, also accept 0 float vars so a 0D benchmark
+        # gets a time-series line (x=over_time, y=value).
+        if self.bench_cfg.over_time:
+            float_range = VarRange(0, 1)
+            input_range = VarRange(0, None)
+        else:
+            float_range = VarRange(1, 1)
+            input_range = None
         return self.filter(
             line_cb,
-            float_range=VarRange(1, 1),
+            float_range=float_range,
             cat_range=VarRange(0, None),
             repeats_range=VarRange(1, 1),
             panel_range=VarRange(0, None),
+            input_range=input_range,
             reduce=ReduceType.SQUEEZE,
             target_dimension=target_dimension,
             result_var=result_var,
@@ -134,11 +143,26 @@ class LineResult(HoloviewResult):
         Returns:
             hvplot.element.Curve | hv.HoloMap: A line plot visualization of the benchmark data.
         """
+        da_plot = dataset[result_var.name]
+
+        # 0D + over_time: time-series line with time on the x-axis.
+        # This is a standalone chart (not a HoloMap) since it inherently
+        # shows all time points at once.
+        if not self.plt_cnt_cfg.float_vars and "over_time" in da_plot.dims:
+            title = self.title_from_ds(da_plot, result_var, **kwargs)
+            plot = da_plot.hvplot.line(
+                x="over_time",
+                y=da_plot.name,
+                title=title,
+                widget_location="bottom",
+                **kwargs,
+            )
+            return self._apply_opts(plot, xrotation=30)
+
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None
         if self.plt_cnt_cfg.cat_cnt >= 1:
             by = self.plt_cnt_cfg.cat_vars[0].name
-        da_plot = dataset[result_var.name]
         title = self.title_from_ds(da_plot, result_var, **kwargs)
 
         if self._use_holomap_for_time(dataset):

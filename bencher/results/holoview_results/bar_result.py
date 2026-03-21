@@ -1,5 +1,4 @@
 from __future__ import annotations
-import holoviews as hv
 import panel as pn
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -122,28 +121,9 @@ class BarResult(HoloviewResult):
         )
 
         if not non_time_dims and "over_time" in da.dims:
-            if not use_holomap:
-                # 0D + single time point: nothing meaningful to bar-chart.
-                return None
-            # 0D + over_time: single bar per time point, same tab format as 1D/2D.
-
-            def make_0d_bar(ds_t):
-                val = float(ds_t[da.name].values)
-                std_var = f"{da.name}_std"
-                bar = hv.Bars([(da.name, val)], kdims=["variable"], vdims=["value"]).opts(
-                    **opts_kwargs
-                )
-                if std_var in ds_t.data_vars:
-                    std_val = float(ds_t[std_var].values)
-                    err = hv.ErrorBars(
-                        [(da.name, val, std_val)],
-                        kdims=["variable"],
-                        vdims=["value", "error"],
-                    )
-                    return bar * err
-                return bar
-
-            return self._build_time_holomap(dataset, da.name, make_0d_bar)
+            # 0D + over_time: LineResult handles the time-series line and
+            # HistogramResult handles per-time-point tabs.
+            return None
 
         if use_holomap:
 
