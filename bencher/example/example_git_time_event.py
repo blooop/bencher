@@ -1,8 +1,12 @@
-"""Example showing how to use git_time_event() for over_time sliders with date+commit labels.
+"""Example showing over_time sliders with simulated timestamped runs.
 
 Simulates server latency that drifts upward over successive runs and has per-call
 noise.  The "All Time Points (aggregated)" tab pools every snapshot into a single
 plot so the distribution is smoother than any individual time point.
+
+In production you would pass ``time_src=bch.git_time_event()`` to label each run
+with the current date and git commit hash.  Here we synthesise timestamps so the
+example is self-contained and reproducible without a real git history.
 """
 
 import random
@@ -21,7 +25,7 @@ class ServerLatency(bch.ParametrizedSweep):
 
     latency = bch.ResultVar(units="ms", doc="Response latency")
 
-    # Internal drift controlled per-run from the example harness
+    # Plain attribute (not a param sweep variable) — set per-run by the example harness
     drift = 0.0
 
     def __call__(self, **kwargs):
@@ -33,18 +37,18 @@ class ServerLatency(bch.ParametrizedSweep):
 
 
 def example_git_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Track benchmark results over time using the current git commit as the time label.
+    """Track benchmark results over time with timestamped runs.
 
-    ``git_time_event()`` returns a string like ``"2024-06-15 14:59 abc1234d"`` combining
-    wall-clock time and short hash.  Pass it as ``time_src`` to ``plot_sweep`` so the slider
-    shows which run and commit produced each data point.
+    Simulates five successive runs with increasing latency drift so the trend
+    is visible when scrubbing the time slider.  Repeats add per-call Gaussian
+    noise — switch to the **All Time Points (aggregated)** tab to see the
+    distribution built from every snapshot's samples.
 
-    Each successive run adds a small upward drift so the trend is visible when
-    scrubbing the time slider.  Repeats add per-call Gaussian noise — switch
-    to the **All Time Points (aggregated)** tab to see the distribution built
-    from every snapshot's samples.
+    In a real workflow, pass ``time_src=bch.git_time_event()`` to label each
+    run with the current date and short git hash.
     """
 
+    random.seed(42)
     run_cfg = run_cfg or bch.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 5

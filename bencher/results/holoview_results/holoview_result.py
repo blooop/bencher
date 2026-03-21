@@ -241,6 +241,11 @@ class HoloviewResult(VideoResult):
     def _build_time_holomap_raw(self, da, make_plot_fn):
         """Build per-time-point HoloMap + a static aggregated plot for distributions.
 
+        *make_plot_fn* receives a DataArray that **retains** the ``over_time``
+        dimension (a single-element slice for per-time-point entries, or the
+        full array for the aggregated tab).  Callers should flatten via
+        ``.to_dataframe().reset_index()`` or equivalent.
+
         Returns ``pn.Tabs`` with two tabs:
 
         1. **Per Time Point** — HoloMap with a time slider (shown by default).
