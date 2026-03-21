@@ -1047,24 +1047,34 @@ class Bench(BenchPlotServer):
         result_vars_in = deepcopy(result_vars)
         const_vars_in = deepcopy(const_vars)
 
-        if self.worker_class_instance is not None:
+        # Use worker_class_instance if available; fall back to extracting
+        # the ParametrizedSweep from a bound-method worker so that
+        # optimize() can auto-detect variables even when the Bench was
+        # created with e.g. ``Bench("name", explorer.some_method)``.
+        instance = self.worker_class_instance
+        if instance is None:
+            bound_self = getattr(self.worker, "__self__", None)
+            if bound_self is not None and isinstance(bound_self, ParametrizedSweep):
+                instance = bound_self
+
+        if instance is not None:
             if input_vars_in is None:
                 input_vars_in = (
                     deepcopy(self.input_vars)
                     if self.input_vars is not None
-                    else self.worker_class_instance.get_inputs_only()
+                    else instance.get_inputs_only()
                 )
             if result_vars_in is None:
                 result_vars_in = (
                     deepcopy(self.result_vars)
                     if self.result_vars is not None
-                    else self.get_result_vars(as_str=False)
+                    else instance.get_results_only()
                 )
             if const_vars_in is None:
                 const_vars_in = (
                     deepcopy(self.const_vars)
                     if self.const_vars is not None
-                    else self.worker_class_instance.get_input_defaults()
+                    else instance.get_input_defaults()
                 )
         else:
             input_vars_in = input_vars_in or []

@@ -30,11 +30,11 @@ class TestOptimizeBoundMethod(unittest.TestCase):
         self.assertIsNotNone(result.study)
         self.assertGreater(len(result.study.trials), 0)
 
-    def test_worker_class_instance_set_for_bound_method(self):
-        """worker_class_instance should be set when worker is a bound method."""
+    def test_worker_class_instance_not_set_for_bound_method(self):
+        """worker_class_instance stays None for a bound method (no side effects on plot_sweep)."""
         explorer = ToyOptimisationProblem()
         bench = bn.Bench("test", explorer.rastrigin)
-        self.assertIs(bench.worker_class_instance, explorer)
+        self.assertIsNone(bench.worker_class_instance)
 
     def test_worker_class_instance_none_for_plain_function(self):
         """worker_class_instance should remain None for a plain function."""
