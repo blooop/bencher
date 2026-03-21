@@ -121,6 +121,7 @@ dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = [
     "dev-add-docker",
 ] }
 prek = "prek run -a"
+prek-install = "prek install"
 prek-update = "prek autoupdate"
 perf = "python bencher/example/example_self_benchmark.py"
 perf-track = "python -c \"from bencher.example.example_self_benchmark import example_self_benchmark_over_time; example_self_benchmark_over_time()\""
@@ -154,7 +155,6 @@ git-commit-all = "git add -A && git commit -m 'Add all untracked files' || true"
 ci-push = { depends-on = ["format", "ruff-lint", "update-lock", "ci", "push"] }
 clear-pixi = "rm -rf .pixi pixi.lock"
 ralph = "ralph"
-setup-git-merge-driver = "git config merge.ourslock.driver true"
 update-from-template-repo = "./scripts/update_from_template.sh"
 dev-use-prebuilt = "./scripts/devcontainer_use_prebuilt.sh"
 dev-use-local = "./scripts/devcontainer_use_local.sh"
