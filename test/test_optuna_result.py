@@ -93,10 +93,10 @@ class TestOptunaResult(unittest.TestCase):
         self.assertIsInstance(plots, pn.Row)
 
 
-class _AggCfg(bch.ParametrizedSweep):
-    algorithm = bch.StringSweep(["algo_a", "algo_b"], optimize=False)
-    param1 = bch.FloatSweep(default=0.5, bounds=(0.0, 1.0))
-    score = bch.ResultVar(units="score", direction=bch.OptDir.minimize)
+class _AggCfg(bn.ParametrizedSweep):
+    algorithm = bn.StringSweep(["algo_a", "algo_b"], optimize=False)
+    param1 = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0))
+    score = bn.ResultVar(units="score", direction=bn.OptDir.minimize)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -104,13 +104,13 @@ class _AggCfg(bch.ParametrizedSweep):
         return super().__call__()
 
 
-class _MultiAggCfg(bch.ParametrizedSweep):
+class _MultiAggCfg(bn.ParametrizedSweep):
     """Helper config to exercise multi-output aggregation (two ResultVars)."""
 
-    algorithm = bch.StringSweep(["algo_a", "algo_b"], optimize=False)
-    param1 = bch.FloatSweep(default=0.5, bounds=(0.0, 1.0))
-    score = bch.ResultVar(units="score", direction=bch.OptDir.minimize)
-    aux_score = bch.ResultVar(units="aux", direction=bch.OptDir.minimize)
+    algorithm = bn.StringSweep(["algo_a", "algo_b"], optimize=False)
+    param1 = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0))
+    score = bn.ResultVar(units="score", direction=bn.OptDir.minimize)
+    aux_score = bn.ResultVar(units="aux", direction=bn.OptDir.minimize)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -120,10 +120,10 @@ class _MultiAggCfg(bch.ParametrizedSweep):
         return super().__call__()
 
 
-class _TrialCfg(bch.ParametrizedSweep):
-    category = bch.StringSweep(["cat_a", "cat_b"], optimize=False)
-    value = bch.FloatSweep(default=0.5, bounds=(0.0, 1.0), samples=3)
-    result = bch.ResultVar(units="v", direction=bch.OptDir.minimize)
+class _TrialCfg(bn.ParametrizedSweep):
+    category = bn.StringSweep(["cat_a", "cat_b"], optimize=False)
+    value = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0), samples=3)
+    result = bn.ResultVar(units="v", direction=bn.OptDir.minimize)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -131,9 +131,9 @@ class _TrialCfg(bch.ParametrizedSweep):
         return super().__call__()
 
 
-class _AllFalseCfg(bch.ParametrizedSweep):
-    x = bch.FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
-    result = bch.ResultVar(units="v", direction=bch.OptDir.minimize)
+class _AllFalseCfg(bn.ParametrizedSweep):
+    x = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+    result = bn.ResultVar(units="v", direction=bn.OptDir.minimize)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -151,12 +151,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
     def test_optimize_false_aggregation(self):
         """Optuna should only suggest optimized vars and aggregate over non-optimized ones."""
         cfg = _AggCfg()
-        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
             "test_agg",
             input_vars=["algorithm", "param1"],
             result_vars=["score"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -175,12 +175,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         """bench_results_to_optuna_trials should only include optimized vars in trial params
         and aggregate results over non-optimized vars."""
         cfg = _TrialCfg()
-        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
             "test_trials",
             input_vars=["category", "value"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -204,12 +204,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
     def test_multi_output_aggregation(self):
         """Multi-output aggregation should average each result var independently."""
         cfg = _MultiAggCfg()
-        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
             "test_multi_agg",
             input_vars=["algorithm", "param1"],
             result_vars=["score", "aux_score"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -229,12 +229,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
     def test_multi_output_trials_aggregation(self):
         """bench_results_to_optuna_trials should aggregate both result vars over non-opt vars."""
         cfg = _MultiAggCfg()
-        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
             "test_multi_trials",
             input_vars=["algorithm", "param1"],
             result_vars=["score", "aux_score"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -250,12 +250,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
     def test_all_optimize_false_raises(self):
         """Should raise ValueError when all input vars have optimize=False."""
         cfg = _AllFalseCfg()
-        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
             "test_all_false",
             input_vars=["x"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -265,12 +265,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
     def test_all_optimize_false_raises_in_trials(self):
         """include_meta=False should raise when all input vars have optimize=False."""
         cfg = _AllFalseCfg()
-        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
             "test_all_false_trials",
             input_vars=["x"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -281,12 +281,12 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         """include_meta=True should succeed even when all input vars have optimize=False,
         because importance analysis uses all vars regardless of optimize flag."""
         cfg = _AllFalseCfg()
-        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
         res = bench.plot_sweep(
             "test_all_false_meta",
             input_vars=["x"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 

@@ -261,7 +261,7 @@ class TestOptunaGridSearch(unittest.TestCase):
             "test_grid",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
         study = optuna_grid_search(res.bench_cfg)
@@ -275,7 +275,7 @@ class TestOptunaGridSearch(unittest.TestCase):
             "test_grid_vars",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bch.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(repeats=2),
             plot_callbacks=False,
         )
         trial_vars = list(res.bench_cfg.all_vars)
