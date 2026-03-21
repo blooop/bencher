@@ -37,8 +37,10 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
     # Result variables — one per timing phase
     total_ms = bch.ResultVar(units="ms", doc="Total sweep wall-clock time")
     dataset_setup_ms = bch.ResultVar(units="ms", doc="Dataset initialization time")
-    job_submission_ms = bch.ResultVar(units="ms", doc="Job creation and submission time")
-    job_execution_ms = bch.ResultVar(units="ms", doc="Worker execution and result storage time")
+    job_submit_and_execute_ms = bch.ResultVar(
+        units="ms", doc="Job creation, submission, and execution time"
+    )
+    result_collection_ms = bch.ResultVar(units="ms", doc="Result collection and storage time")
     cache_check_ms = bch.ResultVar(units="ms", doc="Benchmark cache lookup time")
     sample_cache_init_ms = bch.ResultVar(units="ms", doc="Sample cache initialization time")
     throughput = bch.ResultVar(units="samples/s", doc="Samples processed per second")
@@ -63,8 +65,8 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
         t = res.timings
         self.total_ms = t.total_ms
         self.dataset_setup_ms = t.dataset_setup_ms
-        self.job_submission_ms = t.job_submission_ms
-        self.job_execution_ms = t.job_execution_ms
+        self.job_submit_and_execute_ms = t.job_submit_and_execute_ms
+        self.result_collection_ms = t.result_collection_ms
         self.cache_check_ms = t.cache_check_ms
         self.sample_cache_init_ms = t.sample_cache_init_ms
         self.throughput = (self.num_samples / t.total_ms * 1000) if t.total_ms > 0 else 0
@@ -77,7 +79,12 @@ def example_self_benchmark(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     bench = BencherSelfBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["num_samples"],
-        result_vars=["total_ms", "dataset_setup_ms", "job_submission_ms", "job_execution_ms"],
+        result_vars=[
+            "total_ms",
+            "dataset_setup_ms",
+            "job_submit_and_execute_ms",
+            "result_collection_ms",
+        ],
         title="Bencher Self-Benchmark: Phase Timing vs Problem Size",
     )
     bench.plot_sweep(

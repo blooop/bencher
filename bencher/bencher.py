@@ -24,11 +24,11 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.results import ResultHmap
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.job import Job, FutureCache, JobFuture, Executors
+from bencher.job import Job, FutureCache, JobFuture
 from bencher.utils import params_to_str, resolve_aggregate, _handle_deprecated_agg_over_dims
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
-from bencher.sweep_timings import SweepTimings, phase_timer
+from bencher.sweep_timings import Stopwatch, SweepTimings, phase_timer
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
@@ -521,10 +521,8 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
-        import time as _time
-
         timings = SweepTimings()
-        sweep_t0 = _time.perf_counter()
+        sweep_sw = Stopwatch()
 
         if run_cfg.cache_size is not None:
             cache_size_bytes = run_cfg.cache_size * 1_000_000
@@ -637,7 +635,7 @@ class Bench(BenchPlotServer):
             bench_res.post_setup()
         timings.post_setup_ms = elapsed()
 
-        timings.total_ms = (_time.perf_counter() - sweep_t0) * 1000.0
+        timings.total_ms = sweep_sw.elapsed_ms()
         bench_res.timings = timings
 
         if bench_cfg.auto_plot:
@@ -805,16 +803,12 @@ class Bench(BenchPlotServer):
                 result = self.sample_cache.submit(cache_job)
                 results_list.append(result)
                 callcount += 1
-        timings.job_submission_ms = elapsed()
+        timings.job_submit_and_execute_ms = elapsed()
 
         with phase_timer() as elapsed:
-            if bench_run_cfg.executor == Executors.SERIAL:
-                for job, res in zip(jobs, results_list):
-                    self.store_results(res, bench_res, job, bench_run_cfg)
-            else:
-                for job, res in zip(jobs, results_list):
-                    self.store_results(res, bench_res, job, bench_run_cfg)
-        timings.job_execution_ms = elapsed()
+            for job, res in zip(jobs, results_list):
+                self.store_results(res, bench_res, job, bench_run_cfg)
+        timings.result_collection_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:
             self.add_metadata_to_dataset(bench_res, inp)

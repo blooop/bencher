@@ -19,8 +19,8 @@ class SweepTimings:
     cache_check_ms: float = 0.0
     sample_cache_init_ms: float = 0.0
     dataset_setup_ms: float = 0.0
-    job_submission_ms: float = 0.0
-    job_execution_ms: float = 0.0
+    job_submit_and_execute_ms: float = 0.0
+    result_collection_ms: float = 0.0
     history_merge_ms: float = 0.0
     post_setup_ms: float = 0.0
     total_ms: float = 0.0
@@ -48,3 +48,21 @@ def phase_timer():
 
     yield _elapsed
     result[0] = (time.perf_counter() - t0) * 1000.0
+
+
+class Stopwatch:
+    """Simple stopwatch for measuring total elapsed time across a function.
+
+    Usage::
+
+        sw = Stopwatch()
+        ...
+        timings.total_ms = sw.elapsed_ms()
+    """
+
+    def __init__(self):
+        self._t0 = time.perf_counter()
+
+    def elapsed_ms(self) -> float:
+        """Return elapsed milliseconds since creation."""
+        return (time.perf_counter() - self._t0) * 1000.0

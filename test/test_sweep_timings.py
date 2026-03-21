@@ -44,8 +44,8 @@ def test_bench_result_has_timings():
     assert isinstance(res.timings, SweepTimings)
     assert res.timings.total_ms > 0
     assert res.timings.dataset_setup_ms >= 0
-    assert res.timings.job_submission_ms >= 0
-    assert res.timings.job_execution_ms >= 0
+    assert res.timings.job_submit_and_execute_ms >= 0
+    assert res.timings.result_collection_ms >= 0
 
 
 def test_timings_accessible_via_public_api():
