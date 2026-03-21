@@ -19,7 +19,10 @@ The project uses Pixi for package management and task automation. Key commands:
 - `pixi run agent-iterate` - Full CI cycle for AI agents (includes docs, tests, commits, and fixes)
 
 ### Testing Individual Examples
-To test a specific example: `python bencher/example/example_simple_float.py`
+To test a specific example: `pixi run python bencher/example/example_simple_float.py`
+
+### Important
+- **ALWAYS use the pixi environment for every command.** Never run raw `python`, `pytest`, `ruff`, or any other tool directly — always prefix with `pixi run` (e.g. `pixi run python ...`, `pixi run pytest ...`). This ensures the correct dependencies and environment are used.
 
 ### Updating Examples & Docs
 1. Add or modify the example implementation under `bencher/example/`.

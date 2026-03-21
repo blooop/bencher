@@ -94,21 +94,20 @@ def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseD
         optuna.distributions.BaseDistribution: Optuna representation of a sweep var
     """
 
-    iv_type = type(var)
-    if iv_type == IntSweep:
+    if isinstance(var, IntSweep):
         return optuna.distributions.IntDistribution(var.bounds[0], var.bounds[1])
-    if iv_type == FloatSweep:
+    if isinstance(var, FloatSweep):
         return optuna.distributions.FloatDistribution(var.bounds[0], var.bounds[1])
-    if iv_type in (EnumSweep, StringSweep):
+    if isinstance(var, (EnumSweep, StringSweep)):
         return optuna.distributions.CategoricalDistribution(var.objects)
-    if iv_type == BoolSweep:
+    if isinstance(var, BoolSweep):
         return optuna.distributions.CategoricalDistribution([False, True])
-    if iv_type == TimeSnapshot:
+    if isinstance(var, TimeSnapshot):
         return optuna.distributions.FloatDistribution(0, 1e20)
-    if iv_type == TimeEvent:
+    if isinstance(var, TimeEvent):
         return optuna.distributions.CategoricalDistribution(var.values())
 
-    raise ValueError(f"This input type {iv_type} is not supported")
+    raise ValueError(f"This input type {type(var)} is not supported")
 
 
 def sweep_var_to_suggest(iv: ParametrizedSweep, trial: optuna.trial) -> object:
