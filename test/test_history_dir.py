@@ -150,7 +150,7 @@ class TestHistoryDirNetCDF:
         )
 
         ds2 = _make_dataset("v0.2.0")
-        result = collector.load_history_cache(
+        collector.load_history_cache(
             ds2, bench_hash, clear_history=False, history_dir=str(tmp_path)
         )
 
