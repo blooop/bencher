@@ -32,7 +32,8 @@ def optuna_grid_search(bench_cfg: BenchCfg) -> optuna.Study:
     """
     search_space = {}
     for iv in bench_cfg.all_vars:
-        search_space[iv.name] = iv.values()
+        if getattr(iv, "optimize", True):
+            search_space[iv.name] = iv.values()
     directions = []
     for rv in bench_cfg.optuna_targets(True):
         directions.append(rv.direction)
@@ -143,9 +144,11 @@ def cfg_from_optuna_trial(
 ) -> ParametrizedSweep:
     cfg = cfg_type()
     for iv in bench_cfg.input_vars:
-        cfg.param.set_param(iv.name, sweep_var_to_suggest(iv, trial))
+        if getattr(iv, "optimize", True):
+            cfg.param.set_param(iv.name, sweep_var_to_suggest(iv, trial))
     for mv in bench_cfg.meta_vars:
-        sweep_var_to_suggest(mv, trial)
+        if getattr(mv, "optimize", True):
+            sweep_var_to_suggest(mv, trial)
     return cfg
 
 

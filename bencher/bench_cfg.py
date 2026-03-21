@@ -680,6 +680,16 @@ class BenchCfg(BenchRunCfg):
             col.append(pn.pane.Markdown("## Results:"))
         return col
 
+    @property
+    def optimized_input_vars(self) -> list:
+        """Return input variables where optimize=True (suggested by Optuna)."""
+        return [iv for iv in (self.input_vars or []) if getattr(iv, "optimize", True)]
+
+    @property
+    def non_optimized_input_vars(self) -> list:
+        """Return input variables where optimize=False (swept/aggregated, not suggested)."""
+        return [iv for iv in (self.input_vars or []) if not getattr(iv, "optimize", True)]
+
     def optuna_targets(self, as_var: bool = False) -> list[Any]:
         """Get the list of result variables that are optimization targets.
 

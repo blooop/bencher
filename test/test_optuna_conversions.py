@@ -39,6 +39,52 @@ class SweepCfg(bch.ParametrizedSweep):
         return super().__call__()
 
 
+class TestOptimizeFlag(unittest.TestCase):
+    """Tests for the optimize flag on sweep variables."""
+
+    def test_default_optimize_true_for_input_types(self):
+        self.assertTrue(SweepCfg.param.int_var.optimize)
+        self.assertTrue(SweepCfg.param.float_var.optimize)
+        self.assertTrue(SweepCfg.param.enum_var.optimize)
+        self.assertTrue(SweepCfg.param.bool_var.optimize)
+        self.assertTrue(SweepCfg.param.string_var.optimize)
+
+    def test_default_optimize_false_for_time_types(self):
+        from datetime import datetime
+
+        ts = TimeSnapshot(datetime_src=datetime.now())
+        self.assertFalse(ts.optimize)
+
+        from bencher.variables.time import TimeEvent
+
+        te = TimeEvent(time_event="ev1")
+        self.assertFalse(te.optimize)
+
+    def test_explicit_optimize_false(self):
+        f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+        self.assertFalse(f.optimize)
+        i = IntSweep(default=1, bounds=(0, 10), optimize=False)
+        self.assertFalse(i.optimize)
+        s = StringSweep(["a", "b"], optimize=False)
+        self.assertFalse(s.optimize)
+        e = EnumSweep(SweepColor, optimize=False)
+        self.assertFalse(e.optimize)
+        b = BoolSweep(optimize=False)
+        self.assertFalse(b.optimize)
+
+    def test_deepcopy_preserves_flag(self):
+        from copy import deepcopy
+
+        f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+        f_copy = deepcopy(f)
+        self.assertFalse(f_copy.optimize)
+
+    def test_with_samples_preserves_flag(self):
+        f = FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+        f2 = f.with_samples(5)
+        self.assertFalse(f2.optimize)
+
+
 class TestSweepVarToOptunaDist(unittest.TestCase):
     def test_int_sweep(self):
         var = SweepCfg.param.int_var

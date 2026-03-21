@@ -76,3 +76,93 @@ class TestOptunaResult(unittest.TestCase):
     def test_collect_optuna_plots_with_repeats(self):
         plots = self.res_2d_r2.collect_optuna_plots()
         self.assertIsInstance(plots, pn.Row)
+
+
+class _AggCfg(bch.ParametrizedSweep):
+    algorithm = bch.StringSweep(["algo_a", "algo_b"], optimize=False)
+    param1 = bch.FloatSweep(default=0.5, bounds=(0.0, 1.0))
+    score = bch.ResultVar(units="score", direction=bch.OptDir.minimize)
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.score = (self.param1 - 0.3) ** 2
+        return super().__call__()
+
+
+class _TrialCfg(bch.ParametrizedSweep):
+    category = bch.StringSweep(["cat_a", "cat_b"], optimize=False)
+    value = bch.FloatSweep(default=0.5, bounds=(0.0, 1.0), samples=3)
+    result = bch.ResultVar(units="v", direction=bch.OptDir.minimize)
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.result = self.value * 2
+        return super().__call__()
+
+
+class _AllFalseCfg(bch.ParametrizedSweep):
+    x = bch.FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
+    result = bch.ResultVar(units="v", direction=bch.OptDir.minimize)
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.result = self.x
+        return super().__call__()
+
+
+class TestOptunaOptimizeFlag(unittest.TestCase):
+    """Tests for the optimize=False aggregation behavior in Optuna optimization."""
+
+    @classmethod
+    def setUpClass(cls):
+        optuna.logging.set_verbosity(optuna.logging.CRITICAL)
+
+    def test_optimize_false_aggregation(self):
+        """Optuna should only suggest optimized vars and aggregate over non-optimized ones."""
+        cfg = _AggCfg()
+        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        res = bench.plot_sweep(
+            "test_agg",
+            input_vars=["algorithm", "param1"],
+            result_vars=["score"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+
+        study = res.to_optuna_from_results(cfg, n_trials=10)
+        self.assertIsInstance(study, optuna.Study)
+        self.assertIn("param1", study.best_params)
+        self.assertNotIn("algorithm", study.best_params)
+
+    def test_optimize_false_trials_exclude_non_optimized(self):
+        """bench_results_to_optuna_trials should only include optimized vars in trial params."""
+        cfg = _TrialCfg()
+        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        res = bench.plot_sweep(
+            "test_trials",
+            input_vars=["category", "value"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+
+        trials = res.bench_results_to_optuna_trials(include_meta=False)
+        self.assertGreater(len(trials), 0)
+        for trial in trials:
+            self.assertNotIn("category", trial.params)
+            self.assertIn("value", trial.params)
+
+    def test_all_optimize_false_raises(self):
+        """Should raise ValueError when all input vars have optimize=False."""
+        cfg = _AllFalseCfg()
+        bench = cfg.to_bench(bch.BenchRunCfg(repeats=1))
+        res = bench.plot_sweep(
+            "test_all_false",
+            input_vars=["x"],
+            result_vars=["result"],
+            run_cfg=bch.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+
+        with self.assertRaises(ValueError):
+            res.to_optuna_from_results(cfg, n_trials=5)
