@@ -39,7 +39,7 @@ class TestOptimizeBoundMethod(unittest.TestCase):
     def test_worker_class_instance_none_for_plain_function(self):
         """worker_class_instance should remain None for a plain function."""
 
-        def plain_fn(**kwargs):
+        def plain_fn():
             return {"output": 1.0}
 
         bench = bn.Bench("test", plain_fn)
