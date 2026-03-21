@@ -27,6 +27,8 @@ jobs:
 
       - name: Run self-benchmark
         run: pixi run perf-track
+        env:
+          BENCHER_HISTORY_DIR: bencher/perf_data
 
       - name: Commit performance data
         run: |

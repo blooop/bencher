@@ -12,7 +12,6 @@ Run locally:
 """
 
 import os
-from pathlib import Path
 
 import bencher as bch
 
@@ -113,10 +112,8 @@ def example_self_benchmark_over_time(
     run_cfg.auto_plot = False
     run_cfg.max_time_events = 50
 
-    # Use file-based netCDF history when running from the repo
+    # Use file-based netCDF history only when explicitly requested (e.g. CI)
     history_dir = os.environ.get("BENCHER_HISTORY_DIR")
-    if history_dir is None and Path("bencher/perf_data").is_dir():
-        history_dir = "bencher/perf_data"
     if history_dir:
         run_cfg.history_dir = history_dir
 
