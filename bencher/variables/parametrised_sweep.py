@@ -213,6 +213,20 @@ class ParametrizedSweep(Parameterized):
         """Create a Bench instance from this ParametrizedSweep."""
         return create_bench(self, run_cfg=run_cfg, report=report, name=name)
 
+    def to_optimize(self, n_trials=100, run_cfg=None, **kwargs):
+        """Create a Bench and run optimization in one call.
+
+        Args:
+            n_trials: Number of optuna trials.
+            run_cfg: Optional BenchRunCfg.
+            **kwargs: Forwarded to ``Bench.optimize()``.
+
+        Returns:
+            OptimizeResult wrapping the completed study.
+        """
+        bench = self.to_bench(run_cfg=run_cfg)
+        return bench.optimize(n_trials=n_trials, run_cfg=run_cfg, **kwargs)
+
     def to_bench_runner(self, run_cfg=None, name=None):
         """Create a BenchRunner instance from this ParametrizedSweep.
 
