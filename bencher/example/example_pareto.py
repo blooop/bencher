@@ -10,13 +10,13 @@ It shows how to:
 5. Demonstrate the effect of randomness on Pareto optimization
 """
 
-import bencher as bch
+import bencher as bn
 import numpy as np
 
 np.random.seed(0)
 
 
-class EngineeringDesignProblem(bch.ParametrizedSweep):
+class EngineeringDesignProblem(bn.ParametrizedSweep):
     """
     A simplified engineering design problem with two competing objectives.
 
@@ -29,16 +29,16 @@ class EngineeringDesignProblem(bch.ParametrizedSweep):
     """
 
     # Input design parameters - reduced to just 2
-    material_quality = bch.BoolSweep(
+    material_quality = bn.BoolSweep(
         default=True, doc="Quality of the material (True = high, False = low)"
     )
-    thickness = bch.FloatSweep(
+    thickness = bn.FloatSweep(
         default=0.05, bounds=[0.01, 0.2], doc="Component thickness (m)", samples=20
     )
 
     # Result variables - reduced to just 2 objectives to be optimized
-    performance = bch.ResultVar("score", bch.OptDir.maximize, doc="Performance metric (maximize)")
-    cost = bch.ResultVar("$", bch.OptDir.minimize, doc="Manufacturing cost (minimize)")
+    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance metric (maximize)")
+    cost = bn.ResultVar("$", bn.OptDir.minimize, doc="Manufacturing cost (minimize)")
 
     def __call__(self, **kwargs) -> dict:
         """
@@ -79,7 +79,7 @@ class EngineeringDesignProblem(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_pareto(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_pareto(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """
     Advanced example of multi-objective Pareto optimization using Optuna.
 
@@ -122,4 +122,4 @@ def example_pareto(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_pareto)
+    bn.run(example_pareto)

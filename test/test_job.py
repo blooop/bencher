@@ -1,16 +1,16 @@
 import unittest
-import bencher as bch
+import bencher as bn
 import random
 from bencher.job import JobFunctionCache
 
 from hypothesis import given, strategies as st, settings
 
 
-class CachedParamExample(bch.CachedParams):
-    var1 = bch.FloatSweep(default=0, bounds=[0, 10])
-    var2 = bch.IntSweep(default=10, bounds=[0, 10])
+class CachedParamExample(bn.CachedParams):
+    var1 = bn.FloatSweep(default=0, bounds=[0, 10])
+    var2 = bn.IntSweep(default=10, bounds=[0, 10])
 
-    result = bch.ResultVar()
+    result = bn.ResultVar()
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -20,7 +20,7 @@ class CachedParamExample(bch.CachedParams):
 
 class TestJob(unittest.TestCase):
     @settings(deadline=5000)  # Increased deadline for multiprocessing startup overhead
-    @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
+    @given(st.sampled_from([bn.Executors.SERIAL, bn.Executors.MULTIPROCESSING]))
     def test_basic(self, executor):
         cp = CachedParamExample()  # clears cache by default
 
@@ -50,7 +50,7 @@ class TestJob(unittest.TestCase):
         self.assertNotEqual(res1["result"], res1cp3["result"])
 
     @settings(deadline=5000)  # Increased deadline for multiprocessing startup overhead
-    @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
+    @given(st.sampled_from([bn.Executors.SERIAL, bn.Executors.MULTIPROCESSING]))
     def test_overwrite(self, executor):
         cp = CachedParamExample()  # clears cache by default
 
@@ -82,12 +82,12 @@ class TestJob(unittest.TestCase):
         self.assertNotEqual(res1["result"], res3["result"], f"{res1}")
 
     @settings(deadline=5000)  # Increased deadline for multiprocessing startup overhead
-    @given(st.sampled_from([bch.Executors.SERIAL, bch.Executors.MULTIPROCESSING]))
+    @given(st.sampled_from([bn.Executors.SERIAL, bn.Executors.MULTIPROCESSING]))
     def test_bench_runner_parallel(self, executor):
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
         run_cfg.overwrite_sample_cache = True
         run_cfg.executor = executor
-        bench_run = bch.BenchRunner("test_bench_runner", run_cfg=run_cfg)
+        bench_run = bn.BenchRunner("test_bench_runner", run_cfg=run_cfg)
 
         bench_run.add_bench(CachedParamExample())
 

@@ -4,14 +4,14 @@ from typing import Any
 
 import panel as pn
 
-import bencher as bch
+import bencher as bn
 
 
-class FloatWithTimeBench(bch.ParametrizedSweep):
+class FloatWithTimeBench(bn.ParametrizedSweep):
     """Benchmark with one float input for testing TimeEvent + curve interaction."""
 
-    size = bch.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
-    throughput = bch.ResultVar(units="MB/s", doc="Throughput")
+    size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
+    throughput = bn.ResultVar(units="MB/s", doc="Throughput")
 
     offset = 0.0
 
@@ -21,12 +21,12 @@ class FloatWithTimeBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-class FloatCatWithTimeBench(bch.ParametrizedSweep):
+class FloatCatWithTimeBench(bn.ParametrizedSweep):
     """Benchmark with one float + one cat input for testing TimeEvent + curve interaction."""
 
-    size = bch.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
-    backend = bch.StringSweep(["redis", "local"], doc="Backend")
-    throughput = bch.ResultVar(units="MB/s", doc="Throughput")
+    size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
+    backend = bn.StringSweep(["redis", "local"], doc="Backend")
+    throughput = bn.ResultVar(units="MB/s", doc="Throughput")
 
     offset = 0.0
 
@@ -39,7 +39,7 @@ class FloatCatWithTimeBench(bch.ParametrizedSweep):
 
 def _run_string_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3):
     """Run a benchmark over multiple time points using string time_src (TimeEvent)."""
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = repeats
     bench = benchable.to_bench(run_cfg)

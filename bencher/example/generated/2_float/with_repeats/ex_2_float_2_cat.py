@@ -5,18 +5,18 @@ from typing import Any
 import random
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class CompressionSuite(bch.ParametrizedSweep):
+class CompressionSuite(bn.ParametrizedSweep):
     """Compression suite: block size, entropy, codec, and level."""
 
-    block_size = bch.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
-    entropy = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
-    codec = bch.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")
-    effort = bch.StringSweep(["fast", "balanced", "max"], doc="Compression effort")
+    block_size = bn.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
+    entropy = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
+    codec = bn.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")
+    effort = bn.StringSweep(["fast", "balanced", "max"], doc="Compression effort")
 
-    ratio = bch.ResultVar(units="x", doc="Compression ratio")
+    ratio = bn.ResultVar(units="x", doc="Compression ratio")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -32,7 +32,7 @@ class CompressionSuite(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_2_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_2_float_2_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """2 Float, 2 Categorical."""
     bench = CompressionSuite().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["block_size", "entropy", "codec", "effort"], result_vars=["ratio"])
@@ -41,4 +41,4 @@ def example_with_repeats_2_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_2_float_2_cat, level=4, repeats=3)
+    bn.run(example_with_repeats_2_float_2_cat, level=4, repeats=3)

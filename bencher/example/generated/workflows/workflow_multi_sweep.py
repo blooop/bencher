@@ -3,18 +3,18 @@
 from typing import Any
 
 import math
-import bencher as bch
+import bencher as bn
 
 
-class DataPipeline(bch.ParametrizedSweep):
+class DataPipeline(bn.ParametrizedSweep):
     """Simulates a data processing pipeline with configurable stages."""
 
-    batch_size = bch.FloatSweep(default=100, bounds=[10, 1000], doc="Batch size", units="rows")
-    parallelism = bch.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
-    storage = bch.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
+    batch_size = bn.FloatSweep(default=100, bounds=[10, 1000], doc="Batch size", units="rows")
+    parallelism = bn.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
+    storage = bn.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
 
-    throughput = bch.ResultVar(units="rows/s", doc="Processing throughput")
-    latency = bch.ResultVar(units="ms", doc="Per-batch latency")
+    throughput = bn.ResultVar(units="rows/s", doc="Processing throughput")
+    latency = bn.ResultVar(units="ms", doc="Per-batch latency")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -24,7 +24,7 @@ class DataPipeline(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_workflow_multi_sweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_workflow_multi_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Multiple Sweeps — progressive report with tabs."""
     bench = DataPipeline().to_bench(run_cfg)
 
@@ -60,4 +60,4 @@ def example_workflow_multi_sweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.
 
 
 if __name__ == "__main__":
-    bch.run(example_workflow_multi_sweep, level=3)
+    bn.run(example_workflow_multi_sweep, level=3)

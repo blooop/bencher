@@ -4,10 +4,10 @@ from typing import Any
 
 import math
 import random
-import bencher as bch
+import bencher as bn
 
 
-class NoisySensor(bch.ParametrizedSweep):
+class NoisySensor(bn.ParametrizedSweep):
     """Simulates a sensor with configurable noise.
 
     Demonstrates cache_samples and run_tag usage. When cache_samples is True,
@@ -15,13 +15,13 @@ class NoisySensor(bch.ParametrizedSweep):
     repeated if the run is interrupted.
     """
 
-    temperature = bch.FloatSweep(
+    temperature = bn.FloatSweep(
         default=25.0, bounds=[0.0, 100.0], doc="Sensor temperature", units="C"
     )
 
-    reading = bch.ResultVar(units="V", doc="Sensor voltage reading")
+    reading = bn.ResultVar(units="V", doc="Sensor voltage reading")
 
-    noise_scale = bch.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
+    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -31,9 +31,9 @@ class NoisySensor(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_advanced_cache_patterns(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_advanced_cache_patterns(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Cache Patterns — run_tag and cache_samples."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
 
     # run_tag partitions the cache so different experiment runs don't collide.
     run_cfg.run_tag = "sensor_v1"
@@ -60,4 +60,4 @@ def example_advanced_cache_patterns(run_cfg: bch.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bch.run(example_advanced_cache_patterns, level=3, repeats=5)
+    bn.run(example_advanced_cache_patterns, level=3, repeats=5)

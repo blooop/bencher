@@ -5,15 +5,15 @@ from typing import Any
 import random
 
 from bencher.results.histogram_result import HistogramResult
-import bencher as bch
+import bencher as bn
 
 
-class PassRateFloat(bch.ParametrizedSweep):
+class PassRateFloat(bn.ParametrizedSweep):
     """Test pass rate that decreases with complexity."""
 
-    complexity = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    complexity = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    passed = bch.ResultBool(doc="Whether the test passed")
+    passed = bn.ResultBool(doc="Whether the test passed")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -22,7 +22,7 @@ class PassRateFloat(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_bool_plot_histogram(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_bool_plot_histogram(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Bool Plot: Histogram."""
     bench = PassRateFloat().to_bench(run_cfg)
     res = bench.plot_sweep(input_vars=["complexity"], result_vars=["passed"])
@@ -32,4 +32,4 @@ def example_bool_plot_histogram(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
 
 
 if __name__ == "__main__":
-    bch.run(example_bool_plot_histogram, level=3, repeats=30)
+    bn.run(example_bool_plot_histogram, level=3, repeats=30)

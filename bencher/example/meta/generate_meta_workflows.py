@@ -6,7 +6,7 @@ separation pattern — features that only existed in manual examples until now.
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "workflows"
@@ -21,7 +21,7 @@ WORKFLOW_EXAMPLES = [
 class MetaWorkflows(MetaGeneratorBase):
     """Generate Python examples demonstrating workflow patterns."""
 
-    example = bch.StringSweep(WORKFLOW_EXAMPLES, doc="Which workflow example to generate")
+    example = bn.StringSweep(WORKFLOW_EXAMPLES, doc="Which workflow example to generate")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -37,13 +37,13 @@ class MetaWorkflows(MetaGeneratorBase):
 
     def _generate_bench_runner(self):
         """B1: BenchRunner example showing multiple benchmarks combined."""
-        imports = "import math\nimport bencher as bch"
+        imports = "import math\nimport bencher as bn"
         class_code = '''\
-class SineWave(bch.ParametrizedSweep):
+class SineWave(bn.ParametrizedSweep):
     """A sine wave — one of two benchmarks combined by BenchRunner."""
 
-    theta = bch.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
-    out_sin = bch.ResultVar(units="V", doc="Sine output")
+    theta = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
+    out_sin = bn.ResultVar(units="V", doc="Sine output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -53,7 +53,7 @@ class SineWave(bch.ParametrizedSweep):
 # This example shows the building block that BenchRunner orchestrates.
 # To combine multiple independent benchmarks into one session, use:
 #
-#   runner = bch.BenchRunner("comparison")
+#   runner = bn.BenchRunner("comparison")
 #   runner.add(sine_benchmark_fn)    # each fn returns a Bench
 #   runner.add(cosine_benchmark_fn)
 #   runner.run(level=3)              # runs all, collects reports
@@ -83,17 +83,17 @@ bench.plot_sweep(
 
     def _generate_multi_sweep(self):
         """B2: Multiple sweeps per report."""
-        imports = "import math\nimport bencher as bch"
+        imports = "import math\nimport bencher as bn"
         class_code = '''\
-class DataPipeline(bch.ParametrizedSweep):
+class DataPipeline(bn.ParametrizedSweep):
     """Simulates a data processing pipeline with configurable stages."""
 
-    batch_size = bch.FloatSweep(default=100, bounds=[10, 1000], doc="Batch size", units="rows")
-    parallelism = bch.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
-    storage = bch.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
+    batch_size = bn.FloatSweep(default=100, bounds=[10, 1000], doc="Batch size", units="rows")
+    parallelism = bn.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
+    storage = bn.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
 
-    throughput = bch.ResultVar(units="rows/s", doc="Processing throughput")
-    latency = bch.ResultVar(units="ms", doc="Per-batch latency")
+    throughput = bn.ResultVar(units="rows/s", doc="Processing throughput")
+    latency = bn.ResultVar(units="ms", doc="Per-batch latency")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -145,20 +145,20 @@ bench.plot_sweep(
 
     def _generate_input_output_cfg(self):
         """B9: InputCfg/OutputCfg separation pattern."""
-        imports = "import math\nimport bencher as bch"
+        imports = "import math\nimport bencher as bn"
         class_code = '''\
-class ServerMetrics(bch.ParametrizedSweep):
+class ServerMetrics(bn.ParametrizedSweep):
     """Output metrics from the server benchmark."""
 
-    throughput = bch.ResultVar(
-        units="req/s", direction=bch.OptDir.maximize, doc="Request throughput"
+    throughput = bn.ResultVar(
+        units="req/s", direction=bn.OptDir.maximize, doc="Request throughput"
     )
-    latency = bch.ResultVar(
-        units="ms", direction=bch.OptDir.minimize, doc="Response latency"
+    latency = bn.ResultVar(
+        units="ms", direction=bn.OptDir.minimize, doc="Response latency"
     )
 
 
-class ServerConfig(bch.ParametrizedSweep):
+class ServerConfig(bn.ParametrizedSweep):
     """Server configuration parameters.
 
     The static bench_function method takes a ServerConfig instance and
@@ -166,10 +166,10 @@ class ServerConfig(bch.ParametrizedSweep):
     which variables are inputs and which are outputs.
     """
 
-    worker_count = bch.FloatSweep(
+    worker_count = bn.FloatSweep(
         default=4, bounds=[1, 32], doc="Number of worker threads"
     )
-    cache_size = bch.StringSweep(
+    cache_size = bn.StringSweep(
         ["small", "medium", "large"], doc="Cache tier size"
     )
 
@@ -184,7 +184,7 @@ class ServerConfig(bch.ParametrizedSweep):
         body = """\
 # The Bench constructor accepts the static function and the ServerConfig class.
 # This is an alternative to the ParametrizedSweep.__call__ pattern.
-bench = bch.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
+bench = bn.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
 bench.plot_sweep(
     input_vars=[ServerConfig.param.worker_count],
     result_vars=[ServerMetrics.param.throughput, ServerMetrics.param.latency],
@@ -211,16 +211,16 @@ bench.plot_sweep(
         )
 
 
-def example_meta_workflows(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_workflows(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaWorkflows().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Workflow Patterns",
-        input_vars=[bch.p("example", WORKFLOW_EXAMPLES)],
+        input_vars=[bn.p("example", WORKFLOW_EXAMPLES)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_workflows)
+    bn.run(example_meta_workflows)

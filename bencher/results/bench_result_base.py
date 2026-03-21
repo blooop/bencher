@@ -333,8 +333,8 @@ class BenchResultBase:
         """Get the optimal values from the sweep as a vector.
 
         Args:
-            result_var (bch.ParametrizedSweep): Optimal values of this result variable
-            input_vars (list[bch.ParametrizedSweep]): Define which input vars values are returned in the vector
+            result_var (bn.ParametrizedSweep): Optimal values of this result variable
+            input_vars (list[bn.ParametrizedSweep]): Define which input vars values are returned in the vector
 
         Returns:
             list[Any]: A vector of optimal values for the desired input vector
@@ -357,7 +357,7 @@ class BenchResultBase:
         """Get an xarray mask of the values with the best values found during a parameter sweep
 
         Args:
-            result_var (bch.ParametrizedSweep): Optimal value of this result variable
+            result_var (bn.ParametrizedSweep): Optimal value of this result variable
 
         Returns:
             xr.DataArray: xarray mask of optimal values
@@ -380,12 +380,12 @@ class BenchResultBase:
         """Get a list of tuples of optimal variable names and value pairs, that can be fed in as constant values to subsequent parameter sweeps
 
         Args:
-            result_var (bch.ParametrizedSweep): Optimal values of this result variable
+            result_var (bn.ParametrizedSweep): Optimal values of this result variable
             keep_existing_consts (bool): Include any const values that were defined as part of the parameter sweep
             as_dict (bool): return value as a dictionary
 
         Returns:
-            tuple[bch.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
+            tuple[bn.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
         """
         da = self.get_optimal_value_indices(result_var)
         if keep_existing_consts:

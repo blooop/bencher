@@ -4,19 +4,19 @@ from typing import Any
 
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class ReportExporter(bch.ParametrizedSweep):
+class ReportExporter(bn.ParametrizedSweep):
     """Writes a text report file in the requested format."""
 
-    format_type = bch.StringSweep(["summary", "detailed", "raw"], doc="Report format")
+    format_type = bn.StringSweep(["summary", "detailed", "raw"], doc="Report format")
 
-    file_result = bch.ResultPath(doc="Generated report file")
+    file_result = bn.ResultPath(doc="Generated report file")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
-        filename = bch.gen_path(self.format_type, suffix=".txt")
+        filename = bn.gen_path(self.format_type, suffix=".txt")
         line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]
         with open(filename, "w", encoding="utf-8") as f:
             for i in range(line_count):
@@ -25,7 +25,7 @@ class ReportExporter(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_path_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_path_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Result Path: 1D input."""
     bench = ReportExporter().to_bench(run_cfg)
     bench.plot_sweep(
@@ -38,4 +38,4 @@ def example_result_path_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_result_path_1d, level=3)
+    bn.run(example_result_path_1d, level=3)

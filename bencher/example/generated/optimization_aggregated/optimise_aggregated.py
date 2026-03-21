@@ -5,20 +5,20 @@ from typing import Any
 import math
 import random
 
-import bencher as bch
+import bencher as bn
 
 
-class AlgorithmBench(bch.ParametrizedSweep):
+class AlgorithmBench(bn.ParametrizedSweep):
     """Finds best learning rate across algorithms (aggregated)."""
 
-    algorithm = bch.StringSweep(
+    algorithm = bn.StringSweep(
         ["gradient_descent", "adam", "rmsprop"],
         doc="Optimization algorithm",
         optimize=False,  # sweep but don't optimize — aggregate results
     )
-    learning_rate = bch.FloatSweep(default=0.01, bounds=[0.001, 1.0], doc="Learning rate")
+    learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0], doc="Learning rate")
 
-    loss = bch.ResultVar("loss", bch.OptDir.minimize, doc="Training loss (minimize)")
+    loss = bn.ResultVar("loss", bn.OptDir.minimize, doc="Training loss (minimize)")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -29,9 +29,9 @@ class AlgorithmBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_optimise_aggregated(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_optimise_aggregated(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Aggregated Optimisation."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.use_optuna = True
     bench = AlgorithmBench().to_bench(run_cfg)
     res = bench.plot_sweep(
@@ -46,4 +46,4 @@ def example_optimise_aggregated(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
 
 
 if __name__ == "__main__":
-    bch.run(example_optimise_aggregated, level=3, repeats=3)
+    bn.run(example_optimise_aggregated, level=3, repeats=3)

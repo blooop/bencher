@@ -2,10 +2,10 @@
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 
 
-class PullRequestBenchmark(bch.ParametrizedSweep):
+class PullRequestBenchmark(bn.ParametrizedSweep):
     """Tracks benchmark metrics across discrete events (e.g. pull requests).
 
     TimeEvent lets you label each run with a string (like a PR number or
@@ -13,9 +13,9 @@ class PullRequestBenchmark(bch.ParametrizedSweep):
     CI pipelines where you want to track performance across commits.
     """
 
-    workload = bch.StringSweep(["light", "medium", "heavy"], doc="Workload intensity")
+    workload = bn.StringSweep(["light", "medium", "heavy"], doc="Workload intensity")
 
-    throughput = bch.ResultVar(units="req/s", doc="Requests per second")
+    throughput = bn.ResultVar(units="req/s", doc="Requests per second")
 
     _event_idx = 0  # set externally per event
 
@@ -27,9 +27,9 @@ class PullRequestBenchmark(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_advanced_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_advanced_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Time Events — track metrics across discrete events."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
 
     benchable = PullRequestBenchmark()
@@ -56,4 +56,4 @@ def example_advanced_time_event(run_cfg: bch.BenchRunCfg | None = None) -> bch.B
 
 
 if __name__ == "__main__":
-    bch.run(example_advanced_time_event, level=3)
+    bn.run(example_advanced_time_event, level=3)

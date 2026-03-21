@@ -2,14 +2,14 @@
 
 from typing import Any
 
-import bencher as bch
+import bencher as bn
 
 
-class TrivialWorkload(bch.ParametrizedSweep):
+class TrivialWorkload(bn.ParametrizedSweep):
     """A near-zero-cost worker so we measure framework overhead, not compute."""
 
-    x = bch.FloatSweep(default=0, bounds=[0, 1], samples=2)
-    result = bch.ResultVar(units="v", doc="trivial output")
+    x = bn.FloatSweep(default=0, bounds=[0, 1], samples=2)
+    result = bn.ResultVar(units="v", doc="trivial output")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -17,40 +17,40 @@ class TrivialWorkload(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class BencherSelfBenchmark(bch.ParametrizedSweep):
+class BencherSelfBenchmark(bn.ParametrizedSweep):
     """Sweep over problem sizes and measure bencher's own timing phases."""
 
-    num_samples = bch.IntSweep(
+    num_samples = bn.IntSweep(
         default=10,
         bounds=[2, 100],
         samples=6,
         doc="Number of parameter samples in the inner sweep",
     )
-    use_cache = bch.BoolSweep(default=False, doc="Whether sample caching is enabled")
+    use_cache = bn.BoolSweep(default=False, doc="Whether sample caching is enabled")
 
     # Result variables — one per timing phase
-    total_ms = bch.ResultVar(units="ms", doc="Total sweep wall-clock time")
-    dataset_setup_ms = bch.ResultVar(units="ms", doc="Dataset initialization time")
-    job_submission_ms = bch.ResultVar(units="ms", doc="Job creation and submission time")
-    job_execution_ms = bch.ResultVar(units="ms", doc="Worker execution and result storage time")
-    cache_check_ms = bch.ResultVar(units="ms", doc="Benchmark cache lookup time")
-    sample_cache_init_ms = bch.ResultVar(units="ms", doc="Sample cache initialization time")
-    throughput = bch.ResultVar(units="samples/s", doc="Samples processed per second")
+    total_ms = bn.ResultVar(units="ms", doc="Total sweep wall-clock time")
+    dataset_setup_ms = bn.ResultVar(units="ms", doc="Dataset initialization time")
+    job_submission_ms = bn.ResultVar(units="ms", doc="Job creation and submission time")
+    job_execution_ms = bn.ResultVar(units="ms", doc="Worker execution and result storage time")
+    cache_check_ms = bn.ResultVar(units="ms", doc="Benchmark cache lookup time")
+    sample_cache_init_ms = bn.ResultVar(units="ms", doc="Sample cache initialization time")
+    throughput = bn.ResultVar(units="samples/s", doc="Samples processed per second")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
         workload = TrivialWorkload()
-        x_sweep = bch.FloatSweep(default=0, bounds=[0, 1], samples=self.num_samples, doc="input")
+        x_sweep = bn.FloatSweep(default=0, bounds=[0, 1], samples=self.num_samples, doc="input")
         x_sweep.name = "x"
 
-        inner_cfg = bch.BenchRunCfg()
+        inner_cfg = bn.BenchRunCfg()
         inner_cfg.repeats = 1
         inner_cfg.cache_samples = self.use_cache
         inner_cfg.cache_results = False
         inner_cfg.auto_plot = False
 
-        bench = bch.Bench("inner_bench", workload, run_cfg=inner_cfg)
+        bench = bn.Bench("inner_bench", workload, run_cfg=inner_cfg)
         bench.plot_sweep(input_vars=[x_sweep], result_vars=["result"])
         res = bench.results[-1]
 
@@ -66,7 +66,7 @@ class BencherSelfBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_self_benchmark(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_self_benchmark(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Bencher self-introspection: overhead vs problem size."""
     bench = BencherSelfBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
@@ -89,4 +89,4 @@ def example_self_benchmark(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_self_benchmark)
+    bn.run(example_self_benchmark)

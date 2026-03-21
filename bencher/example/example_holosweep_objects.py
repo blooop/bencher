@@ -3,7 +3,7 @@
 # pylint: disable=duplicate-code,unused-argument
 
 
-import bencher as bch
+import bencher as bn
 import math
 import random
 import numpy as np
@@ -28,28 +28,26 @@ class Function(StrEnum):
         return getattr(np, self.removeprefix("fn_"))(arg)
 
 
-class FunctionInputs(bch.ParametrizedSweep):
-    phase = bch.FloatSweep(
-        default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5
-    )
+class FunctionInputs(bn.ParametrizedSweep):
+    phase = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
 
-    freq = bch.FloatSweep(default=1, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
+    freq = bn.FloatSweep(default=1, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
 
-    theta = bch.FloatSweep(
+    theta = bn.FloatSweep(
         default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=10
     )
 
-    compute_fn = bch.EnumSweep(Function)
+    compute_fn = bn.EnumSweep(Function)
 
 
-class FunctionOutputs(bch.ParametrizedSweep):
-    fn_output = bch.ResultVar(units="v", doc="sin of theta with some noise")
+class FunctionOutputs(bn.ParametrizedSweep):
+    fn_output = bn.ResultVar(units="v", doc="sin of theta with some noise")
 
-    out_sum = bch.ResultVar(units="v", doc="The sum")
+    out_sum = bn.ResultVar(units="v", doc="The sum")
 
-    hmap = bch.ResultHmap()
+    hmap = bn.ResultHmap()
 
-    hmap2 = bch.ResultHmap()
+    hmap2 = bn.ResultHmap()
 
 
 def bench_fn(self, **kwargs) -> dict:
@@ -73,10 +71,10 @@ def plot_holo(self, plot=True) -> hv.core.ViewableElement:
     return None
 
 
-def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_holosweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     # wv = PlotFunctions()
 
-    bench = bch.Bench(
+    bench = bn.Bench(
         "waves",
         bench_fn,
         worker_input_cfg=FunctionInputs,
@@ -106,4 +104,4 @@ def example_holosweep(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_holosweep, level=4)
+    bn.run(example_holosweep, level=4)

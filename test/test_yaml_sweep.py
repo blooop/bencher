@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-import bencher as bch
+import bencher as bn
 
 
 EXAMPLE_YAML = (
@@ -11,7 +11,7 @@ EXAMPLE_YAML = (
 
 
 def test_yaml_sweep_reads_yaml_values():
-    sweep = bch.YamlSweep(EXAMPLE_YAML)
+    sweep = bn.YamlSweep(EXAMPLE_YAML)
     values = sweep.values()
     keys = sweep.keys()
 
@@ -27,13 +27,13 @@ def test_yaml_sweep_reads_yaml_values():
 
 
 def test_yaml_sweep_sampling_respects_requested_samples():
-    sweep = bch.YamlSweep(EXAMPLE_YAML, samples=2)
+    sweep = bn.YamlSweep(EXAMPLE_YAML, samples=2)
     assert sweep.keys() == ["quick", "thorough"]
     assert sweep.values()[0].value() == [12, 18, 27]
 
 
 def test_yaml_sweep_key_lookup_and_default():
-    sweep = bch.YamlSweep(EXAMPLE_YAML, default_key="balanced")
+    sweep = bn.YamlSweep(EXAMPLE_YAML, default_key="balanced")
     items = dict(sweep.items())
     balanced_value = items["balanced"]
 
@@ -47,7 +47,7 @@ def test_yaml_sweep_key_lookup_and_default():
 def test_yaml_sweep_missing_file(tmp_path):
     missing = tmp_path / "missing.yaml"
     with pytest.raises(FileNotFoundError):
-        bch.YamlSweep(missing)
+        bn.YamlSweep(missing)
 
 
 def test_yaml_sweep_requires_mapping(tmp_path):
@@ -55,27 +55,27 @@ def test_yaml_sweep_requires_mapping(tmp_path):
     invalid.write_text("- one\n- two\n", encoding="utf-8")
 
     with pytest.raises(ValueError):
-        bch.YamlSweep(invalid)
+        bn.YamlSweep(invalid)
 
 
 def test_yaml_sweep_sampling_zero_samples():
     with pytest.raises(ValueError):
-        bch.YamlSweep(EXAMPLE_YAML, samples=0)
+        bn.YamlSweep(EXAMPLE_YAML, samples=0)
 
 
 def test_yaml_sweep_sampling_negative_samples():
     with pytest.raises(ValueError):
-        bch.YamlSweep(EXAMPLE_YAML, samples=-1)
+        bn.YamlSweep(EXAMPLE_YAML, samples=-1)
 
 
 def test_yaml_sweep_sampling_too_many_samples():
-    sweep = bch.YamlSweep(EXAMPLE_YAML, samples=10)
+    sweep = bn.YamlSweep(EXAMPLE_YAML, samples=10)
     assert len(sweep.keys()) == 3
 
 
 def test_yaml_sweep_invalid_default_key_raises():
     with pytest.raises(ValueError):
-        bch.YamlSweep(EXAMPLE_YAML, default_key="nonexistent_key")
+        bn.YamlSweep(EXAMPLE_YAML, default_key="nonexistent_key")
 
 
 def test_yaml_sweep_empty_mapping_raises(tmp_path):
@@ -83,22 +83,22 @@ def test_yaml_sweep_empty_mapping_raises(tmp_path):
     empty.write_text("{}\n", encoding="utf-8")
 
     with pytest.raises(ValueError):
-        bch.YamlSweep(empty)
+        bn.YamlSweep(empty)
 
 
 def test_yaml_sweep_hash_includes_value(tmp_path):
     yaml_file = tmp_path / "config.yaml"
     yaml_file.write_text("profile:\n  param: 1\n", encoding="utf-8")
 
-    class ConfigSweepV1(bch.ParametrizedSweep):
-        profile = bch.YamlSweep(yaml_file)
+    class ConfigSweepV1(bn.ParametrizedSweep):
+        profile = bn.YamlSweep(yaml_file)
 
     hash_v1 = ConfigSweepV1().hash_persistent()
 
     yaml_file.write_text("profile:\n  param: 2\n", encoding="utf-8")
 
-    class ConfigSweepV2(bch.ParametrizedSweep):
-        profile = bch.YamlSweep(yaml_file)
+    class ConfigSweepV2(bn.ParametrizedSweep):
+        profile = bn.YamlSweep(yaml_file)
 
     hash_v2 = ConfigSweepV2().hash_persistent()
 

@@ -2,7 +2,7 @@ from enum import auto
 
 from strenum import StrEnum
 
-import bencher as bch
+import bencher as bn
 
 
 class ExampleEnum(StrEnum):
@@ -12,9 +12,9 @@ class ExampleEnum(StrEnum):
     # value4 = auto()
 
 
-class Cfg(bch.ParametrizedSweep):
-    enum1 = bch.EnumSweep(ExampleEnum)
-    result = bch.ResultVar()
+class Cfg(bn.ParametrizedSweep):
+    enum1 = bn.EnumSweep(ExampleEnum)
+    result = bn.ResultVar()
 
     # def __call__(self,**kwargs) -> Any:
     #     self.update_params_from_kwargs(**kwargs)
@@ -49,14 +49,14 @@ def assert_call_counts(bencher, run_cfg, wrapper_calls=-1, fn_calls=-1, cache_ca
     )
 
 
-def example_cache_context() -> bch.Bench:
-    run_cfg = bch.BenchRunCfg()
+def example_cache_context() -> bn.Bench:
+    run_cfg = bn.BenchRunCfg()
     run_cfg.cache_samples = True
     run_cfg.only_hash_tag = True
     run_cfg.repeats = 2
     run_cfg.parallel = False
 
-    bencher = bch.Bench("bench_context", bench_function, Cfg, run_cfg=run_cfg)
+    bencher = bn.Bench("bench_context", bench_function, Cfg, run_cfg=run_cfg)
 
     # clear all tags from the cache at the beginning so that the example works the same not matter how many times the example is run.  When using this for you own code you probably don't want to clear the cache at the beginning because you will lose all the data you collected.
     bencher.clear_tag_from_sample_cache("example_tag1", run_cfg)

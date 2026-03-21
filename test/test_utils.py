@@ -1,4 +1,4 @@
-import bencher as bch
+import bencher as bn
 import unittest
 from bencher.utils import (
     get_nearest_coords,
@@ -15,9 +15,9 @@ from functools import partial
 import xarray as xr
 
 
-class ExampleClass(bch.ParametrizedSweep):
-    iv1 = bch.FloatSweep()
-    rv1 = bch.ResultVar()
+class ExampleClass(bn.ParametrizedSweep):
+    iv1 = bn.FloatSweep()
+    rv1 = bn.ResultVar()
 
 
 class TestBencherUtils(unittest.TestCase):
@@ -58,7 +58,7 @@ class TestBencherUtils(unittest.TestCase):
         # Tests that a named tuple with fields of different data types is created successfully
 
     def test_different_datatypes_namedtuple(self):
-        result = bch.make_namedtuple("Test", field1=1, field2="value2", field3=True)
+        result = bn.make_namedtuple("Test", field1=1, field2="value2", field3=True)
         self.assertEqual(result.field1, 1)
         self.assertEqual(result.field2, "value2")
         self.assertEqual(result.field3, True)
@@ -68,15 +68,15 @@ class TestBencherUtils(unittest.TestCase):
     def test_edge_case_empty_dictionary(self) -> None:
         input_dict = {}
         expected_output = ()
-        self.assertEqual(bch.hmap_canonical_input(input_dict), expected_output)
+        self.assertEqual(bn.hmap_canonical_input(input_dict), expected_output)
 
     def test_dictionary_order(self) -> None:
         dic1 = {"x": 1, "y": 2}
         dic2 = {"y": 2, "x": 1}
 
         self.assertEqual(
-            bch.hmap_canonical_input(dic1),
-            bch.hmap_canonical_input(dic2),
+            bn.hmap_canonical_input(dic1),
+            bn.hmap_canonical_input(dic2),
         )
 
     def test_mult_tuple(self) -> None:

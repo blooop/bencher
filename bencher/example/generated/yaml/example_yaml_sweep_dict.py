@@ -1,17 +1,17 @@
-import bencher as bch
+import bencher as bn
 from bencher.example.example_utils import resolve_example_path
 
 _YAML_PATH = resolve_example_path("example_yaml_sweep_dict.yaml")
 
 
-class YamlDictConfig(bch.ParametrizedSweep):
+class YamlDictConfig(bn.ParametrizedSweep):
     """Example sweep that loads YAML dictionaries and summarizes them."""
 
-    plan = bch.YamlSweep(_YAML_PATH, doc="Dictionary-based configurations stored in YAML")
+    plan = bn.YamlSweep(_YAML_PATH, doc="Dictionary-based configurations stored in YAML")
 
-    plan_summary = bch.ResultContainer(doc="Captured dictionary for the selected plan")
-    total_duration = bch.ResultVar(units="min", doc="Sum of all scheduled durations")
-    average_duration = bch.ResultVar(units="min", doc="Average scheduled duration")
+    plan_summary = bn.ResultContainer(doc="Captured dictionary for the selected plan")
+    total_duration = bn.ResultVar(units="min", doc="Sum of all scheduled durations")
+    average_duration = bn.ResultVar(units="min", doc="Average scheduled duration")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -33,11 +33,11 @@ class YamlDictConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_yaml_sweep_dict(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_yaml_sweep_dict(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = YamlDictConfig().to_bench(run_cfg)
     bench.plot_sweep()
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_yaml_sweep_dict, level=7)
+    bn.run(example_yaml_sweep_dict, level=7)

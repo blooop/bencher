@@ -6,7 +6,7 @@ from enum import auto
 
 import pytest
 
-import bencher as bch
+import bencher as bn
 
 
 # ---------------------------------------------------------------------------
@@ -14,13 +14,13 @@ import bencher as bch
 # ---------------------------------------------------------------------------
 
 
-class Sphere(bch.ParametrizedSweep):
+class Sphere(bn.ParametrizedSweep):
     """Simple sphere function: minimum at origin."""
 
-    x = bch.FloatSweep(default=0, bounds=[-5, 5], samples=5)
-    y = bch.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+    y = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
 
-    loss = bch.ResultVar("ul", bch.OptDir.minimize)
+    loss = bn.ResultVar("ul", bn.OptDir.minimize)
 
     def __call__(self, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -28,13 +28,13 @@ class Sphere(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class MultiObjective(bch.ParametrizedSweep):
+class MultiObjective(bn.ParametrizedSweep):
     """Two conflicting objectives."""
 
-    x = bch.FloatSweep(default=0, bounds=[0, 5], samples=5)
+    x = bn.FloatSweep(default=0, bounds=[0, 5], samples=5)
 
-    obj1 = bch.ResultVar("ul", bch.OptDir.minimize)
-    obj2 = bch.ResultVar("ul", bch.OptDir.maximize)
+    obj1 = bn.ResultVar("ul", bn.OptDir.minimize)
+    obj2 = bn.ResultVar("ul", bn.OptDir.maximize)
 
     def __call__(self, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -43,7 +43,7 @@ class MultiObjective(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class Color(bch.ClassEnum):
+class Color(bn.ClassEnum):
     red = auto()
     green = auto()
     blue = auto()
@@ -53,13 +53,13 @@ class Color(bch.ClassEnum):
         return enum_val
 
 
-class CategoricalProblem(bch.ParametrizedSweep):
+class CategoricalProblem(bn.ParametrizedSweep):
     """Problem with categorical + boolean inputs."""
 
-    flag = bch.BoolSweep(default=False)
-    color = bch.EnumSweep(Color, default=Color.red)
+    flag = bn.BoolSweep(default=False)
+    color = bn.EnumSweep(Color, default=Color.red)
 
-    score = bch.ResultVar("ul", bch.OptDir.minimize)
+    score = bn.ResultVar("ul", bn.OptDir.minimize)
 
     def __call__(self, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -70,7 +70,7 @@ class CategoricalProblem(bch.ParametrizedSweep):
 
 def _run_cfg():
     """Minimal run config with caching enabled."""
-    cfg = bch.BenchRunCfg()
+    cfg = bn.BenchRunCfg()
     cfg.repeats = 1
     return cfg
 
@@ -83,7 +83,7 @@ def _run_cfg():
 class TestSingleObjective:
     def test_basic_optimize(self):
         cfg = Sphere()
-        bench = bch.Bench("test_opt_single", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_single", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=20, plot=False)
 
         assert result.best_params is not None
@@ -95,7 +95,7 @@ class TestSingleObjective:
 
     def test_summary(self):
         cfg = Sphere()
-        bench = bch.Bench("test_opt_summary", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_summary", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, plot=False)
         text = result.summary()
         assert "best value" in text
@@ -105,7 +105,7 @@ class TestSingleObjective:
 class TestMultiObjective:
     def test_pareto_front(self):
         cfg = MultiObjective()
-        bench = bch.Bench("test_opt_multi", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_multi", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=20, plot=False)
 
         assert len(result.best_trials) > 0
@@ -119,7 +119,7 @@ class TestWarmStart:
     def test_warm_start_from_sweep(self):
         cfg = Sphere()
         run_cfg = _run_cfg()
-        bench = bch.Bench("test_opt_warm", cfg, run_cfg=run_cfg)
+        bench = bn.Bench("test_opt_warm", cfg, run_cfg=run_cfg)
 
         # Run a grid sweep first to populate cache
         bench.plot_sweep(
@@ -133,7 +133,7 @@ class TestWarmStart:
 
     def test_no_warm_start(self):
         cfg = Sphere()
-        bench = bch.Bench("test_opt_no_warm", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_no_warm", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, warm_start=False, plot=False)
         assert result.n_warm_start_trials == 0
 
@@ -142,7 +142,7 @@ class TestAutoDetection:
     def test_auto_detect_vars(self):
         """optimize() should auto-detect input/result vars from the worker class."""
         cfg = Sphere()
-        bench = bch.Bench("test_opt_auto", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_auto", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, plot=False)
         assert "x" in result.best_params
         assert "y" in result.best_params
@@ -159,7 +159,7 @@ class TestConvenience:
 class TestCategoricalInputs:
     def test_enum_and_bool(self):
         cfg = CategoricalProblem()
-        bench = bch.Bench("test_opt_cat", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_cat", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=15, plot=False)
         assert "flag" in result.best_params
         assert "color" in result.best_params
@@ -169,14 +169,14 @@ class TestCategoricalInputs:
 class TestOptimizeResult:
     def test_to_panel(self):
         cfg = Sphere()
-        bench = bch.Bench("test_opt_panel", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_panel", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, plot=False)
         panel = result.to_panel()
         assert panel is not None
 
     def test_target_names(self):
         cfg = Sphere()
-        bench = bch.Bench("test_opt_targets", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_targets", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=5, plot=False)
         assert result.target_names == ["loss"]
 
@@ -187,7 +187,7 @@ class TestSummariseOptunaStudy:
     def test_single_objective_no_pareto_error(self, caplog):
         """Single-objective study should not attempt plot_pareto_front."""
         cfg = Sphere()
-        bench = bch.Bench("test_summary_single", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_summary_single", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=5, plot=False)
         panel = result.to_panel()
         assert panel is not None
@@ -199,7 +199,7 @@ class TestSummariseOptunaStudy:
         import panel as pn
 
         cfg = Sphere()
-        bench = bch.Bench("test_summary_best", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_summary_best", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=5, plot=False)
         panel = result.to_panel()
         # Find Markdown panes and check their content
@@ -210,7 +210,7 @@ class TestSummariseOptunaStudy:
     def test_multi_objective_panel_no_best_value_error(self):
         """Multi-objective panel should not call study.best_value (which raises)."""
         cfg = MultiObjective()
-        bench = bch.Bench("test_summary_multi", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_summary_multi", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, plot=False)
         # Should not raise — previously would crash on study.best_value
         panel = result.to_panel()
@@ -221,7 +221,7 @@ class TestSummariseOptunaStudy:
         import panel as pn
 
         cfg = MultiObjective()
-        bench = bch.Bench("test_summary_pareto_size", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_summary_pareto_size", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, plot=False)
         panel = result.to_panel()
         md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]

@@ -2,7 +2,7 @@
 
 import math
 
-import bencher as bch
+import bencher as bn
 from bencher.sweep_timings import SweepTimings, phase_timer
 
 
@@ -22,9 +22,9 @@ def test_sweep_timings_summary():
     assert "dataset_setup_ms" in s
 
 
-class TrivialSweep(bch.ParametrizedSweep):
-    theta = bch.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
-    out = bch.ResultVar(units="v", doc="output")
+class TrivialSweep(bn.ParametrizedSweep):
+    theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
+    out = bn.ResultVar(units="v", doc="output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -34,7 +34,7 @@ class TrivialSweep(bch.ParametrizedSweep):
 
 def test_bench_result_has_timings():
     """After plot_sweep(), the BenchResult should have populated timings."""
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.auto_plot = False
     bench = TrivialSweep().to_bench(run_cfg)
     bench.plot_sweep()
@@ -56,5 +56,5 @@ def test_bench_result_has_timings():
 
 def test_timings_accessible_via_public_api():
     """SweepTimings should be importable from the top-level bencher package."""
-    assert hasattr(bch, "SweepTimings")
-    assert bch.SweepTimings is SweepTimings
+    assert hasattr(bn, "SweepTimings")
+    assert bn.SweepTimings is SweepTimings
