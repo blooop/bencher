@@ -31,14 +31,24 @@ class OptimizeResult:
     # Single-objective helpers
     # ------------------------------------------------------------------
 
+    def _ensure_single_objective(self) -> None:
+        """Raise if study is multi-objective."""
+        if len(self.study.directions) != 1:
+            raise RuntimeError(
+                "best_params/best_value are only defined for single-objective studies. "
+                "For multi-objective studies use best_trials instead."
+            )
+
     @property
     def best_params(self) -> dict[str, Any]:
         """Best parameters found (single-objective only)."""
+        self._ensure_single_objective()
         return self.study.best_params
 
     @property
     def best_value(self) -> float:
         """Best objective value (single-objective only)."""
+        self._ensure_single_objective()
         return self.study.best_value
 
     # ------------------------------------------------------------------

@@ -923,54 +923,13 @@ class Bench(BenchPlotServer):
         Returns:
             OptimizeResult wrapping the completed ``optuna.Study``.
         """
-        # --- resolve variables (mirrors plot_sweep logic) ---------------
-        input_vars_in = deepcopy(input_vars)
-        result_vars_in = deepcopy(result_vars)
-        const_vars_in = deepcopy(const_vars)
-
         if run_cfg is None:
             run_cfg = deepcopy(self.run_cfg) if self.run_cfg is not None else BenchRunCfg()
 
-        if self.worker_class_instance is not None:
-            if input_vars_in is None:
-                input_vars_in = (
-                    deepcopy(self.input_vars)
-                    if self.input_vars is not None
-                    else self.worker_class_instance.get_inputs_only()
-                )
-            if result_vars_in is None:
-                result_vars_in = (
-                    deepcopy(self.result_vars)
-                    if self.result_vars is not None
-                    else self.get_result_vars(as_str=False)
-                )
-            if const_vars_in is None:
-                const_vars_in = (
-                    deepcopy(self.const_vars)
-                    if self.const_vars is not None
-                    else self.worker_class_instance.get_input_defaults()
-                )
-        else:
-            input_vars_in = input_vars_in or []
-            result_vars_in = result_vars_in or []
-            const_vars_in = const_vars_in or []
-
-        # Convert to param.Parameter objects
-        for i in range(len(input_vars_in)):
-            input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
-        for i in range(len(result_vars_in)):
-            result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
-        if isinstance(const_vars_in, dict):
-            const_vars_in = list(const_vars_in.items())
-        for i in range(len(const_vars_in)):
-            cv_list = list(const_vars_in[i])
-            cv_list[0] = self.convert_vars_to_params(cv_list[0], "const", run_cfg)
-            const_vars_in[i] = cv_list
-
-        # Remove inputs that appear in const_vars
-        input_names = {iv.name for iv in input_vars_in}
-        const_vars_in = [c for c in const_vars_in if c[0].name not in input_names]
-
+        # --- resolve variables (mirrors plot_sweep logic) ---------------
+        input_vars_in, result_vars_in, const_vars_in = self._resolve_optimize_vars(
+            input_vars, result_vars, const_vars, run_cfg
+        )
         constant_inputs = self.define_const_inputs(const_vars_in) or {}
 
         if title is None:
@@ -991,8 +950,6 @@ class Bench(BenchPlotServer):
         )
 
         # --- (re)initialize sample cache for reading + writing -----------
-        # plot_sweep closes the sample_cache when it finishes, so we need
-        # to open a fresh one with overwrite=False to honour cached results.
         if self.sample_cache is not None:
             with suppress(Exception):
                 self.sample_cache.close()
@@ -1023,12 +980,12 @@ class Bench(BenchPlotServer):
         n_warm = 0
         if warm_start:
             n_warm = self._warm_start_from_cache(
-                study, bench_cfg, input_vars_in, constant_inputs, target_names, tag
+                study, bench_cfg, input_vars_in, constant_inputs, target_names
             )
 
         # --- run optimisation -------------------------------------------
         objective = self._make_optuna_objective(
-            bench_cfg, input_vars_in, constant_inputs, target_names, tag, run_cfg
+            input_vars_in, constant_inputs, target_names, bench_cfg.tag
         )
         study.optimize(objective, n_trials=n_trials)
 
@@ -1052,24 +1009,62 @@ class Bench(BenchPlotServer):
     # Private helpers for optimize()
     # ------------------------------------------------------------------
 
-    def _warm_start_from_cache(  # pylint: disable=unused-argument
-        self,
-        study: optuna.Study,
-        bench_cfg: BenchCfg,
-        input_vars: list,
-        constant_inputs: dict,
-        target_names: list[str],
-        tag: str,  # noqa: ARG002
-    ) -> int:
-        """Seed *study* with cached evaluations. Returns count of added trials.
+    def _resolve_optimize_vars(self, input_vars, result_vars, const_vars, run_cfg):
+        """Deep-copy and convert variable lists to param.Parameter objects."""
+        input_vars_in = deepcopy(input_vars)
+        result_vars_in = deepcopy(result_vars)
+        const_vars_in = deepcopy(const_vars)
 
-        Uses two sources:
-        1. In-memory ``self.results`` from prior ``plot_sweep()`` calls (always available).
-        2. The on-disk sample cache (only when ``cache_samples=True``).
-        """
+        if self.worker_class_instance is not None:
+            if input_vars_in is None:
+                input_vars_in = (
+                    deepcopy(self.input_vars)
+                    if self.input_vars is not None
+                    else self.worker_class_instance.get_inputs_only()
+                )
+            if result_vars_in is None:
+                result_vars_in = (
+                    deepcopy(self.result_vars)
+                    if self.result_vars is not None
+                    else self.get_result_vars(as_str=False)
+                )
+            if const_vars_in is None:
+                const_vars_in = (
+                    deepcopy(self.const_vars)
+                    if self.const_vars is not None
+                    else self.worker_class_instance.get_input_defaults()
+                )
+        else:
+            input_vars_in = input_vars_in or []
+            result_vars_in = result_vars_in or []
+            const_vars_in = const_vars_in or []
+
+        def _convert_seq(seq, kind):
+            return [self.convert_vars_to_params(v, kind, run_cfg) for v in seq]
+
+        input_vars_in = _convert_seq(input_vars_in, "input")
+        result_vars_in = _convert_seq(result_vars_in, "result")
+
+        if isinstance(const_vars_in, dict):
+            const_vars_in = list(const_vars_in.items())
+        const_vars_in = [
+            (self.convert_vars_to_params(k, "const", run_cfg), v) for k, v in const_vars_in
+        ]
+
+        # Remove inputs that appear in const_vars
+        input_names = {iv.name for iv in input_vars_in}
+        const_vars_in = [c for c in const_vars_in if c[0].name not in input_names]
+
+        return input_vars_in, result_vars_in, const_vars_in
+
+    @staticmethod
+    def _build_cache_key(inputs: dict, tag: str) -> str:
+        """Build a deterministic cache key from an input dict and tag."""
+        return hash_sha1((sorted(inputs.items()), tag))
+
+    def _warm_from_results(self, study: optuna.Study) -> int:
+        """Seed *study* from in-memory BenchResult objects. Returns count added."""
         added = 0
-
-        # --- 1. Warm-start from in-memory BenchResult objects -----------
         for res in self.results:
             try:
                 if len(res.ds.sizes) > 0:
@@ -1078,15 +1073,22 @@ class Bench(BenchPlotServer):
                     added += len(trials)
             except Exception:  # pylint: disable=broad-except
                 pass
+        return added
 
-        # --- 2. Warm-start from sample cache (if available) -------------
+    def _warm_from_sample_cache(
+        self,
+        study: optuna.Study,
+        bench_cfg: BenchCfg,
+        input_vars: list,
+        constant_inputs: dict,
+        target_names: list[str],
+    ) -> int:
+        """Seed *study* from the on-disk sample cache. Returns count added."""
         cache = self.sample_cache.cache
         if cache is None or len(cache) == 0:
-            return added
+            return 0
 
-        distributions = {}
-        for iv in input_vars:
-            distributions[iv.name] = sweep_var_to_optuna_dist(iv)
+        distributions = {iv.name: sweep_var_to_optuna_dist(iv) for iv in input_vars}
 
         iv_grid_values = []
         iv_names = []
@@ -1099,8 +1101,9 @@ class Bench(BenchPlotServer):
             iv_names.append(iv.name)
 
         if not iv_grid_values:
-            return added
+            return 0
 
+        added = 0
         resolved_tag = bench_cfg.tag
 
         for combo in product(*iv_grid_values):
@@ -1108,8 +1111,7 @@ class Bench(BenchPlotServer):
             input_dict.update(constant_inputs)
             input_dict["repeat"] = 1
 
-            fn_inputs_sorted = sorted(input_dict.items())
-            key = hash_sha1((fn_inputs_sorted, resolved_tag))
+            key = self._build_cache_key(input_dict, resolved_tag)
 
             if key in cache:
                 result_dict = cache[key]
@@ -1139,45 +1141,46 @@ class Bench(BenchPlotServer):
 
         return added
 
-    def _make_optuna_objective(  # pylint: disable=unused-argument
+    def _warm_start_from_cache(
         self,
+        study: optuna.Study,
         bench_cfg: BenchCfg,
         input_vars: list,
         constant_inputs: dict,
         target_names: list[str],
-        tag: str,  # noqa: ARG002
-        run_cfg: BenchRunCfg,  # noqa: ARG002
-    ):
+    ) -> int:
+        """Seed *study* with cached evaluations. Returns count of added trials."""
+        added = self._warm_from_results(study)
+        added += self._warm_from_sample_cache(
+            study, bench_cfg, input_vars, constant_inputs, target_names
+        )
+        return added
+
+    def _make_optuna_objective(self, input_vars, constant_inputs, target_names, tag):
         """Return an objective function compatible with ``study.optimize()``."""
-        resolved_tag = bench_cfg.tag
 
         def objective(trial: optuna.trial.Trial):
             kwargs = {}
             for iv in input_vars:
                 kwargs[iv.name] = sweep_var_to_suggest(iv, trial)
 
-            # Build full input dict (with constants + repeat) for cache key
             full_input = dict(kwargs)
             full_input.update(constant_inputs)
             full_input["repeat"] = 1
 
-            fn_inputs_sorted = sorted(full_input.items())
-            cache_key = hash_sha1((fn_inputs_sorted, resolved_tag))
+            cache_key = self._build_cache_key(full_input, tag)
 
-            # Submit through FutureCache (handles cache lookup + storage)
             job = Job(
                 job_id=f"optimize:trial_{trial.number}",
                 function=self.worker,
                 job_args=kwargs,
                 job_key=cache_key,
-                tag=resolved_tag,
+                tag=tag,
             )
             job_future = self.sample_cache.submit(job)
             result_dict = job_future.result()
 
-            output = []
-            for tn in target_names:
-                output.append(result_dict[tn])
+            output = [result_dict[tn] for tn in target_names]
             return tuple(output) if len(output) > 1 else output[0]
 
         return objective

@@ -203,9 +203,7 @@ class TestSummariseOptunaStudy:
         result = bench.optimize(n_trials=5, plot=False)
         panel = result.to_panel()
         # Find Markdown panes and check their content
-        md_texts = [
-            obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)
-        ]
+        md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]
         combined = " ".join(md_texts)
         assert "Best value" in combined
 
@@ -226,8 +224,6 @@ class TestSummariseOptunaStudy:
         bench = bch.Bench("test_summary_pareto_size", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, plot=False)
         panel = result.to_panel()
-        md_texts = [
-            obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)
-        ]
+        md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]
         combined = " ".join(md_texts)
         assert "Pareto-front size" in combined
