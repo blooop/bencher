@@ -10,7 +10,6 @@ from pathlib import Path
 from uuid import uuid4
 from functools import partial
 from typing import Callable, Any
-import warnings
 import logging
 import os
 import tempfile
@@ -344,27 +343,6 @@ def resolve_aggregate(
     raise TypeError(
         f"aggregate must be bool, int, list[str], or None, got {type(aggregate).__name__}"
     )
-
-
-def _handle_deprecated_agg_over_dims(
-    aggregate: bool | int | list[str] | None,
-    agg_over_dims: list[str] | None,
-) -> bool | int | list[str] | None:
-    """Merge the deprecated ``agg_over_dims`` kwarg into ``aggregate``.
-
-    If both are supplied, ``aggregate`` wins and a warning is emitted.
-    If only ``agg_over_dims`` is supplied, it is forwarded as ``aggregate``
-    with a deprecation warning.
-    """
-    if agg_over_dims is not None:
-        warnings.warn(
-            "agg_over_dims is deprecated, use aggregate instead",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        if aggregate is None:
-            return agg_over_dims
-    return aggregate
 
 
 def callable_name(any_callable: Callable[..., Any]) -> str:
