@@ -192,24 +192,80 @@ class HoloviewResult(VideoResult):
 
         return pn.Column(row[0], widget_box)
 
+    def _build_curve_overlay(
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+    ) -> hv.Overlay:
+        """Build a Curve (+ optional Spread) overlay for a single time slice or aggregated data.
+
+        When ``_std`` exists in the dataset the spread band is rendered
+        automatically.  This is used by both the curve renderer and the
+        line renderer (for aggregated data that gained ``_std`` from
+        ``_mean_over_time``).
+        """
+        var = result_var.name
+        std_var = f"{var}_std"
+        has_spread = std_var in dataset.data_vars
+        title = self.title_from_ds(dataset, result_var, **kwargs)
+
+        float_names = [fv.name for fv in self.plt_cnt_cfg.float_vars]
+        ds_dims = list(dataset.dims)
+        kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
+        groupby = [d for d in ds_dims if d not in kdims]
+
+        df = dataset.to_dataframe().reset_index()
+
+        vdims = [var, std_var] if has_spread else [var]
+        hvds = hv.Dataset(df, kdims=kdims + groupby, vdims=vdims)
+
+        if not groupby:
+            pt = hv.Overlay()
+            pt *= hv.Curve(hvds, kdims=kdims, vdims=var, label=var).opts(
+                title=title, xrotation=30, **kwargs
+            )
+            if has_spread:
+                pt *= hv.Spread(hvds, kdims=kdims, vdims=[var, std_var])
+            return pt.opts(legend_position="right")
+
+        pt = hv.Overlay()
+        for key, group_df in df.groupby(groupby):
+            label = str(key) if not isinstance(key, tuple) else ", ".join(str(k) for k in key)
+            group_hvds = hv.Dataset(group_df, kdims=kdims, vdims=vdims)
+            pt *= hv.Curve(group_hvds, kdims=kdims, vdims=var, label=label).opts(
+                xrotation=30, **kwargs
+            )
+            if has_spread:
+                pt *= hv.Spread(group_hvds, kdims=kdims, vdims=[var, std_var])
+        return pt.opts(title=title, legend_position="right")
+
     @staticmethod
     def _mean_over_time(dataset, result_var_name):
         """Average a dataset across all time points.
 
-        Computes the mean of *result_var_name* and, when a corresponding
-        ``_std`` variable exists, the pooled standard deviation via the
-        law of total variance.
+        Always produces a ``_std`` variable so that downstream renderers
+        (e.g. curve spread, error bars) can visualise the aggregation
+        uncertainty.  When a per-time-point ``_std`` already exists the
+        pooled standard deviation is computed via the law of total
+        variance; otherwise the standard deviation of the means across
+        time points is used.
         """
         std_var = f"{result_var_name}_std"
         new_ds = dataset.mean(dim="over_time")
+        var_of_means = dataset[result_var_name].var(dim="over_time")
         if std_var in dataset.data_vars:
             mean_of_vars = (dataset[std_var] ** 2).mean(dim="over_time")
-            var_of_means = dataset[result_var_name].var(dim="over_time")
             new_ds[std_var] = (mean_of_vars + var_of_means) ** 0.5
+        else:
+            new_ds[std_var] = var_of_means**0.5
         return new_ds
 
     def _build_time_holomap(self, dataset, result_var_name, make_plot_fn):
         """Build per-time-point HoloMap + a static aggregated plot.
+
+        ``make_plot_fn`` receives a Dataset *without* the ``over_time``
+        dimension.  The aggregated dataset produced by ``_mean_over_time``
+        always contains a ``_std`` variable; callbacks that are
+        ``_std``-aware (e.g. delegating to ``_build_curve_overlay``) will
+        automatically render spread bands on the aggregated tab.
 
         Returns ``pn.Tabs`` with two tabs:
 
