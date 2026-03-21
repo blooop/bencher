@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from itertools import product
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -39,6 +40,50 @@ from bencher.job import JobFuture
 DEFAULT_CACHE_SIZE_BYTES = int(100e9)
 
 logger = logging.getLogger(__name__)
+
+
+_NETCDF_ATTR_TYPES = (str, int, float, bytes, np.ndarray, np.number, list, tuple)
+
+
+def _clean_attrs(attrs: dict) -> dict:
+    """Keep only netCDF-serialisable attributes."""
+    return {k: v for k, v in attrs.items() if isinstance(v, _NETCDF_ATTR_TYPES)}
+
+
+def _sanitize_for_netcdf(dataset: xr.Dataset) -> xr.Dataset:
+    """Rebuild dataset so every variable is backed by a plain numpy array.
+
+    pandas 3.0 / xarray 2025+ can wrap string coordinates in
+    ArrowStringArray whose dtype (``StringDtype``) is incompatible with
+    netCDF's CF encoder.  Reconstructing from ``.values`` (which always
+    returns an ``ndarray``) and stripping non-serialisable attrs fixes both
+    issues.
+    """
+
+    def _force_numpy(values, to_bytes=False):
+        """Ensure values is a plain numpy ndarray."""
+        if to_bytes:
+            # Convert strings → bytes to avoid pandas ArrowStringArray wrapping
+            return np.array([str(v).encode() for v in values])
+        if isinstance(values, np.ndarray):
+            return values
+        return np.array(list(values))
+
+    data_vars = {}
+    for name, var in dataset.data_vars.items():
+        data_vars[name] = (var.dims, _force_numpy(var.values), _clean_attrs(var.attrs))
+
+    coords = {}
+    for name, coord in dataset.coords.items():
+        # String-like coords must become bytes to avoid ArrowStringArray
+        is_string = coord.dtype.kind in ("U", "O") or not isinstance(coord.dtype, np.dtype)
+        coords[name] = (
+            coord.dims,
+            _force_numpy(coord.values, to_bytes=is_string),
+            _clean_attrs(coord.attrs),
+        )
+
+    return xr.Dataset(data_vars=data_vars, coords=coords, attrs=_clean_attrs(dataset.attrs))
 
 
 def set_xarray_multidim(
@@ -286,6 +331,7 @@ class ResultCollector:
         bench_cfg_hash: str,
         clear_history: bool,
         max_time_events: int | None = None,
+        history_dir: str | None = None,
     ) -> xr.Dataset:
         """Load historical data from a cache if over_time is enabled.
 
@@ -293,17 +339,38 @@ class ResultCollector:
         when tracking performance over time. If clear_history is True, it will clear any existing
         historical data instead of loading it.
 
+        When ``history_dir`` is set, history is persisted as netCDF files in that directory
+        instead of the default diskcache backend. This is useful for committing history to
+        version control so that documentation builds can display accumulated results.
+
         Args:
             dataset (xr.Dataset): Freshly calculated benchmark data for the current run
             bench_cfg_hash (str): Hash of the input variables used to identify cached data
             clear_history (bool): If True, clears historical data instead of loading it
             max_time_events (int | None): Maximum number of over_time events to retain.
                 Oldest events are trimmed. None means unlimited.
+            history_dir (str | None): Directory for netCDF-based history persistence.
+                When set, reads/writes ``{history_dir}/{bench_cfg_hash}.nc`` instead of
+                diskcache.
 
         Returns:
             xr.Dataset: Combined dataset with both historical and current benchmark data,
                 or just the current data if no history exists or history is cleared
         """
+        if history_dir is not None:
+            return self._load_history_netcdf(
+                dataset, bench_cfg_hash, clear_history, max_time_events, history_dir
+            )
+        return self._load_history_diskcache(dataset, bench_cfg_hash, clear_history, max_time_events)
+
+    def _load_history_diskcache(
+        self,
+        dataset: xr.Dataset,
+        bench_cfg_hash: str,
+        clear_history: bool,
+        max_time_events: int | None = None,
+    ) -> xr.Dataset:
+        """History backend using diskcache (default)."""
         with Cache("cachedir/history", size_limit=self.cache_size) as c:
             if clear_history:
                 logger.info("clearing history")
@@ -333,6 +400,44 @@ class ResultCollector:
 
             logger.info("saving data to history cache")
             c[bench_cfg_hash] = dataset
+        return dataset
+
+    def _load_history_netcdf(
+        self,
+        dataset: xr.Dataset,
+        bench_cfg_hash: str,
+        clear_history: bool,
+        max_time_events: int | None = None,
+        history_dir: str = "",
+    ) -> xr.Dataset:
+        """History backend using netCDF files."""
+        history_path = Path(history_dir) / f"{bench_cfg_hash}.nc"
+
+        # Sanitize upfront so both old (from file) and new data use bytes
+        # for string coordinates — this avoids dtype mismatches and
+        # ArrowStringArray issues during concat and save.
+        dataset = _sanitize_for_netcdf(dataset)
+
+        if clear_history:
+            logger.info("clearing history (netCDF)")
+            if history_path.exists():
+                history_path.unlink()
+        else:
+            logger.info(f"checking historical file: {history_path}")
+            if history_path.exists():
+                logger.info("loading historical data from netCDF")
+                ds_old = xr.load_dataset(history_path)
+                dataset = xr.concat([ds_old, dataset], "over_time")
+            else:
+                logger.info("no historical netCDF file found")
+
+        if max_time_events is not None and "over_time" in dataset.dims:
+            if dataset.sizes["over_time"] > max_time_events:
+                dataset = dataset.isel(over_time=slice(-max_time_events, None))
+
+        Path(history_dir).mkdir(parents=True, exist_ok=True)
+        logger.info(f"saving history to netCDF: {history_path}")
+        dataset.to_netcdf(history_path)
         return dataset
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: Any) -> None:

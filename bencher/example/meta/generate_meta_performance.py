@@ -69,12 +69,21 @@ bench.plot_sweep(
 
     def _generate_self_benchmark_over_time(self):
         """Generate the over-time self-benchmark example."""
-        imports = "import bencher as bch"
+        imports = "import os\nfrom pathlib import Path\n\nimport bencher as bch"
 
         body = """\
 run_cfg = run_cfg or bch.BenchRunCfg()
 run_cfg.over_time = True
 run_cfg.auto_plot = False
+run_cfg.max_time_events = 50
+
+# Use file-based netCDF history when running from the repo
+history_dir = os.environ.get("BENCHER_HISTORY_DIR")
+if history_dir is None and Path("bencher/perf_data").is_dir():
+    history_dir = "bencher/perf_data"
+if history_dir:
+    run_cfg.history_dir = history_dir
+
 time_src = bch.git_time_event()
 bench = BencherSelfBenchmark().to_bench(run_cfg)
 bench.plot_sweep(

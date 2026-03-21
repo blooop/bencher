@@ -1,0 +1,33 @@
+name: Performance Tracking
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # git_time_event() needs the commit hash
+
+      - uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          cache: true
+          frozen: true
+
+      - name: Run self-benchmark
+        run: pixi run perf-track
+
+      - name: Commit performance data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bencher/perf_data/*.nc
+          git diff --cached --quiet || git commit -m "perf: update self-benchmark data"
+          git push
