@@ -31,20 +31,17 @@ class ServerOptimizer(bn.ParametrizedSweep):
 
 def example_optimise_1_objective_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Optimise 1 objective(s), 1D input."""
-    run_cfg = run_cfg or bn.BenchRunCfg()
-    run_cfg.use_optuna = True
     bench = ServerOptimizer().to_bench(run_cfg)
-    res = bench.plot_sweep(
+    bench.plot_sweep(
         input_vars=["cpu_cores"],
         result_vars=["performance"],
         const_vars=dict(noise_scale=0.1),
         description="Single-objective optimization over 1D input space using Optuna. The optimizer searches for the parameter combination that maximizes performance.",
         post_description="The Optuna importance plot shows which input parameters most affect the objective.",
     )
-    bench.report.append(res.to_optuna_plots())
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_optimise_1_objective_1d, level=3, repeats=3)
+    bn.run(example_optimise_1_objective_1d, level=3, repeats=3, optimise=30)

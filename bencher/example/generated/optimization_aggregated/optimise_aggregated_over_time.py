@@ -50,10 +50,9 @@ def example_optimise_aggregated_over_time(run_cfg: bn.BenchRunCfg | None = None)
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )
-    bench.report.append(res.to_optuna_plots())
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_optimise_aggregated_over_time, level=3)
+    bn.run(example_optimise_aggregated_over_time, level=3, optimise=30)

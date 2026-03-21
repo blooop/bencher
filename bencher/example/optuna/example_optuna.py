@@ -1,16 +1,6 @@
-import bencher as bn
 import numpy as np
-import optuna
-from optuna.samplers import TPESampler
 
-
-def objective(trial):
-    x = trial.suggest_float("x", -10, 10)
-    return x**2
-
-
-study = optuna.create_study(sampler=TPESampler())
-study.optimize(objective, n_trials=10)
+import bencher as bn
 
 rast_range = 1.5
 
@@ -50,22 +40,13 @@ def optuna_rastrigin(run_cfg: bn.BenchRunCfg | None = None):
 
     bench = bn.Bench("Rastrigin", explorer.rastrigin, run_cfg=run_cfg)
 
-    # res = bench.to_optuna(
-    #     input_vars=[explorer.param.input1, explorer.param.input2],
-    #     result_vars=[explorer.param.output],
-    #     n_trials=30
-    # )
-
-    # run_cfg.use_optuna = True
-    res = bench.plot_sweep(
+    bench.plot_sweep(
         "Rastrigin",
         input_vars=[explorer.param.input1, explorer.param.input2],
         result_vars=[explorer.param.output],
         run_cfg=run_cfg,
     )
 
-    bench.report.append(res.to_optuna_plots())
-    bench.report.append(res.to_optuna_from_sweep(bench))
     bench.report.append_markdown(
         f"The optimal value should be input1:{-optimal_value},input2:{-optimal_value} with a value of 0"
     )
@@ -73,4 +54,4 @@ def optuna_rastrigin(run_cfg: bn.BenchRunCfg | None = None):
 
 
 if __name__ == "__main__":
-    bn.run(optuna_rastrigin)
+    bn.run(optuna_rastrigin, optimise=30)

@@ -52,10 +52,9 @@ def example_optimise_over_time_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )
-    bench.report.append(res.to_optuna_plots())
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_optimise_over_time_2d, level=2)
+    bn.run(example_optimise_over_time_2d, level=2, optimise=30)
