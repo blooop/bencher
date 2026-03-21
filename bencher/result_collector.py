@@ -64,10 +64,10 @@ def _sanitize_for_netcdf(dataset: xr.Dataset) -> xr.Dataset:
         """Ensure values is a plain numpy ndarray."""
         if to_bytes:
             # Convert strings → bytes to avoid pandas ArrowStringArray wrapping
-            return np.array([str(v).encode() for v in values])
+            return np.array([v if isinstance(v, bytes) else str(v).encode() for v in values])
         if isinstance(values, np.ndarray):
             return values
-        return np.array(list(values))
+        return np.asarray(values)
 
     data_vars = {}
     for name, var in dataset.data_vars.items():
@@ -76,7 +76,7 @@ def _sanitize_for_netcdf(dataset: xr.Dataset) -> xr.Dataset:
     coords = {}
     for name, coord in dataset.coords.items():
         # String-like coords must become bytes to avoid ArrowStringArray
-        is_string = coord.dtype.kind in ("U", "O") or not isinstance(coord.dtype, np.dtype)
+        is_string = not isinstance(coord.dtype, np.dtype) or coord.dtype.kind in ("U", "O")
         coords[name] = (
             coord.dims,
             _force_numpy(coord.values, to_bytes=is_string),

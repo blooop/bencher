@@ -15,7 +15,7 @@ def _make_dataset(over_time_label: str, num_samples: int = 3) -> xr.Dataset:
         data_vars={
             "total_ms": (
                 ["num_samples", "over_time"],
-                np.random.rand(num_samples, 1),
+                np.arange(num_samples, dtype=float).reshape(num_samples, 1),
             ),
         },
         coords={
@@ -92,8 +92,8 @@ class TestHistoryDirNetCDF:
 
         assert result.sizes["over_time"] == 2
         labels = _over_time_labels(result)
-        # Should keep only the last 2
-        assert "run_3" in labels
+        # Should keep only the last 2 (most recent)
+        assert labels == ["run_2", "run_3"]
 
     def test_clear_history_removes_file(self, tmp_path):
         """clear_history=True removes the .nc file."""
@@ -121,12 +121,23 @@ class TestHistoryDirNetCDF:
         collector = ResultCollector()
         bench_hash = "testhash_diskcache"
 
-        ds = _make_dataset("run_0")
-        result = collector.load_history_cache(ds, bench_hash, clear_history=True, history_dir=None)
+        # First run: clear and establish baseline
+        ds1 = _make_dataset("run_0")
+        result1 = collector.load_history_cache(
+            ds1, bench_hash, clear_history=True, history_dir=None
+        )
 
         # No .nc file should be created in tmp_path
         assert not list(tmp_path.glob("*.nc"))
-        assert "over_time" in result.dims
+        assert "over_time" in result1.dims
+
+        # Second run: verify accumulation via diskcache
+        ds2 = _make_dataset("run_1")
+        result2 = collector.load_history_cache(
+            ds2, bench_hash, clear_history=False, history_dir=None
+        )
+        assert "over_time" in result2.dims
+        assert result2.sizes["over_time"] == 2
 
     def test_string_roundtrip(self, tmp_path):
         """String coordinates survive netCDF roundtrip after concat."""
@@ -143,10 +154,12 @@ class TestHistoryDirNetCDF:
             ds2, bench_hash, clear_history=False, history_dir=str(tmp_path)
         )
 
-        # Verify the file can be re-read
+        # Verify the file can be re-read with correct labels
         nc_file = tmp_path / f"{bench_hash}.nc"
         reloaded = xr.open_dataset(nc_file)
         assert reloaded.sizes["over_time"] == 2
+        labels = _over_time_labels(reloaded)
+        assert labels == ["v0.1.0", "v0.2.0"]
         reloaded.close()
 
     def test_creates_directory_if_missing(self):
