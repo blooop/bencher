@@ -14,6 +14,7 @@ Key guarantees enforced by these tests:
 """
 
 import inspect
+import json
 import subprocess
 import sys
 import textwrap
@@ -294,33 +295,77 @@ class TestBenchCfgHashStability:
         ), "BenchCfg hash should not change when only excluded obj fields differ"
 
 
-# Script template for cross-process tests. Each subprocess imports the class,
-# constructs an instance, and prints its hash. The parent compares hashes from
-# two independent processes to verify they match.
-_SUBPROCESS_HASH_SCRIPT = textwrap.dedent("""\
-    from bencher.variables.results import {cls_name}
-    {extra}
-    r = {cls_name}({args})
-    print(r.hash_persistent())
+# ---------------------------------------------------------------------------
+# Cross-process hash tests — batched for performance
+#
+# Instead of spawning 2 subprocesses per result class (26 total), we spawn
+# exactly 2 subprocesses that each compute ALL hashes and return them as JSON.
+# This preserves the cross-process guarantee while cutting ~95s of import overhead.
+# ---------------------------------------------------------------------------
+
+# Class names tested for cross-process hash stability — derived from auto-discovery
+# so new Result* classes are automatically included.
+_CROSS_PROCESS_CLASSES = sorted(cls.__name__ for cls in ALL_DISCOVERED_CLASSES)
+
+_BATCH_HASH_SCRIPT = textwrap.dedent("""\
+    import inspect
+    import json
+    import param
+    import bencher.variables.results as results_module
+    from bencher.variables.results import ResultVec, ResultVar, ResultImage
+    from bencher.bench_cfg import BenchCfg
+
+    hashes = {}
+
+    # Auto-discover all Result* classes (mirrors parent process discovery)
+    for name, cls in inspect.getmembers(results_module, inspect.isclass):
+        if (
+            name.startswith("Result")
+            and issubclass(cls, param.Parameter)
+            and cls.__module__ == results_module.__name__
+        ):
+            instance = cls(size=3, units="ul", doc="test") if cls is ResultVec else cls(doc="test")
+            hashes[name] = instance.hash_persistent()
+
+    # BenchCfg composite hash
+    cfg = BenchCfg()
+    cfg.bench_name = "test_bench"
+    cfg.title = "Test"
+    cfg.over_time = False
+    cfg.repeats = 1
+    cfg.tag = ""
+    cfg.input_vars = []
+    cfg.result_vars = [ResultVar(units="m/s", doc="speed"), ResultImage(doc="img")]
+    cfg.const_vars = []
+    hashes["BenchCfg"] = cfg.hash_persistent(include_repeats=True)
+
+    print(json.dumps(hashes))
 """)
 
 
-def _hash_in_subprocess(cls_name, args="doc='test'", extra=""):
-    """Spawn a fresh Python process and return the hash_persistent() value."""
-    script = _SUBPROCESS_HASH_SCRIPT.format(
-        cls_name=cls_name,
-        args=args,
-        extra=extra,
-    )
+def _all_hashes_in_subprocess():
+    """Spawn a fresh Python process that computes hashes for all result classes + BenchCfg."""
     result = subprocess.run(
-        [sys.executable, "-c", script],
+        [sys.executable, "-c", _BATCH_HASH_SCRIPT],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=60,
         check=False,
     )
-    assert result.returncode == 0, f"Subprocess failed for {cls_name}:\n{result.stderr}"
-    return result.stdout.strip()
+    assert result.returncode == 0, f"Batch hash subprocess failed:\n{result.stderr}"
+    return json.loads(result.stdout.strip())
+
+
+@pytest.fixture(scope="class")
+def cross_process_hashes():
+    """Run two independent subprocesses and return both hash dicts.
+
+    Scoped to the class so the 2 subprocess invocations are shared across all
+    parametrized test methods in TestCrossProcessDeterminism.
+    """
+    hashes_a = _all_hashes_in_subprocess()
+    hashes_b = _all_hashes_in_subprocess()
+    return hashes_a, hashes_b
 
 
 class TestCrossProcessDeterminism:
@@ -330,59 +375,31 @@ class TestCrossProcessDeterminism:
     a key, process B must compute the same key to find it. In-process tests cannot
     catch bugs where str(obj) includes the memory address, because the address is
     stable within a single process.
+
+    All hashes are computed in a single batched subprocess call per process,
+    reducing 26 subprocess invocations to 2 while preserving the cross-process
+    guarantee.
     """
 
-    @pytest.mark.parametrize(
-        "cls_name,args",
-        [
-            ("ResultVar", "units='ul', doc='test'"),
-            ("ResultBool", "units='ratio', doc='test'"),
-            ("ResultVec", "size=3, units='ul', doc='test'"),
-            ("ResultHmap", "doc='test'"),
-            ("ResultPath", "doc='test'"),
-            ("ResultVideo", "doc='test'"),
-            ("ResultImage", "doc='test'"),
-            ("ResultString", "doc='test'"),
-            ("ResultContainer", "doc='test'"),
-            ("ResultReference", "doc='test'"),
-            ("ResultDataSet", "doc='test'"),
-            ("ResultVolume", "doc='test'"),
-        ],
-    )
-    def test_hash_stable_across_two_processes(self, cls_name, args):
-        hash_a = _hash_in_subprocess(cls_name, args)
-        hash_b = _hash_in_subprocess(cls_name, args)
-        assert hash_a == hash_b, (
-            f"{cls_name}.hash_persistent() differs across processes: {hash_a!r} != {hash_b!r}"
+    @pytest.mark.parametrize("cls_name", _CROSS_PROCESS_CLASSES)
+    def test_hash_stable_across_two_processes(
+        self,
+        cross_process_hashes,  # pylint: disable=redefined-outer-name
+        cls_name,
+    ):
+        hashes_a, hashes_b = cross_process_hashes
+        assert hashes_a[cls_name] == hashes_b[cls_name], (
+            f"{cls_name}.hash_persistent() differs across processes: "
+            f"{hashes_a[cls_name]!r} != {hashes_b[cls_name]!r}"
         )
 
-    def test_bench_cfg_hash_stable_across_processes(self):
+    def test_bench_cfg_hash_stable_across_processes(
+        self,
+        cross_process_hashes,  # pylint: disable=redefined-outer-name
+    ):
         """End-to-end: BenchCfg cache key must be identical across processes."""
-        script = textwrap.dedent("""\
-            from bencher.variables.results import ResultImage, ResultVar
-            from bencher.bench_cfg import BenchCfg
-            cfg = BenchCfg()
-            cfg.bench_name = "test_bench"
-            cfg.title = "Test"
-            cfg.over_time = False
-            cfg.repeats = 1
-            cfg.tag = ""
-            cfg.input_vars = []
-            cfg.result_vars = [ResultVar(units="m/s", doc="speed"), ResultImage(doc="img")]
-            cfg.const_vars = []
-            print(cfg.hash_persistent(include_repeats=True))
-        """)
-        hashes = []
-        for _ in range(2):
-            result = subprocess.run(
-                [sys.executable, "-c", script],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-            assert result.returncode == 0, f"Subprocess failed:\n{result.stderr}"
-            hashes.append(result.stdout.strip())
-        assert hashes[0] == hashes[1], (
-            f"BenchCfg.hash_persistent() differs across processes: {hashes[0]!r} != {hashes[1]!r}"
+        hashes_a, hashes_b = cross_process_hashes
+        assert hashes_a["BenchCfg"] == hashes_b["BenchCfg"], (
+            f"BenchCfg.hash_persistent() differs across processes: "
+            f"{hashes_a['BenchCfg']!r} != {hashes_b['BenchCfg']!r}"
         )
