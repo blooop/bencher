@@ -40,10 +40,8 @@ def _run_over_time(bench, benchable, run_cfg, input_vars, title, result_vars=Non
 
 def example_over_time_0D(run_cfg: bn.BenchRunCfg | None = None, report=None) -> bn.Bench:
     """Demo: over_time with 0 input vars — produces a time-series line chart."""
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, level=4)
     run_cfg.over_time = True
-    run_cfg.level = 4
 
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg, report=report)
@@ -53,10 +51,8 @@ def example_over_time_0D(run_cfg: bn.BenchRunCfg | None = None, report=None) -> 
 
 def example_over_time_1D(run_cfg: bn.BenchRunCfg | None = None, report=None) -> bn.Bench:
     """Demo: over_time with 1 float input — slider scrubs through phase-shifted curves."""
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, level=4)
     run_cfg.over_time = True
-    run_cfg.level = 4
 
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg, report=report)
@@ -66,10 +62,8 @@ def example_over_time_1D(run_cfg: bn.BenchRunCfg | None = None, report=None) -> 
 
 def example_over_time_2D(run_cfg: bn.BenchRunCfg | None = None, report=None) -> bn.Bench:
     """Demo: over_time with 2 float inputs — slider scrubs through 2D heatmaps."""
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, level=4)
     run_cfg.over_time = True
-    run_cfg.level = 4
 
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg, report=report)
@@ -79,10 +73,8 @@ def example_over_time_2D(run_cfg: bn.BenchRunCfg | None = None, report=None) -> 
 
 def example_over_time_3D(run_cfg: bn.BenchRunCfg | None = None, report=None) -> bn.Bench:
     """Demo: over_time with 3 float inputs — slider scrubs through 3D heatmaps."""
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, level=4)
     run_cfg.over_time = True
-    run_cfg.level = 4
 
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg, report=report)

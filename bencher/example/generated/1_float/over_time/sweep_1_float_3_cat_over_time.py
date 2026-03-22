@@ -40,7 +40,7 @@ class SortFullMatrix(bn.ParametrizedSweep):
 
 def example_sweep_1_float_3_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """1 Float, 3 Categorical (over time)."""
-    run_cfg = run_cfg or bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
     run_cfg.over_time = True
     benchable = SortFullMatrix()
     bench = benchable.to_bench(run_cfg)

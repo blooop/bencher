@@ -21,10 +21,8 @@ from bencher.example.meta.example_meta import BenchableObject
 
 
 def example_agg_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, level=4)
     run_cfg.over_time = True
-    run_cfg.level = 4
 
     benchable = BenchableObject()
     bench = benchable.to_bench(run_cfg)

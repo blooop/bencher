@@ -32,9 +32,8 @@ class ServerOptimizer(bn.ParametrizedSweep):
 
 def example_optim_over_time_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Optimise Over Time: 2D input."""
-    run_cfg = run_cfg or bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)
     run_cfg.over_time = True
-    run_cfg.repeats = 3
     benchable = ServerOptimizer()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)
