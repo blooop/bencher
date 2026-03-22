@@ -41,11 +41,16 @@ class FloatBench(bn.ParametrizedSweep):
         return super().__call__()
 
 
-def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3):
-    """Helper to run a benchmark over multiple time points."""
+def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, **cfg_kwargs):
+    """Helper to run a benchmark over multiple time points.
+
+    Extra keyword arguments are forwarded as BenchRunCfg attribute overrides.
+    """
     run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = repeats
+    for k, v in cfg_kwargs.items():
+        setattr(run_cfg, k, v)
     bench = benchable.to_bench(run_cfg)
     base_time = datetime(2000, 1, 1)
 
@@ -252,3 +257,133 @@ class TestOverTimeWidgetIsDiscreteSlider:
             assert not isinstance(widget, pn.widgets.Select), (
                 "over_time widget must not be a Select dropdown"
             )
+
+
+class TestShowAggregatedTimeTab:
+    """Tests for the show_aggregated_time_tab config parameter."""
+
+    def _count_agg_tabs(self, plots, depth=0):
+        """Count pn.Tabs instances that contain the aggregated title."""
+        count = 0
+        if depth > 10:
+            return 0
+        if isinstance(plots, pn.Tabs):
+            for title in plots._names:  # pylint: disable=protected-access
+                if "aggregated" in title.lower():
+                    count += 1
+        try:
+            for child in plots:
+                count += self._count_agg_tabs(child, depth + 1)
+        except TypeError:
+            pass
+        return count
+
+    def test_aggregated_tab_present_by_default(self):
+        """With default config, aggregated tab should appear."""
+        benchable = SimpleBench()
+        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        assert self._count_agg_tabs(plots) > 0
+
+    def test_aggregated_tab_absent_when_disabled(self):
+        """With show_aggregated_time_tab=False, no aggregated tabs."""
+        benchable = SimpleBench()
+        res = _run_over_time(
+            benchable,
+            ["backend"],
+            ["latency"],
+            repeats=1,
+            snapshots=3,
+            show_aggregated_time_tab=False,
+        )
+        plots = res.to_auto_plots()
+        assert self._count_agg_tabs(plots) == 0
+
+    def test_curve_aggregated_tab_absent_when_disabled(self):
+        """Curve plots also respect show_aggregated_time_tab=False."""
+        benchable = FloatBench()
+        res = _run_over_time(
+            benchable,
+            ["size", "backend"],
+            ["time"],
+            repeats=3,
+            snapshots=3,
+            show_aggregated_time_tab=False,
+        )
+        plots = res.to_auto_plots()
+        assert self._count_agg_tabs(plots) == 0
+
+
+class TestMaxSliderPoints:
+    """Tests for the max_slider_points config parameter."""
+
+    def test_slider_subsampled(self):
+        """With max_slider_points=2 and 5 snapshots, slider should have 2 entries."""
+        benchable = SimpleBench()
+        res = _run_over_time(
+            benchable,
+            ["backend"],
+            ["latency"],
+            repeats=1,
+            snapshots=5,
+            max_slider_points=2,
+        )
+        plots = res.to_auto_plots()
+        widgets = _find_all_over_time_widgets(plots)
+        for widget in widgets:
+            if hasattr(widget, "options"):
+                opts = list(
+                    widget.options.values() if isinstance(widget.options, dict) else widget.options
+                )
+                assert len(opts) == 2, f"Expected 2 slider options, got {len(opts)}"
+
+    def test_no_subsampling_by_default(self):
+        """With default config, slider should have all time points."""
+        benchable = SimpleBench()
+        res = _run_over_time(
+            benchable,
+            ["backend"],
+            ["latency"],
+            repeats=1,
+            snapshots=5,
+        )
+        plots = res.to_auto_plots()
+        widgets = _find_all_over_time_widgets(plots)
+        for widget in widgets:
+            if hasattr(widget, "options"):
+                opts = list(
+                    widget.options.values() if isinstance(widget.options, dict) else widget.options
+                )
+                assert len(opts) == 5, f"Expected 5 slider options, got {len(opts)}"
+
+
+class TestSubsampleIndices:
+    """Unit tests for subsample_indices static method."""
+
+    def test_no_subsampling_when_none(self):
+        from bencher.results.holoview_results.holoview_result import HoloviewResult
+
+        result = list(HoloviewResult.subsample_indices(10, None))
+        assert result == list(range(10))
+
+    def test_no_subsampling_when_n_within_limit(self):
+        from bencher.results.holoview_results.holoview_result import HoloviewResult
+
+        result = list(HoloviewResult.subsample_indices(5, 10))
+        assert result == list(range(5))
+
+    def test_subsampling_includes_first_and_last(self):
+        from bencher.results.holoview_results.holoview_result import HoloviewResult
+
+        result = list(HoloviewResult.subsample_indices(20, 3))
+        assert result[0] == 0
+        assert result[-1] == 19
+        assert len(result) == 3
+
+    def test_subsampling_correct_count(self):
+        from bencher.results.holoview_results.holoview_result import HoloviewResult
+
+        result = list(HoloviewResult.subsample_indices(100, 5))
+        assert len(result) == 5
+        assert result[0] == 0
+        assert result[-1] == 99

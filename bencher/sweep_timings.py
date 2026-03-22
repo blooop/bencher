@@ -23,6 +23,7 @@ class SweepTimings:
     job_execution_ms: float = 0.0  #: Job submission, execution, and result storage
     history_merge_ms: float = 0.0
     post_setup_ms: float = 0.0
+    render_ms: float = 0.0  #: Time spent generating plots (to_auto_plots / plot callbacks)
     total_ms: float = 0.0  #: Sum of all phase timings above
 
     def compute_total(self) -> float:
