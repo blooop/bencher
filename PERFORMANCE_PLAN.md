@@ -222,12 +222,13 @@ Test with cache clearing mid-run to verify race condition handling.
 **File**: `bencher/utils.py:94-107`, `bencher/worker_job.py:48-69`
 
 **Problem**: Each job computes two SHA1 hashes: `function_input_signature_pure` and
-`function_input_signature_benchmark_context`. The pure hash is always computed even when not needed
-(only used when `only_hash_tag` is False).
+`function_input_signature_benchmark_context`. The context hash was never read anywhere in the
+codebase (dead code). The pure hash is always computed even when not needed (only used when
+`only_hash_tag` is False).
 
-**Proposed fix**: Lazily compute hashes — only compute `function_input_signature_benchmark_context`
-when needed (i.e., when `only_hash_tag` is True, skip the context hash). Use `@property` with
-caching (`functools.cached_property`).
+**Status**: `function_input_signature_benchmark_context` removed in PR #816 (dead code). Remaining
+opportunity: lazily compute `function_input_signature_pure` only when `only_hash_tag` is False,
+using `@property` with caching (`functools.cached_property`).
 
 **Correctness risk**: LOW. Hash values are read-only after construction. Lazy evaluation produces
 identical results.
@@ -420,12 +421,12 @@ Every change in this plan must pass:
 |----------|------|--------|------|--------|--------|
 | **P0** | 4.1 Profile baseline | Low | None | Enables all other work | DONE (PR #787 — SweepTimings + perf workflow) |
 | **P1** | 1.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | DONE (single-copy pattern in place) |
-| **P1** | 1.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | |
+| **P1** | 1.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | DONE (PR #816) |
 | **P1** | 3.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
 | **P2** | 1.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
 | **P2** | 1.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | DONE (PR #811) |
 | **P2** | 2.1 Reuse cache instances | Low | Low | Moderate | DONE (PR #813) |
-| **P2** | 2.4 Lazy hash computation | Low | Low | Low-Moderate | |
+| **P2** | 2.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |
 | **P2** | 3.4 Single-pass reduction | Medium | Medium | Moderate | |
 | **P2** | 3.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
 | **P3** | 1.4 Deduplicate reversed product | Low | Low | Low | |
