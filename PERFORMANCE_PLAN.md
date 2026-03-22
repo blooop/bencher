@@ -416,22 +416,22 @@ Every change in this plan must pass:
 
 ## 6. Implementation Priority
 
-| Priority | Item | Effort | Risk | Impact |
-|----------|------|--------|------|--------|
-| **P0** | 4.1 Profile baseline | Low | None | Enables all other work |
-| **P1** | 1.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate |
-| **P1** | 1.5 Filter-then-copy kwargs | Low | Low | High for large sweeps |
-| **P1** | 3.1 Avoid dataset copy in `to_dataset()` | Medium | High | High |
-| **P2** | 1.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate |
-| **P2** | 1.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps |
-| **P2** | 2.1 Reuse cache instances | Low | Low | Moderate |
-| **P2** | 2.4 Lazy hash computation | Low | Low | Low-Moderate |
-| **P2** | 3.4 Single-pass reduction | Medium | Medium | Moderate |
-| **P2** | 3.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots |
-| **P3** | 1.4 Deduplicate reversed product | Low | Low | Low |
-| **P3** | 1.6 Streaming parallel results | Medium | Medium | High for parallel |
-| **P3** | 2.2 FanoutCache for parallel | Low | Low | Moderate for parallel |
-| **P3** | 2.3 Batch cache lookups | High | Medium | High for large sweeps |
-| **P3** | 2.5 `__getstate__` for results | Medium | Medium | Low |
-| **P3** | 3.2 DynamicMap for over_time | Medium | Low-Med | Moderate |
-| **P3** | 3.3 Pre-filter before to_dataframe | Low | Low | Low |
+| Priority | Item | Effort | Risk | Impact | Status |
+|----------|------|--------|------|--------|--------|
+| **P0** | 4.1 Profile baseline | Low | None | Enables all other work | DONE (PR #787 — SweepTimings + perf workflow) |
+| **P1** | 1.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | DONE (single-copy pattern in place) |
+| **P1** | 1.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | |
+| **P1** | 3.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
+| **P2** | 1.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
+| **P2** | 1.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | DONE (PR #811) |
+| **P2** | 2.1 Reuse cache instances | Low | Low | Moderate | DONE (PR #813) |
+| **P2** | 2.4 Lazy hash computation | Low | Low | Low-Moderate | |
+| **P2** | 3.4 Single-pass reduction | Medium | Medium | Moderate | |
+| **P2** | 3.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
+| **P3** | 1.4 Deduplicate reversed product | Low | Low | Low | |
+| **P3** | 2.3 Batch cache lookups | High | Medium | High for large sweeps | |
+| **P3** | 2.5 `__getstate__` for results | Medium | Medium | Low | |
+| **P3** | 3.2 DynamicMap for over_time | Medium | Low-Med | Moderate | PARTIAL (PR #814 — eliminated DataFrame conversion in common over_time path) |
+| **P3** | 3.3 Pre-filter before to_dataframe | Low | Low | Low | PARTIAL (PR #814 — heatmap + line no longer use DataFrame for common path) |
+| **P4** | 1.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
+| **P4** | 2.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
