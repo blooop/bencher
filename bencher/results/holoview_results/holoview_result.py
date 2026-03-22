@@ -1,6 +1,7 @@
 from __future__ import annotations
 import panel as pn
 import holoviews as hv
+import numpy as np
 from param import Parameter
 from functools import partial
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -201,6 +202,11 @@ class HoloviewResult(VideoResult):
         automatically.  This is used by both the curve renderer and the
         line renderer (for aggregated data that gained ``_std`` from
         ``_mean_over_time``).
+
+        Performance: avoids ``to_dataframe()`` when there are no categorical
+        groupby dimensions by constructing ``hv.Dataset`` directly from the
+        xarray Dataset.  The heavier DataFrame path is only used when manual
+        groupby is required.
         """
         var = result_var.name
         std_var = f"{var}_std"
@@ -212,12 +218,11 @@ class HoloviewResult(VideoResult):
         kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
         groupby = [d for d in ds_dims if d not in kdims]
 
-        df = dataset.to_dataframe().reset_index()
-
         vdims = [var, std_var] if has_spread else [var]
-        hvds = hv.Dataset(df, kdims=kdims + groupby, vdims=vdims)
 
         if not groupby:
+            # Fast path: build hv.Dataset directly from xarray (no DataFrame conversion)
+            hvds = hv.Dataset(dataset, kdims=kdims, vdims=vdims)
             pt = hv.Overlay()
             pt *= hv.Curve(hvds, kdims=kdims, vdims=var, label=var).opts(
                 title=title, xrotation=30, **kwargs
@@ -226,6 +231,8 @@ class HoloviewResult(VideoResult):
                 pt *= hv.Spread(hvds, kdims=kdims, vdims=[var, std_var])
             return pt.opts(legend_position="right")
 
+        # Groupby path: DataFrame needed for manual group iteration
+        df = dataset.to_dataframe().reset_index()
         pt = hv.Overlay()
         for key, group_df in df.groupby(groupby):
             label = str(key) if not isinstance(key, tuple) else ", ".join(str(k) for k in key)
@@ -258,8 +265,19 @@ class HoloviewResult(VideoResult):
             new_ds[std_var] = var_of_means**0.5
         return new_ds
 
+    @staticmethod
+    def subsample_indices(n, max_points):
+        """Return evenly-spaced indices into a length-*n* array.
+
+        Always includes the first and last index.  When *max_points* is
+        ``None`` or >= *n*, returns ``range(n)`` (no subsampling).
+        """
+        if max_points is None or n <= max_points:
+            return range(n)
+        return np.unique(np.linspace(0, n - 1, max_points, dtype=int)).tolist()
+
     def _build_time_holomap(self, dataset, result_var_name, make_plot_fn):
-        """Build per-time-point HoloMap + a static aggregated plot.
+        """Build per-time-point HoloMap + optional aggregated plot.
 
         ``make_plot_fn`` receives a Dataset *without* the ``over_time``
         dimension.  The aggregated dataset produced by ``_mean_over_time``
@@ -267,24 +285,31 @@ class HoloviewResult(VideoResult):
         ``_std``-aware (e.g. delegating to ``_build_curve_overlay``) will
         automatically render spread bands on the aggregated tab.
 
-        Returns ``pn.Tabs`` with two tabs:
+        When ``bench_cfg.max_slider_points`` is set, only that many
+        evenly-spaced time points are rendered for the slider (first and
+        last always included).  The aggregated tab still uses all data.
 
-        1. **Per Time Point** — *N*-entry HoloMap with a time slider.
-        2. **All Time Points (aggregated)** — data averaged over every snapshot.
+        When ``bench_cfg.show_aggregated_time_tab`` is ``False``, the
+        aggregation is skipped entirely for faster rendering.
         """
         times = dataset.coords["over_time"].values
         n_time = len(times)
 
+        max_slider = getattr(self.bench_cfg, "max_slider_points", None)
+        slider_indices = self.subsample_indices(n_time, max_slider)
+
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
-        for t in times:
+        for idx in slider_indices:
+            t = times[idx]
             ds_t = dataset.sel(over_time=t)
             holomap[t] = make_plot_fn(ds_t)
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        if n_time > 1:
+        show_agg = getattr(self.bench_cfg, "show_aggregated_time_tab", True)
+        if n_time > 1 and show_agg:
             ds_agg = self._mean_over_time(dataset, result_var_name)
             agg_plot = make_plot_fn(ds_agg)
             return pn.Tabs(
@@ -295,31 +320,34 @@ class HoloviewResult(VideoResult):
         return slider_pane
 
     def _build_time_holomap_raw(self, da, make_plot_fn):
-        """Build per-time-point HoloMap + a static aggregated plot for distributions.
+        """Build per-time-point HoloMap + optional aggregated plot for distributions.
 
         *make_plot_fn* receives a DataArray that **retains** the ``over_time``
         dimension (a single-element slice for per-time-point entries, or the
         full array for the aggregated tab).  Callers should flatten via
         ``.to_dataframe().reset_index()`` or equivalent.
 
-        Returns ``pn.Tabs`` with two tabs:
-
-        1. **Per Time Point** — HoloMap with a time slider (shown by default).
-        2. **All Time Points (aggregated)** — all samples pooled.
+        Respects ``bench_cfg.max_slider_points`` and
+        ``bench_cfg.show_aggregated_time_tab``.
         """
         times = da.coords["over_time"].values
         n_time = len(times)
 
+        max_slider = getattr(self.bench_cfg, "max_slider_points", None)
+        slider_indices = self.subsample_indices(n_time, max_slider)
+
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
-        for i, t in enumerate(times):
-            da_t = da.isel(over_time=slice(i, i + 1))
+        for idx in slider_indices:
+            t = times[idx]
+            da_t = da.isel(over_time=slice(idx, idx + 1))
             holomap[t] = make_plot_fn(da_t)
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        if n_time > 1:
+        show_agg = getattr(self.bench_cfg, "show_aggregated_time_tab", True)
+        if n_time > 1 and show_agg:
             agg_plot = make_plot_fn(da)
             return pn.Tabs(
                 ("Per Time Point", slider_pane),

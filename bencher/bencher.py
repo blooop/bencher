@@ -635,11 +635,13 @@ class Bench(BenchPlotServer):
             bench_res.post_setup()
         timings.post_setup_ms = elapsed()
 
+        if bench_cfg.auto_plot:
+            with phase_timer() as elapsed:
+                self.report.append_result(bench_res)
+            timings.render_ms = elapsed()
+
         timings.total_ms = timings.compute_total()
         bench_res.timings = timings
-
-        if bench_cfg.auto_plot:
-            self.report.append_result(bench_res)
 
         self.results.append(bench_res)
         return bench_res

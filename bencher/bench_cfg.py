@@ -61,6 +61,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
                                    every time it is called
         clear_history (bool): Clear historical results
         max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
+        max_slider_points (int): Maximum time points in the over_time slider. None means all.
+        show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots.
         print_pandas (bool): Print a pandas summary of the results to the console
         print_xarray (bool): Print an xarray summary of the results to the console
         serve_pandas (bool): Serve a pandas summary on the results webpage
@@ -230,6 +232,22 @@ class BenchRunCfg(BenchPlotSrvCfg):
         bounds=[1, None],
         allow_None=True,
         doc="Maximum number of over_time events to retain. Oldest events are trimmed. None means unlimited.",
+    )
+
+    max_slider_points: int | None = param.Integer(
+        None,
+        bounds=[2, None],
+        allow_None=True,
+        doc="Maximum number of time points shown in the over_time slider. "
+        "Evenly subsampled (first and last always included). "
+        "The aggregated tab still uses all data. None means no subsampling.",
+    )
+
+    show_aggregated_time_tab: bool = param.Boolean(
+        True,
+        doc="When over_time is active, show an 'All Time Points (aggregated)' tab "
+        "alongside the per-time-point slider. Set False to skip the aggregation "
+        "computation and extra render, improving performance.",
     )
 
     time_event: str | None = param.String(
