@@ -528,6 +528,7 @@ class Bench(BenchPlotServer):
             self.cache_size = cache_size_bytes
             self._executor.cache_size = cache_size_bytes
             self._collector.cache_size = cache_size_bytes
+            self._collector.close_caches()
             # Invalidate existing sample cache so it gets recreated with the new size
             if self.sample_cache is not None:
                 self.sample_cache.close()
