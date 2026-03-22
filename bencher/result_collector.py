@@ -104,7 +104,10 @@ class ResultCollector:
             self._history_cache.close()
             self._history_cache = None
 
-    def __del__(self) -> None:
+    def __enter__(self) -> "ResultCollector":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
         self.close_caches()
 
     def setup_dataset(
@@ -298,11 +301,11 @@ class ResultCollector:
         # object index may not be pickleable so remove before caching
         obj_index_tmp = bench_res.object_index
         bench_res.object_index = []
-
-        c[bench_cfg_hash] = bench_res
-
-        # restore object index
-        bench_res.object_index = obj_index_tmp
+        try:
+            c[bench_cfg_hash] = bench_res
+        finally:
+            # restore object index even if the cache write fails
+            bench_res.object_index = obj_index_tmp
 
         logger.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
         c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
