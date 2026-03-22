@@ -224,7 +224,7 @@ class TestCacheReuse(unittest.TestCase):
             title="test",
             repeats=1,
         )
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         hashes = []
         self.collector.cache_results(bench_res, "hash-a", hashes)
@@ -253,7 +253,7 @@ class TestCacheReuse(unittest.TestCase):
 
         all_hashes = []
         for i in range(3):
-            bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+            bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
             self.collector.cache_results(bench_res, f"seq-hash-{i}", all_hashes)
 
         self.assertEqual(all_hashes, ["seq-hash-0", "seq-hash-1", "seq-hash-2"])
