@@ -83,7 +83,7 @@ class ResultCollector:
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, list[tuple], list[str]]:
+    ) -> tuple[BenchResult, zip, list[str], int]:
         """Initialize an n-dimensional xarray dataset from benchmark configuration parameters.
 
         This function creates the data structures needed to store benchmark results based on
@@ -96,10 +96,11 @@ class ResultCollector:
             time_src (datetime | str): Timestamp or event name for the benchmark run
 
         Returns:
-            tuple[BenchResult, list[tuple], list[str]]:
+            tuple[BenchResult, zip, list[str], int]:
                 - A BenchResult object with the initialized dataset
-                - A list of function input tuples (index, value pairs)
+                - A lazy iterator of function input tuples (index, value pairs)
                 - A list of dimension names for the dataset
+                - The total number of jobs (Cartesian product size)
         """
         if time_src is None:
             time_src = datetime.now()
@@ -111,9 +112,10 @@ class ResultCollector:
             logger.info(i.sampling_str())
 
         dims_cfg = DimsCfg(bench_cfg)
-        function_inputs = list(
-            zip(product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges))
-        )
+        total_jobs = 1
+        for s in dims_cfg.dims_size:
+            total_jobs *= s
+        function_inputs = zip(product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges))
         # xarray stores K N-dimensional arrays of data.
         # Each array is named and in this case we have an ND array for each result variable
         data_vars = {}
@@ -143,7 +145,7 @@ class ResultCollector:
         bench_res.dataset_list = dataset_list
         bench_res.setup_object_index()
 
-        return bench_res, function_inputs, dims_cfg.dims_name
+        return bench_res, function_inputs, dims_cfg.dims_name, total_jobs
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
