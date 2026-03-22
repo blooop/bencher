@@ -172,6 +172,11 @@ docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs"
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
 
+#performance tracking
+test-timing-xml = "pytest --junit-xml=test-results.xml"
+test-timing-report = "python3 -m bencher.test_timing_report test-results.xml reports"
+test-timing = { depends-on = ["test-timing-xml", "test-timing-report"] }
+
 
 [tool.pylint]
 extension-pkg-whitelist = ["numpy", "scipy"]

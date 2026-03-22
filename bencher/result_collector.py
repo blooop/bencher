@@ -7,6 +7,7 @@ including xarray dataset operations, caching, and metadata management.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime
 from itertools import product
 from typing import Any
@@ -80,10 +81,39 @@ class ResultCollector:
         """
         self.cache_size = cache_size
         self.ds_dynamic: dict = {}
+        self._benchmark_cache: Cache | None = None
+        self._history_cache: Cache | None = None
+
+    def get_benchmark_cache(self) -> Cache:
+        """Return the persistent benchmark_inputs Cache, creating it on first access."""
+        if self._benchmark_cache is None:
+            self._benchmark_cache = Cache("cachedir/benchmark_inputs", size_limit=self.cache_size)
+        return self._benchmark_cache
+
+    def get_history_cache(self) -> Cache:
+        """Return the persistent history Cache, creating it on first access."""
+        if self._history_cache is None:
+            self._history_cache = Cache("cachedir/history", size_limit=self.cache_size)
+        return self._history_cache
+
+    def close_caches(self) -> None:
+        """Close any open cache instances. Safe to call multiple times."""
+        if self._benchmark_cache is not None:
+            self._benchmark_cache.close()
+            self._benchmark_cache = None
+        if self._history_cache is not None:
+            self._history_cache.close()
+            self._history_cache = None
+
+    def __enter__(self) -> "ResultCollector":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close_caches()
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, list[tuple], list[str]]:
+    ) -> tuple[BenchResult, zip, list[str], int]:
         """Initialize an n-dimensional xarray dataset from benchmark configuration parameters.
 
         This function creates the data structures needed to store benchmark results based on
@@ -96,10 +126,11 @@ class ResultCollector:
             time_src (datetime | str): Timestamp or event name for the benchmark run
 
         Returns:
-            tuple[BenchResult, list[tuple], list[str]]:
+            tuple[BenchResult, zip, list[str], int]:
                 - A BenchResult object with the initialized dataset
-                - A list of function input tuples (index, value pairs)
+                - A lazy iterator of function input tuples (index, value pairs)
                 - A list of dimension names for the dataset
+                - The total number of jobs (Cartesian product size)
         """
         if time_src is None:
             time_src = datetime.now()
@@ -111,9 +142,8 @@ class ResultCollector:
             logger.info(i.sampling_str())
 
         dims_cfg = DimsCfg(bench_cfg)
-        function_inputs = list(
-            zip(product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges))
-        )
+        total_jobs = math.prod(dims_cfg.dims_size)
+        function_inputs = zip(product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges))
         # xarray stores K N-dimensional arrays of data.
         # Each array is named and in this case we have an ND array for each result variable
         data_vars = {}
@@ -143,7 +173,7 @@ class ResultCollector:
         bench_res.dataset_list = dataset_list
         bench_res.setup_object_index()
 
-        return bench_res, function_inputs, dims_cfg.dims_name
+        return bench_res, function_inputs, dims_cfg.dims_name, total_jobs
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
@@ -266,20 +296,20 @@ class ResultCollector:
             bench_cfg_hash (str): The hash value to use as the cache key
             bench_cfg_hashes (list[str]): List to append the hash to (modified in place)
         """
-        with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-            logger.info(f"saving results with key: {bench_cfg_hash}")
-            bench_cfg_hashes.append(bench_cfg_hash)
-            # object index may not be pickleable so remove before caching
-            obj_index_tmp = bench_res.object_index
-            bench_res.object_index = []
-
+        c = self.get_benchmark_cache()
+        logger.info(f"saving results with key: {bench_cfg_hash}")
+        bench_cfg_hashes.append(bench_cfg_hash)
+        # object index may not be pickleable so remove before caching
+        obj_index_tmp = bench_res.object_index
+        bench_res.object_index = []
+        try:
             c[bench_cfg_hash] = bench_res
-
-            # restore object index
+        finally:
+            # restore object index even if the cache write fails
             bench_res.object_index = obj_index_tmp
 
-            logger.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
-            c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
+        logger.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
+        c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
 
     def load_history_cache(
         self,
@@ -305,35 +335,35 @@ class ResultCollector:
             xr.Dataset: Combined dataset with both historical and current benchmark data,
                 or just the current data if no history exists or history is cleared
         """
-        with Cache("cachedir/history", size_limit=self.cache_size) as c:
-            if clear_history:
-                logger.info("clearing history")
-            else:
-                logger.info(f"checking historical key: {bench_cfg_hash}")
-                if bench_cfg_hash in c:
-                    logger.info("loading historical data from cache")
-                    ds_old = c[bench_cfg_hash]
-                    if (
-                        "over_time" in ds_old.dims
-                        and "over_time" in dataset.dims
-                        and ds_old["over_time"].dtype != dataset["over_time"].dtype
-                    ):
-                        logger.warning(
-                            "Discarding incompatible historical data "
-                            "(over_time dtype changed: "
-                            f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
-                        )
-                    else:
-                        dataset = xr.concat([ds_old, dataset], "over_time")
+        c = self.get_history_cache()
+        if clear_history:
+            logger.info("clearing history")
+        else:
+            logger.info(f"checking historical key: {bench_cfg_hash}")
+            if bench_cfg_hash in c:
+                logger.info("loading historical data from cache")
+                ds_old = c[bench_cfg_hash]
+                if (
+                    "over_time" in ds_old.dims
+                    and "over_time" in dataset.dims
+                    and ds_old["over_time"].dtype != dataset["over_time"].dtype
+                ):
+                    logger.warning(
+                        "Discarding incompatible historical data "
+                        "(over_time dtype changed: "
+                        f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
+                    )
                 else:
-                    logger.info("did not detect any historical data")
+                    dataset = xr.concat([ds_old, dataset], "over_time")
+            else:
+                logger.info("did not detect any historical data")
 
-            if max_time_events is not None and "over_time" in dataset.dims:
-                if dataset.sizes["over_time"] > max_time_events:
-                    dataset = dataset.isel(over_time=slice(-max_time_events, None))
+        if max_time_events is not None and "over_time" in dataset.dims:
+            if dataset.sizes["over_time"] > max_time_events:
+                dataset = dataset.isel(over_time=slice(-max_time_events, None))
 
-            logger.info("saving data to history cache")
-            c[bench_cfg_hash] = dataset
+        logger.info("saving data to history cache")
+        c[bench_cfg_hash] = dataset
         return dataset
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: Any) -> None:

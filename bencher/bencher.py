@@ -9,7 +9,6 @@ from typing import Callable, Any
 from copy import deepcopy
 import param
 import xarray as xr
-from diskcache import Cache
 from contextlib import suppress
 from functools import partial
 import panel as pn
@@ -303,12 +302,10 @@ class Bench(BenchPlotServer):
             FileNotFoundError: If only_plot=True and no cached results exist
         """
 
-        input_vars_in = deepcopy(input_vars)
-        result_vars_in = deepcopy(result_vars)
-        const_vars_in = deepcopy(const_vars)
-
         if self.worker_class_instance is not None:
-            if input_vars_in is None:
+            if input_vars is not None:
+                input_vars_in = deepcopy(input_vars)
+            else:
                 logging.info(
                     "No input variables passed, using all param variables in bench class as inputs"
                 )
@@ -318,7 +315,10 @@ class Bench(BenchPlotServer):
                     input_vars_in = deepcopy(self.input_vars)
                 for i in input_vars_in:
                     logging.info(f"input var: {i.name}")
-            if result_vars_in is None:
+
+            if result_vars is not None:
+                result_vars_in = deepcopy(result_vars)
+            else:
                 logging.info(
                     "No results variables passed, using all result variables in bench class:"
                 )
@@ -327,18 +327,17 @@ class Bench(BenchPlotServer):
                 else:
                     result_vars_in = deepcopy(self.result_vars)
 
-            if const_vars_in is None:
+            if const_vars is not None:
+                const_vars_in = deepcopy(const_vars)
+            else:
                 if self.const_vars is None:
                     const_vars_in = self.worker_class_instance.get_input_defaults()
                 else:
                     const_vars_in = deepcopy(self.const_vars)
         else:
-            if input_vars_in is None:
-                input_vars_in = []
-            if result_vars_in is None:
-                result_vars_in = []
-            if const_vars_in is None:
-                const_vars_in = []
+            input_vars_in = deepcopy(input_vars) if input_vars is not None else []
+            result_vars_in = deepcopy(result_vars) if result_vars is not None else []
+            const_vars_in = deepcopy(const_vars) if const_vars is not None else []
 
         if run_cfg is None:
             if self.run_cfg is None:
@@ -529,6 +528,7 @@ class Bench(BenchPlotServer):
             self.cache_size = cache_size_bytes
             self._executor.cache_size = cache_size_bytes
             self._collector.cache_size = cache_size_bytes
+            self._collector.close_caches()
             # Invalidate existing sample cache so it gets recreated with the new size
             if self.sample_cache is not None:
                 self.sample_cache.close()
@@ -570,23 +570,23 @@ class Bench(BenchPlotServer):
 
         calculate_results = True
         with phase_timer() as elapsed:
-            with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-                if run_cfg.clear_cache:
-                    c.delete(bench_cfg_hash)
-                    logging.info("cleared cache")
-                elif run_cfg.cache_results:
-                    logging.info(
-                        f"checking for previously calculated results with key: {bench_cfg_hash}"
-                    )
-                    if bench_cfg_hash in c:
-                        logging.info(f"loading cached results from key: {bench_cfg_hash}")
-                        bench_res = c[bench_cfg_hash]
-                        # if not over_time:  # if over time we always want to calculate results
-                        calculate_results = False
-                    else:
-                        logging.info("did not detect results in cache")
-                        if run_cfg.only_plot:
-                            raise FileNotFoundError("Was not able to load the results to plot!")
+            c = self._collector.get_benchmark_cache()
+            if run_cfg.clear_cache:
+                c.delete(bench_cfg_hash)
+                logging.info("cleared cache")
+            elif run_cfg.cache_results:
+                logging.info(
+                    f"checking for previously calculated results with key: {bench_cfg_hash}"
+                )
+                if bench_cfg_hash in c:
+                    logging.info(f"loading cached results from key: {bench_cfg_hash}")
+                    bench_res = c[bench_cfg_hash]
+                    # if not over_time:  # if over time we always want to calculate results
+                    calculate_results = False
+                else:
+                    logging.info("did not detect results in cache")
+                    if run_cfg.only_plot:
+                        raise FileNotFoundError("Was not able to load the results to plot!")
         timings.cache_check_ms = elapsed()
 
         if run_cfg.time_event is not None:
@@ -698,7 +698,7 @@ class Bench(BenchPlotServer):
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, list[tuple], list[str]]:
+    ) -> tuple[BenchResult, zip, list[str], int]:
         """Initialize n-dimensional xarray dataset for storing benchmark results."""
         return self._collector.setup_dataset(bench_cfg, time_src)
 
@@ -741,7 +741,7 @@ class Bench(BenchPlotServer):
             timings = SweepTimings()
 
         with phase_timer() as elapsed:
-            bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
+            bench_res, func_inputs, dims_name, total_jobs = self.setup_dataset(bench_cfg, time_src)
             # Adjust only the sampling traversal; leave dims/plotting unchanged
             if sample_order == SampleOrder.REVERSED:
                 total_dims = len(dims_name)
@@ -792,7 +792,7 @@ class Bench(BenchPlotServer):
                 job.setup_hashes()
                 jobs.append(job)
 
-                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
+                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{total_jobs}"
                 worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
                 cache_jobs.append(
                     Job(

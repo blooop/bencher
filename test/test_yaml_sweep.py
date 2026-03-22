@@ -6,7 +6,7 @@ import bencher as bn
 
 
 EXAMPLE_YAML = (
-    Path(__file__).resolve().parent.parent / "bencher" / "example" / "example_yaml_sweep_list.yaml"
+    Path(__file__).resolve().parent.parent / "bencher" / "example" / "yaml_sweep_list.yaml"
 )
 
 
