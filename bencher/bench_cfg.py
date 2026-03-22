@@ -63,6 +63,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
         max_slider_points (int): Maximum time points in the over_time slider. None means all.
         show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots.
+        show_aggregate_plots (bool): Show aggregated BandResult plots when aggregate is set.
         print_pandas (bool): Print a pandas summary of the results to the console
         print_xarray (bool): Print an xarray summary of the results to the console
         serve_pandas (bool): Serve a pandas summary on the results webpage
@@ -247,6 +248,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
         True,
         doc="When over_time is active, show an 'All Time Points (aggregated)' tab "
         "alongside the per-time-point slider. Set False to skip the aggregation "
+        "computation and extra render, improving performance.",
+    )
+
+    show_aggregate_plots: bool = param.Boolean(
+        True,
+        doc="When aggregate is set on plot_sweep, show the aggregated BandResult "
+        "plots in the auto-plots view. Set False to skip the aggregation "
         "computation and extra render, improving performance.",
     )
 
