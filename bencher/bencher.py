@@ -1030,10 +1030,11 @@ class Bench(BenchPlotServer):
             n_warm_start_trials=n_warm,
             n_new_trials=n_trials,
             target_names=target_names,
+            bench_cfg=bench_cfg,
         )
 
-        if plot:
-            self.report.append(result.to_panel())
+        if plot and self.results:
+            self.report.append(self.results[-1].to_optuna_plots())
 
         return result
 
@@ -1046,6 +1047,17 @@ class Bench(BenchPlotServer):
         input_vars_in = deepcopy(input_vars)
         result_vars_in = deepcopy(result_vars)
         const_vars_in = deepcopy(const_vars)
+
+        # Prefer variables from the last plot_sweep result so that
+        # optimize() matches the preceding sweep by default.
+        last_cfg = self.results[-1].bench_cfg if self.results else None
+        if last_cfg is not None:
+            if input_vars_in is None:
+                input_vars_in = deepcopy(last_cfg.input_vars)
+            if result_vars_in is None:
+                result_vars_in = deepcopy(last_cfg.result_vars)
+            if const_vars_in is None:
+                const_vars_in = deepcopy(last_cfg.const_vars)
 
         # Use worker_class_instance if available; fall back to extracting
         # the ParametrizedSweep from a bound-method worker so that

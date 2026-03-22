@@ -5,11 +5,7 @@ import logging
 import optuna
 import panel as pn
 import param
-from optuna.visualization import (
-    plot_param_importances,
-    plot_pareto_front,
-    plot_optimization_history,
-)
+from optuna.visualization import plot_param_importances
 
 from bencher.bench_cfg import BenchCfg
 
@@ -53,13 +49,22 @@ def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> o
 
 
 # BENCH_CFG
-def param_importance(bench_cfg: BenchCfg, study: optuna.Study) -> pn.Row:
+def param_importance(
+    bench_cfg: BenchCfg, study: optuna.Study, plot_width: int | None = None
+) -> pn.Column:
     col_importance = pn.Column()
-    for tgt in bench_cfg.optuna_targets():
+    for idx, tgt in enumerate(bench_cfg.optuna_targets()):
+
+        def _target(t, i=idx):
+            return t.values[i]
+
+        fig = plot_param_importances(study, target=_target, target_name=tgt)
+        if plot_width and hasattr(fig, "update_layout"):
+            fig.update_layout(width=plot_width)
         col_importance.append(
             pn.Column(
                 pn.pane.Markdown(f"## Parameter importance for: {tgt}"),
-                plot_param_importances(study, target=lambda t: t.values[0], target_name=tgt),
+                fig,
             )
         )
     return col_importance
@@ -166,30 +171,12 @@ def _append_safe(row, plot_fn, *args, **kwargs):
         logging.exception(e)
 
 
-def summarise_optuna_study(study: optuna.study.Study) -> pn.pane.panel:
-    """Summarise an optuna study in a panel format"""
-    row = pn.Column(name="Optimisation Results")
-    n_objectives = len(study.directions)
-    is_multi = n_objectives >= 2
-
-    if is_multi:
-        for idx in range(n_objectives):
-            target_name = f"Objective {idx}"
-
-            def target(t, i=idx):
-                return t.values[i]
-
-            _append_safe(
-                row, plot_optimization_history, study, target=target, target_name=target_name
-            )
-            _append_safe(row, plot_param_importances, study, target=target, target_name=target_name)
-
-        _append_safe(row, plot_pareto_front, study)
-        summary = f"Pareto-front size: {len(study.best_trials)}"
-    else:
-        _append_safe(row, plot_optimization_history, study)
-        _append_safe(row, plot_param_importances, study)
-        summary = f"Best value: {study.best_value}\nParams: {study.best_params}"
-
-    row.append(pn.pane.Markdown(f"```\n{summary}```"))
-    return row
+def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
+    """Like _append_safe but sets a consistent width on the resulting plotly figure."""
+    try:
+        fig = plot_fn(*args, **kwargs)
+        if hasattr(fig, "update_layout"):
+            fig.update_layout(width=width)
+        row.append(fig)
+    except Exception as e:  # pylint: disable=broad-except
+        logging.exception(e)

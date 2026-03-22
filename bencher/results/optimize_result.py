@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import optuna
-import panel as pn
 
-from bencher.optuna_conversions import summarise_optuna_study
+if TYPE_CHECKING:
+    from bencher.bench_cfg import BenchCfg
 
 
 @dataclass
@@ -20,12 +20,14 @@ class OptimizeResult:
         n_warm_start_trials: Number of trials seeded from cache / prior results.
         n_new_trials: Number of new trials evaluated during optimization.
         target_names: Names of the optimization target variables.
+        bench_cfg: Optional BenchCfg for rich report generation.
     """
 
     study: optuna.Study
     n_warm_start_trials: int = 0
     n_new_trials: int = 0
     target_names: list[str] = field(default_factory=list)
+    bench_cfg: BenchCfg | None = None
 
     # ------------------------------------------------------------------
     # Single-objective helpers
@@ -59,14 +61,6 @@ class OptimizeResult:
     def best_trials(self) -> list[optuna.trial.FrozenTrial]:
         """Pareto-optimal trials (multi-objective)."""
         return self.study.best_trials
-
-    # ------------------------------------------------------------------
-    # Visualization
-    # ------------------------------------------------------------------
-
-    def to_panel(self) -> pn.pane.panel:
-        """Panel visualization reusing the existing ``summarise_optuna_study`` helper."""
-        return summarise_optuna_study(self.study)
 
     # ------------------------------------------------------------------
     # Text summary

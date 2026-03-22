@@ -13,9 +13,9 @@ import bencher as bn
 from bencher.optuna_conversions import (
     sweep_var_to_optuna_dist,
     sweep_var_to_suggest,
-    summarise_optuna_study,
     summarise_trial,
     optuna_grid_search,
+    param_importance,
 )
 from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
 from bencher.variables.time import TimeSnapshot
@@ -223,11 +223,32 @@ class TestCfgFromOptunaTrial(unittest.TestCase):
         self.assertTrue(len(study.trials) > 0)
 
 
-class TestSummariseOptunaStudy(unittest.TestCase):
-    def test_summarise_study(self):
-        study = optuna.create_study(direction="minimize")
-        study.optimize(lambda trial: trial.suggest_float("x", 0, 1) ** 2, n_trials=5)
-        result = summarise_optuna_study(study)
+class TestParamImportance(unittest.TestCase):
+    def test_param_importance(self):
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test_importance",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        study = res.bench_result_to_study(include_meta=True)
+        result = param_importance(res.bench_cfg, study)
+        self.assertIsInstance(result, pn.Column)
+        self.assertTrue(len(result) > 0)
+
+    def test_param_importance_with_width(self):
+        bench = SweepCfg().to_bench()
+        res = bench.plot_sweep(
+            "test_importance_w",
+            input_vars=["float_var"],
+            result_vars=["result"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        study = res.bench_result_to_study(include_meta=True)
+        result = param_importance(res.bench_cfg, study, plot_width=500)
         self.assertIsInstance(result, pn.Column)
         self.assertTrue(len(result) > 0)
 

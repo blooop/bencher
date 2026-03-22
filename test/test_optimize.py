@@ -75,6 +75,19 @@ def _run_cfg():
     return cfg
 
 
+def _collect_markdown(panel):
+    """Recursively collect all Markdown text from a nested panel layout."""
+    import panel as pn
+
+    texts = []
+    if isinstance(panel, pn.pane.Markdown):
+        texts.append(panel.object)
+    elif hasattr(panel, "objects"):
+        for obj in panel.objects:
+            texts.append(_collect_markdown(obj))
+    return " ".join(texts)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -167,63 +180,16 @@ class TestCategoricalInputs:
 
 
 class TestOptimizeResult:
-    def test_to_panel(self):
-        cfg = Sphere()
-        bench = bn.Bench("test_opt_panel", cfg, run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=10, plot=False)
-        panel = result.to_panel()
-        assert panel is not None
-
     def test_target_names(self):
         cfg = Sphere()
         bench = bn.Bench("test_opt_targets", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=5, plot=False)
         assert result.target_names == ["loss"]
 
-
-class TestSummariseOptunaStudy:
-    """Tests for summarise_optuna_study handling single vs multi-objective correctly."""
-
-    def test_single_objective_no_pareto_error(self, caplog):
-        """Single-objective study should not attempt plot_pareto_front."""
+    def test_summary_text(self):
         cfg = Sphere()
-        bench = bn.Bench("test_summary_single", cfg, run_cfg=_run_cfg())
+        bench = bn.Bench("test_opt_summary_text", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=5, plot=False)
-        panel = result.to_panel()
-        assert panel is not None
-        # Should not log any plot_pareto_front error
-        assert "plot_pareto_front" not in caplog.text
-
-    def test_single_objective_panel_shows_best_value(self):
-        """Single-objective panel should contain best value text."""
-        import panel as pn
-
-        cfg = Sphere()
-        bench = bn.Bench("test_summary_best", cfg, run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=5, plot=False)
-        panel = result.to_panel()
-        # Find Markdown panes and check their content
-        md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]
-        combined = " ".join(md_texts)
-        assert "Best value" in combined
-
-    def test_multi_objective_panel_no_best_value_error(self):
-        """Multi-objective panel should not call study.best_value (which raises)."""
-        cfg = MultiObjective()
-        bench = bn.Bench("test_summary_multi", cfg, run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=10, plot=False)
-        # Should not raise — previously would crash on study.best_value
-        panel = result.to_panel()
-        assert panel is not None
-
-    def test_multi_objective_panel_shows_pareto_size(self):
-        """Multi-objective panel should show Pareto-front size."""
-        import panel as pn
-
-        cfg = MultiObjective()
-        bench = bn.Bench("test_summary_pareto_size", cfg, run_cfg=_run_cfg())
-        result = bench.optimize(n_trials=10, plot=False)
-        panel = result.to_panel()
-        md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]
-        combined = " ".join(md_texts)
-        assert "Pareto-front size" in combined
+        text = result.summary()
+        assert "best value" in text
+        assert "new trials" in text

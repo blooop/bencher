@@ -66,7 +66,7 @@ def example_optimize_one_liner(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
     print(result.summary())
     # Return a bench for consistency with the docs generator
     bench = bn.Bench("OptimizeOneLiner", Rastrigin(), run_cfg=run_cfg)
-    bench.report.append(result.to_panel())
+    bench.report.append_markdown(result.summary())
     return bench
 
 
