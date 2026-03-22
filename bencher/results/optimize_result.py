@@ -15,6 +15,7 @@ from optuna.visualization import (
 )
 from bencher.optuna_conversions import (
     _append_safe,
+    _append_safe_sized,
     summarise_optuna_study,
     summarise_trial,
     param_importance,
@@ -90,6 +91,7 @@ class OptimizeResult:
         study = self.study
         bench_cfg = self.bench_cfg
         target_names = bench_cfg.optuna_targets()
+        plot_w = bench_cfg.plot_width or bench_cfg.plot_size or 600
 
         study_pane = pn.Column()
         param_str = []
@@ -99,48 +101,42 @@ class OptimizeResult:
         if len(target_names) > 1:
             # --- Pareto Front ---
             if len(target_names) <= 3:
-                study_pane.append(
-                    plot_pareto_front(
-                        study,
-                        target_names=target_names,
-                        include_dominated_trials=False,
-                    )
+                _append_safe(
+                    study_pane,
+                    plot_pareto_front,
+                    study,
+                    target_names=target_names,
+                    include_dominated_trials=False,
                 )
             else:
                 print("plotting pareto front of first 3 result variables")
-                study_pane.append(
-                    plot_pareto_front(
-                        study,
-                        targets=lambda t: (t.values[0], t.values[1], t.values[2]),
-                        target_names=target_names[:3],
-                        include_dominated_trials=False,
-                    )
+                _append_safe(
+                    study_pane,
+                    plot_pareto_front,
+                    study,
+                    targets=lambda t: (t.values[0], t.values[1], t.values[2]),
+                    target_names=target_names[:3],
+                    include_dominated_trials=False,
                 )
 
-            # --- Per-objective tabs: history + importance ---
-            obj_tabs = []
+            # --- Per-objective columns aligned with sweep result vars ---
+            obj_row = pn.Row()
             for idx, tgt in enumerate(target_names):
 
                 def _target(t, i=idx):
                     return t.values[i]
 
-                tab_col = pn.Column()
-                _append_safe(
-                    tab_col,
-                    plot_optimization_history,
-                    study,
-                    target=_target,
-                    target_name=tgt,
+                col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
+                _append_safe_sized(
+                    col, plot_optimization_history, plot_w,
+                    study, target=_target, target_name=tgt,
                 )
-                _append_safe(
-                    tab_col,
-                    plot_param_importances,
-                    study,
-                    target=_target,
-                    target_name=tgt,
+                _append_safe_sized(
+                    col, plot_param_importances, plot_w,
+                    study, target=_target, target_name=tgt,
                 )
-                obj_tabs.append((tgt, tab_col))
-            study_pane.append(pn.Tabs(*obj_tabs))
+                obj_row.append(col)
+            study_pane.append(obj_row)
 
             param_str.append(
                 f"    Number of trials on the Pareto front: {len(study.best_trials)}"
@@ -149,10 +145,13 @@ class OptimizeResult:
                 param_str.extend(summarise_trial(t, bench_cfg))
 
         else:
-            _append_safe(study_pane, plot_optimization_history, study)
+            _append_safe_sized(study_pane, plot_optimization_history, plot_w, study)
 
             if len(bench_cfg.input_vars) > 1:
-                study_pane.append(plot_param_importances(study, target_name=target_names[0]))
+                _append_safe_sized(
+                    study_pane, plot_param_importances, plot_w,
+                    study, target_name=target_names[0],
+                )
 
             param_str.extend(summarise_trial(study.best_trial, bench_cfg))
 

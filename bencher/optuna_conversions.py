@@ -166,6 +166,17 @@ def _append_safe(row, plot_fn, *args, **kwargs):
         logging.exception(e)
 
 
+def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
+    """Like _append_safe but sets a consistent width on the resulting plotly figure."""
+    try:
+        fig = plot_fn(*args, **kwargs)
+        if hasattr(fig, "update_layout"):
+            fig.update_layout(width=width)
+        row.append(fig)
+    except Exception as e:  # pylint: disable=broad-except
+        logging.exception(e)
+
+
 def summarise_optuna_study(study: optuna.study.Study) -> pn.pane.panel:
     """Summarise an optuna study in a panel format"""
     row = pn.Column(name="Optimisation Results")

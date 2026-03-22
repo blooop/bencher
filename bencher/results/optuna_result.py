@@ -20,6 +20,7 @@ from bencher.results.bench_result_base import BenchResultBase, ReduceType
 # from bencher.results.bench_result_base import BenchResultBase
 from bencher.optuna_conversions import (
     _append_safe,
+    _append_safe_sized,
     sweep_var_to_optuna_dist,
     summarise_trial,
     param_importance,
@@ -243,6 +244,8 @@ class OptunaResult(BenchResultBase):
             self.studies.append(self.bench_result_to_study(False))
             tab_names = ["With Repeats", "Without Repeats"]
 
+        plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600
+
         study_panes = []
         for study, tab_name in zip(self.studies, tab_names):
             study_pane = pn.Column()
@@ -252,52 +255,46 @@ class OptunaResult(BenchResultBase):
             if len(target_names) > 1:
                 # --- Pareto Front ---
                 if len(target_names) <= 3:
-                    study_pane.append(
-                        plot_pareto_front(
-                            study,
-                            target_names=target_names,
-                            include_dominated_trials=False,
-                        )
+                    _append_safe(
+                        study_pane,
+                        plot_pareto_front,
+                        study,
+                        target_names=target_names,
+                        include_dominated_trials=False,
                     )
                 else:
                     print("plotting pareto front of first 3 result variables")
-                    study_pane.append(
-                        plot_pareto_front(
-                            study,
-                            targets=lambda t: (t.values[0], t.values[1], t.values[2]),
-                            target_names=target_names[:3],
-                            include_dominated_trials=False,
-                        )
+                    _append_safe(
+                        study_pane,
+                        plot_pareto_front,
+                        study,
+                        targets=lambda t: (t.values[0], t.values[1], t.values[2]),
+                        target_names=target_names[:3],
+                        include_dominated_trials=False,
                     )
                     if pareto_width is not None:
                         study_pane[-1].width = pareto_width
                     if pareto_height is not None:
                         study_pane[-1].height = pareto_height
 
-                # --- Per-objective tabs: history + importance ---
-                obj_tabs = []
+                # --- Per-objective columns aligned with sweep result vars ---
+                obj_row = pn.Row()
                 for idx, tgt in enumerate(target_names):
 
                     def _target(t, i=idx):
                         return t.values[i]
 
-                    tab_col = pn.Column()
-                    _append_safe(
-                        tab_col,
-                        plot_optimization_history,
-                        study,
-                        target=_target,
-                        target_name=tgt,
+                    col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
+                    _append_safe_sized(
+                        col, plot_optimization_history, plot_w,
+                        study, target=_target, target_name=tgt,
                     )
-                    _append_safe(
-                        tab_col,
-                        plot_param_importances,
-                        study,
-                        target=_target,
-                        target_name=tgt,
+                    _append_safe_sized(
+                        col, plot_param_importances, plot_w,
+                        study, target=_target, target_name=tgt,
                     )
-                    obj_tabs.append((tgt, tab_col))
-                study_pane.append(pn.Tabs(*obj_tabs))
+                    obj_row.append(col)
+                study_pane.append(obj_row)
 
                 param_str.append(
                     f"    Number of trials on the Pareto front: {len(study.best_trials)}"
@@ -306,10 +303,15 @@ class OptunaResult(BenchResultBase):
                     param_str.extend(summarise_trial(t, self.bench_cfg))
 
             else:
-                _append_safe(study_pane, plot_optimization_history, study)
+                _append_safe_sized(
+                    study_pane, plot_optimization_history, plot_w, study,
+                )
 
                 if len(self.bench_cfg.input_vars) > 1:
-                    study_pane.append(plot_param_importances(study, target_name=target_names[0]))
+                    _append_safe_sized(
+                        study_pane, plot_param_importances, plot_w,
+                        study, target_name=target_names[0],
+                    )
 
                 param_str.extend(summarise_trial(study.best_trial, self.bench_cfg))
 
