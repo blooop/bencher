@@ -345,7 +345,7 @@ def example_meta_optimization_aggregated(run_cfg: bn.BenchRunCfg | None = None) 
 
     bench.plot_sweep(
         title="Optimization Aggregated",
-        input_vars=[bn.p("with_over_time", [False, True])],
+        input_vars=[bn.p("with_over_time", [False])],
     )
 
     return bench

@@ -65,6 +65,11 @@ def _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names):
     return df.groupby(group_cols, as_index=False)[agg_cols].mean()
 
 
+def _study_has_multiple_params(study):
+    """True when the study has >1 trial parameter, making importance meaningful."""
+    return bool(study.trials) and len(study.trials[0].params) > 1
+
+
 class OptunaResult(BenchResultBase):
     def to_optuna_plots(self, **kwargs) -> list[pn.pane.panel]:
         """Create an optuna summary from the benchmark results
@@ -241,8 +246,6 @@ class OptunaResult(BenchResultBase):
 
         plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600
         target_names = self.bench_cfg.optuna_targets()
-        has_multiple_inputs = len(self.bench_cfg.input_vars) > 1
-
         study_panes = []
         for study, tab_name in zip(self.studies, tab_names):
             study_pane = pn.Column()
@@ -269,7 +272,7 @@ class OptunaResult(BenchResultBase):
                 study_pane.append(history_row)
 
                 # --- Parameter importance (all inputs, per objective target) ---
-                if has_multiple_inputs:
+                if _study_has_multiple_params(study):
                     try:
                         study_pane.append(param_importance(self.bench_cfg, study, plot_w))
                     except RuntimeError as e:
@@ -315,7 +318,7 @@ class OptunaResult(BenchResultBase):
                     study,
                 )
 
-                if has_multiple_inputs:
+                if _study_has_multiple_params(study):
                     study_pane.append(plot_param_importances(study, target_name=target_names[0]))
 
                 param_str.extend(summarise_trial(study.best_trial, self.bench_cfg))
