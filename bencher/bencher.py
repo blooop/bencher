@@ -303,12 +303,10 @@ class Bench(BenchPlotServer):
             FileNotFoundError: If only_plot=True and no cached results exist
         """
 
-        input_vars_in = deepcopy(input_vars)
-        result_vars_in = deepcopy(result_vars)
-        const_vars_in = deepcopy(const_vars)
-
         if self.worker_class_instance is not None:
-            if input_vars_in is None:
+            if input_vars is not None:
+                input_vars_in = deepcopy(input_vars)
+            else:
                 logging.info(
                     "No input variables passed, using all param variables in bench class as inputs"
                 )
@@ -318,7 +316,10 @@ class Bench(BenchPlotServer):
                     input_vars_in = deepcopy(self.input_vars)
                 for i in input_vars_in:
                     logging.info(f"input var: {i.name}")
-            if result_vars_in is None:
+
+            if result_vars is not None:
+                result_vars_in = deepcopy(result_vars)
+            else:
                 logging.info(
                     "No results variables passed, using all result variables in bench class:"
                 )
@@ -327,18 +328,17 @@ class Bench(BenchPlotServer):
                 else:
                     result_vars_in = deepcopy(self.result_vars)
 
-            if const_vars_in is None:
+            if const_vars is not None:
+                const_vars_in = deepcopy(const_vars)
+            else:
                 if self.const_vars is None:
                     const_vars_in = self.worker_class_instance.get_input_defaults()
                 else:
                     const_vars_in = deepcopy(self.const_vars)
         else:
-            if input_vars_in is None:
-                input_vars_in = []
-            if result_vars_in is None:
-                result_vars_in = []
-            if const_vars_in is None:
-                const_vars_in = []
+            input_vars_in = deepcopy(input_vars) if input_vars is not None else []
+            result_vars_in = deepcopy(result_vars) if result_vars is not None else []
+            const_vars_in = deepcopy(const_vars) if const_vars is not None else []
 
         if run_cfg is None:
             if self.run_cfg is None:
