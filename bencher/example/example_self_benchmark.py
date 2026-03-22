@@ -77,6 +77,8 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
 
 def example_self_benchmark(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Benchmark bencher's own overhead across problem sizes."""
+    run_cfg = run_cfg or bn.BenchRunCfg()
+    run_cfg.repeats = 5
     bench = BencherSelfBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["num_samples"],

@@ -38,7 +38,7 @@ def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> di
     """
     function_input_deep = deepcopy(kwargs)
     if not bench_cfg.pass_repeat:
-        function_input_deep.pop("repeat")
+        function_input_deep.pop("repeat", None)
     if "over_time" in function_input_deep:
         function_input_deep.pop("over_time")
     if "time_event" in function_input_deep:
