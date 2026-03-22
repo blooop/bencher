@@ -29,7 +29,7 @@ jobs:
           frozen: true
 
       - name: Run test suite with timing
-        run: pixi run perf
+        run: pixi run test-timing
 
       - name: Upload benchmark report
         uses: actions/upload-artifact@v4
