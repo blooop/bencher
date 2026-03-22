@@ -10,7 +10,6 @@ import panel as pn
 from optuna.visualization import (
     plot_param_importances,
     plot_pareto_front,
-    plot_optimization_history,
 )
 from bencher.utils import hmap_canonical_input
 from bencher.variables.time import TimeSnapshot, TimeEvent
@@ -262,10 +261,6 @@ class OptunaResult(BenchResultBase):
 
                     col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
                     _append_safe_sized(
-                        col, plot_optimization_history, plot_w,
-                        study, target=_target, target_name=tgt,
-                    )
-                    _append_safe_sized(
                         col, plot_param_importances, plot_w,
                         study, target=_target, target_name=tgt,
                     )
@@ -305,10 +300,6 @@ class OptunaResult(BenchResultBase):
                     param_str.extend(summarise_trial(t, self.bench_cfg))
 
             else:
-                _append_safe_sized(
-                    study_pane, plot_optimization_history, plot_w, study,
-                )
-
                 if len(self.bench_cfg.input_vars) > 1:
                     _append_safe_sized(
                         study_pane, plot_param_importances, plot_w,
