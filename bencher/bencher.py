@@ -1030,6 +1030,7 @@ class Bench(BenchPlotServer):
             n_warm_start_trials=n_warm,
             n_new_trials=n_trials,
             target_names=target_names,
+            bench_cfg=bench_cfg,
         )
 
         if plot:

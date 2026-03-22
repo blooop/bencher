@@ -75,6 +75,19 @@ def _run_cfg():
     return cfg
 
 
+def _collect_markdown(panel):
+    """Recursively collect all Markdown text from a nested panel layout."""
+    import panel as pn
+
+    texts = []
+    if isinstance(panel, pn.pane.Markdown):
+        texts.append(panel.object)
+    elif hasattr(panel, "objects"):
+        for obj in panel.objects:
+            texts.append(_collect_markdown(obj))
+    return " ".join(texts)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -194,18 +207,14 @@ class TestSummariseOptunaStudy:
         # Should not log any plot_pareto_front error
         assert "plot_pareto_front" not in caplog.text
 
-    def test_single_objective_panel_shows_best_value(self):
-        """Single-objective panel should contain best value text."""
-        import panel as pn
-
+    def test_single_objective_panel_shows_best_params(self):
+        """Single-objective panel should contain best parameters text."""
         cfg = Sphere()
         bench = bn.Bench("test_summary_best", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=5, plot=False)
         panel = result.to_panel()
-        # Find Markdown panes and check their content
-        md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]
-        combined = " ".join(md_texts)
-        assert "Best value" in combined
+        md_text = _collect_markdown(panel)
+        assert "Best Parameters" in md_text
 
     def test_multi_objective_panel_no_best_value_error(self):
         """Multi-objective panel should not call study.best_value (which raises)."""
@@ -218,12 +227,9 @@ class TestSummariseOptunaStudy:
 
     def test_multi_objective_panel_shows_pareto_size(self):
         """Multi-objective panel should show Pareto-front size."""
-        import panel as pn
-
         cfg = MultiObjective()
         bench = bn.Bench("test_summary_pareto_size", cfg, run_cfg=_run_cfg())
         result = bench.optimize(n_trials=10, plot=False)
         panel = result.to_panel()
-        md_texts = [obj.object for obj in panel.objects if isinstance(obj, pn.pane.Markdown)]
-        combined = " ".join(md_texts)
-        assert "Pareto-front size" in combined
+        md_text = _collect_markdown(panel)
+        assert "Pareto front" in md_text.lower() or "Number of trials" in md_text

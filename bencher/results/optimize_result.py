@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import optuna
 import panel as pn
 
-from bencher.optuna_conversions import summarise_optuna_study
+from optuna.visualization import (
+    plot_param_importances,
+    plot_pareto_front,
+)
+from bencher.optuna_conversions import (
+    summarise_optuna_study,
+    summarise_trial,
+    param_importance,
+)
+
+if TYPE_CHECKING:
+    from bencher.bench_cfg import BenchCfg
 
 
 @dataclass
@@ -20,12 +31,14 @@ class OptimizeResult:
         n_warm_start_trials: Number of trials seeded from cache / prior results.
         n_new_trials: Number of new trials evaluated during optimization.
         target_names: Names of the optimization target variables.
+        bench_cfg: Optional BenchCfg for rich report generation.
     """
 
     study: optuna.Study
     n_warm_start_trials: int = 0
     n_new_trials: int = 0
     target_names: list[str] = field(default_factory=list)
+    bench_cfg: BenchCfg | None = None
 
     # ------------------------------------------------------------------
     # Single-objective helpers
@@ -65,8 +78,69 @@ class OptimizeResult:
     # ------------------------------------------------------------------
 
     def to_panel(self) -> pn.pane.panel:
-        """Panel visualization reusing the existing ``summarise_optuna_study`` helper."""
+        """Panel visualization matching the collect_optuna_plots report layout."""
+        if self.bench_cfg is not None:
+            return self._collect_optuna_plots()
         return summarise_optuna_study(self.study)
+
+    def _collect_optuna_plots(self) -> pn.pane.panel:
+        """Produce the same report layout as OptunaResult.collect_optuna_plots."""
+        study = self.study
+        bench_cfg = self.bench_cfg
+        target_names = bench_cfg.optuna_targets()
+
+        study_pane = pn.Column()
+        param_str = []
+
+        study_pane.append(pn.pane.Markdown("# Analysis"))
+
+        if len(target_names) > 1:
+            if len(target_names) <= 3:
+                study_pane.append(
+                    plot_pareto_front(
+                        study,
+                        target_names=target_names,
+                        include_dominated_trials=False,
+                    )
+                )
+            else:
+                print("plotting pareto front of first 3 result variables")
+                study_pane.append(
+                    plot_pareto_front(
+                        study,
+                        targets=lambda t: (t.values[0], t.values[1], t.values[2]),
+                        target_names=target_names[:3],
+                        include_dominated_trials=False,
+                    )
+                )
+            try:
+                study_pane.append(param_importance(bench_cfg, study))
+                param_str.append(
+                    f"    Number of trials on the Pareto front: {len(study.best_trials)}"
+                )
+            except RuntimeError as e:
+                study_pane.append(f"Error generating parameter importance: {str(e)}")
+
+            for t in study.best_trials:
+                param_str.extend(summarise_trial(t, bench_cfg))
+
+        else:
+            if len(bench_cfg.input_vars) > 1:
+                study_pane.append(plot_param_importances(study, target_name=target_names[0]))
+
+            param_str.extend(summarise_trial(study.best_trial, bench_cfg))
+
+        kwargs = {"height": 500, "scroll": True} if len(param_str) > 30 else {}
+
+        param_str = "\n".join(param_str)
+        study_pane.append(
+            pn.Row(
+                pn.pane.Markdown(f"## Best Parameters\n```text\n{param_str}"),
+                **kwargs,
+            ),
+        )
+
+        return pn.Row(study_pane)
 
     # ------------------------------------------------------------------
     # Text summary
