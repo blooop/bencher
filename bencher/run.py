@@ -84,6 +84,7 @@ def run(
             bench = _original_target(run_cfg)
             if bench.results:
                 bench.report.append(bench.results[-1].to_optuna_plots())
+            bench.optimize(n_trials=optimise)
             return bench
 
         _with_optimise.__name__ = getattr(_original_target, "__name__", "optimised")
