@@ -19,14 +19,19 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 # Default cache size for benchmark results (100 GB)
 DEFAULT_CACHE_SIZE_BYTES = int(100e9)
 
+# Metadata keys that must never be forwarded to the worker function.
+_META_KEYS = frozenset({"over_time", "time_event"})
+
 logger = logging.getLogger(__name__)
 
 
 def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> dict:
     """Prepare keyword arguments and pass them to a worker function.
 
-    This wrapper helps filter out metadata parameters that should not be passed
-    to the worker function (like 'repeat', 'over_time', and 'time_event').
+    This wrapper filters out metadata parameters that should not be passed
+    to the worker function (like 'repeat', 'over_time', and 'time_event'),
+    then deep-copies the filtered dict for mutation safety before calling
+    the worker.
 
     Args:
         worker (Callable): The worker function to call
@@ -36,14 +41,12 @@ def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> di
     Returns:
         dict: The result from the worker function
     """
-    function_input_deep = deepcopy(kwargs)
-    if not bench_cfg.pass_repeat:
-        function_input_deep.pop("repeat", None)
-    if "over_time" in function_input_deep:
-        function_input_deep.pop("over_time")
-    if "time_event" in function_input_deep:
-        function_input_deep.pop("time_event")
-    return worker(**function_input_deep)
+    filtered = {
+        k: v
+        for k, v in kwargs.items()
+        if k not in _META_KEYS and (k != "repeat" or bench_cfg.pass_repeat)
+    }
+    return worker(**deepcopy(filtered))
 
 
 class SweepExecutor:

@@ -62,13 +62,10 @@ def example_float_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 def run_example_float_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
-    run_cfg.repeats = 2
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2, level=3)
     run_cfg.over_time = True
     run_cfg.clear_cache = True
     run_cfg.clear_history = True
-    run_cfg.level = 3
 
     example_float_cat(run_cfg)
 

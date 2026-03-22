@@ -33,7 +33,7 @@ class NoisySensor(bn.ParametrizedSweep):
 
 def example_advanced_cache_patterns(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Cache Patterns — run_tag and cache_samples."""
-    run_cfg = run_cfg or bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5)
 
     # run_tag partitions the cache so different experiment runs don't collide.
     run_cfg.run_tag = "sensor_v1"
@@ -42,7 +42,6 @@ def example_advanced_cache_patterns(run_cfg: bn.BenchRunCfg | None = None) -> bn
     # benchmarks that might be interrupted.
     run_cfg.cache_samples = True
     run_cfg.clear_sample_cache = True
-    run_cfg.repeats = 5
 
     bench = NoisySensor().to_bench(run_cfg)
     bench.plot_sweep(

@@ -168,3 +168,54 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             aggregate=1,
         )
         self.assertEqual(res.bench_cfg.agg_over_dims, ["float2"])
+
+    def test_show_aggregate_plots_false_skips_band_result(self):
+        """show_aggregate_plots=False suppresses aggregate section in to_auto_plots."""
+        import panel as pn
+
+        import bencher as bn
+        from bencher.example.meta.example_meta import BenchableObject
+
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_disabled",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=2, auto_plot=False, show_aggregate_plots=False),
+            aggregate=True,
+        )
+        # agg_over_dims is still set on the config
+        self.assertIsNotNone(res.bench_cfg.agg_over_dims)
+        plots = res.to_auto_plots()
+        # The "Aggregated View" markdown should not appear
+        md_texts = [
+            p.object
+            for p in plots
+            if isinstance(p, pn.pane.Markdown)
+            and "Aggregated View" in str(getattr(p, "object", ""))
+        ]
+        self.assertEqual(len(md_texts), 0, "Aggregated View section should be suppressed")
+
+    def test_show_aggregate_plots_true_renders_band_result(self):
+        """show_aggregate_plots=True (default) renders the aggregate section."""
+        import panel as pn
+
+        import bencher as bn
+        from bencher.example.meta.example_meta import BenchableObject
+
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_enabled",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=2, auto_plot=False),
+            aggregate=True,
+        )
+        plots = res.to_auto_plots()
+        md_texts = [
+            p.object
+            for p in plots
+            if isinstance(p, pn.pane.Markdown)
+            and "Aggregated View" in str(getattr(p, "object", ""))
+        ]
+        self.assertGreater(len(md_texts), 0, "Aggregated View section should be present")

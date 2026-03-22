@@ -261,7 +261,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             ["import bencher as bn", "from datetime import datetime, timedelta"] + _EXTRA_IMPORTS
         )
         body = (
-            "run_cfg = run_cfg or bn.BenchRunCfg()\n"
+            "run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)\n"
             "run_cfg.over_time = True\n"
             "benchable = PolygonRenderer()\n"
             "bench = benchable.to_bench(run_cfg)\n"

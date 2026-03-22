@@ -34,9 +34,7 @@ def example_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 def run_example_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
-    run_cfg.repeats = 1
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=1)
     run_cfg.print_pandas = True
     run_cfg.over_time = True
 

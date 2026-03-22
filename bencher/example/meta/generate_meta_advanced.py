@@ -71,7 +71,7 @@ class NoisySensor(bn.ParametrizedSweep):
             self.reading += random.gauss(0, self.noise_scale)
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bn.BenchRunCfg()
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5)
 
 # run_tag partitions the cache so different experiment runs don't collide.
 run_cfg.run_tag = "sensor_v1"
@@ -80,7 +80,6 @@ run_cfg.run_tag = "sensor_v1"
 # benchmarks that might be interrupted.
 run_cfg.cache_samples = True
 run_cfg.clear_sample_cache = True
-run_cfg.repeats = 5
 
 bench = NoisySensor().to_bench(run_cfg)
 bench.plot_sweep(
@@ -132,7 +131,7 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
         self.throughput = base + self._event_idx * 30
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bn.BenchRunCfg()
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
 run_cfg.over_time = True
 
 benchable = PullRequestBenchmark()
@@ -190,7 +189,7 @@ class ServerLatency(bn.ParametrizedSweep):
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bn.BenchRunCfg()
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
 run_cfg.over_time = True
 
 bench = ServerLatency().to_bench(run_cfg)
@@ -244,7 +243,7 @@ class LatencyMonitor(bn.ParametrizedSweep):
         self.latency = base + self._drift + random.gauss(0, 5)
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bn.BenchRunCfg()
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
 run_cfg.over_time = True
 
 # Keep only the 3 most recent time slices in the cache.
@@ -360,7 +359,7 @@ class ThermalPlate(bn.ParametrizedSweep):
         )
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bn.BenchRunCfg()
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
 run_cfg.over_time = True
 
 benchable = ThermalPlate()

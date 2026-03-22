@@ -108,6 +108,7 @@ def example_self_benchmark_over_time(
 ) -> bn.Bench:
     """Track bencher's overhead over time, accumulating results across commits."""
     run_cfg = run_cfg or bn.BenchRunCfg()
+    run_cfg.repeats = 5
     run_cfg.over_time = True
     run_cfg.auto_plot = False
 

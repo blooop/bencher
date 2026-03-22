@@ -211,7 +211,7 @@ class BenchResult(
         """
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
-        if self.bench_cfg.agg_over_dims:
+        if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
             plot_cols.append(
                 pn.pane.Markdown(

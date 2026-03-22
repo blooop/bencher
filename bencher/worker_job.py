@@ -25,7 +25,6 @@ class WorkerJob:
         canonical_input (tuple[Any]): Canonical representation of inputs for caching
         fn_inputs_sorted (list[tuple[str, Any]]): Sorted representation of function inputs
         function_input_signature_pure (str): Hash of the function inputs and tag
-        function_input_signature_benchmark_context (str): Comprehensive hash including benchmark context
         found_in_cache (bool): Whether this job result was found in cache
         msgs (list[str]): Messages related to this job's execution
     """
@@ -41,7 +40,6 @@ class WorkerJob:
     canonical_input: tuple[Any] | None = None
     fn_inputs_sorted: list[tuple[str, Any]] | None = None
     function_input_signature_pure: str | None = None
-    function_input_signature_benchmark_context: str | None = None
     found_in_cache: bool = False
     msgs: list[str] = field(default_factory=list)
 
@@ -63,7 +61,3 @@ class WorkerJob:
         # the signature is the hash of the inputs to to the function + meta variables such as repeat and time + the hash of the benchmark sweep as a whole (without the repeats hash)
         self.fn_inputs_sorted = sorted(self.function_input.items())
         self.function_input_signature_pure = hash_sha1((self.fn_inputs_sorted, self.tag))
-
-        self.function_input_signature_benchmark_context = hash_sha1(
-            (self.function_input_signature_pure, self.bench_cfg_sample_hash)
-        )

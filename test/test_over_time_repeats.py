@@ -299,20 +299,6 @@ class TestShowAggregatedTimeTab:
         plots = res.to_auto_plots()
         assert self._count_agg_tabs(plots) > 0
 
-    def test_aggregated_tab_absent_when_disabled(self):
-        """With show_aggregated_time_tab=False, no aggregated tabs."""
-        benchable = SimpleBench()
-        res = _run_over_time(
-            benchable,
-            ["backend"],
-            ["latency"],
-            repeats=1,
-            snapshots=3,
-            show_aggregated_time_tab=False,
-        )
-        plots = res.to_auto_plots()
-        assert self._count_agg_tabs(plots) == 0
-
     def test_curve_aggregated_tab_absent_when_disabled(self):
         """Curve plots also respect show_aggregated_time_tab=False."""
         benchable = FloatBench()

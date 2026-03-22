@@ -63,6 +63,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
         max_slider_points (int): Maximum time points in the over_time slider. Defaults to 10, None means all.
         show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots. Defaults to False.
+        show_aggregate_plots (bool): Show aggregated BandResult plots when aggregate is set.
         print_pandas (bool): Print a pandas summary of the results to the console
         print_xarray (bool): Print an xarray summary of the results to the console
         serve_pandas (bool): Serve a pandas summary on the results webpage
@@ -251,6 +252,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "Set True to enable the aggregation view.",
     )
 
+    show_aggregate_plots: bool = param.Boolean(
+        True,
+        doc="When aggregate is set on plot_sweep, show the aggregated BandResult "
+        "plots in the auto-plots view. Set False to skip the aggregation "
+        "computation and extra render, improving performance.",
+    )
+
     time_event: str | None = param.String(
         None,
         doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",
@@ -358,6 +366,17 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     def deep(self):
         return deepcopy(self)
+
+    @classmethod
+    def with_defaults(cls, run_cfg=None, **defaults):
+        """Return *run_cfg* unchanged if provided, otherwise create a new instance.
+
+        Use this in example functions to set preferred defaults that yield to
+        caller-provided values::
+
+            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
+        """
+        return run_cfg if run_cfg is not None else cls(**defaults)
 
 
 class BenchCfg(BenchRunCfg):

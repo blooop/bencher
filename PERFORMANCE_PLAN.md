@@ -426,12 +426,13 @@ Test with cache clearing mid-run to verify race condition handling.
 **File**: `bencher/utils.py:94-107`, `bencher/worker_job.py:48-69`
 
 **Problem**: Each job computes two SHA1 hashes: `function_input_signature_pure` and
-`function_input_signature_benchmark_context`. The pure hash is always computed even when not needed
-(only used when `only_hash_tag` is False).
+`function_input_signature_benchmark_context`. The context hash was never read anywhere in the
+codebase (dead code). The pure hash is always computed even when not needed (only used when
+`only_hash_tag` is False).
 
-**Proposed fix**: Lazily compute hashes — only compute `function_input_signature_benchmark_context`
-when needed (i.e., when `only_hash_tag` is True, skip the context hash). Use `@property` with
-caching (`functools.cached_property`).
+**Status**: `function_input_signature_benchmark_context` removed in PR #816 (dead code). Remaining
+opportunity: lazily compute `function_input_signature_pure` only when `only_hash_tag` is False,
+using `@property` with caching (`functools.cached_property`).
 
 **Correctness risk**: LOW. Hash values are read-only after construction. Lazy evaluation produces
 identical results.
