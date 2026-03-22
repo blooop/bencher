@@ -3,6 +3,7 @@ from typing import Any
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
+
 # Registry of inline class templates keyed by (float_count, cat_count).
 # Each entry defines a unique software/data-processing domain class.
 INLINE_CLASSES = {
@@ -387,8 +388,6 @@ class BenchMetaGen(bn.ParametrizedSweep):
             info, self.float_vars_count, self.categorical_vars_count
         )
 
-        base_title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
-
         if self.sample_over_time and self.sample_with_repeats > 1:
             variant = "over_time_repeats"
         elif self.sample_over_time:
@@ -398,9 +397,14 @@ class BenchMetaGen(bn.ParametrizedSweep):
         else:
             variant = "no_repeats"
 
-        title = f"{self.float_vars_count} Float, {self.categorical_vars_count} Categorical"
-        function_name = f"example_{variant}_{base_title}"
-        filename = f"ex_{base_title}"
+        # Include all dimensions in filename so every generated file is globally unique
+        base_title = f"{self.float_vars_count}_float_{self.categorical_vars_count}_cat"
+        title = (
+            f"{self.float_vars_count} Float, {self.categorical_vars_count} Categorical"
+            f" ({variant.replace('_', ' ')})"
+        )
+        filename = f"sweep_{base_title}_{variant}"
+        function_name = f"example_sweep_{base_title}_{variant}"
 
         result_var_names = list(info["result_vars"].keys())
 

@@ -80,3 +80,41 @@ Bencher is a benchmarking framework built around these core concepts:
 - Coverage reporting with coverage.py
 - Examples serve as integration tests
 - Meta-generated examples in `bencher/example/meta/`
+
+### Generated Example Naming Convention
+
+All auto-generated examples live under `bencher/example/generated/`. Each filename must
+be **globally unique** across the entire generated tree — no two files may share a basename
+even if they are in different subdirectories. This is required because the documentation
+build uses filenames as RST page stems and thumbnail identifiers.
+
+**Pattern:** `{section}_{descriptive_dimensions}.py`
+
+Every filename starts with a short **section prefix** that identifies which generator
+produced it, followed by all varying dimensions encoded in the name. The section prefixes
+are:
+
+| Section Prefix | Output Directory | Varying Dimensions |
+|---|---|---|
+| `sweep_` | `{N}_float/{variant}/` | float count, cat count, variant |
+| `plot_` | `plot_types/` | plot type |
+| `bool_plot_` | `bool_plot_types/` | plot type |
+| `result_` | `result_types/result_{type}/` | result type, input dims |
+| `composable_` | `composable_containers/` | backend, compose type |
+| `sampling_` | `sampling/` | strategy |
+| `stats_` | `statistics/` | variant |
+| `const_vars_` | `const_vars/` | example |
+| `optim_` | `optimization*/` | objectives, dims, over_time |
+| `advanced_` | `advanced/` | example |
+| `workflow_` | `workflows/` | example |
+| `perf_` | `performance/` | variant |
+| `regression_` | `regression/` | variant |
+| `yaml_` | `yaml/` | format |
+
+**Rules for adding new generators:**
+1. Pick a short, unique section prefix that does not collide with existing prefixes.
+2. Encode **every** varying dimension in the filename — never rely on the folder path alone.
+3. The Python function inside the generated file must start with `example_` (the test
+   harness and doc builder use this prefix for discovery).
+4. Register the generator in `generate_examples.py:generate_python_files()` and add
+   corresponding entries to `SECTION_GROUPS` for gallery placement.
