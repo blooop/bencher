@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.72.1] - 2026-03-22
+
+### Changed
+- **Breaking:** `show_aggregated_time_tab` now defaults to `False`. The aggregated "All Time Points" tab doubled `report.save()` embed cost because Panel must pre-compute JSON patches for every slider position in both tabs. Users who need the aggregated view can set `show_aggregated_time_tab=True`. (#818)
+
+### Improved
+- Skip `hv.Spread` bands on per-time-point slider plots when the aggregated tab is disabled, reducing per-slider-position embed complexity
+- Add `report_save_ms` field to `SweepTimings` so downstream users can instrument `report.save()` cost
+
 ## [1.71.0] - 2026-03-21
 
 ### Added

@@ -244,10 +244,11 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     show_aggregated_time_tab: bool = param.Boolean(
-        True,
+        False,
         doc="When over_time is active, show an 'All Time Points (aggregated)' tab "
-        "alongside the per-time-point slider. Set False to skip the aggregation "
-        "computation and extra render, improving performance.",
+        "alongside the per-time-point slider. Enabling this doubles the Panel embed "
+        "cost in report.save() because every slider position must be serialized for "
+        "both tabs. Set True only when aggregated statistics across time are needed.",
     )
 
     time_event: str | None = param.String(
