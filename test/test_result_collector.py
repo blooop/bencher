@@ -44,12 +44,15 @@ class TestResultCollector(unittest.TestCase):
             repeats=2,
         )
 
-        bench_res, _, dims_name = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, dims_name, total_jobs = self.collector.setup_dataset(
+            bench_cfg, datetime(2024, 1, 1)
+        )
 
         self.assertIsNotNone(bench_res)
         self.assertIsNotNone(bench_res.ds)
         self.assertIn("theta", dims_name)
         self.assertIn("repeat", dims_name)
+        self.assertGreater(total_jobs, 0)
 
     def test_setup_dataset_result_vars_scalar(self):
         """Test ResultVar creates float data_vars."""
@@ -65,7 +68,7 @@ class TestResultCollector(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         self.assertIn("out_sin", bench_res.ds.data_vars)
         self.assertEqual(bench_res.ds["out_sin"].dtype, np.float64)
@@ -134,7 +137,7 @@ class TestResultCollector(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Should not raise any errors
         self.collector.report_results(bench_res, print_xarray=False, print_pandas=False)
@@ -197,7 +200,7 @@ class TestCacheOperations(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Start with empty list
         bench_cfg_hashes = []
@@ -222,7 +225,7 @@ class TestCacheOperations(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Set object_index to something non-empty
         bench_res.object_index = ["obj-1", "obj-2"]
@@ -266,7 +269,7 @@ class TestCacheOperations(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Add metadata for theta input
         self.collector.add_metadata_to_dataset(bench_res, instance.param.theta)
@@ -434,6 +437,73 @@ class TestDTypeIncompatibleHistory(unittest.TestCase):
             any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
         )
         self.assertTrue(result.equals(ds_datetime))
+
+
+class TestLazyCartesianProduct(unittest.TestCase):
+    """Tests for lazy Cartesian product in setup_dataset (plan item 1.3)."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def _make_bench_cfg(self, n_theta_samples=3, repeats=2):
+        instance = ExampleBenchCfg()
+        instance.param.theta.samples = n_theta_samples
+        return BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test_lazy",
+            title="test_lazy",
+            repeats=repeats,
+        )
+
+    def test_setup_dataset_returns_lazy_iterator(self):
+        """function_inputs should be a lazy zip, not a list."""
+        bench_cfg = self._make_bench_cfg()
+        _, func_inputs, _, total_jobs = self.collector.setup_dataset(
+            bench_cfg, datetime(2024, 1, 1)
+        )
+        self.assertNotIsInstance(func_inputs, list)
+        self.assertIsInstance(func_inputs, zip)
+        self.assertEqual(total_jobs, 3 * 2)  # theta_samples * repeats
+
+    def test_total_jobs_matches_iterator_length(self):
+        """total_jobs count must match the number of items yielded by the iterator."""
+        bench_cfg = self._make_bench_cfg(n_theta_samples=5, repeats=3)
+        _, func_inputs, _, total_jobs = self.collector.setup_dataset(
+            bench_cfg, datetime(2024, 1, 1)
+        )
+        items = list(func_inputs)
+        self.assertEqual(len(items), total_jobs)
+
+    def test_iterator_yields_correct_values(self):
+        """Materialized iterator should match the expected Cartesian product."""
+        bench_cfg = self._make_bench_cfg(n_theta_samples=3, repeats=2)
+        _, func_inputs, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        items = list(func_inputs)
+        # Each item is (index_tuple, value_tuple)
+        # With 3 theta samples and 2 repeats, expect 6 items
+        self.assertEqual(len(items), 6)
+        # First element should be indices, second should be values
+        for idx_tuple, val_tuple in items:
+            self.assertIsInstance(idx_tuple, tuple)
+            self.assertIsInstance(val_tuple, tuple)
+            self.assertEqual(len(idx_tuple), 2)  # theta dim + repeat dim
+            self.assertEqual(len(val_tuple), 2)
+
+    def test_iteration_does_not_mutate_bench_cfg(self):
+        """Consuming the iterator must not change bench_cfg."""
+        bench_cfg = self._make_bench_cfg()
+        input_vars_before = list(bench_cfg.input_vars)
+        all_vars_before = list(bench_cfg.all_vars) if bench_cfg.all_vars else None
+
+        _, func_inputs, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        # Consume the iterator fully
+        _ = list(func_inputs)
+
+        self.assertEqual(bench_cfg.input_vars, input_vars_before)
+        if all_vars_before is not None:
+            self.assertEqual(list(bench_cfg.all_vars), all_vars_before)
 
 
 class TestSetXarrayMultidim(unittest.TestCase):

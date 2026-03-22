@@ -698,7 +698,7 @@ class Bench(BenchPlotServer):
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, list[tuple], list[str]]:
+    ) -> tuple[BenchResult, zip, list[str], int]:
         """Initialize n-dimensional xarray dataset for storing benchmark results."""
         return self._collector.setup_dataset(bench_cfg, time_src)
 
@@ -741,7 +741,7 @@ class Bench(BenchPlotServer):
             timings = SweepTimings()
 
         with phase_timer() as elapsed:
-            bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
+            bench_res, func_inputs, dims_name, total_jobs = self.setup_dataset(bench_cfg, time_src)
             # Adjust only the sampling traversal; leave dims/plotting unchanged
             if sample_order == SampleOrder.REVERSED:
                 total_dims = len(dims_name)
@@ -792,7 +792,7 @@ class Bench(BenchPlotServer):
                 job.setup_hashes()
                 jobs.append(job)
 
-                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
+                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{total_jobs}"
                 worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
                 cache_jobs.append(
                     Job(
