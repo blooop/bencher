@@ -9,7 +9,6 @@ from typing import Callable, Any
 from copy import deepcopy
 import param
 import xarray as xr
-from diskcache import Cache
 from contextlib import suppress
 from functools import partial
 import panel as pn
@@ -570,23 +569,23 @@ class Bench(BenchPlotServer):
 
         calculate_results = True
         with phase_timer() as elapsed:
-            with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
-                if run_cfg.clear_cache:
-                    c.delete(bench_cfg_hash)
-                    logging.info("cleared cache")
-                elif run_cfg.cache_results:
-                    logging.info(
-                        f"checking for previously calculated results with key: {bench_cfg_hash}"
-                    )
-                    if bench_cfg_hash in c:
-                        logging.info(f"loading cached results from key: {bench_cfg_hash}")
-                        bench_res = c[bench_cfg_hash]
-                        # if not over_time:  # if over time we always want to calculate results
-                        calculate_results = False
-                    else:
-                        logging.info("did not detect results in cache")
-                        if run_cfg.only_plot:
-                            raise FileNotFoundError("Was not able to load the results to plot!")
+            c = self._collector.get_benchmark_cache()
+            if run_cfg.clear_cache:
+                c.delete(bench_cfg_hash)
+                logging.info("cleared cache")
+            elif run_cfg.cache_results:
+                logging.info(
+                    f"checking for previously calculated results with key: {bench_cfg_hash}"
+                )
+                if bench_cfg_hash in c:
+                    logging.info(f"loading cached results from key: {bench_cfg_hash}")
+                    bench_res = c[bench_cfg_hash]
+                    # if not over_time:  # if over time we always want to calculate results
+                    calculate_results = False
+                else:
+                    logging.info("did not detect results in cache")
+                    if run_cfg.only_plot:
+                        raise FileNotFoundError("Was not able to load the results to plot!")
         timings.cache_check_ms = elapsed()
 
         if run_cfg.time_event is not None:
