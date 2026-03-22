@@ -24,6 +24,7 @@ class SweepTimings:
     history_merge_ms: float = 0.0
     post_setup_ms: float = 0.0
     render_ms: float = 0.0  #: Time spent generating plots (to_auto_plots / plot callbacks)
+    report_save_ms: float = 0.0  #: Time to save the HTML report (populated by BenchReport.save)
     total_ms: float = 0.0  #: Sum of all phase timings above
 
     def compute_total(self) -> float:

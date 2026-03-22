@@ -58,3 +58,17 @@ def test_timings_accessible_via_public_api():
     """SweepTimings should be importable from the top-level bencher package."""
     assert hasattr(bn, "SweepTimings")
     assert bn.SweepTimings is SweepTimings
+
+
+def test_report_save_ms_in_summary():
+    """report_save_ms should appear in the summary dict."""
+    t = SweepTimings(report_save_ms=42.5)
+    s = t.summary()
+    assert "report_save_ms" in s
+    assert s["report_save_ms"] == 42.5
+
+
+def test_compute_total_includes_report_save():
+    """compute_total() should include report_save_ms."""
+    t = SweepTimings(render_ms=10.0, report_save_ms=5.0)
+    assert t.compute_total() == 15.0
