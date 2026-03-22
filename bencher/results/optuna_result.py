@@ -273,6 +273,8 @@ class OptunaResult(BenchResultBase):
                 study_pane.append(obj_row)
 
                 # --- Pareto Front ---
+                if self.bench_cfg.post_description:
+                    study_pane.append(pn.pane.Markdown(self.bench_cfg.post_description))
                 if len(target_names) <= 3:
                     _append_safe(
                         study_pane,

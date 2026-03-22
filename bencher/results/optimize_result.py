@@ -119,6 +119,8 @@ class OptimizeResult:
             study_pane.append(obj_row)
 
             # --- Pareto Front ---
+            if bench_cfg.post_description:
+                study_pane.append(pn.pane.Markdown(bench_cfg.post_description))
             if len(target_names) <= 3:
                 _append_safe(
                     study_pane,
