@@ -303,50 +303,29 @@ class TestBenchCfgHashStability:
 # This preserves the cross-process guarantee while cutting ~95s of import overhead.
 # ---------------------------------------------------------------------------
 
-# Class names tested for cross-process hash stability
-_CROSS_PROCESS_CLASSES = [
-    "ResultVar",
-    "ResultBool",
-    "ResultVec",
-    "ResultHmap",
-    "ResultPath",
-    "ResultVideo",
-    "ResultImage",
-    "ResultString",
-    "ResultContainer",
-    "ResultReference",
-    "ResultDataSet",
-    "ResultVolume",
-]
+# Class names tested for cross-process hash stability — derived from auto-discovery
+# so new Result* classes are automatically included.
+_CROSS_PROCESS_CLASSES = sorted(cls.__name__ for cls in ALL_DISCOVERED_CLASSES)
 
 _BATCH_HASH_SCRIPT = textwrap.dedent("""\
+    import inspect
     import json
-    from bencher.variables.results import (
-        ResultVar, ResultBool, ResultVec, ResultHmap, ResultPath,
-        ResultVideo, ResultImage, ResultString, ResultContainer,
-        ResultReference, ResultDataSet, ResultVolume,
-    )
+    import param
+    import bencher.variables.results as results_module
+    from bencher.variables.results import ResultVec, ResultVar, ResultImage
     from bencher.bench_cfg import BenchCfg
 
     hashes = {}
 
-    # Individual result classes — same args as the previous per-class tests
-    cases = [
-        ("ResultVar", ResultVar(units="ul", doc="test")),
-        ("ResultBool", ResultBool(units="ratio", doc="test")),
-        ("ResultVec", ResultVec(size=3, units="ul", doc="test")),
-        ("ResultHmap", ResultHmap(doc="test")),
-        ("ResultPath", ResultPath(doc="test")),
-        ("ResultVideo", ResultVideo(doc="test")),
-        ("ResultImage", ResultImage(doc="test")),
-        ("ResultString", ResultString(doc="test")),
-        ("ResultContainer", ResultContainer(doc="test")),
-        ("ResultReference", ResultReference(doc="test")),
-        ("ResultDataSet", ResultDataSet(doc="test")),
-        ("ResultVolume", ResultVolume(doc="test")),
-    ]
-    for name, instance in cases:
-        hashes[name] = instance.hash_persistent()
+    # Auto-discover all Result* classes (mirrors parent process discovery)
+    for name, cls in inspect.getmembers(results_module, inspect.isclass):
+        if (
+            name.startswith("Result")
+            and issubclass(cls, param.Parameter)
+            and cls.__module__ == results_module.__name__
+        ):
+            instance = cls(size=3, units="ul", doc="test") if cls is ResultVec else cls(doc="test")
+            hashes[name] = instance.hash_persistent()
 
     # BenchCfg composite hash
     cfg = BenchCfg()
@@ -403,14 +382,21 @@ class TestCrossProcessDeterminism:
     """
 
     @pytest.mark.parametrize("cls_name", _CROSS_PROCESS_CLASSES)
-    def test_hash_stable_across_two_processes(self, cross_process_hashes, cls_name):
+    def test_hash_stable_across_two_processes(
+        self,
+        cross_process_hashes,  # pylint: disable=redefined-outer-name
+        cls_name,
+    ):
         hashes_a, hashes_b = cross_process_hashes
         assert hashes_a[cls_name] == hashes_b[cls_name], (
             f"{cls_name}.hash_persistent() differs across processes: "
             f"{hashes_a[cls_name]!r} != {hashes_b[cls_name]!r}"
         )
 
-    def test_bench_cfg_hash_stable_across_processes(self, cross_process_hashes):
+    def test_bench_cfg_hash_stable_across_processes(
+        self,
+        cross_process_hashes,  # pylint: disable=redefined-outer-name
+    ):
         """End-to-end: BenchCfg cache key must be identical across processes."""
         hashes_a, hashes_b = cross_process_hashes
         assert hashes_a["BenchCfg"] == hashes_b["BenchCfg"], (
