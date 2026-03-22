@@ -8,7 +8,6 @@ performance regressions over time. Run locally or via CI to publish to GitHub Pa
 
 import math
 import tempfile
-import time
 from copy import deepcopy
 
 import bencher as bch
@@ -129,11 +128,9 @@ class ResultGenerationPerformance(bch.ParametrizedSweep):
         res = bench.plot_sweep(input_vars=["x"], result_vars=["out"])
         self.plot_time_ms = res.timings.total_ms
 
-        # Measure save time separately
-        t0 = time.perf_counter()
         with tempfile.TemporaryDirectory() as td:
             bench.report.save(directory=td, in_html_folder=False)
-        self.save_time_ms = (time.perf_counter() - t0) * 1000
+        self.save_time_ms = bench.report.last_save_ms
 
         return super().__call__(**kwargs)
 

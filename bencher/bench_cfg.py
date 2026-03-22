@@ -61,8 +61,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
                                    every time it is called
         clear_history (bool): Clear historical results
         max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
-        max_slider_points (int): Maximum time points in the over_time slider. None means all.
-        show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots.
+        max_slider_points (int): Maximum time points in the over_time slider. Defaults to 10, None means all.
+        show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots. Defaults to False.
         show_aggregate_plots (bool): Show aggregated BandResult plots when aggregate is set.
         print_pandas (bool): Print a pandas summary of the results to the console
         print_xarray (bool): Print an xarray summary of the results to the console
@@ -236,20 +236,20 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     max_slider_points: int | None = param.Integer(
-        None,
+        10,
         bounds=[2, None],
         allow_None=True,
         doc="Maximum number of time points shown in the over_time slider. "
         "Evenly subsampled (first and last always included). "
-        "The aggregated tab still uses all data. None means no subsampling.",
+        "The aggregated tab still uses all data. "
+        "Defaults to 10 to cap embed cost. Set to None for no subsampling.",
     )
 
     show_aggregated_time_tab: bool = param.Boolean(
         False,
         doc="When over_time is active, show an 'All Time Points (aggregated)' tab "
-        "alongside the per-time-point slider. Enabling this doubles the Panel embed "
-        "cost in report.save() because every slider position must be serialized for "
-        "both tabs. Set True only when aggregated statistics across time are needed.",
+        "alongside the per-time-point slider. Defaults to False for performance. "
+        "Set True to enable the aggregation view.",
     )
 
     show_aggregate_plots: bool = param.Boolean(

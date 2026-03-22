@@ -337,8 +337,8 @@ class TestMaxSliderPoints:
                 )
                 assert len(opts) == 2, f"Expected 2 slider options, got {len(opts)}"
 
-    def test_no_subsampling_by_default(self):
-        """With default config, slider should have all time points."""
+    def test_no_subsampling_when_below_default_max(self):
+        """With default max_slider_points=10 and only 5 snapshots, all time points shown."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
@@ -355,6 +355,25 @@ class TestMaxSliderPoints:
                     widget.options.values() if isinstance(widget.options, dict) else widget.options
                 )
                 assert len(opts) == 5, f"Expected 5 slider options, got {len(opts)}"
+
+    def test_default_subsampling_caps_at_max(self):
+        """With default max_slider_points=10 and 30 snapshots, slider capped at 10."""
+        benchable = SimpleBench()
+        res = _run_over_time(
+            benchable,
+            ["backend"],
+            ["latency"],
+            repeats=1,
+            snapshots=30,
+        )
+        plots = res.to_auto_plots()
+        widgets = _find_all_over_time_widgets(plots)
+        for widget in widgets:
+            if hasattr(widget, "options"):
+                opts = list(
+                    widget.options.values() if isinstance(widget.options, dict) else widget.options
+                )
+                assert len(opts) == 10, f"Expected 10 slider options, got {len(opts)}"
 
 
 class TestSubsampleIndices:
