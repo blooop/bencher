@@ -1,7 +1,7 @@
 from typing import Any
 from datetime import datetime, timedelta
 
-import bencher as bch
+import bencher as bn
 
 from enum import auto
 from strenum import StrEnum
@@ -17,7 +17,7 @@ class FunctionVariant(StrEnum):
     beta = auto()  # second function variant
 
 
-class BenchableObject(bch.ParametrizedSweep):
+class BenchableObject(bn.ParametrizedSweep):
     """A benchable object with a single parametric function that produces visually distinct plots.
 
     Categories control the function's frequency and phase. The same formula is evaluated regardless
@@ -26,24 +26,24 @@ class BenchableObject(bch.ParametrizedSweep):
     """
 
     # floating point variables
-    float1 = bch.FloatSweep(default=0, bounds=[0, 1.0], doc="x coordinate of the sample volume")
-    float2 = bch.FloatSweep(default=0, bounds=[0, 1.0], doc="y coordinate of the sample volume")
-    float3 = bch.FloatSweep(default=0, bounds=[0, 1.0], doc="z coordinate of the sample volume")
+    float1 = bn.FloatSweep(default=0, bounds=[0, 1.0], doc="x coordinate of the sample volume")
+    float2 = bn.FloatSweep(default=0, bounds=[0, 1.0], doc="y coordinate of the sample volume")
+    float3 = bn.FloatSweep(default=0, bounds=[0, 1.0], doc="z coordinate of the sample volume")
 
     # categorical variables
-    wave = bch.BoolSweep(
+    wave = bn.BoolSweep(
         default=True, doc="High frequency oscillation (True) vs low frequency smooth (False)"
     )
-    variant = bch.EnumSweep(FunctionVariant, doc=FunctionVariant.__doc__)
+    variant = bn.EnumSweep(FunctionVariant, doc=FunctionVariant.__doc__)
 
-    transform = bch.StringSweep(["normal", "inverted"])
+    transform = bn.StringSweep(["normal", "inverted"])
 
-    distance = bch.ResultVar("m", doc="The distance from the sample point to the origin")
-    sample_noise = bch.ResultVar("m", doc="The amount of noise added to the distance sample")
+    distance = bn.ResultVar("m", doc="The distance from the sample point to the origin")
+    sample_noise = bn.ResultVar("m", doc="The amount of noise added to the distance sample")
 
-    result_hmap = bch.ResultHmap()
+    result_hmap = bn.ResultHmap()
 
-    noise_scale = bch.FloatSweep(
+    noise_scale = bn.FloatSweep(
         default=0.0, bounds=[0.0, 1.0], doc="Signal-proportional noise scale (0 = deterministic)"
     )
     _time_offset = 0.0  # offset added to output for over-time support
@@ -85,27 +85,27 @@ class BenchableObject(bch.ParametrizedSweep):
         return super().__call__()
 
 
-class BenchMeta(bch.ParametrizedSweep):
+class BenchMeta(bn.ParametrizedSweep):
     """This class uses bencher to display the multidimensional types bencher can represent"""
 
-    float_vars = bch.IntSweep(
+    float_vars = bn.IntSweep(
         default=0, bounds=(0, 3), doc="The number of floating point variables that are swept"
     )
-    categorical_vars = bch.IntSweep(
+    categorical_vars = bn.IntSweep(
         default=0, bounds=(0, 3), doc="The number of categorical variables that are swept"
     )
-    sample_with_repeats = bch.IntSweep(default=1, bounds=(1, 10))
+    sample_with_repeats = bn.IntSweep(default=1, bounds=(1, 10))
 
-    sample_over_time = bch.BoolSweep(default=False)
+    sample_over_time = bn.BoolSweep(default=False)
 
-    level = bch.IntSweep(default=2, units="level", bounds=(2, 5))
+    level = bn.IntSweep(default=2, units="level", bounds=(2, 5))
 
-    plots = bch.ResultReference(units="int")
+    plots = bn.ResultReference(units="int")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
         run_cfg.level = self.level
         run_cfg.repeats = self.sample_with_repeats
         run_cfg.over_time = self.sample_over_time
@@ -114,7 +114,7 @@ class BenchMeta(bch.ParametrizedSweep):
         benchable = BenchableObject()
         noise = 0.15 if self.sample_with_repeats > 1 else 0.0
 
-        bench = bch.Bench("benchable", benchable, run_cfg=run_cfg)
+        bench = bn.Bench("benchable", benchable, run_cfg=run_cfg)
 
         inputs_vars_float = [
             "float1",
@@ -158,13 +158,13 @@ class BenchMeta(bch.ParametrizedSweep):
                 plot_callbacks=False,
             )
 
-        self.plots = bch.ResultReference()
+        self.plots = bn.ResultReference()
         self.plots.obj = res.to_auto()
 
         return super().__call__()
 
 
-def example_meta(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = BenchMeta().to_bench(run_cfg)
 
     bench.plot_sweep(
@@ -174,7 +174,7 @@ Each category combination produces a distinct scalar value from the unified func
 the default float point (0,0,0).""",
         input_vars=[
             "categorical_vars",
-            bch.p("sample_with_repeats", [1, 10]),
+            bn.p("sample_with_repeats", [1, 10]),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=0),
@@ -187,7 +187,7 @@ Categories shift the frequency and phase of the underlying function, producing v
 curves.""",
         input_vars=[
             "categorical_vars",
-            bch.p("sample_with_repeats", [1, 10]),
+            bn.p("sample_with_repeats", [1, 10]),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=1),
@@ -199,7 +199,7 @@ curves.""",
 The unified function creates interesting 2D patterns that vary with category selection.""",
         input_vars=[
             "categorical_vars",
-            bch.p("sample_with_repeats", [1, 10]),
+            bn.p("sample_with_repeats", [1, 10]),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=2),
@@ -211,7 +211,7 @@ The unified function creates interesting 2D patterns that vary with category sel
 The full 3D function with all cross-coupling terms active.""",
         input_vars=[
             "categorical_vars",
-            bch.p("sample_with_repeats", [1, 10]),
+            bn.p("sample_with_repeats", [1, 10]),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=3),
@@ -221,4 +221,4 @@ The full 3D function with all cross-coupling terms active.""",
 
 
 if __name__ == "__main__":
-    bch.run(example_meta)
+    bn.run(example_meta)

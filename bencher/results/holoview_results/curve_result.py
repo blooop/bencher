@@ -80,6 +80,9 @@ class CurveResult(HoloviewResult):
         When multiple benchmark repetitions are available, standard deviation bounds
         can also be displayed using a spread plot.
 
+        When over_time is active with multiple time points, builds per-time-point
+        curves inside an hv.HoloMap so the slider controls the time dimension.
+
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
             result_var (Parameter): The result variable to plot.
@@ -88,16 +91,12 @@ class CurveResult(HoloviewResult):
         Returns:
             hv.Curve | None: A curve plot with optional standard deviation spread.
         """
-        var = result_var.name
-        std_var = f"{var}_std"
-        title = self.title_from_ds(dataset, result_var, **kwargs)
-
-        hvds = hv.Dataset(dataset)
-        pt = hv.Overlay()
-        pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, xrotation=30, **kwargs)
-        if std_var in dataset.data_vars:
-            pt *= hvds.to(hv.Spread, vdims=[var, std_var])
-        pt = pt.opts(legend_position="right")
         if self._use_holomap_for_time(dataset):
-            pt = self._holomap_with_slider_bottom(pt)
-        return pt
+            var = result_var.name
+
+            def make_curve(ds_t):
+                return self._build_curve_overlay(ds_t, result_var, **kwargs)
+
+            return self._build_time_holomap(dataset, var, make_curve)
+
+        return self._build_curve_overlay(dataset, result_var, **kwargs)

@@ -4,16 +4,16 @@ from typing import Any
 
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class HealthChecker(bch.ParametrizedSweep):
+class HealthChecker(bn.ParametrizedSweep):
     """Checks whether a service passes its health threshold."""
 
-    threshold = bch.FloatSweep(default=0.5, bounds=[0.1, 0.9], doc="Decision threshold")
-    difficulty = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Problem difficulty")
+    threshold = bn.FloatSweep(default=0.5, bounds=[0.1, 0.9], doc="Decision threshold")
+    difficulty = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Problem difficulty")
 
-    healthy = bch.ResultBool(doc="Whether the service is healthy")
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -22,7 +22,7 @@ class HealthChecker(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_result_bool_0d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_bool_0d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Result Bool: 0D input."""
     bench = HealthChecker().to_bench(run_cfg)
     bench.plot_sweep(
@@ -35,4 +35,4 @@ def example_result_bool_0d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_result_bool_0d, level=3)
+    bn.run(example_result_bool_0d, level=3)

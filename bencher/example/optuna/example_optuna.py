@@ -1,31 +1,21 @@
-import bencher as bch
 import numpy as np
-import optuna
-from optuna.samplers import TPESampler
 
-
-def objective(trial):
-    x = trial.suggest_float("x", -10, 10)
-    return x**2
-
-
-study = optuna.create_study(sampler=TPESampler())
-study.optimize(objective, n_trials=10)
+import bencher as bn
 
 rast_range = 1.5
 
 optimal_value = 0.1234
 
 
-class ToyOptimisationProblem(bch.ParametrizedSweep):
-    input1 = bch.FloatSweep(default=0, bounds=[-rast_range, rast_range], samples=10)
-    input2 = bch.FloatSweep(default=0, bounds=[-rast_range, rast_range], samples=10)
-    offset = bch.FloatSweep(default=0, bounds=[-rast_range, rast_range])
+class ToyOptimisationProblem(bn.ParametrizedSweep):
+    input1 = bn.FloatSweep(default=0, bounds=[-rast_range, rast_range], samples=10)
+    input2 = bn.FloatSweep(default=0, bounds=[-rast_range, rast_range], samples=10)
+    offset = bn.FloatSweep(default=0, bounds=[-rast_range, rast_range])
 
-    bump_scale = bch.FloatSweep(default=1.5, bounds=[1, 10])
+    bump_scale = bn.FloatSweep(default=1.5, bounds=[1, 10])
 
     # RESULTS
-    output = bch.ResultVar("ul", bch.OptDir.minimize)
+    output = bn.ResultVar("ul", bn.OptDir.minimize)
 
     def rastrigin(self, **kwargs) -> dict:
         """A modified version of the rastrigin function which is very difficult to find the global optimum
@@ -45,27 +35,18 @@ class ToyOptimisationProblem(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def optuna_rastrigin(run_cfg: bch.BenchRunCfg | None = None):
+def optuna_rastrigin(run_cfg: bn.BenchRunCfg | None = None):
     explorer = ToyOptimisationProblem()
 
-    bench = bch.Bench("Rastrigin", explorer.rastrigin, run_cfg=run_cfg)
+    bench = bn.Bench("Rastrigin", explorer.rastrigin, run_cfg=run_cfg)
 
-    # res = bench.to_optuna(
-    #     input_vars=[explorer.param.input1, explorer.param.input2],
-    #     result_vars=[explorer.param.output],
-    #     n_trials=30
-    # )
-
-    # run_cfg.use_optuna = True
-    res = bench.plot_sweep(
+    bench.plot_sweep(
         "Rastrigin",
         input_vars=[explorer.param.input1, explorer.param.input2],
         result_vars=[explorer.param.output],
         run_cfg=run_cfg,
     )
 
-    bench.report.append(res.to_optuna_plots())
-    bench.report.append(res.to_optuna_from_sweep(bench))
     bench.report.append_markdown(
         f"The optimal value should be input1:{-optimal_value},input2:{-optimal_value} with a value of 0"
     )
@@ -73,4 +54,4 @@ def optuna_rastrigin(run_cfg: bch.BenchRunCfg | None = None):
 
 
 if __name__ == "__main__":
-    bch.run(optuna_rastrigin)
+    bn.run(optuna_rastrigin, optimise=30)

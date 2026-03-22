@@ -1,11 +1,11 @@
 # pylint: disable=duplicate-code
-import bencher as bch
+import bencher as bn
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import NoiseDistribution, ExampleBenchCfg
 
 
-def example_floats2D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_floats2D(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example of how to perform a 2D floating point parameter sweep
 
     Args:
@@ -14,7 +14,7 @@ def example_floats2D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
     Returns:
         Bench: results of the parameter sweep
     """
-    bench = bch.Bench(
+    bench = bn.Bench(
         "Bencher_Example_Floats",
         ExampleBenchCfg(),
         run_cfg=run_cfg,
@@ -61,4 +61,4 @@ def example_floats2D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_floats2D, repeats=2, level=3)
+    bn.run(example_floats2D, repeats=2, level=3)

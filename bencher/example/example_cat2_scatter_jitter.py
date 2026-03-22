@@ -5,25 +5,25 @@ performance and developer productivity metrics.
 """
 
 import random
-import bencher as bch
+import bencher as bn
 
 random.seed(42)  # Fixed seed for reproducibility
 
 
-class ProgrammingBenchmark(bch.ParametrizedSweep):
+class ProgrammingBenchmark(bn.ParametrizedSweep):
     """Benchmark class comparing programming languages and development environments."""
 
-    language = bch.StringSweep(
+    language = bn.StringSweep(
         ["Python", "JavaScript", "Rust", "Go"], doc="Programming language being benchmarked"
     )
-    environment = bch.StringSweep(
+    environment = bn.StringSweep(
         ["Development", "Testing", "Production"], doc="Environment configuration"
     )
 
-    data_size = bch.FloatSweep(bounds=[0, 1000], doc="Dataset size in MB to process")
+    data_size = bn.FloatSweep(bounds=[0, 1000], doc="Dataset size in MB to process")
 
-    is_successful = bch.ResultBool(doc="Whether the benchmark run was successful")
-    score = bch.ResultVar(units="score", doc="A floating point score for the run")
+    is_successful = bn.ResultBool(doc="Whether the benchmark run was successful")
+    score = bn.ResultVar(units="score", doc="A floating point score for the run")
 
     def __call__(self, **kwargs) -> dict:
         """Execute the parameter sweep for the given inputs.
@@ -67,7 +67,7 @@ class ProgrammingBenchmark(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-def example_2_cat_in_4_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_2_cat_in_4_out_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """This example compares a boolean and a float result across programming languages and environments.
 
     It demonstrates how to sample categorical variables with multiple repeats
@@ -77,7 +77,7 @@ def example_2_cat_in_4_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
         run_cfg: Configuration for the benchmark run
 
     Returns:
-        bch.Bench: The benchmark object
+        bn.Bench: The benchmark object
     """
 
     run_cfg.repeats = 15  # Run multiple times to get statistical significance
@@ -100,4 +100,4 @@ def example_2_cat_in_4_out_repeats(run_cfg: bch.BenchRunCfg | None = None) -> bc
 
 
 if __name__ == "__main__":
-    bch.run(example_2_cat_in_4_out_repeats)
+    bn.run(example_2_cat_in_4_out_repeats)

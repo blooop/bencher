@@ -1,14 +1,14 @@
 """This file has an example of how to publish a report to github pages"""
 
 import math
-import bencher as bch
+import bencher as bn
 
 
-class SimpleFloat(bch.ParametrizedSweep):
-    theta = bch.FloatSweep(
+class SimpleFloat(bn.ParametrizedSweep):
+    theta = bn.FloatSweep(
         default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=30
     )
-    out_sin = bch.ResultVar(units="v", doc="sin of theta")
+    out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -24,8 +24,6 @@ if __name__ == "__main__":
     # TODO DON'T OVERWRITE ^ EXAMPLE WHEN RUNNING CODE BELOW
 
     # publish from benchrunner
-    bench_r = bch.BenchRunner(
-        "SimpleFloat", publisher=bch.GithubPagesCfg("blooop", "reports", "r6")
-    )
+    bench_r = bn.BenchRunner("SimpleFloat", publisher=bn.GithubPagesCfg("blooop", "reports", "r6"))
     bench_r.add_bench(SimpleFloat())
     bench_r.run(level=3, show=True, publish=True)

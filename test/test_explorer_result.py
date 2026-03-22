@@ -2,7 +2,7 @@
 
 import unittest
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.explorer_result import ExplorerResult
 
@@ -14,7 +14,7 @@ class TestExplorerResult(unittest.TestCase):
             "explorer_test",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
         # Call ExplorerResult.to_plot via the result object (it inherits from ExplorerResult)
@@ -27,7 +27,7 @@ class TestExplorerResult(unittest.TestCase):
             "explorer_no_inputs",
             input_vars=[],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
         # Falls back to pandas hvplot explorer for 0D

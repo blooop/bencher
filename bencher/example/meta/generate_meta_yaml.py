@@ -7,7 +7,7 @@ generated directory so they are included in the documentation build.
 import shutil
 from pathlib import Path
 
-import bencher as bch
+import bencher as bn
 
 from .generate_examples import GENERATED_DIR
 
@@ -21,7 +21,7 @@ YAML_EXAMPLES = [
 ]
 
 
-def example_meta_yaml(run_cfg: bch.BenchRunCfg | None = None) -> None:  # pylint: disable=unused-argument
+def example_meta_yaml(run_cfg: bn.BenchRunCfg | None = None) -> None:  # pylint: disable=unused-argument
     """Copy YAML sweep examples into the generated directory."""
     dest = GENERATED_DIR / OUTPUT_DIR
     dest.mkdir(parents=True, exist_ok=True)

@@ -14,5 +14,6 @@ if (!window.location.hash && !window.location.search) {
 
 reference/meta/gallery
 reference/index
+concepts
 intro
 ```

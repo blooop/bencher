@@ -1,5 +1,5 @@
 import rerun as rr
-import bencher as bch
+import bencher as bn
 import panel as pn
 
 
@@ -17,13 +17,13 @@ if local:
     row = pn.Row()
     # row.append(rrd_to_pane("http://localhost:8001/dat2.rrd"))
 
-    row.append(bch.rrd_to_pane("http://127.0.0.1:8001/dat2.rrd"))
+    row.append(bn.rrd_to_pane("http://127.0.0.1:8001/dat2.rrd"))
     row.show()
 else:
     # publish data to a github branch
-    bch.publish_and_view_rrd(
+    bn.publish_and_view_rrd(
         file_path,
         remote="https://github.com/blooop/bencher.git",
         branch_name="test_rrd",
-        content_callback=bch.github_content,
+        content_callback=bn.github_content,
     ).show()

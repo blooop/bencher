@@ -1,3 +1,7 @@
+import warnings
+
+warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=UserWarning)
+
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
@@ -96,10 +100,12 @@ from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 from .sample_order import SampleOrder
 from .caching import CachedParams
 from .results.bench_result import BenchResult
+from .results.optimize_result import OptimizeResult
 from .results.video_result import VideoResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg
 from .job import Executors
+from .sweep_timings import SweepTimings
 from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
 from .factories import create_bench, create_bench_runner

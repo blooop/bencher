@@ -361,7 +361,6 @@ class BenchCfg(BenchRunCfg):
         meta_vars (list): Meta variables such as recording time and repeat id
         all_vars (list): Stores a list of both the input_vars and meta_vars
         iv_time (list[TimeSnapshot | TimeEvent]): Parameter for sampling the same inputs over time
-        iv_time_event (list[TimeEvent]): Parameter for sampling inputs over time as a discrete type
         over_time (bool): Controls whether the function is sampled over time
         name (str): The name of the benchmarkCfg
         title (str): The title of the benchmark
@@ -404,12 +403,6 @@ class BenchCfg(BenchRunCfg):
         default=[],
         item_type=TimeSnapshot | TimeEvent,
         doc="A parameter to represent the sampling the same inputs over time as a scalar type",
-    )
-
-    iv_time_event = param.List(
-        default=[],
-        item_type=TimeEvent,
-        doc="A parameter to represent the sampling the same inputs over time as a discrete type",
     )
 
     # Note: over_time is already inherited from BenchRunCfg
@@ -686,6 +679,23 @@ class BenchCfg(BenchRunCfg):
         if results_suffix:
             col.append(pn.pane.Markdown("## Results:"))
         return col
+
+    @staticmethod
+    def partition_input_vars(vars_) -> tuple[list, list]:
+        """Split variables into (optimized, non-optimized) based on the optimize flag."""
+        opt = [v for v in vars_ if getattr(v, "optimize", True)]
+        non_opt = [v for v in vars_ if not getattr(v, "optimize", True)]
+        return opt, non_opt
+
+    @property
+    def optimized_input_vars(self) -> list:
+        """Return input variables where optimize=True (suggested by Optuna)."""
+        return self.partition_input_vars(self.input_vars or [])[0]
+
+    @property
+    def non_optimized_input_vars(self) -> list:
+        """Return input variables where optimize=False (swept/aggregated, not suggested)."""
+        return self.partition_input_vars(self.input_vars or [])[1]
 
     def optuna_targets(self, as_var: bool = False) -> list[Any]:
         """Get the list of result variables that are optimization targets.

@@ -2,28 +2,28 @@
 
 import unittest
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 
 
 class TestLineResult(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        bench = BenchableObject().to_bench(bch.BenchRunCfg(repeats=1))
+        bench = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
         cls.res_1d = bench.plot_sweep(
             "test_line",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
-        bench_cat = BenchableObject().to_bench(bch.BenchRunCfg(repeats=1))
+        bench_cat = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
         cls.res_1d_cat = bench_cat.plot_sweep(
             "test_line_cat",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.wave],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 

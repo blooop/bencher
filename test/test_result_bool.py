@@ -12,7 +12,7 @@ import holoviews as hv
 import numpy as np
 from param import Number
 
-import bencher as bch
+import bencher as bn
 from bencher.results.holoview_results.bar_result import BarResult
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.curve_result import CurveResult
@@ -44,12 +44,12 @@ class CatEnum(StrEnum):
     C = auto()
 
 
-class BoolBenchDeterministic(bch.ParametrizedSweep):
+class BoolBenchDeterministic(bn.ParametrizedSweep):
     """Cat + float inputs, deterministic bool output. For single-repeat tests."""
 
-    cat = bch.EnumSweep(CatEnum, doc="Categorical input")
-    x = bch.FloatSweep(default=0, bounds=[0, 1], doc="Float input")
-    out = bch.ResultBool(doc="Deterministic bool output")
+    cat = bn.EnumSweep(CatEnum, doc="Categorical input")
+    x = bn.FloatSweep(default=0, bounds=[0, 1], doc="Float input")
+    out = bn.ResultBool(doc="Deterministic bool output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -57,12 +57,12 @@ class BoolBenchDeterministic(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class BoolBenchAlternating(bch.ParametrizedSweep):
+class BoolBenchAlternating(bn.ParametrizedSweep):
     """Counter-based alternating True/False. For multi-repeat aggregation tests."""
 
-    cat = bch.EnumSweep(CatEnum, doc="Categorical input")
-    x = bch.FloatSweep(default=0, bounds=[0, 1], doc="Float input")
-    out = bch.ResultBool(doc="Alternating bool output")
+    cat = bn.EnumSweep(CatEnum, doc="Categorical input")
+    x = bn.FloatSweep(default=0, bounds=[0, 1], doc="Float input")
+    out = bn.ResultBool(doc="Alternating bool output")
 
     _call_count = 0
 
@@ -73,11 +73,11 @@ class BoolBenchAlternating(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class BoolBenchAllTrue(bch.ParametrizedSweep):
+class BoolBenchAllTrue(bn.ParametrizedSweep):
     """Always True. For edge case: mean=1.0, std=0.0."""
 
-    cat = bch.EnumSweep(CatEnum, doc="Categorical input")
-    out = bch.ResultBool(doc="Always true")
+    cat = bn.EnumSweep(CatEnum, doc="Categorical input")
+    out = bn.ResultBool(doc="Always true")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -85,11 +85,11 @@ class BoolBenchAllTrue(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class BoolBenchAllFalse(bch.ParametrizedSweep):
+class BoolBenchAllFalse(bn.ParametrizedSweep):
     """Always False. For edge case: mean=0.0, std=0.0."""
 
-    cat = bch.EnumSweep(CatEnum, doc="Categorical input")
-    out = bch.ResultBool(doc="Always false")
+    cat = bn.EnumSweep(CatEnum, doc="Categorical input")
+    out = bn.ResultBool(doc="Always false")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -97,12 +97,12 @@ class BoolBenchAllFalse(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class TwoFloatBool(bch.ParametrizedSweep):
+class TwoFloatBool(bn.ParametrizedSweep):
     """Two float inputs, deterministic bool output. For 2-float plot tests."""
 
-    x1 = bch.FloatSweep(default=0, bounds=[0, 1])
-    x2 = bch.FloatSweep(default=0, bounds=[0, 1])
-    out = bch.ResultBool(doc="bool output")
+    x1 = bn.FloatSweep(default=0, bounds=[0, 1])
+    x2 = bn.FloatSweep(default=0, bounds=[0, 1])
+    out = bn.ResultBool(doc="bool output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -110,13 +110,13 @@ class TwoFloatBool(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class ThreeFloatBool(bch.ParametrizedSweep):
+class ThreeFloatBool(bn.ParametrizedSweep):
     """Three float inputs, deterministic bool output. For volume plot tests."""
 
-    x1 = bch.FloatSweep(default=0, bounds=[0, 1])
-    x2 = bch.FloatSweep(default=0, bounds=[0, 1])
-    x3 = bch.FloatSweep(default=0, bounds=[0, 1])
-    out = bch.ResultBool(doc="bool output")
+    x1 = bn.FloatSweep(default=0, bounds=[0, 1])
+    x2 = bn.FloatSweep(default=0, bounds=[0, 1])
+    x3 = bn.FloatSweep(default=0, bounds=[0, 1])
+    out = bn.ResultBool(doc="bool output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -124,11 +124,11 @@ class ThreeFloatBool(bch.ParametrizedSweep):
         return super().__call__(**kwargs)
 
 
-class BoolBenchNone(bch.ParametrizedSweep):
+class BoolBenchNone(bn.ParametrizedSweep):
     """Returns None for the result. Tests None-to-NaN coercion."""
 
-    cat = bch.EnumSweep(CatEnum, doc="Categorical input")
-    out = bch.ResultBool(doc="None output")
+    cat = bn.EnumSweep(CatEnum, doc="Categorical input")
+    out = bn.ResultBool(doc="None output")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -143,7 +143,7 @@ class BoolBenchNone(bch.ParametrizedSweep):
 
 def _run_sweep(bench_cls, input_vars, result_vars=None, repeats=1, **kwargs):
     """Run a minimal benchmark sweep and return the BenchResult."""
-    run_cfg = bch.BenchRunCfg(repeats=repeats)
+    run_cfg = bn.BenchRunCfg(repeats=repeats)
     bench = bench_cls().to_bench(run_cfg)
     return bench.plot_sweep(
         input_vars=input_vars,
@@ -177,7 +177,7 @@ class TestDataIntegrity(unittest.TestCase):
     def test_bool_aggregation_mean_with_repeats(self):
         """After REDUCE, mean should be in [0,1] and _std should exist."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         da_mean = ds["out"]
         for val in da_mean.values.flat:
             self.assertGreaterEqual(float(val), 0.0)
@@ -187,20 +187,20 @@ class TestDataIntegrity(unittest.TestCase):
     def test_bool_squeeze_removes_repeat_dim(self):
         """SQUEEZE should drop the 'repeat' dimension."""
         res = _run_sweep(BoolBenchDeterministic, ["cat"], repeats=1)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.SQUEEZE).data
+        ds = res.to_hv_dataset(reduce=bn.ReduceType.SQUEEZE).data
         self.assertNotIn("repeat", ds.dims)
 
     def test_bool_all_true_mean(self):
         """All-True benchmark with repeats should give mean=1.0."""
         res = _run_sweep(BoolBenchAllTrue, ["cat"], repeats=3)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
             self.assertAlmostEqual(float(val), 1.0)
 
     def test_bool_all_false_mean(self):
         """All-False benchmark with repeats should give mean=0.0."""
         res = _run_sweep(BoolBenchAllFalse, ["cat"], repeats=3)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
             self.assertAlmostEqual(float(val), 0.0)
 
@@ -489,10 +489,10 @@ class TestAutoReduction(unittest.TestCase):
         """Violin with ResultBool should auto-reduce: no 'repeat' dim in rendered dataset."""
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         # Get the hv_dataset that would be passed to distribution plots (ReduceType.NONE)
-        hv_ds_none = res.to_hv_dataset(reduce=bch.ReduceType.NONE)
+        hv_ds_none = res.to_hv_dataset(reduce=bn.ReduceType.NONE)
         self.assertIn("repeat", hv_ds_none.data.dims)
         # After auto-reduction, the dataset should be reduced
-        hv_ds_reduced = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE)
+        hv_ds_reduced = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE)
         self.assertNotIn("repeat", hv_ds_reduced.data.dims)
         # Confirm the plot still works
         plot = res.to(ViolinResult)
@@ -530,7 +530,7 @@ class TestBinomialSE(unittest.TestCase):
         BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
         n = 4
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=n)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out"].values.flat:
             p = float(val)
             expected_se = np.sqrt(p * (1 - p) / n)
@@ -541,14 +541,14 @@ class TestBinomialSE(unittest.TestCase):
     def test_all_true_binomial_se_is_zero(self):
         """If p=1.0, binomial SE should be 0.0."""
         res = _run_sweep(BoolBenchAllTrue, ["cat"], repeats=4)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out_std"].values.flat:
             self.assertAlmostEqual(float(val), 0.0)
 
     def test_all_false_binomial_se_is_zero(self):
         """If p=0.0, binomial SE should be 0.0."""
         res = _run_sweep(BoolBenchAllFalse, ["cat"], repeats=4)
-        ds = res.to_hv_dataset(reduce=bch.ReduceType.REDUCE).data
+        ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out_std"].values.flat:
             self.assertAlmostEqual(float(val), 0.0)
 

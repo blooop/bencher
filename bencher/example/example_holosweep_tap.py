@@ -3,7 +3,7 @@
 # pylint: disable=duplicate-code,unused-argument
 
 
-import bencher as bch
+import bencher as bn
 import math
 import random
 import numpy as np
@@ -28,24 +28,22 @@ class Function(StrEnum):
         return getattr(np, self.removeprefix("fn_"))(arg)
 
 
-class PlotFunctions(bch.ParametrizedSweep):
-    phase = bch.FloatSweep(
-        default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5
-    )
+class PlotFunctions(bn.ParametrizedSweep):
+    phase = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
 
-    freq = bch.FloatSweep(default=1, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
+    freq = bn.FloatSweep(default=1, bounds=[0, math.pi], doc="Input angle", units="rad", samples=5)
 
-    theta = bch.FloatSweep(
+    theta = bn.FloatSweep(
         default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=10
     )
 
-    compute_fn = bch.EnumSweep(Function)
+    compute_fn = bn.EnumSweep(Function)
 
-    fn_output = bch.ResultVar(units="v", doc="sin of theta with some noise")
+    fn_output = bn.ResultVar(units="v", doc="sin of theta with some noise")
 
-    out_sum = bch.ResultVar(units="v", doc="The sum")
+    out_sum = bn.ResultVar(units="v", doc="The sum")
 
-    hmap = bch.ResultHmap()
+    hmap = bn.ResultHmap()
 
     def __call__(self, plot=True, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -78,12 +76,12 @@ class PlotFunctions(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_holosweep_tap(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_holosweep_tap(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     wv = PlotFunctions()
 
     run_cfg.use_optuna = True
     run_cfg.auto_plot = False
-    bench = bch.Bench("waves", wv, run_cfg=run_cfg)
+    bench = bn.Bench("waves", wv, run_cfg=run_cfg)
 
     res = bench.plot_sweep(
         "phase",
@@ -99,12 +97,12 @@ def example_holosweep_tap(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 def example_holosweep_tap_slider(
-    run_cfg: bch.BenchRunCfg | None = None,
-) -> bch.Bench:  # pragma: no cover
+    run_cfg: bn.BenchRunCfg | None = None,
+) -> bn.Bench:  # pragma: no cover
     wv = PlotFunctions()
 
     run_cfg.use_optuna = True
-    bench = bch.Bench("waves", wv, run_cfg=run_cfg)
+    bench = bn.Bench("waves", wv, run_cfg=run_cfg)
 
     res = bench.plot_sweep(
         "phase",
@@ -122,8 +120,8 @@ def example_holosweep_tap_slider(
 
     def tap_plot(x, y):
         print(x, y)
-        selres = bch.get_nearest_coords(res.ds, theta=x, freq=y, phase=sld1.value, repeat=1)
-        return res.hmaps[bch.hmap_canonical_input(selres)]
+        selres = bn.get_nearest_coords(res.ds, theta=x, freq=y, phase=sld1.value, repeat=1)
+        return res.hmaps[bn.hmap_canonical_input(selres)]
 
     tap_dmap = hv.DynamicMap(tap_plot, streams=[posxy])
 
@@ -136,7 +134,7 @@ def example_holosweep_tap_slider(
 
 
 if __name__ == "__main__":
-    bch.run(example_holosweep_tap)
+    bn.run(example_holosweep_tap)
 
 
 # todo  https://discourse.holoviz.org/t/pointdraw-as-parameterized-class/3539

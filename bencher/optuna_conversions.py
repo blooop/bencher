@@ -21,18 +21,25 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 
 # BENCH_CFG
-def optuna_grid_search(bench_cfg: BenchCfg) -> optuna.Study:
+def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> optuna.Study:
     """use optuna to perform a grid search
 
     Args:
         bench_cfg (BenchCfg): setting for grid search
+        trial_vars (list | None): If provided, use these variables for the search space.
+            Otherwise, filter bench_cfg.all_vars by optimize=True.
 
     Returns:
         optuna.Study: results of grid search
     """
     search_space = {}
-    for iv in bench_cfg.all_vars:
-        search_space[iv.name] = iv.values()
+    if trial_vars is not None:
+        for iv in trial_vars:
+            search_space[iv.name] = iv.values()
+    else:
+        for iv in bench_cfg.all_vars:
+            if getattr(iv, "optimize", True):
+                search_space[iv.name] = iv.values()
     directions = []
     for rv in bench_cfg.optuna_targets(True):
         directions.append(rv.direction)
@@ -94,24 +101,20 @@ def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseD
         optuna.distributions.BaseDistribution: Optuna representation of a sweep var
     """
 
-    iv_type = type(var)
-    if iv_type == IntSweep:
+    if isinstance(var, IntSweep):
         return optuna.distributions.IntDistribution(var.bounds[0], var.bounds[1])
-    if iv_type == FloatSweep:
+    if isinstance(var, FloatSweep):
         return optuna.distributions.FloatDistribution(var.bounds[0], var.bounds[1])
-    if iv_type in (EnumSweep, StringSweep):
+    if isinstance(var, (EnumSweep, StringSweep)):
         return optuna.distributions.CategoricalDistribution(var.objects)
-    if iv_type == BoolSweep:
+    if isinstance(var, BoolSweep):
         return optuna.distributions.CategoricalDistribution([False, True])
-    if iv_type == TimeSnapshot:
-        # return optuna.distributions.IntDistribution(0, sys.maxsize)
+    if isinstance(var, TimeSnapshot):
         return optuna.distributions.FloatDistribution(0, 1e20)
-        # return optuna.distributions.CategoricalDistribution([])
-    # elif iv_type == TimeEvent:
-    #     pass
-    # return optuna.distributions.CategoricalDistribution(["now"])
+    if isinstance(var, TimeEvent):
+        return optuna.distributions.CategoricalDistribution(var.values())
 
-    raise ValueError(f"This input type {iv_type} is not supported")
+    raise ValueError(f"This input type {type(var)} is not supported")
 
 
 def sweep_var_to_suggest(iv: ParametrizedSweep, trial: optuna.trial) -> object:
@@ -136,7 +139,7 @@ def sweep_var_to_suggest(iv: ParametrizedSweep, trial: optuna.trial) -> object:
     if iv_type in (EnumSweep, StringSweep):
         return trial.suggest_categorical(iv.name, iv.objects)
     if iv_type in (TimeSnapshot, TimeEvent):
-        pass  # optuna does not like time
+        return None  # optuna does not like time
     if iv_type == BoolSweep:
         return trial.suggest_categorical(iv.name, [True, False])
     raise ValueError(f"This input type {iv_type} is not supported")
@@ -147,24 +150,46 @@ def cfg_from_optuna_trial(
 ) -> ParametrizedSweep:
     cfg = cfg_type()
     for iv in bench_cfg.input_vars:
-        cfg.param.set_param(iv.name, sweep_var_to_suggest(iv, trial))
+        if getattr(iv, "optimize", True):
+            cfg.param.set_param(iv.name, sweep_var_to_suggest(iv, trial))
     for mv in bench_cfg.meta_vars:
-        sweep_var_to_suggest(mv, trial)
+        if getattr(mv, "optimize", True):
+            sweep_var_to_suggest(mv, trial)
     return cfg
+
+
+def _append_safe(row, plot_fn, *args, **kwargs):
+    """Append a plot to *row*, logging any exception instead of propagating."""
+    try:
+        row.append(plot_fn(*args, **kwargs))
+    except Exception as e:  # pylint: disable=broad-except
+        logging.exception(e)
 
 
 def summarise_optuna_study(study: optuna.study.Study) -> pn.pane.panel:
     """Summarise an optuna study in a panel format"""
     row = pn.Column(name="Optimisation Results")
-    row.append(plot_optimization_history(study))
-    row.append(plot_param_importances(study))
-    try:
-        row.append(plot_pareto_front(study))
-    except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
+    n_objectives = len(study.directions)
+    is_multi = n_objectives >= 2
 
-    row.append(
-        pn.pane.Markdown(f"```\nBest value: {study.best_value}\nParams: {study.best_params}```")
-    )
+    if is_multi:
+        for idx in range(n_objectives):
+            target_name = f"Objective {idx}"
 
+            def target(t, i=idx):
+                return t.values[i]
+
+            _append_safe(
+                row, plot_optimization_history, study, target=target, target_name=target_name
+            )
+            _append_safe(row, plot_param_importances, study, target=target, target_name=target_name)
+
+        _append_safe(row, plot_pareto_front, study)
+        summary = f"Pareto-front size: {len(study.best_trials)}"
+    else:
+        _append_safe(row, plot_optimization_history, study)
+        _append_safe(row, plot_param_importances, study)
+        summary = f"Best value: {study.best_value}\nParams: {study.best_params}"
+
+    row.append(pn.pane.Markdown(f"```\n{summary}```"))
     return row
