@@ -278,15 +278,15 @@ class TestShowAggregatedTimeTab:
             pass
         return count
 
-    def test_aggregated_tab_present_by_default(self):
-        """With default config, aggregated tab should appear."""
+    def test_aggregated_tab_absent_by_default(self):
+        """With default config (show_aggregated_time_tab=False), no aggregated tabs."""
         benchable = SimpleBench()
         res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
         plots = res.to_auto_plots()
-        assert self._count_agg_tabs(plots) > 0
+        assert self._count_agg_tabs(plots) == 0
 
-    def test_aggregated_tab_absent_when_disabled(self):
-        """With show_aggregated_time_tab=False, no aggregated tabs."""
+    def test_aggregated_tab_present_when_enabled(self):
+        """With show_aggregated_time_tab=True, aggregated tab should appear."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
@@ -294,10 +294,10 @@ class TestShowAggregatedTimeTab:
             ["latency"],
             repeats=1,
             snapshots=3,
-            show_aggregated_time_tab=False,
+            show_aggregated_time_tab=True,
         )
         plots = res.to_auto_plots()
-        assert self._count_agg_tabs(plots) == 0
+        assert self._count_agg_tabs(plots) > 0
 
     def test_curve_aggregated_tab_absent_when_disabled(self):
         """Curve plots also respect show_aggregated_time_tab=False."""
