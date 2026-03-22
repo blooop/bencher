@@ -10,6 +10,7 @@ import panel as pn
 from optuna.visualization import (
     plot_param_importances,
     plot_pareto_front,
+    plot_optimization_history,
 )
 from bencher.utils import hmap_canonical_input
 from bencher.variables.time import TimeSnapshot, TimeEvent
@@ -24,7 +25,6 @@ from bencher.optuna_conversions import (
     summarise_trial,
     param_importance,
     optuna_grid_search,
-    summarise_optuna_study,
     sweep_var_to_suggest,
 )
 
@@ -74,12 +74,6 @@ class OptunaResult(BenchResultBase):
         """
 
         return self.collect_optuna_plots(**kwargs)
-
-    def to_optuna_from_sweep(self, bench, n_trials=30):
-        optu = self.to_optuna_from_results(
-            bench.worker, n_trials=n_trials, extra_results=bench.results
-        )
-        return summarise_optuna_study(optu)
 
     def to_optuna_from_results(
         self,
@@ -225,16 +219,21 @@ class OptunaResult(BenchResultBase):
         return [p.params for p in self.studies[0].trials]
 
     def collect_optuna_plots(
-        self, pareto_width: float | None = None, pareto_height: float | None = None
-    ) -> list[pn.pane.panel]:
-        """Use optuna to plot various summaries of the optimisation
+        self,
+        pareto_width: float | None = None,
+        pareto_height: float | None = None,
+        optimize_study: optuna.Study | None = None,
+    ) -> pn.pane.panel:
+        """Use optuna to plot various summaries of the optimisation.
 
         Args:
-            study (optuna.Study): The study to plot
-            bench_cfg (BenchCfg): Benchmark config with options used to generate the study
+            pareto_width: Optional width for the pareto front plot.
+            pareto_height: Optional height for the pareto front plot.
+            optimize_study: Optional TPE study from bench.optimize() — used to
+                render the optimization history plot.
 
         Returns:
-            list[pn.pane.Pane]: A list of plots
+            pn.pane.panel: A panel with optuna visualisations.
         """
 
         self.studies = [self.bench_result_to_study(True)]
@@ -244,28 +243,39 @@ class OptunaResult(BenchResultBase):
             tab_names = ["With Repeats", "Without Repeats"]
 
         plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600
+        target_names = self.bench_cfg.optuna_targets()
 
         study_panes = []
         for study, tab_name in zip(self.studies, tab_names):
             study_pane = pn.Column()
-            target_names = self.bench_cfg.optuna_targets()
             param_str = []
 
             if len(target_names) > 1:
-                # --- Per-objective columns aligned with sweep result vars ---
-                obj_row = pn.Row()
-                for idx, tgt in enumerate(target_names):
+                # --- Per-objective columns: optimization history ---
+                if optimize_study is not None:
+                    history_row = pn.Row()
+                    for idx, tgt in enumerate(target_names):
 
-                    def _target(t, i=idx):
-                        return t.values[i]
+                        def _target_hist(t, i=idx):
+                            return t.values[i]
 
-                    col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
-                    _append_safe_sized(
-                        col, plot_param_importances, plot_w,
-                        study, target=_target, target_name=tgt,
-                    )
-                    obj_row.append(col)
-                study_pane.append(obj_row)
+                        col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
+                        _append_safe_sized(
+                            col,
+                            plot_optimization_history,
+                            plot_w,
+                            optimize_study,
+                            target=_target_hist,
+                            target_name=tgt,
+                        )
+                        history_row.append(col)
+                    study_pane.append(history_row)
+
+                # --- Parameter importance (all inputs, per objective target) ---
+                try:
+                    study_pane.append(param_importance(self.bench_cfg, study, plot_w))
+                except RuntimeError as e:
+                    study_pane.append(f"Error generating parameter importance: {str(e)}")
 
                 # --- Pareto Front ---
                 if self.bench_cfg.post_description:
@@ -300,11 +310,16 @@ class OptunaResult(BenchResultBase):
                     param_str.extend(summarise_trial(t, self.bench_cfg))
 
             else:
-                if len(self.bench_cfg.input_vars) > 1:
+                if optimize_study is not None:
                     _append_safe_sized(
-                        study_pane, plot_param_importances, plot_w,
-                        study, target_name=target_names[0],
+                        study_pane,
+                        plot_optimization_history,
+                        plot_w,
+                        optimize_study,
                     )
+
+                if len(self.bench_cfg.input_vars) > 1:
+                    study_pane.append(plot_param_importances(study, target_name=target_names[0]))
 
                 param_str.extend(summarise_trial(study.best_trial, self.bench_cfg))
 

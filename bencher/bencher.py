@@ -1033,8 +1033,8 @@ class Bench(BenchPlotServer):
             bench_cfg=bench_cfg,
         )
 
-        if plot:
-            self.report.append(result.to_panel())
+        if plot and self.results:
+            self.report.append(self.results[-1].to_optuna_plots(optimize_study=study))
 
         return result
 
