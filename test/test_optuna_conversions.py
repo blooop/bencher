@@ -90,7 +90,7 @@ class TestOptimizeFlag(unittest.TestCase):
         from bencher.variables.inputs import YamlSweep
 
         yaml_path = (
-            Path(__file__).resolve().parent.parent / "bencher/example/example_yaml_sweep_list.yaml"
+            Path(__file__).resolve().parent.parent / "bencher/example/yaml_sweep_list.yaml"
         )
         default_yaml = YamlSweep(yaml_path)
         self.assertTrue(default_yaml.optimize)
