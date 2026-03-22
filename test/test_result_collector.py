@@ -174,6 +174,96 @@ class TestResultCollector(unittest.TestCase):
             self.assertEqual(len(extra_vars), 1)
 
 
+class TestCacheReuse(unittest.TestCase):
+    """Tests for reusing diskcache.Cache instances across calls."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def tearDown(self):
+        self.collector.close_caches()
+
+    def test_benchmark_cache_reused_across_cache_results_calls(self):
+        """The same Cache instance should be returned on repeated access."""
+        cache1 = self.collector.get_benchmark_cache()
+        cache2 = self.collector.get_benchmark_cache()
+        self.assertIs(cache1, cache2)
+
+    def test_history_cache_reused_across_calls(self):
+        """The same history Cache instance should be returned on repeated access."""
+        cache1 = self.collector.get_history_cache()
+        cache2 = self.collector.get_history_cache()
+        self.assertIs(cache1, cache2)
+
+    def test_benchmark_and_history_caches_are_distinct(self):
+        """Benchmark and history caches should be different instances."""
+        bc = self.collector.get_benchmark_cache()
+        hc = self.collector.get_history_cache()
+        self.assertIsNot(bc, hc)
+
+    def test_close_caches_allows_reopen(self):
+        """After close_caches(), new instances should be created on next access."""
+        cache1 = self.collector.get_benchmark_cache()
+        self.collector.close_caches()
+        cache2 = self.collector.get_benchmark_cache()
+        self.assertIsNot(cache1, cache2)
+
+    def test_close_caches_idempotent(self):
+        """Calling close_caches() multiple times should not raise."""
+        self.collector.close_caches()
+        self.collector.close_caches()
+
+    def test_cache_results_uses_persistent_cache(self):
+        """cache_results should use the persistent benchmark cache, not open a new one."""
+        instance = ExampleBenchCfg()
+        bench_cfg = BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test_reuse",
+            title="test",
+            repeats=1,
+        )
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+
+        hashes = []
+        self.collector.cache_results(bench_res, "hash-a", hashes)
+        self.collector.cache_results(bench_res, "hash-b", hashes)
+
+        # Both writes should have gone to the same cache instance
+        cache = self.collector.get_benchmark_cache()
+        self.assertIn("hash-a", cache)
+        self.assertIn("hash-b", cache)
+
+    def test_sequential_plot_sweep_calls_reuse_cache(self):
+        """Multiple sequential cache operations should reuse the same Cache instance.
+
+        This is the core regression test: verify identical cache behavior
+        across multiple sequential operations (simulating plot_sweep() calls).
+        """
+        instance = ExampleBenchCfg()
+        bench_cfg = BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test_sequential",
+            title="test",
+            repeats=1,
+        )
+
+        all_hashes = []
+        for i in range(3):
+            bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+            self.collector.cache_results(bench_res, f"seq-hash-{i}", all_hashes)
+
+        self.assertEqual(all_hashes, ["seq-hash-0", "seq-hash-1", "seq-hash-2"])
+
+        # All results retrievable from the single persistent cache
+        cache = self.collector.get_benchmark_cache()
+        for i in range(3):
+            self.assertIn(f"seq-hash-{i}", cache)
+
+
 class TestCacheOperations(unittest.TestCase):
     """Tests for cache_results and load_history_cache."""
 
@@ -185,6 +275,7 @@ class TestCacheOperations(unittest.TestCase):
         self.original_history_dir = "cachedir/history"
 
     def tearDown(self):
+        self.collector.close_caches()
         # Clean up temp directory
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
