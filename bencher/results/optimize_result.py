@@ -96,24 +96,8 @@ class OptimizeResult:
 
         study_pane.append(pn.pane.Markdown("# Analysis"))
 
-        # --- Optimization History ---
         if len(target_names) > 1:
-            for idx, tgt in enumerate(target_names):
-
-                def _target(t, i=idx):
-                    return t.values[i]
-
-                _append_safe(
-                    study_pane,
-                    plot_optimization_history,
-                    study,
-                    target=_target,
-                    target_name=tgt,
-                )
-        else:
-            _append_safe(study_pane, plot_optimization_history, study)
-
-        if len(target_names) > 1:
+            # --- Pareto Front ---
             if len(target_names) <= 3:
                 study_pane.append(
                     plot_pareto_front(
@@ -132,18 +116,41 @@ class OptimizeResult:
                         include_dominated_trials=False,
                     )
                 )
-            try:
-                study_pane.append(param_importance(bench_cfg, study))
-                param_str.append(
-                    f"    Number of trials on the Pareto front: {len(study.best_trials)}"
-                )
-            except RuntimeError as e:
-                study_pane.append(f"Error generating parameter importance: {str(e)}")
 
+            # --- Per-objective tabs: history + importance ---
+            obj_tabs = []
+            for idx, tgt in enumerate(target_names):
+
+                def _target(t, i=idx):
+                    return t.values[i]
+
+                tab_col = pn.Column()
+                _append_safe(
+                    tab_col,
+                    plot_optimization_history,
+                    study,
+                    target=_target,
+                    target_name=tgt,
+                )
+                _append_safe(
+                    tab_col,
+                    plot_param_importances,
+                    study,
+                    target=_target,
+                    target_name=tgt,
+                )
+                obj_tabs.append((tgt, tab_col))
+            study_pane.append(pn.Tabs(*obj_tabs))
+
+            param_str.append(
+                f"    Number of trials on the Pareto front: {len(study.best_trials)}"
+            )
             for t in study.best_trials:
                 param_str.extend(summarise_trial(t, bench_cfg))
 
         else:
+            _append_safe(study_pane, plot_optimization_history, study)
+
             if len(bench_cfg.input_vars) > 1:
                 study_pane.append(plot_param_importances(study, target_name=target_names[0]))
 
