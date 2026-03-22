@@ -253,6 +253,25 @@ class OptunaResult(BenchResultBase):
             param_str = []
 
             if len(target_names) > 1:
+                # --- Per-objective columns aligned with sweep result vars ---
+                obj_row = pn.Row()
+                for idx, tgt in enumerate(target_names):
+
+                    def _target(t, i=idx):
+                        return t.values[i]
+
+                    col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
+                    _append_safe_sized(
+                        col, plot_optimization_history, plot_w,
+                        study, target=_target, target_name=tgt,
+                    )
+                    _append_safe_sized(
+                        col, plot_param_importances, plot_w,
+                        study, target=_target, target_name=tgt,
+                    )
+                    obj_row.append(col)
+                study_pane.append(obj_row)
+
                 # --- Pareto Front ---
                 if len(target_names) <= 3:
                     _append_safe(
@@ -276,25 +295,6 @@ class OptunaResult(BenchResultBase):
                         study_pane[-1].width = pareto_width
                     if pareto_height is not None:
                         study_pane[-1].height = pareto_height
-
-                # --- Per-objective columns aligned with sweep result vars ---
-                obj_row = pn.Row()
-                for idx, tgt in enumerate(target_names):
-
-                    def _target(t, i=idx):
-                        return t.values[i]
-
-                    col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
-                    _append_safe_sized(
-                        col, plot_optimization_history, plot_w,
-                        study, target=_target, target_name=tgt,
-                    )
-                    _append_safe_sized(
-                        col, plot_param_importances, plot_w,
-                        study, target=_target, target_name=tgt,
-                    )
-                    obj_row.append(col)
-                study_pane.append(obj_row)
 
                 param_str.append(
                     f"    Number of trials on the Pareto front: {len(study.best_trials)}"

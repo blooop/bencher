@@ -99,6 +99,25 @@ class OptimizeResult:
         study_pane.append(pn.pane.Markdown("# Analysis"))
 
         if len(target_names) > 1:
+            # --- Per-objective columns aligned with sweep result vars ---
+            obj_row = pn.Row()
+            for idx, tgt in enumerate(target_names):
+
+                def _target(t, i=idx):
+                    return t.values[i]
+
+                col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
+                _append_safe_sized(
+                    col, plot_optimization_history, plot_w,
+                    study, target=_target, target_name=tgt,
+                )
+                _append_safe_sized(
+                    col, plot_param_importances, plot_w,
+                    study, target=_target, target_name=tgt,
+                )
+                obj_row.append(col)
+            study_pane.append(obj_row)
+
             # --- Pareto Front ---
             if len(target_names) <= 3:
                 _append_safe(
@@ -118,25 +137,6 @@ class OptimizeResult:
                     target_names=target_names[:3],
                     include_dominated_trials=False,
                 )
-
-            # --- Per-objective columns aligned with sweep result vars ---
-            obj_row = pn.Row()
-            for idx, tgt in enumerate(target_names):
-
-                def _target(t, i=idx):
-                    return t.values[i]
-
-                col = pn.Column(pn.pane.Markdown(f"## {tgt}"))
-                _append_safe_sized(
-                    col, plot_optimization_history, plot_w,
-                    study, target=_target, target_name=tgt,
-                )
-                _append_safe_sized(
-                    col, plot_param_importances, plot_w,
-                    study, target=_target, target_name=tgt,
-                )
-                obj_row.append(col)
-            study_pane.append(obj_row)
 
             param_str.append(
                 f"    Number of trials on the Pareto front: {len(study.best_trials)}"
