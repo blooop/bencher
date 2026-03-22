@@ -12,8 +12,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: "performance-${{ github.ref }}"
-  cancel-in-progress: true
+  group: "performance-${{ github.ref }}-${{ github.sha }}"
 
 jobs:
   benchmark:
@@ -54,45 +53,48 @@ jobs:
           destination_dir: latest
           keep_files: true
 
-      # Deploy PR reports to pr/{number}/
+      # Deploy PR reports to pr/{number}/{sha}/
       - name: Deploy to GitHub Pages (PR)
         if: github.event_name == 'pull_request'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./reports
-          destination_dir: pr/${{ github.event.pull_request.number }}
+          destination_dir: pr/${{ github.event.pull_request.number }}/${{ github.event.pull_request.head.sha }}
           keep_files: true
 
-      # Post or update PR comment with preview link
-      - name: Comment on PR with preview URL
+      # Post a performance report comment for each commit
+      - name: Comment on PR with performance report
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
             const prNumber = context.payload.pull_request.number;
-            const url = `https://blooop.github.io/bencher/pr/${prNumber}/`;
-            const body = `## Performance Report\n\nPreview: ${url}\n\n_Updated by Performance Tracking workflow_`;
-            const { data: comments } = await github.rest.issues.listComments({
+            const sha = context.payload.pull_request.head.sha;
+            const shortSha = sha.substring(0, 7);
+            const reportUrl = `https://blooop.github.io/bencher/pr/${prNumber}/${sha}/`;
+
+            let summary = '';
+            try {
+              summary = fs.readFileSync('reports/summary.md', 'utf8');
+            } catch (e) {
+              summary = '_Summary not available_';
+            }
+
+            const body = [
+              `## Performance Report for \`${shortSha}\``,
+              '',
+              summary,
+              '',
+              `[Full report](${reportUrl})`,
+              '',
+              `_Updated by Performance Tracking workflow_`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
+              body,
             });
-            const existing = comments.find(c =>
-              c.user.type === 'Bot' && c.body.includes('Performance Report')
-            );
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body,
-              });
-            }

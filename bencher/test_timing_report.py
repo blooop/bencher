@@ -89,6 +89,34 @@ def build_summary_tab(df: pd.DataFrame) -> pn.pane.Markdown:
     return pn.pane.Markdown(md, name="Summary", width=800)
 
 
+def generate_markdown_summary(df: pd.DataFrame, top_n: int = 10) -> str:
+    """Generate a concise markdown summary suitable for a PR comment."""
+    total = df["time"].sum()
+    count = len(df)
+    mean = df["time"].mean()
+    median = df["time"].median()
+    top = df.nlargest(top_n, "time")
+    lines = [
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Total tests | {count} |",
+        f"| Total time | {total:.2f}s |",
+        f"| Mean | {mean:.4f}s |",
+        f"| Median | {median:.4f}s |",
+        "",
+        "<details>",
+        f"<summary>Top {top_n} slowest tests</summary>",
+        "",
+        "| Test | Time (s) |",
+        "|------|----------|",
+    ]
+    for _, r in top.iterrows():
+        lines.append(f"| `{r['classname']}::{r['test']}` | {r['time']:.3f} |")
+    lines.append("")
+    lines.append("</details>")
+    return "\n".join(lines)
+
+
 def generate_report(junit_path: str | Path, output_dir: str | Path = "reports") -> Path:
     """Parse JUnit XML and generate an HTML timing report."""
     df = parse_junit_xml(junit_path)
@@ -97,6 +125,10 @@ def generate_report(junit_path: str | Path, output_dir: str | Path = "reports") 
     report.append_tab(build_time_by_file_tab(df), "Time by File")
     report.append_tab(build_slowest_tests_tab(df), "Slowest Tests")
     report.append_tab(build_summary_tab(df), "Summary")
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "summary.md").write_text(generate_markdown_summary(df))
 
     return report.save_index(directory=str(output_dir))
 
