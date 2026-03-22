@@ -16,8 +16,8 @@ OUTPUT_DIR = "yaml"
 
 # (python_file, list_of_yaml_data_files)
 YAML_EXAMPLES = [
-    ("example_yaml_sweep_list.py", ["example_yaml_sweep_list.yaml"]),
-    ("example_yaml_sweep_dict.py", ["example_yaml_sweep_dict.yaml"]),
+    ("yaml_sweep_list.py", ["yaml_sweep_list.yaml"]),
+    ("yaml_sweep_dict.py", ["yaml_sweep_dict.yaml"]),
 ]
 
 

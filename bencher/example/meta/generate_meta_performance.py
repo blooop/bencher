@@ -14,8 +14,8 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 OUTPUT_DIR = "performance"
 
 PERFORMANCE_EXAMPLES = [
-    "self_benchmark",
-    "self_benchmark_over_time",
+    "perf_self_benchmark",
+    "perf_self_benchmark_over_time",
 ]
 
 
@@ -27,9 +27,9 @@ class MetaPerformance(MetaGeneratorBase):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        if self.example == "self_benchmark":
+        if self.example == "perf_self_benchmark":
             self._generate_self_benchmark()
-        elif self.example == "self_benchmark_over_time":
+        elif self.example == "perf_self_benchmark_over_time":
             self._generate_self_benchmark_over_time()
 
         return super().__call__()
@@ -60,8 +60,8 @@ bench.plot_sweep(
         self.generate_example(
             title="Bencher self-introspection: overhead vs problem size",
             output_dir=OUTPUT_DIR,
-            filename="self_benchmark",
-            function_name="example_self_benchmark",
+            filename="perf_self_benchmark",
+            function_name="example_perf_self_benchmark",
             imports=imports,
             body=body,
             class_code=_get_shared_class_code(),
@@ -94,8 +94,8 @@ bench.plot_sweep(
         self.generate_example(
             title="Bencher self-introspection: overhead tracked over time",
             output_dir=OUTPUT_DIR,
-            filename="self_benchmark_over_time",
-            function_name="example_self_benchmark_over_time",
+            filename="perf_self_benchmark_over_time",
+            function_name="example_perf_self_benchmark_over_time",
             imports=imports,
             body=body,
             class_code=_get_shared_class_code(),

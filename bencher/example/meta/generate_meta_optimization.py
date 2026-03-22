@@ -96,8 +96,8 @@ class MetaOptimization(MetaGeneratorBase):
         self.update_params_from_kwargs(**kwargs)
 
         obj_word = "1_objective" if self.n_objectives == 1 else "2_objectives"
-        filename = f"optimise_{obj_word}_{self.input_dims}d"
-        function_name = f"example_optimise_{obj_word}_{self.input_dims}d"
+        filename = f"optim_{obj_word}_{self.input_dims}d"
+        function_name = f"example_optim_{obj_word}_{self.input_dims}d"
         title = f"Optimise {self.n_objectives} objective(s), {self.input_dims}D input"
 
         if self.n_objectives == 1:
@@ -161,8 +161,8 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
 
-        filename = f"optimise_over_time_{self.input_dims}d"
-        function_name = f"example_optimise_over_time_{self.input_dims}d"
+        filename = f"optim_over_time_{self.input_dims}d"
+        function_name = f"example_optim_over_time_{self.input_dims}d"
         title = f"Optimise Over Time: {self.input_dims}D input"
 
         if self.input_dims == 1:
@@ -234,8 +234,8 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
         self.update_params_from_kwargs(**kwargs)
 
         if self.with_over_time:
-            filename = "optimise_aggregated_over_time"
-            function_name = "example_optimise_aggregated_over_time"
+            filename = "optim_aggregated_over_time"
+            function_name = "example_optim_aggregated_over_time"
             title = "Aggregated Optimisation (Over Time)"
             description = (
                 "Finds the best learning rate averaged across algorithms, tracked over time. "
@@ -282,8 +282,8 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 run_kwargs={"level": 3, "optimise": 30},
             )
         else:
-            filename = "optimise_aggregated"
-            function_name = "example_optimise_aggregated"
+            filename = "optim_aggregated"
+            function_name = "example_optim_aggregated"
             title = "Aggregated Optimisation"
             description = (
                 "Finds the best learning rate averaged across algorithms. "

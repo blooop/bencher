@@ -1,0 +1,100 @@
+name: Performance Tracking
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: "performance-${{ github.ref }}-${{ github.sha }}"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          cache: true
+          frozen: true
+
+      - name: Run test suite with timing
+        run: pixi run test-timing
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report
+          path: reports/
+
+      # The gh-pages branch has a .gitignore (copied from main) that ignores
+      # index.html. peaceiris/actions-gh-pages uses "git add --all" which
+      # respects .gitignore, silently skipping index.html. Adding a negating
+      # .gitignore inside reports/ overrides the root rule in the destination.
+      - name: Ensure reports not blocked by gitignore
+        run: printf '!index.html\n' > reports/.gitignore
+
+      # Deploy main branch reports to latest/
+      - name: Deploy to GitHub Pages (main)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports
+          destination_dir: latest
+          keep_files: true
+
+      # Deploy PR reports to pr/{number}/{sha}/
+      - name: Deploy to GitHub Pages (PR)
+        if: github.event_name == 'pull_request'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports
+          destination_dir: pr/${{ github.event.pull_request.number }}/${{ github.event.pull_request.head.sha }}
+          keep_files: true
+
+      # Post a performance report comment for each commit
+      - name: Comment on PR with performance report
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const prNumber = context.payload.pull_request.number;
+            const sha = context.payload.pull_request.head.sha;
+            const shortSha = sha.substring(0, 7);
+            const reportUrl = `https://blooop.github.io/bencher/pr/${prNumber}/${sha}/`;
+
+            let summary = '';
+            try {
+              summary = fs.readFileSync('reports/summary.md', 'utf8');
+            } catch (e) {
+              summary = '_Summary not available_';
+            }
+
+            const body = [
+              `## Performance Report for \`${shortSha}\``,
+              '',
+              summary,
+              '',
+              `[Full report](${reportUrl})`,
+              '',
+              `_Updated by Performance Tracking workflow_`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body,
+            });
