@@ -4,6 +4,8 @@ Validates that the overlay produced when categorical groupby dimensions exist
 contains the expected Curve elements with correct labels and optional Spread bands.
 """
 
+# pylint: disable=protected-access
+
 import holoviews as hv
 import numpy as np
 import xarray as xr
