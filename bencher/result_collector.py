@@ -7,6 +7,7 @@ including xarray dataset operations, caching, and metadata management.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime
 from itertools import product
 from typing import Any
@@ -112,9 +113,7 @@ class ResultCollector:
             logger.info(i.sampling_str())
 
         dims_cfg = DimsCfg(bench_cfg)
-        total_jobs = 1
-        for s in dims_cfg.dims_size:
-            total_jobs *= s
+        total_jobs = math.prod(dims_cfg.dims_size)
         function_inputs = zip(product(*dims_cfg.dim_ranges_index), product(*dims_cfg.dim_ranges))
         # xarray stores K N-dimensional arrays of data.
         # Each array is named and in this case we have an ND array for each result variable

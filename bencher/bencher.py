@@ -698,7 +698,7 @@ class Bench(BenchPlotServer):
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, list[tuple], list[str]]:
+    ) -> tuple[BenchResult, zip, list[str], int]:
         """Initialize n-dimensional xarray dataset for storing benchmark results."""
         return self._collector.setup_dataset(bench_cfg, time_src)
 
