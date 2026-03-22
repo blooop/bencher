@@ -134,4 +134,4 @@ def example_self_benchmark_over_time(
 
 
 if __name__ == "__main__":
-    bn.run(example_self_benchmark, level=5, repeats=20)
+    bn.run(example_self_benchmark)

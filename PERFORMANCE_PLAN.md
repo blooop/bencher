@@ -12,18 +12,222 @@ caching, and viewing. Each item includes a correctness assessment and regression
 
 ## Table of Contents
 
-1. [Benchmark Generation & Execution](#1-benchmark-generation--execution)
-2. [Caching](#2-caching)
-3. [Viewing & Visualization](#3-viewing--visualization)
-4. [Cross-Cutting Concerns](#4-cross-cutting-concerns)
-5. [Regression Testing Strategy](#5-regression-testing-strategy)
-6. [Implementation Priority](#6-implementation-priority)
+1. [Report Saving & over_time Rendering (Critical Path)](#1-report-saving--over_time-rendering-critical-path)
+2. [Benchmark Generation & Execution](#2-benchmark-generation--execution)
+3. [Caching](#3-caching)
+4. [Viewing & Visualization](#4-viewing--visualization)
+5. [Cross-Cutting Concerns](#5-cross-cutting-concerns)
+6. [Regression Testing Strategy](#6-regression-testing-strategy)
+7. [Implementation Priority](#7-implementation-priority)
 
 ---
 
-## 1. Benchmark Generation & Execution
+## 1. Report Saving & over_time Rendering (Critical Path)
 
-### 1.1 Eliminate redundant deep copies in `plot_sweep()`
+> **Context**: Real-world CI benchmarks with `over_time=True` exposed a major performance
+> regression introduced in v1.71.0. The v1.72.0 release (PR #814) partially addressed it
+> by optimising DataFrame conversions and adding `max_slider_points` /
+> `show_aggregated_time_tab` config knobs. However, **report.save() with embed=True remains
+> the dominant bottleneck** — not plot construction (`post_setup_ms` < 10ms) but Panel's
+> static HTML serialization of HoloMap slider patches.
+>
+> **Scaling model**: `cost ~ sum(num_result_vars * (1 + has_aggregate_tab) * f(num_time_events))`
+> where `f(N)` is Panel's superlinear embed cost per HoloMap slider.
+>
+> Benchmarks with many result variables (e.g. 7) and `over_time=True` see `report.save()`
+> become the largest non-execution cost, dwarfing all other phases combined.
+
+### 1.1 Default `show_aggregated_time_tab` to `False`
+
+**File**: `bencher/bench_cfg.py:246-251`
+
+**Problem**: `show_aggregated_time_tab` defaults to `True`, meaning every `over_time` report
+generates **two** Panel tabs per result variable: a "Per Time Point" slider tab and an
+"All Time Points (aggregated)" tab. When saved with `embed=True`, Panel must pre-compute
+JSON patches for every slider position in *both* tabs. This doubles the embed cost compared
+to pre-v1.71.0 behaviour (which had only one tab).
+
+The aggregated tab is useful for analysis but is the entire source of the 2x regression
+relative to v1.70.4. Most CI pipelines care about the per-time-point slider — they can
+opt into aggregation when they need it.
+
+**Proposed fix**: Change the default to `False`:
+
+```python
+show_aggregated_time_tab: bool = param.Boolean(
+    False,
+    doc="When over_time is active, show an 'All Time Points (aggregated)' tab "
+    "alongside the per-time-point slider. Set True to enable aggregation "
+    "view (adds rendering cost during report.save).",
+)
+```
+
+**Correctness risk**: NONE. This is a default change, not a behavioural change. All existing
+code that explicitly sets `show_aggregated_time_tab=True` is unaffected.
+
+**Regression test**: Existing `test_over_time_repeats.py` covers over_time rendering. Verify
+both `True` and `False` produce valid HTML. Add a test asserting the default is `False`.
+
+---
+
+### 1.2 Add `report_save_ms` to SweepTimings
+
+**File**: `bencher/sweep_timings.py`, `bencher/bencher.py` (where `report.save()` is called)
+
+**Problem**: `SweepTimings` tracks compute phases (`cache_check`, `dataset_setup`,
+`job_execution`, `history_merge`, `post_setup`, `render`) but NOT `report.save()`. In
+production benchmarks with `over_time=True`, `report.save()` is the second-largest cost
+after `job_execution`, yet there's no timing data for it.
+
+**Proposed fix**: Add `report_save_ms` to `SweepTimings`. Wrap the `report.save()` call
+site with `phase_timer()` and record the result.
+
+Additionally, consider breaking down the report save into sub-phases:
+- Number of tabs/panes serialized
+- Per-tab embed time
+- Total HTML write time
+
+This could be a separate `ReportTimings` dataclass or additional fields on `SweepTimings`.
+
+**Correctness risk**: NONE. This is pure instrumentation — no behavioural change.
+
+**Regression test**: Verify `SweepTimings.summary()` includes the new field. Verify
+`compute_total()` sums it correctly.
+
+---
+
+### 1.3 Cap embedded slider positions in report.save()
+
+**File**: `bencher/results/holoview_results/holoview_result.py:279-318`
+
+**Problem**: `max_slider_points` (added in v1.72.0) already subsamples which time points
+are included in the HoloMap, reducing the number of JSON patches Panel must compute.
+However, the default is `None` (no subsampling), so users who don't know about this option
+still pay the full O(N) embed cost for all time events.
+
+**Proposed fix**: Set a sensible default for `max_slider_points` — e.g., `20` — so that
+users with long histories don't accidentally generate multi-minute `report.save()` calls.
+The aggregated tab already uses all data regardless of this setting.
+
+```python
+max_slider_points: int | None = param.Integer(
+    20,
+    bounds=[2, None],
+    allow_None=True,
+    doc="Maximum number of time points shown in the over_time slider. "
+    "Evenly subsampled (first and last always included). "
+    "The aggregated tab still uses all data. None means no subsampling.",
+)
+```
+
+Users who want all slider positions can set `max_slider_points=None`.
+
+**Correctness risk**: LOW. The subsample logic (`subsample_indices`) already exists and
+is tested. This just changes the default. First and last time points are always included.
+
+**Regression test**: Verify that with 50 time events and `max_slider_points=20`, the
+HoloMap has exactly 20 entries. Verify first and last time points are present.
+
+---
+
+### 1.4 Use `embed_json` to offload slider patches to separate files
+
+**File**: `bencher/bench_report.py:119,136`
+
+**Problem**: `report.save(embed=True)` inlines all HoloMap JSON patches directly into the
+HTML file. For reports with many slider positions and result variables, this produces
+multi-megabyte HTML files and the serialization itself is slow (Panel must compute diffs
+and encode them inline).
+
+**Proposed fix**: Use Panel's `embed_json=True` with `embed_json_prefix` to write JSON
+patches as separate files alongside the HTML:
+
+```python
+content.save(
+    filename=index_path,
+    progress=True,
+    embed=True,
+    embed_json=True,
+    embed_json_prefix=str(base_path / "_json"),
+    **kwargs,
+)
+```
+
+This splits the serialization cost: HTML is written quickly, JSON patches are written to
+separate files. The browser loads patches on demand when the user interacts with sliders.
+
+**Correctness risk**: MEDIUM. Must verify:
+1. Panel correctly resolves the JSON prefix path in the saved HTML
+2. The `_tabs/` iframe approach still works with external JSON files
+3. GitHub Pages / static hosting can serve the JSON files with correct MIME types
+4. Existing tests that check `report.save()` output pass with the new structure
+
+**Regression test**: Save a report with `embed_json=True`, open in browser, verify all
+slider positions are accessible. Compare rendering output to the inline-embed approach.
+
+---
+
+### 1.5 Profile and optimize Panel embed serialization hotspots
+
+**File**: `bencher/bench_report.py:80-142`
+
+**Problem**: `pn.Column(tab).save(embed=True)` is called per tab, and each call triggers
+Panel's full embed pipeline: state enumeration, plot rendering for each widget state, JSON
+diff computation, and HTML assembly. The cost scales as
+`O(num_widget_states × rendering_cost_per_state)`.
+
+Evidence from production benchmarks:
+- `render_ms` (plot object construction) < 10ms
+- `report.save()` for 7 result vars × 1 time event = **16.8s**
+- `report.save()` with `over_time=False` for same benchmark = **0.3s** (56× faster)
+
+The bottleneck is Panel's embed pipeline, not HoloViews plot construction.
+
+**Proposed fix**: Profile `report.save()` with `cProfile` or `py-spy` to identify exactly
+where time is spent:
+1. Is it in Bokeh rendering (converting HoloViews → Bokeh models)?
+2. Is it in JSON diff computation (comparing base state to each slider state)?
+3. Is it in HTML string assembly / writing?
+
+Based on profiling results, potential fixes:
+- **Pre-render Bokeh models once** and reuse across slider positions where possible
+- **Parallelise per-tab saves** — each tab's `pn.Column(tab).save()` is independent
+- **Use Panel's `save(embed=False)` for over_time reports** and provide a Panel serve
+  fallback for interactive use
+
+**Correctness risk**: Varies by approach. Profiling itself has zero risk.
+
+**Regression test**: Benchmark `report.save()` duration with a fixed dataset and assert it
+stays within acceptable bounds.
+
+---
+
+### 1.6 Skip Spread bands on per-time-point curve renders
+
+**File**: `bencher/results/holoview_results/holoview_result.py:196-245`
+
+**Problem**: `_build_curve_overlay()` renders `hv.Spread` bands whenever a `_std` variable
+exists in the dataset. For the aggregated tab, Spread bands are meaningful (they show
+cross-time-point variance). But for per-time-point renders (each slider position), the `_std`
+comes from within-repeat variance and the Spread adds rendering overhead without much value
+since each time point has its own exact data.
+
+**Proposed fix**: Have `_build_time_holomap()` pass a flag to `make_plot_fn` indicating
+whether the render is for a per-time-point slice or the aggregated view. Skip Spread bands
+on per-time-point slices. Alternatively, strip the `_std` variable from the dataset before
+passing to `make_plot_fn` for per-time-point renders.
+
+**Correctness risk**: LOW. The per-time-point plots are still correct without Spread bands.
+The aggregated tab retains them.
+
+**Regression test**: Visual regression test — verify per-time-point plots render correctly
+without Spread. Verify aggregated tab still has Spread bands.
+
+---
+
+## 2. Benchmark Generation & Execution
+
+### 2.1 Eliminate redundant deep copies in `plot_sweep()`
 
 **File**: `bencher/bencher.py:303-331`
 
@@ -52,7 +256,7 @@ Add an assertion that modifying the returned variables does not affect `self.inp
 
 ---
 
-### 1.2 Eliminate double deep copy in `BenchRunner.run()`
+### 2.2 Eliminate double deep copy in `BenchRunner.run()`
 
 **File**: `bencher/bench_runner.py:317,332`
 
@@ -73,7 +277,7 @@ before and after the change by comparing output datasets element-by-element.
 
 ---
 
-### 1.3 Avoid materializing full Cartesian product into a list
+### 2.3 Avoid materializing full Cartesian product into a list
 
 **File**: `bencher/result_collector.py:113-116`
 
@@ -100,7 +304,7 @@ for both forward and reversed orderings with a multi-dimensional sweep.
 
 ---
 
-### 1.4 Deduplicate Cartesian product calls for reversed sample order
+### 2.4 Deduplicate Cartesian product calls for reversed sample order
 
 **File**: `bencher/bencher.py:726-746`
 
@@ -118,7 +322,7 @@ known multi-dimensional sweep. Assert element-by-element dataset equality.
 
 ---
 
-### 1.5 Deep copy kwargs only when necessary in `worker_kwargs_wrapper()`
+### 2.5 Deep copy kwargs only when necessary in `worker_kwargs_wrapper()`
 
 **File**: `bencher/sweep_executor.py:39`
 
@@ -141,7 +345,7 @@ counts are unchanged.
 
 ---
 
-### 1.6 Parallel result streaming for non-serial executors
+### 2.6 Parallel result streaming for non-serial executors
 
 **File**: `bencher/bencher.py:782-784`
 
@@ -160,9 +364,9 @@ xarray dataset to the `SERIAL` result. They must be element-wise identical.
 
 ---
 
-## 2. Caching
+## 3. Caching
 
-### 2.1 Avoid redundant cache opens
+### 3.1 Avoid redundant cache opens
 
 **File**: `bencher/result_collector.py:254-281`, `bencher/bencher.py:554-582`
 
@@ -180,7 +384,7 @@ across multiple sequential `plot_sweep()` calls.
 
 ---
 
-### 2.2 Use `diskcache.FanoutCache` for parallel workloads
+### 3.2 Use `diskcache.FanoutCache` for parallel workloads
 
 **File**: `bencher/job.py:210`
 
@@ -198,7 +402,7 @@ Run with both `SERIAL` and `MULTIPROCESSING` executors.
 
 ---
 
-### 2.3 Batch cache lookups
+### 3.3 Batch cache lookups
 
 **File**: `bencher/job.py:239-246`
 
@@ -217,7 +421,7 @@ Test with cache clearing mid-run to verify race condition handling.
 
 ---
 
-### 2.4 Reduce hash computation overhead
+### 3.4 Reduce hash computation overhead
 
 **File**: `bencher/utils.py:94-107`, `bencher/worker_job.py:48-69`
 
@@ -238,7 +442,7 @@ identical results.
 
 ---
 
-### 2.5 Remove non-pickleable objects before caching more efficiently
+### 3.5 Remove non-pickleable objects before caching more efficiently
 
 **File**: `bencher/result_collector.py:272-278`
 
@@ -258,9 +462,9 @@ fields are present/correct after retrieval.
 
 ---
 
-## 3. Viewing & Visualization
+## 4. Viewing & Visualization
 
-### 3.1 Avoid unnecessary dataset copies in `to_dataset()`
+### 4.1 Avoid unnecessary dataset copies in `to_dataset()`
 
 **File**: `bencher/results/bench_result_base.py:223`
 
@@ -281,22 +485,26 @@ to expected values.
 
 ---
 
-### 3.2 Lazy HoloMap construction for over_time plots
+### 4.2 Lazy HoloMap construction for over_time plots
 
-**File**: `bencher/results/holoview_results/line_result.py:145-150`,
-`bencher/results/holoview_results/heatmap_result.py:154-158`
+**File**: `bencher/results/holoview_results/holoview_result.py:279-318`
 
-**Problem**: For over_time benchmarks, the code eagerly creates a separate plot for *every*
-time point and assembles them into a `HoloMap`. For many time points, this is slow and
-memory-intensive.
+**Problem**: For over_time benchmarks, `_build_time_holomap()` eagerly creates a separate plot
+for *every* time point and assembles them into a `HoloMap`. For many time points, this is slow
+and memory-intensive. More importantly, Panel's `embed=True` mode must then pre-compute JSON
+patches for every slider position.
 
 **Proposed fix**: Use `hv.DynamicMap` instead of `hv.HoloMap`. DynamicMap generates plots on
 demand (when the user selects a time point in the widget).
 
 **Correctness risk**: LOW-MEDIUM. DynamicMap requires a callable that returns a plot for a given
-key. The current loop body can be extracted into such a callable. However, DynamicMap behavior
-in static exports (HTML, notebook) differs from HoloMap — DynamicMap requires a live server for
-interactivity.
+key. The current loop body can be extracted into such a callable. However, **DynamicMap does not
+work with Panel's `embed=True` mode** — it requires a live Panel server for interactivity. This
+means it cannot be used for `report.save()` static HTML output.
+
+This fix is therefore only applicable when reports are served live via `report.show()` /
+`pn.serve()`. For static HTML, the `max_slider_points` subsampling (item 1.3) is the
+correct approach.
 
 **Regression test**: Visual regression test — generate plots with both HoloMap and DynamicMap for
 a known dataset. Verify data values are identical. Test both interactive (Panel serve) and static
@@ -304,7 +512,7 @@ a known dataset. Verify data values are identical. Test both interactive (Panel 
 
 ---
 
-### 3.3 Avoid redundant `to_dataframe()` conversions
+### 4.3 Avoid redundant `to_dataframe()` conversions
 
 **File**: `bencher/results/holoview_results/distribution_result/distribution_result.py:120`,
 `bencher/results/volume_result.py:85`,
@@ -330,7 +538,7 @@ Spread elements, and data point counts as the original DataFrame path.
 
 ---
 
-### 3.4 Reduce xr.merge() overhead in reduction pipeline
+### 4.4 Reduce xr.merge() overhead in reduction pipeline
 
 **File**: `bencher/results/bench_result_base.py:244-253`
 
@@ -355,7 +563,7 @@ a reference dataset with known statistical values. Verify `_std` variable names 
 
 ---
 
-### 3.5 Cache reduced datasets
+### 4.5 Cache reduced datasets
 
 **File**: `bencher/results/bench_result_base.py:204-326`
 
@@ -374,28 +582,31 @@ equal datasets. Verify that modifying `self.ds` and re-calling produces updated 
 
 ---
 
-## 4. Cross-Cutting Concerns
+## 5. Cross-Cutting Concerns
 
-### 4.1 Profile before optimizing
+### 5.1 Profile before optimizing
 
 Before implementing any of the above changes, establish a performance baseline:
 
 1. **Create a benchmark suite** with representative workloads:
    - Small sweep: 2 dims × 5 values = 25 jobs
    - Medium sweep: 4 dims × 10 values = 10,000 jobs
+   - Large sweep with over_time: 2 dims × 10 values × 15 time events × 7 result vars
    - Large sweep: 5 dims × 20 values = 3,200,000 jobs (cache-only, skip execution)
-2. **Measure**: wall time, peak memory, cache hit rate, plot render time
-3. **Profile**: Use `cProfile` or `py-spy` to identify actual hotspots
+2. **Measure**: wall time, peak memory, cache hit rate, plot render time, **report.save() time**
+3. **Profile**: Use `cProfile` or `py-spy` to identify actual hotspots — especially in
+   `report.save()` → Panel embed pipeline
 4. **Track**: Store baseline metrics to compare against after each optimization
 
-### 4.2 Add performance regression tests
+### 5.2 Add performance regression tests
 
 Add a `test_performance.py` that runs representative sweeps and asserts:
 - Execution time stays within 2× of baseline (to catch algorithmic regressions)
 - Memory usage stays within 1.5× of baseline
 - Cache hit rates remain identical for identical inputs
+- **report.save() time with over_time stays within 2× of baseline** (to catch embed regressions)
 
-### 4.3 Document the deep-copy contract
+### 5.3 Document the deep-copy contract
 
 Add a section to `CLAUDE.md` or a `CONTRIBUTING.md` explaining:
 - Why deep copies exist (mutation safety for cached data)
@@ -404,7 +615,7 @@ Add a section to `CLAUDE.md` or a `CONTRIBUTING.md` explaining:
 
 ---
 
-## 5. Regression Testing Strategy
+## 6. Regression Testing Strategy
 
 Every change in this plan must pass:
 
@@ -419,27 +630,34 @@ Every change in this plan must pass:
    identical across processes
 6. **Mutation safety test** (new): After each operation that was previously guarded by deep copy,
    mutate the returned object and verify the source is unaffected
+7. **over_time report.save() timing** (new): For a benchmark with N result vars and M time events,
+   assert `report.save()` completes within a time budget. Track this in CI via `SweepTimings`.
 
 ---
 
-## 6. Implementation Priority
+## 7. Implementation Priority
 
 | Priority | Item | Effort | Risk | Impact | Status |
 |----------|------|--------|------|--------|--------|
-| **P0** | 4.1 Profile baseline | Low | None | Enables all other work | DONE (PR #787 — SweepTimings + perf workflow) |
-| **P1** | 1.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | DONE (single-copy pattern in place) |
-| **P1** | 1.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | DONE (PR #816) |
-| **P1** | 3.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
-| **P2** | 1.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
-| **P2** | 1.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | DONE (PR #811) |
-| **P2** | 2.1 Reuse cache instances | Low | Low | Moderate | DONE (PR #813) |
-| **P2** | 2.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |
-| **P2** | 3.4 Single-pass reduction | Medium | Medium | Moderate | |
-| **P2** | 3.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
-| **P3** | 1.4 Deduplicate reversed product | Low | Low | Low | |
-| **P3** | 2.3 Batch cache lookups | High | Medium | High for large sweeps | |
-| **P3** | 2.5 `__getstate__` for results | Medium | Medium | Low | |
-| **P3** | 3.2 DynamicMap for over_time | Medium | Low-Med | Moderate | PARTIAL (PR #814 — eliminated DataFrame conversion in common over_time path) |
-| **P3** | 3.3 Pre-filter before to_dataframe | Low | Low | Low | DONE (PR #814 — fast path; PR #820 — curve groupby path uses xarray sel) |
-| **P4** | 1.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
-| **P4** | 2.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
+| **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users | |
+| **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck | DONE (PR #787 — SweepTimings + perf workflow) |
+| **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | |
+| **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | |
+| **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed | |
+| **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost | |
+| **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | DONE (single-copy pattern in place) |
+| **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | DONE (PR #816) |
+| **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
+| **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
+| **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | DONE (PR #811) |
+| **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | DONE (PR #813) |
+| **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |
+| **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | |
+| **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
+| **P3** | 2.4 Deduplicate reversed product | Low | Low | Low | |
+| **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
+| **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
+| **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps | |
+| **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low | |
+| **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) | PARTIAL (PR #814 — eliminated DataFrame conversion in common over_time path) |
+| **P3** | 4.3 Pre-filter before to_dataframe | Low | Low | Low | DONE (PR #814 — fast path; PR #822 — curve groupby path uses xarray sel) |

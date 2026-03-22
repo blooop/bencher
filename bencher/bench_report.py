@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import logging
+import time
 from typing import Callable
 import os
 from pathlib import Path
@@ -30,6 +31,7 @@ class BenchReport(BenchPlotServer):
     ) -> None:
         self.bench_name = bench_name
         self.pane = pn.Tabs(tabs_location="left", name=self.bench_name)
+        self.last_save_ms: float = 0.0
 
     def append_title(self, title: str, new_tab: bool = True):
         if new_tab:
@@ -99,47 +101,51 @@ class BenchReport(BenchPlotServer):
             Path: the save path
         """
 
-        if filename is None:
-            filename = f"{self.bench_name}.html"
+        t0 = time.perf_counter()
+        try:
+            if filename is None:
+                filename = f"{self.bench_name}.html"
 
-        base_path = Path(directory)
+            base_path = Path(directory)
 
-        if in_html_folder:
-            base_path /= "html"
+            if in_html_folder:
+                base_path /= "html"
 
-        logging.info(f"creating dir {base_path.absolute()}")
-        os.makedirs(base_path.absolute(), exist_ok=True)
+            logging.info(f"creating dir {base_path.absolute()}")
+            os.makedirs(base_path.absolute(), exist_ok=True)
 
-        index_path = base_path / filename
+            index_path = base_path / filename
 
-        if len(self.pane) <= 1:
-            logging.info(f"saving html output to: {index_path.absolute()}")
-            # Save inner content directly so the Tabs sidebar is not rendered
-            content = self.pane[0] if len(self.pane) == 1 else self.pane
-            content.save(filename=index_path, progress=True, embed=True, **kwargs)
+            if len(self.pane) <= 1:
+                logging.info(f"saving html output to: {index_path.absolute()}")
+                # Save inner content directly so the Tabs sidebar is not rendered
+                content = self.pane[0] if len(self.pane) == 1 else self.pane
+                content.save(filename=index_path, progress=True, embed=True, **kwargs)
+                return index_path
+
+            # Save each tab to its own HTML so HoloMap sliders don't collide.
+            tab_dir = base_path / "_tabs"
+            os.makedirs(tab_dir, exist_ok=True)
+            tab_files = []
+            seen_names = set()
+            for i, tab in enumerate(self.pane):
+                tab_name = getattr(tab, "name", None) or f"tab_{i}"
+                safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tab_name)
+                if safe_name in seen_names:
+                    safe_name = f"{safe_name}_{i}"
+                seen_names.add(safe_name)
+                tab_file = f"{safe_name}.html"
+                tab_path = tab_dir / tab_file
+                logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
+                pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
+                tab_files.append((tab_name, f"_tabs/{tab_file}"))
+
+            # Generate an index page with tab buttons and an iframe.
+            self._write_iframe_index(index_path, tab_files)
+            logging.info(f"saving index to: {index_path.absolute()}")
             return index_path
-
-        # Save each tab to its own HTML so HoloMap sliders don't collide.
-        tab_dir = base_path / "_tabs"
-        os.makedirs(tab_dir, exist_ok=True)
-        tab_files = []
-        seen_names = set()
-        for i, tab in enumerate(self.pane):
-            tab_name = getattr(tab, "name", None) or f"tab_{i}"
-            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tab_name)
-            if safe_name in seen_names:
-                safe_name = f"{safe_name}_{i}"
-            seen_names.add(safe_name)
-            tab_file = f"{safe_name}.html"
-            tab_path = tab_dir / tab_file
-            logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
-            pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
-            tab_files.append((tab_name, f"_tabs/{tab_file}"))
-
-        # Generate an index page with tab buttons and an iframe.
-        self._write_iframe_index(index_path, tab_files)
-        logging.info(f"saving index to: {index_path.absolute()}")
-        return index_path
+        finally:
+            self.last_save_ms = (time.perf_counter() - t0) * 1000.0
 
     @staticmethod
     def _write_iframe_index(index_path: Path, tab_files: list) -> None:
