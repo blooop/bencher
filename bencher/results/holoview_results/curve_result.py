@@ -93,10 +93,9 @@ class CurveResult(HoloviewResult):
         """
         if self._use_holomap_for_time(dataset):
             var = result_var.name
-            skip = not self.bench_cfg.show_aggregated_time_tab
 
             def make_curve(ds_t):
-                return self._build_curve_overlay(ds_t, result_var, skip_spread=skip, **kwargs)
+                return self._build_curve_overlay(ds_t, result_var, **kwargs)
 
             return self._build_time_holomap(dataset, var, make_curve)
 

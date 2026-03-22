@@ -166,14 +166,13 @@ class LineResult(HoloviewResult):
         title = self.title_from_ds(da_plot, result_var, **kwargs)
 
         if self._use_holomap_for_time(dataset):
-            skip = not self.bench_cfg.show_aggregated_time_tab
 
             def make_line(ds_t):
                 # When _std exists (e.g. after _mean_over_time aggregation),
                 # delegate to the curve overlay which renders Spread bands.
                 std_var = f"{result_var.name}_std"
                 if std_var in ds_t.data_vars:
-                    return self._build_curve_overlay(ds_t, result_var, skip_spread=skip, **kwargs)
+                    return self._build_curve_overlay(ds_t, result_var, **kwargs)
                 da_t = ds_t[result_var.name]
                 plot_t = da_t.hvplot.line(x=x, by=by, title=title, **kwargs)
                 return self._apply_opts(plot_t, xrotation=30)

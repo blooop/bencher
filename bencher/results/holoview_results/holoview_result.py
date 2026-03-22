@@ -194,13 +194,14 @@ class HoloviewResult(VideoResult):
         return pn.Column(row[0], widget_box)
 
     def _build_curve_overlay(
-        self, dataset: xr.Dataset, result_var: Parameter, skip_spread: bool = False, **kwargs
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
     ) -> hv.Overlay:
         """Build a Curve (+ optional Spread) overlay for a single time slice or aggregated data.
 
         When ``_std`` exists in the dataset the spread band is rendered
-        automatically unless *skip_spread* is ``True``.  Skipping spread
-        reduces the per-slider-position embed cost in ``report.save()``.
+        automatically.  This is used by both the curve renderer and the
+        line renderer (for aggregated data that gained ``_std`` from
+        ``_mean_over_time``).
 
         Performance: avoids ``to_dataframe()`` when there are no categorical
         groupby dimensions by constructing ``hv.Dataset`` directly from the
@@ -209,7 +210,7 @@ class HoloviewResult(VideoResult):
         """
         var = result_var.name
         std_var = f"{var}_std"
-        has_spread = (not skip_spread) and std_var in dataset.data_vars
+        has_spread = std_var in dataset.data_vars
         title = self.title_from_ds(dataset, result_var, **kwargs)
 
         float_names = [fv.name for fv in self.plt_cnt_cfg.float_vars]
