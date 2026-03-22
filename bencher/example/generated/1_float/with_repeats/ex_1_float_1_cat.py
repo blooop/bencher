@@ -5,16 +5,16 @@ from typing import Any
 import random
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class SortComparison(bch.ParametrizedSweep):
+class SortComparison(bn.ParametrizedSweep):
     """Compares sort duration across array sizes and algorithms."""
 
-    array_size = bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
-    algorithm = bch.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
+    array_size = bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
+    algorithm = bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
 
-    time = bch.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultVar(units="ms", doc="Sort duration")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -24,7 +24,7 @@ class SortComparison(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_1_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_1_float_1_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """1 Float, 1 Categorical."""
     bench = SortComparison().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["array_size", "algorithm"], result_vars=["time"])
@@ -33,4 +33,4 @@ def example_with_repeats_1_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_1_float_1_cat, level=4, repeats=10)
+    bn.run(example_with_repeats_1_float_1_cat, level=4, repeats=10)

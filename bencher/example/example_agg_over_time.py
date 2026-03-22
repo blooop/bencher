@@ -16,13 +16,13 @@ Run:
 
 from datetime import datetime, timedelta
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_agg_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     if run_cfg is None:
-        run_cfg = bch.BenchRunCfg()
+        run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.level = 4
 
@@ -49,4 +49,4 @@ def example_agg_over_time(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_agg_over_time, save=True)
+    bn.run(example_agg_over_time, save=True)

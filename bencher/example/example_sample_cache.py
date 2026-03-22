@@ -1,19 +1,19 @@
-import bencher as bch
+import bencher as bn
 
 
-class UnreliableClass(bch.ParametrizedSweep):
+class UnreliableClass(bn.ParametrizedSweep):
     """This class helps demonstrate benchmarking a function that sometimes crashes during sampling.  By using BenchRunCfg.cache_samples you can store the results of every call to the benchmark function so data is not lost in the event of a crash.  However, because cache invalidation is hard (https://martinfowler.com/bliki/TwoHardThings.html) you need to be mindful of how you could get bad results due to incorrect cache data.  For example if you change your benchmark function and use the sample cache you will not get correct values; you will need to use BenchRunCfg.clear_sample_cache to purge any out of date results."""
 
-    input_val = bch.IntSweep(
+    input_val = bn.IntSweep(
         default=0,
         bounds=[0, 3],
         doc="If check limit=True the crashy_fn will crash if this value is >1",
     )
-    return_value = bch.ResultVar(
+    return_value = bn.ResultVar(
         units="ul",
         doc="This is a dummy result variable. In this example, it is the same as the value passed in.",
     )
-    trigger_crash = bch.ResultVar(
+    trigger_crash = bn.ResultVar(
         units="True/False",
         doc="if true crashy_fn will crash when input_val >1",
     )
@@ -27,9 +27,9 @@ class UnreliableClass(bch.ParametrizedSweep):
 
 
 def example_sample_cache(
-    run_cfg: bch.BenchRunCfg | None = None,
+    run_cfg: bn.BenchRunCfg | None = None,
     trigger_crash: bool = False,
-) -> bch.Bench:
+) -> bn.Bench:
     """This example shows how to use the cache_samples option to deal with unreliable functions and to continue benchmarking using previously calculated results even if the code crashed during the run
 
     Args:
@@ -43,7 +43,7 @@ def example_sample_cache(
     instance = UnreliableClass()
     instance.trigger_crash = trigger_crash
 
-    bencher = bch.Bench("example_sample_cache", instance.crashy_fn, run_cfg=run_cfg)
+    bencher = bn.Bench("example_sample_cache", instance.crashy_fn, run_cfg=run_cfg)
 
     bencher.plot_sweep(
         title="Example Crashy Function with the sample_cache",
@@ -57,9 +57,9 @@ def example_sample_cache(
 
 
 if __name__ == "__main__":
-    ex_run_cfg = bch.BenchRunCfg()
+    ex_run_cfg = bn.BenchRunCfg()
     ex_run_cfg.repeats = 1
-    ex_run_cfg.executor = bch.Executors.SCOOP
+    ex_run_cfg.executor = bn.Executors.SCOOP
 
     # this will store the result of of every call to crashy_fn
     ex_run_cfg.cache_samples = True

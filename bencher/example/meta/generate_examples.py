@@ -5,18 +5,19 @@ import html
 import importlib
 import io
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
-import bencher as bch
+import bencher as bn
 
 
 GENERATED_DIR = Path("bencher/example/generated")
 
 
 def _extract_run_kwargs(py_file: Path) -> dict:
-    """Extract kwargs from bch.run() call in __main__ block."""
+    """Extract kwargs from bn.run() call in __main__ block."""
     source = py_file.read_text()
     tree = ast.parse(source)
     for node in ast.walk(tree):
@@ -25,7 +26,7 @@ def _extract_run_kwargs(py_file: Path) -> dict:
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "run"
             and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "bch"
+            and node.func.value.id == "bn"
         ):
             kwargs = {}
             for kw in node.keywords:
@@ -102,7 +103,11 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_composable import example_meta_composable
     from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_image_video import example_meta_image_video
-    from bencher.example.meta.generate_meta_optimization import example_meta_optimization
+    from bencher.example.meta.generate_meta_optimization import (
+        example_meta_optimization,
+        example_meta_optimization_over_time,
+        example_meta_optimization_aggregated,
+    )
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
@@ -111,6 +116,7 @@ def generate_python_files():
 
     from bencher.example.meta.generate_meta_regression import example_meta_regression
     from bencher.example.meta.generate_meta_yaml import example_meta_yaml
+    from bencher.example.meta.generate_meta_performance import example_meta_performance
 
     example_meta()
     example_meta_result_types()
@@ -121,11 +127,14 @@ def generate_python_files():
     example_meta_statistics()
     example_meta_const_vars()
     example_meta_optimization()
+    example_meta_optimization_over_time()
+    example_meta_optimization_aggregated()
     example_meta_workflows()
     example_meta_advanced()
     example_meta_bool_plot_types()
     example_meta_regression()
     example_meta_yaml()
+    example_meta_performance()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -174,7 +183,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
         return None
 
     run_kwargs = _extract_run_kwargs(py_file)
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.level = run_kwargs.get("level", 4)
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
@@ -344,48 +353,96 @@ def generate_section_index(
     index_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-SECTIONS = {
-    "0 Float Inputs": "0_float/no_repeats",
-    "0 Float Inputs (Repeated)": "0_float/with_repeats",
-    "0 Float Inputs (Over Time)": "0_float/over_time",
-    "0 Float Inputs (Over Time + Repeated)": "0_float/over_time_repeats",
-    "1 Float Input": "1_float/no_repeats",
-    "1 Float Input (Repeated)": "1_float/with_repeats",
-    "1 Float Input (Over Time)": "1_float/over_time",
-    "1 Float Input (Over Time + Repeated)": "1_float/over_time_repeats",
-    "2 Float Inputs": "2_float/no_repeats",
-    "2 Float Inputs (Repeated)": "2_float/with_repeats",
-    "2 Float Inputs (Over Time)": "2_float/over_time",
-    "3 Float Inputs": "3_float/no_repeats",
-    "3 Float Inputs (Repeated)": "3_float/with_repeats",
-    "3 Float Inputs (Over Time)": "3_float/over_time",
-    "Result Types": "result_types",
-    "Plot Types": "plot_types",
-    "Bool Plot Types": "bool_plot_types",
-    "Optimization": "optimization",
-    "Sampling Strategies": "sampling",
-    "Composable Containers": "composable_containers",
-    "Constant Variables": "const_vars",
-    "Statistics": "statistics",
-    "Workflows": "workflows",
-    "YAML Sweeps": "yaml",
-    "Advanced Patterns": "advanced",
-    "Regression Detection": "regression",
-}
+# Gallery hierarchy: list of (group_title | None, [(section_title, rel_path), ...])
+# Groups with title=None have their sections rendered at the top level.
+SECTION_GROUPS = [
+    (
+        "0 Float Inputs",
+        [
+            ("No Repeats", "0_float/no_repeats"),
+            ("Repeated", "0_float/with_repeats"),
+            ("Over Time", "0_float/over_time"),
+            ("Over Time + Repeated", "0_float/over_time_repeats"),
+        ],
+    ),
+    (
+        "1 Float Input",
+        [
+            ("No Repeats", "1_float/no_repeats"),
+            ("Repeated", "1_float/with_repeats"),
+            ("Over Time", "1_float/over_time"),
+            ("Over Time + Repeated", "1_float/over_time_repeats"),
+        ],
+    ),
+    (
+        "2 Float Inputs",
+        [
+            ("No Repeats", "2_float/no_repeats"),
+            ("Repeated", "2_float/with_repeats"),
+            ("Over Time", "2_float/over_time"),
+        ],
+    ),
+    (
+        "3 Float Inputs",
+        [
+            ("No Repeats", "3_float/no_repeats"),
+            ("Repeated", "3_float/with_repeats"),
+            ("Over Time", "3_float/over_time"),
+        ],
+    ),
+    (
+        "Optimisation",
+        [
+            ("Basic", "optimization"),
+            ("Over Time", "optimization_over_time"),
+            ("Aggregated", "optimization_aggregated"),
+        ],
+    ),
+    (
+        None,
+        [
+            ("Result Types", "result_types"),
+            ("Plot Types", "plot_types"),
+            ("Bool Plot Types", "bool_plot_types"),
+            ("Sampling Strategies", "sampling"),
+            ("Composable Containers", "composable_containers"),
+            ("Constant Variables", "const_vars"),
+            ("Statistics", "statistics"),
+            ("Workflows", "workflows"),
+            ("YAML Sweeps", "yaml"),
+            ("Advanced Patterns", "advanced"),
+            ("Regression Detection", "regression"),
+            ("Performance", "performance"),
+        ],
+    ),
+]
+
+
+def _flat_sections():
+    """Yield (section_title, rel_path) pairs from SECTION_GROUPS."""
+    for _group_title, sections in SECTION_GROUPS:
+        yield from sections
+
+
+# Flat view used by section index generation and toctree.
+# Keyed by rel_path (unique) rather than title (may repeat across groups).
+SECTIONS = {rel_path: title for title, rel_path in _flat_sections()}
 
 
 def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
     """Generate a single gallery.rst page with PNG thumbnail cards grouped by section."""
     from collections import OrderedDict
 
-    grouped = OrderedDict()
-    for title, rel_path in SECTIONS.items():
-        grouped[title] = {"rel_path": rel_path, "examples": []}
+    # Build lookup: rel_path -> {title, rel_path, examples}
+    # Keyed by rel_path (unique) rather than title (may repeat across groups).
+    section_lookup = OrderedDict()
+    for title, rel_path in _flat_sections():
+        section_lookup[rel_path] = {"title": title, "rel_path": rel_path, "examples": []}
 
     for meta in examples_metadata:
-        for title, rel_path in SECTIONS.items():
+        for _title, rel_path in _flat_sections():
             if _match_section(meta["section_rel"], rel_path):
-                grouped[title]["examples"].append(meta)
+                section_lookup[rel_path]["examples"].append(meta)
                 break
 
     lines = [
@@ -400,18 +457,35 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         '   <div class="gallery-container">',
     ]
 
-    for section_title, info in grouped.items():
-        if not info["examples"]:
+    for group_title, sections in SECTION_GROUPS:
+        # Check if this group has any examples at all
+        group_has_examples = any(section_lookup[rel_path]["examples"] for _, rel_path in sections)
+        if not group_has_examples:
             continue
-        lines.append(f'   <h3 class="gallery-section-title">{html.escape(section_title)}</h3>')
-        lines += _render_subgrouped_gallery(
-            info["examples"],
-            info["rel_path"],
-            href_fn=lambda ex: f"{ex['rst_rel']}.html",
-            thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
-            heading_tag="h4",
-            heading_class="gallery-subsection-title",
-        )
+
+        # Emit group heading if present
+        if group_title:
+            lines.append(f'   <h2 class="gallery-group-title">{html.escape(group_title)}</h2>')
+
+        section_tag = "h4" if group_title else "h3"
+        subsection_tag = "h5" if group_title else "h4"
+
+        for section_title, rel_path in sections:
+            info = section_lookup[rel_path]
+            if not info["examples"]:
+                continue
+            lines.append(
+                f'   <{section_tag} class="gallery-section-title">'
+                f"{html.escape(section_title)}</{section_tag}>"
+            )
+            lines += _render_subgrouped_gallery(
+                info["examples"],
+                info["rel_path"],
+                href_fn=lambda ex: f"{ex['rst_rel']}.html",
+                thumb_src_fn=lambda ex: f"_thumbs/{ex['section_rel']}/{ex['stem']}.png",
+                heading_tag=subsection_tag,
+                heading_class="gallery-subsection-title",
+            )
 
     lines.append("   </div>")
     lines.append("")
@@ -470,25 +544,102 @@ def generate_all() -> list[Path]:
     # Phase 3: Generate section index files
     meta_by_section = {}
     for meta in examples_metadata:
-        for _title, rel_path in SECTIONS.items():
+        for rel_path in SECTIONS:
             if _match_section(meta["section_rel"], rel_path):
                 meta_by_section.setdefault(rel_path, []).append(meta)
                 break
 
-    for title, rel_path in SECTIONS.items():
+    for rel_path, title in SECTIONS.items():
         section_dir = META_DOCS_DIR / rel_path
         if section_dir.exists():
             generate_section_index(section_dir, title, meta_by_section.get(rel_path, []), rel_path)
 
+    # Generate group index pages for hierarchical groups
+    for group_title, sections in SECTION_GROUPS:
+        if group_title is None:
+            continue
+
+        group_slug = re.sub(r"[^a-z0-9]+", "_", group_title.lower()).strip("_")
+        group_index_dir = META_DOCS_DIR / group_slug
+        group_index_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build toctree entries (relative from group index dir)
+        toc_entries = []
+        for _sec_title, rel_path in sections:
+            section_dir = META_DOCS_DIR / rel_path
+            if (section_dir / "index.rst").exists():
+                toc_entries.append(f"   ../{rel_path}/index")
+        if not toc_entries:
+            continue
+
+        underline = "=" * len(group_title)
+        # Thumbs path relative from the group index directory
+        thumbs_prefix = "../_thumbs"
+
+        lines = [
+            group_title,
+            underline,
+            "",
+            ".. toctree::",
+            "   :hidden:",
+            "   :maxdepth: 1",
+            "",
+            "\n".join(toc_entries),
+            "",
+        ]
+
+        # Add gallery cards grouped by subsection
+        group_examples = []
+        for _sec_title, rel_path in sections:
+            group_examples.extend(meta_by_section.get(rel_path, []))
+
+        if group_examples:
+            lines += [
+                ".. raw:: html",
+                "",
+                '   <div class="gallery-container">',
+            ]
+            for sec_title, rel_path in sections:
+                sec_examples = meta_by_section.get(rel_path, [])
+                if not sec_examples:
+                    continue
+                lines.append(f'   <h3 class="gallery-section-title">{html.escape(sec_title)}</h3>')
+                lines.append('   <div class="gallery-grid">')
+                lines += _render_gallery_cards(
+                    sec_examples,
+                    href_fn=lambda ex: f"../{ex['rst_rel']}.html",
+                    thumb_src_fn=lambda ex, pfx=thumbs_prefix: (
+                        f"{pfx}/{ex['section_rel']}/{ex['stem']}.png"
+                    ),
+                )
+                lines.append("   </div>")
+            lines += [
+                "   </div>",
+                "",
+            ]
+
+        (group_index_dir / "index.rst").write_text("\n".join(lines), encoding="utf-8")
+
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)
 
-    # Generate top-level meta index
+    # Generate top-level meta index with hierarchy
     meta_index_entries = []
-    for rel_path in SECTIONS.values():
-        section_dir = META_DOCS_DIR / rel_path
-        if (section_dir / "index.rst").exists():
-            meta_index_entries.append(f"   {rel_path}/index")
+    used_paths = set()
+    for group_title, sections in SECTION_GROUPS:
+        if group_title:
+            group_slug = re.sub(r"[^a-z0-9]+", "_", group_title.lower()).strip("_")
+            group_index = META_DOCS_DIR / group_slug / "index.rst"
+            if group_index.exists():
+                meta_index_entries.append(f"   {group_slug}/index")
+                for _, rel_path in sections:
+                    used_paths.add(rel_path)
+        else:
+            for _, rel_path in sections:
+                section_dir = META_DOCS_DIR / rel_path
+                if (section_dir / "index.rst").exists() and rel_path not in used_paths:
+                    meta_index_entries.append(f"   {rel_path}/index")
+                    used_paths.add(rel_path)
 
     entries_str = "\n".join(meta_index_entries)
     meta_index = f"""Reference Gallery

@@ -2,19 +2,19 @@
 
 import unittest
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 
 
 class TestHeatmapResult(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        bench_2d = BenchableObject().to_bench(bch.BenchRunCfg(repeats=1))
+        bench_2d = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
         cls.res_2d = bench_2d.plot_sweep(
             "test_hm",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -23,7 +23,7 @@ class TestHeatmapResult(unittest.TestCase):
             "test_hm_1d",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 

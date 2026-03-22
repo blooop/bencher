@@ -1,12 +1,12 @@
 # pylint: disable=duplicate-code
 
-import bencher as bch
+import bencher as bn
 
 # All the examples will be using the data structures and benchmark function defined in this file
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
-def example_categorical(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_categorical(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example of how to perform a categorical parameter sweep
 
     Args:
@@ -21,7 +21,7 @@ def example_categorical(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     # run_cfg.over_time = True
 
-    bench = bch.Bench(
+    bench = bn.Bench(
         "Bencher_Example_Categorical",
         ExampleBenchCfg(),
         run_cfg=run_cfg,
@@ -84,4 +84,4 @@ def example_categorical(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_categorical)
+    bn.run(example_categorical)

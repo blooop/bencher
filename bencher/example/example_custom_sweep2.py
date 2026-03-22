@@ -1,12 +1,12 @@
-import bencher as bch
+import bencher as bn
 
 
-class Square(bch.ParametrizedSweep):
+class Square(bn.ParametrizedSweep):
     """An example of a datatype with an integer and float parameter"""
 
-    x = bch.FloatSweep(default=0, bounds=[0, 6])
+    x = bn.FloatSweep(default=0, bounds=[0, 6])
 
-    result = bch.ResultVar("ul", doc="Square of x")
+    result = bn.ResultVar("ul", doc="Square of x")
 
     def __call__(self, **kwargs) -> dict:
         self.update_params_from_kwargs(**kwargs)
@@ -14,7 +14,7 @@ class Square(bch.ParametrizedSweep):
         return self.get_results_values_as_dict()
 
 
-def example_custom_sweep2(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_custom_sweep2(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """This example shows how to define a custom set of value to sample from instead of a uniform sweep
 
     Args:
@@ -28,14 +28,14 @@ def example_custom_sweep2(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
     # These are all equivalent
     bench.plot_sweep(input_vars=[Square.param.x.with_sample_values([0, 1, 2])])
-    bench.plot_sweep(input_vars=[bch.p("x", [0, 1, 2])])
-    bench.plot_sweep(input_vars=[bch.p("x", [4, 5, 6])])
+    bench.plot_sweep(input_vars=[bn.p("x", [0, 1, 2])])
+    bench.plot_sweep(input_vars=[bn.p("x", [4, 5, 6])])
 
-    bench.plot_sweep(input_vars=[bch.p("x", samples=5)])
-    bench.plot_sweep(input_vars=[bch.p("x", samples=6)])
+    bench.plot_sweep(input_vars=[bn.p("x", samples=5)])
+    bench.plot_sweep(input_vars=[bn.p("x", samples=6)])
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_custom_sweep2)
+    bn.run(example_custom_sweep2)

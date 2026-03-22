@@ -1,28 +1,28 @@
 # pylint: disable=duplicate-code
 import numpy as np
-import bencher as bch
+import bencher as bn
 
 
-class VolumeSweep(bch.ParametrizedSweep):
+class VolumeSweep(bn.ParametrizedSweep):
     """A class to represent a 3D point in space."""
 
-    x = bch.FloatSweep(
+    x = bn.FloatSweep(
         default=0, bounds=[-1.0, 1.0], doc="x coordinate of the sample volume", samples=4
     )
-    y = bch.FloatSweep(
+    y = bn.FloatSweep(
         default=0, bounds=[-1.0, 1.0], doc="y coordinate of the sample volume", samples=5
     )
-    z = bch.FloatSweep(
+    z = bn.FloatSweep(
         default=0, bounds=[-1.0, 1.0], doc="z coordinate of the sample volume", samples=6
     )
 
-    value = bch.ResultVar("ul", doc="The scalar value of the 3D volume field")
-    occupancy = bch.ResultVar(
+    value = bn.ResultVar("ul", doc="The scalar value of the 3D volume field")
+    occupancy = bn.ResultVar(
         "occupied", doc="If the value is > 0.5 this point is considered occupied"
     )
-    interesting = bch.ResultVar("ul", doc="A more interesting scalar field")
-    interesting_vec = bch.ResultVec(3, "vec", doc="A vector field with an interesting shape")
-    interesting_vec_and_occ = bch.ResultVec(
+    interesting = bn.ResultVar("ul", doc="A more interesting scalar field")
+    interesting_vec = bn.ResultVec(3, "vec", doc="A vector field with an interesting shape")
+    interesting_vec_and_occ = bn.ResultVec(
         3, "vec", doc="The same vector field but only showing values in a sphere of radius 0.5"
     )
 
@@ -47,7 +47,7 @@ class VolumeSweep(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_floats3D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_floats3D(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Example of how to perform a 3D floating point parameter sweep
 
     Args:
@@ -74,4 +74,4 @@ def example_floats3D(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_floats3D, level=6)
+    bn.run(example_floats3D, level=6)

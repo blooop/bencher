@@ -8,6 +8,7 @@ performance regressions over time. Run locally or via CI to publish to GitHub Pa
 
 import math
 import tempfile
+import time
 from copy import deepcopy
 
 import bencher as bch
@@ -61,13 +62,13 @@ class SweepPerformance(bch.ParametrizedSweep):
         cfg = _fresh_cfg()
         bench = bch.Bench("_perf_1d", _SineWorker(), run_cfg=cfg)
         res = bench.plot_sweep(input_vars=["x"], result_vars=["out"])
-        self.sweep_1d_time_ms = res.perf_report.total_ms
+        self.sweep_1d_time_ms = res.timings.total_ms
 
         # 2D sweep
         cfg2 = _fresh_cfg()
         bench2 = bch.Bench("_perf_2d", _SineWorker(), run_cfg=cfg2)
         res2 = bench2.plot_sweep(input_vars=["x", "y"], result_vars=["out"])
-        self.sweep_2d_time_ms = res2.perf_report.total_ms
+        self.sweep_2d_time_ms = res2.timings.total_ms
 
         return super().__call__(**kwargs)
 
@@ -93,7 +94,7 @@ class CachePerformance(bch.ParametrizedSweep):
         cfg.cache_samples = True
         bench = bch.Bench("_cache_perf", _SineWorker(), run_cfg=cfg)
         res = bench.plot_sweep(input_vars=["x"], result_vars=["out"])
-        self.cold_time_ms = res.perf_report.total_ms
+        self.cold_time_ms = res.timings.total_ms
 
         # Warm run
         cfg2 = _fresh_cfg()
@@ -101,7 +102,7 @@ class CachePerformance(bch.ParametrizedSweep):
         cfg2.clear_sample_cache = False
         bench2 = bch.Bench("_cache_perf", _SineWorker(), run_cfg=cfg2)
         res2 = bench2.plot_sweep(input_vars=["x"], result_vars=["out"])
-        self.warm_time_ms = res2.perf_report.total_ms
+        self.warm_time_ms = res2.timings.total_ms
 
         self.speedup = self.cold_time_ms / max(self.warm_time_ms, 0.001)
         return super().__call__(**kwargs)
@@ -126,14 +127,13 @@ class ResultGenerationPerformance(bch.ParametrizedSweep):
         bench = bch.Bench("_plot_perf", _SineWorker(), run_cfg=cfg)
 
         res = bench.plot_sweep(input_vars=["x"], result_vars=["out"])
-        self.plot_time_ms = res.perf_report.total_ms
+        self.plot_time_ms = res.timings.total_ms
 
-        # Save timing is separate from the sweep — measure it directly via PerfTracker
-        save_tracker = bch.PerfTracker()
-        with save_tracker.phase("save"):
-            with tempfile.TemporaryDirectory() as td:
-                bench.report.save(directory=td, in_html_folder=False)
-        self.save_time_ms = save_tracker.report().get_phase("save").duration_ms
+        # Measure save time separately
+        t0 = time.perf_counter()
+        with tempfile.TemporaryDirectory() as td:
+            bench.report.save(directory=td, in_html_folder=False)
+        self.save_time_ms = (time.perf_counter() - t0) * 1000
 
         return super().__call__(**kwargs)
 

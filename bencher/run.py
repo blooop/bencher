@@ -28,14 +28,15 @@ def run(
     publish: bool = False,
     grouped: bool = False,
     cache_results: bool = True,
+    optimise: int = 0,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
 
     Handles three cases:
-    1. Callable (e.g. ``bch.run(example_fn)``) — wraps in BenchRunner.
-    2. ParametrizedSweep subclass (e.g. ``bch.run(SimpleFloat)``) — instantiates, calls
+    1. Callable (e.g. ``bn.run(example_fn)``) — wraps in BenchRunner.
+    2. ParametrizedSweep subclass (e.g. ``bn.run(SimpleFloat)``) — instantiates, calls
        ``to_bench()`` + ``plot_sweep()``.
-    3. ParametrizedSweep instance (e.g. ``bch.run(SimpleFloat())``) — same as above
+    3. ParametrizedSweep instance (e.g. ``bn.run(SimpleFloat())``) — same as above
        without instantiation.
 
     Args:
@@ -50,6 +51,9 @@ def run(
         publish: Publish results. Defaults to False.
         grouped: Produce a single HTML page with all benchmarks. Defaults to False.
         cache_results: Use sample cache for previous results. Defaults to True.
+        optimise: Number of extra optuna optimisation trials to run after the sweep.
+            When > 0, ``bench.optimize(n_trials=optimise)`` is called and the
+            optimisation plots are appended to the report. Defaults to 0 (no optimisation).
 
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
@@ -71,6 +75,18 @@ def run(
 
         _sweep_fn.__name__ = f"bench_{instance.name}"
         target = _sweep_fn
+
+    # Wrap target to add optimisation if requested
+    if optimise > 0:
+        _original_target = target
+
+        def _with_optimise(run_cfg: BenchRunCfg | None = None) -> "Bench":
+            bench = _original_target(run_cfg)
+            bench.optimize(n_trials=optimise)
+            return bench
+
+        _with_optimise.__name__ = getattr(_original_target, "__name__", "optimised")
+        target = _with_optimise
 
     # Case 1: Callable — wrap in BenchRunner
     br = BenchRunner(target)

@@ -4,18 +4,18 @@ from typing import Any
 
 import random
 import math
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class SortAnalysis(bch.ParametrizedSweep):
+class SortAnalysis(bn.ParametrizedSweep):
     """Sort analysis across size, algorithm, and data distribution."""
 
-    array_size = bch.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
-    algorithm = bch.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
-    distribution = bch.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")
+    array_size = bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
+    algorithm = bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
+    distribution = bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")
 
-    time = bch.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultVar(units="ms", doc="Sort duration")
 
     _time_offset = 0.0
 
@@ -31,9 +31,9 @@ class SortAnalysis(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_repeats_1_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_repeats_1_float_2_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """1 Float, 2 Categorical."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 3
     benchable = SortAnalysis()
@@ -55,4 +55,4 @@ def example_over_time_repeats_1_float_2_cat(run_cfg: bch.BenchRunCfg | None = No
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_repeats_1_float_2_cat, level=4)
+    bn.run(example_over_time_repeats_1_float_2_cat, level=4)

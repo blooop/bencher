@@ -4,17 +4,17 @@ from typing import Any
 
 import random
 
-import bencher as bch
+import bencher as bn
 
 
-class DeploymentConfig(bch.ParametrizedSweep):
+class DeploymentConfig(bn.ParametrizedSweep):
     """Full config matrix: protocol, region, and log level."""
 
-    protocol = bch.StringSweep(["http", "grpc"], doc="Network protocol")
-    region = bch.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
-    log_level = bch.StringSweep(["debug", "info", "warn"], doc="Logging level")
+    protocol = bn.StringSweep(["http", "grpc"], doc="Network protocol")
+    region = bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
+    log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging level")
 
-    throughput = bch.ResultVar(units="req/s", doc="Request throughput")
+    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -25,7 +25,7 @@ class DeploymentConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_0_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_0_float_3_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 3 Categorical."""
     bench = DeploymentConfig().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["protocol", "region", "log_level"], result_vars=["throughput"])
@@ -34,4 +34,4 @@ def example_with_repeats_0_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_0_float_3_cat, level=4, repeats=10)
+    bn.run(example_with_repeats_0_float_3_cat, level=4, repeats=10)

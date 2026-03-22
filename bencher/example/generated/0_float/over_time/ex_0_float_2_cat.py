@@ -3,17 +3,17 @@
 from typing import Any
 
 import random
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class NetworkConfig(bch.ParametrizedSweep):
+class NetworkConfig(bn.ParametrizedSweep):
     """Measures throughput across protocol and region combinations."""
 
-    protocol = bch.StringSweep(["http", "grpc"], doc="Network protocol")
-    region = bch.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
+    protocol = bn.StringSweep(["http", "grpc"], doc="Network protocol")
+    region = bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
 
-    throughput = bch.ResultVar(units="req/s", doc="Request throughput")
+    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
     _time_offset = 0.0
 
@@ -26,9 +26,9 @@ class NetworkConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_0_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_0_float_2_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 2 Categorical."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     benchable = NetworkConfig()
     bench = benchable.to_bench(run_cfg)
@@ -49,4 +49,4 @@ def example_over_time_0_float_2_cat(run_cfg: bch.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_0_float_2_cat, level=4)
+    bn.run(example_over_time_0_float_2_cat, level=4)

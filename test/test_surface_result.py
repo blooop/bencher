@@ -3,28 +3,28 @@
 import unittest
 import panel as pn
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 
 
 class TestSurfaceResult(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        bench_2d = BenchableObject().to_bench(bch.BenchRunCfg(repeats=1))
+        bench_2d = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
         cls.res_2d = bench_2d.plot_sweep(
             "test_surface",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
-        bench_2d_r2 = BenchableObject().to_bench(bch.BenchRunCfg(repeats=2))
+        bench_2d_r2 = BenchableObject().to_bench(bn.BenchRunCfg(repeats=2))
         cls.res_2d_r2 = bench_2d_r2.plot_sweep(
             "test_surface_r2",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(repeats=2),
             plot_callbacks=False,
         )
 
@@ -33,7 +33,7 @@ class TestSurfaceResult(unittest.TestCase):
             "test_surface_1d",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 

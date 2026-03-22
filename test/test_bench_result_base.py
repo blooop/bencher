@@ -1,5 +1,5 @@
 import unittest
-import bencher as bch
+import bencher as bn
 import numpy as np
 import holoviews as hv
 import panel as pn
@@ -8,10 +8,10 @@ from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.bench_result_base import ReduceType
 
 
-class TstBench(bch.ParametrizedSweep):
-    float_var = bch.FloatSweep(default=0, bounds=[0, 4])
-    cat_var = bch.StringSweep(["a", "b", "c", "d", "e"])
-    result = bch.ResultVar()
+class TstBench(bn.ParametrizedSweep):
+    float_var = bn.FloatSweep(default=0, bounds=[0, 4])
+    cat_var = bn.StringSweep(["a", "b", "c", "d", "e"])
+    result = bn.ResultVar()
 
     def __call__(self, **kwargs):
         self.result = 1
@@ -31,7 +31,7 @@ class TestAggOverDimsStd(unittest.TestCase):
             "agg_1d_1rep",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -40,7 +40,7 @@ class TestAggOverDimsStd(unittest.TestCase):
             "agg_1d_2rep",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(repeats=2),
             plot_callbacks=False,
         )
 
@@ -49,7 +49,7 @@ class TestAggOverDimsStd(unittest.TestCase):
             "agg_1d_multi",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -58,7 +58,7 @@ class TestAggOverDimsStd(unittest.TestCase):
             "agg_2d",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -67,7 +67,7 @@ class TestAggOverDimsStd(unittest.TestCase):
             "agg_2d_2rep",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(repeats=2),
             plot_callbacks=False,
         )
 
@@ -215,7 +215,7 @@ class TestBenchResultBase(unittest.TestCase):
             "sweep1repeat",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
 
@@ -223,7 +223,7 @@ class TestBenchResultBase(unittest.TestCase):
             "sweep2repeat",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
-            run_cfg=bch.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(repeats=2),
             plot_callbacks=False,
         )
 
@@ -248,7 +248,7 @@ class TestBenchResultBase(unittest.TestCase):
 
         res = bench.plot_sweep(
             input_vars=["float_var", "cat_var"],
-            run_cfg=bch.BenchRunCfg(level=4),
+            run_cfg=bn.BenchRunCfg(level=4),
             plot_callbacks=False,
         )
 
@@ -271,12 +271,12 @@ class TestBenchResultBase(unittest.TestCase):
         asserts(ds_filtered_names, [0, 4], ["a", "b", "c", "d", "e"])
 
     def _make_1d_result(self, repeats=1):
-        bench = BenchableObject().to_bench(bch.BenchRunCfg(repeats=repeats))
+        bench = BenchableObject().to_bench(bn.BenchRunCfg(repeats=repeats))
         return bench.plot_sweep(
             "test_base",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
-            run_cfg=bch.BenchRunCfg(repeats=repeats),
+            run_cfg=bn.BenchRunCfg(repeats=repeats),
             plot_callbacks=False,
         )
 
@@ -336,7 +336,7 @@ class TestBenchResultBase(unittest.TestCase):
             "test_base_empty",
             input_vars=[],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(repeats=1),
             plot_callbacks=False,
         )
         title = res.to_plot_title()

@@ -3,16 +3,16 @@
 from typing import Any
 
 import random
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class CacheBackend(bch.ParametrizedSweep):
+class CacheBackend(bn.ParametrizedSweep):
     """Compares latency across different cache backends."""
 
-    backend = bch.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
+    backend = bn.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
 
-    latency = bch.ResultVar(units="ms", doc="Cache lookup latency")
+    latency = bn.ResultVar(units="ms", doc="Cache lookup latency")
 
     _time_offset = 0.0
 
@@ -24,9 +24,9 @@ class CacheBackend(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_0_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_0_float_1_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 1 Categorical."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     benchable = CacheBackend()
     bench = benchable.to_bench(run_cfg)
@@ -47,4 +47,4 @@ def example_over_time_0_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_0_float_1_cat, level=4)
+    bn.run(example_over_time_0_float_1_cat, level=4)

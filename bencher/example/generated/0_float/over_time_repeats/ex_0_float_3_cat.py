@@ -3,18 +3,18 @@
 from typing import Any
 
 import random
-import bencher as bch
+import bencher as bn
 from datetime import datetime, timedelta
 
 
-class DeploymentConfig(bch.ParametrizedSweep):
+class DeploymentConfig(bn.ParametrizedSweep):
     """Full config matrix: protocol, region, and log level."""
 
-    protocol = bch.StringSweep(["http", "grpc"], doc="Network protocol")
-    region = bch.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
-    log_level = bch.StringSweep(["debug", "info", "warn"], doc="Logging level")
+    protocol = bn.StringSweep(["http", "grpc"], doc="Network protocol")
+    region = bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
+    log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging level")
 
-    throughput = bch.ResultVar(units="req/s", doc="Request throughput")
+    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
     _time_offset = 0.0
 
@@ -28,9 +28,9 @@ class DeploymentConfig(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_over_time_repeats_0_float_3_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_over_time_repeats_0_float_3_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 3 Categorical."""
-    run_cfg = run_cfg or bch.BenchRunCfg()
+    run_cfg = run_cfg or bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = 3
     benchable = DeploymentConfig()
@@ -52,4 +52,4 @@ def example_over_time_repeats_0_float_3_cat(run_cfg: bch.BenchRunCfg | None = No
 
 
 if __name__ == "__main__":
-    bch.run(example_over_time_repeats_0_float_3_cat, level=4)
+    bn.run(example_over_time_repeats_0_float_3_cat, level=4)

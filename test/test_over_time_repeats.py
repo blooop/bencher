@@ -7,14 +7,14 @@ from typing import Any
 import holoviews as hv
 import panel as pn
 
-import bencher as bch
+import bencher as bn
 
 
-class SimpleBench(bch.ParametrizedSweep):
+class SimpleBench(bn.ParametrizedSweep):
     """Minimal benchmark for testing over_time + repeats."""
 
-    backend = bch.StringSweep(["redis", "local"], doc="Backend")
-    latency = bch.ResultVar(units="ms", doc="Latency")
+    backend = bn.StringSweep(["redis", "local"], doc="Backend")
+    latency = bn.ResultVar(units="ms", doc="Latency")
 
     offset = 0.0
 
@@ -25,12 +25,12 @@ class SimpleBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-class FloatBench(bch.ParametrizedSweep):
+class FloatBench(bn.ParametrizedSweep):
     """Benchmark with one float input for curve tests."""
 
-    size = bch.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
-    backend = bch.StringSweep(["redis", "local"], doc="Backend")
-    time = bch.ResultVar(units="ms", doc="Duration")
+    size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
+    backend = bn.StringSweep(["redis", "local"], doc="Backend")
+    time = bn.ResultVar(units="ms", doc="Duration")
 
     offset = 0.0
 
@@ -43,7 +43,7 @@ class FloatBench(bch.ParametrizedSweep):
 
 def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3):
     """Helper to run a benchmark over multiple time points."""
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = repeats
     bench = benchable.to_bench(run_cfg)
@@ -107,10 +107,10 @@ def _find_all_over_time_widgets(obj, depth=0):
     return found
 
 
-class ZeroDimBench(bch.ParametrizedSweep):
+class ZeroDimBench(bn.ParametrizedSweep):
     """Benchmark with no input vars — 0D numeric result for over_time regression test."""
 
-    value = bch.ResultVar(units="m", doc="Value")
+    value = bn.ResultVar(units="m", doc="Value")
 
     offset = 0.0
 
@@ -182,7 +182,7 @@ class TestDistributionResultOverTime:
 
 
 class TestCurveResultOverTime:
-    """Test CurveResult with over_time slider (already works, verify)."""
+    """Test CurveResult with over_time slider."""
 
     def test_curve_over_time_with_repeats(self):
         """1 float + 1 cat + repeats + over_time -> curve with slider."""
@@ -193,6 +193,46 @@ class TestCurveResultOverTime:
         assert len(plots) > 0
         # Curve with over_time should produce a Column with slider
         assert any(isinstance(p, pn.Column) for p in plots)
+
+    def test_curve_over_time_no_repeats(self):
+        """1 float + 1 cat + over_time without repeats must not crash."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+
+
+class TestHeatmapResultOverTime:
+    """Test HeatmapResult with over_time slider."""
+
+    def test_heatmap_over_time_no_repeats(self):
+        """1 float + 1 cat + over_time -> heatmap with slider, no crash."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=1, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+
+    def test_heatmap_over_time_with_repeats(self):
+        """1 float + 1 cat + repeats + over_time -> heatmap with slider."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
+        plots = res.to_auto_plots()
+        assert plots is not None
+        assert len(plots) > 0
+        assert any(isinstance(p, pn.Column) for p in plots)
+
+
+class TestOptunaResultOverTime:
+    """Test OptunaResult with over_time (pandas Timestamp handling)."""
+
+    def test_optuna_plots_over_time(self):
+        """to_optuna_plots() must not crash when over_time=True (pandas Timestamps)."""
+        benchable = FloatBench()
+        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
+        optuna_plots = res.to_optuna_plots()
+        assert optuna_plots is not None
 
 
 class TestOverTimeWidgetIsDiscreteSlider:

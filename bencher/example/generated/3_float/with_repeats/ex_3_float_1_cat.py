@@ -5,18 +5,18 @@ from typing import Any
 import random
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class HashComparison(bch.ParametrizedSweep):
+class HashComparison(bn.ParametrizedSweep):
     """Hash throughput across key size, payload, iterations, and algorithm."""
 
-    key_size = bch.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")
-    payload_size = bch.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")
-    iterations = bch.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")
-    algorithm = bch.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")
+    key_size = bn.FloatSweep(default=32, bounds=[8, 256], doc="Key size in bytes")
+    payload_size = bn.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")
+    iterations = bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")
+    algorithm = bn.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")
 
-    throughput = bch.ResultVar(units="MB/s", doc="Hash throughput")
+    throughput = bn.ResultVar(units="MB/s", doc="Hash throughput")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -32,7 +32,7 @@ class HashComparison(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_3_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_3_float_1_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """3 Float, 1 Categorical."""
     bench = HashComparison().to_bench(run_cfg)
     bench.plot_sweep(
@@ -44,4 +44,4 @@ def example_with_repeats_3_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_3_float_1_cat, level=4, repeats=3)
+    bn.run(example_with_repeats_3_float_1_cat, level=4, repeats=3)

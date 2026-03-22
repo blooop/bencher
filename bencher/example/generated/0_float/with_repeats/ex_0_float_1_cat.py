@@ -4,15 +4,15 @@ from typing import Any
 
 import random
 
-import bencher as bch
+import bencher as bn
 
 
-class CacheBackend(bch.ParametrizedSweep):
+class CacheBackend(bn.ParametrizedSweep):
     """Compares latency across different cache backends."""
 
-    backend = bch.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
+    backend = bn.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
 
-    latency = bch.ResultVar(units="ms", doc="Cache lookup latency")
+    latency = bn.ResultVar(units="ms", doc="Cache lookup latency")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -21,7 +21,7 @@ class CacheBackend(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_0_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_0_float_1_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 1 Categorical."""
     bench = CacheBackend().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["backend"], result_vars=["latency"])
@@ -30,4 +30,4 @@ def example_with_repeats_0_float_1_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_0_float_1_cat, level=4, repeats=10)
+    bn.run(example_with_repeats_0_float_1_cat, level=4, repeats=10)

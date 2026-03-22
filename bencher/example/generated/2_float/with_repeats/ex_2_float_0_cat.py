@@ -5,16 +5,16 @@ from typing import Any
 import random
 import math
 
-import bencher as bch
+import bencher as bn
 
 
-class CompressionBench(bch.ParametrizedSweep):
+class CompressionBench(bn.ParametrizedSweep):
     """Measures compression ratio across block size and input entropy."""
 
-    block_size = bch.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
-    entropy = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
+    block_size = bn.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
+    entropy = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
 
-    ratio = bch.ResultVar(units="x", doc="Compression ratio")
+    ratio = bn.ResultVar(units="x", doc="Compression ratio")
 
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
@@ -23,7 +23,7 @@ class CompressionBench(bch.ParametrizedSweep):
         return super().__call__()
 
 
-def example_with_repeats_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_with_repeats_2_float_0_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """2 Float, 0 Categorical."""
     bench = CompressionBench().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["block_size", "entropy"], result_vars=["ratio"])
@@ -32,4 +32,4 @@ def example_with_repeats_2_float_0_cat(run_cfg: bch.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bch.run(example_with_repeats_2_float_0_cat, level=4, repeats=3)
+    bn.run(example_with_repeats_2_float_0_cat, level=4, repeats=3)

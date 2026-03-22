@@ -116,44 +116,16 @@ class TestResolveAggregate(unittest.TestCase):
             resolve_aggregate(2.5, self.vars3)
 
 
-class TestHandleDeprecatedAggOverDims(unittest.TestCase):
-    """Tests for the deprecated agg_over_dims alias."""
-
-    def test_agg_over_dims_forwards_to_aggregate(self):
-        from bencher.utils import _handle_deprecated_agg_over_dims
-
-        with self.assertWarns(DeprecationWarning):
-            result = _handle_deprecated_agg_over_dims(None, ["x", "y"])
-        self.assertEqual(result, ["x", "y"])
-
-    def test_aggregate_takes_precedence(self):
-        from bencher.utils import _handle_deprecated_agg_over_dims
-
-        with self.assertWarns(DeprecationWarning):
-            result = _handle_deprecated_agg_over_dims(True, ["x", "y"])
-        self.assertIs(result, True)
-
-    def test_no_warning_when_agg_over_dims_is_none(self):
-        import warnings
-
-        from bencher.utils import _handle_deprecated_agg_over_dims
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            result = _handle_deprecated_agg_over_dims(True, None)
-        self.assertIs(result, True)
-
-
 class TestResolveAggregateIntegration(unittest.TestCase):
     """Integration: verify aggregate=True matches explicit dim list via plot_sweep."""
 
     @classmethod
     def setUpClass(cls):
-        import bencher as bch
+        import bencher as bn
         from bencher.example.meta.example_meta import BenchableObject
 
         bench = BenchableObject().to_bench()
-        run_cfg = bch.BenchRunCfg(repeats=1, auto_plot=False)
+        run_cfg = bn.BenchRunCfg(repeats=1, auto_plot=False)
 
         cls.res_explicit = bench.plot_sweep(
             "agg_explicit",
@@ -183,7 +155,7 @@ class TestResolveAggregateIntegration(unittest.TestCase):
 
     def test_aggregate_int_selects_last_n(self):
         """aggregate=1 should select only the last input dim."""
-        import bencher as bch
+        import bencher as bn
         from bencher.example.meta.example_meta import BenchableObject
 
         bench = BenchableObject().to_bench()
@@ -191,7 +163,7 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             "agg_int",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bch.BenchRunCfg(repeats=1, auto_plot=False),
+            run_cfg=bn.BenchRunCfg(repeats=1, auto_plot=False),
             plot_callbacks=False,
             aggregate=1,
         )
