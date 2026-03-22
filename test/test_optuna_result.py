@@ -82,15 +82,15 @@ class TestOptunaResult(unittest.TestCase):
 
     def test_collect_optuna_plots_single_result(self):
         plots = self.res_2d.collect_optuna_plots()
-        self.assertIsInstance(plots, pn.Row)
+        self.assertIsInstance(plots, (pn.Row, pn.Column, pn.Tabs))
 
     def test_to_optuna_plots(self):
         plots = self.res_2d.to_optuna_plots()
-        self.assertIsInstance(plots, pn.Row)
+        self.assertIsInstance(plots, (pn.Row, pn.Column, pn.Tabs))
 
     def test_collect_optuna_plots_with_repeats(self):
         plots = self.res_2d_r2.collect_optuna_plots()
-        self.assertIsInstance(plots, pn.Row)
+        self.assertIsInstance(plots, pn.Tabs)
 
 
 class _AggCfg(bn.ParametrizedSweep):

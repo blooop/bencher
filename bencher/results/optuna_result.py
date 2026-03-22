@@ -238,21 +238,16 @@ class OptunaResult(BenchResultBase):
         """
 
         self.studies = [self.bench_result_to_study(True)]
-        titles = ["# Analysis"]
+        tab_names = ["Analysis"]
         if self.bench_cfg.repeats > 1:
             self.studies.append(self.bench_result_to_study(False))
-            titles = [
-                "# Parameter Importance With Repeats",
-                "# Parameter Importance Without Repeats",
-            ]
+            tab_names = ["With Repeats", "Without Repeats"]
 
-        study_repeats_pane = pn.Row()
-        for study, title in zip(self.studies, titles):
+        study_panes = []
+        for study, tab_name in zip(self.studies, tab_names):
             study_pane = pn.Column()
             target_names = self.bench_cfg.optuna_targets()
             param_str = []
-
-            study_pane.append(pn.pane.Markdown(title))
 
             if len(target_names) > 1:
                 # --- Pareto Front ---
@@ -328,9 +323,11 @@ class OptunaResult(BenchResultBase):
                 ),
             )
 
-            study_repeats_pane.append(study_pane)
+            study_panes.append((tab_name, study_pane))
 
-        return study_repeats_pane
+        if len(study_panes) == 1:
+            return study_panes[0][1]
+        return pn.Tabs(*study_panes)
 
     # def extract_study_to_dataset(study: optuna.Study, bench_cfg: BenchCfg) -> BenchCfg:
     #     """Extract an optuna study into an xarray dataset for easy plotting
