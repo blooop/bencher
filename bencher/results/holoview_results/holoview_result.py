@@ -295,8 +295,7 @@ class HoloviewResult(VideoResult):
         times = dataset.coords["over_time"].values
         n_time = len(times)
 
-        max_slider = getattr(self.bench_cfg, "max_slider_points", None)
-        slider_indices = self.subsample_indices(n_time, max_slider)
+        slider_indices = self.subsample_indices(n_time, self.bench_cfg.max_slider_points)
 
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
@@ -308,8 +307,7 @@ class HoloviewResult(VideoResult):
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        show_agg = getattr(self.bench_cfg, "show_aggregated_time_tab", True)
-        if n_time > 1 and show_agg:
+        if n_time > 1 and self.bench_cfg.show_aggregated_time_tab:
             ds_agg = self._mean_over_time(dataset, result_var_name)
             agg_plot = make_plot_fn(ds_agg)
             return pn.Tabs(
@@ -333,8 +331,7 @@ class HoloviewResult(VideoResult):
         times = da.coords["over_time"].values
         n_time = len(times)
 
-        max_slider = getattr(self.bench_cfg, "max_slider_points", None)
-        slider_indices = self.subsample_indices(n_time, max_slider)
+        slider_indices = self.subsample_indices(n_time, self.bench_cfg.max_slider_points)
 
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
@@ -346,8 +343,7 @@ class HoloviewResult(VideoResult):
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        show_agg = getattr(self.bench_cfg, "show_aggregated_time_tab", True)
-        if n_time > 1 and show_agg:
+        if n_time > 1 and self.bench_cfg.show_aggregated_time_tab:
             agg_plot = make_plot_fn(da)
             return pn.Tabs(
                 ("Per Time Point", slider_pane),

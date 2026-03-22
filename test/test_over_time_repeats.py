@@ -41,11 +41,16 @@ class FloatBench(bn.ParametrizedSweep):
         return super().__call__()
 
 
-def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3):
-    """Helper to run a benchmark over multiple time points."""
+def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, **cfg_kwargs):
+    """Helper to run a benchmark over multiple time points.
+
+    Extra keyword arguments are forwarded as BenchRunCfg attribute overrides.
+    """
     run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = True
     run_cfg.repeats = repeats
+    for k, v in cfg_kwargs.items():
+        setattr(run_cfg, k, v)
     bench = benchable.to_bench(run_cfg)
     base_time = datetime(2000, 1, 1)
 
@@ -254,30 +259,6 @@ class TestOverTimeWidgetIsDiscreteSlider:
             )
 
 
-def _run_over_time_cfg(benchable, input_vars, result_vars, repeats=1, snapshots=3, **cfg_kwargs):
-    """Helper that accepts extra BenchRunCfg keyword overrides."""
-    run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = True
-    run_cfg.repeats = repeats
-    for k, v in cfg_kwargs.items():
-        setattr(run_cfg, k, v)
-    bench = benchable.to_bench(run_cfg)
-    base_time = datetime(2000, 1, 1)
-
-    for i in range(snapshots):
-        benchable.offset = i * 0.5
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
-        res = bench.plot_sweep(
-            "over_time_test",
-            input_vars=input_vars,
-            result_vars=result_vars,
-            run_cfg=run_cfg,
-            time_src=base_time + timedelta(seconds=i),
-        )
-    return res
-
-
 class TestShowAggregatedTimeTab:
     """Tests for the show_aggregated_time_tab config parameter."""
 
@@ -300,14 +281,14 @@ class TestShowAggregatedTimeTab:
     def test_aggregated_tab_present_by_default(self):
         """With default config, aggregated tab should appear."""
         benchable = SimpleBench()
-        res = _run_over_time_cfg(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
+        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
         plots = res.to_auto_plots()
         assert self._count_agg_tabs(plots) > 0
 
     def test_aggregated_tab_absent_when_disabled(self):
         """With show_aggregated_time_tab=False, no aggregated tabs."""
         benchable = SimpleBench()
-        res = _run_over_time_cfg(
+        res = _run_over_time(
             benchable,
             ["backend"],
             ["latency"],
@@ -321,7 +302,7 @@ class TestShowAggregatedTimeTab:
     def test_curve_aggregated_tab_absent_when_disabled(self):
         """Curve plots also respect show_aggregated_time_tab=False."""
         benchable = FloatBench()
-        res = _run_over_time_cfg(
+        res = _run_over_time(
             benchable,
             ["size", "backend"],
             ["time"],
@@ -339,7 +320,7 @@ class TestMaxSliderPoints:
     def test_slider_subsampled(self):
         """With max_slider_points=2 and 5 snapshots, slider should have 2 entries."""
         benchable = SimpleBench()
-        res = _run_over_time_cfg(
+        res = _run_over_time(
             benchable,
             ["backend"],
             ["latency"],
@@ -359,7 +340,7 @@ class TestMaxSliderPoints:
     def test_no_subsampling_by_default(self):
         """With default config, slider should have all time points."""
         benchable = SimpleBench()
-        res = _run_over_time_cfg(
+        res = _run_over_time(
             benchable,
             ["backend"],
             ["latency"],
