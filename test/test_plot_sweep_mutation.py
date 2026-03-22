@@ -153,7 +153,9 @@ class TestPlotSweepResultConsistency(unittest.TestCase):
 
         self.assertEqual(set(ds1.data_vars), set(ds2.data_vars))
         for var in ds1.data_vars:
-            self.assertTrue(ds1[var].equals(ds2[var]), f"Data variable '{var}' differs between runs")
+            self.assertTrue(
+                ds1[var].equals(ds2[var]), f"Data variable '{var}' differs between runs"
+            )
 
     def test_plot_sweep_with_self_vars_matches_explicit(self):
         """Using self.input_vars should produce the same result as passing them explicitly."""
