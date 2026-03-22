@@ -307,19 +307,26 @@ a known dataset. Verify data values are identical. Test both interactive (Panel 
 ### 3.3 Avoid redundant `to_dataframe()` conversions
 
 **File**: `bencher/results/holoview_results/distribution_result/distribution_result.py:120`,
-`bencher/results/volume_result.py:85`
+`bencher/results/volume_result.py:85`,
+`bencher/results/holoview_results/holoview_result.py:234` (groupby path in `_build_curve_overlay`)
 
 **Problem**: Several plot types convert xarray datasets to pandas DataFrames using
 `.to_dataframe().reset_index()`. This creates a full copy of the data in a different format.
-Some plots then subset the DataFrame, wasting most of the conversion work.
+Some plots then subset the DataFrame, wasting most of the conversion work.  The curve overlay
+groupby path was the worst offender: it ran `to_dataframe()` + `df.groupby()` for **every
+slider position** when categorical dimensions were present.
 
 **Proposed fix**: Where possible, select/filter the xarray data *before* converting to DataFrame.
 For plots that accept xarray directly (via hvplot.xarray), skip the DataFrame conversion entirely.
+For the curve overlay groupby path, replace `to_dataframe().groupby()` with `xarray.sel()` +
+`itertools.product` — `dataset.sel()` returns an xarray view (no copy, no format conversion).
 
 **Correctness risk**: LOW. The data content is identical; only the container format changes.
 
 **Regression test**: Compare plot data values before and after the change using `hv.render()` to
-extract the underlying data from the generated plot objects.
+extract the underlying data from the generated plot objects.  Unit tests in
+`test_curve_overlay_groupby.py` validate that the xarray sel path produces identical Curve labels,
+Spread elements, and data point counts as the original DataFrame path.
 
 ---
 
@@ -433,6 +440,6 @@ Every change in this plan must pass:
 | **P3** | 2.3 Batch cache lookups | High | Medium | High for large sweeps | |
 | **P3** | 2.5 `__getstate__` for results | Medium | Medium | Low | |
 | **P3** | 3.2 DynamicMap for over_time | Medium | Low-Med | Moderate | PARTIAL (PR #814 — eliminated DataFrame conversion in common over_time path) |
-| **P3** | 3.3 Pre-filter before to_dataframe | Low | Low | Low | PARTIAL (PR #814 — heatmap + line no longer use DataFrame for common path) |
+| **P3** | 3.3 Pre-filter before to_dataframe | Low | Low | Low | DONE (PR #814 — fast path; PR #820 — curve groupby path uses xarray sel) |
 | **P4** | 1.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
 | **P4** | 2.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
