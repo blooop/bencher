@@ -1,3 +1,7 @@
+import warnings
+
+warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=UserWarning)
+
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
