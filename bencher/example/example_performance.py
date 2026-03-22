@@ -161,7 +161,7 @@ def example_result_generation_performance(run_cfg: bch.BenchRunCfg | None = None
 
 
 def example_performance(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    """Run all performance benchmarks and combine into a single report."""
+    """Run all performance benchmarks sequentially."""
     bench = example_sweep_performance(run_cfg)
     example_cache_performance(run_cfg)
     example_result_generation_performance(run_cfg)
