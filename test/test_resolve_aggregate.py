@@ -189,6 +189,9 @@ class TestResolveAggregateIntegration(unittest.TestCase):
         plots = res.to_auto_plots()
         # The "Aggregated View" markdown should not appear
         md_texts = [
-            p.object for p in plots if isinstance(p, pn.pane.Markdown) and "Aggregated View" in str(getattr(p, "object", ""))
+            p.object
+            for p in plots
+            if isinstance(p, pn.pane.Markdown)
+            and "Aggregated View" in str(getattr(p, "object", ""))
         ]
         self.assertEqual(len(md_texts), 0, "Aggregated View section should be suppressed")
