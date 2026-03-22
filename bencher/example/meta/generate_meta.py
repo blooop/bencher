@@ -425,12 +425,13 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 time_offset=True,
             )
 
-            run_cfg_lines = ["run_cfg.over_time = True"]
+            defaults_kw = ""
             if self.sample_with_repeats > 1:
-                run_cfg_lines.append(f"run_cfg.repeats = {self.sample_with_repeats}")
+                defaults_kw = f", repeats={self.sample_with_repeats}"
 
             body = (
-                "run_cfg = run_cfg or bn.BenchRunCfg()\n" + "\n".join(run_cfg_lines) + "\n"
+                f"run_cfg = bn.BenchRunCfg.with_defaults(run_cfg{defaults_kw})\n"
+                "run_cfg.over_time = True\n"
                 f"benchable = {info['class_name']}()\n"
                 f"bench = benchable.to_bench(run_cfg)\n"
                 f"_base_time = datetime(2000, 1, 1)\n"

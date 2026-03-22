@@ -52,9 +52,8 @@ class ServerBenchmark(bn.ParametrizedSweep):
         self.throughput = 1000.0 / self.response_time
         return super().__call__()'''
         body = """\
-run_cfg = run_cfg or bn.BenchRunCfg()
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
 run_cfg.over_time = True
-run_cfg.repeats = 2
 run_cfg.regression_detection = True
 run_cfg.regression_method = "percentage"
 run_cfg.regression_fail = False

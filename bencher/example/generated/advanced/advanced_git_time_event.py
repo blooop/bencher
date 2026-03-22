@@ -26,7 +26,7 @@ class ServerLatency(bn.ParametrizedSweep):
 
 def example_advanced_git_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Git Time Event — date + commit hash slider labels."""
-    run_cfg = run_cfg or bn.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
     run_cfg.over_time = True
 
     bench = ServerLatency().to_bench(run_cfg)

@@ -96,15 +96,10 @@ def example_pareto(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     Returns:
         Bench: Benchmark object with results
     """
-    run_cfg.repeats = 5  # Multiple repeats to demonstrate randomness effects
-    run_cfg.level = 4
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
 
     # Set up Optuna for multi-objective optimization
     run_cfg.use_optuna = True
-
-    # Important: Set multiple repeats to demonstrate the effect of randomness
-    # The framework will automatically calculate and plot both individual runs and averages
-    run_cfg.repeats = 5
 
     # Create problem definition and benchmark
     bench = EngineeringDesignProblem().to_bench(run_cfg)

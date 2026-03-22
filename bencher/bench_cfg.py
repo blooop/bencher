@@ -358,6 +358,17 @@ class BenchRunCfg(BenchPlotSrvCfg):
     def deep(self):
         return deepcopy(self)
 
+    @classmethod
+    def with_defaults(cls, run_cfg=None, **defaults):
+        """Return *run_cfg* unchanged if provided, otherwise create a new instance.
+
+        Use this in example functions to set preferred defaults that yield to
+        caller-provided values::
+
+            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
+        """
+        return run_cfg if run_cfg is not None else cls(**defaults)
+
 
 class BenchCfg(BenchRunCfg):
     """Complete configuration for a benchmark protocol.

@@ -48,11 +48,7 @@ def example_bool_result_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.
     Returns:
         bn.Bench: The benchmark object with results
     """
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
-
-    # Explicitly set repeats to 1 to avoid averaging
-    run_cfg.repeats = 1
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=1)
 
     bench = SimpleBoolBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
@@ -85,11 +81,7 @@ def example_bool_result_categorical_no_repeats(run_cfg: bn.BenchRunCfg | None = 
         bn.Bench: The benchmark object with results
     """
 
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
-
-    # Explicitly set repeats to 1 to avoid averaging
-    run_cfg.repeats = 1
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=1)
 
     bench = ProgrammingBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
