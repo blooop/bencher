@@ -10,6 +10,7 @@ import panel as pn
 from optuna.visualization import (
     plot_param_importances,
     plot_pareto_front,
+    plot_optimization_history,
 )
 from bencher.utils import hmap_canonical_input
 from bencher.variables.time import TimeSnapshot, TimeEvent
@@ -18,6 +19,7 @@ from bencher.results.bench_result_base import BenchResultBase, ReduceType
 
 # from bencher.results.bench_result_base import BenchResultBase
 from bencher.optuna_conversions import (
+    _append_safe,
     sweep_var_to_optuna_dist,
     summarise_trial,
     param_importance,
@@ -252,6 +254,23 @@ class OptunaResult(BenchResultBase):
 
             study_pane.append(pn.pane.Markdown(title))
 
+            # --- Optimization History ---
+            if len(target_names) > 1:
+                for idx, tgt in enumerate(target_names):
+
+                    def _target(t, i=idx):
+                        return t.values[i]
+
+                    _append_safe(
+                        study_pane,
+                        plot_optimization_history,
+                        study,
+                        target=_target,
+                        target_name=tgt,
+                    )
+            else:
+                _append_safe(study_pane, plot_optimization_history, study)
+
             if len(target_names) > 1:
                 if len(target_names) <= 3:
                     study_pane.append(
@@ -287,10 +306,6 @@ class OptunaResult(BenchResultBase):
                     param_str.extend(summarise_trial(t, self.bench_cfg))
 
             else:
-                # cols.append(plot_optimization_history(study)) #TODO, maybe more clever when this is plotted?
-
-                # If there is only 1 parameter then there is no point is plotting relative importance.  Only worth plotting if there are multiple repeats of the same value so that you can compare the parameter vs to repeat to get a sense of the how much chance affects the results
-                # if bench_cfg.repeats > 1 and len(bench_cfg.input_vars) > 1:  #old code, not sure if its right
                 if len(self.bench_cfg.input_vars) > 1:
                     study_pane.append(plot_param_importances(study, target_name=target_names[0]))
 

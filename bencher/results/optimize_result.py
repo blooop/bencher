@@ -11,8 +11,10 @@ import panel as pn
 from optuna.visualization import (
     plot_param_importances,
     plot_pareto_front,
+    plot_optimization_history,
 )
 from bencher.optuna_conversions import (
+    _append_safe,
     summarise_optuna_study,
     summarise_trial,
     param_importance,
@@ -93,6 +95,23 @@ class OptimizeResult:
         param_str = []
 
         study_pane.append(pn.pane.Markdown("# Analysis"))
+
+        # --- Optimization History ---
+        if len(target_names) > 1:
+            for idx, tgt in enumerate(target_names):
+
+                def _target(t, i=idx):
+                    return t.values[i]
+
+                _append_safe(
+                    study_pane,
+                    plot_optimization_history,
+                    study,
+                    target=_target,
+                    target_name=tgt,
+                )
+        else:
+            _append_safe(study_pane, plot_optimization_history, study)
 
         if len(target_names) > 1:
             if len(target_names) <= 3:
