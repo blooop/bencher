@@ -469,6 +469,23 @@ class TestBenchResultBase(unittest.TestCase):
         title = res.title_from_ds(da, rv)
         self.assertIsInstance(title, str)
 
+    def test_to_dataset_mutation_safety(self):
+        """Mutating the returned dataset must not affect the source self.ds."""
+        res = self._make_1d_result(repeats=2)
+        original_values = res.ds["distance"].values.copy()
+
+        for reduce in (ReduceType.REDUCE, ReduceType.MINMAX, ReduceType.SQUEEZE, ReduceType.NONE):
+            ds = res.to_dataset(reduce=reduce)
+            # Mutate the returned dataset in-place
+            for var in ds.data_vars:
+                ds[var].values[:] = -999.0
+            # Verify source is unaffected
+            np.testing.assert_array_equal(
+                res.ds["distance"].values,
+                original_values,
+                err_msg=f"self.ds mutated after to_dataset(reduce={reduce.name})",
+            )
+
     def test_result_samples(self):
         res = self._make_1d_result()
         samples = res.result_samples()
