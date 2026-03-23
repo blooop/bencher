@@ -5,11 +5,16 @@ SAVE_PERFORMANCE_REPORT.md with timing data, file sizes, profiling
 breakdown, and recommendations.
 
 Usage:
-    pixi run benchmark-save
+    pixi run benchmark-save                    # full benchmark
+    pixi run benchmark-save -- --fixture over_time   # single fixture
+    pixi run benchmark-save -- --skip-profiling      # skip cProfile phase
+    pixi run benchmark-save -- --skip-parallel       # skip parallel tab test
+    pixi run benchmark-save -- --quick               # fast subset (no profiling/parallel)
 """
 
 from __future__ import annotations
 
+import argparse
 import cProfile
 import gc
 import os
@@ -22,11 +27,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from io import StringIO
 from pathlib import Path
 from typing import Any
 
-import bokeh.io
+import bokeh
 import holoviews as hv
 import panel as pn
 
@@ -273,6 +277,30 @@ def run_save_timed(
 # ---------------------------------------------------------------------------
 
 
+def _profiler_stats_to_markdown(profiler: cProfile.Profile, limit: int = 20) -> str:
+    """Return a markdown table of the top `limit` functions from a cProfile.Profile.
+
+    Uses the structured `pstats.Stats.stats` mapping instead of parsing
+    text output, making it robust across Python/platform versions.
+    """
+    stats = pstats.Stats(profiler)
+    func_stats = []
+    for func_key, (cc, nc, tt, ct, _callers) in stats.stats.items():
+        func_stats.append((func_key, nc, tt, ct))
+
+    func_stats.sort(key=lambda item: item[3], reverse=True)
+
+    rows = [
+        "| ncalls | tottime (s) | cumtime (s) | function |",
+        "|--------|-------------|-------------|----------|",
+    ]
+    for (filename, lineno, funcname), ncalls, tottime, cumtime in func_stats[:limit]:
+        location = f"`{filename}:{lineno}({funcname})`"
+        rows.append(f"| {ncalls} | {tottime:.4f} | {cumtime:.4f} | {location} |")
+
+    return "\n".join(rows)
+
+
 def run_profiled_save(report: bn.BenchReport) -> str:
     """Run a profiled save on the report, return markdown table of top-20 functions."""
     content = _get_save_content(report)
@@ -286,47 +314,7 @@ def run_profiled_save(report: bn.BenchReport) -> str:
         content.save(filename=path, progress=False, embed=True, resources=CDN)
         profiler.disable()
 
-    # Extract stats
-    stream = StringIO()
-    stats = pstats.Stats(profiler, stream=stream)
-    stats.sort_stats("cumulative")
-    stats.print_stats(40)
-    raw_output = stream.getvalue()
-
-    # Parse into table rows
-    lines = raw_output.strip().split("\n")
-    rows = []
-    for line in lines:
-        line = line.strip()
-        if not line or ("/" not in line and ":" not in line):
-            continue
-        parts = line.split(None, 5)
-        if len(parts) < 6:
-            continue
-        try:
-            ncalls = parts[0]
-            tottime = float(parts[1])
-            _percall1 = parts[2]
-            cumtime = float(parts[3])
-            _percall2 = parts[4]
-            func = parts[5]
-            rows.append((ncalls, tottime, cumtime, func))
-        except (ValueError, IndexError):
-            continue
-
-    # Build markdown table — top 20
-    table_lines = [
-        "| ncalls | tottime (s) | cumtime (s) | function |",
-        "|--------|-------------|-------------|----------|",
-    ]
-    for ncalls, tottime, cumtime, func in rows[:20]:
-        table_lines.append(f"| {ncalls} | {tottime:.4f} | {cumtime:.4f} | `{func}` |")
-
-    if len(table_lines) <= 2:
-        # Fallback: include raw output
-        return f"```\n{raw_output}\n```"
-
-    return "\n".join(table_lines)
+    return _profiler_stats_to_markdown(profiler, limit=20)
 
 
 # ---------------------------------------------------------------------------
@@ -668,103 +656,167 @@ Prioritized by expected impact:
 # ---------------------------------------------------------------------------
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Benchmark bencher report .save() performance")
+    parser.add_argument(
+        "--fixture",
+        choices=["simple", "over_time", "complex"],
+        nargs="+",
+        default=None,
+        help="Run only these fixture types (default: all)",
+    )
+    parser.add_argument(
+        "--skip-profiling",
+        action="store_true",
+        help="Skip the cProfile profiling phase",
+    )
+    parser.add_argument(
+        "--skip-parallel",
+        action="store_true",
+        help="Skip the parallel tab saves test",
+    )
+    parser.add_argument(
+        "--skip-slow",
+        action="store_true",
+        help="Skip slow configs (max_states_100, max_opts_1)",
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick mode: over_time fixture only, no profiling/parallel/slow configs",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = _parse_args()
+
+    # --quick implies restricted scope
+    if args.quick:
+        args.skip_profiling = True
+        args.skip_parallel = True
+        args.skip_slow = True
+        if args.fixture is None:
+            args.fixture = ["over_time"]
+
+    fixtures = set(args.fixture) if args.fixture else {"simple", "over_time", "complex"}
+
     print("=" * 60)
     print("Bencher .save() Performance Benchmark")
+    print(f"  Fixtures: {', '.join(sorted(fixtures))}")
+    if args.skip_profiling:
+        print("  Skipping: profiling")
+    if args.skip_parallel:
+        print("  Skipping: parallel tab saves")
+    if args.skip_slow:
+        print("  Skipping: slow configs")
     print("=" * 60)
 
     all_timing_results: list[TimingResult] = []
     slider_results: list[TimingResult] = []
     agg_tab_results: list[TimingResult] = []
     profile_table = ""
+    bench_complex = None
 
     default_variant = FixtureVariant(name="default", max_slider_points=10, show_agg_tab=False)
     baseline_config = SAVE_CONFIGS_CORE[0]
 
     # --- Phase 1: Simple fixture (reduced configs) ---
-    print("\n--- Building fixture: simple (default variant) ---")
-    bench = build_fixture("simple", default_variant)
-    for config in SAVE_CONFIGS_REDUCED:
-        print(f"  Testing save config: {config.name} ...", end=" ", flush=True)
-        result = run_save_timed(bench.report, config)
-        result.fixture_type = "simple"
-        result.fixture_variant = "default"
-        all_timing_results.append(result)
-        print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
+    if "simple" in fixtures:
+        print("\n--- Building fixture: simple (default variant) ---")
+        bench = build_fixture("simple", default_variant)
+        for config in SAVE_CONFIGS_REDUCED:
+            print(f"  Testing save config: {config.name} ...", end=" ", flush=True)
+            result = run_save_timed(bench.report, config)
+            result.fixture_type = "simple"
+            result.fixture_variant = "default"
+            all_timing_results.append(result)
+            print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
 
     # --- Phase 2: Over_time fixture (core configs with full timing) ---
-    print("\n--- Building fixture: over_time (default variant) ---")
-    bench = build_fixture("over_time", default_variant)
-    for config in SAVE_CONFIGS_CORE:
-        print(f"  Testing save config: {config.name} ...", end=" ", flush=True)
-        result = run_save_timed(bench.report, config)
-        result.fixture_type = "over_time"
-        result.fixture_variant = "default"
-        all_timing_results.append(result)
-        print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
+    if "over_time" in fixtures:
+        print("\n--- Building fixture: over_time (default variant) ---")
+        bench = build_fixture("over_time", default_variant)
+        for config in SAVE_CONFIGS_CORE:
+            print(f"  Testing save config: {config.name} ...", end=" ", flush=True)
+            result = run_save_timed(bench.report, config)
+            result.fixture_type = "over_time"
+            result.fixture_variant = "default"
+            all_timing_results.append(result)
+            print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
 
-    # Slow/exploratory configs — single run (these trigger expensive fallback paths)
-    for config in SAVE_CONFIGS_SLOW:
-        print(f"  Testing save config: {config.name} (single run) ...", end=" ", flush=True)
-        result = run_save_timed(bench.report, config, single_run=True)
-        result.fixture_type = "over_time"
-        result.fixture_variant = "default"
-        all_timing_results.append(result)
-        print(f"{_fmt_ms(result.mean_ms)}")
+        # Slow/exploratory configs — single run (trigger expensive fallback paths)
+        if not args.skip_slow:
+            for config in SAVE_CONFIGS_SLOW:
+                print(
+                    f"  Testing save config: {config.name} (single run) ...",
+                    end=" ",
+                    flush=True,
+                )
+                result = run_save_timed(bench.report, config, single_run=True)
+                result.fixture_type = "over_time"
+                result.fixture_variant = "default"
+                all_timing_results.append(result)
+                print(f"{_fmt_ms(result.mean_ms)}")
 
     # --- Phase 3: Complex fixture (reduced configs) ---
-    print("\n--- Building fixture: complex (default variant) ---")
-    bench_complex = build_fixture("complex", default_variant)
-    for config in SAVE_CONFIGS_REDUCED:
-        print(f"  Testing save config: {config.name} ...", end=" ", flush=True)
-        result = run_save_timed(bench_complex.report, config)
-        result.fixture_type = "complex"
-        result.fixture_variant = "default"
-        all_timing_results.append(result)
-        print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
+    if "complex" in fixtures:
+        print("\n--- Building fixture: complex (default variant) ---")
+        bench_complex = build_fixture("complex", default_variant)
+        for config in SAVE_CONFIGS_REDUCED:
+            print(f"  Testing save config: {config.name} ...", end=" ", flush=True)
+            result = run_save_timed(bench_complex.report, config)
+            result.fixture_type = "complex"
+            result.fixture_variant = "default"
+            all_timing_results.append(result)
+            print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
 
     # --- Phase 4: Slider points scaling (over_time fixture only) ---
-    print("\n--- Slider points scaling ---")
-    for variant in FIXTURE_VARIANTS:
-        print(f"  Building over_time with {variant.name} ...", end=" ", flush=True)
-        bench = build_fixture("over_time", variant)
-        result = run_save_timed(bench.report, baseline_config)
-        result.fixture_type = "over_time"
-        result.fixture_variant = variant.name
-        slider_results.append(result)
-        print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
+    if "over_time" in fixtures:
+        print("\n--- Slider points scaling ---")
+        for variant in FIXTURE_VARIANTS:
+            print(f"  Building over_time with {variant.name} ...", end=" ", flush=True)
+            bench = build_fixture("over_time", variant)
+            result = run_save_timed(bench.report, baseline_config)
+            result.fixture_type = "over_time"
+            result.fixture_variant = variant.name
+            slider_results.append(result)
+            print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
 
-    # --- Phase 5: Aggregated tab impact ---
-    print("\n--- Aggregated tab impact ---")
-    for show_agg in [False, True]:
-        variant_name = "with_agg_tab" if show_agg else "no_agg_tab"
-        variant = FixtureVariant(name=variant_name, max_slider_points=10, show_agg_tab=show_agg)
-        print(f"  Building over_time with {variant_name} ...", end=" ", flush=True)
-        bench = build_fixture("over_time", variant)
-        result = run_save_timed(bench.report, baseline_config)
-        result.fixture_type = "over_time"
-        result.fixture_variant = variant_name
-        agg_tab_results.append(result)
-        print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
+        # --- Phase 5: Aggregated tab impact ---
+        print("\n--- Aggregated tab impact ---")
+        for show_agg in [False, True]:
+            variant_name = "with_agg_tab" if show_agg else "no_agg_tab"
+            variant = FixtureVariant(name=variant_name, max_slider_points=10, show_agg_tab=show_agg)
+            print(f"  Building over_time with {variant_name} ...", end=" ", flush=True)
+            bench = build_fixture("over_time", variant)
+            result = run_save_timed(bench.report, baseline_config)
+            result.fixture_type = "over_time"
+            result.fixture_variant = variant_name
+            agg_tab_results.append(result)
+            print(f"{_fmt_ms(result.mean_ms)} (±{_fmt_ms(result.std_ms)})")
 
     # --- Phase 6: Profiling ---
-    print("\n--- Profiling baseline over_time save ---")
-    bench = build_fixture("over_time", default_variant)
-    profile_table = run_profiled_save(bench.report)
-    print("  Done.")
+    if not args.skip_profiling and "over_time" in fixtures:
+        print("\n--- Profiling baseline over_time save ---")
+        bench = build_fixture("over_time", default_variant)
+        profile_table = run_profiled_save(bench.report)
+        print("  Done.")
 
     # --- Phase 7: Parallel tab saves ---
-    print("\n--- Parallel tab saves ---")
-    parallel_data = test_parallel_tab_saves(bench_complex.report)
-    seq_ms, par_ms, n_tabs = parallel_data
-    if n_tabs > 1:
-        speedup = seq_ms / par_ms if par_ms > 0 else 0
-        print(
-            f"  {n_tabs} tabs: sequential={_fmt_ms(seq_ms)}, "
-            f"parallel={_fmt_ms(par_ms)}, speedup={speedup:.2f}x"
-        )
-    else:
-        print("  Only 1 tab — skipping parallel test.")
+    parallel_data = (0.0, 0.0, 0)
+    if not args.skip_parallel and bench_complex is not None:
+        print("\n--- Parallel tab saves ---")
+        parallel_data = test_parallel_tab_saves(bench_complex.report)
+        seq_ms, par_ms, n_tabs = parallel_data
+        if n_tabs > 1:
+            speedup = seq_ms / par_ms if par_ms > 0 else 0
+            print(
+                f"  {n_tabs} tabs: sequential={_fmt_ms(seq_ms)}, "
+                f"parallel={_fmt_ms(par_ms)}, speedup={speedup:.2f}x"
+            )
+        else:
+            print("  Only 1 tab — skipping parallel test.")
 
     # --- Generate report ---
     print("\n--- Generating report ---")
