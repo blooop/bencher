@@ -3,7 +3,6 @@ from __future__ import annotations
 from functools import partial
 import panel as pn
 from param import Parameter
-import holoviews as hv
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.results.video_controls import VideoControls
 from bencher.variables.results import (

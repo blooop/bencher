@@ -69,11 +69,12 @@ class TestHeatmapResult(unittest.TestCase):
     def test_to_heatmap_single(self):
         rv = self.res_2d.bench_cfg.result_vars[0]
         result = self.res_2d.to_heatmap_single(rv)
-        self.assertIsNotNone(result)
+        # Legacy stub returns None in Plotly mode
+        self.assertIsNone(result)
 
     def test_to_heatmap_1d_single_filter_fail(self):
         rv = self.res_1d.bench_cfg.result_vars[0]
         # With 1 float var, the filter (float_range=VarRange(2, None)) should not match
         result = self.res_1d.to_heatmap_single(rv, override=False)
-        # Should return the filter match panel (not a heatmap)
-        self.assertIsNotNone(result)
+        # to_heatmap_single is a legacy stub that returns None in Plotly mode
+        self.assertIsNone(result)

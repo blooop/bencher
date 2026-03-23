@@ -4,7 +4,7 @@ import logging
 import panel as pn
 from param import Parameter
 
-from bencher.results.bench_result_base import EmptyContainer, ReduceType
+from bencher.results.bench_result_base import EmptyContainer, ReduceType, _wrap_plotly_figure
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.video_result import VideoResult
 from bencher.results.volume_result import VolumeResult
@@ -147,7 +147,7 @@ class BenchResult(
              pn.panel: A panel representation of the results, or None if no plot_callbacks defined
         """
         if self.bench_cfg.plot_callbacks is not None:
-            return pn.Column(*[cb(self) for cb in self.bench_cfg.plot_callbacks])
+            return pn.Column(*[_wrap_plotly_figure(cb(self)) for cb in self.bench_cfg.plot_callbacks])
         return None
 
     def to_auto(
@@ -189,7 +189,7 @@ class BenchResult(
             # the callbacks are passed from the static class definition, so self needs to be
             # passed before the plotting callback can be called
             try:
-                row.append(plot_callback(self, override=override, **kwargs))
+                row.append(_wrap_plotly_figure(plot_callback(self, override=override, **kwargs)))
             except Exception:  # pylint: disable=broad-except
                 logging.error("Plot callback %s failed", plot_callback.__name__, exc_info=True)
 
@@ -218,7 +218,7 @@ class BenchResult(
                     f"### Aggregated View\nMean and percentile bands aggregated over: **{dims}**"
                 )
             )
-            plot_cols.append(self.to(BandResult, aggregate=self.bench_cfg.agg_over_dims))
+            plot_cols.append(_wrap_plotly_figure(self.to(BandResult, aggregate=self.bench_cfg.agg_over_dims)))
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols

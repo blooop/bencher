@@ -11,6 +11,8 @@ from threading import Thread
 from dataclasses import dataclass
 
 import panel as pn
+import plotly.graph_objects as go
+import plotly.io as pio
 from bencher.results.bench_result import BenchResult
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_cfg import BenchRunCfg
@@ -22,6 +24,97 @@ class GithubPagesCfg:
     repo_name: str
     folder_name: str = "report"
     branch_name: str = "gh-pages"
+
+
+def _extract_plotly_figures(pane) -> list[go.Figure]:
+    """Recursively extract all Plotly figures from a Panel pane tree."""
+    figures = []
+    if isinstance(pane, pn.pane.Plotly):
+        obj = pane.object
+        if isinstance(obj, go.Figure):
+            figures.append(obj)
+        elif isinstance(obj, dict):
+            figures.append(go.Figure(obj))
+    elif isinstance(pane, go.Figure):
+        figures.append(pane)
+    elif hasattr(pane, "__iter__"):
+        for child in pane:
+            figures.extend(_extract_plotly_figures(child))
+    elif hasattr(pane, "objects"):
+        for child in pane.objects:
+            figures.extend(_extract_plotly_figures(child))
+    elif hasattr(pane, "object"):
+        obj = pane.object
+        if isinstance(obj, go.Figure):
+            figures.append(obj)
+        elif isinstance(obj, dict):
+            try:
+                figures.append(go.Figure(obj))
+            except Exception:
+                pass
+    return figures
+
+
+def _extract_markdown(pane) -> list[str]:
+    """Recursively extract Markdown text from a Panel pane tree."""
+    texts = []
+    if isinstance(pane, pn.pane.Markdown):
+        texts.append(pane.object or "")
+    elif hasattr(pane, "__iter__"):
+        for child in pane:
+            texts.extend(_extract_markdown(child))
+    elif hasattr(pane, "objects"):
+        for child in pane.objects:
+            texts.extend(_extract_markdown(child))
+    return texts
+
+
+def _save_tab_plotly(pane, filepath: Path) -> None:
+    """Save a single tab's content as a standalone Plotly HTML file.
+
+    Extracts all Plotly figures and markdown from the pane tree and
+    writes them into a single HTML file using plotly.io.
+    """
+    figures = _extract_plotly_figures(pane)
+    markdowns = _extract_markdown(pane)
+
+    if not figures and not markdowns:
+        # Fallback: try Panel save (for non-Plotly content like images/videos)
+        try:
+            pn.Column(pane).save(filename=filepath, progress=False, embed=True)
+            return
+        except Exception:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write("<html><body><p>No content</p></body></html>")
+            return
+
+    # Build a combined HTML page with all figures
+    html_parts = [
+        '<!DOCTYPE html><html><head><meta charset="utf-8">',
+        '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>',
+        "<style>body{font-family:sans-serif;margin:20px;}"
+        ".plotly-graph-div{margin-bottom:20px;}</style>",
+        "</head><body>",
+    ]
+
+    for md in markdowns:
+        # Simple markdown-to-HTML: just wrap in a div
+        escaped = html.escape(md).replace("\n", "<br>")
+        html_parts.append(f"<div>{escaped}</div>")
+
+    for i, fig in enumerate(figures):
+        div_html = pio.to_html(
+            fig,
+            full_html=False,
+            include_plotlyjs=("cdn" if i == 0 else False),
+            config={"responsive": True},
+        )
+        html_parts.append(div_html)
+
+    html_parts.append("</body></html>")
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write("\n".join(html_parts))
 
 
 class BenchReport(BenchPlotServer):
@@ -86,16 +179,16 @@ class BenchReport(BenchPlotServer):
         in_html_folder: bool = True,
         **kwargs,
     ) -> Path:
-        """Save the result to a html file.
+        """Save the result to an HTML file.
 
-        When the report contains multiple tabs, each tab is saved to its own
-        embedded HTML file and the index page uses iframes to display them.
-        This prevents HoloMap slider widgets from colliding across tabs.
+        Uses fast Plotly-native HTML serialization instead of Panel's
+        embed pipeline, eliminating the slow HoloMap state pre-computation
+        that was the primary performance bottleneck.
 
         Args:
-            directory (str | Path, optional): base folder to save to. Defaults to "cachedir" which should be ignored by git.
-            filename (str, optional): The name of the html file. Defaults to the name of the benchmark
-            in_html_folder (bool, optional): Put the saved files in a html subfolder to help keep the results separate from source code. Defaults to True.
+            directory: base folder to save to.
+            filename: The name of the html file.
+            in_html_folder: Put saved files in a html subfolder.
 
         Returns:
             Path: the save path
@@ -118,12 +211,11 @@ class BenchReport(BenchPlotServer):
 
             if len(self.pane) <= 1:
                 logging.info(f"saving html output to: {index_path.absolute()}")
-                # Save inner content directly so the Tabs sidebar is not rendered
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
-                content.save(filename=index_path, progress=True, embed=True, **kwargs)
+                _save_tab_plotly(content, index_path)
                 return index_path
 
-            # Save each tab to its own HTML so HoloMap sliders don't collide.
+            # Save each tab to its own HTML file
             tab_dir = base_path / "_tabs"
             os.makedirs(tab_dir, exist_ok=True)
             tab_files = []
@@ -137,7 +229,7 @@ class BenchReport(BenchPlotServer):
                 tab_file = f"{safe_name}.html"
                 tab_path = tab_dir / tab_file
                 logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
-                pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
+                _save_tab_plotly(tab, tab_path)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 
             # Generate an index page with tab buttons and an iframe.

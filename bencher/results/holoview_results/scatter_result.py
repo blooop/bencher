@@ -1,111 +1,78 @@
 from __future__ import annotations
-import panel as pn
 
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
+import plotly.graph_objects as go
+import xarray as xr
+from param import Parameter
+
 from bencher.results.bench_result_base import ReduceType
-
 from bencher.plotting.plot_filter import VarRange, PlotFilter
-
-
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import HoloviewResult, PLOTLY_COLORS
 
 
 class ScatterResult(HoloviewResult):
-    """A class for creating scatter plots from benchmark results.
+    """Scatter plots using Plotly."""
 
-    Scatter plots are useful for visualizing the distribution of individual data points
-    and identifying patterns, clusters, or outliers. This class provides methods to
-    generate scatter plots with jittering capabilities to better visualize overlapping
-    points, particularly useful for displaying benchmark results across multiple repetitions.
-
-    Methods include:
-    - to_scatter_jitter: Creates scatter plots with jittering for better visualization of overlapping points
-    - to_scatter: Creates standard scatter plots that can be grouped by categorical variables
-    """
-
-    def to_plot(self, override: bool = True, **kwargs) -> pn.panel | None:
-        """Creates a standard scatter plot from benchmark data.
-
-        This is a convenience method that calls to_scatter() with the same parameters.
-
-        Args:
-            override (bool, optional): Whether to override filter restrictions. Defaults to True.
-            **kwargs: Additional keyword arguments passed to the scatter plot options.
-
-        Returns:
-            pn.panel | None: A panel containing the scatter plot if data is appropriate,
-                              otherwise returns filter match results.
-        """
+    def to_plot(self, override: bool = True, **kwargs):
         return self.to_scatter(override=override, **kwargs)
 
-    def to_scatter(self, override: bool = True, **kwargs) -> pn.panel | None:
-        """Creates a standard scatter plot from benchmark data.
-
-        This method applies filters to ensure the data is appropriate for a scatter plot
-        and generates a visualization with points representing individual data points.
-        When categorical variables are present, the scatter points can be grouped.
-
-        Args:
-            override (bool, optional): Whether to override filter restrictions. Defaults to True.
-            **kwargs: Additional keyword arguments passed to the scatter plot options.
-
-        Returns:
-            pn.panel | None: A panel containing the scatter plot if data is appropriate,
-                              otherwise returns filter match results.
-        """
+    def to_scatter(self, result_var=None, override: bool = True, **kwargs):
         match_res = PlotFilter(
             float_range=VarRange(0, 0),
             cat_range=VarRange(0, None),
             repeats_range=VarRange(1, 1),
-        ).matches_result(self.plt_cnt_cfg, "to_hvplot_scatter", override=override)
+        ).matches_result(self.plt_cnt_cfg, "to_scatter", override=override)
         if match_res.overall:
-            hv_ds = self.to_hv_dataset(ReduceType.SQUEEZE)
-            by = None
-            subplots = False
-            if self.plt_cnt_cfg.cat_cnt > 1:
-                by = [v.name for v in self.bench_cfg.input_vars[1:]]
-                subplots = False
-            plot = hv_ds.data.hvplot.scatter(
-                by=by,
-                subplots=subplots,
-                widget_location="bottom",
-                title=self.to_plot_title(),
+            return self.filter(
+                self._to_scatter_ds,
+                float_range=VarRange(0, 0),
+                cat_range=VarRange(0, None),
+                repeats_range=VarRange(1, 1),
+                reduce=ReduceType.SQUEEZE,
+                result_var=result_var,
+                override=override,
                 **kwargs,
             )
-            return self._apply_opts(plot, xrotation=30)
         return match_res.to_panel(**kwargs)
 
-    # def to_scatter_jitter(
-    #     self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    # ) -> pn.panel | None:
-    #     return self.filter(
-    #         self.to_scatter_ds,
-    #         float_range=VarRange(0, 0),
-    #         cat_range=VarRange(0, None),
-    #         repeats_range=VarRange(2, None),
-    #         reduce=ReduceType.NONE,
-    #         target_dimension=2,
-    #         result_var=result_var,
-    #         result_types=(ResultVar),
-    #         override=override,
-    #         **kwargs,
-    #     )
+    def _to_scatter_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
+        title = self.title_from_ds(dataset, result_var, **kwargs)
+        var = result_var.name
+        fig = go.Figure()
 
-    # def to_scatter_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs) -> hv.Scatter:
-    #     by = None
-    #     if self.plt_cnt_cfg.cat_cnt >= 2:
-    #         by = self.plt_cnt_cfg.cat_vars[1].name
-    #     # print(dataset)
-    #     da_plot = dataset[result_var.name]
-    #     # da_plot = dataset
-    #     # print(da_plot)
-    #     print("by", by)
-    #     title = self.title_from_ds(da_plot, result_var, **kwargs)
-    #     time_widget_args = self.time_widget(title)
-    #     print(da_plot)
-    #     # return da_plot.hvplot.box(by=by, **time_widget_args, **kwargs)
-    #     # return da_plot.hvplot.box( **time_widget_args, **kwargs)
-    #     return da_plot.hvplot.scatter(
-    #         y=result_var.name, x="repeat", by=by, **time_widget_args, **kwargs
-    #     ).opts(jitter=0.1)
+        dims = [d for d in dataset.dims if d != "repeat"]
+        if not dims:
+            # 0D case
+            y_vals = dataset[var].values.ravel()
+            fig.add_trace(go.Scatter(
+                y=y_vals, mode="markers", name=var,
+            ))
+        elif len(dims) == 1:
+            x_dim = dims[0]
+            x_vals = dataset.coords[x_dim].values
+            y_vals = dataset[var].values.ravel()
+            fig.add_trace(go.Scatter(
+                x=[str(v) for v in x_vals], y=y_vals,
+                mode="markers", name=var,
+            ))
+            fig.update_layout(xaxis_title=x_dim)
+        else:
+            # Multiple dims: use first as x, second as color
+            x_dim = dims[0]
+            by_dim = dims[1] if len(dims) > 1 else None
+            if by_dim:
+                for ci, val in enumerate(dataset.coords[by_dim].values):
+                    ds_sel = dataset.sel({by_dim: val})
+                    x_vals = ds_sel.coords[x_dim].values
+                    y_vals = ds_sel[var].values.ravel()
+                    fig.add_trace(go.Scatter(
+                        x=[str(v) for v in x_vals], y=y_vals,
+                        mode="markers", name=str(val),
+                        marker=dict(color=PLOTLY_COLORS[ci % len(PLOTLY_COLORS)]),
+                    ))
+            fig.update_layout(xaxis_title=x_dim)
+
+        fig.update_layout(
+            **self._default_layout(title=title),
+            yaxis_title=f"{var} [{getattr(result_var, 'units', '')}]",
+        )
+        return fig

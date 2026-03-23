@@ -1,14 +1,14 @@
 """Unit tests for _build_curve_overlay groupby path correctness.
 
-Validates that the overlay produced when categorical groupby dimensions exist
-contains the expected Curve elements with correct labels and optional Spread bands.
+Validates that the Plotly figure produced when categorical groupby
+dimensions exist contains the expected traces with correct names.
 """
 
 # pylint: disable=protected-access
 
-import holoviews as hv
 import numpy as np
 import xarray as xr
+import plotly.graph_objects as go
 from unittest.mock import MagicMock
 from param import Parameter
 
@@ -16,11 +16,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 def _make_dataset(backends, sizes, has_std=True):
-    """Build a synthetic xarray Dataset mimicking reduced benchmark output.
-
-    Dimensions: size (float) x backend (categorical).
-    Data vars: time, time_std (optional).
-    """
+    """Build a synthetic xarray Dataset mimicking reduced benchmark output."""
     data = np.random.default_rng(42).random((len(sizes), len(backends)))
     ds = xr.Dataset(
         {"time": (["size", "backend"], data)},
@@ -33,7 +29,7 @@ def _make_dataset(backends, sizes, has_std=True):
 
 
 def _make_result_stub(float_var_names):
-    """Create a minimal HoloviewResult-like object with plt_cnt_cfg.float_vars stub."""
+    """Create a minimal HoloviewResult-like object."""
     result = MagicMock(spec=HoloviewResult)
     float_vars = []
     for name in float_var_names:
@@ -43,68 +39,68 @@ def _make_result_stub(float_var_names):
     result.plt_cnt_cfg = MagicMock()
     result.plt_cnt_cfg.float_vars = float_vars
     result.title_from_ds = MagicMock(return_value="Test Title")
+    result._default_layout = HoloviewResult._default_layout
     return result
 
 
 def _make_result_var(name):
-    """Create a Parameter-like result var with a .name attribute."""
     rv = MagicMock(spec=Parameter)
     rv.name = name
+    rv.units = "s"
     return rv
 
 
 class TestBuildCurveOverlayGroupby:
     """Tests for the groupby path in _build_curve_overlay."""
 
-    def test_produces_curve_per_category(self):
-        """Each categorical value should produce one Curve in the overlay."""
+    def test_produces_trace_per_category(self):
+        """Each categorical value should produce at least one trace."""
         backends = ["redis", "local"]
         ds = _make_dataset(backends, [10.0, 50.0, 100.0], has_std=False)
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        fig = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        assert isinstance(fig, go.Figure)
 
-        curves = [el for el in overlay if isinstance(el, hv.Curve)]
-        assert len(curves) == len(backends), f"Expected {len(backends)} curves, got {len(curves)}"
+        # Should have one Scatter trace per backend
+        scatter_traces = [t for t in fig.data if isinstance(t, go.Scatter) and t.mode == "lines"]
+        assert len(scatter_traces) == len(backends)
 
-    def test_curve_labels_match_categories(self):
-        """Curve labels should correspond to the categorical dimension values."""
+    def test_trace_names_match_categories(self):
+        """Trace names should correspond to the categorical dimension values."""
         backends = ["redis", "local"]
         ds = _make_dataset(backends, [10.0, 50.0, 100.0], has_std=False)
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        fig = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        names = sorted(t.name for t in fig.data if isinstance(t, go.Scatter) and t.mode == "lines")
+        assert names == sorted(backends)
 
-        labels = sorted(el.label for el in overlay if isinstance(el, hv.Curve))
-        assert labels == sorted(backends)
-
-    def test_spread_present_when_std_exists(self):
-        """When _std var exists, Spread elements should accompany Curves."""
+    def test_fill_traces_present_when_std_exists(self):
+        """When _std var exists, fill traces should accompany line traces."""
         backends = ["redis", "local"]
         ds = _make_dataset(backends, [10.0, 50.0, 100.0], has_std=True)
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        fig = HoloviewResult._build_curve_overlay(stub, ds, rv)
 
-        spreads = [el for el in overlay if isinstance(el, hv.Spread)]
-        assert len(spreads) == len(backends), (
-            f"Expected {len(backends)} spreads, got {len(spreads)}"
-        )
+        fill_traces = [t for t in fig.data if hasattr(t, "fill") and t.fill == "toself"]
+        assert len(fill_traces) == len(backends)
 
-    def test_no_spread_without_std(self):
-        """Without _std var, no Spread elements should be in overlay."""
+    def test_no_fill_without_std(self):
+        """Without _std var, no fill traces should be in figure."""
         backends = ["redis", "local"]
         ds = _make_dataset(backends, [10.0, 50.0, 100.0], has_std=False)
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        fig = HoloviewResult._build_curve_overlay(stub, ds, rv)
 
-        spreads = [el for el in overlay if isinstance(el, hv.Spread)]
-        assert len(spreads) == 0
+        fill_traces = [t for t in fig.data if hasattr(t, "fill") and t.fill == "toself"]
+        assert len(fill_traces) == 0
 
     def test_multi_category_labels(self):
         """With two categorical dimensions, labels should be comma-joined."""
@@ -121,25 +117,23 @@ class TestBuildCurveOverlayGroupby:
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        fig = HoloviewResult._build_curve_overlay(stub, ds, rv)
 
-        curves = [el for el in overlay if isinstance(el, hv.Curve)]
-        # 2 backends × 3 algos = 6 curves
-        assert len(curves) == 6, f"Expected 6 curves, got {len(curves)}"
-        # Labels should contain comma-separated values
-        labels = [el.label for el in overlay if isinstance(el, hv.Curve)]
-        for label in labels:
-            assert ", " in label, f"Expected comma-separated label, got '{label}'"
+        line_traces = [t for t in fig.data if isinstance(t, go.Scatter) and t.mode == "lines"]
+        # 2 backends × 3 algos = 6 traces
+        assert len(line_traces) == 6
+        for t in line_traces:
+            assert ", " in t.name
 
-    def test_curve_data_not_empty(self):
-        """Each Curve should contain actual data points."""
+    def test_trace_data_not_empty(self):
+        """Each trace should contain actual data points."""
         backends = ["redis", "local"]
         ds = _make_dataset(backends, [10.0, 50.0, 100.0], has_std=False)
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        fig = HoloviewResult._build_curve_overlay(stub, ds, rv)
 
-        for el in overlay:
-            if isinstance(el, hv.Curve):
-                assert len(el) == 3, f"Expected 3 data points, got {len(el)}"
+        for t in fig.data:
+            if isinstance(t, go.Scatter) and t.mode == "lines":
+                assert len(t.x) == 3

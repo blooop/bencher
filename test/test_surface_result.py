@@ -2,6 +2,7 @@
 
 import unittest
 import panel as pn
+import plotly.graph_objects as go
 
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
@@ -52,14 +53,14 @@ class TestSurfaceResult(unittest.TestCase):
         ds = self.res_2d_r2.to_dataset()
         rv = self.res_2d_r2.bench_cfg.result_vars[0]
         result = self.res_2d_r2.to_surface_ds(ds, rv)
-        self.assertIsInstance(result, pn.pane.Plotly)
+        self.assertIsInstance(result, go.Figure)
 
     def test_to_surface_ds_with_std(self):
         ds = self.res_2d_r2.to_dataset()
         rv = self.res_2d_r2.bench_cfg.result_vars[0]
         # With repeats > 1, should show std-dev bounds
         result = self.res_2d_r2.to_surface_ds(ds, rv)
-        self.assertIsInstance(result, pn.pane.Plotly)
+        self.assertIsInstance(result, go.Figure)
 
     def test_to_surface_1d_filter_fail(self):
         """1D data doesn't match the 2-float requirement for surface plots."""
@@ -67,4 +68,4 @@ class TestSurfaceResult(unittest.TestCase):
 
         result = SurfaceResult.to_surface(self.res_1d, override=False)
         # Filter rejects — returns None or a Markdown debug panel, not a Plotly surface
-        self.assertNotIsInstance(result, pn.pane.Plotly)
+        self.assertNotIsInstance(result, go.Figure)
