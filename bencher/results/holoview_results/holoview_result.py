@@ -4,6 +4,7 @@ import holoviews as hv
 import numpy as np
 from param import Parameter
 from functools import partial
+from itertools import product as iterproduct
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -231,12 +232,14 @@ class HoloviewResult(VideoResult):
                 pt *= hv.Spread(hvds, kdims=kdims, vdims=[var, std_var])
             return pt.opts(legend_position="right")
 
-        # Groupby path: DataFrame needed for manual group iteration
-        df = dataset.to_dataframe().reset_index()
+        # Groupby path: use xarray .sel() to avoid expensive DataFrame conversion
+        group_coords = [dataset.coords[g].values for g in groupby]
         pt = hv.Overlay()
-        for key, group_df in df.groupby(groupby):
-            label = str(key) if not isinstance(key, tuple) else ", ".join(str(k) for k in key)
-            group_hvds = hv.Dataset(group_df, kdims=kdims, vdims=vdims)
+        for combo in iterproduct(*group_coords):
+            sel = dict(zip(groupby, combo))
+            group_ds = dataset.sel(**sel)
+            label = ", ".join(str(v) for v in combo) if len(combo) > 1 else str(combo[0])
+            group_hvds = hv.Dataset(group_ds, kdims=kdims, vdims=vdims)
             pt *= hv.Curve(group_hvds, kdims=kdims, vdims=var, label=label).opts(
                 xrotation=30, **kwargs
             )

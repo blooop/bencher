@@ -515,19 +515,26 @@ a known dataset. Verify data values are identical. Test both interactive (Panel 
 ### 4.3 Avoid redundant `to_dataframe()` conversions
 
 **File**: `bencher/results/holoview_results/distribution_result/distribution_result.py:120`,
-`bencher/results/volume_result.py:85`
+`bencher/results/volume_result.py:85`,
+`bencher/results/holoview_results/holoview_result.py:234` (groupby path in `_build_curve_overlay`)
 
 **Problem**: Several plot types convert xarray datasets to pandas DataFrames using
 `.to_dataframe().reset_index()`. This creates a full copy of the data in a different format.
-Some plots then subset the DataFrame, wasting most of the conversion work.
+Some plots then subset the DataFrame, wasting most of the conversion work.  The curve overlay
+groupby path was the worst offender: it ran `to_dataframe()` + `df.groupby()` for **every
+slider position** when categorical dimensions were present.
 
 **Proposed fix**: Where possible, select/filter the xarray data *before* converting to DataFrame.
 For plots that accept xarray directly (via hvplot.xarray), skip the DataFrame conversion entirely.
+For the curve overlay groupby path, replace `to_dataframe().groupby()` with `xarray.sel()` +
+`itertools.product` — `dataset.sel()` returns an xarray view (no copy, no format conversion).
 
 **Correctness risk**: LOW. The data content is identical; only the container format changes.
 
 **Regression test**: Compare plot data values before and after the change using `hv.render()` to
-extract the underlying data from the generated plot objects.
+extract the underlying data from the generated plot objects.  Unit tests in
+`test_curve_overlay_groupby.py` validate that the xarray sel path produces identical Curve labels,
+Spread elements, and data point counts as the original DataFrame path.
 
 ---
 
@@ -630,27 +637,27 @@ Every change in this plan must pass:
 
 ## 7. Implementation Priority
 
-| Priority | Item | Effort | Risk | Impact |
-|----------|------|--------|------|--------|
-| **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users |
-| **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck |
-| **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories |
-| **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations |
-| **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed |
-| **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost |
-| **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate |
-| **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps |
-| **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High |
-| **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate |
-| **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps |
-| **P2** | 3.1 Reuse cache instances | Low | Low | Moderate |
-| **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate |
-| **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate |
-| **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots |
-| **P3** | 2.4 Deduplicate reversed product | Low | Low | Low |
-| **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel |
-| **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel |
-| **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps |
-| **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low |
-| **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) |
-| **P3** | 4.3 Pre-filter before to_dataframe | Low | Low | Low |
+| Priority | Item | Effort | Risk | Impact | Status |
+|----------|------|--------|------|--------|--------|
+| **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users | |
+| **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck | DONE (PR #787 — SweepTimings + perf workflow) |
+| **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | |
+| **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | |
+| **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed | |
+| **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost | |
+| **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | DONE (single-copy pattern in place) |
+| **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | DONE (PR #816) |
+| **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
+| **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
+| **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | DONE (PR #811) |
+| **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | DONE (PR #813) |
+| **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |
+| **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | |
+| **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
+| **P3** | 2.4 Deduplicate reversed product | Low | Low | Low | |
+| **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
+| **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
+| **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps | |
+| **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low | |
+| **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) | PARTIAL (PR #814 — eliminated DataFrame conversion in common over_time path) |
+| **P3** | 4.3 Pre-filter before to_dataframe | Low | Low | Low | DONE (PR #814 — fast path; PR #822 — curve groupby path uses xarray sel) |
