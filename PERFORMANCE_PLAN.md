@@ -630,27 +630,27 @@ Every change in this plan must pass:
 
 ## 7. Implementation Priority
 
-| Priority | Item | Effort | Risk | Impact |
-|----------|------|--------|------|--------|
-| **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users |
-| **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck |
-| **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories |
-| **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations |
-| **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed |
-| **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost |
-| **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate |
-| **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps |
-| **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High |
-| **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate |
-| **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps |
-| **P2** | 3.1 Reuse cache instances | Low | Low | Moderate |
-| **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate |
-| **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate |
-| **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots |
-| **P3** | 2.4 Deduplicate reversed product | Low | Low | Low |
-| **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel |
-| **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel |
-| **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps |
-| **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low |
-| **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) |
-| **P3** | 4.3 Pre-filter before to_dataframe | Low | Low | Low |
+| Priority | Item | Effort | Risk | Impact | Status |
+|----------|------|--------|------|--------|--------|
+| **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users | **DONE** (v1.72.1) |
+| **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck | **DONE** (v1.72.1, field defined) |
+| **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | **DONE** (v1.72.1, default=10) |
+| **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | |
+| **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed | |
+| **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost | |
+| **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | **DONE** |
+| **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | **DONE** |
+| **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
+| **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
+| **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | **DONE** |
+| **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | **DONE** |
+| **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | |
+| **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | **DONE** |
+| **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
+| **P3** | 2.4 Deduplicate reversed product | Low | Low | Low | |
+| **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel | |
+| **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | |
+| **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps | |
+| **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low | |
+| **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) | |
+| **P3** | 4.3 Pre-filter before to_dataframe | Low | Low | Low | |
