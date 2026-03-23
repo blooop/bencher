@@ -250,14 +250,19 @@ class BenchResultBase:
                     if isinstance(rv, ResultBool) and rv.name in ds_reduce_std.data_vars:
                         p = ds_reduce_mean[rv.name]
                         ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_repeats)
-                ds_reduce_std = rename_ds(ds_reduce_std, "std")
-                ds_out = xr.merge([ds_reduce_mean, ds_reduce_std])
+                # Assign std vars directly onto mean dataset (avoids xr.merge copy)
+                for var in ds_reduce_std.data_vars:
+                    ds_reduce_mean[f"{var}_std"] = ds_reduce_std[var]
+                ds_out = ds_reduce_mean
             case ReduceType.MINMAX:  # TODO, need to pass mean, center of minmax, and minmax
                 ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
                 ds_reduce_min = ds_out.min(dim="repeat")
                 ds_reduce_max = ds_out.max(dim="repeat")
-                ds_reduce_range = rename_ds(ds_reduce_max - ds_reduce_min, "range")
-                ds_out = xr.merge([ds_reduce_mean, ds_reduce_range])
+                # Assign range vars directly onto mean dataset (avoids xr.merge copy)
+                ds_range = ds_reduce_max - ds_reduce_min
+                for var in ds_range.data_vars:
+                    ds_reduce_mean[f"{var}_range"] = ds_range[var]
+                ds_out = ds_reduce_mean
             case ReduceType.SQUEEZE:
                 if (
                     self.bench_cfg.over_time
