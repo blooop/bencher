@@ -644,10 +644,10 @@ Every change in this plan must pass:
 | **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | **DONE** (v1.72.1, default=10) |
 | **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | |
 | **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed | |
-| **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost | |
+| **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost | **Won't do** — Spread bands on per-time-point renders provide useful information |
 | **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | **DONE** (single-copy pattern in place) |
 | **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | **DONE** (PR #816) |
-| **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
+| **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | **DONE** — skip copy for REDUCE/MINMAX (reductions create new arrays); deep copy only for SQUEEZE/NONE |
 | **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
 | **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | **DONE** (PR #811) |
 | **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | **DONE** (PR #813) |
