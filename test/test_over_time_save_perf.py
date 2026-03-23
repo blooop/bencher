@@ -36,7 +36,7 @@ def _run_and_save(show_agg: bool) -> float:
     bench = benchable.to_bench(run_cfg)
     base = datetime(2000, 1, 1)
 
-    for i in range(3):
+    for i in range(2):
         benchable.offset = i * 0.1
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0

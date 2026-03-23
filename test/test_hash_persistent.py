@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 import textwrap
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 import param
@@ -363,8 +364,11 @@ def cross_process_hashes():
     Scoped to the class so the 2 subprocess invocations are shared across all
     parametrized test methods in TestCrossProcessDeterminism.
     """
-    hashes_a = _all_hashes_in_subprocess()
-    hashes_b = _all_hashes_in_subprocess()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_a = executor.submit(_all_hashes_in_subprocess)
+        future_b = executor.submit(_all_hashes_in_subprocess)
+        hashes_a = future_a.result()
+        hashes_b = future_b.result()
     return hashes_a, hashes_b
 
 

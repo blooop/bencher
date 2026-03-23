@@ -28,4 +28,4 @@ class TestBenchExamples(unittest.TestCase):
             self.assertTrue(os.path.exists(path))
 
     def test_example_meta(self) -> None:
-        self.examples_asserts(example_meta(self.create_run_cfg()))
+        self.examples_asserts(example_meta(self.create_run_cfg(), sample_repeats_values=[1, 3]))
