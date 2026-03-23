@@ -25,6 +25,10 @@ def git_time_event(repo_path: str | None = None) -> str:
 
     Example return value: ``"2024-06-15 14:59 abc1234"``
 
+    The SHA portion is git's canonical abbreviated hash (``rev-parse --short``),
+    which is typically 7 characters but may be longer in large repositories
+    to avoid ambiguity.
+
     Intended to be used with ``BenchRunCfg(over_time=True, time_event=...)``
     so the over-time slider shows *when* and *which commit* produced the data.
 
