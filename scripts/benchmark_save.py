@@ -43,7 +43,7 @@ try:
     from importlib.metadata import version as _pkg_version
 
     _BENCHER_VERSION = _pkg_version("holobench")
-except Exception:
+except (ImportError, ModuleNotFoundError):
     _BENCHER_VERSION = "unknown"
 
 
@@ -285,7 +285,7 @@ def _profiler_stats_to_markdown(profiler: cProfile.Profile, limit: int = 20) -> 
     """
     stats = pstats.Stats(profiler)
     func_stats = []
-    for func_key, (cc, nc, tt, ct, _callers) in stats.stats.items():
+    for func_key, (_cc, nc, tt, ct, _callers) in stats.stats.items():
         func_stats.append((func_key, nc, tt, ct))
 
     func_stats.sort(key=lambda item: item[3], reverse=True)
