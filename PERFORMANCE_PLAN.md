@@ -639,20 +639,20 @@ Every change in this plan must pass:
 
 | Priority | Item | Effort | Risk | Impact | Status |
 |----------|------|--------|------|--------|--------|
-| **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users | |
-| **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck | DONE (PR #787 — SweepTimings + perf workflow) |
-| **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | |
+| **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users | **DONE** (v1.72.1) |
+| **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck | **DONE** (PR #787, v1.72.1) |
+| **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | **DONE** (v1.72.1, default=10) |
 | **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | |
 | **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed | |
 | **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost | |
-| **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | DONE (single-copy pattern in place) |
-| **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | DONE (PR #816) |
+| **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | **DONE** (single-copy pattern in place) |
+| **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | **DONE** (PR #816) |
 | **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | |
 | **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
-| **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | DONE (PR #811) |
-| **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | DONE (PR #813) |
+| **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | **DONE** (PR #811) |
+| **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | **DONE** (PR #813) |
 | **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |
-| **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | |
+| **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | **DONE** |
 | **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
 | **P3** | 2.4 Deduplicate reversed product | Low | Low | Low | |
 | **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
