@@ -642,8 +642,10 @@ Every change in this plan must pass:
 | **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users | **DONE** (v1.72.1) |
 | **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck | **DONE** (PR #787, v1.72.1) |
 | **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | **DONE** (v1.72.1, default=10) |
-| **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | |
-| **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed | |
+| **P1** | 1.7 Disable HoloViews pipeline tracking during save | Trivial | Low | Predicted **High** — profiling showed 3.3s cumtime for 4998 `pipelined_fn` calls | **REJECTED** — benchmarked; `pipelined_fn` tottime is only 28ms (overhead is in child calls, not the wrapper). `disable_pipeline()` measured same-or-slower than baseline. |
+| **P1** | 1.8 Pre-compute and freeze plot ranges | Low | Medium | Predicted **Moderate** — profiling showed 3.4s cumtime for 162 `compute_ranges` calls | **REJECTED** — `compute_ranges` tottime is only 2.5ms; the 3.4s cumtime is dominated by child data operations, not range computation itself. |
+| **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | **DONE** — profiled in SAVE_PERFORMANCE_REPORT.md. Key finding: the bottleneck is Panel's per-state re-rendering (`plot.update`: 60 calls, 6.6s cumtime), not any single wrapping layer. `pipelined_fn` and `compute_ranges` have low tottime (~30ms combined); their high cumtimes reflect the underlying render cost, not addressable overhead. |
+| **P1** | 1.4 Use `embed_json` for external patch files | Medium | Medium | **High** — reduces HTML size and may improve serialization speed | **REJECTED** — benchmarked at 1.6x slower than baseline (6.68s vs 4.15s); computation not skipped, adds I/O |
 | **P1** | 1.6 Skip Spread on per-time-point renders | Low | Low | **Moderate** — reduces per-slider-position render cost | **Won't do** — Spread bands on per-time-point renders provide useful information |
 | **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | **DONE** (single-copy pattern in place) |
 | **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | **DONE** (PR #816) |
@@ -659,5 +661,5 @@ Every change in this plan must pass:
 | **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
 | **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps | |
 | **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low | |
-| **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) | PARTIAL (PR #814 — eliminated DataFrame conversion in common over_time path) |
+| **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) | **REJECTED** — requires a live Panel server; not viable for static HTML reports (the only supported output mode) |
 | **P3** | 4.3 Pre-filter before to_dataframe | Low | Low | Low | DONE (PR #814 — fast path; PR #822 — curve groupby path uses xarray sel) |
