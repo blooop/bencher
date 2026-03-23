@@ -30,7 +30,8 @@ def example_sampling_levels(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
             bn.p("resolution", [2, 3, 4, 5]),
         ],
         result_vars=["value"],
-        description="The level parameter controls how many samples are taken along each axis. Higher levels give finer resolution but take longer.",
+        description="Sample levels let you perform parameter sweeps without having to decide how many samples to take when defining the class. If you perform a sweep at level 2, all those points are reused when sampling at level 3. Higher levels reuse the points from lower levels to avoid recomputing potentially expensive samples. This enables a workflow where you quickly see results at low resolution to sense-check the code, then run at a high level for full fidelity. When calling a sweep at a high level you can publish intermediate lower-level results as computation continues, letting you track progress and end the sweep early when you have sufficient resolution.",
+        post_description="Each column shows the same function sampled at a different resolution level. Notice how lower-level sample points are a subset of higher-level points -- no work is wasted.",
     )
 
     return bench

@@ -31,7 +31,10 @@ def example_sweep_3_float_0_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None
     """3 Float, 0 Categorical (no repeats)."""
     bench = HashBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=["key_size", "payload_size", "iterations"], result_vars=["throughput"]
+        input_vars=["key_size", "payload_size", "iterations"],
+        result_vars=["throughput"],
+        description="A 3 float + 0 categorical parameter sweep with a single sample per combination. Bencher calculates the Cartesian product of all input variables and evaluates the benchmark function at each point. With no repeats, each combination appears exactly once -- useful for deterministic functions or quick exploration before committing to longer runs. A 3D float sweep produces a volumetric representation. This is useful for visualising scalar fields in 3D parameter spaces.",
+        post_description="Each tab shows a different view of the same data: interactive plots, tabular summaries, and raw data. Use the tabs to explore the sweep results from different angles.",
     )
 
     return bench

@@ -37,7 +37,10 @@ def example_sweep_1_float_3_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None
     """1 Float, 3 Categorical (no repeats)."""
     bench = SortFullMatrix().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=["array_size", "algorithm", "distribution", "stability"], result_vars=["time"]
+        input_vars=["array_size", "algorithm", "distribution", "stability"],
+        result_vars=["time"],
+        description="A 1 float + 3 categorical parameter sweep with a single sample per combination. Bencher calculates the Cartesian product of all input variables and evaluates the benchmark function at each point. With no repeats, each combination appears exactly once -- useful for deterministic functions or quick exploration before committing to longer runs. Adding categorical variables to a float sweep creates faceted line plots -- one curve per category, making it easy to compare how each setting modifies the continuous relationship.",
+        post_description="Each tab shows a different view of the same data: interactive plots, tabular summaries, and raw data. Use the tabs to explore the sweep results from different angles.",
     )
 
     return bench

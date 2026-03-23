@@ -22,7 +22,12 @@ class CacheBackend(bn.ParametrizedSweep):
 def example_sweep_0_float_1_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 1 Categorical (no repeats)."""
     bench = CacheBackend().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["backend"], result_vars=["latency"])
+    bench.plot_sweep(
+        input_vars=["backend"],
+        result_vars=["latency"],
+        description="A 0 float + 1 categorical parameter sweep with a single sample per combination. Bencher calculates the Cartesian product of all input variables and evaluates the benchmark function at each point. With no repeats, each combination appears exactly once -- useful for deterministic functions or quick exploration before committing to longer runs. Categorical-only sweeps produce bar/swarm plots comparing discrete settings.",
+        post_description="Each tab shows a different view of the same data: interactive plots, tabular summaries, and raw data. Use the tabs to explore the sweep results from different angles.",
+    )
 
     return bench
 

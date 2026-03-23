@@ -39,6 +39,8 @@ def example_sweep_0_float_0_cat_over_time_repeats(
             "over_time",
             input_vars=[],
             result_vars=["baseline"],
+            description="A 0 float + 0 categorical parameter sweep with both repeats and over_time tracking. This combination is the most informative: repeats reveal per-measurement noise at each time point, while over_time captures long-term drift. If your nightly benchmark shows increasing variance, repeats help distinguish whether the algorithm became noisier or the environment became less stable. With no input variables, this is a 0D sweep that measures a single baseline metric.",
+            post_description="Compare the per-snapshot distributions (via the slider) with the aggregated view. Growing spread over time suggests a real change, not just noise.",
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )
