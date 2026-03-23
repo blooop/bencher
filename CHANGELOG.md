@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.72.2] - 2026-03-23
+
+### Changed
+- `git_time_event()` now uses wall-clock time (`datetime.now()`) instead of commit date, producing labels like `"2024-06-15 14:59 abc1234"` so multiple runs on the same commit get distinct over_time labels
+- `git_time_event()` uses `git rev-parse --short HEAD` for the canonical abbreviated SHA instead of hardcoded `[:8]` slicing
+- `git_time_event()` falls back to `"<timestamp> unknown"` instead of just the timestamp when git is unavailable, keeping the label format consistent
+- Removed the second subprocess call (`git log`) from `git_time_event()`, making it lighter for fork-sensitive environments
+- Increased `wrap_long_time_labels` wrap width from 20 to 30 characters to accommodate the longer time-event label format
+- Docstring documents the recommended import-time caching pattern for fork-safety in threaded environments (ROS 2, DDS, etc.)
+
+### Performance
+- Skip redundant dataset copy in `to_dataset()` for REDUCE/MINMAX paths (#826)
+- Single-pass reduction avoids `xr.merge()` in `to_dataset()` (#824)
+- Replace DataFrame groupby with xarray sel in curve overlay (#822)
+- Batch cross-process hash tests into 2 subprocess invocations (#820)
+- Add comprehensive `.save()` performance benchmark and report (#825)
+
 ## [1.72.1] - 2026-03-22
 
 ### Changed
