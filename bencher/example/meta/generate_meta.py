@@ -360,6 +360,92 @@ def _get_input_var_names(info, float_count, cat_count):
     return float_vars[:float_count] + cat_vars[:cat_count]
 
 
+def _get_sweep_description(float_count, cat_count, variant):
+    """Return educational description and post_description for a sweep example.
+
+    These descriptions preserve the pedagogical content from the original
+    hand-written examples (example_floats.py, example_categorical.py, etc.)
+    so that the auto-generated gallery remains a useful learning resource.
+    """
+    dim_label = f"{float_count} float + {cat_count} categorical"
+
+    descs = {
+        "no_repeats": (
+            f"A {dim_label} parameter sweep with a single sample per combination. "
+            "Bencher calculates the Cartesian product of all input variables and "
+            "evaluates the benchmark function at each point. With no repeats, each "
+            "combination appears exactly once -- useful for deterministic functions "
+            "or quick exploration before committing to longer runs.",
+            "Each tab shows a different view of the same data: interactive plots, "
+            "tabular summaries, and raw data. Use the tabs to explore the sweep "
+            "results from different angles.",
+        ),
+        "with_repeats": (
+            f"A {dim_label} parameter sweep with multiple repeats per combination. "
+            "Repeating measurements reveals the noise structure of your benchmark. "
+            "If your function is deterministic, all repeats will be identical; if it "
+            "has stochastic components, repeats let you estimate confidence intervals "
+            "and distinguish signal from noise. The benchmark function must be pure -- "
+            "if past calls affect future calls through side effects, the statistics "
+            "will be invalid.",
+            "Swarm/violin plots show the distribution of repeated measurements. "
+            "If repeat has high variance, it suggests either measurement noise or "
+            "unintended side effects in the benchmark function.",
+        ),
+        "over_time": (
+            f"A {dim_label} parameter sweep tracked over time. Setting over_time=True "
+            "records multiple time snapshots that can be scrubbed via a slider. Each "
+            "call to plot_sweep with a new time_src appends a snapshot to the history. "
+            "This is designed for nightly benchmarks or CI pipelines where you want to "
+            "track how metrics evolve across commits, releases, or environmental changes. "
+            "Use clear_history=True on the first snapshot to reset, and clear_cache=True "
+            "to force re-evaluation.",
+            "The time slider lets you scrub through snapshots. The 'All Time Points "
+            "(aggregated)' tab pools all snapshots into one view, smoothing out "
+            "per-snapshot noise to reveal long-term trends.",
+        ),
+        "over_time_repeats": (
+            f"A {dim_label} parameter sweep with both repeats and over_time tracking. "
+            "This combination is the most informative: repeats reveal per-measurement "
+            "noise at each time point, while over_time captures long-term drift. If "
+            "your nightly benchmark shows increasing variance, repeats help distinguish "
+            "whether the algorithm became noisier or the environment became less stable.",
+            "Compare the per-snapshot distributions (via the slider) with the aggregated "
+            "view. Growing spread over time suggests a real change, not just noise.",
+        ),
+    }
+
+    desc, post_desc = descs.get(variant, ("", ""))
+
+    # Add dimensionality-specific guidance
+    if float_count == 0 and cat_count == 0:
+        desc += (
+            " With no input variables, this is a 0D sweep that measures a single baseline metric."
+        )
+    elif float_count == 0:
+        desc += " Categorical-only sweeps produce bar/swarm plots comparing discrete settings."
+    elif float_count == 1 and cat_count == 0:
+        desc += " A 1D float sweep produces a line plot -- the simplest way to characterise a continuous input."
+    elif float_count == 1 and cat_count >= 1:
+        desc += (
+            " Adding categorical variables to a float sweep creates faceted line plots -- "
+            "one curve per category, making it easy to compare how each setting "
+            "modifies the continuous relationship."
+        )
+    elif float_count == 2:
+        desc += (
+            " A 2D float sweep produces a heatmap. Additional categorical variables "
+            "create faceted heatmaps, one per category combination."
+        )
+    elif float_count == 3:
+        desc += (
+            " A 3D float sweep produces a volumetric representation. "
+            "This is useful for visualising scalar fields in 3D parameter spaces."
+        )
+
+    return desc, post_desc
+
+
 class BenchMetaGen(bn.ParametrizedSweep):
     """This class uses bencher to display the multidimensional types bencher can represent"""
 
@@ -415,6 +501,10 @@ class BenchMetaGen(bn.ParametrizedSweep):
             line for line in info["imports"].split("\n") if line and line != "import bencher as bn"
         ]
 
+        description, post_description = _get_sweep_description(
+            self.float_vars_count, self.categorical_vars_count, variant
+        )
+
         if self.sample_over_time:
             noise_val = max(0.1, 0.15 if self.sample_with_repeats > 1 else 0.0)
             class_code = _build_class_code(
@@ -443,6 +533,8 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 f'        "over_time",\n'
                 f"        input_vars={input_var_names!r},\n"
                 f"        result_vars={result_var_names!r},\n"
+                f"        description={description!r},\n"
+                f"        post_description={post_description!r},\n"
                 f"        run_cfg=run_cfg,\n"
                 f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"
@@ -484,6 +576,8 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 result_vars=repr(result_var_names),
                 class_code=class_code,
                 extra_imports=sweep_extra_imports or None,
+                description=description,
+                post_description=post_description,
                 run_kwargs=run_kwargs,
             )
 

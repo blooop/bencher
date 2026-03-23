@@ -117,6 +117,8 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_regression import example_meta_regression
     from bencher.example.meta.generate_meta_yaml import example_meta_yaml
     from bencher.example.meta.generate_meta_performance import example_meta_performance
+    from bencher.example.meta.generate_meta_publish import example_meta_publish
+    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
 
     example_meta()
     example_meta_result_types()
@@ -135,6 +137,8 @@ def generate_python_files():
     example_meta_regression()
     example_meta_yaml()
     example_meta_performance()
+    example_meta_publish()
+    example_meta_rerun()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -418,6 +422,8 @@ SECTION_GROUPS = [
             ("Advanced Patterns", "advanced"),
             ("Regression Detection", "regression"),
             ("Performance", "performance"),
+            ("Publishing", "publishing"),
+            ("Rerun Integration", "rerun"),
         ],
     ),
 ]

@@ -33,7 +33,12 @@ class CompressionSuite(bn.ParametrizedSweep):
 def example_sweep_2_float_2_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """2 Float, 2 Categorical (no repeats)."""
     bench = CompressionSuite().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=["block_size", "entropy", "codec", "effort"], result_vars=["ratio"])
+    bench.plot_sweep(
+        input_vars=["block_size", "entropy", "codec", "effort"],
+        result_vars=["ratio"],
+        description="A 2 float + 2 categorical parameter sweep with a single sample per combination. Bencher calculates the Cartesian product of all input variables and evaluates the benchmark function at each point. With no repeats, each combination appears exactly once -- useful for deterministic functions or quick exploration before committing to longer runs. A 2D float sweep produces a heatmap. Additional categorical variables create faceted heatmaps, one per category combination.",
+        post_description="Each tab shows a different view of the same data: interactive plots, tabular summaries, and raw data. Use the tabs to explore the sweep results from different angles.",
+    )
 
     return bench
 

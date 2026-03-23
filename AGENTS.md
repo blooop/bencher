@@ -110,6 +110,8 @@ are:
 | `perf_` | `performance/` | variant |
 | `regression_` | `regression/` | variant |
 | `yaml_` | `yaml/` | format |
+| `publish_` | `publishing/` | example |
+| `rerun_` | `rerun/` | example |
 
 **Rules for adding new generators:**
 1. Pick a short, unique section prefix that does not collide with existing prefixes.
