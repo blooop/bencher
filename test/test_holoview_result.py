@@ -3,6 +3,7 @@
 import unittest
 import holoviews as hv
 import panel as pn
+import xarray as xr
 
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
@@ -153,3 +154,33 @@ class TestHoloviewResult(unittest.TestCase):
     def test_to_points_reduce(self):
         result = self.res_2d_r2.to_points(reduce=ReduceType.REDUCE)
         self.assertIsInstance(result, hv.Element)
+
+    def test_strip_std_vars_removes_std(self):
+        ds = xr.Dataset(
+            {
+                "val": (["x"], [1.0, 2.0]),
+                "val_std": (["x"], [0.1, 0.2]),
+                "other": (["x"], [3.0, 4.0]),
+            }
+        )
+        stripped = HoloviewResult._strip_std_vars(ds)
+        self.assertIn("val", stripped.data_vars)
+        self.assertIn("other", stripped.data_vars)
+        self.assertNotIn("val_std", stripped.data_vars)
+
+    def test_strip_std_vars_no_std(self):
+        ds = xr.Dataset({"val": (["x"], [1.0, 2.0])})
+        stripped = HoloviewResult._strip_std_vars(ds)
+        # Should return the original dataset unchanged
+        self.assertIs(stripped, ds)
+
+    def test_strip_std_vars_preserves_original(self):
+        ds = xr.Dataset(
+            {
+                "val": (["x"], [1.0, 2.0]),
+                "val_std": (["x"], [0.1, 0.2]),
+            }
+        )
+        _ = HoloviewResult._strip_std_vars(ds)
+        # Original dataset must be unmodified
+        self.assertIn("val_std", ds.data_vars)

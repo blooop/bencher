@@ -276,6 +276,18 @@ class HoloviewResult(VideoResult):
             return range(n)
         return np.unique(np.linspace(0, n - 1, max_points, dtype=int)).tolist()
 
+    @staticmethod
+    def _strip_std_vars(dataset):
+        """Remove ``_std`` variables from a dataset.
+
+        Per-time-point slices carry within-repeat ``_std`` which adds
+        Spread-band rendering cost without much analytical value.
+        Stripping them lets downstream renderers skip Spread bands
+        automatically, reducing per-slider-position render cost.
+        """
+        std_vars = [v for v in dataset.data_vars if v.endswith("_std")]
+        return dataset.drop_vars(std_vars) if std_vars else dataset
+
     def _build_time_holomap(self, dataset, result_var_name, make_plot_fn):
         """Build per-time-point HoloMap + optional aggregated plot.
 
@@ -284,6 +296,10 @@ class HoloviewResult(VideoResult):
         always contains a ``_std`` variable; callbacks that are
         ``_std``-aware (e.g. delegating to ``_build_curve_overlay``) will
         automatically render spread bands on the aggregated tab.
+
+        Per-time-point slices have ``_std`` variables stripped so that
+        Spread bands are not rendered on individual slider positions,
+        reducing rendering overhead.
 
         When ``bench_cfg.max_slider_points`` is set, only that many
         evenly-spaced time points are rendered for the slider (first and
@@ -302,7 +318,7 @@ class HoloviewResult(VideoResult):
 
         for idx in slider_indices:
             t = times[idx]
-            ds_t = dataset.sel(over_time=t)
+            ds_t = self._strip_std_vars(dataset.sel(over_time=t))
             holomap[t] = make_plot_fn(ds_t)
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
