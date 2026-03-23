@@ -169,6 +169,7 @@ def example_meta(
 ) -> bn.Bench:
     if sample_repeats_values is None:
         sample_repeats_values = [1, 10]
+    sample_repeats_values = tuple(sample_repeats_values)
 
     bench = BenchMeta().to_bench(run_cfg)
 

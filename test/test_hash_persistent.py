@@ -364,6 +364,7 @@ def cross_process_hashes():
     Scoped to the class so the 2 subprocess invocations are shared across all
     parametrized test methods in TestCrossProcessDeterminism.
     """
+    # Thread-safe: each task spawns an independent subprocess with no shared state.
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_a = executor.submit(_all_hashes_in_subprocess)
         future_b = executor.submit(_all_hashes_in_subprocess)

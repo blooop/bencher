@@ -1,5 +1,7 @@
 """Tests for over_time + repeats support in bar and distribution plots."""
 
+# pylint: disable=redefined-outer-name
+
 import random
 from datetime import datetime, timedelta
 from typing import Any
@@ -176,7 +178,7 @@ class TestNumericOverTimeNotRoutedToImageSlider:
 class TestBarResultOverTime:
     """Test BarResult with over_time slider."""
 
-    def test_bar_over_time_no_repeats(self, simple_bench_repeats1_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_bar_over_time_no_repeats(self, simple_bench_repeats1_snapshots3):
         """0 float + 1 cat + over_time -> bar with slider."""
         plots = simple_bench_repeats1_snapshots3.to_auto_plots()
         assert plots is not None
@@ -184,7 +186,7 @@ class TestBarResultOverTime:
         # With multiple time points, bar should be wrapped in a Column with slider
         assert any(isinstance(p, pn.Column) for p in plots)
 
-    def test_bar_over_time_with_repeats(self, simple_bench_repeats3_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_bar_over_time_with_repeats(self, simple_bench_repeats3_snapshots3):
         """0 float + 1 cat + repeats + over_time -> bar with slider."""
         plots = simple_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
@@ -194,7 +196,7 @@ class TestBarResultOverTime:
 class TestDistributionResultOverTime:
     """Test BoxWhisker/Violin with over_time slider."""
 
-    def test_boxwhisker_over_time(self, simple_bench_repeats3_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_boxwhisker_over_time(self, simple_bench_repeats3_snapshots3):
         """0 float + 1 cat + repeats + over_time -> box whisker with slider."""
         plots = simple_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
@@ -206,7 +208,7 @@ class TestDistributionResultOverTime:
 class TestCurveResultOverTime:
     """Test CurveResult with over_time slider."""
 
-    def test_curve_over_time_with_repeats(self, float_bench_repeats3_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_curve_over_time_with_repeats(self, float_bench_repeats3_snapshots3):
         """1 float + 1 cat + repeats + over_time -> curve with slider."""
         plots = float_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
@@ -234,7 +236,7 @@ class TestHeatmapResultOverTime:
         assert plots is not None
         assert len(plots) > 0
 
-    def test_heatmap_over_time_with_repeats(self, float_bench_repeats3_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_heatmap_over_time_with_repeats(self, float_bench_repeats3_snapshots3):
         """1 float + 1 cat + repeats + over_time -> heatmap with slider."""
         plots = float_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
@@ -245,7 +247,7 @@ class TestHeatmapResultOverTime:
 class TestOptunaResultOverTime:
     """Test OptunaResult with over_time (pandas Timestamp handling)."""
 
-    def test_optuna_plots_over_time(self, float_bench_repeats3_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_optuna_plots_over_time(self, float_bench_repeats3_snapshots3):
         """to_optuna_plots() must not crash when over_time=True (pandas Timestamps)."""
         optuna_plots = float_bench_repeats3_snapshots3.to_optuna_plots()
         assert optuna_plots is not None
@@ -254,7 +256,7 @@ class TestOptunaResultOverTime:
 class TestOverTimeWidgetIsDiscreteSlider:
     """Verify over_time uses DiscreteSlider, not a Select dropdown."""
 
-    def test_bar_over_time_uses_discrete_slider(self, simple_bench_repeats1_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_bar_over_time_uses_discrete_slider(self, simple_bench_repeats1_snapshots3):
         """All over_time widgets must be DiscreteSlider, none should be Select."""
         plots = simple_bench_repeats1_snapshots3.to_auto_plots()
         widgets = _find_all_over_time_widgets(plots)
@@ -287,7 +289,7 @@ class TestShowAggregatedTimeTab:
             pass
         return count
 
-    def test_aggregated_tab_absent_by_default(self, simple_bench_repeats1_snapshots3):  # pylint: disable=redefined-outer-name
+    def test_aggregated_tab_absent_by_default(self, simple_bench_repeats1_snapshots3):
         """With default config (show_aggregated_time_tab=False), no aggregated tabs."""
         plots = simple_bench_repeats1_snapshots3.to_auto_plots()
         assert self._count_agg_tabs(plots) == 0
@@ -364,14 +366,14 @@ class TestMaxSliderPoints:
                 assert len(opts) == 5, f"Expected 5 slider options, got {len(opts)}"
 
     def test_default_subsampling_caps_at_max(self):
-        """With default max_slider_points=10 and 15 snapshots, slider capped at 10."""
+        """With default max_slider_points=10 and 12 snapshots, slider capped at 10."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
             ["backend"],
             ["latency"],
             repeats=1,
-            snapshots=15,
+            snapshots=12,
         )
         plots = res.to_auto_plots()
         widgets = _find_all_over_time_widgets(plots)
