@@ -221,7 +221,11 @@ class BenchResultBase:
         if reduce == ReduceType.AUTO:
             reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
 
-        ds_out = self.ds.copy()
+        # Avoid an upfront copy for REDUCE/MINMAX — those reductions (.mean(),
+        # .std(), .min(), .max()) always allocate new arrays, so the copy is
+        # wasted.  SQUEEZE and NONE still need a copy because the returned
+        # dataset may share memory with self.ds.
+        ds_out = self.ds
 
         if result_var is not None:
             if isinstance(result_var, Parameter):
@@ -269,10 +273,12 @@ class BenchResultBase:
                     and "repeat" in ds_out.dims
                     and ds_out.sizes["repeat"] == 1
                 ):
-                    # Only squeeze repeat, preserving over_time even if it's length 1
-                    ds_out = ds_out.squeeze("repeat", drop=True)
+                    ds_out = ds_out.squeeze("repeat", drop=True).copy(deep=True)
                 else:
-                    ds_out = ds_out.squeeze(drop=True)
+                    ds_out = ds_out.squeeze(drop=True).copy(deep=True)
+            case _:
+                # ReduceType.NONE — deep copy for mutation safety
+                ds_out = ds_out.copy(deep=True)
 
         # Optional aggregation across non-repeat dimensions (e.g., categorical)
         if agg_over_dims:
