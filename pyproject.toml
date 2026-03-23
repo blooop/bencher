@@ -169,6 +169,7 @@ docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs"
 
 
 #demos
+benchmark-save = "python scripts/benchmark_save.py"
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
 
