@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import plotly.graph_objects as go
-import panel as pn
 from param import Parameter
 import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
-from bencher.plotting.plot_filter import PlotFilter, VarRange
+from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import ResultVar
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
@@ -89,13 +88,15 @@ class HeatmapResult(HoloviewResult):
         else:
             z_2d = z_vals.T
 
-        fig = go.Figure(data=go.Heatmap(
-            x=[str(v) for v in x_vals],
-            y=[str(v) for v in y_vals],
-            z=z_2d,
-            colorscale="Plasma",
-            colorbar=dict(title=f"{C} [{getattr(result_var, 'units', '')}]"),
-        ))
+        fig = go.Figure(
+            data=go.Heatmap(
+                x=[str(v) for v in x_vals],
+                y=[str(v) for v in y_vals],
+                z=z_2d,
+                colorscale="Plasma",
+                colorbar=dict(title=f"{C} [{getattr(result_var, 'units', '')}]"),
+            )
+        )
         fig.update_layout(
             **self._default_layout(title=title),
             xaxis_title=x_name,

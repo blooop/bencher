@@ -30,8 +30,16 @@ class BarResult(HoloviewResult):
         }
 
         scenarios = [
-            {"repeats_range": VarRange(1, 1), "reduce": ReduceType.SQUEEZE, "result_types": (ResultVar,)},
-            {"repeats_range": VarRange(2, None), "reduce": ReduceType.REDUCE, "result_types": (ResultBool,)},
+            {
+                "repeats_range": VarRange(1, 1),
+                "reduce": ReduceType.SQUEEZE,
+                "result_types": (ResultVar,),
+            },
+            {
+                "repeats_range": VarRange(2, None),
+                "reduce": ReduceType.REDUCE,
+                "result_types": (ResultBool,),
+            },
         ]
 
         for params in scenarios:
@@ -65,8 +73,10 @@ class BarResult(HoloviewResult):
             return None
 
         if use_holomap:
+
             def make_bar(ds_t):
                 return self._make_bar_fig(ds_t, result_var, x_dim, by, title, **kwargs)
+
             return self._build_time_holomap(dataset, var, make_bar)
 
         return self._make_bar_fig(dataset, result_var, x_dim, by, title, **kwargs)
@@ -81,10 +91,14 @@ class BarResult(HoloviewResult):
                 ds_sel = dataset.sel({by: val})
                 x_vals = [str(v) for v in ds_sel.coords[x_dim].values]
                 y_vals = ds_sel[var].values.ravel()
-                fig.add_trace(go.Bar(
-                    x=x_vals, y=y_vals, name=str(val),
-                    marker_color=PLOTLY_COLORS[ci % len(PLOTLY_COLORS)],
-                ))
+                fig.add_trace(
+                    go.Bar(
+                        x=x_vals,
+                        y=y_vals,
+                        name=str(val),
+                        marker_color=PLOTLY_COLORS[ci % len(PLOTLY_COLORS)],
+                    )
+                )
             fig.update_layout(barmode="group")
         else:
             x_vals = [str(v) for v in da.coords[x_dim].values] if x_dim in da.coords else []

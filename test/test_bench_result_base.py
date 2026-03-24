@@ -1,7 +1,6 @@
 import unittest
 import bencher as bn
 import numpy as np
-import holoviews as hv
 import panel as pn
 
 from bencher.example.meta.example_meta import BenchableObject

@@ -4,8 +4,8 @@ import random
 from datetime import datetime, timedelta
 from typing import Any
 
-import holoviews as hv
 import panel as pn
+import plotly.graph_objects as go
 
 import bencher as bn
 
@@ -68,48 +68,31 @@ def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, *
     return res
 
 
-def _has_holomap_column(plots):
-    """Check if plots contain a pn.Column wrapping a HoloMap (slider layout)."""
-    for p in plots:
-        if isinstance(p, pn.Column):
-            # Check children for HoloMap-based pane (rendered as HoloViews pane)
-            for child in p:
-                if isinstance(child, pn.pane.HoloViews):
-                    if isinstance(child.object, hv.HoloMap):
-                        return True
-    return False
-
-
-def _find_over_time_widget(obj, depth=0):
-    """Recursively find the over_time widget from a Panel layout, or None."""
-    if isinstance(obj, pn.widgets.Widget) and getattr(obj, "name", None) == "over_time":
-        return obj
-    if depth > 8:
-        return None
-    try:
-        for child in obj:
-            result = _find_over_time_widget(child, depth + 1)
-            if result is not None:
-                return result
-    except TypeError:
-        pass
-    return None
-
-
-def _find_all_over_time_widgets(obj, depth=0):
-    """Recursively collect *all* over_time widgets from a Panel layout."""
+def _find_plotly_figures(obj, depth=0):
+    """Recursively find all Plotly go.Figure objects in a Panel layout."""
     found = []
-    if isinstance(obj, pn.widgets.Widget) and getattr(obj, "name", None) == "over_time":
+    if depth > 10:
+        return found
+    if isinstance(obj, pn.pane.Plotly):
+        fig = obj.object
+        if isinstance(fig, go.Figure):
+            found.append(fig)
+        return found
+    if isinstance(obj, go.Figure):
         found.append(obj)
         return found
-    if depth > 8:
-        return found
     try:
         for child in obj:
-            found.extend(_find_all_over_time_widgets(child, depth + 1))
+            found.extend(_find_plotly_figures(child, depth + 1))
     except TypeError:
         pass
     return found
+
+
+def _find_plotly_time_dropdowns(obj):
+    """Find all Plotly figures that have over_time dropdown menus."""
+    figures = _find_plotly_figures(obj)
+    return [fig for fig in figures if fig.layout.updatemenus and len(fig.layout.updatemenus) > 0]
 
 
 class ZeroDimBench(bn.ParametrizedSweep):
@@ -240,53 +223,50 @@ class TestOptunaResultOverTime:
         assert optuna_plots is not None
 
 
-class TestOverTimeWidgetIsDiscreteSlider:
-    """Verify over_time uses DiscreteSlider, not a Select dropdown."""
+class TestOverTimePlotlyDropdown:
+    """Verify over_time uses Plotly dropdown menus."""
 
-    def test_bar_over_time_uses_discrete_slider(self):
-        """All over_time widgets must be DiscreteSlider, none should be Select."""
+    def test_bar_over_time_uses_plotly_dropdown(self):
+        """Over-time plots must have Plotly updatemenus dropdown controls."""
         benchable = SimpleBench()
         res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
         plots = res.to_auto_plots()
-        widgets = _find_all_over_time_widgets(plots)
-        assert len(widgets) > 0, "Expected at least one over_time widget in the plots"
-        for widget in widgets:
-            assert isinstance(widget, pn.widgets.DiscreteSlider), (
-                f"Expected DiscreteSlider, got {type(widget).__name__}"
-            )
-            assert not isinstance(widget, pn.widgets.Select), (
-                "over_time widget must not be a Select dropdown"
-            )
+        figs_with_dropdown = _find_plotly_time_dropdowns(plots)
+        assert len(figs_with_dropdown) > 0, (
+            "Expected at least one Plotly figure with an over_time dropdown"
+        )
+        for fig in figs_with_dropdown:
+            menu = fig.layout.updatemenus[0]
+            assert menu.type == "dropdown"
+            assert len(menu.buttons) > 1, "Dropdown should have multiple time entries"
 
 
 class TestShowAggregatedTimeTab:
     """Tests for the show_aggregated_time_tab config parameter."""
 
-    def _count_agg_tabs(self, plots, depth=0):
-        """Count pn.Tabs instances that contain the aggregated title."""
+    def _count_agg_entries(self, plots):
+        """Count Plotly dropdown buttons that contain 'aggregated' in the label."""
         count = 0
-        if depth > 10:
-            return 0
-        if isinstance(plots, pn.Tabs):
-            for title in plots._names:  # pylint: disable=protected-access
-                if "aggregated" in title.lower():
-                    count += 1
-        try:
-            for child in plots:
-                count += self._count_agg_tabs(child, depth + 1)
-        except TypeError:
-            pass
+        for fig in _find_plotly_figures(plots):
+            if not fig.layout.updatemenus:
+                continue
+            for menu in fig.layout.updatemenus:
+                if not menu.buttons:
+                    continue
+                for btn in menu.buttons:
+                    if btn.label and "aggregated" in btn.label.lower():
+                        count += 1
         return count
 
     def test_aggregated_tab_absent_by_default(self):
-        """With default config (show_aggregated_time_tab=False), no aggregated tabs."""
+        """With default config (show_aggregated_time_tab=False), no aggregated entries."""
         benchable = SimpleBench()
         res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
         plots = res.to_auto_plots()
-        assert self._count_agg_tabs(plots) == 0
+        assert self._count_agg_entries(plots) == 0
 
     def test_aggregated_tab_present_when_enabled(self):
-        """With show_aggregated_time_tab=True, aggregated tab should appear."""
+        """With show_aggregated_time_tab=True, aggregated dropdown entry should appear."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
@@ -297,7 +277,7 @@ class TestShowAggregatedTimeTab:
             show_aggregated_time_tab=True,
         )
         plots = res.to_auto_plots()
-        assert self._count_agg_tabs(plots) > 0
+        assert self._count_agg_entries(plots) > 0
 
     def test_curve_aggregated_tab_absent_when_disabled(self):
         """Curve plots also respect show_aggregated_time_tab=False."""
@@ -311,14 +291,14 @@ class TestShowAggregatedTimeTab:
             show_aggregated_time_tab=False,
         )
         plots = res.to_auto_plots()
-        assert self._count_agg_tabs(plots) == 0
+        assert self._count_agg_entries(plots) == 0
 
 
 class TestMaxSliderPoints:
     """Tests for the max_slider_points config parameter."""
 
     def test_slider_subsampled(self):
-        """With max_slider_points=2 and 5 snapshots, slider should have 2 entries."""
+        """With max_slider_points=2 and 5 snapshots, dropdown should have 2 entries."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
@@ -329,13 +309,10 @@ class TestMaxSliderPoints:
             max_slider_points=2,
         )
         plots = res.to_auto_plots()
-        widgets = _find_all_over_time_widgets(plots)
-        for widget in widgets:
-            if hasattr(widget, "options"):
-                opts = list(
-                    widget.options.values() if isinstance(widget.options, dict) else widget.options
-                )
-                assert len(opts) == 2, f"Expected 2 slider options, got {len(opts)}"
+        figs = _find_plotly_time_dropdowns(plots)
+        for fig in figs:
+            n_buttons = len(fig.layout.updatemenus[0].buttons)
+            assert n_buttons == 2, f"Expected 2 dropdown entries, got {n_buttons}"
 
     def test_no_subsampling_when_below_default_max(self):
         """With default max_slider_points=10 and only 5 snapshots, all time points shown."""
@@ -348,16 +325,13 @@ class TestMaxSliderPoints:
             snapshots=5,
         )
         plots = res.to_auto_plots()
-        widgets = _find_all_over_time_widgets(plots)
-        for widget in widgets:
-            if hasattr(widget, "options"):
-                opts = list(
-                    widget.options.values() if isinstance(widget.options, dict) else widget.options
-                )
-                assert len(opts) == 5, f"Expected 5 slider options, got {len(opts)}"
+        figs = _find_plotly_time_dropdowns(plots)
+        for fig in figs:
+            n_buttons = len(fig.layout.updatemenus[0].buttons)
+            assert n_buttons == 5, f"Expected 5 dropdown entries, got {n_buttons}"
 
     def test_default_subsampling_caps_at_max(self):
-        """With default max_slider_points=10 and 30 snapshots, slider capped at 10."""
+        """With default max_slider_points=10 and 30 snapshots, dropdown capped at 10."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
@@ -367,13 +341,10 @@ class TestMaxSliderPoints:
             snapshots=30,
         )
         plots = res.to_auto_plots()
-        widgets = _find_all_over_time_widgets(plots)
-        for widget in widgets:
-            if hasattr(widget, "options"):
-                opts = list(
-                    widget.options.values() if isinstance(widget.options, dict) else widget.options
-                )
-                assert len(opts) == 10, f"Expected 10 slider options, got {len(opts)}"
+        figs = _find_plotly_time_dropdowns(plots)
+        for fig in figs:
+            n_buttons = len(fig.layout.updatemenus[0].buttons)
+            assert n_buttons == 10, f"Expected 10 dropdown entries, got {n_buttons}"
 
 
 class TestSubsampleIndices:

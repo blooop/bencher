@@ -1,7 +1,6 @@
 """Tests for bencher/results/holoview_results/surface_result.py"""
 
 import unittest
-import panel as pn
 import plotly.graph_objects as go
 
 import bencher as bn

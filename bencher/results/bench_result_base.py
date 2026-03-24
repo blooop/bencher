@@ -526,7 +526,7 @@ class BenchResultBase:
     def map_plot_panes(
         self,
         plot_callback: Callable,
-        hv_dataset: hv.Dataset = None,
+        hv_dataset: DatasetWrapper | None = None,
         target_dimension: int = 2,
         result_var: ResultVar | None = None,
         result_types=None,

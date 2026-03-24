@@ -89,54 +89,79 @@ class DistributionResult(HoloviewResult):
             if x_col and x_col in df.columns:
                 for val in df[x_col].unique():
                     subset = df[df[x_col] == val]
-                    fig.add_trace(go.Violin(
-                        y=subset[var_name], name=str(val),
-                        box_visible=True, meanline_visible=True,
-                    ))
+                    fig.add_trace(
+                        go.Violin(
+                            y=subset[var_name],
+                            name=str(val),
+                            box_visible=True,
+                            meanline_visible=True,
+                        )
+                    )
             else:
-                fig.add_trace(go.Violin(
-                    y=df[var_name], name=var_name,
-                    box_visible=True, meanline_visible=True,
-                ))
+                fig.add_trace(
+                    go.Violin(
+                        y=df[var_name],
+                        name=var_name,
+                        box_visible=True,
+                        meanline_visible=True,
+                    )
+                )
 
         elif plot_type == "box":
             if x_col and x_col in df.columns:
                 for val in df[x_col].unique():
                     subset = df[df[x_col] == val]
-                    fig.add_trace(go.Box(
-                        y=subset[var_name], name=str(val),
-                        boxmean="sd",
-                    ))
+                    fig.add_trace(
+                        go.Box(
+                            y=subset[var_name],
+                            name=str(val),
+                            boxmean="sd",
+                        )
+                    )
             else:
-                fig.add_trace(go.Box(
-                    y=df[var_name], name=var_name,
-                    boxmean="sd",
-                ))
+                fig.add_trace(
+                    go.Box(
+                        y=df[var_name],
+                        name=var_name,
+                        boxmean="sd",
+                    )
+                )
 
         elif plot_type == "scatter":
             if x_col and x_col in df.columns:
                 for val in df[x_col].unique():
                     subset = df[df[x_col] == val]
-                    fig.add_trace(go.Box(
-                        y=subset[var_name], name=str(val),
-                        boxpoints="all", jitter=jitter,
-                        pointpos=0, line=dict(color="rgba(0,0,0,0)"),
+                    fig.add_trace(
+                        go.Box(
+                            y=subset[var_name],
+                            name=str(val),
+                            boxpoints="all",
+                            jitter=jitter,
+                            pointpos=0,
+                            line=dict(color="rgba(0,0,0,0)"),
+                            fillcolor="rgba(0,0,0,0)",
+                            marker=dict(size=4, opacity=0.5),
+                        )
+                    )
+            else:
+                fig.add_trace(
+                    go.Box(
+                        y=df[var_name],
+                        name=var_name,
+                        boxpoints="all",
+                        jitter=jitter,
+                        pointpos=0,
+                        line=dict(color="rgba(0,0,0,0)"),
                         fillcolor="rgba(0,0,0,0)",
                         marker=dict(size=4, opacity=0.5),
-                    ))
-            else:
-                fig.add_trace(go.Box(
-                    y=df[var_name], name=var_name,
-                    boxpoints="all", jitter=jitter,
-                    pointpos=0, line=dict(color="rgba(0,0,0,0)"),
-                    fillcolor="rgba(0,0,0,0)",
-                    marker=dict(size=4, opacity=0.5),
-                ))
+                    )
+                )
 
         fig.update_layout(
             title=title,
             yaxis_title=f"{var_name} [{getattr(result_var, 'units', '')}]",
-            width=600, height=500,
+            width=600,
+            height=500,
             margin=dict(t=60, b=60, r=40, l=60),
             template="plotly_white",
         )

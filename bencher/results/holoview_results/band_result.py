@@ -48,7 +48,9 @@ class BandResult(HoloviewResult):
 
         use_holomap = self._use_holomap_for_time(dataset)
         if use_holomap:
-            return self._band_over_time(dataset, var, explicit_title, agg_over_dims, units=units, **kwargs)
+            return self._band_over_time(
+                dataset, var, explicit_title, agg_over_dims, units=units, **kwargs
+            )
         return self._band_static(dataset, var, explicit_title, agg_over_dims, units=units, **kwargs)
 
     def _band_over_time(self, dataset, var, title, agg_over_dims, units="", **kwargs):
@@ -106,33 +108,41 @@ class BandResult(HoloviewResult):
         fig = go.Figure()
 
         # Outer band: 10th-90th
-        fig.add_trace(go.Scatter(
-            x=x_str + x_str[::-1],
-            y=np.concatenate([p90, p10[::-1]]).tolist(),
-            fill="toself",
-            fillcolor="rgba(70,130,180,0.2)",
-            line=dict(color="rgba(255,255,255,0)"),
-            name="10th\u201390th pctl",
-            hoverinfo="skip",
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=x_str + x_str[::-1],
+                y=np.concatenate([p90, p10[::-1]]).tolist(),
+                fill="toself",
+                fillcolor="rgba(70,130,180,0.2)",
+                line=dict(color="rgba(255,255,255,0)"),
+                name="10th\u201390th pctl",
+                hoverinfo="skip",
+            )
+        )
 
         # Inner band: 25th-75th
-        fig.add_trace(go.Scatter(
-            x=x_str + x_str[::-1],
-            y=np.concatenate([p75, p25[::-1]]).tolist(),
-            fill="toself",
-            fillcolor="rgba(70,130,180,0.4)",
-            line=dict(color="rgba(255,255,255,0)"),
-            name="25th\u201375th pctl",
-            hoverinfo="skip",
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=x_str + x_str[::-1],
+                y=np.concatenate([p75, p25[::-1]]).tolist(),
+                fill="toself",
+                fillcolor="rgba(70,130,180,0.4)",
+                line=dict(color="rgba(255,255,255,0)"),
+                name="25th\u201375th pctl",
+                hoverinfo="skip",
+            )
+        )
 
         # Median line
-        fig.add_trace(go.Scatter(
-            x=x_str, y=p50.tolist(),
-            mode="lines", name="median",
-            line=dict(color="steelblue", width=2),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=x_str,
+                y=p50.tolist(),
+                mode="lines",
+                name="median",
+                line=dict(color="steelblue", width=2),
+            )
+        )
 
         # Scatter points
         if enable_scatter:
@@ -146,18 +156,23 @@ class BandResult(HoloviewResult):
                     full_x = full_x[idx]
                     full_y = full_y[idx]
                 mask = ~np.isnan(full_y)
-                fig.add_trace(go.Scatter(
-                    x=[str(v) for v in full_x[mask]], y=full_y[mask].tolist(),
-                    mode="markers", name="samples",
-                    marker=dict(color="grey", size=3, opacity=0.3),
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=[str(v) for v in full_x[mask]],
+                        y=full_y[mask].tolist(),
+                        mode="markers",
+                        name="samples",
+                        marker=dict(color="grey", size=3, opacity=0.3),
+                    )
+                )
 
         ylabel = f"{var} [{units}]" if units else var
         fig.update_layout(
             title=title,
             xaxis_title=x_dim,
             yaxis_title=ylabel,
-            width=600, height=500,
+            width=600,
+            height=500,
             margin=dict(t=60, b=60, r=40, l=60),
             template="plotly_white",
             legend=dict(x=1.02, y=1, xanchor="left"),

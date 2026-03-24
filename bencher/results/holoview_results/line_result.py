@@ -71,10 +71,14 @@ class LineResult(HoloviewResult):
             x_vals = da_plot.coords["over_time"].values
             y_vals = da_plot.values.ravel()
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=[str(v) for v in x_vals], y=y_vals,
-                mode="lines+markers", name=var,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[str(v) for v in x_vals],
+                    y=y_vals,
+                    mode="lines+markers",
+                    name=var,
+                )
+            )
             fig.update_layout(
                 **self._default_layout(title=title),
                 xaxis_title="over_time",
@@ -109,18 +113,26 @@ class LineResult(HoloviewResult):
                 ds_sel = dataset.sel({by: val})
                 x_vals = ds_sel.coords[x_dim].values
                 y_vals = ds_sel[var].values.ravel()
-                fig.add_trace(go.Scatter(
-                    x=x_vals, y=y_vals,
-                    mode="lines+markers", name=str(val),
-                    line=dict(color=PLOTLY_COLORS[ci % len(PLOTLY_COLORS)]),
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_vals,
+                        y=y_vals,
+                        mode="lines+markers",
+                        name=str(val),
+                        line=dict(color=PLOTLY_COLORS[ci % len(PLOTLY_COLORS)]),
+                    )
+                )
         else:
             x_vals = dataset.coords[x_dim].values if x_dim in dataset.coords else []
             y_vals = dataset[var].values.ravel()
-            fig.add_trace(go.Scatter(
-                x=x_vals, y=y_vals,
-                mode="lines+markers", name=var,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=x_vals,
+                    y=y_vals,
+                    mode="lines+markers",
+                    name=var,
+                )
+            )
 
         fig.update_layout(
             **self._default_layout(title=title),

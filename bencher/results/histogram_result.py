@@ -30,15 +30,19 @@ class HistogramResult(HoloviewResult):
         var = result_var.name
         values = dataset[var].values.ravel()
         fig = go.Figure()
-        fig.add_trace(go.Histogram(
-            x=values, name=var,
-            marker_color="#636EFA",
-        ))
+        fig.add_trace(
+            go.Histogram(
+                x=values,
+                name=var,
+                marker_color="#636EFA",
+            )
+        )
         fig.update_layout(
             title=f"{var} vs Count",
             xaxis_title=var,
             yaxis_title="count",
-            width=600, height=500,
+            width=600,
+            height=500,
             margin=dict(t=60, b=60, r=40, l=60),
             template="plotly_white",
         )

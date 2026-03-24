@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import plotly.graph_objects as go
 from param import Parameter
 import xarray as xr
 

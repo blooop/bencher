@@ -9,12 +9,9 @@ from __future__ import annotations
 
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import xarray as xr
-from param import Parameter
 
 from bencher.results.video_result import VideoResult
-from bencher.results.bench_result_base import ReduceType
 
 # Default plot dimensions
 DEFAULT_WIDTH = 600
@@ -120,11 +117,13 @@ class PlotlyResult(VideoResult):
             vis = [False] * total_traces
             for j in range(group_sizes[i]):
                 vis[offset + j] = True
-            buttons.append(dict(
-                label=label,
-                method="update",
-                args=[{"visible": vis}],
-            ))
+            buttons.append(
+                dict(
+                    label=label,
+                    method="update",
+                    args=[{"visible": vis}],
+                )
+            )
             offset += group_sizes[i]
 
         # Default: show last time point (most recent)
@@ -158,7 +157,9 @@ class PlotlyResult(VideoResult):
         if "margin" not in layout:
             layout["margin"] = dict(t=60, b=120, r=40, l=60)
         else:
-            layout["margin"] = dict(layout["margin"], b=max(layout.get("margin", {}).get("b", 60), 120))
+            layout["margin"] = dict(
+                layout["margin"], b=max(layout.get("margin", {}).get("b", 60), 120)
+            )
 
         fig.update_layout(**layout)
         return fig

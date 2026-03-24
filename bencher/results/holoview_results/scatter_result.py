@@ -43,17 +43,25 @@ class ScatterResult(HoloviewResult):
         if not dims:
             # 0D case
             y_vals = dataset[var].values.ravel()
-            fig.add_trace(go.Scatter(
-                y=y_vals, mode="markers", name=var,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    y=y_vals,
+                    mode="markers",
+                    name=var,
+                )
+            )
         elif len(dims) == 1:
             x_dim = dims[0]
             x_vals = dataset.coords[x_dim].values
             y_vals = dataset[var].values.ravel()
-            fig.add_trace(go.Scatter(
-                x=[str(v) for v in x_vals], y=y_vals,
-                mode="markers", name=var,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[str(v) for v in x_vals],
+                    y=y_vals,
+                    mode="markers",
+                    name=var,
+                )
+            )
             fig.update_layout(xaxis_title=x_dim)
         else:
             # Multiple dims: use first as x, second as color
@@ -64,11 +72,15 @@ class ScatterResult(HoloviewResult):
                     ds_sel = dataset.sel({by_dim: val})
                     x_vals = ds_sel.coords[x_dim].values
                     y_vals = ds_sel[var].values.ravel()
-                    fig.add_trace(go.Scatter(
-                        x=[str(v) for v in x_vals], y=y_vals,
-                        mode="markers", name=str(val),
-                        marker=dict(color=PLOTLY_COLORS[ci % len(PLOTLY_COLORS)]),
-                    ))
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[str(v) for v in x_vals],
+                            y=y_vals,
+                            mode="markers",
+                            name=str(val),
+                            marker=dict(color=PLOTLY_COLORS[ci % len(PLOTLY_COLORS)]),
+                        )
+                    )
             fig.update_layout(xaxis_title=x_dim)
 
         fig.update_layout(

@@ -147,7 +147,9 @@ class BenchResult(
              pn.panel: A panel representation of the results, or None if no plot_callbacks defined
         """
         if self.bench_cfg.plot_callbacks is not None:
-            return pn.Column(*[_wrap_plotly_figure(cb(self)) for cb in self.bench_cfg.plot_callbacks])
+            return pn.Column(
+                *[_wrap_plotly_figure(cb(self)) for cb in self.bench_cfg.plot_callbacks]
+            )
         return None
 
     def to_auto(
@@ -218,7 +220,9 @@ class BenchResult(
                     f"### Aggregated View\nMean and percentile bands aggregated over: **{dims}**"
                 )
             )
-            plot_cols.append(_wrap_plotly_figure(self.to(BandResult, aggregate=self.bench_cfg.agg_over_dims)))
+            plot_cols.append(
+                _wrap_plotly_figure(self.to(BandResult, aggregate=self.bench_cfg.agg_over_dims))
+            )
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols

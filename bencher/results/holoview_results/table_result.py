@@ -11,9 +11,13 @@ class TableResult(HoloviewResult):
         ds = self.to_dataset(ReduceType.SQUEEZE)
         df = ds.to_dataframe().reset_index()
 
-        fig = go.Figure(data=[go.Table(
-            header=dict(values=list(df.columns)),
-            cells=dict(values=[df[col] for col in df.columns]),
-        )])
+        fig = go.Figure(
+            data=[
+                go.Table(
+                    header=dict(values=list(df.columns)),
+                    cells=dict(values=[df[col] for col in df.columns]),
+                )
+            ]
+        )
         fig.update_layout(width=800, height=400, margin=dict(t=30, b=10, r=10, l=10))
         return fig

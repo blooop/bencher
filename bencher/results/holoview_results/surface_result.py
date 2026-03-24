@@ -65,7 +65,9 @@ class SurfaceResult(HoloviewResult):
 
             data = [
                 go.Surface(
-                    x=x_vals, y=y_vals, z=z_vals,
+                    x=x_vals,
+                    y=y_vals,
+                    z=z_vals,
                     colorscale="Viridis",
                     colorbar=dict(title=f"{result_var.name} [{result_var.units}]"),
                 )
@@ -76,16 +78,23 @@ class SurfaceResult(HoloviewResult):
                 for bound, sign in [("upper", 1), ("lower", -1)]:
                     bound_da = mean_da + sign * std_dev
                     _, _, bz = _da_to_sorted_grid(bound_da, x.name, y.name)
-                    data.append(go.Surface(
-                        x=x_vals, y=y_vals, z=bz,
-                        colorscale="Viridis", showscale=False,
-                        opacity=alpha, name=bound,
-                    ))
+                    data.append(
+                        go.Surface(
+                            x=x_vals,
+                            y=y_vals,
+                            z=bz,
+                            colorscale="Viridis",
+                            showscale=False,
+                            opacity=alpha,
+                            name=bound,
+                        )
+                    )
 
             fig = go.Figure(data=data)
             fig.update_layout(
                 title=f"{result_var.name} vs ({x.name} and {y.name})",
-                width=width, height=height,
+                width=width,
+                height=height,
                 margin=dict(t=50, b=50, r=50, l=50),
                 scene=dict(
                     xaxis_title=f"{x.name} [{x.units}]",

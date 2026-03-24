@@ -11,7 +11,6 @@ from __future__ import annotations
 import numpy as np
 import panel as pn
 import plotly.graph_objects as go
-import plotly.io as pio
 from param import Parameter
 from itertools import product as iterproduct
 import xarray as xr
@@ -19,7 +18,7 @@ import xarray as xr
 from bencher.utils import listify
 from bencher.results.video_result import VideoResult
 from bencher.results.bench_result_base import ReduceType
-from bencher.variables.results import ResultVar, ResultImage, ResultVideo
+from bencher.variables.results import ResultImage, ResultVideo
 
 # Default plot dimensions
 DEFAULT_WIDTH = 600
@@ -27,8 +26,16 @@ DEFAULT_HEIGHT = 500
 
 # Plotly color sequence (matches plotly_white template)
 PLOTLY_COLORS = [
-    "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
-    "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
+    "#636EFA",
+    "#EF553B",
+    "#00CC96",
+    "#AB63FA",
+    "#FFA15A",
+    "#19D3F3",
+    "#FF6692",
+    "#B6E880",
+    "#FF97FF",
+    "#FECB52",
 ]
 
 _AGG_TITLE = "All Time Points (aggregated)"
@@ -157,11 +164,13 @@ class HoloviewResult(VideoResult):
             vis = [False] * total_traces
             for j in range(group_sizes[i]):
                 vis[offset + j] = True
-            buttons.append(dict(
-                label=label,
-                method="update",
-                args=[{"visible": vis}],
-            ))
+            buttons.append(
+                dict(
+                    label=label,
+                    method="update",
+                    args=[{"visible": vis}],
+                )
+            )
             offset += group_sizes[i]
 
         # Default: show last non-aggregated time point
@@ -231,9 +240,7 @@ class HoloviewResult(VideoResult):
             # Remove data-specific items
             layout_base.pop("template", None)
 
-        return self._build_time_dropdown_fig(
-            dataset, result_var_name, make_traces_fn, layout_base
-        )
+        return self._build_time_dropdown_fig(dataset, result_var_name, make_traces_fn, layout_base)
 
     def _build_time_holomap_raw(self, da, make_plot_fn):
         """Build time dropdown for distribution plots.
@@ -294,12 +301,19 @@ class HoloviewResult(VideoResult):
 
         fig = go.Figure(data=all_traces)
         fig.update_layout(
-            updatemenus=[dict(
-                active=last_non_agg,
-                buttons=buttons,
-                x=0.0, xanchor="left", y=-0.15, yanchor="top",
-                direction="up", type="dropdown", showactive=True,
-            )],
+            updatemenus=[
+                dict(
+                    active=last_non_agg,
+                    buttons=buttons,
+                    x=0.0,
+                    xanchor="left",
+                    y=-0.15,
+                    yanchor="top",
+                    direction="up",
+                    type="dropdown",
+                    showactive=True,
+                )
+            ],
             margin=dict(t=60, b=120, r=40, l=60),
             template="plotly_white",
         )
@@ -327,22 +341,36 @@ class HoloviewResult(VideoResult):
         x_dim = kdims[0] if kdims else ds_dims[0] if ds_dims else var
 
         if not groupby:
-            x_vals = dataset.coords[x_dim].values if x_dim in dataset.coords else np.arange(len(dataset[var].values))
+            x_vals = (
+                dataset.coords[x_dim].values
+                if x_dim in dataset.coords
+                else np.arange(len(dataset[var].values))
+            )
             y_vals = dataset[var].values.ravel()
-            fig.add_trace(go.Scatter(
-                x=x_vals, y=y_vals, mode="lines", name=var,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=x_vals,
+                    y=y_vals,
+                    mode="lines",
+                    name=var,
+                )
+            )
             if has_spread:
                 std_vals = dataset[std_var].values.ravel()
                 upper = y_vals + std_vals
                 lower = y_vals - std_vals
-                fig.add_trace(go.Scatter(
-                    x=np.concatenate([x_vals, x_vals[::-1]]),
-                    y=np.concatenate([upper, lower[::-1]]),
-                    fill="toself", fillcolor="rgba(99,110,250,0.2)",
-                    line=dict(color="rgba(255,255,255,0)"),
-                    name=f"{var} ± std", showlegend=True, hoverinfo="skip",
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=np.concatenate([x_vals, x_vals[::-1]]),
+                        y=np.concatenate([upper, lower[::-1]]),
+                        fill="toself",
+                        fillcolor="rgba(99,110,250,0.2)",
+                        line=dict(color="rgba(255,255,255,0)"),
+                        name=f"{var} ± std",
+                        showlegend=True,
+                        hoverinfo="skip",
+                    )
+                )
         else:
             group_coords = [dataset.coords[g].values for g in groupby]
             for ci, combo in enumerate(iterproduct(*group_coords)):
@@ -351,24 +379,38 @@ class HoloviewResult(VideoResult):
                 label = ", ".join(str(v) for v in combo) if len(combo) > 1 else str(combo[0])
                 color = PLOTLY_COLORS[ci % len(PLOTLY_COLORS)]
 
-                x_vals = group_ds.coords[x_dim].values if x_dim in group_ds.coords else np.arange(len(group_ds[var].values))
+                x_vals = (
+                    group_ds.coords[x_dim].values
+                    if x_dim in group_ds.coords
+                    else np.arange(len(group_ds[var].values))
+                )
                 y_vals = group_ds[var].values.ravel()
-                fig.add_trace(go.Scatter(
-                    x=x_vals, y=y_vals, mode="lines", name=label,
-                    line=dict(color=color),
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_vals,
+                        y=y_vals,
+                        mode="lines",
+                        name=label,
+                        line=dict(color=color),
+                    )
+                )
                 if has_spread:
                     std_vals = group_ds[std_var].values.ravel()
                     upper = y_vals + std_vals
                     lower = y_vals - std_vals
                     r, g_c, b = _hex_to_rgb(color)
-                    fig.add_trace(go.Scatter(
-                        x=np.concatenate([x_vals, x_vals[::-1]]),
-                        y=np.concatenate([upper, lower[::-1]]),
-                        fill="toself", fillcolor=f"rgba({r},{g_c},{b},0.2)",
-                        line=dict(color="rgba(255,255,255,0)"),
-                        name=f"{label} ± std", showlegend=False, hoverinfo="skip",
-                    ))
+                    fig.add_trace(
+                        go.Scatter(
+                            x=np.concatenate([x_vals, x_vals[::-1]]),
+                            y=np.concatenate([upper, lower[::-1]]),
+                            fill="toself",
+                            fillcolor=f"rgba({r},{g_c},{b},0.2)",
+                            line=dict(color="rgba(255,255,255,0)"),
+                            name=f"{label} ± std",
+                            showlegend=False,
+                            hoverinfo="skip",
+                        )
+                    )
 
         fig.update_layout(
             **self._default_layout(title=title),
@@ -474,7 +516,7 @@ class HoloviewResult(VideoResult):
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert a hex color string to RGB tuple."""
     hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
 
 HoloviewResult.set_default_opts()
