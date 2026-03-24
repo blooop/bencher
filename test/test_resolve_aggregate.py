@@ -20,19 +20,19 @@ class TestResolveAggregate(unittest.TestCase):
     def test_false_returns_none(self):
         self.assertIsNone(resolve_aggregate(False, self.vars3))
 
-    # --- True: aggregate all ---
+    # --- True: collapse to 1-D (aggregate all but first) ---
 
-    def test_true_all_3(self):
-        self.assertEqual(resolve_aggregate(True, self.vars3), ["x", "y", "z"])
+    def test_true_3_keeps_first(self):
+        self.assertEqual(resolve_aggregate(True, self.vars3), ["y", "z"])
 
-    def test_true_all_2(self):
-        self.assertEqual(resolve_aggregate(True, self.vars2), ["x", "y"])
+    def test_true_2_keeps_first(self):
+        self.assertEqual(resolve_aggregate(True, self.vars2), ["y"])
 
-    def test_true_all_1(self):
-        self.assertEqual(resolve_aggregate(True, self.vars1), ["x"])
+    def test_true_1_nothing_to_aggregate(self):
+        self.assertIsNone(resolve_aggregate(True, self.vars1))
 
-    def test_true_empty(self):
-        self.assertEqual(resolve_aggregate(True, self.vars0), [])
+    def test_true_empty_nothing_to_aggregate(self):
+        self.assertIsNone(resolve_aggregate(True, self.vars0))
 
     # --- int: last N dims ---
 
@@ -144,9 +144,9 @@ class TestResolveAggregateIntegration(unittest.TestCase):
         )
 
     def test_aggregate_true_sets_agg_over_dims(self):
-        """aggregate=True should resolve to all input dim names on BenchCfg."""
+        """aggregate=True should resolve to all but the first input dim on BenchCfg."""
         cfg = self.res_agg_true.bench_cfg
-        self.assertEqual(cfg.agg_over_dims, ["float1", "float2"])
+        self.assertEqual(cfg.agg_over_dims, ["float2"])
 
     def test_no_aggregate_has_none(self):
         """Without aggregate, agg_over_dims should be None."""

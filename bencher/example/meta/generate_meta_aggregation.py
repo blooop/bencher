@@ -42,11 +42,11 @@ def example_meta_aggregation():
         run_kwargs={"level": 4, "repeats": 3},
     )
 
-    # ---- 2) aggregate=True: 1 float + 1 cat → all dims collapsed → bar ----
+    # ---- 2) aggregate=True: 1 float + 1 cat → collapse to 1-D (keep first) ----
     info = INLINE_CLASSES[(1, 1)]
     class_code = _build_class_code(info, 1, 1, noise_val=0.15)
     gen.generate_sweep_example(
-        title="Aggregate All (True)",
+        title="Aggregate to 1-D (True)",
         output_dir="aggregation",
         filename="agg_all",
         function_name="example_agg_all",
@@ -57,13 +57,14 @@ def example_meta_aggregation():
         class_code=class_code,
         extra_imports=["import random", "import math"],
         description=(
-            "Setting aggregate=True collapses every input dimension, giving a "
-            "single scalar summary. Useful when you want one headline number "
-            "from a multi-dimensional sweep."
+            "Setting aggregate=True collapses all but the first input dimension, "
+            "reducing the sweep to a 1-D plot. Useful when you want a simple "
+            "curve from a multi-dimensional sweep."
         ),
         post_description=(
-            "The aggregated view collapses all inputs into a single mean ± std. "
-            "The non-aggregated view below shows the full detail."
+            "The aggregated view collapses all inputs except the first into a "
+            "single mean ± std curve. The non-aggregated view below shows the "
+            "full detail."
         ),
         aggregate=True,
         run_kwargs={"level": 4, "repeats": 3},

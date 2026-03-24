@@ -298,7 +298,9 @@ def resolve_aggregate(
     Args:
         aggregate: Aggregation specification.
             - None / False: no aggregation
-            - True: aggregate all input dims (requires input_var_names)
+            - True: aggregate all but the first input dim, collapsing data
+              to 1-D (the minimum for meaningful plots). With 0 or 1 input
+              vars there is nothing to aggregate and None is returned.
             - int N: aggregate last N input dims (requires input_var_names)
             - list[str]: aggregate exactly these dims (validated only when
               input_var_names is provided)
@@ -319,7 +321,10 @@ def resolve_aggregate(
     if aggregate is True:
         if input_var_names is None:
             raise ValueError("aggregate=True requires input_var_names")
-        return list(input_var_names)
+        if len(input_var_names) <= 1:
+            return None
+        # Keep the first input dim (x-axis) and aggregate the rest
+        return list(input_var_names[1:])
     if isinstance(aggregate, int):
         if input_var_names is None:
             raise ValueError("aggregate=<int> requires input_var_names")
