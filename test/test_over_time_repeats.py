@@ -1,11 +1,14 @@
 """Tests for over_time + repeats support in bar and distribution plots."""
 
+# pylint: disable=redefined-outer-name
+
 import random
 from datetime import datetime, timedelta
 from typing import Any
 
 import holoviews as hv
 import panel as pn
+import pytest
 
 import bencher as bn
 
@@ -125,6 +128,28 @@ class ZeroDimBench(bn.ParametrizedSweep):
         return super().__call__()
 
 
+# Module-scoped fixtures for shared benchmark results to reduce test execution time
+@pytest.fixture(scope="module")
+def simple_bench_repeats3_snapshots3():
+    """SimpleBench result with repeats=3, snapshots=3 for multiple test classes."""
+    benchable = SimpleBench()
+    return _run_over_time(benchable, ["backend"], ["latency"], repeats=3, snapshots=3)
+
+
+@pytest.fixture(scope="module")
+def simple_bench_repeats1_snapshots3():
+    """SimpleBench result with repeats=1, snapshots=3 for multiple test classes."""
+    benchable = SimpleBench()
+    return _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
+
+
+@pytest.fixture(scope="module")
+def float_bench_repeats3_snapshots3():
+    """FloatBench result with repeats=3, snapshots=3 for multiple test classes."""
+    benchable = FloatBench()
+    return _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
+
+
 class TestNumericOverTimeNotRoutedToImageSlider:
     """Regression tests: numeric ResultVar must not be routed to _pane_over_time_slider.
 
@@ -153,21 +178,17 @@ class TestNumericOverTimeNotRoutedToImageSlider:
 class TestBarResultOverTime:
     """Test BarResult with over_time slider."""
 
-    def test_bar_over_time_no_repeats(self):
+    def test_bar_over_time_no_repeats(self, simple_bench_repeats1_snapshots3):
         """0 float + 1 cat + over_time -> bar with slider."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats1_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         # With multiple time points, bar should be wrapped in a Column with slider
         assert any(isinstance(p, pn.Column) for p in plots)
 
-    def test_bar_over_time_with_repeats(self):
+    def test_bar_over_time_with_repeats(self, simple_bench_repeats3_snapshots3):
         """0 float + 1 cat + repeats + over_time -> bar with slider."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
 
@@ -175,11 +196,9 @@ class TestBarResultOverTime:
 class TestDistributionResultOverTime:
     """Test BoxWhisker/Violin with over_time slider."""
 
-    def test_boxwhisker_over_time(self):
+    def test_boxwhisker_over_time(self, simple_bench_repeats3_snapshots3):
         """0 float + 1 cat + repeats + over_time -> box whisker with slider."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         # With repeats > 1 and over_time, distribution plots should produce slider columns
@@ -189,11 +208,9 @@ class TestDistributionResultOverTime:
 class TestCurveResultOverTime:
     """Test CurveResult with over_time slider."""
 
-    def test_curve_over_time_with_repeats(self):
+    def test_curve_over_time_with_repeats(self, float_bench_repeats3_snapshots3):
         """1 float + 1 cat + repeats + over_time -> curve with slider."""
-        benchable = FloatBench()
-        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = float_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         # Curve with over_time should produce a Column with slider
@@ -219,11 +236,9 @@ class TestHeatmapResultOverTime:
         assert plots is not None
         assert len(plots) > 0
 
-    def test_heatmap_over_time_with_repeats(self):
+    def test_heatmap_over_time_with_repeats(self, float_bench_repeats3_snapshots3):
         """1 float + 1 cat + repeats + over_time -> heatmap with slider."""
-        benchable = FloatBench()
-        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = float_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         assert any(isinstance(p, pn.Column) for p in plots)
@@ -232,22 +247,18 @@ class TestHeatmapResultOverTime:
 class TestOptunaResultOverTime:
     """Test OptunaResult with over_time (pandas Timestamp handling)."""
 
-    def test_optuna_plots_over_time(self):
+    def test_optuna_plots_over_time(self, float_bench_repeats3_snapshots3):
         """to_optuna_plots() must not crash when over_time=True (pandas Timestamps)."""
-        benchable = FloatBench()
-        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
-        optuna_plots = res.to_optuna_plots()
+        optuna_plots = float_bench_repeats3_snapshots3.to_optuna_plots()
         assert optuna_plots is not None
 
 
 class TestOverTimeWidgetIsDiscreteSlider:
     """Verify over_time uses DiscreteSlider, not a Select dropdown."""
 
-    def test_bar_over_time_uses_discrete_slider(self):
+    def test_bar_over_time_uses_discrete_slider(self, simple_bench_repeats1_snapshots3):
         """All over_time widgets must be DiscreteSlider, none should be Select."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats1_snapshots3.to_auto_plots()
         widgets = _find_all_over_time_widgets(plots)
         assert len(widgets) > 0, "Expected at least one over_time widget in the plots"
         for widget in widgets:
@@ -278,11 +289,9 @@ class TestShowAggregatedTimeTab:
             pass
         return count
 
-    def test_aggregated_tab_absent_by_default(self):
+    def test_aggregated_tab_absent_by_default(self, simple_bench_repeats1_snapshots3):
         """With default config (show_aggregated_time_tab=False), no aggregated tabs."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats1_snapshots3.to_auto_plots()
         assert self._count_agg_tabs(plots) == 0
 
     def test_aggregated_tab_present_when_enabled(self):
@@ -357,14 +366,14 @@ class TestMaxSliderPoints:
                 assert len(opts) == 5, f"Expected 5 slider options, got {len(opts)}"
 
     def test_default_subsampling_caps_at_max(self):
-        """With default max_slider_points=10 and 30 snapshots, slider capped at 10."""
+        """With default max_slider_points=10 and 12 snapshots, slider capped at 10."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
             ["backend"],
             ["latency"],
             repeats=1,
-            snapshots=30,
+            snapshots=12,
         )
         plots = res.to_auto_plots()
         widgets = _find_all_over_time_widgets(plots)
