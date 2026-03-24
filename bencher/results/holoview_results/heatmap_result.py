@@ -13,7 +13,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 class HeatmapResult(HoloviewResult):
     """Heatmap visualizations using Plotly."""
 
-    def to_plot(
+    def to_plot(  # pylint: disable=unused-argument
         self,
         result_var=None,
         tap_var=None,
@@ -31,7 +31,7 @@ class HeatmapResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_heatmap(
+    def to_heatmap(  # pylint: disable=unused-argument
         self,
         result_var=None,
         tap_var=None,
@@ -55,7 +55,7 @@ class HeatmapResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_heatmap_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
+    def to_heatmap_ds(self, dataset: xr.Dataset, result_var: Parameter, **_kwargs):
         if len(dataset.dims) >= 2:
             x_name = self.bench_cfg.input_vars[0].name
             y_name = self.bench_cfg.input_vars[1].name
@@ -108,8 +108,12 @@ class HeatmapResult(HoloviewResult):
     def to_heatmap_container_tap_ds(self, dataset, result_var, **kwargs):
         return self.to_heatmap_ds(dataset, result_var, **kwargs)
 
-    def to_heatmap_single(self, result_var, override=True, reduce=ReduceType.AUTO, **kwargs):
+    def to_heatmap_single(  # pylint: disable=unused-argument
+        self, result_var, override=True, reduce=ReduceType.AUTO, **kwargs
+    ):
         return None
 
-    def to_heatmap_tap(self, result_var, reduce=ReduceType.AUTO, **kwargs):
+    def to_heatmap_tap(  # pylint: disable=unused-argument
+        self, result_var, reduce=ReduceType.AUTO, **kwargs
+    ):
         return None

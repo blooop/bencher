@@ -26,7 +26,7 @@ class HistogramResult(HoloviewResult):
             **kwargs,
         )
 
-    def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
+    def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **_kwargs):
         var = result_var.name
         values = dataset[var].values.ravel()
         fig = go.Figure()

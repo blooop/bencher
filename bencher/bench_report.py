@@ -50,7 +50,7 @@ def _extract_plotly_figures(pane) -> list[go.Figure]:
         elif isinstance(obj, dict):
             try:
                 figures.append(go.Figure(obj))
-            except Exception:
+            except (ValueError, TypeError):
                 pass
     return figures
 
@@ -83,7 +83,7 @@ def _save_tab_plotly(pane, filepath: Path) -> None:
         try:
             pn.Column(pane).save(filename=filepath, progress=False, embed=True)
             return
-        except Exception:
+        except (ValueError, TypeError, OSError):
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write("<html><body><p>No content</p></body></html>")
             return
@@ -177,7 +177,7 @@ class BenchReport(BenchPlotServer):
         directory: str | Path = "cachedir",
         filename: str | None = None,
         in_html_folder: bool = True,
-        **kwargs,
+        **_kwargs,
     ) -> Path:
         """Save the result to an HTML file.
 

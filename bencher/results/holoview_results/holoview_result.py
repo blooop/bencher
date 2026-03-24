@@ -90,7 +90,7 @@ class HoloviewResult(VideoResult):
     _use_slider_for_time = _use_holomap_for_time
 
     @staticmethod
-    def _apply_opts(plot, **opts_kwargs):
+    def _apply_opts(plot, **_opts_kwargs):
         """No-op for backward compat — Plotly figures don't use .opts()."""
         return plot
 
@@ -421,7 +421,7 @@ class HoloviewResult(VideoResult):
         return fig
 
     @staticmethod
-    def _holomap_with_slider_bottom(hvobj, widgets=None):
+    def _holomap_with_slider_bottom(hvobj, _widgets=None):
         """Backward compat stub — returns input unchanged."""
         return hvobj
 
@@ -451,11 +451,11 @@ class HoloviewResult(VideoResult):
         """Backward compat — return widget config dict."""
         return {"title": title}
 
-    def to_hv_type(self, hv_type, reduce=ReduceType.AUTO, **kwargs):
+    def to_hv_type(self, _hv_type, _reduce=ReduceType.AUTO, **_kwargs):
         """Backward compat stub."""
         return None
 
-    def to_hv_container(self, container, reduce_type=ReduceType.AUTO, **kwargs):
+    def to_hv_container(self, _container, _reduce_type=ReduceType.AUTO, **_kwargs):
         """Backward compat stub."""
         return None
 
@@ -480,35 +480,35 @@ class HoloviewResult(VideoResult):
         cont_instances = [c(**kwargs) if c is not None else None for c in containers]
         return result_var_plots, cont_instances
 
-    def to_error_bar(self, result_var=None, **kwargs):
+    def to_error_bar(self, _result_var=None, **_kwargs):
         """Backward compat stub."""
         return None
 
-    def to_points(self, reduce=ReduceType.AUTO):
+    def to_points(self, _reduce=ReduceType.AUTO):
         """Backward compat stub."""
         return None
 
-    def to_nd_layout(self, hmap_name):
+    def to_nd_layout(self, _hmap_name):
         """Backward compat stub."""
         return None
 
-    def to_holomap(self, name=None):
+    def to_holomap(self, _name=None):
         """Backward compat stub."""
         return None
 
-    def to_holomap_list(self, hmap_names=None):
+    def to_holomap_list(self, _hmap_names=None):
         """Backward compat stub."""
         return pn.Column()
 
-    def get_nearest_holomap(self, name=None, **kwargs):
+    def get_nearest_holomap(self, _name=None, **_kwargs):
         """Backward compat stub."""
         return None
 
-    def to_dynamic_map(self, name=None):
+    def to_dynamic_map(self, _name=None):
         """Backward compat stub."""
         return None
 
-    def to_grid(self, inputs=None):
+    def to_grid(self, _inputs=None):
         """Backward compat stub."""
         return None
 

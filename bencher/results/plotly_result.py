@@ -164,7 +164,7 @@ class PlotlyResult(VideoResult):
         fig.update_layout(**layout)
         return fig
 
-    def _wrap_plotly(self, fig: go.Figure, name: str = "plotly") -> go.Figure:
+    def _wrap_plotly(self, fig: go.Figure, _name: str = "plotly") -> go.Figure:
         """Return the Plotly figure directly (no Panel wrapper).
 
         Kept as a method so subclasses can override if needed.

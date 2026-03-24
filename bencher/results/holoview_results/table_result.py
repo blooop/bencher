@@ -6,7 +6,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 class TableResult(HoloviewResult):
-    def to_plot(self, **kwargs):
+    def to_plot(self, **_kwargs):
         """Convert the dataset to a Plotly Table visualization."""
         ds = self.to_dataset(ReduceType.SQUEEZE)
         df = ds.to_dataframe().reset_index()

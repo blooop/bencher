@@ -13,7 +13,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult, PLO
 class LineResult(HoloviewResult):
     """Line plots using Plotly."""
 
-    def to_plot(
+    def to_plot(  # pylint: disable=unused-argument
         self,
         result_var=None,
         tap_var=None,
@@ -30,7 +30,7 @@ class LineResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_line(
+    def to_line(  # pylint: disable=unused-argument
         self,
         result_var=None,
         tap_var=None,
@@ -104,7 +104,7 @@ class LineResult(HoloviewResult):
 
         return self._make_line_fig(dataset, result_var, x_dim, by, title, **kwargs)
 
-    def _make_line_fig(self, dataset, result_var, x_dim, by, title, **kwargs):
+    def _make_line_fig(self, dataset, result_var, x_dim, by, title, **_kwargs):
         var = result_var.name
         fig = go.Figure()
 
@@ -143,5 +143,7 @@ class LineResult(HoloviewResult):
 
     # Tap-based interactive plots are not supported in static Plotly
     # but we keep the method signature for backward compat
-    def to_line_tap_ds(self, dataset, result_var, result_var_plots=None, container=None, **kwargs):
+    def to_line_tap_ds(
+        self, dataset, result_var, _result_var_plots=None, _container=None, **kwargs
+    ):
         return self.to_line_ds(dataset, result_var, **kwargs)

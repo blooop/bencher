@@ -81,7 +81,7 @@ class BarResult(HoloviewResult):
 
         return self._make_bar_fig(dataset, result_var, x_dim, by, title, **kwargs)
 
-    def _make_bar_fig(self, dataset, result_var, x_dim, by, title, **kwargs):
+    def _make_bar_fig(self, dataset, result_var, x_dim, by, title, **_kwargs):
         var = result_var.name
         da = dataset[var]
         fig = go.Figure()

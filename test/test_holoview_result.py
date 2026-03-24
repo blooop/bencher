@@ -104,7 +104,7 @@ class TestHoloviewResult(unittest.TestCase):
     def test_build_curve_overlay_returns_plotly_figure(self):
         ds = self.res_1d_r2.to_dataset(ReduceType.REDUCE)
         rv = self.res_1d_r2.bench_cfg.result_vars[0]
-        fig = self.res_1d_r2._build_curve_overlay(ds, rv)
+        fig = self.res_1d_r2._build_curve_overlay(ds, rv)  # pylint: disable=protected-access
         self.assertIsInstance(fig, go.Figure)
         self.assertGreater(len(fig.data), 0)
 
