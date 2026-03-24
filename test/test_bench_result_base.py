@@ -1,7 +1,6 @@
 import unittest
 import bencher as bn
 import numpy as np
-import holoviews as hv
 import panel as pn
 
 from bencher.example.meta.example_meta import BenchableObject
@@ -411,9 +410,11 @@ class TestBenchResultBase(unittest.TestCase):
         self.assertIsNotNone(result)
 
     def test_to_hv_dataset_none_reduce(self):
+        from bencher.results.bench_result_base import DatasetWrapper
+
         res = self._make_1d_result(repeats=2)
         hv_ds = res.to_hv_dataset(ReduceType.NONE)
-        self.assertIsInstance(hv_ds, hv.Dataset)
+        self.assertIsInstance(hv_ds, DatasetWrapper)
 
     def test_to_pandas(self):
         res = self._make_1d_result()

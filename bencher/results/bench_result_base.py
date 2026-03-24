@@ -6,7 +6,6 @@ from enum import Enum, auto
 import numpy as np
 import xarray as xr
 from param import Parameter
-import holoviews as hv
 from functools import partial
 import panel as pn
 from textwrap import wrap
@@ -49,6 +48,21 @@ class ReduceType(Enum):
     NONE = auto()  # don't reduce
 
 
+class DatasetWrapper:
+    """Lightweight wrapper around an xarray Dataset.
+
+    Provides ``.data`` and ``.dimensions()`` for compatibility with the
+    layout pipeline that previously used ``hv.Dataset``.
+    """
+
+    def __init__(self, ds: xr.Dataset) -> None:
+        self.data = ds
+
+    def dimensions(self) -> list:
+        """Return list of dimension names + data variable names."""
+        return list(self.data.dims) + list(self.data.data_vars)
+
+
 class EmptyContainer:
     """A wrapper for list like containers that only appends if the item is not None"""
 
@@ -64,7 +78,7 @@ class EmptyContainer:
 
 
 def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
-    """Given a dataarray that contains boolean coordinates, convert them to strings so that holoviews loads the data properly
+    """Given a dataarray that contains boolean coordinates, convert them to strings so that plotting libraries handle them properly
 
     Args:
         dataarray (xr.DataArray): dataarray with boolean coordinates
@@ -80,6 +94,21 @@ def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
     if len(bool_coords) > 0:
         return dataset.assign_coords(bool_coords)
     return dataset
+
+
+def _wrap_plotly_figure(obj):
+    """Wrap a Plotly Figure in pn.pane.Plotly for Panel containers.
+
+    If obj is already a Panel pane or not a Plotly figure, return as-is.
+    """
+    try:
+        import plotly.graph_objects as go
+
+        if isinstance(obj, go.Figure):
+            return pn.pane.Plotly(obj)
+    except ImportError:
+        pass
+    return obj
 
 
 class BenchResultBase:
@@ -171,36 +200,21 @@ class BenchResultBase:
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
-    ) -> hv.Dataset:
-        """Generate a holoviews dataset from the xarray dataset.
+    ) -> DatasetWrapper:
+        """Generate a dataset wrapper from the xarray dataset.
 
-        Args:
-            reduce (ReduceType, optional): Optionally perform reduce options on the dataset.  By default the returned dataset will calculate the mean and standard deviation over the "repeat" dimension so that the dataset plays nicely with most of the holoviews plot types.  Reduce.Sqeeze is used if there is only 1 repeat and you want the "reduce" variable removed from the dataset. ReduceType.None returns an unaltered dataset. Defaults to ReduceType.AUTO.
-
-        Returns:
-            hv.Dataset: results in the form of a holoviews dataset
+        Returns a lightweight wrapper that provides ``.data`` (the xarray
+        Dataset) and ``.dimensions()`` for compatibility with the layout
+        pipeline.
         """
-
-        if reduce == ReduceType.NONE:
-            ds_out = self.to_dataset(
-                reduce,
-                result_var=result_var,
-                level=level,
-                agg_over_dims=agg_over_dims,
-                agg_fn=agg_fn,
-            )
-            # Filter kdims to only those that survived aggregation
-            kdims = [i.name for i in self.bench_cfg.all_vars if i.name in ds_out.dims]
-            return hv.Dataset(ds_out, kdims=kdims)
-        return hv.Dataset(
-            self.to_dataset(
-                reduce,
-                result_var=result_var,
-                level=level,
-                agg_over_dims=agg_over_dims,
-                agg_fn=agg_fn,
-            )
+        ds_out = self.to_dataset(
+            reduce,
+            result_var=result_var,
+            level=level,
+            agg_over_dims=agg_over_dims,
+            agg_fn=agg_fn,
         )
+        return DatasetWrapper(ds_out)
 
     def to_dataset(
         self,
@@ -512,7 +526,7 @@ class BenchResultBase:
     def map_plot_panes(
         self,
         plot_callback: Callable,
-        hv_dataset: hv.Dataset = None,
+        hv_dataset: DatasetWrapper | None = None,
         target_dimension: int = 2,
         result_var: ResultVar | None = None,
         result_types=None,
@@ -567,7 +581,7 @@ class BenchResultBase:
         result_types=None,
         pane_collection: pn.pane = None,
         override=False,
-        hv_dataset: hv.Dataset | None = None,
+        hv_dataset: DatasetWrapper | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
         **kwargs,
@@ -621,7 +635,7 @@ class BenchResultBase:
 
     def to_panes_multi_panel(
         self,
-        hv_dataset: hv.Dataset,
+        hv_dataset: DatasetWrapper,
         result_var: ResultVar,
         plot_callback: Callable | None = None,
         target_dimension: int = 1,
@@ -658,7 +672,7 @@ class BenchResultBase:
     ) -> pn.panel:
         dims = list(d for d in dataset.sizes)
 
-        # over_time is handled by hvplot's groupby widget, not pane recursion
+        # over_time is handled by Plotly's dropdown widget, not pane recursion
         if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
             pane_dims = [d for d in dims if d != "over_time"]
         else:
@@ -695,16 +709,16 @@ class BenchResultBase:
                     result_var=result_var,
                 )
                 max_len = max(max_len, inner_container.label_len)
-                inner_container.append(panes)
+                inner_container.append(_wrap_plotly_figure(panes))
                 outer_container.append(inner_container.container)
             for c in outer_container.container:
                 c[0].width = max_len * 7
         else:
             # When over_time is active with >1 time points, the dataset still
             # contains the over_time dimension (it was excluded from pane recursion
-            # so hvplot numeric plots can use groupby).  For pane-type results
+            # so Plotly plots can use the dropdown widget).  For pane-type results
             # (images, videos) we need to build a Panel slider manually because
-            # they are not HoloViews objects and cannot use hv.HoloMap.
+            # they produce Panel objects, not Plotly figures.
             if (
                 self.bench_cfg.over_time
                 and "over_time" in list(dataset.sizes)
@@ -712,7 +726,8 @@ class BenchResultBase:
                 and isinstance(result_var, (ResultVideo, ResultImage))
             ):
                 return self._pane_over_time_slider(dataset, result_var)
-            return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
+            result = plot_callback(dataset=dataset, result_var=result_var, **kwargs)
+            return _wrap_plotly_figure(result)
 
         return outer_container.container
 
@@ -724,10 +739,10 @@ class BenchResultBase:
         """Create a Panel slider widget for over_time with pane-type results.
 
         Numeric plot callbacks (line, heatmap) handle over_time internally via
-        hv.HoloMap.  Pane-type callbacks (images, videos) cannot use HoloMap
-        because they produce Panel objects, not HoloViews elements.  This method
-        builds per-time-point content and swaps it via a Bokeh JS callback to
-        avoid Panel's ImportedStyleSheet document-ownership errors.
+        Plotly dropdown menus.  Pane-type callbacks (images, videos) cannot use
+        Plotly figures because they produce Panel objects.  This method builds
+        per-time-point content and swaps it via a Bokeh JS callback to avoid
+        Panel's ImportedStyleSheet document-ownership errors.
         """
         import base64
         from bokeh.models import CustomJS, Div

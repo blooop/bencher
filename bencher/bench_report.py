@@ -10,7 +10,10 @@ import tempfile
 from threading import Thread
 from dataclasses import dataclass
 
+import markdown as md_lib
 import panel as pn
+import plotly.graph_objects as go
+import plotly.io as pio
 from bencher.results.bench_result import BenchResult
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_cfg import BenchRunCfg
@@ -22,6 +25,116 @@ class GithubPagesCfg:
     repo_name: str
     folder_name: str = "report"
     branch_name: str = "gh-pages"
+
+
+def _extract_plotly_figures(pane) -> list[go.Figure]:
+    """Recursively extract all Plotly figures from a Panel pane tree."""
+    figures = []
+    if isinstance(pane, pn.pane.Plotly):
+        obj = pane.object
+        if isinstance(obj, go.Figure):
+            figures.append(obj)
+        elif isinstance(obj, dict):
+            figures.append(go.Figure(obj))
+    elif isinstance(pane, go.Figure):
+        figures.append(pane)
+    elif hasattr(pane, "objects"):
+        for child in pane.objects:
+            figures.extend(_extract_plotly_figures(child))
+    elif hasattr(pane, "__iter__") and not isinstance(pane, (str, dict)):
+        for child in pane:
+            figures.extend(_extract_plotly_figures(child))
+    elif hasattr(pane, "object"):
+        obj = pane.object
+        if isinstance(obj, go.Figure):
+            figures.append(obj)
+        elif isinstance(obj, dict):
+            try:
+                figures.append(go.Figure(obj))
+            except (ValueError, TypeError):
+                pass
+    return figures
+
+
+def _extract_markdown(pane) -> list[str]:
+    """Recursively extract Markdown text from a Panel pane tree."""
+    texts = []
+    if isinstance(pane, pn.pane.Markdown):
+        texts.append(pane.object or "")
+    elif hasattr(pane, "objects"):
+        for child in pane.objects:
+            texts.extend(_extract_markdown(child))
+    elif hasattr(pane, "__iter__") and not isinstance(pane, (str, dict)):
+        for child in pane:
+            texts.extend(_extract_markdown(child))
+    return texts
+
+
+def _has_bokeh_panes(pane) -> bool:
+    """Check if the pane tree contains any Bokeh panes (e.g. image/video sliders)."""
+    if isinstance(pane, pn.pane.Bokeh):
+        return True
+    if hasattr(pane, "objects"):
+        return any(_has_bokeh_panes(child) for child in pane.objects)
+    if hasattr(pane, "__iter__") and not isinstance(pane, (str, dict)):
+        return any(_has_bokeh_panes(child) for child in pane)
+    return False
+
+
+def _save_tab_plotly(pane, filepath: Path) -> None:
+    """Save a single tab's content as an HTML file.
+
+    For pure Plotly content: extracts figures and markdown, writes fast HTML
+    via plotly.io.  For tabs containing Bokeh panes (image/video sliders):
+    delegates to Panel's save() which properly embeds Bokeh widgets.
+    """
+    # If the tab has Bokeh content (image/video sliders), use Panel save
+    # which properly embeds Bokeh widgets with JS interactivity.
+    if _has_bokeh_panes(pane):
+        try:
+            pn.Column(pane).save(filename=filepath, progress=False, embed=True)
+            return
+        except (ValueError, TypeError, OSError) as e:
+            logging.warning("Panel save failed for Bokeh content: %s", e)
+
+    figures = _extract_plotly_figures(pane)
+    markdowns = _extract_markdown(pane)
+
+    if not figures and not markdowns:
+        # Fallback: try Panel save (for other non-Plotly content)
+        try:
+            pn.Column(pane).save(filename=filepath, progress=False, embed=True)
+            return
+        except (ValueError, TypeError, OSError):
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write("<html><body><p>No content</p></body></html>")
+            return
+
+    # Build a combined HTML page with all figures
+    html_parts = [
+        '<!DOCTYPE html><html><head><meta charset="utf-8">',
+        "<style>body{font-family:sans-serif;margin:20px;}"
+        ".plotly-graph-div{margin-bottom:20px;}</style>",
+        "</head><body>",
+    ]
+
+    for md_text in markdowns:
+        rendered = md_lib.markdown(md_text, extensions=["tables", "fenced_code"])
+        html_parts.append(f"<div>{rendered}</div>")
+
+    for i, fig in enumerate(figures):
+        div_html = pio.to_html(
+            fig,
+            full_html=False,
+            include_plotlyjs=("cdn" if i == 0 else False),
+            config={"responsive": True},
+        )
+        html_parts.append(div_html)
+
+    html_parts.append("</body></html>")
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write("\n".join(html_parts))
 
 
 class BenchReport(BenchPlotServer):
@@ -84,18 +197,18 @@ class BenchReport(BenchPlotServer):
         directory: str | Path = "cachedir",
         filename: str | None = None,
         in_html_folder: bool = True,
-        **kwargs,
+        **_kwargs,
     ) -> Path:
-        """Save the result to a html file.
+        """Save the result to an HTML file.
 
-        When the report contains multiple tabs, each tab is saved to its own
-        embedded HTML file and the index page uses iframes to display them.
-        This prevents HoloMap slider widgets from colliding across tabs.
+        Uses fast Plotly-native HTML serialization instead of Panel's
+        embed pipeline, eliminating the slow HoloMap state pre-computation
+        that was the primary performance bottleneck.
 
         Args:
-            directory (str | Path, optional): base folder to save to. Defaults to "cachedir" which should be ignored by git.
-            filename (str, optional): The name of the html file. Defaults to the name of the benchmark
-            in_html_folder (bool, optional): Put the saved files in a html subfolder to help keep the results separate from source code. Defaults to True.
+            directory: base folder to save to.
+            filename: The name of the html file.
+            in_html_folder: Put saved files in a html subfolder.
 
         Returns:
             Path: the save path
@@ -118,12 +231,11 @@ class BenchReport(BenchPlotServer):
 
             if len(self.pane) <= 1:
                 logging.info(f"saving html output to: {index_path.absolute()}")
-                # Save inner content directly so the Tabs sidebar is not rendered
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
-                content.save(filename=index_path, progress=True, embed=True, **kwargs)
+                _save_tab_plotly(content, index_path)
                 return index_path
 
-            # Save each tab to its own HTML so HoloMap sliders don't collide.
+            # Save each tab to its own HTML file
             tab_dir = base_path / "_tabs"
             os.makedirs(tab_dir, exist_ok=True)
             tab_files = []
@@ -137,7 +249,7 @@ class BenchReport(BenchPlotServer):
                 tab_file = f"{safe_name}.html"
                 tab_path = tab_dir / tab_file
                 logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
-                pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
+                _save_tab_plotly(tab, tab_path)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 
             # Generate an index page with tab buttons and an iframe.
@@ -224,7 +336,7 @@ resizeIframe();
             # TODO DON'T OVERWRITE EVERYTHING
             os.system(f"{cd_dir} git init")
             os.system(f"{cd_dir} git checkout -b {branch_name}")
-            os.system(f"{cd_dir} git add {folder_name}/index.html")
+            os.system(f"{cd_dir} git add {folder_name}/")
             os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
             os.system(f"{cd_dir} git remote add origin {remote}")
             os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
@@ -269,7 +381,7 @@ resizeIframe();
 
             os.system(f"{cd_dir} git init")
             os.system(f"{cd_dir} git checkout -b {branch_name}")
-            os.system(f"{cd_dir} git add index.html")
+            os.system(f"{cd_dir} git add .")
             os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
             os.system(f"{cd_dir} git remote add origin {remote}")
             os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")

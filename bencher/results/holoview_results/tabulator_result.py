@@ -4,7 +4,6 @@ import panel as pn
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 from param import Parameter
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
 import pandas as pd
 
