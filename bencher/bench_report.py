@@ -10,6 +10,7 @@ import tempfile
 from threading import Thread
 from dataclasses import dataclass
 
+import markdown as md_lib
 import panel as pn
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -69,17 +70,38 @@ def _extract_markdown(pane) -> list[str]:
     return texts
 
 
-def _save_tab_plotly(pane, filepath: Path) -> None:
-    """Save a single tab's content as a standalone Plotly HTML file.
+def _has_bokeh_panes(pane) -> bool:
+    """Check if the pane tree contains any Bokeh panes (e.g. image/video sliders)."""
+    if isinstance(pane, pn.pane.Bokeh):
+        return True
+    if hasattr(pane, "objects"):
+        return any(_has_bokeh_panes(child) for child in pane.objects)
+    if hasattr(pane, "__iter__") and not isinstance(pane, (str, dict)):
+        return any(_has_bokeh_panes(child) for child in pane)
+    return False
 
-    Extracts all Plotly figures and markdown from the pane tree and
-    writes them into a single HTML file using plotly.io.
+
+def _save_tab_plotly(pane, filepath: Path) -> None:
+    """Save a single tab's content as an HTML file.
+
+    For pure Plotly content: extracts figures and markdown, writes fast HTML
+    via plotly.io.  For tabs containing Bokeh panes (image/video sliders):
+    delegates to Panel's save() which properly embeds Bokeh widgets.
     """
+    # If the tab has Bokeh content (image/video sliders), use Panel save
+    # which properly embeds Bokeh widgets with JS interactivity.
+    if _has_bokeh_panes(pane):
+        try:
+            pn.Column(pane).save(filename=filepath, progress=False, embed=True)
+            return
+        except (ValueError, TypeError, OSError) as e:
+            logging.warning("Panel save failed for Bokeh content: %s", e)
+
     figures = _extract_plotly_figures(pane)
     markdowns = _extract_markdown(pane)
 
     if not figures and not markdowns:
-        # Fallback: try Panel save (for non-Plotly content like images/videos)
+        # Fallback: try Panel save (for other non-Plotly content)
         try:
             pn.Column(pane).save(filename=filepath, progress=False, embed=True)
             return
@@ -96,10 +118,9 @@ def _save_tab_plotly(pane, filepath: Path) -> None:
         "</head><body>",
     ]
 
-    for md in markdowns:
-        # Simple markdown-to-HTML: just wrap in a div
-        escaped = html.escape(md).replace("\n", "<br>")
-        html_parts.append(f"<div>{escaped}</div>")
+    for md_text in markdowns:
+        rendered = md_lib.markdown(md_text, extensions=["tables", "fenced_code"])
+        html_parts.append(f"<div>{rendered}</div>")
 
     for i, fig in enumerate(figures):
         div_html = pio.to_html(
