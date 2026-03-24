@@ -938,7 +938,7 @@ class Bench(BenchPlotServer):
         tag: str = "",
         run_cfg: BenchRunCfg | None = None,
         plot: bool = True,
-    ) -> OptimizeResult:
+    ) -> OptimizeResult | None:
         """Run optuna optimization directly — no full grid sweep required.
 
         Args:
@@ -994,10 +994,12 @@ class Bench(BenchPlotServer):
         # --- determine optimisation directions --------------------------
         targets = bench_cfg.optuna_targets(as_var=True)
         if not targets:
-            raise ValueError(
+            logging.warning(
                 "No result variables with an optimization direction found. "
-                "Set direction=OptDir.minimize or OptDir.maximize on your ResultVar."
+                "Skipping optimization. Set direction=OptDir.minimize or "
+                "OptDir.maximize on your ResultVar to enable optimization."
             )
+            return None
         directions = [t.direction for t in targets]
         target_names = [t.name for t in targets]
 
