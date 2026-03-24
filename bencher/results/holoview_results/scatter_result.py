@@ -5,7 +5,7 @@ import xarray as xr
 from param import Parameter
 
 from bencher.results.bench_result_base import ReduceType
-from bencher.plotting.plot_filter import VarRange, PlotFilter
+from bencher.plotting.plot_filter import VarRange
 from bencher.results.holoview_results.holoview_result import HoloviewResult, PLOTLY_COLORS
 
 
@@ -16,23 +16,16 @@ class ScatterResult(HoloviewResult):
         return self.to_scatter(override=override, **kwargs)
 
     def to_scatter(self, result_var=None, override: bool = True, **kwargs):
-        match_res = PlotFilter(
+        return self.filter(
+            self._to_scatter_ds,
             float_range=VarRange(0, 0),
             cat_range=VarRange(0, None),
             repeats_range=VarRange(1, 1),
-        ).matches_result(self.plt_cnt_cfg, "to_scatter", override=override)
-        if match_res.overall:
-            return self.filter(
-                self._to_scatter_ds,
-                float_range=VarRange(0, 0),
-                cat_range=VarRange(0, None),
-                repeats_range=VarRange(1, 1),
-                reduce=ReduceType.SQUEEZE,
-                result_var=result_var,
-                override=override,
-                **kwargs,
-            )
-        return match_res.to_panel(**kwargs)
+            reduce=ReduceType.SQUEEZE,
+            result_var=result_var,
+            override=override,
+            **kwargs,
+        )
 
     def _to_scatter_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
         title = self.title_from_ds(dataset, result_var, **kwargs)

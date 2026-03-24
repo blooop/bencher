@@ -4,7 +4,6 @@ import plotly.graph_objects as go
 from param import Parameter
 import xarray as xr
 
-from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import ResultVar
 from bencher.results.holoview_results.holoview_result import HoloviewResult
@@ -103,17 +102,3 @@ class HeatmapResult(HoloviewResult):
             yaxis_title=y_name,
         )
         return fig
-
-    # Keep legacy method signatures for backward compat
-    def to_heatmap_container_tap_ds(self, dataset, result_var, **kwargs):
-        return self.to_heatmap_ds(dataset, result_var, **kwargs)
-
-    def to_heatmap_single(  # pylint: disable=unused-argument
-        self, result_var, override=True, reduce=ReduceType.AUTO, **kwargs
-    ):
-        return None
-
-    def to_heatmap_tap(  # pylint: disable=unused-argument
-        self, result_var, reduce=ReduceType.AUTO, **kwargs
-    ):
-        return None

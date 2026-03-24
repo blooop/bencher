@@ -37,11 +37,11 @@ def _extract_plotly_figures(pane) -> list[go.Figure]:
             figures.append(go.Figure(obj))
     elif isinstance(pane, go.Figure):
         figures.append(pane)
-    elif hasattr(pane, "__iter__"):
-        for child in pane:
-            figures.extend(_extract_plotly_figures(child))
     elif hasattr(pane, "objects"):
         for child in pane.objects:
+            figures.extend(_extract_plotly_figures(child))
+    elif hasattr(pane, "__iter__") and not isinstance(pane, (str, dict)):
+        for child in pane:
             figures.extend(_extract_plotly_figures(child))
     elif hasattr(pane, "object"):
         obj = pane.object
@@ -60,11 +60,11 @@ def _extract_markdown(pane) -> list[str]:
     texts = []
     if isinstance(pane, pn.pane.Markdown):
         texts.append(pane.object or "")
-    elif hasattr(pane, "__iter__"):
-        for child in pane:
-            texts.extend(_extract_markdown(child))
     elif hasattr(pane, "objects"):
         for child in pane.objects:
+            texts.extend(_extract_markdown(child))
+    elif hasattr(pane, "__iter__") and not isinstance(pane, (str, dict)):
+        for child in pane:
             texts.extend(_extract_markdown(child))
     return texts
 
@@ -91,7 +91,6 @@ def _save_tab_plotly(pane, filepath: Path) -> None:
     # Build a combined HTML page with all figures
     html_parts = [
         '<!DOCTYPE html><html><head><meta charset="utf-8">',
-        '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>',
         "<style>body{font-family:sans-serif;margin:20px;}"
         ".plotly-graph-div{margin-bottom:20px;}</style>",
         "</head><body>",
@@ -316,7 +315,7 @@ resizeIframe();
             # TODO DON'T OVERWRITE EVERYTHING
             os.system(f"{cd_dir} git init")
             os.system(f"{cd_dir} git checkout -b {branch_name}")
-            os.system(f"{cd_dir} git add {folder_name}/index.html")
+            os.system(f"{cd_dir} git add {folder_name}/")
             os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
             os.system(f"{cd_dir} git remote add origin {remote}")
             os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
@@ -361,7 +360,7 @@ resizeIframe();
 
             os.system(f"{cd_dir} git init")
             os.system(f"{cd_dir} git checkout -b {branch_name}")
-            os.system(f"{cd_dir} git add index.html")
+            os.system(f"{cd_dir} git add .")
             os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
             os.system(f"{cd_dir} git remote add origin {remote}")
             os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")

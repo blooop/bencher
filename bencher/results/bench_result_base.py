@@ -78,7 +78,7 @@ class EmptyContainer:
 
 
 def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
-    """Given a dataarray that contains boolean coordinates, convert them to strings so that holoviews loads the data properly
+    """Given a dataarray that contains boolean coordinates, convert them to strings so that plotting libraries handle them properly
 
     Args:
         dataarray (xr.DataArray): dataarray with boolean coordinates
@@ -672,7 +672,7 @@ class BenchResultBase:
     ) -> pn.panel:
         dims = list(d for d in dataset.sizes)
 
-        # over_time is handled by hvplot's groupby widget, not pane recursion
+        # over_time is handled by Plotly's dropdown widget, not pane recursion
         if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
             pane_dims = [d for d in dims if d != "over_time"]
         else:
@@ -716,9 +716,9 @@ class BenchResultBase:
         else:
             # When over_time is active with >1 time points, the dataset still
             # contains the over_time dimension (it was excluded from pane recursion
-            # so hvplot numeric plots can use groupby).  For pane-type results
+            # so Plotly plots can use the dropdown widget).  For pane-type results
             # (images, videos) we need to build a Panel slider manually because
-            # they are not HoloViews objects and cannot use hv.HoloMap.
+            # they produce Panel objects, not Plotly figures.
             if (
                 self.bench_cfg.over_time
                 and "over_time" in list(dataset.sizes)
@@ -739,10 +739,10 @@ class BenchResultBase:
         """Create a Panel slider widget for over_time with pane-type results.
 
         Numeric plot callbacks (line, heatmap) handle over_time internally via
-        hv.HoloMap.  Pane-type callbacks (images, videos) cannot use HoloMap
-        because they produce Panel objects, not HoloViews elements.  This method
-        builds per-time-point content and swaps it via a Bokeh JS callback to
-        avoid Panel's ImportedStyleSheet document-ownership errors.
+        Plotly dropdown menus.  Pane-type callbacks (images, videos) cannot use
+        Plotly figures because they produce Panel objects.  This method builds
+        per-time-point content and swaps it via a Bokeh JS callback to avoid
+        Panel's ImportedStyleSheet document-ownership errors.
         """
         import base64
         from bokeh.models import CustomJS, Div

@@ -9,16 +9,12 @@ of HoloMap widget states.
 from __future__ import annotations
 
 import numpy as np
-import panel as pn
 import plotly.graph_objects as go
 from param import Parameter
 from itertools import product as iterproduct
 import xarray as xr
 
-from bencher.utils import listify
 from bencher.results.video_result import VideoResult
-from bencher.results.bench_result_base import ReduceType
-from bencher.variables.results import ResultImage, ResultVideo
 
 # Default plot dimensions
 DEFAULT_WIDTH = 600
@@ -38,11 +34,6 @@ PLOTLY_COLORS = [
     "#FECB52",
 ]
 
-_AGG_TITLE = "All Time Points (aggregated)"
-
-# Flag to enable or disable tap tool functionality in visualizations
-use_tap = True
-
 
 class HoloviewResult(VideoResult):
     """Base class providing Plotly-based plotting utilities.
@@ -50,19 +41,6 @@ class HoloviewResult(VideoResult):
     Despite the legacy name (kept for backward compatibility with the
     class hierarchy), all plots are now rendered via Plotly.
     """
-
-    @staticmethod
-    def set_default_opts(width: int = DEFAULT_WIDTH, height: int = DEFAULT_HEIGHT) -> dict:
-        """Set default options for visualizations.
-
-        Args:
-            width: Default width for visualizations. Defaults to 600.
-            height: Default height for visualizations. Defaults to 600.
-
-        Returns:
-            dict: Dictionary containing width and height settings.
-        """
-        return {"width": width, "height": height}
 
     @staticmethod
     def _default_layout(title="", width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT, **extra):
@@ -88,16 +66,6 @@ class HoloviewResult(VideoResult):
 
     # Alias for backward compat
     _use_slider_for_time = _use_holomap_for_time
-
-    @staticmethod
-    def _apply_opts(plot, **_opts_kwargs):
-        """No-op for backward compat — Plotly figures don't use .opts()."""
-        return plot
-
-    @staticmethod
-    def _over_time_kdims() -> list:
-        """Return the kdim list for over_time — kept for compat."""
-        return ["over_time"]
 
     @staticmethod
     def subsample_indices(n, max_points):
@@ -420,103 +388,8 @@ class HoloviewResult(VideoResult):
         )
         return fig
 
-    @staticmethod
-    def _holomap_with_slider_bottom(hvobj, _widgets=None):
-        """Backward compat stub — returns input unchanged."""
-        return hvobj
-
-    def overlay_plots(self, plot_callback: callable):
-        """Create combined figure by applying callback to each result variable."""
-        figures = []
-        for rv in self.bench_cfg.result_vars:
-            res = plot_callback(rv)
-            if res is not None and isinstance(res, go.Figure):
-                figures.append(res)
-        if not figures:
-            return None
-        if len(figures) == 1:
-            return figures[0]
-        # Merge traces into first figure
-        combined = go.Figure(data=figures[0].data, layout=figures[0].layout)
-        for f in figures[1:]:
-            for trace in f.data:
-                combined.add_trace(trace)
-        return combined
-
-    def layout_plots(self, plot_callback: callable):
-        """Create layout of plots by applying callback to each result variable."""
-        return self.overlay_plots(plot_callback)
-
-    def time_widget(self, title: str) -> dict:
-        """Backward compat — return widget config dict."""
-        return {"title": title}
-
-    def to_hv_type(self, _hv_type, _reduce=ReduceType.AUTO, **_kwargs):
-        """Backward compat stub."""
-        return None
-
-    def to_hv_container(self, _container, _reduce_type=ReduceType.AUTO, **_kwargs):
-        """Backward compat stub."""
-        return None
-
-    def result_var_to_container(self, result_var: Parameter) -> type:
-        """Determine the appropriate container type for a given result variable."""
-        if isinstance(result_var, ResultImage):
-            return pn.pane.PNG
-        return pn.pane.Video if isinstance(result_var, ResultVideo) else pn.Column
-
-    def setup_results_and_containers(
-        self,
-        result_var_plots,
-        container=None,
-        **kwargs,
-    ):
-        """Set up containers for result variables."""
-        result_var_plots = listify(result_var_plots)
-        if container is None:
-            containers = [self.result_var_to_container(rv) for rv in result_var_plots]
-        else:
-            containers = listify(container)
-        cont_instances = [c(**kwargs) if c is not None else None for c in containers]
-        return result_var_plots, cont_instances
-
-    def to_error_bar(self, _result_var=None, **_kwargs):
-        """Backward compat stub."""
-        return None
-
-    def to_points(self, _reduce=ReduceType.AUTO):
-        """Backward compat stub."""
-        return None
-
-    def to_nd_layout(self, _hmap_name):
-        """Backward compat stub."""
-        return None
-
-    def to_holomap(self, _name=None):
-        """Backward compat stub."""
-        return None
-
-    def to_holomap_list(self, _hmap_names=None):
-        """Backward compat stub."""
-        return pn.Column()
-
-    def get_nearest_holomap(self, _name=None, **_kwargs):
-        """Backward compat stub."""
-        return None
-
-    def to_dynamic_map(self, _name=None):
-        """Backward compat stub."""
-        return None
-
-    def to_grid(self, _inputs=None):
-        """Backward compat stub."""
-        return None
-
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert a hex color string to RGB tuple."""
     hex_color = hex_color.lstrip("#")
     return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-
-
-HoloviewResult.set_default_opts()
