@@ -195,9 +195,7 @@ class BenchResult(
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
-            row.append(
-                pn.pane.Markdown("No Plotters are able to represent these results", **kwargs)
-            )
+            row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
 
     def to_auto_plots(self, **kwargs) -> pn.panel:
@@ -213,12 +211,15 @@ class BenchResult(
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
+            plot_cols.append(pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**"))
+            agg_kwargs = {k: v for k, v in kwargs.items() if k not in ("agg_over_dims", "agg_fn")}
             plot_cols.append(
-                pn.pane.Markdown(
-                    f"### Aggregated View\nMean and percentile bands aggregated over: **{dims}**"
+                self.to_auto(
+                    agg_over_dims=self.bench_cfg.agg_over_dims,
+                    agg_fn=self.bench_cfg.agg_fn,
+                    **agg_kwargs,
                 )
             )
-            plot_cols.append(self.to(BandResult, aggregate=self.bench_cfg.agg_over_dims))
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols

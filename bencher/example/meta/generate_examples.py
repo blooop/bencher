@@ -119,6 +119,7 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_performance import example_meta_performance
     from bencher.example.meta.generate_meta_publish import example_meta_publish
     from bencher.example.meta.generate_meta_rerun import example_meta_rerun
+    from bencher.example.meta.generate_meta_aggregation import example_meta_aggregation
 
     example_meta()
     example_meta_result_types()
@@ -139,6 +140,7 @@ def generate_python_files():
     example_meta_performance()
     example_meta_publish()
     example_meta_rerun()
+    example_meta_aggregation()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -415,6 +417,7 @@ SECTION_GROUPS = [
             ("Bool Plot Types", "bool_plot_types"),
             ("Sampling Strategies", "sampling"),
             ("Composable Containers", "composable_containers"),
+            ("Aggregation", "aggregation"),
             ("Constant Variables", "const_vars"),
             ("Statistics", "statistics"),
             ("Workflows", "workflows"),
