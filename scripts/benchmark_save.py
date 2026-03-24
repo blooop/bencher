@@ -62,6 +62,7 @@ class SaveConfig:
     max_states: int = 1000
     max_opts: int = 3
     resources: str = "CDN"  # CDN or INLINE
+    use_disable_pipeline: bool = False
 
     def save_kwargs(self) -> dict:
         from bokeh.resources import CDN, INLINE
@@ -248,10 +249,15 @@ def run_save_timed(
     Args:
         single_run: If True, skip warmup and do 1 timed run only (for slow configs).
     """
+    from contextlib import nullcontext
+
+    from holoviews.core.data import disable_pipeline
+
     result = TimingResult(fixture_type="", fixture_variant="", save_config=config.name)
     content = _get_save_content(report)
     warmup = 0 if single_run else WARMUP_RUNS
     timed = 1 if single_run else TIMED_RUNS
+    ctx = disable_pipeline if config.use_disable_pipeline else nullcontext
 
     for run_idx in range(warmup + timed):
         gc.collect()
@@ -259,7 +265,8 @@ def run_save_timed(
             path = Path(td) / "output.html"
             kwargs = config.save_kwargs()
             t0 = time.perf_counter()
-            content.save(filename=path, progress=False, **kwargs)
+            with ctx():
+                content.save(filename=path, progress=False, **kwargs)
             elapsed = (time.perf_counter() - t0) * 1000.0
 
             if run_idx >= warmup:
@@ -372,6 +379,7 @@ def test_parallel_tab_saves(report: bn.BenchReport) -> tuple[float, float, int]:
 # Core configs — run with warmup + timed iterations
 SAVE_CONFIGS_CORE = [
     SaveConfig(name="baseline", embed=True, embed_json=False),
+    SaveConfig(name="disable_pipeline", embed=True, use_disable_pipeline=True),
     SaveConfig(name="embed_json", embed=True, embed_json=True),
     SaveConfig(name="no_embed", embed=False),
     SaveConfig(name="inline_resources", embed=True, resources="INLINE"),
@@ -490,6 +498,7 @@ def generate_report(
         )
 
     baseline_ot = _find("baseline")
+    disable_pipeline_ot = _find("disable_pipeline")
     no_embed_ot = _find("no_embed")
     max_states_ot = _find("max_states_100")
     max_opts_ot = _find("max_opts_1")
@@ -501,6 +510,13 @@ def generate_report(
         summary_bullets.append(
             f"- **Baseline** over_time save: {_fmt_ms(baseline_ot.mean_ms)} "
             f"({_fmt_bytes(baseline_ot.file_size_bytes)})"
+        )
+    if disable_pipeline_ot and baseline_ot:
+        ratio = disable_pipeline_ot.mean_ms / baseline_ot.mean_ms
+        summary_bullets.append(
+            f"- **disable_pipeline** is {ratio:.1f}x baseline "
+            f"({_fmt_ms(disable_pipeline_ot.mean_ms)}) "
+            f"— REJECTED: no improvement, wrapper overhead is negligible"
         )
     if no_embed_ot and baseline_ot:
         ratio = baseline_ot.mean_ms / no_embed_ot.mean_ms if no_embed_ot.mean_ms > 0 else 0
@@ -634,13 +650,19 @@ Prioritized by expected impact:
 2. **Keep `show_aggregated_time_tab=False` (P0, shipped)** — Avoids doubling embed cost
 3. **NEVER reduce `max_states` or `max_opts` below defaults** — This is counter-intuitive
    but triggers a much more expensive fallback path in Panel
-4. **Parallel per-tab saves** — For multi-tab reports, save tabs concurrently via
-   ThreadPoolExecutor. Requires confirming Panel/Bokeh thread safety.
+4. **Avoid `inline_resources`** — Use CDN (default) unless offline viewing is required
 5. **Consider `embed=False` for CI/preview** — 2-3x faster, produces static HTML
    without interactive sliders. Good for automated reports where interactivity isn't needed.
-6. **Avoid `inline_resources`** — Use CDN (default) unless offline viewing is required
-7. **Long-term: lazy embed / on-demand** — Instead of pre-embedding all states at save
-   time, generate server-backed HTML or use Panel's `--rest` mode
+   Note: this is opt-in only — default keeps interactive sliders.
+6. ~~**Parallel per-tab saves via ThreadPoolExecutor**~~ **REJECTED** — GIL blocks
+   parallelism (measured 0.95x speedup). `ProcessPoolExecutor` is an option but
+   Panel/Bokeh objects are not easily serializable across process boundaries.
+7. ~~**Long-term: lazy embed / on-demand / Panel `--rest` mode**~~ **REJECTED** — Requires
+   a live Panel server, which is not viable for static HTML reports (the only supported
+   output mode). DynamicMap similarly requires a server for interactivity.
+8. ~~**Disable HoloViews pipeline tracking (`disable_pipeline()`)**~~ **REJECTED** —
+   Benchmarked; the wrapper overhead is only ~28ms tottime despite 3.3s cumtime.
+   Measured same-or-slower than baseline.
 
 ## Appendix: Raw Timing Data
 
