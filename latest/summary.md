@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
-| Total tests | 931 |
-| Total time | 109.00s |
-| Mean | 0.1171s |
+| Total tests | 932 |
+| Total time | 82.71s |
+| Mean | 0.0887s |
 | Median | 0.0020s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 35.914 |
-| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 7.719 |
-| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 7.007 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 5.175 |
-| `test.test_generated_examples::test_generated_example[1_float/over_time/sweep_1_float_3_cat_over_time.py]` | 1.615 |
-| `test.test_optuna_result.TestOptunaResult::test_collect_optuna_plots_with_repeats` | 1.362 |
-| `test.test_generated_examples::test_generated_example[1_float/over_time_repeats/sweep_1_float_3_cat_over_time_repeats.py]` | 1.304 |
-| `test.test_generated_examples::test_generated_example[3_float/over_time/sweep_3_float_2_cat_over_time.py]` | 1.208 |
-| `test.test_bencher.TestBencher::test_bench_cfg_hash` | 1.019 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_no_subsampling_when_below_default_max` | 0.981 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 22.783 |
+| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 3.941 |
+| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 3.640 |
+| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.035 |
+| `test.test_generated_examples::test_generated_example[1_float/over_time/sweep_1_float_3_cat_over_time.py]` | 1.592 |
+| `test.test_optuna_result.TestOptunaResult::test_collect_optuna_plots_with_repeats` | 1.331 |
+| `test.test_generated_examples::test_generated_example[1_float/over_time_repeats/sweep_1_float_3_cat_over_time_repeats.py]` | 1.292 |
+| `test.test_generated_examples::test_generated_example[3_float/over_time/sweep_3_float_2_cat_over_time.py]` | 1.174 |
+| `test.test_bencher.TestBencher::test_bench_cfg_hash` | 0.922 |
+| `test.test_generated_examples::test_generated_example[result_types/result_image/result_image_to_video.py]` | 0.873 |
 
 </details>
