@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.72.3] - 2026-03-24
 
 ### Fixed
-- `aggregate` parameter in `plot_sweep` now produces the correct plot type for remaining dimensions (e.g. heatmap for 2 remaining floats) instead of always forcing a 1D band plot that collapsed all non-x dimensions
+- `aggregate` parameter in `plot_sweep` now produces the correct plot type for remaining dimensions (e.g. heatmap for 2 remaining floats) instead of always forcing a 1D band plot, collapsing all non-x dimensions
 
 ## [1.72.2] - 2026-03-23
 
