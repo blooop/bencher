@@ -28,7 +28,7 @@ def example_meta_aggregation():
         class_code=class_code,
         extra_imports=["import random", "import math"],
         description=(
-            "Aggregate a specific dimension by name using aggregate=[\"codec\"]. "
+            'Aggregate a specific dimension by name using aggregate=["codec"]. '
             "The codec categorical is averaged out, leaving a 2D heatmap of "
             "block_size vs entropy. This is the most explicit form — you list "
             "exactly which dimensions to collapse."
@@ -112,14 +112,14 @@ def example_meta_aggregation():
         class_code=class_code,
         extra_imports=["import random", "import math"],
         description=(
-            "Combine aggregate=[\"codec\"] with agg_fn=\"max\" to show the "
+            'Combine aggregate=["codec"] with agg_fn="max" to show the '
             "best-case (maximum) compression ratio across codecs for each "
             "(block_size, entropy) combination."
         ),
         post_description=(
-            "Unlike the default mean aggregation, agg_fn=\"max\" picks the "
-            "best codec at every point. Other options: \"min\", \"sum\", "
-            "\"median\"."
+            'Unlike the default mean aggregation, agg_fn="max" picks the '
+            'best codec at every point. Other options: "min", "sum", '
+            '"median".'
         ),
         aggregate=["codec"],
         agg_fn="max",

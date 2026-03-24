@@ -7,6 +7,7 @@ import math
 
 import bencher as bn
 
+
 class SortComparison(bn.ParametrizedSweep):
     """Compares sort duration across array sizes and algorithms."""
 
@@ -26,7 +27,13 @@ class SortComparison(bn.ParametrizedSweep):
 def example_agg_all(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Aggregate All (True)."""
     bench = SortComparison().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=['array_size', 'algorithm'], result_vars=['time'], description='Setting aggregate=True collapses every input dimension, giving a single scalar summary. Useful when you want one headline number from a multi-dimensional sweep.', post_description='The aggregated view collapses all inputs into a single mean ± std. The non-aggregated view below shows the full detail.', aggregate=True)
+    bench.plot_sweep(
+        input_vars=["array_size", "algorithm"],
+        result_vars=["time"],
+        description="Setting aggregate=True collapses every input dimension, giving a single scalar summary. Useful when you want one headline number from a multi-dimensional sweep.",
+        post_description="The aggregated view collapses all inputs into a single mean ± std. The non-aggregated view below shows the full detail.",
+        aggregate=True,
+    )
 
     return bench
 

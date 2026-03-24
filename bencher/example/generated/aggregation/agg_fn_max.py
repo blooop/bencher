@@ -7,6 +7,7 @@ import math
 
 import bencher as bn
 
+
 class CompressionCodec(bn.ParametrizedSweep):
     """Compression ratio across block size, entropy, and codec."""
 
@@ -19,7 +20,9 @@ class CompressionCodec(bn.ParametrizedSweep):
     def __call__(self, **kwargs: Any) -> Any:
         self.update_params_from_kwargs(**kwargs)
         codec_eff = {"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}[self.codec]
-        self.ratio = codec_eff * (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
+        self.ratio = (
+            codec_eff * (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
+        )
         self.ratio += random.gauss(0, 0.15 * 0.3)
         return super().__call__()
 
@@ -27,7 +30,14 @@ class CompressionCodec(bn.ParametrizedSweep):
 def example_agg_fn_max(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Aggregate with Max."""
     bench = CompressionCodec().to_bench(run_cfg)
-    bench.plot_sweep(input_vars=['block_size', 'entropy', 'codec'], result_vars=['ratio'], description='Combine aggregate=["codec"] with agg_fn="max" to show the best-case (maximum) compression ratio across codecs for each (block_size, entropy) combination.', post_description='Unlike the default mean aggregation, agg_fn="max" picks the best codec at every point. Other options: "min", "sum", "median".', aggregate=['codec'], agg_fn='max')
+    bench.plot_sweep(
+        input_vars=["block_size", "entropy", "codec"],
+        result_vars=["ratio"],
+        description='Combine aggregate=["codec"] with agg_fn="max" to show the best-case (maximum) compression ratio across codecs for each (block_size, entropy) combination.',
+        post_description='Unlike the default mean aggregation, agg_fn="max" picks the best codec at every point. Other options: "min", "sum", "median".',
+        aggregate=["codec"],
+        agg_fn="max",
+    )
 
     return bench
 
