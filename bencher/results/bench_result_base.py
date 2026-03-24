@@ -596,9 +596,28 @@ class BenchResultBase:
             repeats_range=repeats_range,
             input_range=input_range,
         )
-        matches_res = plot_filter.matches_result(
-            self.plt_cnt_cfg, callable_name(plot_callback), override
-        )
+        # When aggregating, adjust variable counts to reflect post-aggregation
+        # dimensions so plot type filters correctly reject impossible combos
+        # (e.g. curve with 0 kdims after collapsing all inputs).
+        check_cfg = self.plt_cnt_cfg
+        if agg_over_dims:
+            agg_set = set(agg_over_dims)
+            adj_float = [fv for fv in self.plt_cnt_cfg.float_vars if fv.name not in agg_set]
+            adj_cat = [cv for cv in self.plt_cnt_cfg.cat_vars if cv.name not in agg_set]
+            check_cfg = PltCntCfg(
+                float_vars=adj_float,
+                float_cnt=len(adj_float),
+                cat_vars=adj_cat,
+                cat_cnt=len(adj_cat),
+                vector_len=self.plt_cnt_cfg.vector_len,
+                result_vars=self.plt_cnt_cfg.result_vars,
+                panel_vars=list(self.plt_cnt_cfg.panel_vars),
+                panel_cnt=self.plt_cnt_cfg.panel_cnt,
+                repeats=self.plt_cnt_cfg.repeats,
+                inputs_cnt=len(adj_float) + len(adj_cat),
+                print_debug=self.plt_cnt_cfg.print_debug,
+            )
+        matches_res = plot_filter.matches_result(check_cfg, callable_name(plot_callback), override)
         if matches_res.overall:
             # Compute aggregated dataset once (if requested) so all plotters benefit
             if hv_dataset is None:

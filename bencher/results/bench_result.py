@@ -212,14 +212,49 @@ class BenchResult(
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
             plot_cols.append(pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**"))
-            agg_kwargs = {k: v for k, v in kwargs.items() if k not in ("agg_over_dims", "agg_fn")}
-            plot_cols.append(
-                self.to_auto(
-                    agg_over_dims=self.bench_cfg.agg_over_dims,
-                    agg_fn=self.bench_cfg.agg_fn,
-                    **agg_kwargs,
+            # Check whether ALL input dims are being aggregated (scalar result)
+            all_input_names = {iv.name for iv in self.bench_cfg.input_vars}
+            agg_set = set(self.bench_cfg.agg_over_dims)
+            if all_input_names <= agg_set:
+                # Fully-aggregated scalar: render a summary table instead of
+                # trying to_auto (no plotter handles 0-dimensional data).
+                plot_cols.append(self._scalar_aggregate_summary())
+            else:
+                agg_kwargs = {
+                    k: v for k, v in kwargs.items() if k not in ("agg_over_dims", "agg_fn")
+                }
+                plot_cols.append(
+                    self.to_auto(
+                        agg_over_dims=self.bench_cfg.agg_over_dims,
+                        agg_fn=self.bench_cfg.agg_fn,
+                        **agg_kwargs,
+                    )
                 )
-            )
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
+
+    def _scalar_aggregate_summary(self) -> pn.pane.Markdown:
+        """Render a Markdown table for a fully-aggregated (scalar) result."""
+        ds = self.to_dataset(
+            reduce=ReduceType.REDUCE,
+            agg_over_dims=self.bench_cfg.agg_over_dims,
+            agg_fn=self.bench_cfg.agg_fn,
+        )
+        rows = []
+        for rv in self.bench_cfg.result_vars:
+            name = rv.name
+            if name not in ds.data_vars:
+                continue
+            val = float(ds[name].values)
+            std_name = f"{name}_std"
+            units = getattr(rv, "units", "")
+            if std_name in ds.data_vars:
+                std = float(ds[std_name].values)
+                rows.append(f"| {name} | {val:.4g} ± {std:.4g} | {units} |")
+            else:
+                rows.append(f"| {name} | {val:.4g} | {units} |")
+        header = "| Result | Value | Units |\n|---|---|---|"
+        return pn.pane.Markdown(
+            f"{header}\n" + "\n".join(rows) if rows else "No result variables found."
+        )

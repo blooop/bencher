@@ -216,6 +216,8 @@ class HoloviewResult(VideoResult):
 
         float_names = [fv.name for fv in self.plt_cnt_cfg.float_vars]
         ds_dims = list(dataset.dims)
+        if not ds_dims:
+            return None
         kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
         groupby = [d for d in ds_dims if d not in kdims]
 
