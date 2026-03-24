@@ -112,6 +112,7 @@ are:
 | `yaml_` | `yaml/` | format |
 | `publish_` | `publishing/` | example |
 | `rerun_` | `rerun/` | example |
+| `agg_` | `aggregation/` | aggregation form, agg_fn |
 
 **Rules for adding new generators:**
 1. Pick a short, unique section prefix that does not collide with existing prefixes.

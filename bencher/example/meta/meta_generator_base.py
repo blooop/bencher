@@ -90,6 +90,8 @@ if __name__ == "__main__":
         extra_imports=None,
         run_kwargs=None,
         module_docstring=None,
+        aggregate=None,
+        agg_fn=None,
     ):
         """Build imports + body and call generate_example() for a standard sweep.
 
@@ -163,6 +165,10 @@ if __name__ == "__main__":
             sweep_parts.append(f"description={description!r}")
         if post_description:
             sweep_parts.append(f"post_description={post_description!r}")
+        if aggregate is not None:
+            sweep_parts.append(f"aggregate={aggregate!r}")
+        if agg_fn is not None:
+            sweep_parts.append(f"agg_fn={agg_fn!r}")
         sweep_args = ", ".join(sweep_parts)
 
         use_res = post_sweep_line is not None
