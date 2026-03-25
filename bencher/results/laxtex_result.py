@@ -19,12 +19,20 @@ def format_values_list(values: list[Any], max_display: int = 5) -> list[Any]:
     return [values[i] for i in [0, 1, 0, -2, -1]]
 
 
+def latex_value(val: Any) -> str:
+    """Format a single value for LaTeX, wrapping strings that contain spaces in \\text{}."""
+    s = str(val)
+    if " " in s:
+        return r"\text{" + s.replace("_", " ") + "}"
+    return s
+
+
 def create_matrix_array(values: list[Any]) -> str:
     """Create a LaTeX matrix array from values."""
     displayed_vals = format_values_list(values)
     if len(values) > 5:
         displayed_vals[2] = "⋮"
-    return r"\\ ".join([str(val) for val in displayed_vals])
+    return r"\\ ".join([latex_value(val) for val in displayed_vals])
 
 
 def input_var_to_latex(input_var) -> str:
