@@ -32,6 +32,7 @@ class BenchReport(BenchPlotServer):
         self.bench_name = bench_name
         self.pane = pn.Tabs(tabs_location="left", name=self.bench_name)
         self.last_save_ms: float = 0.0
+        self.bench_results: list[BenchResult] = []
 
     def append_title(self, title: str, new_tab: bool = True):
         if new_tab:
@@ -63,6 +64,7 @@ class BenchReport(BenchPlotServer):
         self.pane.append(col)
 
     def append_result(self, bench_res: BenchResult) -> None:
+        self.bench_results.append(bench_res)
         self.append_tab(bench_res.plot(), bench_res.bench_cfg.title)
 
     def append_tab(self, pane: pn.panel, name: str | None = None) -> None:
@@ -146,6 +148,11 @@ class BenchReport(BenchPlotServer):
             return index_path
         finally:
             self.last_save_ms = (time.perf_counter() - t0) * 1000.0
+            # Propagate save timing back to bench result timings
+            for br in self.bench_results:
+                if br.timings is not None:
+                    br.timings.report_save_ms = self.last_save_ms
+                    br.timings.total_ms = br.timings.compute_total()
 
     @staticmethod
     def _write_iframe_index(index_path: Path, tab_files: list) -> None:

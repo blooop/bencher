@@ -212,10 +212,14 @@ class BenchResult(
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
             plot_cols.append(pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**"))
-            # Check whether ALL input dims are being aggregated (scalar result)
+            # Check whether ALL input dims are being aggregated (scalar result).
+            # When over_time is active, the dataset retains the over_time
+            # dimension even after collapsing all input dims, so the result
+            # is NOT scalar — route to to_auto which will produce time-series
+            # plots using over_time as the x-axis.
             all_input_names = {iv.name for iv in self.bench_cfg.input_vars}
             agg_set = set(self.bench_cfg.agg_over_dims)
-            if all_input_names <= agg_set:
+            if all_input_names <= agg_set and not self.bench_cfg.over_time:
                 # Fully-aggregated scalar: render a summary table instead of
                 # trying to_auto (no plotter handles 0-dimensional data).
                 plot_cols.append(self._scalar_aggregate_summary())
