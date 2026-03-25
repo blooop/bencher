@@ -1,6 +1,6 @@
 """Meta-generator: Sampling Strategies.
 
-Shows uniform bounds, custom sample_values, level-based sampling, and Int vs Float.
+Shows uniform bounds, custom sample_values, and Int vs Float.
 """
 
 from typing import Any
@@ -10,7 +10,7 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "sampling"
 
-STRATEGIES = ["uniform", "custom_values", "levels", "int_vs_float"]
+STRATEGIES = ["uniform", "custom_values", "int_vs_float"]
 
 # -- Inline class definitions for self-contained examples -----------------------
 
@@ -38,20 +38,6 @@ class CustomSampler(bn.ParametrizedSweep):
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
         self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
-        return super().__call__()'''
-
-_LEVELS_CLASS_CODE = '''\
-class LevelDemo(bn.ParametrizedSweep):
-    """Demonstrates how sampling level affects resolution."""
-
-    resolution = bn.IntSweep(default=2, bounds=(2, 5), doc="Sampling resolution level")
-    points = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Sample point")
-
-    value = bn.ResultVar(units="ul")
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.value = math.sin(self.points * math.pi * self.resolution) + self.resolution * 0.1
         return super().__call__()'''
 
 _INT_FLOAT_CLASS_CODE = '''\
@@ -142,49 +128,6 @@ class MetaSampling(MetaGeneratorBase):
                 imports=imports,
                 body=body,
                 class_code=_CUSTOM_CLASS_CODE,
-                run_kwargs={"level": 3},
-            )
-        elif self.strategy == "levels":
-            imports = "import math\nimport bencher as bn"
-            levels_desc = (
-                "Sample levels let you perform parameter sweeps without "
-                "having to decide how many samples to take when defining the class. "
-                "If you perform a sweep at level 2, all those points are reused when "
-                "sampling at level 3. Higher levels reuse the points from lower "
-                "levels to avoid recomputing potentially expensive samples. This "
-                "enables a workflow where you quickly see results at low resolution "
-                "to sense-check the code, then run at a high level for full "
-                "fidelity. When calling a sweep at a high level you can publish "
-                "intermediate lower-level results as computation continues, letting "
-                "you track progress and end the sweep early when you have "
-                "sufficient resolution."
-            )
-            levels_post = (
-                "Each column shows the same function sampled at "
-                "a different resolution level. Notice how lower-level sample "
-                "points are a subset of higher-level points -- no work is wasted."
-            )
-            body = (
-                "bench = LevelDemo().to_bench(run_cfg)\n"
-                "bench.plot_sweep(\n"
-                '    title="Level-based sampling resolution",\n'
-                "    input_vars=[\n"
-                '        "points",\n'
-                '        bn.p("resolution", [2, 3, 4, 5]),\n'
-                "    ],\n"
-                '    result_vars=["value"],\n'
-                f"    description={levels_desc!r},\n"
-                f"    post_description={levels_post!r},\n"
-                ")\n"
-            )
-            self.generate_example(
-                title=title,
-                output_dir=OUTPUT_DIR,
-                filename=filename,
-                function_name=function_name,
-                imports=imports,
-                body=body,
-                class_code=_LEVELS_CLASS_CODE,
                 run_kwargs={"level": 3},
             )
         else:  # int_vs_float

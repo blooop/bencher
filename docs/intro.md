@@ -159,7 +159,7 @@ Bencher includes a composable container system for combining visual outputs. See
 
 ## Sampling and Level System
 
-The `level` parameter controls sampling density across all dimensions with a single knob. Higher levels are strict supersets of lower ones, so cached results are reused automatically. See [The Level System](concepts.md#the-level-system) for details and the [Sampling Strategies](reference/meta/sampling/index) gallery.
+The `level` parameter controls sampling density across all dimensions with a single knob. Higher levels are strict supersets of lower ones, so cached results are reused automatically. See [The Level System](concepts.md#the-level-system) for the conceptual explanation, the [Level System](reference/meta/levels/index) gallery for an interactive demo, and the [Sampling Strategies](reference/meta/sampling/index) gallery for related sampling techniques.
 
 ## Running Examples
 

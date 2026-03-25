@@ -188,6 +188,9 @@ This enables a natural workflow: start at a low level for quick iteration, then 
 publication-quality results. Because higher levels are strict supersets of lower ones, cached
 results from earlier runs are reused automatically — you only pay for the new midpoints.
 
+See the [Level System gallery](reference/meta/levels/index) for an interactive demo showing how
+increasing the level progressively refines the sample grid.
+
 ## Connections to Related Ideas
 
 Bencher sits at the intersection of several established concepts:
