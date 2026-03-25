@@ -72,9 +72,7 @@ class BandResult(HoloviewResult):
         use_holomap = self._use_holomap_for_time(dataset)
 
         if use_holomap:
-            return self._band_over_time(
-                dataset, var, explicit_title, agg_over_dims, units=units, **kwargs
-            )
+            return self._band_over_time(dataset, var, explicit_title, units=units, **kwargs)
 
         # Without over_time: find a continuous x-axis from remaining dims
         return self._band_static(dataset, var, explicit_title, agg_over_dims, units=units, **kwargs)
@@ -84,21 +82,17 @@ class BandResult(HoloviewResult):
         dataset: xr.Dataset,
         var: str,
         title: str | None,
-        agg_over_dims: list[str] | None,
         units: str = "",
         **kwargs,
     ) -> hv.Overlay | None:
         """Build percentile bands with time on x-axis."""
         da = dataset[var]
 
-        # Determine which dims to collapse into the sample pool.
-        # By default every dim except the x-axis (over_time) becomes a sample.
-        # When agg_over_dims is given, only those dims (plus the implicit repeat
-        # dim, which always represents independent trials) are collapsed, leaving
-        # the remaining dims as separate facets/groups upstream.
+        # Collapse every dim except over_time into the sample pool.
+        # The band plot has over_time as its sole x-axis, so all other
+        # dimensions (input vars, repeat) become samples whose distribution
+        # is shown via percentile bands + scatter.
         sample_dims = [d for d in da.dims if d != "over_time"]
-        if agg_over_dims:
-            sample_dims = [d for d in sample_dims if d in agg_over_dims or d == "repeat"]
 
         if title is None:
             agg_names = [d for d in sample_dims if d != "repeat"]
@@ -107,9 +101,11 @@ class BandResult(HoloviewResult):
         if not sample_dims:
             return None
 
-        # Stack sample dims, compute percentiles at each time point
-        stacked = da.stack(sample=sample_dims).transpose("over_time", "sample")
-        values = stacked.values  # shape: (n_time, n_samples)
+        # Reshape to (n_time, n_samples) using numpy directly.
+        # Avoids xarray .stack() which fails on Arrow-backed string coords.
+        time_axis = list(da.dims).index("over_time")
+        raw = np.asarray(da.values, dtype=float)
+        values = np.moveaxis(raw, time_axis, 0).reshape(da.sizes["over_time"], -1)
 
         time_coords = da.coords["over_time"].values
         p10 = np.nanpercentile(values, 10, axis=1)

@@ -209,17 +209,25 @@ class BenchResult(
         """
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
+
+        # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
-            plot_cols.append(pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**"))
-            # Check whether ALL input dims are being aggregated (scalar result)
             all_input_names = {iv.name for iv in self.bench_cfg.input_vars}
             agg_set = set(self.bench_cfg.agg_over_dims)
-            if all_input_names <= agg_set:
-                # Fully-aggregated scalar: render a summary table instead of
-                # trying to_auto (no plotter handles 0-dimensional data).
+            fully_aggregated = all_input_names <= agg_set
+            if fully_aggregated and not self.bench_cfg.over_time:
+                # All input dims collapsed, no over_time: scalar summary table.
+                plot_cols.append(
+                    pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**")
+                )
                 plot_cols.append(self._scalar_aggregate_summary())
             else:
+                # Partial aggregation (or full with over_time): let to_auto pick
+                # the right plotter for the remaining dims.
+                plot_cols.append(
+                    pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**")
+                )
                 agg_kwargs = {
                     k: v for k, v in kwargs.items() if k not in ("agg_over_dims", "agg_fn")
                 }
@@ -230,6 +238,22 @@ class BenchResult(
                         **agg_kwargs,
                     )
                 )
+
+        # --- Over-time band plot (orthogonal to dimension aggregation) ---
+        if (
+            self.bench_cfg.over_time
+            and "over_time" in self.ds.dims
+            and self.ds.sizes["over_time"] > 1
+            and self.bench_cfg.input_vars
+        ):
+            input_names = [iv.name for iv in self.bench_cfg.input_vars]
+            plot_cols.append(
+                pn.pane.Markdown(
+                    "### Over Time\nPercentile bands across all input dimensions over time"
+                )
+            )
+            plot_cols.append(self.to(BandResult, aggregate=input_names))
+
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
