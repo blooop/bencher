@@ -182,9 +182,9 @@ class TestVarSweeps(unittest.TestCase):
         self.assertEqual(fs.sweep_bounds, (0, 1))
         self.assertIsNone(fs.bounds)
 
-        ist = IntSweep(bounds=(0, 10))
-        self.assertEqual(ist.sweep_bounds, (0, 10))
-        self.assertIsNone(ist.bounds)
+        int_sw = IntSweep(bounds=(0, 10))
+        self.assertEqual(int_sw.sweep_bounds, (0, 10))
+        self.assertIsNone(int_sw.bounds)
 
     def test_float_sweep_out_of_bounds(self):
         class Cfg(ParametrizedSweep):
