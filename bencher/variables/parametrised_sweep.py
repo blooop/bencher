@@ -13,7 +13,33 @@ from bencher.factories import create_bench, create_bench_runner
 
 
 class ParametrizedSweep(Parameterized):
-    """Parent class for all Sweep types that need a custom hash"""
+    """Parent class for all Sweep types that need a custom hash.
+
+    Subclasses can define either ``__call__`` (classic pattern) or the simpler
+    ``compute`` method.  When ``compute`` is defined, ``__call__`` is
+    auto-generated to handle the ``update_params_from_kwargs`` /
+    ``get_results_values_as_dict`` boilerplate::
+
+        class MyBench(bn.ParametrizedSweep):
+            x = bn.FloatSweep(...)
+            out = bn.ResultVar()
+
+            def compute(self, **kwargs):
+                self.out = self.x ** 2
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Only wrap when the subclass itself defines `compute` (not inherited).
+        if "compute" in cls.__dict__:
+            original_compute = cls.__dict__["compute"]
+
+            def _auto_call(self, **kwargs):
+                self.update_params_from_kwargs(**kwargs)
+                original_compute(self, **kwargs)
+                return self.get_results_values_as_dict()
+
+            cls.__call__ = _auto_call
 
     @staticmethod
     def param_hash(param_type: Parameterized, hash_value: bool = True) -> int:
