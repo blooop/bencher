@@ -40,19 +40,7 @@ class CustomSampler(bn.ParametrizedSweep):
         self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
         return super().__call__()'''
 
-_LEVELS_CLASS_CODE = '''\
-class LevelDemo(bn.ParametrizedSweep):
-    """Demonstrates how sampling level affects resolution."""
-
-    resolution = bn.IntSweep(default=2, bounds=(2, 5), doc="Sampling resolution level")
-    points = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Sample point")
-
-    value = bn.ResultVar(units="ul")
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.value = math.sin(self.points * math.pi * self.resolution) + self.resolution * 0.1
-        return super().__call__()'''
+_LEVELS_CLASS_CODE = ""  # Uses BenchMeta from example_meta instead
 
 _INT_FLOAT_CLASS_CODE = '''\
 class IntFloatCompare(bn.ParametrizedSweep):
@@ -145,7 +133,9 @@ class MetaSampling(MetaGeneratorBase):
                 run_kwargs={"level": 3},
             )
         elif self.strategy == "levels":
-            imports = "import math\nimport bencher as bn"
+            imports = (
+                "import bencher as bn\nfrom bencher.example.meta.example_meta import BenchMeta"
+            )
             levels_desc = (
                 "Sample levels let you perform parameter sweeps without "
                 "having to decide how many samples to take when defining the class. "
@@ -160,19 +150,19 @@ class MetaSampling(MetaGeneratorBase):
                 "sufficient resolution."
             )
             levels_post = (
-                "Each column shows the same function sampled at "
-                "a different resolution level. Notice how lower-level sample "
-                "points are a subset of higher-level points -- no work is wasted."
+                "Each panel shows the benchmark sampled at a different level. "
+                "Higher levels produce more sample points. Notice how lower-level "
+                "sample points are a subset of higher-level points -- no work is wasted."
             )
             body = (
-                "bench = LevelDemo().to_bench(run_cfg)\n"
+                "bench = BenchMeta().to_bench(run_cfg)\n"
                 "bench.plot_sweep(\n"
-                '    title="Level-based sampling resolution",\n'
+                '    title="Using Levels to define sample density",\n'
                 "    input_vars=[\n"
-                '        "points",\n'
-                '        bn.p("resolution", [2, 3, 4, 5]),\n'
+                '        bn.p("float_vars", [1, 2]),\n'
+                '        bn.p("level", [2, 3, 4, 5]),\n'
                 "    ],\n"
-                '    result_vars=["value"],\n'
+                "    const_vars=dict(categorical_vars=0),\n"
                 f"    description={levels_desc!r},\n"
                 f"    post_description={levels_post!r},\n"
                 ")\n"
@@ -184,8 +174,7 @@ class MetaSampling(MetaGeneratorBase):
                 function_name=function_name,
                 imports=imports,
                 body=body,
-                class_code=_LEVELS_CLASS_CODE,
-                run_kwargs={"level": 3},
+                class_code="",
             )
         else:  # int_vs_float
             self.generate_sweep_example(
