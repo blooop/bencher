@@ -634,6 +634,11 @@ def p(
 
     # If a SweepBase param object is passed, delegate to its callable API
     if isinstance(name, SweepBase):
+        if max_level is not None:
+            raise ValueError(
+                "max_level is not supported when passing a SweepBase object to p(). "
+                "Use the string-based API instead: p('param_name', max_level=N)"
+            )
         if values is not None:
             return name.with_sample_values(values)
         if samples is not None:
