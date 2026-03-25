@@ -1,11 +1,11 @@
-"""Auto-generated example: Sampling: Levels."""
+"""Auto-generated example: Level System: Sample Density."""
 
 import bencher as bn
 from bencher.example.meta.example_meta import BenchMeta
 
 
-def example_sampling_levels(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Sampling: Levels."""
+def example_levels_sample_density(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    """Level System: Sample Density."""
     bench = BenchMeta().to_bench(run_cfg)
     bench.plot_sweep(
         title="Using Levels to define sample density",
@@ -22,4 +22,4 @@ def example_sampling_levels(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_sampling_levels)
+    bn.run(example_levels_sample_density)

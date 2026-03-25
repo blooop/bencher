@@ -110,6 +110,7 @@ def generate_python_files():
     )
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
+    from bencher.example.meta.generate_meta_levels import example_meta_levels
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
     from bencher.example.meta.generate_meta_workflows import example_meta_workflows
@@ -126,6 +127,7 @@ def generate_python_files():
     example_meta_image_video()
     example_meta_composable()
     example_meta_plot_types()
+    example_meta_levels()
     example_meta_sampling()
     example_meta_statistics()
     example_meta_const_vars()
@@ -415,6 +417,7 @@ SECTION_GROUPS = [
             ("Result Types", "result_types"),
             ("Plot Types", "plot_types"),
             ("Bool Plot Types", "bool_plot_types"),
+            ("Level System", "levels"),
             ("Sampling Strategies", "sampling"),
             ("Composable Containers", "composable_containers"),
             ("Aggregation", "aggregation"),
