@@ -107,9 +107,9 @@ def sweep_var_to_optuna_dist(var: param.Parameter) -> optuna.distributions.BaseD
     """
 
     if isinstance(var, IntSweep):
-        return optuna.distributions.IntDistribution(var.bounds[0], var.bounds[1])
+        return optuna.distributions.IntDistribution(var.sweep_bounds[0], var.sweep_bounds[1])
     if isinstance(var, FloatSweep):
-        return optuna.distributions.FloatDistribution(var.bounds[0], var.bounds[1])
+        return optuna.distributions.FloatDistribution(var.sweep_bounds[0], var.sweep_bounds[1])
     if isinstance(var, (EnumSweep, StringSweep)):
         return optuna.distributions.CategoricalDistribution(var.objects)
     if isinstance(var, BoolSweep):
@@ -138,9 +138,9 @@ def sweep_var_to_suggest(iv: ParametrizedSweep, trial: optuna.trial) -> object:
     iv_type = type(iv)
 
     if iv_type == IntSweep:
-        return trial.suggest_int(iv.name, iv.bounds[0], iv.bounds[1])
+        return trial.suggest_int(iv.name, iv.sweep_bounds[0], iv.sweep_bounds[1])
     if iv_type == FloatSweep:
-        return trial.suggest_float(iv.name, iv.bounds[0], iv.bounds[1])
+        return trial.suggest_float(iv.name, iv.sweep_bounds[0], iv.sweep_bounds[1])
     if iv_type in (EnumSweep, StringSweep):
         return trial.suggest_categorical(iv.name, iv.objects)
     if iv_type in (TimeSnapshot, TimeEvent):

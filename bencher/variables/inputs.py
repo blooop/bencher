@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -464,6 +465,10 @@ class IntSweep(Integer, SweepBase):
         **params,
     ):
         SweepBase.__init__(self)
+        # Redirect bounds -> softbounds so param doesn't hard-enforce them
+        user_bounds = params.pop("bounds", None)
+        if user_bounds is not None:
+            params["softbounds"] = user_bounds
         Integer.__init__(self, **params)
 
         self.units = units
@@ -471,9 +476,9 @@ class IntSweep(Integer, SweepBase):
 
         if sample_values is None:
             if samples is None:
-                if self.bounds is None:
+                if self.sweep_bounds is None:
                     raise RuntimeError("You must define bounds for integer types")
-                self.samples = 1 + self.bounds[1] - self.bounds[0]
+                self.samples = 1 + self.sweep_bounds[1] - self.sweep_bounds[0]
             else:
                 self.samples = samples
             self.sample_values = None
@@ -495,7 +500,7 @@ class IntSweep(Integer, SweepBase):
         sample_values = (
             self.sample_values
             if self.sample_values is not None
-            else list(range(int(self.bounds[0]), int(self.bounds[1] + 1)))
+            else list(range(int(self.sweep_bounds[0]), int(self.sweep_bounds[1] + 1)))
         )
 
         return self.indices_to_samples(self.samples, sample_values)
@@ -545,6 +550,10 @@ class FloatSweep(Number, SweepBase):
         **params,
     ):
         SweepBase.__init__(self)
+        # Redirect bounds -> softbounds so param doesn't hard-enforce them
+        user_bounds = params.pop("bounds", None)
+        if user_bounds is not None:
+            params["softbounds"] = user_bounds
         Number.__init__(self, step=step, **params)
 
         self.units = units
@@ -571,9 +580,9 @@ class FloatSweep(Number, SweepBase):
         samps = self.samples
         if self.sample_values is None:
             if self.step is None:
-                return np.linspace(self.bounds[0], self.bounds[1], samps)
+                return np.linspace(self.sweep_bounds[0], self.sweep_bounds[1], samps)
 
-            return np.arange(self.bounds[0], self.bounds[1], self.step)
+            return np.arange(self.sweep_bounds[0], self.sweep_bounds[1], self.step)
         return self.sample_values
 
 
@@ -597,28 +606,45 @@ def box(name: str, center: float, width: float) -> FloatSweep:
 
 
 def p(
-    name: str,
+    name: str | SweepBase,
     values: list[Any] | None = None,
     samples: int | None = None,
     max_level: int | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | SweepBase:
     """
-    Create a parameter dictionary with optional values, samples, and max_level.
+    Create a parameter specification for use in plot_sweep input_vars.
+
+    Accepts either a string parameter name (returns a dict for deferred lookup)
+    or a SweepBase parameter object (returns a configured sweep directly).
 
     Args:
-        name (str): The name of the parameter.
+        name: The parameter name (str) or a param object (e.g. ``Cfg.param.theta``).
         values (list[Any], optional): A list of values for the parameter. Defaults to None.
         samples (int, optional): The number of samples. Must be greater than 0 if provided. Defaults to None.
         max_level (int, optional): The maximum level. Must be greater than 0 if provided. Defaults to None.
 
     Returns:
-        dict[str, Any]: A dictionary containing the parameter details.
+        dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.
     """
     if max_level is not None and max_level <= 0:
         raise ValueError("max_level must be greater than 0")
 
     if samples is not None and samples <= 0:
         raise ValueError("samples must be greater than 0")
+
+    # If a SweepBase param object is passed, delegate to its callable API
+    if isinstance(name, SweepBase):
+        if max_level is not None:
+            raise ValueError(
+                "max_level is not supported when passing a SweepBase object to p(). "
+                "Use the string-based API instead: p('param_name', max_level=N)"
+            )
+        if values is not None:
+            return name.with_sample_values(values)
+        if samples is not None:
+            return name.with_samples(samples)
+        return deepcopy(name)
+
     return {"name": name, "values": values, "max_level": max_level, "samples": samples}
 
 

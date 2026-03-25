@@ -2,6 +2,8 @@ import unittest
 from hypothesis import given, strategies as st  # pylint: disable=unused-import
 import pytest
 from bencher.variables.inputs import IntSweep, EnumSweep, StringSweep, BoolSweep, FloatSweep
+from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import ResultVar
 from enum import auto
 from strenum import StrEnum
 
@@ -174,3 +176,36 @@ class TestVarSweeps(unittest.TestCase):
         int_sweep = IntSweep(bounds=[0, 10], samples=samples)
         self.assertEqual(int_sweep.default, 0)
         self.assertEqual(len(int_sweep.values()), samples)
+
+    def test_sweep_bounds_property(self):
+        fs = FloatSweep(bounds=(0, 1))
+        self.assertEqual(fs.sweep_bounds, (0, 1))
+        self.assertIsNone(fs.bounds)
+
+        int_sw = IntSweep(bounds=(0, 10))
+        self.assertEqual(int_sw.sweep_bounds, (0, 10))
+        self.assertIsNone(int_sw.bounds)
+
+    def test_float_sweep_out_of_bounds(self):
+        class Cfg(ParametrizedSweep):
+            theta = FloatSweep(default=0.5, bounds=(0, 1), samples=3)
+            result = ResultVar()
+
+        cfg = Cfg()
+        cfg.update_params_from_kwargs(theta=1.5)
+        self.assertEqual(cfg.theta, 1.5)
+
+        cfg.update_params_from_kwargs(theta=-0.5)
+        self.assertEqual(cfg.theta, -0.5)
+
+    def test_int_sweep_out_of_bounds(self):
+        class Cfg(ParametrizedSweep):
+            count = IntSweep(default=3, bounds=(0, 10))
+            result = ResultVar()
+
+        cfg = Cfg()
+        cfg.update_params_from_kwargs(count=15)
+        self.assertEqual(cfg.count, 15)
+
+        cfg.update_params_from_kwargs(count=-5)
+        self.assertEqual(cfg.count, -5)
