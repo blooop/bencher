@@ -6,6 +6,7 @@ job creation, and cache management in benchmark runs.
 
 from __future__ import annotations
 
+import difflib
 import logging
 from copy import deepcopy
 from typing import Any, Callable
@@ -69,6 +70,40 @@ class SweepExecutor:
         self.cache_size = cache_size
         self.sample_cache: FutureCache | None = None
 
+    @staticmethod
+    def _lookup_param_by_name(
+        worker_class_instance: ParametrizedSweep,
+        name: str,
+        var_type: str,
+    ) -> param.Parameter:
+        """Look up a parameter by name with a helpful error on typos.
+
+        Args:
+            worker_class_instance: The worker class to look up parameters on.
+            name: The parameter name to find.
+            var_type: 'input', 'result', or 'const' — used in the error message.
+
+        Returns:
+            The matching ``param.Parameter``.
+
+        Raises:
+            KeyError: If *name* is not found, listing available names and
+                suggesting close matches via ``difflib.get_close_matches``.
+        """
+        params = worker_class_instance.param.objects(instance=False)
+        if name in params:
+            return params[name]
+        available = sorted(k for k in params if k != "name")
+        close = difflib.get_close_matches(name, available, n=3, cutoff=0.5)
+        msg = (
+            f"{var_type}_vars: parameter '{name}' not found on "
+            f"{type(worker_class_instance).__name__}.\n"
+            f"  Available parameters: {available}"
+        )
+        if close:
+            msg += f"\n  Did you mean: {close}?"
+        raise KeyError(msg)
+
     def convert_vars_to_params(
         self,
         variable: param.Parameter | str | dict | tuple,
@@ -109,9 +144,11 @@ class SweepExecutor:
                     f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
                 )
         if isinstance(variable, str):
-            variable = worker_class_instance.param.objects(instance=False)[variable]
+            variable = self._lookup_param_by_name(worker_class_instance, variable, var_type)
         if isinstance(variable, dict):
-            param_var = worker_class_instance.param.objects(instance=False)[variable["name"]]
+            param_var = self._lookup_param_by_name(
+                worker_class_instance, variable["name"], var_type
+            )
             if variable.get("values"):
                 param_var = param_var.with_sample_values(variable["values"])
 
