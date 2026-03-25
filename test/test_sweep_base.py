@@ -200,6 +200,29 @@ class TestSweepBase(unittest.TestCase):
     #     var_int = bn.IntSweep(default=start, bounds=(start, start + var_range))
     #     self.sweep_up_to(var_int, int, level=5)
 
+    def test_callable_sweep_values(self):
+        vals = AllSweepVars.param.var_float([0, 1, 5]).values()
+        self.assertEqual(vals, [0, 1, 5])
+
+    def test_callable_sweep_samples(self):
+        sampled = AllSweepVars.param.var_float(samples=3).values()
+        self.assertEqual(len(sampled), 3)
+
+    def test_callable_sweep_no_args(self):
+        original = AllSweepVars.param.var_float.values()
+        copy = AllSweepVars.param.var_float().values()
+        self.assertEqual(str(original), str(copy))
+
+    def test_p_with_param_object(self):
+        result = bn.p(AllSweepVars.param.var_float, [0, 1, 5])
+        self.assertIsInstance(result, bn.SweepBase)
+        self.assertEqual(result.values(), [0, 1, 5])
+
+    def test_p_with_param_object_samples(self):
+        result = bn.p(AllSweepVars.param.var_float, samples=3)
+        self.assertIsInstance(result, bn.SweepBase)
+        self.assertEqual(len(result.values()), 3)
+
 
 if __name__ == "__main__":
     # TestSweepBase().test_override_defaults()
