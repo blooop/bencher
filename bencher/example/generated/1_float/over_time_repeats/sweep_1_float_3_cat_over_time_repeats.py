@@ -43,7 +43,6 @@ def example_sweep_1_float_3_cat_over_time_repeats(
 ) -> bn.Bench:
     """1 Float, 3 Categorical (over time repeats)."""
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)
-    run_cfg.over_time = True
     benchable = SortFullMatrix()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)
@@ -65,4 +64,4 @@ def example_sweep_1_float_3_cat_over_time_repeats(
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_1_float_3_cat_over_time_repeats, level=4)
+    bn.run(example_sweep_1_float_3_cat_over_time_repeats, level=4, over_time=True)

@@ -29,7 +29,6 @@ class ServerBenchmark(bn.ParametrizedSweep):
 def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Regression detection — percentage threshold over time."""
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
-    run_cfg.over_time = True
     run_cfg.regression_detection = True
     run_cfg.regression_method = "percentage"
     run_cfg.regression_fail = False
@@ -69,4 +68,4 @@ def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_regression_percentage)
+    bn.run(example_regression_percentage, over_time=True)

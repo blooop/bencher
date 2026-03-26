@@ -33,7 +33,6 @@ class ServerOptimizer(bn.ParametrizedSweep):
 def example_optim_over_time_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Optimise Over Time: 1D input."""
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)
-    run_cfg.over_time = True
     benchable = ServerOptimizer()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)
@@ -56,4 +55,4 @@ def example_optim_over_time_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
 
 
 if __name__ == "__main__":
-    bn.run(example_optim_over_time_1d, level=2, optimise=30)
+    bn.run(example_optim_over_time_1d, level=2, optimise=30, over_time=True)

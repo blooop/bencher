@@ -132,7 +132,6 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
         return super().__call__()'''
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-run_cfg.over_time = True
 
 benchable = PullRequestBenchmark()
 bench = benchable.to_bench(run_cfg)
@@ -162,7 +161,7 @@ for i, event_name in enumerate(events):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"level": 3, "over_time": True},
         )
 
     def _generate_git_time_event(self):
@@ -189,9 +188,6 @@ class ServerLatency(bn.ParametrizedSweep):
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
         return super().__call__()'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-run_cfg.over_time = True
-
 bench = ServerLatency().to_bench(run_cfg)
 
 # git_time_event() returns a string like "2024-06-15 abc1234d".
@@ -214,7 +210,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"level": 3, "over_time": True},
         )
 
     def _generate_max_time_events(self):
@@ -244,7 +240,6 @@ class LatencyMonitor(bn.ParametrizedSweep):
         return super().__call__()'''
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-run_cfg.over_time = True
 
 # Keep only the 3 most recent time slices in the cache.
 # Without this, every call to plot_sweep appends a new slice and the
@@ -279,7 +274,7 @@ for i in range(5):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"level": 3, "over_time": True},
         )
 
     def _generate_report_save(self):
@@ -360,7 +355,6 @@ class ThermalPlate(bn.ParametrizedSweep):
         return super().__call__()'''
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-run_cfg.over_time = True
 
 benchable = ThermalPlate()
 bench = benchable.to_bench(run_cfg)
@@ -389,7 +383,7 @@ for i, offset in enumerate(time_offsets):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4},
+            run_kwargs={"level": 4, "over_time": True},
         )
 
 

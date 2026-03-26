@@ -109,7 +109,10 @@ class BenchRunner:
 
     @staticmethod
     def setup_run_cfg(
-        run_cfg: BenchRunCfg | None = None, level: int = 2, cache_results: bool = True
+        run_cfg: BenchRunCfg | None = None,
+        level: int = 2,
+        cache_results: bool = True,
+        over_time: bool = False,
     ) -> BenchRunCfg:
         """Configure benchmark run settings with reasonable defaults.
 
@@ -120,6 +123,7 @@ class BenchRunner:
             run_cfg (BenchRunCfg, optional): Base configuration to modify. Defaults to None.
             level (int, optional): Benchmark sampling resolution level. Defaults to 2.
             cache_results (bool, optional): Whether to enable result caching. Defaults to True.
+            over_time (bool, optional): Enable time-series benchmarking. Defaults to False.
 
         Returns:
             BenchRunCfg: A new configuration object with the specified settings
@@ -128,6 +132,8 @@ class BenchRunner:
         run_cfg_out.cache_samples = cache_results
         run_cfg_out.only_hash_tag = cache_results
         run_cfg_out.level = level
+        if over_time:
+            run_cfg_out.over_time = True
         return run_cfg_out
 
     @staticmethod
@@ -265,6 +271,7 @@ class BenchRunner:
         save: bool = False,
         grouped: bool = False,
         cache_results: bool = True,
+        over_time: bool = False,
     ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
 
@@ -290,6 +297,7 @@ class BenchRunner:
             save (bool, optional): save the results to disk in index.html. Defaults to False.
             grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to False.
             cache_results (bool, optional): Use the sample cache to reused previous results. Defaults to True.
+            over_time (bool, optional): Enable time-series benchmarking. Defaults to False.
 
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
@@ -315,7 +323,9 @@ class BenchRunner:
 
         if run_cfg is None:
             run_cfg = deepcopy(self.run_cfg)
-        run_cfg = BenchRunner.setup_run_cfg(run_cfg, cache_results=cache_results)
+        run_cfg = BenchRunner.setup_run_cfg(
+            run_cfg, cache_results=cache_results, over_time=over_time
+        )
 
         # Set up level and repeat ranges
         min_level = level

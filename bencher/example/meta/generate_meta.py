@@ -521,7 +521,6 @@ class BenchMetaGen(bn.ParametrizedSweep):
 
             body = (
                 f"run_cfg = bn.BenchRunCfg.with_defaults(run_cfg{defaults_kw})\n"
-                "run_cfg.over_time = True\n"
                 f"benchable = {info['class_name']}()\n"
                 f"bench = benchable.to_bench(run_cfg)\n"
                 f"_base_time = datetime(2000, 1, 1)\n"
@@ -549,7 +548,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 imports=imports,
                 body=body,
                 class_code=class_code,
-                run_kwargs={"level": 4},
+                run_kwargs={"level": 4, "over_time": True},
             )
         else:
             noise_val = 0.15 if self.sample_with_repeats > 1 else 0.0

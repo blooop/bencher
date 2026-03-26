@@ -183,7 +183,6 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
 
         body_lines = [
             "run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)",
-            "run_cfg.over_time = True",
             "benchable = ServerOptimizer()",
             "bench = benchable.to_bench(run_cfg)",
             "_base_time = datetime(2000, 1, 1)",
@@ -214,7 +213,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
             ),
             body="\n".join(body_lines) + "\n",
             class_code=CLASS_CODE_OVERTIME,
-            run_kwargs={"level": 2, "optimise": 30},
+            run_kwargs={"level": 2, "optimise": 30, "over_time": True},
         )
 
         return super().__call__()
@@ -248,7 +247,6 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
 
             body_lines = [
                 "run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)",
-                "run_cfg.over_time = True",
                 "benchable = AlgorithmBench()",
                 "bench = benchable.to_bench(run_cfg)",
                 "_base_time = datetime(2000, 1, 1)",
@@ -277,7 +275,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 ),
                 body="\n".join(body_lines) + "\n",
                 class_code=CLASS_CODE_AGG,
-                run_kwargs={"level": 3, "optimise": 30},
+                run_kwargs={"level": 3, "optimise": 30, "over_time": True},
             )
         else:
             filename = "optim_aggregated"

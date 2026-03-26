@@ -69,7 +69,6 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
 def example_perf_self_benchmark_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Bencher self-introspection: overhead tracked over time."""
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-    run_cfg.over_time = True
     run_cfg.auto_plot = False
     time_src = bn.git_time_event()
     bench = BencherSelfBenchmark().to_bench(run_cfg)
@@ -90,4 +89,4 @@ def example_perf_self_benchmark_over_time(run_cfg: bn.BenchRunCfg | None = None)
 
 
 if __name__ == "__main__":
-    bn.run(example_perf_self_benchmark_over_time)
+    bn.run(example_perf_self_benchmark_over_time, over_time=True)
