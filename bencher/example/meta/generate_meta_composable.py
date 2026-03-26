@@ -289,7 +289,7 @@ class MetaComposableAllTypes(MetaGeneratorBase):
             "bench.plot_sweep(\n"
             '    title="Composable Container: All ComposeTypes",\n'
             "    input_vars=[\n"
-            "        bn.p(\n"
+            "        bn.sweep(\n"
             '            "compose_method",\n'
             "            [bn.ComposeType.right, bn.ComposeType.down,\n"
             "             bn.ComposeType.sequence, bn.ComposeType.overlay],\n"
@@ -322,21 +322,21 @@ def example_meta_composable(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaComposableVideo().to_bench(run_cfg)
     bench.plot_sweep(
         title="Composable Video Examples",
-        input_vars=[bn.p("compose", ["right", "down", "sequence", "overlay"])],
+        input_vars=[bn.sweep("compose", ["right", "down", "sequence", "overlay"])],
     )
 
     # Panel backend: one example per supported ComposeType
     bench2 = MetaComposablePanel().to_bench(run_cfg)
     bench2.plot_sweep(
         title="Composable Panel Examples",
-        input_vars=[bn.p("compose", ["right", "down", "sequence"])],
+        input_vars=[bn.sweep("compose", ["right", "down", "sequence"])],
     )
 
     # Dataset backend: one example per ComposeType
     bench3 = MetaComposableDataset().to_bench(run_cfg)
     bench3.plot_sweep(
         title="Composable Dataset Examples",
-        input_vars=[bn.p("compose", ["right", "down", "sequence", "overlay"])],
+        input_vars=[bn.sweep("compose", ["right", "down", "sequence", "overlay"])],
     )
 
     # Sweep all ComposeTypes in a single benchmark

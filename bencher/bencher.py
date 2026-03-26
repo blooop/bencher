@@ -352,7 +352,8 @@ class Bench(BenchPlotServer):
 
         self.last_run_cfg = run_cfg
 
-        input_vars_in = self._resolve_input_vars(input_vars_in, run_cfg)
+        for i in range(len(input_vars_in)):
+            input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
         for i in range(len(result_vars_in)):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
 
@@ -437,57 +438,6 @@ class Bench(BenchPlotServer):
             agg_fn=agg_fn,
         )
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
-
-    def _resolve_input_vars(self, input_vars_in, run_cfg):
-        """Normalize input_vars from various shorthand forms into a list of param.Parameter.
-
-        Supported forms:
-            - dict:  ``{"theta": [0, 0.5, 1.0], "phi": 5, "psi": None}``
-              Values can be a list (explicit values), an int (number of samples),
-              or None (use sweep defaults).
-            - list:  ``["theta", {"phi": [1, 2]}, Cfg.param.psi]``
-              Elements can be strings, dicts (single-entry ``{name: spec}``),
-              ``bn.p()`` dicts, or param.Parameter objects.
-        """
-        if isinstance(input_vars_in, dict):
-            result = []
-            for k, v in input_vars_in.items():
-                param_var = self.convert_vars_to_params(k, "input", run_cfg)
-                if isinstance(v, list):
-                    if len(v) == 0:
-                        raise ValueError(f"Input variable '{k}' cannot be an empty list")
-                    param_var = param_var.with_sample_values(v)
-                elif isinstance(v, int):
-                    param_var = param_var.with_samples(v)
-                elif v is not None:
-                    raise TypeError(
-                        f"Input variable '{k}' value must be a list, int, or None, not {type(v)}"
-                    )
-                result.append(param_var)
-            return result
-
-        # List form — expand inline dicts like {"theta": [0, 0.5, 1.0]}
-        expanded = []
-        for item in input_vars_in:
-            if isinstance(item, dict) and "name" not in item:
-                # Inline dict shorthand: {"theta": [0, 0.5, 1.0]}
-                for k, v in item.items():
-                    param_var = self.convert_vars_to_params(k, "input", run_cfg)
-                    if isinstance(v, list):
-                        if len(v) == 0:
-                            raise ValueError(f"Input variable '{k}' cannot be an empty list")
-                        param_var = param_var.with_sample_values(v)
-                    elif isinstance(v, int):
-                        param_var = param_var.with_samples(v)
-                    elif v is not None:
-                        raise TypeError(
-                            f"Input variable '{k}' value must be a list, int, or None, "
-                            f"not {type(v)}"
-                        )
-                    expanded.append(param_var)
-            else:
-                expanded.append(self.convert_vars_to_params(item, "input", run_cfg))
-        return expanded
 
     @staticmethod
     def filter_overridable_params(

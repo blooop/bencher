@@ -323,7 +323,7 @@ def example_meta_plot_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Plot Types",
-        input_vars=[bn.p("plot_type", PLOT_NAMES)],
+        input_vars=[bn.sweep("plot_type", PLOT_NAMES)],
     )
 
     return bench

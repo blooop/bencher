@@ -11,6 +11,7 @@ import random
 import unittest
 from copy import deepcopy
 
+import bencher as bn
 from bencher import Bench, BenchRunCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 
@@ -187,56 +188,72 @@ class TestPlotSweepResultConsistency(unittest.TestCase):
             self.assertTrue(ds1[var].equals(ds2[var]), f"Data variable '{var}' differs")
 
 
-class TestDictInputVars(unittest.TestCase):
-    """Verify that plot_sweep() accepts dict and inline-dict input_vars."""
+class TestBoundsAPI(unittest.TestCase):
+    """Verify that bounds= works via bn.sweep() and Cfg.param.theta()."""
 
     def setUp(self):
         random.seed(42)
-        self.bench = Bench("test_dict_input", ExampleBenchCfg())
+        self.bench = Bench("test_bounds", ExampleBenchCfg())
         self.run_cfg = BenchRunCfg(repeats=1, over_time=False, auto_plot=False)
 
-    def test_dict_with_list_values(self):
+    def test_callable_bounds_with_samples(self):
+        """Cfg.param.theta(bounds=(lo, hi), samples=N) works in list form."""
         res = self.bench.plot_sweep(
-            title="dict_list",
-            input_vars={"theta": [0.0, 1.0, 2.0]},
+            title="callable_bounds",
+            input_vars=[ExampleBenchCfg.param.theta(bounds=(0.0, 1.0), samples=6)],
             result_vars=[ExampleBenchCfg.param.out_sin],
             run_cfg=self.run_cfg,
         )
-        self.assertEqual(res.result_samples(), 3)
+        self.assertEqual(res.result_samples(), 6)
 
-    def test_dict_with_int_samples(self):
+    def test_callable_bounds_default_samples(self):
+        """Cfg.param.theta(bounds=(lo, hi)) keeps default sample count."""
         res = self.bench.plot_sweep(
-            title="dict_int",
-            input_vars={"theta": 5},
+            title="callable_bounds_default",
+            input_vars=[ExampleBenchCfg.param.theta(bounds=(0.0, 1.0))],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        self.assertEqual(res.result_samples(), 30)
+
+    def test_sweep_string_bounds_with_samples(self):
+        """bn.sweep("theta", bounds=(lo, hi), samples=N) works."""
+        res = self.bench.plot_sweep(
+            title="sweep_bounds",
+            input_vars=[bn.sweep("theta", bounds=(0.0, 1.0), samples=4)],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        self.assertEqual(res.result_samples(), 4)
+
+    def test_sweep_string_bounds_default_samples(self):
+        """bn.sweep("theta", bounds=(lo, hi)) keeps default sample count."""
+        res = self.bench.plot_sweep(
+            title="sweep_bounds_default",
+            input_vars=[bn.sweep("theta", bounds=(0.0, 1.0))],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        self.assertEqual(res.result_samples(), 30)
+
+    def test_sweep_obj_bounds(self):
+        """bn.sweep(Cfg.param.theta, bounds=(lo, hi), samples=N) with SweepBase object."""
+        res = self.bench.plot_sweep(
+            title="sweep_obj_bounds",
+            input_vars=[bn.sweep(ExampleBenchCfg.param.theta, bounds=(0.0, 1.0), samples=5)],
             result_vars=[ExampleBenchCfg.param.out_sin],
             run_cfg=self.run_cfg,
         )
         self.assertEqual(res.result_samples(), 5)
 
-    def test_dict_with_none_defaults(self):
-        res = self.bench.plot_sweep(
-            title="dict_none",
-            input_vars={"theta": None},
-            result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=self.run_cfg,
-        )
-        self.assertEqual(res.result_samples(), 30)  # theta default samples=30
+    def test_p_deprecation_warning(self):
+        """bn.p() still works but emits a DeprecationWarning."""
+        import warnings
 
-    def test_list_with_inline_dict(self):
-        res = self.bench.plot_sweep(
-            title="list_inline_dict",
-            input_vars=[{"theta": [0.0, 1.0, 2.0]}],
-            result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=self.run_cfg,
-        )
-        self.assertEqual(res.result_samples(), 3)
-
-    def test_list_mixed_string_and_inline_dict(self):
-        res = self.bench.plot_sweep(
-            title="list_mixed",
-            input_vars=[{"theta": [0.0, 1.0]}, "offset"],
-            result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=self.run_cfg,
-        )
-        # 2 theta values * 30 offset samples = 60
-        self.assertEqual(res.result_samples(), 60)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = bn.p("theta", [0.0, 1.0])
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[0].category, DeprecationWarning))
+            self.assertIn("bn.sweep()", str(w[0].message))
+        self.assertEqual(result["name"], "theta")

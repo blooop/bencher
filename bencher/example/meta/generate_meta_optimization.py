@@ -319,8 +319,8 @@ def example_meta_optimization(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
     bench.plot_sweep(
         title="Optimization",
         input_vars=[
-            bn.p("n_objectives", [1, 2]),
-            bn.p("input_dims", [1, 2]),
+            bn.sweep("n_objectives", [1, 2]),
+            bn.sweep("input_dims", [1, 2]),
         ],
     )
 
@@ -332,7 +332,7 @@ def example_meta_optimization_over_time(run_cfg: bn.BenchRunCfg | None = None) -
 
     bench.plot_sweep(
         title="Optimization Over Time",
-        input_vars=[bn.p("input_dims", [1, 2])],
+        input_vars=[bn.sweep("input_dims", [1, 2])],
     )
 
     return bench
@@ -343,7 +343,7 @@ def example_meta_optimization_aggregated(run_cfg: bn.BenchRunCfg | None = None) 
 
     bench.plot_sweep(
         title="Optimization Aggregated",
-        input_vars=[bn.p("with_over_time", [False])],
+        input_vars=[bn.sweep("with_over_time", [False])],
     )
 
     return bench

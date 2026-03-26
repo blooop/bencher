@@ -41,8 +41,8 @@ class MetaLevels(MetaGeneratorBase):
             "bench.plot_sweep(\n"
             '    title="Using Levels to define sample density",\n'
             "    input_vars=[\n"
-            '        bn.p("float_vars", [1, 2]),\n'
-            '        bn.p("level", [2, 3, 4, 5]),\n'
+            '        bn.sweep("float_vars", [1, 2]),\n'
+            '        bn.sweep("level", [2, 3, 4, 5]),\n'
             "    ],\n"
             "    const_vars=dict(categorical_vars=0),\n"
             f"    description={levels_desc!r},\n"

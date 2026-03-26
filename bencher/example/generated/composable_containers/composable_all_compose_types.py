@@ -82,7 +82,7 @@ def example_composable_all_compose_types(run_cfg: bn.BenchRunCfg | None = None) 
     bench.plot_sweep(
         title="Composable Container: All ComposeTypes",
         input_vars=[
-            bn.p(
+            bn.sweep(
                 "compose_method",
                 [
                     bn.ComposeType.right,

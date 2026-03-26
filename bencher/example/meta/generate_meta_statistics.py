@@ -107,7 +107,7 @@ def example_meta_statistics(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Statistics Examples",
-        input_vars=[bn.p("example_variant", [0, 1, 2])],
+        input_vars=[bn.sweep("example_variant", [0, 1, 2])],
     )
 
     return bench

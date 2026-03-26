@@ -213,15 +213,35 @@ class TestSweepBase(unittest.TestCase):
         copy = AllSweepVars.param.var_float().values()
         self.assertEqual(str(original), str(copy))
 
-    def test_p_with_param_object(self):
-        result = bn.p(AllSweepVars.param.var_float, [0, 1, 5])
+    def test_sweep_with_param_object(self):
+        result = bn.sweep(AllSweepVars.param.var_float, [0, 1, 5])
         self.assertIsInstance(result, bn.SweepBase)
         self.assertEqual(result.values(), [0, 1, 5])
 
-    def test_p_with_param_object_samples(self):
-        result = bn.p(AllSweepVars.param.var_float, samples=3)
+    def test_sweep_with_param_object_samples(self):
+        result = bn.sweep(AllSweepVars.param.var_float, samples=3)
         self.assertIsInstance(result, bn.SweepBase)
         self.assertEqual(len(result.values()), 3)
+
+    def test_sweep_with_param_object_bounds(self):
+        result = bn.sweep(AllSweepVars.param.var_float, bounds=(0, 5), samples=3)
+        self.assertIsInstance(result, bn.SweepBase)
+        self.assertEqual(len(result.values()), 3)
+        self.assertAlmostEqual(result.values()[0], 0.0)
+        self.assertAlmostEqual(result.values()[-1], 5.0)
+
+    def test_sweep_with_string_bounds(self):
+        result = bn.sweep("var_float", bounds=(0, 5), samples=3)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["bounds"], (0, 5))
+        self.assertEqual(result["samples"], 3)
+
+    def test_callable_sweep_bounds(self):
+        result = AllSweepVars.param.var_float(bounds=(0, 5), samples=3)
+        self.assertIsInstance(result, bn.SweepBase)
+        self.assertEqual(len(result.values()), 3)
+        self.assertAlmostEqual(result.values()[0], 0.0)
+        self.assertAlmostEqual(result.values()[-1], 5.0)
 
 
 if __name__ == "__main__":

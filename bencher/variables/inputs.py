@@ -605,23 +605,33 @@ def box(name: str, center: float, width: float) -> FloatSweep:
     return var
 
 
-def p(
+def sweep(
     name: str | SweepBase,
     values: list[Any] | None = None,
+    *,
     samples: int | None = None,
+    bounds: tuple[float, float] | None = None,
     max_level: int | None = None,
 ) -> dict[str, Any] | SweepBase:
-    """
-    Create a parameter specification for use in plot_sweep input_vars.
+    """Create a parameter specification for use in plot_sweep input_vars.
 
     Accepts either a string parameter name (returns a dict for deferred lookup)
     or a SweepBase parameter object (returns a configured sweep directly).
 
+    Examples::
+
+        bn.sweep("theta", [0, 0.5, 1.0])                  # explicit values
+        bn.sweep("theta", samples=5)                        # override sample count
+        bn.sweep("theta", bounds=(0, 1))                    # override range
+        bn.sweep("theta", bounds=(0, 1), samples=10)        # override range + count
+        bn.sweep(Cfg.param.theta, bounds=(0, 1), samples=5) # SweepBase object
+
     Args:
         name: The parameter name (str) or a param object (e.g. ``Cfg.param.theta``).
-        values (list[Any], optional): A list of values for the parameter. Defaults to None.
-        samples (int, optional): The number of samples. Must be greater than 0 if provided. Defaults to None.
-        max_level (int, optional): The maximum level. Must be greater than 0 if provided. Defaults to None.
+        values: A list of values for the parameter.
+        samples: The number of samples. Must be > 0 if provided.
+        bounds: ``(low, high)`` tuple to override the sweep range.
+        max_level: The maximum level. Must be > 0 if provided.
 
     Returns:
         dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.
@@ -632,20 +642,43 @@ def p(
     if samples is not None and samples <= 0:
         raise ValueError("samples must be greater than 0")
 
-    # If a SweepBase param object is passed, delegate to its callable API
+    # If a SweepBase param object is passed, delegate to its methods directly
     if isinstance(name, SweepBase):
         if max_level is not None:
             raise ValueError(
-                "max_level is not supported when passing a SweepBase object to p(). "
-                "Use the string-based API instead: p('param_name', max_level=N)"
+                "max_level is not supported when passing a SweepBase object to sweep(). "
+                "Use the string-based API instead: sweep('param_name', max_level=N)"
             )
         if values is not None:
             return name.with_sample_values(values)
+        if bounds is not None:
+            return name.with_bounds(bounds[0], bounds[1], samples)
         if samples is not None:
             return name.with_samples(samples)
         return deepcopy(name)
 
-    return {"name": name, "values": values, "max_level": max_level, "samples": samples}
+    return {
+        "name": name,
+        "values": values,
+        "max_level": max_level,
+        "samples": samples,
+        "bounds": bounds,
+    }
+
+
+def p(
+    name: str | SweepBase,
+    values: list[Any] | None = None,
+    *,
+    samples: int | None = None,
+    bounds: tuple[float, float] | None = None,
+    max_level: int | None = None,
+) -> dict[str, Any] | SweepBase:
+    """Deprecated: use ``bn.sweep()`` instead."""
+    import warnings
+
+    warnings.warn("bn.p() is deprecated, use bn.sweep() instead", DeprecationWarning, stacklevel=2)
+    return sweep(name, values, samples=samples, bounds=bounds, max_level=max_level)
 
 
 def with_level(arr: list, level: int) -> list:
