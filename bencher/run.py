@@ -16,7 +16,10 @@ if TYPE_CHECKING:
 
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
+# NOTE: only mutated from the main thread (signal handlers also run there in
+# CPython), so no additional synchronisation is needed.
 _active_runners: list = []
+_sigterm_installed: bool = False
 
 
 def _shutdown_all_servers() -> None:
@@ -27,14 +30,24 @@ def _shutdown_all_servers() -> None:
 
 atexit.register(_shutdown_all_servers)
 
+_prev_sigterm_handler = signal.getsignal(signal.SIGTERM)
 
-def _sigterm_handler(signum, _frame) -> None:
+
+def _sigterm_handler(signum, frame) -> None:
     """Handle SIGTERM so servers are stopped even when the process is killed."""
     _shutdown_all_servers()
-    sys.exit(128 + signum)
+    if _prev_sigterm_handler not in (signal.SIG_DFL, signal.SIG_IGN, None):
+        _prev_sigterm_handler(signum, frame)  # type: ignore[misc]
+    else:
+        sys.exit(128 + signum)
 
 
-signal.signal(signal.SIGTERM, _sigterm_handler)
+def _install_sigterm_handler() -> None:
+    """Install SIGTERM handler lazily, only when servers are actually running."""
+    global _sigterm_installed  # noqa: PLW0603  # pylint: disable=global-statement
+    if not _sigterm_installed:
+        _sigterm_installed = True
+        signal.signal(signal.SIGTERM, _sigterm_handler)
 
 
 def run(
@@ -129,6 +142,7 @@ def run(
     if show and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.
         _active_runners.append(br)
+        _install_sigterm_handler()
         if sys.stdin.isatty():
             # Best-effort delay so Bokeh/Tornado startup logs finish before the
             # prompt is printed (not a guarantee on very slow machines).
