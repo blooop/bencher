@@ -1129,7 +1129,7 @@ class Bench(BenchPlotServer):
                     study.add_trials(trials)
                     added += len(trials)
             except Exception:  # pylint: disable=broad-except
-                pass
+                logging.debug("Failed to warm-start from result", exc_info=True)
         return added
 
     def _warm_from_sample_cache(
@@ -1194,7 +1194,7 @@ class Bench(BenchPlotServer):
                     study.add_trial(trial)
                     added += 1
                 except Exception:  # pylint: disable=broad-except
-                    pass
+                    logging.debug("Failed to warm-start trial from cache", exc_info=True)
 
         return added
 
