@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import sys
 from typing import Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
@@ -114,7 +115,15 @@ def run(
         grouped=grouped,
         cache_results=cache_results,
     )
-    # Prevent garbage collection from killing the panel servers
     if show and br.servers:
-        _active_runners.append(br)
+        if sys.stdin.isatty():
+            # Interactive terminal: block until the user is done viewing results.
+            try:
+                input("Press Enter to stop the server(s) and exit...\n")
+            except (EOFError, KeyboardInterrupt):
+                pass
+            br.shutdown()
+        else:
+            # Non-interactive (CI, piped, etc.): keep alive, let atexit clean up.
+            _active_runners.append(br)
     return results
