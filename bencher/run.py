@@ -70,7 +70,7 @@ def run(
     publish: bool = False,
     grouped: bool = False,
     cache_results: bool = True,
-    over_time: bool = False,
+    over_time: bool | None = None,
     optimise: int | bool = 0,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
@@ -94,7 +94,7 @@ def run(
         publish: Publish results. Defaults to False.
         grouped: Produce a single HTML page with all benchmarks. Defaults to False.
         cache_results: Use sample cache for previous results. Defaults to True.
-        over_time: Enable time-series benchmarking. Defaults to False.
+        over_time: Enable time-series benchmarking. None preserves run_cfg value.
         optimise: When > 0, appends optuna analysis plots (parameter importance,
             with/without repeats comparison, best parameters) from the sweep results
             to the report. Defaults to 0 (no optimisation analysis).
