@@ -237,8 +237,10 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
 
 .. raw:: html
 
-   <iframe src="_reports/{stem}/{bench.bench_name}.html"
-           style="width:100%; height:800px; border:1px solid #ccc;">
+   <iframe class="bencher-report"
+           src="_reports/{stem}/{bench.bench_name}.html"
+           scrolling="no"
+           style="width:100%; min-height:400px; border:1px solid #ccc; overflow:hidden;">
    </iframe>
 """
     rst_path.write_text(rst_content, encoding="utf-8")

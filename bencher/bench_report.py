@@ -177,20 +177,43 @@ body {{ margin:0; font-family:sans-serif; }}
 iframe {{ width:100%; border:none; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>
-<iframe id="content" src="{first_src}"></iframe>
+<iframe id="content" src="{first_src}" scrolling="no"
+        style="overflow:hidden;"></iframe>
 <script>
 function switchTab(btn, src) {{
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('content').src = src;
 }}
-function resizeIframe() {{
+function resizeInner() {{
   var f = document.getElementById('content');
+  try {{
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {{
+      doc.documentElement.style.overflow = 'hidden';
+      doc.body.style.overflow = 'hidden';
+      var h = doc.documentElement.scrollHeight;
+      if (h > 0) {{ f.style.height = h + 'px'; return; }}
+    }}
+  }} catch(e) {{}}
   f.style.height = (window.innerHeight - f.getBoundingClientRect().top) + 'px';
 }}
-window.addEventListener('resize', resizeIframe);
-document.getElementById('content').addEventListener('load', resizeIframe);
-resizeIframe();
+function setupObserver() {{
+  var f = document.getElementById('content');
+  try {{
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {{
+      new ResizeObserver(function() {{ resizeInner(); }}).observe(doc.body);
+    }}
+  }} catch(e) {{}}
+}}
+window.addEventListener('resize', resizeInner);
+document.getElementById('content').addEventListener('load', function() {{
+  resizeInner(); setupObserver();
+  setTimeout(resizeInner, 500);
+  setTimeout(resizeInner, 1500);
+}});
+resizeInner();
 </script></body></html>"""
         with open(index_path, "w", encoding="utf-8") as f:
             f.write(page)

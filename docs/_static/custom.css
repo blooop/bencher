@@ -68,3 +68,11 @@
     color: #333;
     padding: 10px 8px;
 }
+
+/* --- Bencher report iframes (auto-resized by iframe-resize.js) --- */
+iframe.bencher-report {
+    min-height: 400px;
+    width: 100%;
+    border: 1px solid #ccc;
+    overflow: hidden;
+}
