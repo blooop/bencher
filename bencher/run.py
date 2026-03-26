@@ -25,12 +25,15 @@ _sigterm_installed: bool = False
 def _shutdown_all_servers() -> None:
     """Stop all active panel servers during interpreter exit."""
     while _active_runners:
-        _active_runners.pop().shutdown()
+        try:
+            _active_runners.pop().shutdown()
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            pass
 
 
 atexit.register(_shutdown_all_servers)
 
-_prev_sigterm_handler = signal.getsignal(signal.SIGTERM)
+_prev_sigterm_handler = None
 
 
 def _sigterm_handler(signum, frame) -> None:
@@ -44,9 +47,10 @@ def _sigterm_handler(signum, frame) -> None:
 
 def _install_sigterm_handler() -> None:
     """Install SIGTERM handler lazily, only when servers are actually running."""
-    global _sigterm_installed  # noqa: PLW0603  # pylint: disable=global-statement
+    global _sigterm_installed, _prev_sigterm_handler  # noqa: PLW0603  # pylint: disable=global-statement
     if not _sigterm_installed:
         _sigterm_installed = True
+        _prev_sigterm_handler = signal.getsignal(signal.SIGTERM)
         signal.signal(signal.SIGTERM, _sigterm_handler)
 
 
