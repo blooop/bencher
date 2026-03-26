@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import atexit
+import signal
+import sys
+import time
 from typing import Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
@@ -12,7 +16,45 @@ if TYPE_CHECKING:
 
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
+# NOTE: only mutated from the main thread (signal handlers also run there in
+# CPython), so no additional synchronisation is needed.
 _active_runners: list = []
+_sigterm_installed: bool = False
+
+
+def _shutdown_all_servers() -> None:
+    """Stop all active panel servers during interpreter exit."""
+    while _active_runners:
+        try:
+            _active_runners.pop().shutdown()
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            print(
+                "bencher: error shutting down panel server, continuing cleanup",
+                file=sys.stderr,
+            )
+
+
+atexit.register(_shutdown_all_servers)
+
+_prev_sigterm_handler = None
+
+
+def _sigterm_handler(signum, frame) -> None:
+    """Handle SIGTERM so servers are stopped even when the process is killed."""
+    _shutdown_all_servers()
+    if _prev_sigterm_handler not in (signal.SIG_DFL, signal.SIG_IGN, None):
+        _prev_sigterm_handler(signum, frame)  # type: ignore[misc]
+    else:
+        sys.exit(128 + signum)
+
+
+def _install_sigterm_handler() -> None:
+    """Install SIGTERM handler lazily, only when servers are actually running."""
+    global _sigterm_installed, _prev_sigterm_handler  # noqa: PLW0603  # pylint: disable=global-statement
+    if not _sigterm_installed:
+        _sigterm_installed = True
+        _prev_sigterm_handler = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGTERM, _sigterm_handler)
 
 
 def run(
@@ -104,7 +146,25 @@ def run(
         grouped=grouped,
         cache_results=cache_results,
     )
-    # Prevent garbage collection from killing the panel servers
     if show and br.servers:
+        # Always register so atexit/SIGTERM can clean up as a safety net.
         _active_runners.append(br)
+        _install_sigterm_handler()
+        if sys.stdin.isatty():
+            # Best-effort delay so Bokeh/Tornado startup logs finish before the
+            # prompt is printed (not a guarantee on very slow machines).
+            time.sleep(1)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            # Interactive terminal: block until the user is done viewing results.
+            try:
+                input("Press Enter to stop the server(s) and exit...")
+            except (EOFError, KeyboardInterrupt):
+                pass
+            br.shutdown()
+            # Remove so atexit/SIGTERM doesn't double-stop.
+            try:
+                _active_runners.remove(br)
+            except ValueError:
+                pass
     return results

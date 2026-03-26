@@ -141,7 +141,7 @@ def example_meta_publish(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Publishing Patterns",
-        input_vars=[bn.p("example", PUBLISH_EXAMPLES)],
+        input_vars=[bn.sweep("example", PUBLISH_EXAMPLES)],
     )
 
     return bench

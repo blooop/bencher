@@ -180,7 +180,7 @@ Each category combination produces a distinct scalar value from the unified func
 the default float point (0,0,0).""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", sample_repeats_values),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=0),
@@ -193,7 +193,7 @@ Categories shift the frequency and phase of the underlying function, producing v
 curves.""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", sample_repeats_values),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=1),
@@ -205,7 +205,7 @@ curves.""",
 The unified function creates interesting 2D patterns that vary with category selection.""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", sample_repeats_values),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=2),
@@ -217,7 +217,7 @@ The unified function creates interesting 2D patterns that vary with category sel
 The full 3D function with all cross-coupling terms active.""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", sample_repeats_values),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=3),

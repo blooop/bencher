@@ -264,7 +264,7 @@ def example_meta_bool_plot_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
 
     bench.plot_sweep(
         title="Bool Plot Types",
-        input_vars=[bn.p("plot_type", BOOL_PLOT_NAMES)],
+        input_vars=[bn.sweep("plot_type", BOOL_PLOT_NAMES)],
     )
 
     return bench

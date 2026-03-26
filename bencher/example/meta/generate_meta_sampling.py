@@ -91,19 +91,19 @@ class MetaSampling(MetaGeneratorBase):
                 "bench = CustomSampler().to_bench(run_cfg)\n"
                 "\n"
                 "# There are several equivalent ways to specify custom sample values:\n"
-                "#   1. bn.p('load', [0.0, 0.3, 0.7, 1.0])  -- shorthand helper\n"
+                "#   1. bn.sweep('load', [0.0, 0.3, 0.7, 1.0])  -- shorthand helper\n"
                 "#   2. CustomSampler.param.load.with_sample_values([0.0, 0.3, 0.7, 1.0])\n"
-                "#   3. bn.p('load', samples=5)  -- override the number of uniform samples\n"
+                "#   3. bn.sweep('load', samples=5)  -- override the number of uniform samples\n"
                 "\n"
                 "# Explicit sample values\n"
                 "bench.plot_sweep(\n"
-                '    title="Custom Sample Values with bn.p()",\n'
-                '    input_vars=[bn.p("load", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
+                '    title="Custom Sample Values with bn.sweep()",\n'
+                '    input_vars=[bn.sweep("load", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],\n'
                 '    result_vars=["latency"],\n'
                 '    description="Custom sample values let you pick exact points '
-                "to evaluate instead of a uniform sweep. Use bn.p('name', [values]) "
+                "to evaluate instead of a uniform sweep. Use bn.sweep('name', [values]) "
                 "as shorthand, or Cls.param.name.with_sample_values([values]) for "
-                "the explicit form. You can also use bn.p('name', samples=N) to "
+                "the explicit form. You can also use bn.sweep('name', samples=N) to "
                 'override the number of uniform samples without listing values.",\n'
                 '    post_description="The plot shows the function evaluated only at '
                 "the six hand-picked load values. Compare with the uniform sampling "
@@ -112,10 +112,10 @@ class MetaSampling(MetaGeneratorBase):
                 "\n"
                 "# Override number of uniform samples\n"
                 "bench.plot_sweep(\n"
-                '    title="Override Uniform Sample Count with bn.p()",\n'
-                '    input_vars=[bn.p("load", samples=5)],\n'
+                '    title="Override Uniform Sample Count with bn.sweep()",\n'
+                '    input_vars=[bn.sweep("load", samples=5)],\n'
                 '    result_vars=["latency"],\n'
-                "    description=\"bn.p('load', samples=5) overrides how many "
+                "    description=\"bn.sweep('load', samples=5) overrides how many "
                 "uniformly-spaced samples are taken from the variable's bounds, "
                 'without listing explicit values.",\n'
                 ")\n"
@@ -157,7 +157,7 @@ def example_meta_sampling(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Sampling Strategies",
-        input_vars=[bn.p("strategy", STRATEGIES)],
+        input_vars=[bn.sweep("strategy", STRATEGIES)],
     )
 
     return bench

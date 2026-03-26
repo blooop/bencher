@@ -150,6 +150,38 @@ class SweepBase(param.Parameter):
             output.step = None  # pylint: disable = attribute-defined-outside-init
         return output
 
+    def with_bounds(self, low: float, high: float, samples: int | None = None) -> SweepBase:
+        """Create a copy with overridden sweep bounds (and optionally sample count).
+
+        Args:
+            low: Lower bound of the sweep range.
+            high: Upper bound of the sweep range.
+            samples: Number of samples.  When *None* the existing sample count is kept.
+
+        Returns:
+            SweepBase: A new sweep with the specified bounds.
+
+        Raises:
+            ValueError: If *low* >= *high* or the sweep has no bounds attributes.
+        """
+        if low >= high:
+            raise ValueError(f"low must be less than high, got low={low}, high={high}")
+        output = deepcopy(self)
+        if hasattr(output, "softbounds"):
+            output.softbounds = (low, high)  # pylint: disable=attribute-defined-outside-init
+        elif hasattr(output, "bounds"):
+            output.bounds = (low, high)  # pylint: disable=attribute-defined-outside-init
+        else:
+            raise ValueError(
+                f"{type(self).__name__} has neither 'softbounds' nor 'bounds'; "
+                "with_bounds() cannot override the range"
+            )
+        if samples is not None:
+            output.samples = samples  # pylint: disable=attribute-defined-outside-init
+        if hasattr(output, "step"):
+            output.step = None  # pylint: disable=attribute-defined-outside-init
+        return output
+
     def with_sample_values(self, sample_values: list) -> SweepBase:
         output = deepcopy(self)
         # TODO set up class properly. Slightly complicated due to slots
@@ -160,23 +192,39 @@ class SweepBase(param.Parameter):
         output.samples = len(sample_values)  # pylint: disable = attribute-defined-outside-init
         return output
 
-    def __call__(self, values: list | None = None, *, samples: int | None = None) -> SweepBase:
-        """Shorthand for creating a sweep with specific values or sample count.
+    def __call__(
+        self,
+        values: list | None = None,
+        *,
+        samples: int | None = None,
+        bounds: tuple[float, float] | None = None,
+    ) -> SweepBase:
+        """Shorthand for creating a sweep with specific values, sample count, or bounds.
 
         Usage::
 
-            Cfg.param.theta([0, 0.5, 1.0])   # explicit values
-            Cfg.param.theta(samples=5)         # override sample count
+            Cfg.param.theta([0, 0.5, 1.0])            # explicit values
+            Cfg.param.theta(samples=5)                  # override sample count
+            Cfg.param.theta(bounds=(0, 1))              # override range
+            Cfg.param.theta(bounds=(0, 1), samples=10)  # override range and count
 
         Args:
             values: Explicit list of values to sweep through.
             samples: Number of samples to take from the sweep range.
+            bounds: ``(low, high)`` tuple to override the sweep range.
 
         Returns:
-            SweepBase: A copy of this sweep with the specified values or sample count.
+            SweepBase: A copy of this sweep with the specified configuration.
         """
+        if values is not None and (bounds is not None or samples is not None):
+            raise ValueError(
+                "Cannot combine 'values' with 'bounds' or 'samples'. "
+                "Use values alone, or bounds/samples together."
+            )
         if values is not None:
             return self.with_sample_values(values)
+        if bounds is not None:
+            return self.with_bounds(bounds[0], bounds[1], samples)
         if samples is not None:
             return self.with_samples(samples)
         return deepcopy(self)

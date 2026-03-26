@@ -105,7 +105,7 @@ def example_meta_regression(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Regression Detection",
-        input_vars=[bn.p("example", REGRESSION_EXAMPLES)],
+        input_vars=[bn.sweep("example", REGRESSION_EXAMPLES)],
     )
 
     return bench

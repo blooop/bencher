@@ -333,7 +333,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "bench = _ComposableImageDemo().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"
             "    input_vars=[\n"
-            "        bn.p(\n"
+            "        bn.sweep(\n"
             '            "compose_method",\n'
             "            [bn.ComposeType.right, bn.ComposeType.sequence, "
             "bn.ComposeType.down],\n"
@@ -363,8 +363,8 @@ def example_meta_image_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         title="Image/Video Sweeps",
         input_vars=[
-            bn.p("result_kind", ["result_image", "result_video"]),
-            bn.p("input_dims", [0, 1, 2]),
+            bn.sweep("result_kind", ["result_image", "result_video"]),
+            bn.sweep("input_dims", [0, 1, 2]),
         ],
     )
 
@@ -373,7 +373,7 @@ def example_meta_image_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench2.plot_sweep(
         title="Image/Video Rich Examples",
         input_vars=[
-            bn.p(
+            bn.sweep(
                 "example_name",
                 [
                     "result_image_progressive",

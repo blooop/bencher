@@ -297,8 +297,8 @@ def example_meta_result_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
     bench.plot_sweep(
         title="Result Types",
         input_vars=[
-            bn.p("result_type", RESULT_TYPES),
-            bn.p("input_dims", [0, 1, 2]),
+            bn.sweep("result_type", RESULT_TYPES),
+            bn.sweep("input_dims", [0, 1, 2]),
         ],
     )
 

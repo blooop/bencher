@@ -353,22 +353,21 @@ class Bench(BenchPlotServer):
         self.last_run_cfg = run_cfg
 
         if isinstance(input_vars_in, dict):
-            input_lists = []
-            for k, v in input_vars_in.items():
-                param_var = self.convert_vars_to_params(k, "input", run_cfg)
-                if isinstance(v, list):
-                    if len(v) == 0:
-                        raise ValueError(f"Input variable '{k}' cannot be an empty list")
-                    param_var = param_var.with_sample_values(v)
+            import warnings
 
-                else:
-                    raise RuntimeError("Unsupported type")
-                input_lists.append(param_var)
+            warnings.warn(
+                "Passing input_vars as a dict is deprecated. "
+                "Use a list of bn.sweep() specs instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            input_vars_in = [
+                {"name": k, "values": v if isinstance(v, list) else None}
+                for k, v in input_vars_in.items()
+            ]
 
-            input_vars_in = input_lists
-        else:
-            for i in range(len(input_vars_in)):
-                input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
+        for i in range(len(input_vars_in)):
+            input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
         for i in range(len(result_vars_in)):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
 

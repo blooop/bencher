@@ -8,8 +8,8 @@ def example_meta_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         title="Sweeping Categorical Variables",
         input_vars=[
-            bn.p("categorical_vars", [1, 2, 3]),
-            bn.p("sample_with_repeats", [1, 2]),
+            bn.sweep("categorical_vars", [1, 2, 3]),
+            bn.sweep("sample_with_repeats", [1, 2]),
         ],
         const_vars=dict(float_vars=0),
     )
