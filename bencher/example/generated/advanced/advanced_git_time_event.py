@@ -26,9 +26,6 @@ class ServerLatency(bn.ParametrizedSweep):
 
 def example_advanced_git_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Git Time Event — date + commit hash slider labels."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-    run_cfg.over_time = True
-
     bench = ServerLatency().to_bench(run_cfg)
 
     # git_time_event() returns a string like "2024-06-15 abc1234d".
@@ -47,4 +44,4 @@ def example_advanced_git_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_git_time_event, level=3)
+    bn.run(example_advanced_git_time_event, level=3, over_time=True)

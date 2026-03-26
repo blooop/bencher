@@ -29,8 +29,8 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
 
 def example_advanced_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Time Events — track metrics across discrete events."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-    run_cfg.over_time = True
+    if run_cfg is None:
+        run_cfg = bn.BenchRunCfg()
 
     benchable = PullRequestBenchmark()
     bench = benchable.to_bench(run_cfg)
@@ -56,4 +56,4 @@ def example_advanced_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_time_event, level=3)
+    bn.run(example_advanced_time_event, level=3, over_time=True)

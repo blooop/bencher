@@ -72,8 +72,8 @@ bench.plot_sweep(
         imports = "import bencher as bn"
 
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-run_cfg.over_time = True
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
 run_cfg.auto_plot = False
 time_src = bn.git_time_event()
 bench = BencherSelfBenchmark().to_bench(run_cfg)
@@ -99,6 +99,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=_get_shared_class_code(),
+            run_kwargs={"over_time": True},
         )
 
 

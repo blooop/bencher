@@ -27,8 +27,8 @@ class SortBenchmark(bn.ParametrizedSweep):
 
 def example_sweep_1_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """1 Float, 0 Categorical (over time)."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-    run_cfg.over_time = True
+    if run_cfg is None:
+        run_cfg = bn.BenchRunCfg()
     benchable = SortBenchmark()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)
@@ -50,4 +50,4 @@ def example_sweep_1_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_1_float_0_cat_over_time, level=4)
+    bn.run(example_sweep_1_float_0_cat_over_time, level=4, over_time=True)

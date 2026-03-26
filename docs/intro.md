@@ -89,7 +89,13 @@ Bencher assumes your function is a stochastic pure function — given the same i
 
 ## Tracking Over Time
 
-Track how results change across successive runs by calling `plot_sweep()` multiple times with different `time_src` values:
+Enable `over_time` to record time-series snapshots that can be scrubbed via a slider:
+
+```python
+bn.run(MyBench, level=3, repeats=3, over_time=True)
+```
+
+For multi-snapshot tracking (e.g. CI pipelines), call `plot_sweep()` in a loop with different `time_src` values:
 
 ```python
 run_cfg = bn.BenchRunCfg(over_time=True, repeats=3)

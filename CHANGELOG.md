@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.73.0] - 2026-03-26
+
+### Added
+- `bn.sweep()` API with `bounds=(low, high)` support as the unified replacement for `bn.p()` — `bn.p()` still works but emits a `DeprecationWarning` (#838)
+- `SweepBase.__call__()` for concise, type-safe sweep configuration: `Cfg.param.theta([0, 0.5, 1.0])` or `Cfg.param.theta(samples=5)` (#838)
+- `SweepBase.with_bounds()` for overriding sweep ranges immutably (#838)
+- Dict and inline-dict shorthand for `input_vars` in `plot_sweep`: `{"theta": [0, 0.5, 1.0]}`, `{"theta": 5}`, `{"theta": None}` (#842)
+- `atexit` handler to stop Panel servers on exit, preventing process hangs after `bn.run(show=True)` (#841)
+- Interactive prompt in terminal mode — press Enter to stop servers after viewing results (#841)
+- SIGTERM handler chaining — lazily installed only when servers are created, chains to previous handler instead of calling `sys.exit()` (#841)
+- `over_time` parameter on `bn.run()` and `BenchRunner.run()` — enables time-series benchmarking without manually creating a `BenchRunCfg` (#848)
+- 2-float 2-categorical aggregation example (`agg_list_2_cat`) demonstrating `aggregate=["direction", "scale"]` on a `GradientSurface` class (#845)
+
+### Changed
+- `FloatSweep`/`IntSweep` now store user-supplied bounds as param `softbounds` instead of hard bounds, so values outside the defined sweep range are no longer rejected by `update_params_from_kwargs` (#838)
+- `BenchRunCfg.with_defaults()` returns a deep copy and merges defaults into caller-provided configs instead of ignoring them (#840)
+- `BenchRunCfg.with_defaults()` raises `ValueError` for unknown parameter names to catch typos early (#840)
+- Rename `test/test_bn_p.py` to `test/test_sweep_helper.py` to match new `bn.sweep()` API
+- Generated over_time examples now pass `over_time=True` via `bn.run()` kwargs instead of setting `run_cfg.over_time` inside the function body (#848)
+
+### Fixed
+- `bn.p()` now raises `ValueError` when `max_level` is used with `SweepBase` objects, which require `run_cfg.level` at execution time (#838)
+- `bn.sweep()` / `__call__()` reject combining explicit `values` with `bounds`/`samples` to prevent ambiguous configurations (#838)
+- Server shutdown is exception-safe — a failing shutdown on one runner no longer prevents cleanup of remaining runners (#841)
+- Shutdown errors are logged to stderr instead of silently swallowed (#841)
+- Interactive prompt delayed to appear after async server startup logs (#841)
+- Optuna plot failures now show diagnostic `Markdown` panels instead of silently swallowing exceptions (#847)
+- `to_optuna_plots()` in `bn.run()` shows a diagnostic when `optimize()` returns `None` (#847)
+- `logging.warning` when `dropna` removes all rows from optuna trial data (#847)
+
 ## [1.72.3] - 2026-03-24
 
 ### Fixed

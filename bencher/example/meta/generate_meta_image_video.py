@@ -261,8 +261,8 @@ class MetaImageVideoRich(MetaGeneratorBase):
             ["import bencher as bn", "from datetime import datetime, timedelta"] + _EXTRA_IMPORTS
         )
         body = (
-            "run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)\n"
-            "run_cfg.over_time = True\n"
+            "if run_cfg is None:\n"
+            "    run_cfg = bn.BenchRunCfg()\n"
             "benchable = PolygonRenderer()\n"
             "bench = benchable.to_bench(run_cfg)\n"
             "_base_time = datetime(2000, 1, 1)\n"
@@ -286,7 +286,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"level": 3, "over_time": True},
         )
 
     # -- Composable container video from images ------------------------------

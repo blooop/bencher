@@ -30,8 +30,8 @@ class LatencyMonitor(bn.ParametrizedSweep):
 
 def example_advanced_max_time_events(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Max Time Events — cap over_time history."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-    run_cfg.over_time = True
+    if run_cfg is None:
+        run_cfg = bn.BenchRunCfg()
 
     # Keep only the 3 most recent time slices in the cache.
     # Without this, every call to plot_sweep appends a new slice and the
@@ -62,4 +62,4 @@ def example_advanced_max_time_events(run_cfg: bn.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_max_time_events, level=3)
+    bn.run(example_advanced_max_time_events, level=3, over_time=True)

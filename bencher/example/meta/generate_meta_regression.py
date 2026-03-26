@@ -53,7 +53,6 @@ class ServerBenchmark(bn.ParametrizedSweep):
         return super().__call__()'''
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
-run_cfg.over_time = True
 run_cfg.regression_detection = True
 run_cfg.regression_method = "percentage"
 run_cfg.regression_fail = False
@@ -97,6 +96,7 @@ if report is not None:
             imports=imports,
             body=body,
             class_code=class_code,
+            run_kwargs={"over_time": True},
         )
 
 
