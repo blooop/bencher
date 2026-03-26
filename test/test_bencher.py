@@ -455,3 +455,15 @@ class TestBenchRunCfgWithDefaults(unittest.TestCase):
         self.assertEqual(cfg.repeats, 3)  # was at default, so applied
         self.assertEqual(cfg.level, 2)  # caller set, so preserved
         self.assertTrue(cfg.headless)  # was at default, so applied
+
+    def test_does_not_mutate_original(self):
+        original = BenchRunCfg()
+        original_repeats = original.repeats
+        result = BenchRunCfg.with_defaults(original, repeats=99)
+        self.assertEqual(result.repeats, 99)
+        self.assertEqual(original.repeats, original_repeats)  # unchanged
+        self.assertIsNot(result, original)
+
+    def test_unknown_key_raises(self):
+        with self.assertRaises(ValueError, msg="Unknown BenchRunCfg parameter"):
+            BenchRunCfg.with_defaults(None, not_a_real_param=42)
