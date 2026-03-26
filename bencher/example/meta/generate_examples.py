@@ -232,14 +232,23 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     rst_content = f"""{title_text}
 {underline}
 
+.. raw:: html
+
+   <iframe class="bencher-report"
+           src="_reports/{stem}/{bench.bench_name}.html"
+           scrolling="no"
+           style="width:100%; min-height:400px; border:none; overflow:hidden;">
+   </iframe>
+
+   <details class="bencher-source">
+   <summary>Source Code</summary>
+
 .. literalinclude:: {py_rel}
    :language: python
 
 .. raw:: html
 
-   <iframe src="_reports/{stem}/{bench.bench_name}.html"
-           style="width:100%; height:800px; border:1px solid #ccc;">
-   </iframe>
+   </details>
 """
     rst_path.write_text(rst_content, encoding="utf-8")
 
