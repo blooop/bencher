@@ -205,6 +205,9 @@ class TestBoundsAPI(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
         self.assertEqual(res.result_samples(), 6)
+        theta_coords = res.ds.coords["theta"].values
+        self.assertAlmostEqual(float(theta_coords.min()), 0.0)
+        self.assertAlmostEqual(float(theta_coords.max()), 1.0)
 
     def test_callable_bounds_default_samples(self):
         """Cfg.param.theta(bounds=(lo, hi)) keeps default sample count."""
@@ -225,6 +228,9 @@ class TestBoundsAPI(unittest.TestCase):
             run_cfg=self.run_cfg,
         )
         self.assertEqual(res.result_samples(), 4)
+        theta_coords = res.ds.coords["theta"].values
+        self.assertAlmostEqual(float(theta_coords.min()), 0.0)
+        self.assertAlmostEqual(float(theta_coords.max()), 1.0)
 
     def test_sweep_string_bounds_default_samples(self):
         """bn.sweep("theta", bounds=(lo, hi)) keeps default sample count."""

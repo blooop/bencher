@@ -352,6 +352,20 @@ class Bench(BenchPlotServer):
 
         self.last_run_cfg = run_cfg
 
+        if isinstance(input_vars_in, dict):
+            import warnings
+
+            warnings.warn(
+                "Passing input_vars as a dict is deprecated. "
+                "Use a list of bn.sweep() specs instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            input_vars_in = [
+                {"name": k, "values": v if isinstance(v, list) else None}
+                for k, v in input_vars_in.items()
+            ]
+
         for i in range(len(input_vars_in)):
             input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
         for i in range(len(result_vars_in)):

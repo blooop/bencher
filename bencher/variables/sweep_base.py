@@ -160,12 +160,22 @@ class SweepBase(param.Parameter):
 
         Returns:
             SweepBase: A new sweep with the specified bounds.
+
+        Raises:
+            ValueError: If *low* >= *high* or the sweep has no bounds attributes.
         """
+        if low >= high:
+            raise ValueError(f"low must be less than high, got low={low}, high={high}")
         output = deepcopy(self)
         if hasattr(output, "softbounds"):
             output.softbounds = (low, high)  # pylint: disable=attribute-defined-outside-init
         elif hasattr(output, "bounds"):
             output.bounds = (low, high)  # pylint: disable=attribute-defined-outside-init
+        else:
+            raise ValueError(
+                f"{type(self).__name__} has neither 'softbounds' nor 'bounds'; "
+                "with_bounds() cannot override the range"
+            )
         if samples is not None:
             output.samples = samples  # pylint: disable=attribute-defined-outside-init
         if hasattr(output, "step"):
@@ -206,6 +216,11 @@ class SweepBase(param.Parameter):
         Returns:
             SweepBase: A copy of this sweep with the specified configuration.
         """
+        if values is not None and (bounds is not None or samples is not None):
+            raise ValueError(
+                "Cannot combine 'values' with 'bounds' or 'samples'. "
+                "Use values alone, or bounds/samples together."
+            )
         if values is not None:
             return self.with_sample_values(values)
         if bounds is not None:

@@ -642,6 +642,12 @@ def sweep(
     if samples is not None and samples <= 0:
         raise ValueError("samples must be greater than 0")
 
+    if values is not None and (bounds is not None or samples is not None):
+        raise ValueError(
+            "Cannot combine 'values' with 'bounds' or 'samples'. "
+            "Use values alone, or bounds/samples together."
+        )
+
     # If a SweepBase param object is passed, delegate to its methods directly
     if isinstance(name, SweepBase):
         if max_level is not None:

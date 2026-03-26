@@ -243,6 +243,55 @@ class TestSweepBase(unittest.TestCase):
         self.assertAlmostEqual(result.values()[0], 0.0)
         self.assertAlmostEqual(result.values()[-1], 5.0)
 
+    def test_with_bounds_direct(self):
+        """Directly test SweepBase.with_bounds() for immutability, bounds, samples, and step."""
+        original = AllSweepVars.param.var_float
+        original_bounds = getattr(original, "softbounds", getattr(original, "bounds", None))
+        original_samples = original.samples
+
+        # Manually set step so we can verify with_bounds resets it
+        original.step = 0.5  # pylint: disable=attribute-defined-outside-init
+
+        # with_bounds without samples: bounds updated, samples preserved, step reset
+        updated = original.with_bounds(2.0, 8.0)
+        self.assertIsNot(original, updated)
+        # original unchanged
+        self.assertEqual(
+            getattr(original, "softbounds", getattr(original, "bounds", None)),
+            original_bounds,
+        )
+        self.assertEqual(original.step, 0.5)
+        # updated has new bounds
+        updated_bounds = getattr(updated, "softbounds", getattr(updated, "bounds", None))
+        self.assertEqual(updated_bounds, (2.0, 8.0))
+        self.assertEqual(updated.samples, original_samples)
+        self.assertIsNone(updated.step)
+
+        # with_bounds with samples: both bounds and samples updated, step reset
+        updated2 = original.with_bounds(1.0, 9.0, samples=10)
+        self.assertIsNot(original, updated2)
+        updated2_bounds = getattr(updated2, "softbounds", getattr(updated2, "bounds", None))
+        self.assertEqual(updated2_bounds, (1.0, 9.0))
+        self.assertEqual(updated2.samples, 10)
+        self.assertIsNone(updated2.step)
+
+        # Clean up
+        original.step = None  # pylint: disable=attribute-defined-outside-init
+
+    def test_with_bounds_invalid_range(self):
+        """with_bounds(low >= high) raises ValueError."""
+        with self.assertRaises(ValueError, msg="low must be less than high"):
+            AllSweepVars.param.var_float.with_bounds(5.0, 5.0)
+        with self.assertRaises(ValueError, msg="low must be less than high"):
+            AllSweepVars.param.var_float.with_bounds(10.0, 2.0)
+
+    def test_callable_conflicts_raise(self):
+        """Passing values together with bounds or samples raises ValueError."""
+        with self.assertRaises(ValueError):
+            AllSweepVars.param.var_float([1, 2], bounds=(0, 5))
+        with self.assertRaises(ValueError):
+            AllSweepVars.param.var_float([1, 2], samples=3)
+
 
 if __name__ == "__main__":
     # TestSweepBase().test_override_defaults()

@@ -5,15 +5,13 @@ from bencher import p, sweep
 
 
 class TestSweep:
-    def test_returns_correct_dict_all_params(self):
-        result = sweep(name="param1", values=[1, 2, 3], samples=10, max_level=5)
-        assert result == {
-            "name": "param1",
-            "values": [1, 2, 3],
-            "samples": 10,
-            "max_level": 5,
-            "bounds": None,
-        }
+    def test_values_with_samples_raises(self):
+        with pytest.raises(ValueError, match="Cannot combine"):
+            sweep(name="param1", values=[1, 2, 3], samples=10)
+
+    def test_values_with_bounds_raises(self):
+        with pytest.raises(ValueError, match="Cannot combine"):
+            sweep(name="param1", values=[1, 2, 3], bounds=(0, 10))
 
     def test_returns_correct_dict_name_only(self):
         result = sweep(name="param1")
