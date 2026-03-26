@@ -369,14 +369,22 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     @classmethod
     def with_defaults(cls, run_cfg=None, **defaults):
-        """Return *run_cfg* unchanged if provided, otherwise create a new instance.
+        """Merge *defaults* into *run_cfg*, creating a new instance when needed.
 
-        Use this in example functions to set preferred defaults that yield to
-        caller-provided values::
+        When *run_cfg* is ``None`` a fresh ``BenchRunCfg`` is created with *defaults*.
+        When *run_cfg* is provided, each default is applied only if the corresponding
+        field is still at its param-level default value (i.e. the caller did not
+        explicitly set it).  This lets benchmark functions declare sensible defaults
+        while still allowing callers to override::
 
             run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
         """
-        return run_cfg if run_cfg is not None else cls(**defaults)
+        if run_cfg is None:
+            return cls(**defaults)
+        for key, value in defaults.items():
+            if key in cls.param and getattr(run_cfg, key) == cls.param[key].default:
+                setattr(run_cfg, key, value)
+        return run_cfg
 
 
 class BenchCfg(BenchRunCfg):

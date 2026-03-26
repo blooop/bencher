@@ -427,3 +427,31 @@ class TestBencher(unittest.TestCase):
             bench._executor.sample_cache.size_limit,  # pylint: disable=protected-access
             expected_bytes,
         )
+
+
+class TestBenchRunCfgWithDefaults(unittest.TestCase):
+    """Tests for BenchRunCfg.with_defaults merging behavior."""
+
+    def test_none_creates_fresh_instance(self):
+        cfg = BenchRunCfg.with_defaults(None, repeats=5, level=4)
+        self.assertEqual(cfg.repeats, 5)
+        self.assertEqual(cfg.level, 4)
+
+    def test_defaults_applied_to_param_default_fields(self):
+        cfg = BenchRunCfg()
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, level=4)
+        self.assertEqual(cfg.repeats, 5)
+        self.assertEqual(cfg.level, 4)
+
+    def test_caller_set_fields_not_overwritten(self):
+        cfg = BenchRunCfg(repeats=10)
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, level=4)
+        self.assertEqual(cfg.repeats, 10)  # caller's value preserved
+        self.assertEqual(cfg.level, 4)  # default still applied
+
+    def test_multiple_defaults_in_one_call(self):
+        cfg = BenchRunCfg(level=2)
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=3, level=7, headless=True)
+        self.assertEqual(cfg.repeats, 3)  # was at default, so applied
+        self.assertEqual(cfg.level, 2)  # caller set, so preserved
+        self.assertTrue(cfg.headless)  # was at default, so applied
