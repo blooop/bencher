@@ -195,6 +195,19 @@ class TestServerShutdown(unittest.TestCase):
             r.shutdown.assert_called_once()
         self.assertEqual(len(_active_runners), 0)
 
+    def test_shutdown_continues_on_error(self):
+        """_shutdown_all_servers keeps going if one runner's shutdown() raises."""
+        bad = MagicMock()
+        bad.shutdown.side_effect = RuntimeError("boom")
+        good = MagicMock()
+        _active_runners.extend([good, bad])
+
+        _shutdown_all_servers()
+
+        bad.shutdown.assert_called_once()
+        good.shutdown.assert_called_once()
+        self.assertEqual(len(_active_runners), 0)
+
     def test_sigterm_handler_calls_shutdown(self):
         """_sigterm_handler shuts down servers then exits."""
         mock_runner = MagicMock()
@@ -221,14 +234,13 @@ class TestServerShutdown(unittest.TestCase):
         """_install_sigterm_handler installs once then is a no-op."""
         current = signal.getsignal(signal.SIGTERM)
         _run_mod._sigterm_installed = False
+        self.addCleanup(signal.signal, signal.SIGTERM, current)
+        self.addCleanup(setattr, _run_mod, "_sigterm_installed", False)
         _install_sigterm_handler()
         self.assertTrue(_run_mod._sigterm_installed)
         # Calling again should be a no-op
         _install_sigterm_handler()
         self.assertTrue(_run_mod._sigterm_installed)
-        # Restore
-        signal.signal(signal.SIGTERM, current)
-        _run_mod._sigterm_installed = False
 
 
 if __name__ == "__main__":

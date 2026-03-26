@@ -28,7 +28,10 @@ def _shutdown_all_servers() -> None:
         try:
             _active_runners.pop().shutdown()
         except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            pass
+            print(
+                "bencher: error shutting down panel server, continuing cleanup",
+                file=sys.stderr,
+            )
 
 
 atexit.register(_shutdown_all_servers)
@@ -151,6 +154,8 @@ def run(
             # Best-effort delay so Bokeh/Tornado startup logs finish before the
             # prompt is printed (not a guarantee on very slow machines).
             time.sleep(1)
+            sys.stdout.flush()
+            sys.stderr.flush()
             # Interactive terminal: block until the user is done viewing results.
             try:
                 input("Press Enter to stop the server(s) and exit...")
