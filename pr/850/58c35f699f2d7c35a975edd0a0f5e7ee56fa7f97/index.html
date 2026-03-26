@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Report</title>
+<style>
+body { margin:0; font-family:sans-serif; }
+.tab-bar { display:flex; gap:2px; background:#e0e0e0; padding:4px; }
+.tab-btn { padding:8px 16px; border:none; cursor:pointer; background:#ccc; font-size:14px; }
+.tab-btn.active { background:#fff; font-weight:bold; }
+iframe { width:100%; border:none; }
+</style></head><body>
+<div class="tab-bar"><button class="tab-btn" onclick="switchTab(this, '_tabs/Time_by_File.html')">Time by File</button>
+<button class="tab-btn" onclick="switchTab(this, '_tabs/Slowest_Tests.html')">Slowest Tests</button>
+<button class="tab-btn active" onclick="switchTab(this, '_tabs/Summary.html')">Summary</button>
+</div>
+<iframe id="content" src="_tabs/Summary.html" scrolling="no"
+        style="overflow:hidden;"></iframe>
+<script>
+function switchTab(btn, src) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('content').src = src;
+}
+function resizeInner() {
+  var f = document.getElementById('content');
+  try {
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {
+      doc.documentElement.style.overflow = 'hidden';
+      doc.body.style.overflow = 'hidden';
+      var h = doc.documentElement.scrollHeight;
+      if (h > 0) { f.style.height = h + 'px'; return; }
+    }
+  } catch(e) {}
+  f.style.height = (window.innerHeight - f.getBoundingClientRect().top) + 'px';
+}
+function setupObserver() {
+  var f = document.getElementById('content');
+  try {
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {
+      new ResizeObserver(function() { resizeInner(); }).observe(doc.body);
+    }
+  } catch(e) {}
+}
+window.addEventListener('resize', resizeInner);
+document.getElementById('content').addEventListener('load', function() {
+  resizeInner(); setupObserver();
+  setTimeout(resizeInner, 500);
+  setTimeout(resizeInner, 1500);
+});
+resizeInner();
+</script></body></html>
