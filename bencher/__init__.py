@@ -18,7 +18,7 @@ from .variables.inputs import (
 )
 from .variables.time import TimeSnapshot
 
-from .variables.inputs import box, p
+from .variables.inputs import box, p, sweep
 from .variables.results import (
     ResultVar,
     ResultBool,

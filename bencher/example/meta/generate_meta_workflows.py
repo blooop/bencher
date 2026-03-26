@@ -339,7 +339,7 @@ def example_meta_workflows(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Workflow Patterns",
-        input_vars=[bn.p("example", WORKFLOW_EXAMPLES)],
+        input_vars=[bn.sweep("example", WORKFLOW_EXAMPLES)],
     )
 
     return bench

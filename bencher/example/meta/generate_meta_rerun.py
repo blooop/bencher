@@ -208,7 +208,7 @@ def example_meta_rerun(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Rerun Integration",
-        input_vars=[bn.p("example", RERUN_EXAMPLES)],
+        input_vars=[bn.sweep("example", RERUN_EXAMPLES)],
     )
 
     return bench

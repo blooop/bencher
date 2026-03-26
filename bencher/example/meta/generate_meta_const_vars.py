@@ -157,7 +157,7 @@ def example_meta_const_vars(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Constant Variables",
-        input_vars=[bn.p("example", EXAMPLES)],
+        input_vars=[bn.sweep("example", EXAMPLES)],
     )
 
     return bench

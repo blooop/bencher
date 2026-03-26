@@ -398,7 +398,7 @@ def example_meta_advanced(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
     bench.plot_sweep(
         title="Advanced Patterns",
-        input_vars=[bn.p("example", ADVANCED_EXAMPLES)],
+        input_vars=[bn.sweep("example", ADVANCED_EXAMPLES)],
     )
 
     return bench

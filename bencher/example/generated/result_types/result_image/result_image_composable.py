@@ -62,7 +62,7 @@ def example_result_image_composable(run_cfg: bn.BenchRunCfg | None = None) -> bn
     bench = _ComposableImageDemo().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=[
-            bn.p(
+            bn.sweep(
                 "compose_method",
                 [bn.ComposeType.right, bn.ComposeType.sequence, bn.ComposeType.down],
             )
