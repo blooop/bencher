@@ -1,13 +1,15 @@
-/* Force RTD content area to full width, and forcibly show a horizontal scrollbar. */
+/* Widen RTD content area while keeping it bounded. */
 .wy-nav-content {
-    max-width: none !important;
-    /* remove default ~900px constraint */
-    overflow-x: scroll !important;
-    /* ALWAYS show horizontal scrollbar */
+    max-width: 1200px !important;
+    overflow-x: auto;
     overflow-y: auto;
-    /* keep normal vertical scrolling */
-
     height: 99vh;
+}
+
+/* Wrap long lines inside code blocks instead of scrolling. */
+.highlight pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 /* --- Gallery overview page --- */
