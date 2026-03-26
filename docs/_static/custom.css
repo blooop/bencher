@@ -1,6 +1,6 @@
-/* Widen RTD content area while keeping it bounded. */
+/* Widen RTD content area. */
 .wy-nav-content {
-    max-width: 1200px !important;
+    max-width: none !important;
     overflow-x: auto;
     overflow-y: auto;
     height: 99vh;
