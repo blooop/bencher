@@ -38,7 +38,8 @@ class ThermalPlate(bn.ParametrizedSweep):
 
 def example_advanced_agg_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Aggregate Over Time — 2D sweep to scalar curve with error bounds."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
+    if run_cfg is None:
+        run_cfg = bn.BenchRunCfg()
 
     benchable = ThermalPlate()
     bench = benchable.to_bench(run_cfg)

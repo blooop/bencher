@@ -30,7 +30,8 @@ class DeploymentConfig(bn.ParametrizedSweep):
 
 def example_sweep_0_float_3_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """0 Float, 3 Categorical (over time)."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
+    if run_cfg is None:
+        run_cfg = bn.BenchRunCfg()
     benchable = DeploymentConfig()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)

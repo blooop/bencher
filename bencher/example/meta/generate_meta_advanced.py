@@ -131,7 +131,8 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
         self.throughput = base + self._event_idx * 30
         return super().__call__()'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
 
 benchable = PullRequestBenchmark()
 bench = benchable.to_bench(run_cfg)
@@ -239,7 +240,8 @@ class LatencyMonitor(bn.ParametrizedSweep):
         self.latency = base + self._drift + random.gauss(0, 5)
         return super().__call__()'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
 
 # Keep only the 3 most recent time slices in the cache.
 # Without this, every call to plot_sweep appends a new slice and the
@@ -354,7 +356,8 @@ class ThermalPlate(bn.ParametrizedSweep):
         )
         return super().__call__()'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
 
 benchable = ThermalPlate()
 bench = benchable.to_bench(run_cfg)

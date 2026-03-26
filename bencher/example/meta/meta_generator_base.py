@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
         body_lines = []
         if run_cfg_lines:
-            body_lines.append("run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)")
+            body_lines.append("if run_cfg is None:\n    run_cfg = bn.BenchRunCfg()")
             body_lines.extend(run_cfg_lines)
 
         body_lines.append(f"bench = {benchable_class}().to_bench(run_cfg)")
