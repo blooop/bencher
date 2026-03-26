@@ -76,3 +76,34 @@ iframe.bencher-report {
     border: 1px solid #ccc;
     overflow: hidden;
 }
+
+/* --- Line wrapping for code blocks --- */
+.rst-content pre {
+    white-space: pre-wrap !important;
+    word-wrap: break-word;
+}
+
+/* --- Collapsible source code section --- */
+details.bencher-source {
+    margin-top: 16px;
+}
+
+details.bencher-source > summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 8px 12px;
+    background: #f0f2f5;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    user-select: none;
+}
+
+details.bencher-source[open] > summary {
+    border-radius: 4px 4px 0 0;
+    margin-bottom: 0;
+}
+
+details.bencher-source[open] > .highlight-python {
+    margin-top: 0;
+    border-top: none;
+}
