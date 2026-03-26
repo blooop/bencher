@@ -37,8 +37,14 @@ def example_agg_int(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["x", "direction", "scale"],
         result_vars=["out"],
-        description="Setting aggregate=1 collapses the last 1 input dimension (scale). The remaining dimensions (x, direction) produce a line plot faceted by direction.",
-        post_description="The aggregated view averages over the scale dimension. Use aggregate=N to collapse the last N dimensions in the input variable list.",
+        description=(
+            "Setting aggregate=1 collapses the last 1 input dimension (scale). The remaining "
+            "dimensions (x, direction) produce a line plot faceted by direction."
+        ),
+        post_description=(
+            "The aggregated view averages over the scale dimension. Use aggregate=N to "
+            "collapse the last N dimensions in the input variable list."
+        ),
         aggregate=1,
     )
 

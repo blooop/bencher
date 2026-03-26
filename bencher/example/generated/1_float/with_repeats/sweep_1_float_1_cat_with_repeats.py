@@ -30,8 +30,21 @@ def example_sweep_1_float_1_cat_with_repeats(run_cfg: bn.BenchRunCfg | None = No
     bench.plot_sweep(
         input_vars=["array_size", "algorithm"],
         result_vars=["time"],
-        description="A 1 float + 1 categorical parameter sweep with multiple repeats per combination. Repeating measurements reveals the noise structure of your benchmark. If your function is deterministic, all repeats will be identical; if it has stochastic components, repeats let you estimate confidence intervals and distinguish signal from noise. The benchmark function must be pure -- if past calls affect future calls through side effects, the statistics will be invalid. Adding categorical variables to a float sweep creates faceted line plots -- one curve per category, making it easy to compare how each setting modifies the continuous relationship.",
-        post_description="Swarm/violin plots show the distribution of repeated measurements. If repeat has high variance, it suggests either measurement noise or unintended side effects in the benchmark function.",
+        description=(
+            "A 1 float + 1 categorical parameter sweep with multiple repeats per combination. "
+            "Repeating measurements reveals the noise structure of your benchmark. If your "
+            "function is deterministic, all repeats will be identical; if it has stochastic "
+            "components, repeats let you estimate confidence intervals and distinguish signal "
+            "from noise. The benchmark function must be pure -- if past calls affect future "
+            "calls through side effects, the statistics will be invalid. Adding categorical "
+            "variables to a float sweep creates faceted line plots -- one curve per category, "
+            "making it easy to compare how each setting modifies the continuous relationship."
+        ),
+        post_description=(
+            "Swarm/violin plots show the distribution of repeated measurements. If repeat has "
+            "high variance, it suggests either measurement noise or unintended side effects "
+            "in the benchmark function."
+        ),
     )
 
     return bench

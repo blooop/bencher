@@ -31,8 +31,14 @@ def example_agg_fn_max(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["x", "y", "direction"],
         result_vars=["out"],
-        description='Combine aggregate=["direction"] with agg_fn="max" to show the maximum surface value across directions for each (x, y) combination.',
-        post_description='Unlike the default mean aggregation, agg_fn="max" picks the highest direction at every point. Other options: "min", "sum", "median".',
+        description=(
+            'Combine aggregate=["direction"] with agg_fn="max" to show the maximum surface '
+            "value across directions for each (x, y) combination."
+        ),
+        post_description=(
+            'Unlike the default mean aggregation, agg_fn="max" picks the highest direction at '
+            'every point. Other options: "min", "sum", "median".'
+        ),
         aggregate=["direction"],
         agg_fn="max",
     )

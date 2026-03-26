@@ -5,6 +5,18 @@ import bencher as bn
 from .generate_examples import GENERATED_DIR
 
 
+def _wrap_str_literal(value, chunk_width=80):
+    """Format a string as a Python literal, wrapping long strings as implicit concatenation."""
+    if len(repr(value)) <= chunk_width:
+        return repr(value)
+    chunks = textwrap.wrap(value, width=chunk_width)
+    for i in range(len(chunks) - 1):
+        if not chunks[i].endswith(" "):
+            chunks[i] += " "
+    parts = " ".join(repr(c) for c in chunks)
+    return f"({parts})"
+
+
 class MetaGeneratorBase(bn.ParametrizedSweep):
     """Shared base class for meta-generators that produce Python example files."""
 
@@ -162,9 +174,9 @@ if __name__ == "__main__":
         if const_vars:
             sweep_parts.append(f"const_vars={const_vars}")
         if description:
-            sweep_parts.append(f"description={description!r}")
+            sweep_parts.append(f"description={_wrap_str_literal(description)}")
         if post_description:
-            sweep_parts.append(f"post_description={post_description!r}")
+            sweep_parts.append(f"post_description={_wrap_str_literal(post_description)}")
         if aggregate is not None:
             sweep_parts.append(f"aggregate={aggregate!r}")
         if agg_fn is not None:

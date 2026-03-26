@@ -45,8 +45,15 @@ def example_optim_over_time_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
             input_vars=["cpu_cores", "memory_gb"],
             result_vars=["performance"],
             const_vars=dict(noise_scale=0.15),
-            description="Optimization over 2D input space with temporal drift. Performance degrades over successive runs. The importance analysis shows repeat, over_time, and input parameters — revealing whether noise or temporal drift dominates.",
-            post_description="Check the 'Parameter Importance With Repeats' plot: if over_time has high importance, results are drifting. If repeat is high, measurements are noisy.",
+            description=(
+                "Optimization over 2D input space with temporal drift. Performance degrades over "
+                "successive runs. The importance analysis shows repeat, over_time, and input "
+                "parameters — revealing whether noise or temporal drift dominates."
+            ),
+            post_description=(
+                "Check the 'Parameter Importance With Repeats' plot: if over_time has high "
+                "importance, results are drifting. If repeat is high, measurements are noisy."
+            ),
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )

@@ -27,7 +27,10 @@ def example_sampling_int_vs_float(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
     bench.plot_sweep(
         input_vars=["int_input", "float_input"],
         result_vars=["output"],
-        description="Integer sweeps produce discrete steps while float sweeps produce continuous curves. Compare how the plot changes between the two types.",
+        description=(
+            "Integer sweeps produce discrete steps while float sweeps produce continuous "
+            "curves. Compare how the plot changes between the two types."
+        ),
     )
 
     return bench

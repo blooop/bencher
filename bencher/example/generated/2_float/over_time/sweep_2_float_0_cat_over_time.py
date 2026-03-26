@@ -41,8 +41,21 @@ def example_sweep_2_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
             "over_time",
             input_vars=["block_size", "entropy"],
             result_vars=["ratio"],
-            description="A 2 float + 0 categorical parameter sweep tracked over time. Setting over_time=True records multiple time snapshots that can be scrubbed via a slider. Each call to plot_sweep with a new time_src appends a snapshot to the history. This is designed for nightly benchmarks or CI pipelines where you want to track how metrics evolve across commits, releases, or environmental changes. Use clear_history=True on the first snapshot to reset, and clear_cache=True to force re-evaluation. A 2D float sweep produces a heatmap. Additional categorical variables create faceted heatmaps, one per category combination.",
-            post_description="The time slider lets you scrub through snapshots. The 'All Time Points (aggregated)' tab pools all snapshots into one view, smoothing out per-snapshot noise to reveal long-term trends.",
+            description=(
+                "A 2 float + 0 categorical parameter sweep tracked over time. Setting "
+                "over_time=True records multiple time snapshots that can be scrubbed via a "
+                "slider. Each call to plot_sweep with a new time_src appends a snapshot to the "
+                "history. This is designed for nightly benchmarks or CI pipelines where you want "
+                "to track how metrics evolve across commits, releases, or environmental changes. "
+                "Use clear_history=True on the first snapshot to reset, and clear_cache=True to "
+                "force re-evaluation. A 2D float sweep produces a heatmap. Additional categorical "
+                "variables create faceted heatmaps, one per category combination."
+            ),
+            post_description=(
+                "The time slider lets you scrub through snapshots. The 'All Time Points "
+                "(aggregated)' tab pools all snapshots into one view, smoothing out per-snapshot "
+                "noise to reveal long-term trends."
+            ),
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )

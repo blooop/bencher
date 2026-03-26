@@ -33,8 +33,17 @@ def example_sampling_custom_values(run_cfg: bn.BenchRunCfg | None = None) -> bn.
         title="Custom Sample Values with bn.sweep()",
         input_vars=[bn.sweep("load", [0.0, 0.1, 0.3, 0.7, 0.9, 1.0])],
         result_vars=["latency"],
-        description="Custom sample values let you pick exact points to evaluate instead of a uniform sweep. Use bn.sweep('name', [values]) as shorthand, or Cls.param.name.with_sample_values([values]) for the explicit form. You can also use bn.sweep('name', samples=N) to override the number of uniform samples without listing values.",
-        post_description="The plot shows the function evaluated only at the six hand-picked load values. Compare with the uniform sampling example to see the difference in coverage.",
+        description=(
+            "Custom sample values let you pick exact points to evaluate instead of a uniform "
+            "sweep. Use bn.sweep('name', [values]) as shorthand, or "
+            "Cls.param.name.with_sample_values([values]) for the explicit form. You can also "
+            "use bn.sweep('name', samples=N) to override the number of uniform samples "
+            "without listing values."
+        ),
+        post_description=(
+            "The plot shows the function evaluated only at the six hand-picked load values. "
+            "Compare with the uniform sampling example to see the difference in coverage."
+        ),
     )
 
     # Override number of uniform samples
@@ -42,7 +51,10 @@ def example_sampling_custom_values(run_cfg: bn.BenchRunCfg | None = None) -> bn.
         title="Override Uniform Sample Count with bn.sweep()",
         input_vars=[bn.sweep("load", samples=5)],
         result_vars=["latency"],
-        description="bn.sweep('load', samples=5) overrides how many uniformly-spaced samples are taken from the variable's bounds, without listing explicit values.",
+        description=(
+            "bn.sweep('load', samples=5) overrides how many uniformly-spaced samples are "
+            "taken from the variable's bounds, without listing explicit values."
+        ),
     )
 
     return bench

@@ -38,8 +38,17 @@ def example_agg_list_2_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["x", "y", "direction", "scale"],
         result_vars=["out"],
-        description='Aggregate two categorical dimensions by name using aggregate=["direction", "scale"]. Both categoricals are averaged out, leaving a 2D heatmap of x vs y with mean and std computed across all direction/scale combinations.',
-        post_description="The aggregated view shows a single heatmap because two float dimensions remain after collapsing both categoricals. The non-aggregated view below shows the full faceted heatmaps (one per direction × scale) — each with a visually distinct gradient pattern.",
+        description=(
+            'Aggregate two categorical dimensions by name using aggregate=["direction", '
+            '"scale"]. Both categoricals are averaged out, leaving a 2D heatmap of x vs y '
+            "with mean and std computed across all direction/scale combinations."
+        ),
+        post_description=(
+            "The aggregated view shows a single heatmap because two float dimensions remain "
+            "after collapsing both categoricals. The non-aggregated view below shows the full "
+            "faceted heatmaps (one per direction × scale) — each with a visually distinct "
+            "gradient pattern."
+        ),
         aggregate=["direction", "scale"],
     )
 
