@@ -116,6 +116,10 @@ class Bench(BenchPlotServer):
         self.plot_callbacks = []
         self.plot = True
 
+    def close(self) -> None:
+        """Close the sample cache so on-disk resources are released."""
+        self._executor.close_cache()
+
     @property
     def sample_cache(self):
         """Access the sample cache from the executor (for backward compatibility)."""
@@ -628,7 +632,6 @@ class Bench(BenchPlotServer):
             self.cache_results(bench_res, bench_cfg_hash)
 
         logging.info(self.sample_cache.stats())
-        self.sample_cache.close()
 
         with phase_timer() as elapsed:
             bench_res.post_setup()

@@ -109,7 +109,7 @@ class BenchRunner:
 
     @staticmethod
     def setup_run_cfg(
-        run_cfg: BenchRunCfg | None = None, level: int = 2, cache_results: bool = True
+        run_cfg: BenchRunCfg | None = None, level: int = 2, cache_samples: bool = False
     ) -> BenchRunCfg:
         """Configure benchmark run settings with reasonable defaults.
 
@@ -119,14 +119,14 @@ class BenchRunner:
         Args:
             run_cfg (BenchRunCfg, optional): Base configuration to modify. Defaults to None.
             level (int, optional): Benchmark sampling resolution level. Defaults to 2.
-            cache_results (bool, optional): Whether to enable result caching. Defaults to True.
+            cache_samples (bool, optional): Whether to enable sample caching. Defaults to False.
 
         Returns:
             BenchRunCfg: A new configuration object with the specified settings
         """
         run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
-        run_cfg_out.cache_samples = cache_results
-        run_cfg_out.only_hash_tag = cache_results
+        run_cfg_out.cache_samples = cache_samples
+        run_cfg_out.only_hash_tag = cache_samples
         run_cfg_out.level = level
         return run_cfg_out
 
@@ -264,7 +264,8 @@ class BenchRunner:
         show: bool = False,
         save: bool = False,
         grouped: bool = False,
-        cache_results: bool = True,
+        cache_samples: bool = False,
+        **kwargs,
     ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
 
@@ -289,11 +290,22 @@ class BenchRunner:
             show (bool, optional): show the results in the local web browser. Defaults to False.
             save (bool, optional): save the results to disk in index.html. Defaults to False.
             grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to False.
-            cache_results (bool, optional): Use the sample cache to reused previous results. Defaults to True.
+            cache_samples (bool, optional): Use the sample cache to reuse previous results. Defaults to False.
 
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
         """
+        # Handle deprecated cache_results keyword
+        if "cache_results" in kwargs:
+            warnings.warn(
+                "cache_results parameter is deprecated. Use 'cache_samples' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            cache_samples = kwargs.pop("cache_results")
+        if kwargs:
+            raise TypeError(f"Unexpected keyword arguments: {', '.join(kwargs)}")
+
         # Handle deprecation warnings for legacy parameters
         if min_level is not None:
             warnings.warn(
@@ -315,13 +327,26 @@ class BenchRunner:
 
         if run_cfg is None:
             run_cfg = deepcopy(self.run_cfg)
-        run_cfg = BenchRunner.setup_run_cfg(run_cfg, cache_results=cache_results)
+        run_cfg = BenchRunner.setup_run_cfg(run_cfg, cache_samples=cache_samples)
 
         # Set up level and repeat ranges
         min_level = level
         final_max_level = max_level if max_level is not None else level
         min_repeats = repeats
         final_max_repeats = max_repeats if max_repeats is not None else repeats
+
+        # Auto-enable sample caching for progressive runs
+        if final_max_level > min_level or final_max_repeats > min_repeats:
+            if not run_cfg.cache_samples:
+                logging.info(
+                    "Automatically enabling cache_samples for progressive run "
+                    "(max_level=%s, max_repeats=%s). Disable with cache_samples=False "
+                    "in BenchRunCfg if not desired.",
+                    max_level,
+                    max_repeats,
+                )
+                run_cfg.cache_samples = True
+                run_cfg.only_hash_tag = True
 
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_level, final_max_level + 1):
