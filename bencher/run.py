@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import sys
+import time
 from typing import Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
@@ -117,6 +118,9 @@ def run(
     )
     if show and br.servers:
         if sys.stdin.isatty():
+            # Let the server thread finish its startup logging before printing
+            # the prompt, so it doesn't get buried by Bokeh/Tornado output.
+            time.sleep(1)
             # Interactive terminal: block until the user is done viewing results.
             try:
                 input("Press Enter to stop the server(s) and exit...\n")
