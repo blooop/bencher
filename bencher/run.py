@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import signal
 import sys
 import time
 from typing import Callable, TYPE_CHECKING
@@ -25,6 +26,15 @@ def _shutdown_all_servers() -> None:
 
 
 atexit.register(_shutdown_all_servers)
+
+
+def _sigterm_handler(signum, _frame) -> None:
+    """Handle SIGTERM so servers are stopped even when the process is killed."""
+    _shutdown_all_servers()
+    sys.exit(128 + signum)
+
+
+signal.signal(signal.SIGTERM, _sigterm_handler)
 
 
 def run(
@@ -117,17 +127,21 @@ def run(
         cache_results=cache_results,
     )
     if show and br.servers:
+        # Always register so atexit/SIGTERM can clean up as a safety net.
+        _active_runners.append(br)
         if sys.stdin.isatty():
-            # Let the server thread finish its startup logging before printing
-            # the prompt, so it doesn't get buried by Bokeh/Tornado output.
+            # Best-effort delay so Bokeh/Tornado startup logs finish before the
+            # prompt is printed (not a guarantee on very slow machines).
             time.sleep(1)
             # Interactive terminal: block until the user is done viewing results.
             try:
-                input("Press Enter to stop the server(s) and exit...\n")
+                input("Press Enter to stop the server(s) and exit...")
             except (EOFError, KeyboardInterrupt):
                 pass
             br.shutdown()
-        else:
-            # Non-interactive (CI, piped, etc.): keep alive, let atexit clean up.
-            _active_runners.append(br)
+            # Remove so atexit/SIGTERM doesn't double-stop.
+            try:
+                _active_runners.remove(br)
+            except ValueError:
+                pass
     return results
