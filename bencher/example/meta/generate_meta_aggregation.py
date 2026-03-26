@@ -98,7 +98,63 @@ def example_meta_aggregation():
         run_kwargs={"level": 4, "repeats": 3},
     )
 
-    # ---- 4) aggregate + agg_fn="max": 2 float + 1 cat → heatmap of max ----
+    # ---- 4) aggregate 2 cats: 2 float + 2 cat → heatmap (both cats averaged out) ----
+    # Simple gradients — each direction × scale combo is visually distinct.
+    agg2_class_code = '''\
+class GradientSurface(bn.ParametrizedSweep):
+    """2D gradient surface with categorical direction and scale controls."""
+
+    x = bn.FloatSweep(default=0, bounds=[0, 1], doc="X position")
+    y = bn.FloatSweep(default=0, bounds=[0, 1], doc="Y position")
+    direction = bn.StringSweep(["diagonal", "horizontal", "vertical"], doc="Gradient direction")
+    scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
+
+    out = bn.ResultVar(units="v", doc="Surface value")
+
+    def __call__(self, **kwargs: Any) -> Any:
+        self.update_params_from_kwargs(**kwargs)
+        if self.direction == "diagonal":
+            base = self.x + self.y
+        elif self.direction == "horizontal":
+            base = self.x
+        else:
+            base = self.y
+        if self.scale == "linear":
+            self.out = base
+        elif self.scale == "quadratic":
+            self.out = base**2
+        else:
+            self.out = base**0.5
+        return super().__call__()'''
+    gen.generate_sweep_example(
+        title="Aggregate 2 Categoricals (list)",
+        output_dir="aggregation",
+        filename="agg_list_2_cat",
+        function_name="example_agg_list_2_cat",
+        benchable_class="GradientSurface",
+        benchable_module=None,
+        input_vars="['x', 'y', 'direction', 'scale']",
+        result_vars="['out']",
+        class_code=agg2_class_code,
+        extra_imports=[],
+        description=(
+            "Aggregate two categorical dimensions by name using "
+            'aggregate=["direction", "scale"]. Both categoricals are averaged '
+            "out, leaving a 2D heatmap of x vs y with mean and std computed "
+            "across all direction/scale combinations."
+        ),
+        post_description=(
+            "The aggregated view shows a single heatmap because two float "
+            "dimensions remain after collapsing both categoricals. The "
+            "non-aggregated view below shows the full faceted heatmaps "
+            "(one per direction × scale) — each with a visually distinct "
+            "gradient pattern."
+        ),
+        aggregate=["direction", "scale"],
+        run_kwargs={"level": 4},
+    )
+
+    # ---- 5) aggregate + agg_fn="max": 2 float + 1 cat → heatmap of max ----
     info = INLINE_CLASSES[(2, 1)]
     class_code = _build_class_code(info, 2, 1, noise_val=0.15)
     gen.generate_sweep_example(
