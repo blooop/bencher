@@ -185,3 +185,58 @@ class TestPlotSweepResultConsistency(unittest.TestCase):
         self.assertEqual(set(ds1.data_vars), set(ds2.data_vars))
         for var in ds1.data_vars:
             self.assertTrue(ds1[var].equals(ds2[var]), f"Data variable '{var}' differs")
+
+
+class TestDictInputVars(unittest.TestCase):
+    """Verify that plot_sweep() accepts dict and inline-dict input_vars."""
+
+    def setUp(self):
+        random.seed(42)
+        self.bench = Bench("test_dict_input", ExampleBenchCfg())
+        self.run_cfg = BenchRunCfg(repeats=1, over_time=False, auto_plot=False)
+
+    def test_dict_with_list_values(self):
+        res = self.bench.plot_sweep(
+            title="dict_list",
+            input_vars={"theta": [0.0, 1.0, 2.0]},
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        self.assertEqual(res.result_samples(), 3)
+
+    def test_dict_with_int_samples(self):
+        res = self.bench.plot_sweep(
+            title="dict_int",
+            input_vars={"theta": 5},
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        self.assertEqual(res.result_samples(), 5)
+
+    def test_dict_with_none_defaults(self):
+        res = self.bench.plot_sweep(
+            title="dict_none",
+            input_vars={"theta": None},
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        self.assertEqual(res.result_samples(), 30)  # theta default samples=30
+
+    def test_list_with_inline_dict(self):
+        res = self.bench.plot_sweep(
+            title="list_inline_dict",
+            input_vars=[{"theta": [0.0, 1.0, 2.0]}],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        self.assertEqual(res.result_samples(), 3)
+
+    def test_list_mixed_string_and_inline_dict(self):
+        res = self.bench.plot_sweep(
+            title="list_mixed",
+            input_vars=[{"theta": [0.0, 1.0]}, "offset"],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=self.run_cfg,
+        )
+        # 2 theta values * 30 offset samples = 60
+        self.assertEqual(res.result_samples(), 60)
