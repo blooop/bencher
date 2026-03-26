@@ -237,7 +237,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
    <iframe class="bencher-report"
            src="_reports/{stem}/{bench.bench_name}.html"
            scrolling="no"
-           style="width:100%; min-height:400px; border:1px solid #ccc; overflow:hidden;">
+           style="width:100%; min-height:400px; border:none; overflow:hidden;">
    </iframe>
 
    <details class="bencher-source">

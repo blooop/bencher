@@ -37,7 +37,16 @@
     }
   }
 
+  function makeFullWidth(iframe) {
+    iframe.style.width = "100vw";
+    iframe.style.maxWidth = "none";
+    iframe.style.position = "relative";
+    var rect = iframe.getBoundingClientRect();
+    iframe.style.left = -rect.left + "px";
+  }
+
   function setupIframe(iframe) {
+    makeFullWidth(iframe);
     resizeToContent(iframe);
     observeContent(iframe);
     setTimeout(function () { resizeToContent(iframe); }, 500);

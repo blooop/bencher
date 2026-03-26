@@ -73,7 +73,7 @@
 iframe.bencher-report {
     min-height: 400px;
     width: 100%;
-    border: 1px solid #ccc;
+    border: none;
     overflow: hidden;
 }
 
