@@ -123,10 +123,27 @@ def run(
         _original_target = target
 
         def _with_optimise(run_cfg: BenchRunCfg | None = None) -> "Bench":
+            import logging as _log
+            import panel as _pn
+
             bench = _original_target(run_cfg)
             result = bench.optimize(n_trials=optimise, plot=False)
-            if result is not None and bench.results:
-                bench.report.append(bench.results[-1].to_optuna_plots())
+            if result is None:
+                bench.report.append(
+                    _pn.pane.Markdown(
+                        "**Optimisation skipped**: no result variables have an optimization "
+                        "direction. Set `direction=OptDir.minimize` or `OptDir.maximize` "
+                        "on your `ResultVar`."
+                    )
+                )
+            elif bench.results:
+                try:
+                    bench.report.append(bench.results[-1].to_optuna_plots())
+                except Exception as e:  # pylint: disable=broad-except
+                    _log.exception(e)
+                    bench.report.append(
+                        _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
+                    )
             return bench
 
         _with_optimise.__name__ = getattr(_original_target, "__name__", "optimised")
