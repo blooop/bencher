@@ -7,11 +7,11 @@ body { margin:0; font-family:sans-serif; }
 .tab-btn.active { background:#fff; font-weight:bold; }
 iframe { width:100%; border:none; }
 </style></head><body>
-<div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this, '_tabs/Time_by_File.html')">Time by File</button>
+<div class="tab-bar"><button class="tab-btn" onclick="switchTab(this, '_tabs/Time_by_File.html')">Time by File</button>
 <button class="tab-btn" onclick="switchTab(this, '_tabs/Slowest_Tests.html')">Slowest Tests</button>
-<button class="tab-btn" onclick="switchTab(this, '_tabs/Summary.html')">Summary</button>
+<button class="tab-btn active" onclick="switchTab(this, '_tabs/Summary.html')">Summary</button>
 </div>
-<iframe id="content" src="_tabs/Time_by_File.html"></iframe>
+<iframe id="content" src="_tabs/Summary.html"></iframe>
 <script>
 function switchTab(btn, src) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
