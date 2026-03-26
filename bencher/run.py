@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 from typing import Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
@@ -13,6 +14,15 @@ if TYPE_CHECKING:
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
 _active_runners: list = []
+
+
+def _shutdown_all_servers() -> None:
+    """Stop all active panel servers during interpreter exit."""
+    while _active_runners:
+        _active_runners.pop().shutdown()
+
+
+atexit.register(_shutdown_all_servers)
 
 
 def run(
