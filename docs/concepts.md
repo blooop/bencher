@@ -42,23 +42,38 @@ Cartesian product, caching results, selecting appropriate visualizations, and co
 
 ## Architecture Overview
 
-A Bencher problem has three components:
+Just as the grammar of graphics decomposes a chart into Data, Aesthetics, Geometry, and so on,
+Bencher decomposes a benchmark into three stages — each mapping directly onto the grammar
+primitives introduced below:
 
 ```{mermaid}
 flowchart LR
-    A["🔧 Benchable Class\n(ParametrizedSweep)\n\nDefine inputs, outputs\n& benchmark function"]
-    B["📐 Sweep Definition\n(BenchCfg)\n\nConfigure sampling\nlevel & repeats"]
-    C["▶ Run Process\n(Bench / BenchRunner)\n\nExecute, cache\n& visualize"]
+    subgraph What ["What to measure"]
+        A[ParametrizedSweep]
+    end
+    subgraph How ["How to sample"]
+        B[BenchCfg]
+    end
+    subgraph Run ["Execute & present"]
+        C[Bench / BenchRunner]
+    end
 
-    A --> B --> C --> A
+    A -- "inputs & results" --> B
+    B -- "sweep config" --> C
+    C -- "cached data" --> A
 ```
 
-1. **Benchable Class** — *What* to measure. A `ParametrizedSweep` subclass that declares
-   input parameters, result variables, and a `__call__` method with your benchmark logic.
-2. **Sweep Definition** — *How* to measure. `BenchCfg` configures sampling density (level),
-   repetitions, caching, and display options.
-3. **Run Process** — *Execute* the sweep. `Bench` computes the Cartesian product of all
-   inputs, evaluates each combination (with caching), and auto-selects visualizations.
+1. **What to measure** (`ParametrizedSweep`) — Declares the grammar's *Data* and *Aesthetics*:
+   typed input parameters (`FloatSweep`, `EnumSweep`, …) define the input space, result
+   variables (`ResultVar`, `ResultImage`, …) define the output space, and a `__call__` method
+   holds the benchmark logic.
+2. **How to sample** (`BenchCfg`) — Declares *Scales* and *Statistics*: the level system
+   controls sampling density, `repeats` enables statistical reduction (mean, std, min, max),
+   and caching options determine when to recompute.
+3. **Execute & present** (`Bench` / `BenchRunner`) — Handles *Geometry*, *Facets*, and
+   *Composition*: computes the Cartesian product of all inputs, evaluates each combination
+   (with persistent caching), auto-selects plot types from the data signature, and arranges
+   extra dimensions as nested facet panels.
 
 ## Bencher's Primitives
 
