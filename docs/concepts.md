@@ -40,6 +40,54 @@ ggplot2 replaces "pick a chart type" with "compose visualization components", Be
 `__call__` method defines the function to evaluate. Bencher handles the rest — computing the
 Cartesian product, caching results, selecting appropriate visualizations, and composing panels.
 
+## Architecture Overview
+
+Just as the grammar of graphics decomposes a chart into Data, Aesthetics, Geometry, and so on,
+Bencher decomposes a benchmark into three stages — each mapping directly onto the grammar
+primitives introduced below:
+
+```{mermaid}
+flowchart LR
+    subgraph How ["How to measure"]
+        A[ParametrizedSweep]
+    end
+    subgraph What ["What to measure"]
+        B[BenchCfg]
+    end
+    subgraph Fidelity ["Measurement fidelity"]
+        C[BenchRunCfg]
+    end
+
+    A -- "inputs & results" --> B
+    B -- "sweep config" --> C
+    C -- "cached data" --> A
+```
+
+1. **How to measure** (`ParametrizedSweep`) — Declares the grammar's *Data* and *Aesthetics*:
+   typed input parameters (`FloatSweep`, `EnumSweep`, …) define the input space, result
+   variables (`ResultVar`, `ResultImage`, …) define the output space, and a `__call__` method
+   holds the benchmark logic.
+2. **What to measure** (`BenchCfg`) — Declares *Scales* and *Statistics*: configures which
+   sweep parameters to vary, which metrics and reports to produce, and how results are
+   reduced (mean, std, min, max).
+3. **Measurement fidelity** (`BenchRunCfg` / `bn.run()`) — Controls *Scales* and *Statistics*:
+   the level system sets sampling density, `repeats` determines statistical power, and caching
+   options control when to recompute.
+
+### Iterative Workflow
+
+The architecture above supports a natural iterative workflow:
+
+1. **Define** — Create a `ParametrizedSweep` subclass with your inputs, outputs, and
+   benchmark function.
+2. **Configure** — Set up a `BenchCfg` with the sweep parameters and the metrics or reports
+   you want.
+3. **Debug** — Run at a low level with few repeats to verify the pipeline works end-to-end.
+   Because results are cached, fixing and re-running is cheap.
+4. **Refine** — Increase the level and repeats to get publication-quality statistics. The
+   level system's binary subdivision means higher levels reuse all previously cached points —
+   you only pay for the new midpoints.
+
 ## Bencher's Primitives
 
 Bencher's design maps onto six primitives, each paralleling a grammar of graphics concept:

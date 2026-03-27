@@ -3,5 +3,6 @@ sphinxcontrib-napoleon
 sphinx-rtd-theme
 sphinx-autoapi
 sphinx_copybutton
+sphinxcontrib-mermaid
 playwright
 Pillow
