@@ -43,12 +43,12 @@ def example_sweep_1_float_0_cat_over_time_repeats(
             result_vars=["time"],
             description=(
                 "A 1 float + 0 categorical parameter sweep with both repeats and over_time "
-                "tracking. This combination is the most informative: repeats reveal per- "
-                "measurement noise at each time point, while over_time captures long-term drift. "
-                "If your nightly benchmark shows increasing variance, repeats help distinguish "
-                "whether the algorithm became noisier or the environment became less stable. A 1D "
-                "float sweep produces a line plot -- the simplest way to characterise a "
-                "continuous input."
+                "tracking. This combination is the most informative: repeats reveal "
+                "per-measurement noise at each time point, while over_time captures long-term "
+                "drift. If your nightly benchmark shows increasing variance, repeats help "
+                "distinguish whether the algorithm became noisier or the environment became less "
+                "stable. A 1D float sweep produces a line plot -- the simplest way to "
+                "characterise a continuous input."
             ),
             post_description=(
                 "Compare the per-snapshot distributions (via the slider) with the aggregated "

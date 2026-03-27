@@ -45,13 +45,13 @@ def example_sweep_1_float_1_cat_over_time_repeats(
             result_vars=["time"],
             description=(
                 "A 1 float + 1 categorical parameter sweep with both repeats and over_time "
-                "tracking. This combination is the most informative: repeats reveal per- "
-                "measurement noise at each time point, while over_time captures long-term drift. "
-                "If your nightly benchmark shows increasing variance, repeats help distinguish "
-                "whether the algorithm became noisier or the environment became less stable. "
-                "Adding categorical variables to a float sweep creates faceted line plots -- one "
-                "curve per category, making it easy to compare how each setting modifies the "
-                "continuous relationship."
+                "tracking. This combination is the most informative: repeats reveal "
+                "per-measurement noise at each time point, while over_time captures long-term "
+                "drift. If your nightly benchmark shows increasing variance, repeats help "
+                "distinguish whether the algorithm became noisier or the environment became less "
+                "stable. Adding categorical variables to a float sweep creates faceted line plots "
+                "-- one curve per category, making it easy to compare how each setting modifies "
+                "the continuous relationship."
             ),
             post_description=(
                 "Compare the per-snapshot distributions (via the slider) with the aggregated "

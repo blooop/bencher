@@ -19,11 +19,11 @@ def example_levels_sample_density(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
             "samples to take when defining the class. If you perform a sweep at level 2, all "
             "those points are reused when sampling at level 3. Higher levels reuse the points "
             "from lower levels to avoid recomputing potentially expensive samples. This "
-            "enables a workflow where you quickly see results at low resolution to sense- "
-            "check the code, then run at a high level for full fidelity. When calling a sweep "
-            "at a high level you can publish intermediate lower-level results as computation "
-            "continues, letting you track progress and end the sweep early when you have "
-            "sufficient resolution."
+            "enables a workflow where you quickly see results at low resolution to "
+            "sense-check the code, then run at a high level for full fidelity. When calling a "
+            "sweep at a high level you can publish intermediate lower-level results as "
+            "computation continues, letting you track progress and end the sweep early when "
+            "you have sufficient resolution."
         ),
         post_description=(
             "Each panel shows the benchmark sampled at a different level. Higher levels "

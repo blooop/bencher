@@ -9,7 +9,13 @@ def _wrap_str_literal(value, chunk_width=80):
     """Format a string as a Python literal, wrapping long strings as implicit concatenation."""
     if len(repr(value)) <= chunk_width:
         return repr(value)
-    chunks = textwrap.wrap(value, width=chunk_width)
+    chunks = textwrap.wrap(
+        value,
+        width=chunk_width,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    # Ensure non-final chunks end with a space so implicit concatenation preserves word separation.
     for i in range(len(chunks) - 1):
         if not chunks[i].endswith(" "):
             chunks[i] += " "
