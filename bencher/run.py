@@ -140,7 +140,8 @@ def run(
                 )
             elif bench.results:
                 try:
-                    bench.report.append(bench.results[-1].to_optuna_plots())
+                    for res in bench.results:
+                        bench.report.append(res.to_optuna_plots())
                 except Exception as e:  # pylint: disable=broad-except
                     _log.exception(e)
                     bench.report.append(
