@@ -55,7 +55,7 @@ flowchart LR
         B[BenchCfg]
     end
     subgraph Fidelity ["Measurement fidelity"]
-        C[Bench / BenchRunner]
+        C[BenchRunCfg]
     end
 
     A -- "inputs & results" --> B
@@ -70,10 +70,9 @@ flowchart LR
 2. **What to measure** (`BenchCfg`) — Declares *Scales* and *Statistics*: configures which
    sweep parameters to vary, which metrics and reports to produce, and how results are
    reduced (mean, std, min, max).
-3. **Measurement fidelity** (`Bench` / `BenchRunner`) — Controls *Geometry*, *Facets*, and
-   *Composition*: the level system sets sampling density, `repeats` determines statistical
-   power, and the runner computes the Cartesian product, caches results, auto-selects plot
-   types from the data signature, and arranges extra dimensions as nested facet panels.
+3. **Measurement fidelity** (`BenchRunCfg`) — Controls *Scales* and *Statistics*: the level
+   system sets sampling density, `repeats` determines statistical power, and caching options
+   control when to recompute.
 
 ### Iterative Workflow
 
