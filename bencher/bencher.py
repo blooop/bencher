@@ -1038,7 +1038,7 @@ class Bench(BenchPlotServer):
 
         if plot and self.results:
             for res in self.results:
-                self.report.append(res.to_optuna_plots())
+                self.report.append_to_result(res, res.to_optuna_plots())
 
         return result
 
