@@ -70,9 +70,9 @@ flowchart LR
 2. **What to measure** (`BenchCfg`) — Declares *Scales* and *Statistics*: configures which
    sweep parameters to vary, which metrics and reports to produce, and how results are
    reduced (mean, std, min, max).
-3. **Measurement fidelity** (`BenchRunCfg`) — Controls *Scales* and *Statistics*: the level
-   system sets sampling density, `repeats` determines statistical power, and caching options
-   control when to recompute.
+3. **Measurement fidelity** (`BenchRunCfg` / `bn.run()`) — Controls *Scales* and *Statistics*:
+   the level system sets sampling density, `repeats` determines statistical power, and caching
+   options control when to recompute.
 
 ### Iterative Workflow
 
