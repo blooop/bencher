@@ -75,6 +75,20 @@ flowchart LR
    (with persistent caching), auto-selects plot types from the data signature, and arranges
    extra dimensions as nested facet panels.
 
+### Iterative Workflow
+
+The architecture above supports a natural iterative workflow:
+
+1. **Define** — Create a `ParametrizedSweep` subclass with your inputs, outputs, and
+   benchmark function.
+2. **Configure** — Set up a `BenchCfg` with the sweep parameters and the metrics or reports
+   you want.
+3. **Debug** — Run at a low level with few repeats to verify the pipeline works end-to-end.
+   Because results are cached, fixing and re-running is cheap.
+4. **Refine** — Increase the level and repeats to get publication-quality statistics. The
+   level system's binary subdivision means higher levels reuse all previously cached points —
+   you only pay for the new midpoints.
+
 ## Bencher's Primitives
 
 Bencher's design maps onto six primitives, each paralleling a grammar of graphics concept:
