@@ -7,7 +7,7 @@ over-time importance analysis, and optimize=False aggregation.
 from typing import Any
 
 import bencher as bn
-from bencher.example.meta.meta_generator_base import MetaGeneratorBase, _wrap_str_literal
+from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "optimization"
 
@@ -195,8 +195,8 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
             f"        input_vars={input_vars_code},",
             '        result_vars=["performance"],',
             "        const_vars=dict(noise_scale=0.15),",
-            f"        description={_wrap_str_literal(description)},",
-            f"        post_description={_wrap_str_literal(post_description)},",
+            f"        description={description!r},",
+            f"        post_description={post_description!r},",
             "        run_cfg=run_cfg,",
             "        time_src=_base_time + timedelta(seconds=i),",
             "    )",
@@ -257,8 +257,8 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 '        "over_time",',
                 '        input_vars=["algorithm", "learning_rate"],',
                 '        result_vars=["loss"],',
-                f"        description={_wrap_str_literal(description)},",
-                f"        post_description={_wrap_str_literal(post_description)},",
+                f"        description={description!r},",
+                f"        post_description={post_description!r},",
                 "        run_cfg=run_cfg,",
                 "        time_src=_base_time + timedelta(seconds=i),",
                 "    )",

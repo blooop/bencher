@@ -30,15 +30,8 @@ def example_agg_all(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["x", "scale"],
         result_vars=["out"],
-        description=(
-            "Setting aggregate=True collapses all but the first input dimension, reducing the "
-            "sweep to a 1-D plot. Useful when you want a simple curve from a "
-            "multi-dimensional sweep."
-        ),
-        post_description=(
-            "The aggregated view collapses all inputs except the first into a single mean ± "
-            "std curve. The non-aggregated view below shows the full detail."
-        ),
+        description="Setting aggregate=True collapses all but the first input dimension, reducing the sweep to a 1-D plot. Useful when you want a simple curve from a multi-dimensional sweep.",
+        post_description="The aggregated view collapses all inputs except the first into a single mean ± std curve. The non-aggregated view below shows the full detail.",
         aggregate=True,
     )
 

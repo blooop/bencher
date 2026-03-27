@@ -1,7 +1,7 @@
 from typing import Any
 
 import bencher as bn
-from bencher.example.meta.meta_generator_base import MetaGeneratorBase, _wrap_str_literal
+from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 
 # Registry of inline class templates keyed by (float_count, cat_count).
@@ -536,8 +536,8 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 f'        "over_time",\n'
                 f"        input_vars={input_var_names!r},\n"
                 f"        result_vars={result_var_names!r},\n"
-                f"        description={_wrap_str_literal(description)},\n"
-                f"        post_description={_wrap_str_literal(post_description)},\n"
+                f"        description={description!r},\n"
+                f"        post_description={post_description!r},\n"
                 f"        run_cfg=run_cfg,\n"
                 f"        time_src=_base_time + timedelta(seconds=i),\n"
                 f"    )\n"

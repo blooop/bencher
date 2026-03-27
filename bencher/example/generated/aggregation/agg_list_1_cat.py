@@ -31,16 +31,8 @@ def example_agg_list_1_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["x", "y", "direction"],
         result_vars=["out"],
-        description=(
-            'Aggregate a specific dimension by name using aggregate=["direction"]. The '
-            "direction categorical is averaged out, leaving a 2D heatmap of x vs y. This is "
-            "the most explicit form — you list exactly which dimensions to collapse."
-        ),
-        post_description=(
-            "The aggregated view shows a heatmap because two float dimensions remain after "
-            "collapsing direction. The non-aggregated view below shows the full faceted "
-            "heatmaps (one per direction)."
-        ),
+        description='Aggregate a specific dimension by name using aggregate=["direction"]. The direction categorical is averaged out, leaving a 2D heatmap of x vs y. This is the most explicit form — you list exactly which dimensions to collapse.',
+        post_description="The aggregated view shows a heatmap because two float dimensions remain after collapsing direction. The non-aggregated view below shows the full faceted heatmaps (one per direction).",
         aggregate=["direction"],
     )
 

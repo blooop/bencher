@@ -6,7 +6,7 @@ Demonstrates how the level parameter controls sampling density.
 from typing import Any
 
 import bencher as bn
-from bencher.example.meta.meta_generator_base import MetaGeneratorBase, _wrap_str_literal
+from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "levels"
 
@@ -45,8 +45,8 @@ class MetaLevels(MetaGeneratorBase):
             '        bn.sweep("level", [2, 3, 4, 5]),\n'
             "    ],\n"
             "    const_vars=dict(categorical_vars=0),\n"
-            f"    description={_wrap_str_literal(levels_desc)},\n"
-            f"    post_description={_wrap_str_literal(levels_post)},\n"
+            f"    description={levels_desc!r},\n"
+            f"    post_description={levels_post!r},\n"
             ")\n"
         )
         self.generate_example(

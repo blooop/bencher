@@ -26,10 +26,7 @@ def example_sampling_uniform(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["load"],
         result_vars=["latency"],
-        description=(
-            "Uniform sampling distributes points evenly across the parameter bounds. The "
-            "number of samples is controlled by the level parameter."
-        ),
+        description="Uniform sampling distributes points evenly across the parameter bounds. The number of samples is controlled by the level parameter.",
     )
 
     return bench

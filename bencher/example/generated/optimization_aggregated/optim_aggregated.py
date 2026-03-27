@@ -35,16 +35,8 @@ def example_optim_aggregated(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["algorithm", "learning_rate"],
         result_vars=["loss"],
-        description=(
-            "Finds the best learning rate averaged across algorithms. algorithm has "
-            "optimize=False so Optuna only suggests learning_rate and averages loss over all "
-            "algorithm choices."
-        ),
-        post_description=(
-            "The importance plot shows learning_rate and repeat — algorithm is aggregated "
-            "away. Compare 'With Repeats' vs 'Without Repeats' to see if measurement noise "
-            "affects the result."
-        ),
+        description="Finds the best learning rate averaged across algorithms. algorithm has optimize=False so Optuna only suggests learning_rate and averages loss over all algorithm choices.",
+        post_description="The importance plot shows learning_rate and repeat — algorithm is aggregated away. Compare 'With Repeats' vs 'Without Repeats' to see if measurement noise affects the result.",
     )
 
     return bench

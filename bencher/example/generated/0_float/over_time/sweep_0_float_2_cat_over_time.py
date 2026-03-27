@@ -41,21 +41,8 @@ def example_sweep_0_float_2_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
             "over_time",
             input_vars=["protocol", "region"],
             result_vars=["throughput"],
-            description=(
-                "A 0 float + 2 categorical parameter sweep tracked over time. Setting "
-                "over_time=True records multiple time snapshots that can be scrubbed via a "
-                "slider. Each call to plot_sweep with a new time_src appends a snapshot to the "
-                "history. This is designed for nightly benchmarks or CI pipelines where you want "
-                "to track how metrics evolve across commits, releases, or environmental changes. "
-                "Use clear_history=True on the first snapshot to reset, and clear_cache=True to "
-                "force re-evaluation. Categorical-only sweeps produce bar/swarm plots comparing "
-                "discrete settings."
-            ),
-            post_description=(
-                "The time slider lets you scrub through snapshots. The 'All Time Points "
-                "(aggregated)' tab pools all snapshots into one view, smoothing out per-snapshot "
-                "noise to reveal long-term trends."
-            ),
+            description="A 0 float + 2 categorical parameter sweep tracked over time. Setting over_time=True records multiple time snapshots that can be scrubbed via a slider. Each call to plot_sweep with a new time_src appends a snapshot to the history. This is designed for nightly benchmarks or CI pipelines where you want to track how metrics evolve across commits, releases, or environmental changes. Use clear_history=True on the first snapshot to reset, and clear_cache=True to force re-evaluation. Categorical-only sweeps produce bar/swarm plots comparing discrete settings.",
+            post_description="The time slider lets you scrub through snapshots. The 'All Time Points (aggregated)' tab pools all snapshots into one view, smoothing out per-snapshot noise to reveal long-term trends.",
             run_cfg=run_cfg,
             time_src=_base_time + timedelta(seconds=i),
         )

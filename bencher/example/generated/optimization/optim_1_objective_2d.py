@@ -36,13 +36,8 @@ def example_optim_1_objective_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
         input_vars=["cpu_cores", "memory_gb"],
         result_vars=["performance"],
         const_vars=dict(noise_scale=0.1),
-        description=(
-            "Single-objective optimization over 2D input space using Optuna. The optimizer "
-            "searches for the parameter combination that maximizes performance."
-        ),
-        post_description=(
-            "The Optuna importance plot shows which input parameters most affect the objective."
-        ),
+        description="Single-objective optimization over 2D input space using Optuna. The optimizer searches for the parameter combination that maximizes performance.",
+        post_description="The Optuna importance plot shows which input parameters most affect the objective.",
     )
 
     return bench
