@@ -18,8 +18,9 @@ import bencher as bn
 #   2. Log data with rr.log(...)          -- shapes, scalars, images, etc.
 #   3. self.out = bn.capture_rerun_window() -- snapshot into the report
 #
-# To run the viewer alongside bencher, call bn.run_flask_in_thread() before
-# launching the sweep so the .rrd files are served over HTTP.
+# To run the viewer alongside bencher, call bn.run_file_server() before
+# launching the sweep so the .rrd files are served over HTTP (uses stdlib
+# http.server, no extra dependencies required).
 
 
 class RerunSweep(bn.ParametrizedSweep):
@@ -52,8 +53,8 @@ class RerunSweep(bn.ParametrizedSweep):
 
 def example_rerun_capture_window(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Rerun Capture — embed spatial visualizations in sweep reports."""
-    # In production, start the Flask file server before running sweeps:
-    # bn.run_flask_in_thread()
+    # In production, start the file server before running sweeps:
+    # bn.run_file_server()
 
     bench = RerunSweep().to_bench(run_cfg)
     bench.plot_sweep(

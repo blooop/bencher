@@ -51,8 +51,9 @@ class MetaRerun(MetaGeneratorBase):
 #   2. Log data with rr.log(...)          -- shapes, scalars, images, etc.
 #   3. self.out = bn.capture_rerun_window() -- snapshot into the report
 #
-# To run the viewer alongside bencher, call bn.run_flask_in_thread() before
-# launching the sweep so the .rrd files are served over HTTP.
+# To run the viewer alongside bencher, call bn.run_file_server() before
+# launching the sweep so the .rrd files are served over HTTP (uses stdlib
+# http.server, no extra dependencies required).
 
 
 class RerunSweep(bn.ParametrizedSweep):
@@ -84,8 +85,8 @@ class RerunSweep(bn.ParametrizedSweep):
 
         return super().__call__(**kwargs)'''
         body = """\
-# In production, start the Flask file server before running sweeps:
-# bn.run_flask_in_thread()
+# In production, start the file server before running sweeps:
+# bn.run_file_server()
 
 bench = RerunSweep().to_bench(run_cfg)
 bench.plot_sweep(
@@ -138,8 +139,8 @@ bench.plot_sweep(
 #   bn.publish_and_view_rrd(file_path, remote, branch_name, content_callback)
 #       -> Pushes the .rrd file to a git branch and returns rrd_to_pane()
 #
-#   bn.run_flask_in_thread()
-#       -> Starts a local HTTP server to serve .rrd files from the cache dir
+#   bn.run_file_server()
+#       -> Starts a local file server to serve .rrd files from the cache dir
 
 
 class WaveSweep(bn.ParametrizedSweep):
@@ -185,7 +186,8 @@ bench.plot_sweep(
     "the hosted rerun web viewer in a Panel pane, or "
     "bn.publish_and_view_rrd() to push the .rrd file to a git branch and "
     "view it immediately. Start a local file server with "
-    "bn.run_flask_in_thread() to serve .rrd files from the cache directory.",
+    "bn.run_file_server() to serve .rrd files from the cache directory.\\n"
+    "The file server uses Python's stdlib http.server — no extra dependencies.",
     post_description="This example shows the sweep pattern. To see live rerun "
     "output, install rerun-sdk (pip install rerun-sdk) and uncomment the "
     "rr.log() calls in the class definition.",
