@@ -295,3 +295,76 @@ class TestOptunaOptimizeFlag(unittest.TestCase):
         # x and repeat should both appear as trial params
         self.assertIn("x", trials[0].params)
         self.assertIn("repeat", trials[0].params)
+
+
+class TestOptunaReportRouting(unittest.TestCase):
+    """Verify that optuna plots land in the correct report tab for each sweep."""
+
+    @classmethod
+    def setUpClass(cls):
+        optuna.logging.set_verbosity(optuna.logging.CRITICAL)
+
+    def test_optuna_plots_per_sweep_tab(self):
+        """Each sweep's optuna plots must appear in its own tab, not the last tab."""
+        cfg = BenchableObject()
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
+
+        bench.plot_sweep(
+            "sweep_A",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        bench.plot_sweep(
+            "sweep_B",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+
+        self.assertEqual(len(bench.results), 2)
+        self.assertEqual(len(bench.report.pane), 2)
+
+        items_before = [len(bench.report.pane[i].objects) for i in range(2)]
+
+        # Append optuna plots using append_to_result
+        for res in bench.results:
+            bench.report.append_to_result(res, res.to_optuna_plots())
+
+        # Each tab should have grown by exactly one item
+        for i in range(2):
+            self.assertEqual(
+                len(bench.report.pane[i].objects),
+                items_before[i] + 1,
+                f"Tab {i} should have exactly one new optuna pane",
+            )
+
+    def test_optimize_routes_plots_to_correct_tabs(self):
+        """bench.optimize(plot=True) routes optuna plots to matching sweep tabs."""
+        cfg = BenchableObject()
+        bench = cfg.to_bench(bn.BenchRunCfg(repeats=1))
+
+        bench.plot_sweep(
+            "sweep_A",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        bench.plot_sweep(
+            "sweep_B",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+
+        items_before = [len(bench.report.pane[i].objects) for i in range(2)]
+
+        bench.optimize(n_trials=5, plot=True)
+
+        # Both tabs should have gained optuna content
+        for i in range(2):
+            self.assertGreater(
+                len(bench.report.pane[i].objects),
+                items_before[i],
+                f"Tab {i} should have optuna content after optimize(plot=True)",
+            )
