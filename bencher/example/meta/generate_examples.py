@@ -203,7 +203,10 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     if optimise and bench.results:
         bench.optimize(n_trials=optimise, plot=False)
         for res in bench.results:
-            bench.report.append(res.to_optuna_plots())
+            bench.report.append_tab(
+                res.to_optuna_plots(),
+                f"Optuna: {res.bench_cfg.title}",
+            )
 
     # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
     reports_output_dir = REPORTS_EXTRA_DIR / rel.parent

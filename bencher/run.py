@@ -139,14 +139,17 @@ def run(
                     )
                 )
             elif bench.results:
-                try:
-                    for res in bench.results:
-                        bench.report.append(res.to_optuna_plots())
-                except Exception as e:  # pylint: disable=broad-except
-                    _log.exception(e)
-                    bench.report.append(
-                        _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
-                    )
+                for res in bench.results:
+                    try:
+                        bench.report.append_tab(
+                            res.to_optuna_plots(),
+                            f"Optuna: {res.bench_cfg.title}",
+                        )
+                    except Exception as e:  # pylint: disable=broad-except
+                        _log.exception(e)
+                        bench.report.append(
+                            _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
+                        )
             return bench
 
         _with_optimise.__name__ = getattr(_original_target, "__name__", "optimised")
