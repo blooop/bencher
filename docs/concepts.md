@@ -40,6 +40,58 @@ ggplot2 replaces "pick a chart type" with "compose visualization components", Be
 `__call__` method defines the function to evaluate. Bencher handles the rest — computing the
 Cartesian product, caching results, selecting appropriate visualizations, and composing panels.
 
+## Architecture Overview
+
+A Bencher problem is composed of three components: the **Benchable Class** that defines
+*what* to measure, the **Sweep Definition** that configures *how* to measure it, and the
+**Run Process** that executes the sweep and produces results.
+
+```{mermaid}
+flowchart TB
+    subgraph benchable ["1. Benchable Class (ParametrizedSweep)"]
+        direction TB
+        inputs["Input Parameters\nFloatSweep, IntSweep,\nEnumSweep, BoolSweep, StringSweep"]
+        outputs["Result Variables\nResultVar, ResultBool,\nResultVec, ResultImage, …"]
+        call["__call__()\nBenchmark function logic"]
+        inputs --> call
+        call --> outputs
+    end
+
+    subgraph sweep_def ["2. Sweep Definition (BenchCfg / BenchRunCfg)"]
+        direction TB
+        sampling["Sampling\nlevel, repeats"]
+        caching["Caching\ndiskcache, hash-based keys"]
+        presentation["Presentation\nauto plot selection,\nfaceting, composition"]
+    end
+
+    subgraph run_process ["3. Run Process (Bench / BenchRunner)"]
+        direction TB
+        cartesian["Cartesian Product\nof all input values"]
+        execute["Execute\neach combination\n(with caching)"]
+        collect["Collect Results\ninto N-D xarray Dataset"]
+        visualize["Visualize\nauto-selected plots\n& composed panels"]
+        cartesian --> execute --> collect --> visualize
+    end
+
+    benchable -- "declares inputs,\noutputs & function" --> sweep_def
+    sweep_def -- "configures sampling,\ncaching & display" --> run_process
+    run_process -- "calls __call__()\nfor each combination" --> benchable
+
+    style benchable fill:#e8f4f8,stroke:#2196F3,stroke-width:2px
+    style sweep_def fill:#fff3e0,stroke:#FF9800,stroke-width:2px
+    style run_process fill:#e8f5e9,stroke:#4CAF50,stroke-width:2px
+```
+
+The typical user workflow mirrors this decomposition:
+
+1. **Define** — Subclass `ParametrizedSweep`, declare typed input parameters and result
+   variables, implement `__call__` with your benchmark logic.
+2. **Configure** — Choose a sampling level, number of repeats, and any display options
+   via `BenchRunCfg`, or accept the defaults.
+3. **Run** — Call `bench.plot_sweep()` or `bn.run(MyBench, level=N)`. Bencher computes
+   the Cartesian product, evaluates each point (caching results), and produces
+   visualizations automatically matched to the data's dimensionality.
+
 ## Bencher's Primitives
 
 Bencher's design maps onto six primitives, each paralleling a grammar of graphics concept:
