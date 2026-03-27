@@ -48,13 +48,13 @@ primitives introduced below:
 
 ```{mermaid}
 flowchart LR
-    subgraph What ["What to measure"]
+    subgraph How ["How to measure"]
         A[ParametrizedSweep]
     end
-    subgraph How ["How to sample"]
+    subgraph What ["What to measure"]
         B[BenchCfg]
     end
-    subgraph Run ["Execute & present"]
+    subgraph Fidelity ["Measurement fidelity"]
         C[Bench / BenchRunner]
     end
 
@@ -63,17 +63,17 @@ flowchart LR
     C -- "cached data" --> A
 ```
 
-1. **What to measure** (`ParametrizedSweep`) — Declares the grammar's *Data* and *Aesthetics*:
+1. **How to measure** (`ParametrizedSweep`) — Declares the grammar's *Data* and *Aesthetics*:
    typed input parameters (`FloatSweep`, `EnumSweep`, …) define the input space, result
    variables (`ResultVar`, `ResultImage`, …) define the output space, and a `__call__` method
    holds the benchmark logic.
-2. **How to sample** (`BenchCfg`) — Declares *Scales* and *Statistics*: the level system
-   controls sampling density, `repeats` enables statistical reduction (mean, std, min, max),
-   and caching options determine when to recompute.
-3. **Execute & present** (`Bench` / `BenchRunner`) — Handles *Geometry*, *Facets*, and
-   *Composition*: computes the Cartesian product of all inputs, evaluates each combination
-   (with persistent caching), auto-selects plot types from the data signature, and arranges
-   extra dimensions as nested facet panels.
+2. **What to measure** (`BenchCfg`) — Declares *Scales* and *Statistics*: configures which
+   sweep parameters to vary, which metrics and reports to produce, and how results are
+   reduced (mean, std, min, max).
+3. **Measurement fidelity** (`Bench` / `BenchRunner`) — Controls *Geometry*, *Facets*, and
+   *Composition*: the level system sets sampling density, `repeats` determines statistical
+   power, and the runner computes the Cartesian product, caches results, auto-selects plot
+   types from the data signature, and arranges extra dimensions as nested facet panels.
 
 ### Iterative Workflow
 
