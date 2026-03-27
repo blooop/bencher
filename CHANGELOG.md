@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.73.1] - 2026-03-27
+
+### Fixed
+- Generate optimisation reports for all benchmarks, not just the last (#852)
+- Include time event in over_time panel labels and default to last (#849)
+- Wrap long description strings in generated examples to fit 100-char line limit (#851)
+- Override RTD theme CSS to wrap long lines in docs code blocks (#851)
+
 ## [1.73.0] - 2026-03-26
 
 ### Added
