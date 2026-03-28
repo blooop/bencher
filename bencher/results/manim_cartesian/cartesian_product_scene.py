@@ -11,7 +11,6 @@ Renders frames directly with PIL (fast), saves as GIF.
 from __future__ import annotations
 
 import functools
-import hashlib
 import logging
 from pathlib import Path
 
@@ -44,27 +43,6 @@ DEPTH_DX = 10
 DEPTH_DY = -8
 GROUP_GAP = 20
 GAP = "..."
-
-
-def _create_cache_key(
-    cfg: CartesianProductCfg, width: int, height: int, fps: int, step_frames: int
-) -> str:
-    """Create a deterministic cache key from animation parameters."""
-    # Convert cfg to a hashable string representation
-    cfg_str = (
-        f"vars:{[(v.name, tuple(v.values)) for v in cfg.all_vars]}"
-        f"results:{tuple(cfg.result_names)}"
-        f"strobe_color:{cfg.strobe_color}"
-        f"strobe_pad:{cfg.strobe_pad}"
-        f"strobe_mark_size:{cfg.strobe_mark_size}"
-        f"strobe_mark_gap:{cfg.strobe_mark_gap}"
-        f"strobe_mark_row_h:{cfg.strobe_mark_row_h}"
-        f"strobe_border_radius:{cfg.strobe_border_radius}"
-        f"strobe_base_border_w:{cfg.strobe_base_border_w}"
-    )
-
-    params_str = f"{cfg_str}|w:{width}|h:{height}|fps:{fps}|steps:{step_frames}"
-    return hashlib.md5(params_str.encode()).hexdigest()[:12]  # 12 chars for readability
 
 
 @functools.lru_cache(maxsize=8)
@@ -502,20 +480,13 @@ def render_animation(
     Returns
     -------
     str
-        Path to the output GIF file.
+        Path to the output animation file.
     """
-    # Create cache key and check if animation already exists
-    cache_key = _create_cache_key(cfg, width, height, fps, step_frames)
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = str(out_dir / f"cartesian_{cache_key}.png")
+    out_path = str(out_dir / "cartesian_product.png")
 
-    # Return cached version if it exists
-    if Path(out_path).exists():
-        logger.info("Using cached animation: %s", out_path)
-        return out_path
-
-    logger.info("Rendering new animation: %s", out_path)
+    logger.info("Rendering animation: %s", out_path)
     dims = []
     for v in cfg.all_vars:
         real_vals = [val for val in v.values if val != GAP]

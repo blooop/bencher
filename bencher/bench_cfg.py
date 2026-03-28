@@ -621,12 +621,12 @@ class BenchCfg(BenchRunCfg):
         if latex is not None:
             parts.append(latex)
 
-        # Render Cartesian product animation as GIF (gracefully skipped on error)
-        gif_path = self.to_cartesian_animation()
-        if gif_path is not None:
+        # Render Cartesian product animation (gracefully skipped on error)
+        animation_path = self.to_cartesian_animation()
+        if animation_path is not None:
             from pathlib import Path
 
-            abs_path = str(Path(gif_path).resolve())
+            abs_path = str(Path(animation_path).resolve())
             parts.append(pn.pane.Image(abs_path, width=640))
 
         parts.append(desc)

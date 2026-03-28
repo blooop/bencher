@@ -3,7 +3,7 @@
 Uses bencher's sweep machinery to explore the animation space:
   - spatial_dims (1-4) × use_repeat × use_over_time
 
-Run with: pixi run python bencher/example/example_cartesian_grid.py
+Run with: pixi run python bencher/example/example_cartesian_animation.py
 """
 
 from __future__ import annotations
@@ -54,27 +54,24 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
             strobe_border_radius=self.strobe_border_radius,
         )
 
-        # With caching, no need for tag-based directories - each unique animation gets its own filename
-        gif_path = render_animation(
+        animation_path = render_animation(
             cfg,
             width=320,
             height=200,
         )
-        self.animation = gif_path
+        self.animation = animation_path
         return super().__call__()
 
 
-def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+def example_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = CartesianAnimationSweep().to_bench(run_cfg)
 
     bench.plot_sweep(
         input_vars=["spatial_dims", bn.sweep("repeats", [0, 1,6, 100]),bn.sweep("time_steps", [0, 1, 6,30])],
-
-        const_vars=[("time_steps", 0)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_cartesian_grid, level=4, cache_results=False)
+    bn.run(example_cartesian_animation, level=4)
