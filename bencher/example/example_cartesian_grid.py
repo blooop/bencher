@@ -17,7 +17,6 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
     spatial_dims = bn.IntSweep(default=1, bounds=(1, 5), doc="Number of spatial dimensions")
     repeats = bn.IntSweep(default=0, bounds=(0, 3), doc="Number of repeats (0 = no repeat dim)")
     time_steps = bn.IntSweep(default=0, bounds=(0, 10), doc="Number of time steps (0 = no over_time dim)")
-
     animation = bn.ResultImage()
 
     def __call__(self, **kwargs):
@@ -67,4 +66,4 @@ def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_cartesian_grid, level=4,cache_results=False)
+    bn.run(example_cartesian_grid, level=3,cache_results=False)
