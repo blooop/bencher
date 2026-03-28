@@ -807,15 +807,46 @@ def render_animation(
         max_animation_frames = int(fps * 0.7)  # Always 0.7 second
 
         if time_size <= max_frames_visible:
-            # All frames fit - just show them statically
+            # All frames fit - show them statically, with last frame centered
             timeline = TimelineShape(shape, time_size, 0, max_frames_visible)
-            make_frame(timeline, count_label=count_text, fixed_scale=timeline_scale)
-            final_timeline_offset = 0
+            
+            # Calculate x_offset to center the actual last frame
+            frame_w = TimelineShape.FRAME_W + 16  # Frame width + gap
+            last_frame_x_in_timeline = 6 + (time_size - 1) * frame_w + frame_w // 2  # Center of actual last frame
+            screen_center = width // 2
+            
+            if timeline_scale < 1.0:
+                scaled_last_frame_x = last_frame_x_in_timeline * timeline_scale
+                x_offset_for_centering = int(screen_center - scaled_last_frame_x)
+            else:
+                x_offset_for_centering = int(screen_center - last_frame_x_in_timeline)
+                
+            make_frame(timeline, count_label=count_text, x_offset=x_offset_for_centering, fixed_scale=timeline_scale)
+            final_timeline_offset = x_offset_for_centering
         else:
             # Animation strategy: Maintain visual continuity with previous static frame
             # Start and end with last frame centered, slide through progression in middle
             end_pos = max(0, time_size - 1 - max_frames_visible // 2)  # Center last frame
             start_pos = 0  # Beginning of timeline
+
+            # Calculate x_offset to center the last frame properly with fixed scaling
+            end_timeline = TimelineShape(shape, time_size, end_pos, max_frames_visible)
+            timeline_w, _ = end_timeline.size()
+            
+            # With fixed scaling, calculate offset to center the last visible frame
+            # The last visible frame is at position (max_frames_visible - 1) within the timeline
+            frame_w = TimelineShape.FRAME_W + 16  # Frame width + gap
+            last_frame_x_in_timeline = 6 + (max_frames_visible - 1) * frame_w + frame_w // 2  # Center of last frame
+            screen_center = width // 2
+            
+            # Calculate offset so the last visible frame appears at screen center
+            if timeline_scale < 1.0:
+                # Scaled timeline: adjust for scaling
+                scaled_last_frame_x = last_frame_x_in_timeline * timeline_scale
+                x_offset_for_centering = int(screen_center - scaled_last_frame_x)
+            else:
+                # Unscaled timeline
+                x_offset_for_centering = int(screen_center - last_frame_x_in_timeline)
 
             # Sliding animation: show progression through time while maintaining position
             for i in range(max_animation_frames):
@@ -833,16 +864,13 @@ def render_animation(
 
                 timeline = TimelineShape(shape, time_size, current_pos, max_frames_visible)
 
-                # No horizontal sliding - maintain consistent position for visual continuity
-                x_offset = 0
-
                 make_frame(
-                    timeline, count_label=count_text, x_offset=x_offset, fixed_scale=timeline_scale
+                    timeline, count_label=count_text, x_offset=x_offset_for_centering, fixed_scale=timeline_scale
                 )
 
             # Final position: last frame centered
             timeline = TimelineShape(shape, time_size, end_pos, max_frames_visible)
-            final_timeline_offset = 0
+            final_timeline_offset = x_offset_for_centering
 
         shape = timeline
 
