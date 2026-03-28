@@ -789,16 +789,22 @@ def render_animation(
         count_text = f"{running_product} combinations x ({time_size} times)"
 
         # Calculate consistent scale for timeline animation
-        # Use a reference timeline showing max frames to determine scale
-        reference_timeline = TimelineShape(shape, time_size, 0, max_frames_visible)
-        ref_w, ref_h = reference_timeline.size()
+        # Use fixed scale for consistent zoom level regardless of frame count
+        # Base scale on showing 3 frames at a good size, not fitting everything
+        base_timeline_width = 3 * (TimelineShape.FRAME_W + 20) + 60  # 3 frames + padding
+        base_timeline_height = TimelineShape.FRAME_H + 60  # Frame height + film padding
+        
         avail_w = width - 40
         avail_h = height - 55 - 10  # shape_area_top = 55
-        timeline_scale = min(avail_w / max(ref_w, 1), avail_h / max(ref_h, 1), 1.0)
+        
+        # Calculate scale to show 3 frames at good visibility
+        scale_by_width = avail_w / base_timeline_width
+        scale_by_height = avail_h / base_timeline_height
+        timeline_scale = min(scale_by_width, scale_by_height, 1.5)  # Allow some zoom in, max 1.5x
 
         # Sliding animation with windowed timeline
-        # Always 1 second as requested
-        max_animation_frames = fps * 1  # Always 1 second
+        # Always 0.7 second as requested
+        max_animation_frames = int(fps * 0.7)  # Always 0.7 second
 
         if time_size <= max_frames_visible:
             # All frames fit - just show them statically
