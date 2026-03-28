@@ -41,19 +41,14 @@ class MetaRerun(MetaGeneratorBase):
 # Rerun integration requires the optional rerun-sdk package.
 # Install with: pip install rerun-sdk
 #
-# bn.capture_rerun_window() snapshots the current rerun recording into an
-# .rrd file and returns a Panel HTML pane embedding the rerun web viewer.
-# This lets you log spatial data (2D/3D shapes, time series, images) during
-# a parameter sweep and view the results interactively in the report.
+# bn.capture_rerun_window() captures the current rerun recording and returns
+# a self-contained Panel HTML pane with base64-encoded data inline.
+# No local file server is needed — the rerun web viewer is loaded from CDN.
 #
 # Usage pattern:
-#   1. rr.init("my_app")                  -- initialise a recording
-#   2. Log data with rr.log(...)          -- shapes, scalars, images, etc.
-#   3. self.out = bn.capture_rerun_window() -- snapshot into the report
-#
-# To run the viewer alongside bencher, call bn.run_file_server() before
-# launching the sweep so the .rrd files are served over HTTP (uses stdlib
-# http.server, no extra dependencies required).
+#   1. rr.init("my_app")                    -- initialise a recording
+#   2. Log data with rr.log(...)            -- shapes, scalars, images, etc.
+#   3. self.out = bn.capture_rerun_window() -- capture inline into the report
 
 
 class RerunSweep(bn.ParametrizedSweep):
@@ -79,29 +74,24 @@ class RerunSweep(bn.ParametrizedSweep):
         #   rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta, 1]))
         #   self.out_pane = bn.capture_rerun_window(width=300, height=300)
         #
-        # capture_rerun_window() saves the current recording to an .rrd file
-        # in the cache directory and returns an HTML pane that embeds the
-        # rerun web viewer pointed at that file.
+        # capture_rerun_window() embeds the data inline (base64) and loads
+        # the rerun viewer from CDN — no local file server needed.
 
         return super().__call__(**kwargs)'''
         body = """\
-# In production, start the file server before running sweeps:
-# bn.run_file_server()
-
 bench = RerunSweep().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["theta"],
     result_vars=["out_sin"],
     description="Rerun is a spatial logging library for 2D/3D visualization. "
     "Bencher integrates with rerun via bn.capture_rerun_window(), which "
-    "snapshots the current rerun recording into an .rrd file and returns a "
-    "Panel widget that embeds the rerun web viewer. This lets you attach "
-    "interactive 2D/3D visualizations to each point in a parameter sweep. "
+    "captures the current recording with base64-encoded data inline and "
+    "returns a self-contained Panel HTML pane. No local file server needed. "
     "Install rerun-sdk and uncomment the rr.log() calls in the class to "
     "see live rerun output.",
     post_description="The ResultContainer type stores arbitrary Panel widgets "
     "(HTML, images, embedded viewers). For rerun, each sweep point gets its "
-    "own .rrd snapshot that can be explored interactively in the report.",
+    "own inline snapshot that can be explored interactively in the report.",
 )
 """
         self.generate_example(

@@ -11,8 +11,8 @@ class SweepRerun(bn.ParametrizedSweep):
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
-        self.out_pane = bn.capture_rerun_window(width=300, height=300)
         rr.log("s1", rr.Boxes2D(half_sizes=[self.theta, 1]))
+        self.out_pane = bn.capture_rerun_window(width=600, height=600)
 
         return super().__call__(**kwargs)
 
@@ -26,5 +26,4 @@ def example_rerun(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run_flask_in_thread()
     example_rerun(bn.BenchRunCfg(level=3)).report.show()

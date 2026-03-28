@@ -4,14 +4,32 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from threading import Thread
 
 import panel as pn
 from diskcache import Cache
+from tornado.web import StaticFileHandler
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
 
 logging.basicConfig(level=logging.INFO)
+
+
+class _CorsStaticHandler(StaticFileHandler):
+    """A Tornado static file handler that adds CORS headers."""
+
+    def data_received(self, chunk):  # pragma: no cover
+        pass
+
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "*")
+
+    def options(self, *_args):
+        self.set_status(204)
+        self.finish()
 
 
 class BenchPlotServer:
@@ -99,14 +117,37 @@ class BenchPlotServer:
         for logger in ["tornado", "bokeh"]:
             logging.getLogger(logger).setLevel(logging.WARNING)
 
+        extra = self._rrd_extra_patterns()
+
+        # When serving .rrd files, use a known port so rerun iframe URLs work.
+        if port is None and extra:
+            from bencher.utils_rerun import PANEL_PORT
+
+            port = PANEL_PORT
+
         serve_kwargs = dict(
             title=bench_name,
             threaded=True,
             show=show,
             address="0.0.0.0",
             websocket_origin=["*"],
+            extra_patterns=extra,
         )
         if port is not None:
             serve_kwargs["port"] = port
 
         return pn.serve(plots_instance, **serve_kwargs)
+
+    @staticmethod
+    def _rrd_extra_patterns() -> list:
+        """Return Tornado route patterns for serving .rrd files with CORS headers."""
+        rrd_dir = Path("cachedir/rrd").resolve()
+        if rrd_dir.is_dir():
+            return [
+                (
+                    r"/rrd_static/(.*)",
+                    _CorsStaticHandler,
+                    {"path": str(rrd_dir)},
+                )
+            ]
+        return []
