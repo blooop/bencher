@@ -40,7 +40,7 @@ BG_COLOR = (255, 255, 255)  # white
 LABEL_COLOR = (30, 30, 30)  # dark text
 DEPTH_DX = 10
 DEPTH_DY = -8
-GROUP_GAP = 30
+GROUP_GAP = 20
 GAP = "..."
 
 
@@ -319,6 +319,130 @@ class TimelineShape(Shape):
         return TimelineShape(self.inner._deep_copy(), self.count)
 
 
+# ---------------------------------------------------------------------------
+# Repeat animation — strobe / flash
+# ---------------------------------------------------------------------------
+
+
+class StrobeShape(Shape):
+    """Shape with a glowing border and tally-mark counter.
+
+    ``flash`` (0–1) controls the glow intensity for animation frames.
+    All visual tunables are read from ``cfg`` (a CartesianProductCfg).
+    """
+
+    def __init__(self, inner: Shape, count: int, cfg: CartesianProductCfg, flash: float = 0.0):
+        self.inner = inner
+        self.count = count
+        self.cfg = cfg
+        self.flash = flash
+        super().__init__(children=None, direction="right", depth=0)
+
+    @property
+    def is_leaf(self) -> bool:
+        return False
+
+    def size(self) -> tuple[int, int]:
+        iw, ih = self.inner.size()
+        c = self.cfg
+        # Marks never widen the box — they overlap if needed
+        total_w = iw + 2 * c.strobe_pad
+        total_h = ih + 2 * c.strobe_pad + c.strobe_mark_row_h
+        return (total_w, total_h)
+
+    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0):
+        c = self.cfg
+        iw, ih = self.inner.size()
+        total_w, total_h = self.size()
+        box_h = total_h - c.strobe_mark_row_h
+
+        # Border — static (no flash)
+        border_color = tuple(int(v * 0.25 * alpha) for v in c.strobe_color)
+        img.rounded_rectangle(
+            [x, y, x + total_w, y + box_h],
+            radius=c.strobe_border_radius,
+            outline=border_color,
+            width=c.strobe_base_border_w,
+        )
+
+        # Inner shape
+        ix = x + (total_w - iw) // 2
+        iy = y + (box_h - ih) // 2
+        self.inner.draw(img, ix, iy, alpha)
+
+        # Gentle gray wash on flash
+        if self.flash > 0.3:
+            fill_alpha = self.flash * 0.08
+            overlay = Image.new("RGB", (total_w, box_h), c.strobe_color)
+            base_img = img._image
+            base_img.paste(
+                Image.blend(base_img.crop((x, y, x + total_w, y + box_h)), overlay, fill_alpha),
+                (x, y),
+            )
+
+        # Tally marks + count label below
+        marks_y = y + box_h + 6
+        mark_color = tuple(int(v * alpha) for v in c.strobe_color)
+        avail_w = total_w - 2 * c.strobe_pad
+        self._draw_tally(img, x + c.strobe_pad, marks_y, avail_w, mark_color, c)
+
+    def _draw_tally(self, img, mx0, my, avail_w, color, c):
+        """Proper tally marks (vertical lines, diagonal strike every 5) + xN label.
+
+        Tallies grow from the left. The xN number is always on the right.
+        Only draws as many complete groups/marks as fit cleanly; the label
+        alone conveys the count when space is tight.
+        """
+        mark_h = c.strobe_mark_row_h - 2
+        mark_w = c.strobe_mark_size
+        stride = mark_w + c.strobe_mark_gap
+        group_size = 5
+        group_gap = c.strobe_mark_gap * 3
+
+        font = _get_font(c.strobe_mark_row_h - 2)
+        one_group_w = (group_size - 1) * stride + mark_w
+
+        # Check if all tallies fit
+        def tally_width(n):
+            if n == 0:
+                return 0
+            n_full = n // group_size
+            n_rem = n % group_size
+            w = n_full * one_group_w + max(0, n_full - 1) * group_gap
+            if n_rem > 0:
+                w += (group_gap if n_full > 0 else 0) + (n_rem - 1) * stride + mark_w
+            return w
+
+        if tally_width(self.count) <= avail_w:
+            # All tallies fit — draw them, no number needed
+            cx = mx0
+            for i in range(self.count):
+                group_idx = i % group_size
+                img.rectangle([cx, my, cx + mark_w, my + mark_h], fill=color)
+                if group_idx == group_size - 1:
+                    group_x0 = cx - (group_size - 1) * stride
+                    overshoot = stride // 2
+                    inset = mark_h // 5
+                    img.line(
+                        [group_x0 - overshoot, my + mark_h - inset,
+                         cx + mark_w + overshoot, my + inset],
+                        fill=color, width=mark_w * 2,
+                    )
+                    cx += mark_w + group_gap
+                else:
+                    cx += stride
+        else:
+            # Too many — just show the number, centered
+            label = f"x{self.count}"
+            bbox = img.textbbox((0, 0), label, font=font)
+            tw = bbox[2] - bbox[0]
+            lx = mx0 + (avail_w - tw) // 2
+            img.text((lx, my - 1), label, fill=color, font=font)
+
+    def _deep_copy(self) -> "Shape":
+        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)
+
+
 def render_animation(
     cfg: CartesianProductCfg,
     width: int = 640,
@@ -492,28 +616,28 @@ def render_animation(
         spatial_idx += 1
         dim_color += 1
 
-    # --- Phase 2: Repeat — standard extrusion, same as spatial dims ---
+    # --- Phase 2: Repeat — strobe flash animation ---
     # Always shown (even ×1) to match the LaTeX summary.
+    # Total repeat phase is hard-capped at ~3 seconds of frames.
+    MAX_REPEAT_FRAMES = fps * 3
     if repeat_dim:
         repeat_size = repeat_dim[0][1]
-        direction = _direction_for(spatial_idx)
-        logger.info("Repeat: ×%d (direction=%s)", repeat_size, direction)
+        logger.info("Repeat: ×%d (strobe)", repeat_size)
 
         make_frame(shape, dim_label="repeat")
         hold(shape)
 
-        if repeat_size > 1:
-            old_shape = shape
-            n_steps = repeat_size - 1
-            for k in range(2, repeat_size + 1):
-                partial = old_shape.extrude(k, direction, color_index=dim_color)
-                make_frame(partial, count_label=f"{running_product * k} combinations")
-                n_extra = max(0, round(step_frames / n_steps) - 1)
-                for _ in range(n_extra):
-                    make_frame(partial)
-            shape = old_shape.extrude(repeat_size, direction, color_index=dim_color)
-
+        repeat_frame_count = 0
+        for k in range(1, repeat_size + 1):
+            if repeat_frame_count >= MAX_REPEAT_FRAMES:
+                break
+            flash_on = StrobeShape(shape, k, cfg, flash=1.0)
+            make_frame(flash_on, count_label=f"{running_product} x {k} repeats")
+            make_frame(StrobeShape(shape, k, cfg, flash=0.0))
+            repeat_frame_count += 2
+        shape = StrobeShape(shape, repeat_size, cfg, flash=0.0)
         running_product *= repeat_size
+
         make_frame(shape, count_label=f"{running_product} combinations")
         hold(shape)
         spatial_idx += 1
