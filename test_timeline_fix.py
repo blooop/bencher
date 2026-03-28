@@ -8,7 +8,6 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from bencher.results.manim_cartesian.cartesian_product_scene import render_animation
-from bencher.bench_cfg import BenchCfg
 
 
 # Simple test configuration with over_time dimension

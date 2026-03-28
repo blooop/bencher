@@ -66,7 +66,7 @@ def analyze_animation(png_path):
                         print(f"    Frame positions: {', '.join(frame_positions)}")
 
                         # Check if frames are centered
-                        total_frame_width = frames_found[-1][1] - frames_found[0][0]
+                        total_frame_width = frames_found[-1][1] - frames_found[0][0]  # pylint: disable=unused-variable
                         center_pos = (frames_found[0][0] + frames_found[-1][1]) / 2
                         screen_center = width / 2
                         offset_from_center = abs(center_pos - screen_center)
@@ -77,7 +77,7 @@ def analyze_animation(png_path):
                         print(f"    Offset from center: {offset_from_center:.1f} pixels")
 
                         if offset_from_center < 10:
-                            print(f"    ✓ Frames are well centered")
+                            print("    ✓ Frames are well centered")
                         else:
                             print(f"    ✗ Frames are off-center by {offset_from_center:.1f}px")
 
@@ -94,7 +94,7 @@ def analyze_animation(png_path):
         img.seek(frame_count - 1)
         # Re-run the analysis for the last frame with more detail
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error analyzing animation: {e}")
 
 

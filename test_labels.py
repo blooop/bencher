@@ -25,6 +25,7 @@ def test_timeline_labels():
     timeline.draw(draw, 50, 50)
 
     # Check if labels were generated
+    # pylint: disable=protected-access
     print(f"Generated {len(timeline._label_info)} labels:")
     for i, label in enumerate(timeline._label_info):
         print(f"  {i + 1}. '{label['text']}' at ({label['x']}, {label['y']})")
@@ -38,7 +39,7 @@ def test_timeline_labels():
 
     font = _get_font(24)  # Large font for visibility
 
-    for label in timeline._label_info:
+    for label in timeline._label_info:  # pylint: disable=protected-access
         x = label["x"] + 50  # Add timeline x offset
         y = label["y"] + 50  # Add timeline y offset
         draw.text((x, y), label["text"], fill=(255, 0, 0), font=font)  # Red text

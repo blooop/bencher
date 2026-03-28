@@ -3,7 +3,7 @@
 
 import sys
 import os
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
@@ -97,19 +97,19 @@ def detailed_analysis(png_path):
                             f"  Labels detected at x positions: {labels_found[:5]}..."
                         )  # Show first 5
                     else:
-                        print(f"  ⚠️  NO LABELS DETECTED")
+                        print("  ⚠️  NO LABELS DETECTED")
 
                     if has_right_background:
-                        print(f"  ✓ Background visible on right side")
+                        print("  ✓ Background visible on right side")
                     else:
-                        print(f"  ✗ No background visible on right")
+                        print("  ✗ No background visible on right")
 
                     # Special analysis for what should be the final frame
                     if frame_count >= 7:  # Later frames
-                        print(f"  Final frame analysis:")
-                        print(f"    - Time step 4 (t=4) should be centered")
-                        print(f"    - Should see background on right")
-                        print(f"    - Should have label 't=4' below centered frame")
+                        print("  Final frame analysis:")
+                        print("    - Time step 4 (t=4) should be centered")
+                        print("    - Should see background on right")
+                        print("    - Should have label 't=4' below centered frame")
 
                 frame_count += 1
                 img.seek(frame_count)
@@ -120,7 +120,7 @@ def detailed_analysis(png_path):
         print(f"\nTotal frames: {frame_count}")
         print(f"Animation duration: {frame_count / 10:.1f}s at 10fps")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error: {e}")
 
 

@@ -162,16 +162,16 @@ class Shape:
     def extrude(self, n: int, direction: str, color_index: int | None = None) -> "Shape":
         """Create a new shape by extruding this one n times along direction."""
         if color_index is not None:
-            copies = [self._deep_copy_recolored(color_index) for _ in range(n)]
+            copies = [self._deep_copy_recolored(color_index) for _ in range(n)]  # pylint: disable=protected-access
         else:
-            copies = [self._deep_copy() for _ in range(n)]
+            copies = [self._deep_copy() for _ in range(n)]  # pylint: disable=protected-access
         return Shape(children=copies, direction=direction, depth=self.depth + 1)
 
     def _deep_copy(self) -> "Shape":
         if self.is_leaf:
             return Shape(color_index=self.color_index)
         return Shape(
-            children=[c._deep_copy() for c in self.children],
+            children=[c._deep_copy() for c in self.children],  # pylint: disable=protected-access
             direction=self.direction,
             depth=self.depth,
         )
@@ -181,7 +181,7 @@ class Shape:
         if self.is_leaf:
             return Shape(color_index=color_index)
         return Shape(
-            children=[c._deep_copy_recolored(color_index) for c in self.children],
+            children=[c._deep_copy_recolored(color_index) for c in self.children],  # pylint: disable=protected-access
             direction=self.direction,
             depth=self.depth,
         )
@@ -283,6 +283,7 @@ class TimelineShape(Shape):
 
         # Calculate the actual visible frames in this window (for compatibility)
         self.visible_count = min(self.max_visible_frames, self.count - self.start_frame)
+        self._label_info = []  # Initialize label info for timeline labels
         super().__init__(children=None, direction="right", depth=0)
 
     @property
@@ -343,11 +344,11 @@ class TimelineShape(Shape):
         scaled_w, scaled_h = inner_img.size
 
         # Need the underlying PIL Image (not ImageDraw) for pasting
-        base_img = img._image
+        base_img = img._image  # pylint: disable=protected-access
 
         frames_y = y + FILM_PAD + FILM_SPROCKET_H + FILM_SPROCKET_MARGIN
         # Use same font size as main dimension labels for consistency
-        font_label = _get_font(12)
+        font_label = _get_font(12)  # pylint: disable=unused-variable
 
         # Draw all frames in the render range (includes extra frames for sliding effect)
         for i in range(self.render_count):
@@ -368,8 +369,9 @@ class TimelineShape(Shape):
             base_img.paste(inner_img, (cx, cy))
 
             # Store label info for drawing at main canvas level (to avoid scaling)
-            if not hasattr(self, "_label_info"):
-                self._label_info = []
+            # Clear and rebuild label info for each draw call
+            if i == 0:  # Clear on first frame
+                self._label_info.clear()
 
             # Only store labels that would be visible on screen (optimization)
             # For sliding animation, store all labels; PIL will handle clipping
@@ -398,7 +400,7 @@ class TimelineShape(Shape):
             )
 
     def _deep_copy(self) -> "Shape":
-        return TimelineShape(self.inner._deep_copy(), self.count)
+        return TimelineShape(self.inner._deep_copy(), self.count)  # pylint: disable=protected-access
 
 
 # ---------------------------------------------------------------------------
@@ -456,7 +458,7 @@ class StrobeShape(Shape):
         if self.flash > 0.3:
             fill_alpha = self.flash * 0.08
             overlay = Image.new("RGB", (total_w, box_h), c.strobe_color)
-            base_img = img._image
+            base_img = img._image  # pylint: disable=protected-access
             base_img.paste(
                 Image.blend(base_img.crop((x, y, x + total_w, y + box_h)), overlay, fill_alpha),
                 (x, y),
@@ -527,7 +529,7 @@ class StrobeShape(Shape):
             img.text((lx, my - 1), label, fill=color, font=font)
 
     def _deep_copy(self) -> "Shape":
-        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)
+        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)  # pylint: disable=protected-access
 
 
 def render_animation(
@@ -644,7 +646,7 @@ def render_animation(
         # Draw timeline labels if present
         if isinstance(shape, TimelineShape) and hasattr(shape, "_label_info"):
             font_timeline = _get_font(12)
-            for label_info in shape._label_info:
+            for label_info in shape._label_info:  # pylint: disable=protected-access
                 if scale < 1.0:
                     # Scaled shape: adjust label positions
                     label_x = paste_x + int(label_info["x"] * scale) - 20 * scale
@@ -804,31 +806,35 @@ def render_animation(
             make_frame(timeline, count_label=count_text, fixed_scale=timeline_scale)
             final_timeline_offset = 0
         else:
-            # Start: show first frames from right edge
-            # End: show last frame centered
-            start_pos = 0
+            # Animation strategy: Maintain visual continuity with previous static frame
+            # Start and end with last frame centered, slide through progression in middle
             end_pos = max(0, time_size - 1 - max_frames_visible // 2)  # Center last frame
+            start_pos = 0  # Beginning of timeline
 
-            # Sliding animation: timeline comes in from right, stops when target centered
+            # Sliding animation: show progression through time while maintaining position
             for i in range(max_animation_frames):
                 t = i / max(max_animation_frames - 1, 1)  # 0 to 1
-                current_pos = int(start_pos + t * (end_pos - start_pos))
+
+                # Create smooth progression: start at end, go to beginning, return to end
+                if t <= 0.5:
+                    # First half: slide from end position to start
+                    t1 = t * 2  # 0 to 1
+                    current_pos = int(end_pos + t1 * (start_pos - end_pos))
+                else:
+                    # Second half: slide from start back to end
+                    t2 = (t - 0.5) * 2  # 0 to 1
+                    current_pos = int(start_pos + t2 * (end_pos - start_pos))
 
                 timeline = TimelineShape(shape, time_size, current_pos, max_frames_visible)
 
-                # Start from right edge, slide to center
-                slide_progress = t
-                start_x_offset = width // 2  # Start from right
-                end_x_offset = 0  # End centered
-                x_offset = int(
-                    start_x_offset * (1 - slide_progress) + end_x_offset * slide_progress
-                )
+                # No horizontal sliding - maintain consistent position for visual continuity
+                x_offset = 0
 
                 make_frame(
                     timeline, count_label=count_text, x_offset=x_offset, fixed_scale=timeline_scale
                 )
 
-            # Final position
+            # Final position: last frame centered
             timeline = TimelineShape(shape, time_size, end_pos, max_frames_visible)
             final_timeline_offset = 0
 

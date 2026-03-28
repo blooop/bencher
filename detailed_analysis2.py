@@ -75,14 +75,14 @@ def detailed_analysis(png_path):
                         print(f"  Frames: {frames_found}")
 
                     if labels_found > 20:  # Threshold for detecting actual text
-                        print(f"  ✓ Labels detected")
+                        print("  ✓ Labels detected")
                     else:
                         print(f"  ✗ NO LABELS - only {labels_found} text pixels")
 
                     if has_right_background:
-                        print(f"  ✓ Background visible on right")
+                        print("  ✓ Background visible on right")
                     else:
-                        print(f"  ✗ No right background visible")
+                        print("  ✗ No right background visible")
 
                 frame_count += 1
                 img.seek(frame_count)
@@ -92,7 +92,7 @@ def detailed_analysis(png_path):
 
         print(f"\\nTotal frames: {frame_count}")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error: {e}")
 
 

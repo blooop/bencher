@@ -37,7 +37,6 @@ def test_centering(time_steps, test_name):
         print("All frames should fit, no scrolling needed")
     else:
         center_pos = max(0, time_steps - 1 - 3 // 2)  # 3 // 2 = 1
-        expected_center = time_steps - 1 - 1  # Last frame - 1 for centering
         print(f"Last frame (index {time_steps - 1}) should be centered")
         print(f"Expected start position for centering: {center_pos}")
         print(

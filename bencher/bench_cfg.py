@@ -594,7 +594,7 @@ class BenchCfg(BenchRunCfg):
 
             cfg = from_bench_cfg(self)
             return render_animation(cfg, width=350, height=250)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return None
 
     def describe_sweep(

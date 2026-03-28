@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Test script to verify the new windowed over_time animation behavior."""
 
-import bencher as bn
 from bencher.results.manim_cartesian import CartesianProductCfg, SweepVar, render_animation
 
 
