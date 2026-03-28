@@ -82,12 +82,41 @@ class BenchReport(BenchPlotServer):
             label = label[:57] + "..."
         return label
 
+    def _is_over_time_series_continuation(self, bench_res: BenchResult) -> bool:
+        """Check if this over_time result is a continuation of an existing time series.
+        
+        Returns True if there's already a result with the same title that has over_time,
+        indicating this should be part of the same aggregated time series.
+        """
+        if not bench_res.bench_cfg.over_time or "over_time" not in bench_res.ds.coords:
+            return False
+            
+        base_title = bench_res.bench_cfg.title
+        
+        # Check if we already have a result with this exact title (no time label)
+        for existing_res in self.bench_results:  # Check all existing results
+            if existing_res.bench_cfg.title == base_title:
+                return True
+                
+        return False
+
     def append_result(self, bench_res: BenchResult) -> None:
-        self.bench_results.append(bench_res)
+        # Check if this should be aggregated BEFORE adding to list
         title = bench_res.bench_cfg.title
+        
+        # Only add time labels if this is NOT part of a time series that should be aggregated
+        # For over_time examples that create multiple snapshots, we want them in a single tab
         label = self._time_event_label(bench_res)
-        if label:
+        should_add_time_label = (
+            label and 
+            not self._is_over_time_series_continuation(bench_res)
+        )
+        
+        if should_add_time_label:
             title = f"{title} [{label}]"
+            
+        # Now add to the results list
+        self.bench_results.append(bench_res)
         self.append_tab(bench_res.plot(), title)
 
     def append_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
