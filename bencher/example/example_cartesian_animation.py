@@ -1,103 +1,80 @@
-"""Demonstrates the Cartesian product animation.
+"""Grid of Cartesian product animations across all dimensionality combinations.
 
-Shows how each dimension builds on the last:
-    point --dim1--> line --dim2--> grid --dim3--> stack
-    --repeat--> echo --over_time--> timeline
-    --dim4+--> sets of sets ...
+Uses bencher's sweep machinery to explore the animation space:
+  - spatial_dims (1-4) × use_repeat × use_over_time
 
-Uses PIL to render a GIF — no manim dependency.
-Run with: pixi run python bencher/example/example_cartesian_animation.py
-Enable logging with: LOGLEVEL=INFO pixi run python ...
+Run with: pixi run python bencher/example/example_cartesian_grid.py
 """
 
 from __future__ import annotations
 
-import logging
-import sys
+import bencher as bn
 
 from bencher.results.manim_cartesian import CartesianProductCfg, SweepVar, render_animation
 
-logging.basicConfig(level=getattr(logging, "INFO"), stream=sys.stdout)
 
-
-def example_cartesian_2d_with_meta():
-    """2-D sweep + repeat=1 + over_time=1: shows meta dims even when single-element."""
-    cfg = CartesianProductCfg(
-        all_vars=[
-            SweepVar("x", [0.0, 0.5, 1.0]),
-            SweepVar("y", ["A", "B"]),
-            SweepVar("repeat", [1]),
-            SweepVar("over_time", ["t0"]),
-        ],
-        result_names=["result"],
+class CartesianAnimationSweep(bn.ParametrizedSweep):
+    spatial_dims = bn.IntSweep(default=1, bounds=(1, 5), doc="Number of spatial dimensions")
+    repeats = bn.IntSweep(default=0, bounds=(0, 100), doc="Number of repeats (0 = no repeat dim)")
+    time_steps = bn.IntSweep(
+        default=0, bounds=(0, 10), doc="Number of time steps (0 = no over_time dim)"
     )
-    path = render_animation(cfg)
-    print(f"2-D + meta GIF: {path}")
+
+    # Strobe tunables
+    strobe_pad = 12
+    strobe_border_radius = 4
+    strobe_mark_size = 2
+    strobe_mark_gap = 4
+
+    animation = bn.ResultImage()
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+
+        all_spatial = [
+            SweepVar("dim_1", [0, 1, 2]),
+            SweepVar("dim_2", [0, 1, 2]),
+            SweepVar("dim_3", [0, 1]),
+            SweepVar("dim_4", [0, 1]),
+            SweepVar("dim_5", [0, 1]),
+        ]
+        sweep_vars = list(all_spatial[: self.spatial_dims])
+
+        if self.repeats > 0:
+            sweep_vars.append(SweepVar("repeat", list(range(1, self.repeats + 1))))
+        if self.time_steps > 0:
+            sweep_vars.append(SweepVar("over_time", [f"t{i}" for i in range(self.time_steps)]))
+
+        cfg = CartesianProductCfg(
+            all_vars=sweep_vars,
+            result_names=["result"],
+            strobe_pad=self.strobe_pad,
+            strobe_mark_size=self.strobe_mark_size,
+            strobe_mark_gap=self.strobe_mark_gap,
+            strobe_border_radius=self.strobe_border_radius,
+        )
+
+        # With caching, no need for tag-based directories - each unique animation gets its own filename
+        gif_path = render_animation(
+            cfg,
+            width=320,
+            height=200,
+        )
+        self.animation = gif_path
+        return super().__call__()
 
 
-def example_cartesian_3d():
-    """3-D sweep: two spatial + repeat×2 → 3×2×2 = 12 cells."""
-    cfg = CartesianProductCfg(
-        all_vars=[
-            SweepVar("theta", [0.0, 1.57, 3.14]),
-            SweepVar("phi", [0, 1]),
-            SweepVar("repeat", [1, 2]),
-        ],
-        result_names=["out_sin", "out_cos"],
+def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    bench = CartesianAnimationSweep().to_bench(run_cfg)
+
+    bench.plot_sweep(
+        input_vars=["spatial_dims", bn.sweep("repeats", [0, 1,6, 100]),bn.sweep("time_steps", [0, 1, 6,30])],
+
+        const_vars=[("time_steps", 0)],
     )
-    path = render_animation(cfg)
-    print(f"3-D GIF: {path}")
 
-
-def example_cartesian_3d_stack():
-    """3 spatial dims: shows h→v→stack progression."""
-    cfg = CartesianProductCfg(
-        all_vars=[
-            SweepVar("x", [0, 1, 2]),
-            SweepVar("y", [0, 1, 2]),
-            SweepVar("z", [0, 1, 2]),
-            SweepVar("repeat", [1]),
-        ],
-        result_names=["metric"],
-    )
-    path = render_animation(cfg)
-    print(f"3-D stack GIF: {path}")
-
-
-def example_cartesian_4d():
-    """4-D sweep: three spatial + repeat → 2×2×3×2 = 24 cells."""
-    cfg = CartesianProductCfg(
-        all_vars=[
-            SweepVar("x", [0, 1]),
-            SweepVar("y", [0, 1]),
-            SweepVar("z", ["A", "B", "C"]),
-            SweepVar("repeat", [1, 2]),
-        ],
-        result_names=["metric"],
-    )
-    path = render_animation(cfg)
-    print(f"4-D GIF: {path}")
-
-
-def example_cartesian_full():
-    """Full demo: 3 spatial + repeat×3 + over_time×3."""
-    cfg = CartesianProductCfg(
-        all_vars=[
-            SweepVar("x", [0, 1, 2]),
-            SweepVar("y", [0, 1, 2]),
-            SweepVar("z", [0, 1]),
-            SweepVar("repeat", [1, 2, 3]),
-            SweepVar("over_time", ["t0", "t1", "t2"]),
-        ],
-        result_names=["metric"],
-    )
-    path = render_animation(cfg)
-    print(f"Full GIF: {path}")
+    return bench
 
 
 if __name__ == "__main__":
-    example_cartesian_2d_with_meta()
-    example_cartesian_3d()
-    example_cartesian_3d_stack()
-    example_cartesian_4d()
-    example_cartesian_full()
+    bn.run(example_cartesian_grid, level=4, cache_results=False)
