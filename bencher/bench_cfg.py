@@ -580,6 +580,23 @@ class BenchCfg(BenchRunCfg):
         """
         return to_latex(self)
 
+    def to_cartesian_animation(self) -> str | None:
+        """Render an animation of the Cartesian product data collection.
+
+        Uses matplotlib + moviepy for fast rendering.  Returns ``None``
+        on any import or rendering error so callers degrade gracefully.
+
+        Returns:
+            str | None: Path to the rendered MP4 video file, or None on failure.
+        """
+        try:
+            from bencher.results.manim_cartesian import from_bench_cfg, render_animation
+
+            cfg = from_bench_cfg(self)
+            return render_animation(cfg, width=350, height=250)
+        except Exception:
+            return None
+
     def describe_sweep(
         self, width: int = 800, accordion: bool = True
     ) -> pn.pane.Markdown | pn.Column:
@@ -599,9 +616,21 @@ class BenchCfg(BenchRunCfg):
             desc = pn.Accordion(("Expand Full Data Collection Parameters", desc))
 
         sentence = self.sweep_sentence()
+
+        parts = [sentence]
         if latex is not None:
-            return pn.Column(sentence, latex, desc)
-        return pn.Column(sentence, desc)
+            parts.append(latex)
+
+        # Render Cartesian product animation (gracefully skipped on error)
+        animation_path = self.to_cartesian_animation()
+        if animation_path is not None:
+            from pathlib import Path
+
+            abs_path = str(Path(animation_path).resolve())
+            parts.append(pn.pane.Image(abs_path, width=350))
+
+        parts.append(desc)
+        return pn.Column(*parts)
 
     def sweep_sentence(self) -> pn.pane.Markdown:
         """Generate a concise summary sentence of the sweep configuration.
