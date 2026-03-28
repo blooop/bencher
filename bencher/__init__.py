@@ -87,7 +87,7 @@ from .utils import (
 
 try:
     from .utils_rerun import publish_and_view_rrd, rrd_to_pane, rerun_to_pane, capture_rerun_window
-    from .flask_server import run_flask_in_thread
+    from .file_server import run_file_server
 except ModuleNotFoundError as e:
     pass
 
