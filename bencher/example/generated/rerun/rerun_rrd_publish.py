@@ -25,8 +25,8 @@ import bencher as bn
 #   bn.publish_and_view_rrd(file_path, remote, branch_name, content_callback)
 #       -> Pushes the .rrd file to a git branch and returns rrd_to_pane()
 #
-#   bn.run_flask_in_thread()
-#       -> Starts a local HTTP server to serve .rrd files from the cache dir
+#   bn.run_file_server()
+#       -> Starts a local file server to serve .rrd files from the cache dir
 
 
 class WaveSweep(bn.ParametrizedSweep):
@@ -73,7 +73,8 @@ def example_rerun_rrd_publish(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
         "the hosted rerun web viewer in a Panel pane, or "
         "bn.publish_and_view_rrd() to push the .rrd file to a git branch and "
         "view it immediately. Start a local file server with "
-        "bn.run_flask_in_thread() to serve .rrd files from the cache directory.",
+        "bn.run_file_server() to serve .rrd files from the cache directory.\n"
+        "The file server uses Python's stdlib http.server — no extra dependencies.",
         post_description="This example shows the sweep pattern. To see live rerun "
         "output, install rerun-sdk (pip install rerun-sdk) and uncomment the "
         "rr.log() calls in the class definition.",
