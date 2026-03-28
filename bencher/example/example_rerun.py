@@ -1,8 +1,6 @@
 import rerun as rr
 import bencher as bn
 
-rr.init("rerun_example_my_blueprint")
-
 
 class SweepRerun(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=1, bounds=[1, 4], doc="Input angle", units="rad", samples=30)

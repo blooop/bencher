@@ -61,6 +61,12 @@ _viewer_started = False
 PANEL_PORT = 8051
 
 
+def _ensure_rerun_init():  # pragma: no cover
+    """Ensure a rerun recording exists, creating one if needed."""
+    if rr.get_global_data_recording() is None:
+        rr.init("bencher")
+
+
 def _ensure_rerun_viewer():  # pragma: no cover
     """Start the local rerun web viewer server if not already running."""
     global _viewer_started  # noqa: PLW0603  # pylint: disable=global-statement
@@ -106,8 +112,10 @@ def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pr
     """Save the current rerun recording to an .rrd file and return the path.
 
     Data must be logged BEFORE calling this function so that the in-memory
-    recording has content to drain.
+    recording has content to drain.  Calls ``rr.init()`` automatically if no
+    recording exists yet.
     """
+    _ensure_rerun_init()
     rec = recording or rr.get_global_data_recording()
     rrd_bytes = rec.memory_recording().drain_as_bytes()
     file_path = gen_rerun_data_path()
