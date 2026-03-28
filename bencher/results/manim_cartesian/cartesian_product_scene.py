@@ -29,7 +29,6 @@ LABEL_COLOR = (30, 30, 30)  # dark text
 DEPTH_DX = 10
 DEPTH_DY = -8
 GROUP_GAP = 30
-MAX_DIM_SIZE = 5
 GAP = "..."
 
 
@@ -322,7 +321,7 @@ def render_animation(
     dims = []
     for v in cfg.all_vars:
         real_vals = [val for val in v.values if val != GAP]
-        n = min(len(real_vals), MAX_DIM_SIZE)
+        n = len(real_vals)
         if n > 0:
             dims.append((v.name, n))
 

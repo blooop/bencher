@@ -58,26 +58,6 @@ class CartesianProductCfg:
         return result
 
 
-MAX_DISPLAY_PER_DIM = 5
-"""Maximum values per dimension shown in the animation grid.
-
-Dimensions with more values are truncated to first 2, a gap marker, and
-last 2 — mirroring the ``format_values_list`` approach in the LaTeX
-summary.
-"""
-
-
-def truncate_values(values: list[Any], max_display: int = MAX_DISPLAY_PER_DIM) -> list[Any]:
-    """Return a truncated value list with an ellipsis marker when needed.
-
-    The marker ``"..."`` is inserted at index 2 when the list is too long,
-    keeping the first 2 and last 2 values (same rule as the LaTeX summary).
-    """
-    if len(values) <= max_display:
-        return list(values)
-    return [values[0], values[1], "...", values[-2], values[-1]]
-
-
 def from_bench_cfg(bench_cfg) -> CartesianProductCfg:
     """Build a :class:`CartesianProductCfg` from a ``BenchCfg`` instance.
 
@@ -89,7 +69,7 @@ def from_bench_cfg(bench_cfg) -> CartesianProductCfg:
     (``bench_cfg.py``).
     """
     all_vars = [
-        SweepVar(name=iv.name, values=truncate_values(list(iv.values())))
+        SweepVar(name=iv.name, values=list(iv.values()))
         for iv in bench_cfg.all_vars
     ]
     result_names = [rv.name for rv in bench_cfg.result_vars]

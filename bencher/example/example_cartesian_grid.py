@@ -14,8 +14,8 @@ from bencher.results.manim_cartesian import CartesianProductCfg, SweepVar, rende
 
 
 class CartesianAnimationSweep(bn.ParametrizedSweep):
-    spatial_dims = bn.IntSweep(default=1, bounds=(1, 4), doc="Number of spatial dimensions")
-    repeats = bn.IntSweep(default=0, bounds=(0, 10), doc="Number of repeats (0 = no repeat dim)")
+    spatial_dims = bn.IntSweep(default=1, bounds=(1, 5), doc="Number of spatial dimensions")
+    repeats = bn.IntSweep(default=0, bounds=(0, 3), doc="Number of repeats (0 = no repeat dim)")
     time_steps = bn.IntSweep(default=0, bounds=(0, 10), doc="Number of time steps (0 = no over_time dim)")
 
     animation = bn.ResultImage()
@@ -24,10 +24,11 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
         self.update_params_from_kwargs(**kwargs)
 
         all_spatial = [
-            SweepVar("x", [0, 1, 2]),
-            SweepVar("y", [0, 1, 2]),
-            SweepVar("z", [0, 1]),
-            SweepVar("w", [0, 1]),
+            SweepVar("dim_1", [0, 1, 2]),
+            SweepVar("dim_2", [0, 1, 2]),
+            SweepVar("dim_3", [0, 1]),
+            SweepVar("dim_4", [0, 1]),
+            SweepVar("dim_5", [0, 1]),
         ]
         sweep_vars = list(all_spatial[: self.spatial_dims])
 
@@ -51,6 +52,7 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
 
 def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     run_cfg.cache_results = False
+    run_cfg.executor = bn.Executors.MULTIPROCESSING
     bench = bn.Bench("cartesian_animations", CartesianAnimationSweep(), run_cfg=run_cfg)
     bench.result_vars = ["animation"]
     bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
@@ -65,4 +67,4 @@ def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_cartesian_grid, level=4)
+    bn.run(example_cartesian_grid, level=4,cache_results=False)
