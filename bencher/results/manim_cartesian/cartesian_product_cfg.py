@@ -77,9 +77,6 @@ def from_bench_cfg(bench_cfg) -> CartesianProductCfg:
     This mirrors the extraction pattern in ``DimsCfg.__init__``
     (``bench_cfg.py``).
     """
-    all_vars = [
-        SweepVar(name=iv.name, values=list(iv.values()))
-        for iv in bench_cfg.all_vars
-    ]
+    all_vars = [SweepVar(name=iv.name, values=list(iv.values())) for iv in bench_cfg.all_vars]
     result_names = [rv.name for rv in bench_cfg.result_vars]
     return CartesianProductCfg(all_vars=all_vars, result_names=result_names)

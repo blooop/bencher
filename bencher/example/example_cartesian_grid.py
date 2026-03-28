@@ -16,7 +16,9 @@ from bencher.results.manim_cartesian import CartesianProductCfg, SweepVar, rende
 class CartesianAnimationSweep(bn.ParametrizedSweep):
     spatial_dims = bn.IntSweep(default=1, bounds=(1, 5), doc="Number of spatial dimensions")
     repeats = bn.IntSweep(default=0, bounds=(0, 100), doc="Number of repeats (0 = no repeat dim)")
-    time_steps = bn.IntSweep(default=0, bounds=(0, 10), doc="Number of time steps (0 = no over_time dim)")
+    time_steps = bn.IntSweep(
+        default=0, bounds=(0, 10), doc="Number of time steps (0 = no over_time dim)"
+    )
 
     # Strobe tunables
     strobe_pad = 12
@@ -52,16 +54,11 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
             strobe_border_radius=self.strobe_border_radius,
         )
 
-        tag = (
-            f"{self.spatial_dims}d_r{self.repeats}_t{self.time_steps}"
-            f"_p{self.strobe_pad}_ms{self.strobe_mark_size}_mg{self.strobe_mark_gap}"
-            f"_br{self.strobe_border_radius}"
-        )
+        # With caching, no need for tag-based directories - each unique animation gets its own filename
         gif_path = render_animation(
             cfg,
             width=320,
             height=200,
-            output_dir=f"cachedir/manim/{tag}",
         )
         self.animation = gif_path
         return super().__call__()
@@ -69,7 +66,7 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
 
 def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     run_cfg.cache_results = False
-    run_cfg.executor = bn.Executors.MULTIPROCESSING
+    run_cfg.executor = bn.Executors.THREAD_POOL  # Use thread pool to avoid multiprocessing import issues
     bench = bn.Bench("cartesian_animations", CartesianAnimationSweep(), run_cfg=run_cfg)
     bench.result_vars = ["animation"]
     bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
@@ -86,4 +83,4 @@ def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_cartesian_grid, level=4,cache_results=False)
+    bn.run(example_cartesian_grid, level=4, cache_results=False)

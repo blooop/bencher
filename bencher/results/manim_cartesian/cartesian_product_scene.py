@@ -10,6 +10,8 @@ Renders frames directly with PIL (fast), saves as GIF.
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import logging
 from pathlib import Path
 
@@ -44,6 +46,28 @@ GROUP_GAP = 20
 GAP = "..."
 
 
+def _create_cache_key(
+    cfg: CartesianProductCfg, width: int, height: int, fps: int, step_frames: int
+) -> str:
+    """Create a deterministic cache key from animation parameters."""
+    # Convert cfg to a hashable string representation
+    cfg_str = (
+        f"vars:{[(v.name, tuple(v.values)) for v in cfg.all_vars]}"
+        f"results:{tuple(cfg.result_names)}"
+        f"strobe_color:{cfg.strobe_color}"
+        f"strobe_pad:{cfg.strobe_pad}"
+        f"strobe_mark_size:{cfg.strobe_mark_size}"
+        f"strobe_mark_gap:{cfg.strobe_mark_gap}"
+        f"strobe_mark_row_h:{cfg.strobe_mark_row_h}"
+        f"strobe_border_radius:{cfg.strobe_border_radius}"
+        f"strobe_base_border_w:{cfg.strobe_base_border_w}"
+    )
+
+    params_str = f"{cfg_str}|w:{width}|h:{height}|fps:{fps}|steps:{step_frames}"
+    return hashlib.md5(params_str.encode()).hexdigest()[:12]  # 12 chars for readability
+
+
+@functools.lru_cache(maxsize=8)
 def _get_font(size: int):
     """Get a font, falling back to default if no TTF available."""
     try:
@@ -76,6 +100,7 @@ class Shape:
         self.direction = direction  # right, down, stack
         self.depth = depth  # 0 = innermost (tight gap), higher = wider gap
         self.color_index = color_index  # palette index for leaf cells
+        self._cached_size = None  # lazily populated by size()
 
     @property
     def is_leaf(self) -> bool:
@@ -94,24 +119,27 @@ class Shape:
         return GROUP_GAP * max(1, self.depth - 3)
 
     def size(self) -> tuple[int, int]:
-        """Return (width, height) in pixels."""
+        """Return (width, height) in pixels.  Cached — tree structure is immutable."""
+        if self._cached_size is not None:
+            return self._cached_size
         if self.is_leaf:
-            return (CELL_SIZE, CELL_SIZE)
-        if self.direction == "stack":
+            result = (CELL_SIZE, CELL_SIZE)
+        elif self.direction == "stack":
             cw, ch = self.children[0].size()
             n = len(self.children)
-            w = cw + (n - 1) * DEPTH_DX
-            h = ch + (n - 1) * abs(DEPTH_DY)
-            return (w, h)
-        g = self.gap
-        if self.direction == "right":
+            result = (cw + (n - 1) * DEPTH_DX, ch + (n - 1) * abs(DEPTH_DY))
+        elif self.direction == "right":
+            g = self.gap
             w = sum(c.size()[0] for c in self.children) + g * (len(self.children) - 1)
             h = max(c.size()[1] for c in self.children)
-            return (w, h)
-        # down
-        w = max(c.size()[0] for c in self.children)
-        h = sum(c.size()[1] for c in self.children) + g * (len(self.children) - 1)
-        return (w, h)
+            result = (w, h)
+        else:  # down
+            g = self.gap
+            w = max(c.size()[0] for c in self.children)
+            h = sum(c.size()[1] for c in self.children) + g * (len(self.children) - 1)
+            result = (w, h)
+        self._cached_size = result
+        return result
 
     def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0):
         """Draw this shape at position (x, y) on the image."""
@@ -145,25 +173,27 @@ class Shape:
 
     def extrude(self, n: int, direction: str, color_index: int | None = None) -> "Shape":
         """Create a new shape by extruding this one n times along direction."""
-        copies = [self._deep_copy() for _ in range(n)]
         if color_index is not None:
-            for copy in copies:
-                copy.recolor(color_index)
-        return Shape(children=copies, direction=direction, depth=self.depth + 1)
-
-    def recolor(self, color_index: int):
-        """Set all leaf cells to a new palette color."""
-        if self.is_leaf:
-            self.color_index = color_index
+            copies = [self._deep_copy_recolored(color_index) for _ in range(n)]
         else:
-            for c in self.children:
-                c.recolor(color_index)
+            copies = [self._deep_copy() for _ in range(n)]
+        return Shape(children=copies, direction=direction, depth=self.depth + 1)
 
     def _deep_copy(self) -> "Shape":
         if self.is_leaf:
             return Shape(color_index=self.color_index)
         return Shape(
             children=[c._deep_copy() for c in self.children],
+            direction=self.direction,
+            depth=self.depth,
+        )
+
+    def _deep_copy_recolored(self, color_index: int) -> "Shape":
+        """Copy and recolor in a single traversal."""
+        if self.is_leaf:
+            return Shape(color_index=color_index)
+        return Shape(
+            children=[c._deep_copy_recolored(color_index) for c in self.children],
             direction=self.direction,
             depth=self.depth,
         )
@@ -265,9 +295,7 @@ class TimelineShape(Shape):
         inner_draw = ImageDraw.Draw(inner_img)
         self.inner.draw(inner_draw, 0, 0, alpha)
         if scale < 1.0:
-            inner_img = inner_img.resize(
-                (int(iw * scale), int(ih * scale)), Image.LANCZOS
-            )
+            inner_img = inner_img.resize((int(iw * scale), int(ih * scale)), Image.Resampling.LANCZOS)
         scaled_w, scaled_h = inner_img.size
 
         # Need the underlying PIL Image (not ImageDraw) for pasting
@@ -424,9 +452,14 @@ class StrobeShape(Shape):
                     overshoot = stride // 2
                     inset = mark_h // 5
                     img.line(
-                        [group_x0 - overshoot, my + mark_h - inset,
-                         cx + mark_w + overshoot, my + inset],
-                        fill=color, width=mark_w * 2,
+                        [
+                            group_x0 - overshoot,
+                            my + mark_h - inset,
+                            cx + mark_w + overshoot,
+                            my + inset,
+                        ],
+                        fill=color,
+                        width=mark_w * 2,
                     )
                     cx += mark_w + group_gap
                 else:
@@ -449,7 +482,7 @@ def render_animation(
     height: int = 360,
     fps: int = 15,
     step_frames: int = 4,
-    output_dir: str = "cachedir/manim",
+    output_dir: str = "cachedir/cartesian",
 ) -> str:
     """Render the dimensional extrusion animation.
 
@@ -471,6 +504,18 @@ def render_animation(
     str
         Path to the output GIF file.
     """
+    # Create cache key and check if animation already exists
+    cache_key = _create_cache_key(cfg, width, height, fps, step_frames)
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = str(out_dir / f"cartesian_{cache_key}.png")
+
+    # Return cached version if it exists
+    if Path(out_path).exists():
+        logger.info("Using cached animation: %s", out_path)
+        return out_path
+
+    logger.info("Rendering new animation: %s", out_path)
     dims = []
     for v in cfg.all_vars:
         real_vals = [val for val in v.values if val != GAP]
@@ -489,6 +534,8 @@ def render_animation(
     font_small = _get_font(14)
 
     frames: list[Image.Image] = []
+    durations: list[int] = []  # per-frame duration in ms
+    frame_duration_ms = 1000 // fps
 
     # Persistent text state — both lines always visible, no flickering
     current_dim_label = ""
@@ -527,7 +574,7 @@ def render_animation(
             shape.draw(big_draw, 20, 5)
             new_w = int(big.width * scale)
             new_h = int(big.height * scale)
-            big = big.resize((new_w, new_h), Image.LANCZOS)
+            big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
             paste_x = (width - big.width) // 2 + x_offset
             paste_y = shape_area_top + (avail_h - big.height) // 2
             img.paste(big, (paste_x, paste_y))
@@ -551,19 +598,19 @@ def render_animation(
             )
 
         frames.append(img)
+        durations.append(frame_duration_ms)
 
     # Minimum frames to hold each step so labels are readable (~0.5s)
     min_hold = max(1, fps // 2)
 
-    def hold(shape: Shape, n: int = 0):
-        """Duplicate the last frame at least *min_hold* times (or *n* if larger)."""
-        for _ in range(max(min_hold, n)):
-            make_frame(shape)
+    def hold(n: int = 0):
+        """Extend the last frame's duration instead of duplicating it."""
+        durations[-1] += max(min_hold, n) * frame_duration_ms
 
     # Start with point
     shape = Shape()  # single cell
     make_frame(shape, count_label="1 point")
-    hold(shape)
+    hold()
 
     # Separate meta dims from spatial dims — each rendered distinctly
     spatial_dims = [(n, s) for n, s in dims if n not in ("over_time", "repeat")]
@@ -596,23 +643,22 @@ def render_animation(
         )
 
         make_frame(shape, dim_label=display_name)
-        hold(shape)
+        hold()
 
         old_shape = shape
         n_steps = size - 1  # k goes from 2..size
         for k in range(2, size + 1):
-            partial = old_shape.extrude(k, direction, color_index=dim_color)
-            make_frame(partial, count_label=f"{running_product * k} combinations")
+            shape = old_shape.extrude(k, direction, color_index=dim_color)
+            make_frame(shape, count_label=f"{running_product * k} combinations")
             # Hold so total growth time ≈ step_frames regardless of element count
             n_extra = max(0, round(step_frames / n_steps) - 1)
-            for _ in range(n_extra):
-                make_frame(partial)
+            durations[-1] += n_extra * frame_duration_ms
 
-        shape = old_shape.extrude(size, direction, color_index=dim_color)
+        # shape is now the final extrusion (k == size) — no need to re-extrude
         running_product *= size
 
         make_frame(shape, count_label=f"{running_product} combinations")
-        hold(shape)
+        hold()
         spatial_idx += 1
         dim_color += 1
 
@@ -625,7 +671,7 @@ def render_animation(
         logger.info("Repeat: ×%d (strobe)", repeat_size)
 
         make_frame(shape, dim_label="repeat")
-        hold(shape)
+        hold()
 
         repeat_frame_count = 0
         for k in range(1, repeat_size + 1):
@@ -639,7 +685,7 @@ def render_animation(
         running_product *= repeat_size
 
         make_frame(shape, count_label=f"{running_product} combinations")
-        hold(shape)
+        hold()
         spatial_idx += 1
         dim_color += 1
 
@@ -651,7 +697,7 @@ def render_animation(
         logger.info("Over time: %d steps (film strip slide-in)", time_size)
 
         make_frame(shape, dim_label="over time")
-        hold(shape)
+        hold()
 
         timeline_shape = TimelineShape(shape, time_size)
         count_text = f"{running_product} combinations x ({time_size} times)"
@@ -664,25 +710,20 @@ def render_animation(
             offset = int(width * (1 - ease))  # width → 0
             make_frame(timeline_shape, count_label=count_text, x_offset=offset)
 
-        hold(timeline_shape)  # settled at center
+        hold()  # settled at center
         shape = timeline_shape
 
     # Final hold
     make_frame(shape, count_label=f"{running_product} total combinations")
-    for _ in range(fps):  # 1 second hold
-        make_frame(shape)
+    durations[-1] += fps * frame_duration_ms  # 1 second hold
 
-    # Write GIF — PIL handles this directly
-    out_dir = Path(output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = str(out_dir / "cartesian_product.gif")
-
-    frame_duration_ms = 1000 // fps
+    # Write animation — APNG is ~12x faster than GIF to encode
     frames[0].save(
         out_path,
+        format="PNG",
         save_all=True,
         append_images=frames[1:],
-        duration=frame_duration_ms,
+        duration=durations,
         loop=0,  # loop forever
     )
 
