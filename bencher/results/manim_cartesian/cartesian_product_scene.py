@@ -231,20 +231,30 @@ class TimelineShape(Shape):
     FRAME_W = 100
     FRAME_H = 80
 
-    def __init__(self, inner: Shape, count: int, start_frame: int = 0, max_visible_frames: int = None):
+    def __init__(
+        self, inner: Shape, count: int, center_frame: int = 0, max_visible_frames: int = None
+    ):
         self.inner = inner
         self.count = count
-        self.start_frame = start_frame
+        self.start_frame = center_frame
+        self.center_frame = center_frame
         self.max_visible_frames = max_visible_frames or count
-        
+
         # For sliding effect, render extra frames beyond the visible window
         if self.max_visible_frames < self.count:
             # Add extra frames on the left for sliding in effect
             self.render_start = max(0, self.start_frame - 2)
-            
+
             # Handle the case where we want to center the last frame
-            # In this case, start_frame might be >= count-1 to center the last frame
-            if self.start_frame >= self.count - 1:
+            # This happens when start_frame is positioned to center the last frame
+            # For centering, start_frame = count - 1 - (max_visible_frames // 2)
+            expected_center_pos = max(0, self.count - 1 - self.max_visible_frames // 2)
+            is_centering_last = (
+                self.start_frame >= expected_center_pos
+                and self.start_frame + self.max_visible_frames > self.count
+            )
+
+            if is_centering_last:
                 # We're centering the last frame - render up to the end
                 self.render_end = self.count
                 # Adjust render_start to ensure we have enough frames to show
@@ -253,22 +263,24 @@ class TimelineShape(Shape):
             else:
                 # Check if this is the final position (showing last frames normally)
                 final_position_start = self.count - self.max_visible_frames
-                is_final_position = (self.start_frame >= final_position_start)
-                
+                is_final_position = self.start_frame >= final_position_start
+
                 if is_final_position:
                     # At final position: don't render past the actual end
                     self.render_end = self.count
                 else:
                     # Normal position: add extra frames on the right
-                    self.render_end = min(self.count, self.start_frame + self.max_visible_frames + 2)
-            
+                    self.render_end = min(
+                        self.count, self.start_frame + self.max_visible_frames + 2
+                    )
+
             self.render_count = self.render_end - self.render_start
         else:
             # Show all frames if not windowing
             self.render_start = 0
             self.render_end = self.count
             self.render_count = self.count
-            
+
         # Calculate the actual visible frames in this window (for compatibility)
         self.visible_count = min(self.max_visible_frames, self.count - self.start_frame)
         super().__init__(children=None, direction="right", depth=0)
@@ -285,7 +297,11 @@ class TimelineShape(Shape):
         frame_w, frame_h = self._outer_frame_size()
 
         # Use render_count for size calculation (includes extra frames for sliding)
-        total_w = FILM_PAD * 2 + self.render_count * frame_w + max(0, self.render_count - 1) * FILM_FRAME_GAP
+        total_w = (
+            FILM_PAD * 2
+            + self.render_count * frame_w
+            + max(0, self.render_count - 1) * FILM_FRAME_GAP
+        )
         total_h = (
             FILM_PAD
             + FILM_SPROCKET_H
@@ -352,16 +368,18 @@ class TimelineShape(Shape):
             base_img.paste(inner_img, (cx, cy))
 
             # Store label info for drawing at main canvas level (to avoid scaling)
-            if not hasattr(self, '_label_info'):
+            if not hasattr(self, "_label_info"):
                 self._label_info = []
-            
+
             # Only store labels that would be visible on screen (optimization)
             # For sliding animation, store all labels; PIL will handle clipping
-            self._label_info.append({
-                'text': f"t={actual_frame_idx}",
-                'x': fx + frame_w // 2,  # center x relative to shape
-                'y': y + strip_h + 2,    # y relative to shape
-            })
+            self._label_info.append(
+                {
+                    "text": f"t={actual_frame_idx}",
+                    "x": fx + frame_w // 2,  # center x relative to shape
+                    "y": y + strip_h + 2,  # y relative to shape
+                }
+            )
 
     @staticmethod
     def _draw_sprockets(img: ImageDraw.ImageDraw, strip_x: int, row_y: int, strip_w: int):
@@ -578,11 +596,12 @@ def render_animation(
         dim_label: str | None = None,
         count_label: str | None = None,
         x_offset: int = 0,
+        fixed_scale: float | None = None,
     ):
         """Render one frame. Text is persistent — only updates when new values given.
 
-        x_offset shifts the shape horizontally (positive = right). Parts that
-        fall outside the canvas are clipped naturally by PIL.
+        x_offset shifts the shape horizontally (positive = right).
+        fixed_scale keeps timeline at consistent size during animation.
         """
         nonlocal current_dim_label, current_count_label
         if dim_label is not None:
@@ -598,75 +617,53 @@ def render_animation(
         sw, sh = shape.size()
         avail_w = width - 40
         avail_h = height - shape_area_top - 10
-        
-        # Special handling for sliding film strips (when we have windowed animation with extra frames)
-        is_sliding_film_strip = (isinstance(shape, TimelineShape) and 
-                                hasattr(shape, 'render_count') and 
-                                shape.render_count > shape.max_visible_frames)
-        
-        if is_sliding_film_strip:
-            # For sliding film strips, don't scale horizontally - allow natural clipping
-            # Only scale if height exceeds available space
-            scale = min(avail_h / max(sh, 1), 1.0)
+
+        # Use fixed scale if provided (for timeline consistency), otherwise calculate
+        if fixed_scale is not None:
+            scale = fixed_scale
         else:
-            # Normal scaling for other shapes
             scale = min(avail_w / max(sw, 1), avail_h / max(sh, 1), 1.0)
 
         if scale < 1.0:
-            if is_sliding_film_strip:
-                # Scale only height, preserve width for horizontal scrolling
-                new_w = sw
-                new_h = int(sh * scale)
-                big = Image.new("RGB", (sw, sh), BG_COLOR)
-                big_draw = ImageDraw.Draw(big)
-                shape.draw(big_draw, 0, 0)
-                big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                paste_x = x_offset  # Use offset directly for horizontal positioning
-                paste_y = shape_area_top + (avail_h - new_h) // 2
-            else:
-                # Normal scaling for non-film shapes
-                big = Image.new("RGB", (sw + 40, sh + 10), BG_COLOR)
-                big_draw = ImageDraw.Draw(big)
-                shape.draw(big_draw, 20, 5)  
-                new_w = int(big.width * scale)
-                new_h = int(big.height * scale)
-                big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                paste_x = (width - big.width) // 2 + x_offset
-                paste_y = shape_area_top + (avail_h - big.height) // 2
-                
+            # Scale the shape uniformly
+            big = Image.new("RGB", (sw + 40, sh + 10), BG_COLOR)
+            big_draw = ImageDraw.Draw(big)
+            shape.draw(big_draw, 20, 5)
+            new_w = int(big.width * scale)
+            new_h = int(big.height * scale)
+            big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            paste_x = (width - big.width) // 2 + x_offset
+            paste_y = shape_area_top + (avail_h - big.height) // 2
             img.paste(big, (paste_x, paste_y))
         else:
+            # Shape fits, center it with offset
             sx = (width - sw) // 2 + x_offset
             sy = shape_area_top + (avail_h - sh) // 2
             shape.draw(draw, sx, sy)
 
-        # Draw timeline labels at full screen size (after any shape scaling)
-        if isinstance(shape, TimelineShape) and hasattr(shape, '_label_info'):
-            font_timeline = _get_font(14)  # Same size as repeat count labels (font_small)
+        # Draw timeline labels if present
+        if isinstance(shape, TimelineShape) and hasattr(shape, "_label_info"):
+            font_timeline = _get_font(12)
             for label_info in shape._label_info:
                 if scale < 1.0:
-                    if is_sliding_film_strip:
-                        # Film strip: only height scaled, x positions preserved
-                        label_x = paste_x + label_info['x']
-                        label_y = paste_y + int(label_info['y'] * scale)
-                    else:
-                        # Regular shape: uniformly scaled
-                        shape_relative_x = label_info['x'] * scale
-                        label_x = paste_x + shape_relative_x - 20 * scale  # Account for shape offset
-                        label_y = paste_y + big.height + 5  # Just below the pasted shape
+                    # Scaled shape: adjust label positions
+                    label_x = paste_x + int(label_info["x"] * scale) - 20 * scale
+                    label_y = paste_y + int(label_info["y"] * scale)
                 else:
-                    # Shape was not scaled - use positions relative to shape position
-                    label_x = sx + label_info['x']
-                    label_y = sy + label_info['y']
-                
-                # Center the text horizontally and only draw if label is potentially visible
-                bbox = draw.textbbox((0, 0), label_info['text'], font=font_timeline)
+                    # Unscaled shape: use direct positions
+                    label_x = sx + label_info["x"]
+                    label_y = sy + label_info["y"]
+
+                # Center the text horizontally
+                bbox = draw.textbbox((0, 0), label_info["text"], font=font_timeline)
                 tw = bbox[2] - bbox[0]
                 final_x = label_x - tw // 2
-                
-                # Only draw labels that might be visible on screen (with some margin)
+
+                # Only draw if potentially visible
                 if -50 <= final_x <= width + 50:
-                    draw.text((final_x, label_y), label_info['text'], fill=FILM_LABEL_COLOR, font=font_timeline)
+                    draw.text(
+                        (final_x, label_y), label_info["text"], fill=LABEL_COLOR, font=font_timeline
+                    )
 
         # Line 1: dimension name (always visible)
         if current_dim_label:
@@ -776,6 +773,8 @@ def render_animation(
 
     # --- Phase 3: over_time as film strip with fixed duration animation ---
     # Always shown (even ×1) to match the LaTeX summary.
+    final_timeline_offset = 0  # Default offset for final frame
+    timeline_scale = None  # Default scale for final frame
     if time_dim:
         time_size = time_dim[0][1]
         running_product *= time_size
@@ -787,74 +786,61 @@ def render_animation(
         max_frames_visible = 3
         count_text = f"{running_product} combinations x ({time_size} times)"
 
-        # Always use windowed sliding animation for consistency
-        # High-performance sliding window animation
-        animation_duration = 2.0  # Fixed 2 seconds maximum
-        total_animation_frames = int(fps * animation_duration)
-        
-        # Calculate the total scroll range
-        # We want to go from showing frames [0,1,2] to showing the last frame centered
-        if time_size <= max_frames_visible:
-            # For few frames, just slide in and hold
-            scroll_range = 0
-            max_scroll_pos = 0
-        else:
-            # We need to scroll beyond the normal range to center the last frame
-            # Normal range would be 0 to (time_size - max_frames_visible)
-            # but we extend further to center the last frame
-            scroll_range = time_size - 1  # Go all the way to center the last frame
-            max_scroll_pos = scroll_range
-        
-        for frame_idx in range(total_animation_frames):
-            # Normalized time from 0 to 1 over the entire animation
-            t = frame_idx / max(total_animation_frames - 1, 1)
-            
-            # Quadratic ease-out for efficient animation
-            eased_t = 1 - (1 - t) ** 2
-            
-            # Calculate the starting frame for this animation step
-            if scroll_range > 0:
-                # Smoothly interpolate from 0 to max_scroll_pos
-                start_frame = int(eased_t * max_scroll_pos)
-                start_frame = min(start_frame, max_scroll_pos)  # Clamp to max
-            else:
-                start_frame = 0
-            
-            # Create a window showing the current frames
-            visible_timeline = TimelineShape(shape, time_size, start_frame, max_frames_visible)
-            
-            # Calculate offset to center the intended visible frames
-            if visible_timeline.render_start < start_frame:
-                frame_w, _ = visible_timeline._outer_frame_size()
-                frame_spacing = frame_w + 16  # FILM_FRAME_GAP
-                extra_frames_offset = (start_frame - visible_timeline.render_start) * frame_spacing
-            else:
-                extra_frames_offset = 0
-            
-            # For the very first few frames, add initial slide-in effect
-            if frame_idx < fps // 2:  # First 0.5s
-                slide_t = frame_idx / (fps // 2)
-                slide_ease = 1 - (1 - slide_t) ** 2  # quadratic ease-out
-                initial_offset = int(width * (1 - slide_ease))  # width → 0
-            else:
-                initial_offset = 0
-            
-            # Combine offsets
-            total_offset = initial_offset - extra_frames_offset
-            
-            make_frame(visible_timeline, count_label=count_text, x_offset=total_offset)
-        
-        hold()  # Final pause
-        # Create final shape showing the last frame properly centered
-        if time_size <= max_frames_visible:
-            final_start = 0
-        else:
-            # Position to center the last frame with previous frames off-screen to the left
-            final_start = time_size - 1  # This centers the last frame
-        shape = TimelineShape(shape, time_size, final_start, max_frames_visible)
+        # Calculate consistent scale for timeline animation
+        # Use a reference timeline showing max frames to determine scale
+        reference_timeline = TimelineShape(shape, time_size, 0, max_frames_visible)
+        ref_w, ref_h = reference_timeline.size()
+        avail_w = width - 40
+        avail_h = height - 55 - 10  # shape_area_top = 55
+        timeline_scale = min(avail_w / max(ref_w, 1), avail_h / max(ref_h, 1), 1.0)
 
-    # Final hold
-    make_frame(shape, count_label=f"{running_product} total combinations")
+        # Sliding animation with windowed timeline
+        # Max 2 seconds as requested
+        max_animation_frames = min(fps * 2, fps)  # Max 2 seconds
+
+        if time_size <= max_frames_visible:
+            # All frames fit - just show them statically
+            timeline = TimelineShape(shape, time_size, 0, max_frames_visible)
+            make_frame(timeline, count_label=count_text, fixed_scale=timeline_scale)
+            final_timeline_offset = 0
+        else:
+            # Start: show first frames from right edge
+            # End: show last frame centered
+            start_pos = 0
+            end_pos = max(0, time_size - 1 - max_frames_visible // 2)  # Center last frame
+
+            # Sliding animation: timeline comes in from right, stops when target centered
+            for i in range(max_animation_frames):
+                t = i / max(max_animation_frames - 1, 1)  # 0 to 1
+                current_pos = int(start_pos + t * (end_pos - start_pos))
+
+                timeline = TimelineShape(shape, time_size, current_pos, max_frames_visible)
+
+                # Start from right edge, slide to center
+                slide_progress = t
+                start_x_offset = width // 2  # Start from right
+                end_x_offset = 0  # End centered
+                x_offset = int(
+                    start_x_offset * (1 - slide_progress) + end_x_offset * slide_progress
+                )
+
+                make_frame(
+                    timeline, count_label=count_text, x_offset=x_offset, fixed_scale=timeline_scale
+                )
+
+            # Final position
+            timeline = TimelineShape(shape, time_size, end_pos, max_frames_visible)
+            final_timeline_offset = 0
+
+        shape = timeline
+
+    # Final hold (use timeline position and scale if we had over_time, otherwise default)
+    make_frame(
+        shape,
+        count_label=f"{running_product} total combinations",
+        x_offset=final_timeline_offset,
+        fixed_scale=timeline_scale,
+    )
     durations[-1] += fps * frame_duration_ms  # 1 second hold
 
     # Write animation — APNG is ~12x faster than GIF to encode
