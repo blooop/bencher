@@ -65,17 +65,11 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
 
 
 def example_cartesian_grid(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    run_cfg.cache_results = False
-    run_cfg.executor = bn.Executors.THREAD_POOL  # Use thread pool to avoid multiprocessing import issues
-    bench = bn.Bench("cartesian_animations", CartesianAnimationSweep(), run_cfg=run_cfg)
-    bench.result_vars = ["animation"]
-    bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
-    bench.add_plot_callback(bn.BenchResult.to_panes)
+    bench = CartesianAnimationSweep().to_bench(run_cfg)
 
-    # -- 2D sweep: spatial_dims × repeats --
     bench.plot_sweep(
-        "Tally: spatial_dims x repeats",
-        input_vars=["spatial_dims", bn.sweep("repeats", [0, 1, 5, 10, 20, 100])],
+        input_vars=["spatial_dims", bn.sweep("repeats", [0, 1,6, 100]),bn.sweep("time_steps", [0, 1, 6,30])],
+
         const_vars=[("time_steps", 0)],
     )
 
