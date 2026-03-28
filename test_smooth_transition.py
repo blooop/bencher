@@ -23,7 +23,9 @@ class TestCfg:
                 (),
                 {
                     "name": "over_time",
-                    "values": [f"t{i}" for i in range(12)],  # 12 time steps to trigger windowed animation
+                    "values": [
+                        f"t{i}" for i in range(12)
+                    ],  # 12 time steps to trigger windowed animation
                     "meta": {},
                 },
             )()
@@ -55,7 +57,7 @@ def test_smooth_transition():
     print("1. No jarring horizontal slide-in when transitioning to over_time")
     print("2. Film strip appears smoothly at the correct position")
     print("3. Time progression is shown through frame windowing, not horizontal sliding")
-    
+
     return output_path
 
 

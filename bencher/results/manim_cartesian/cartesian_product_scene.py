@@ -797,8 +797,8 @@ def render_animation(
         timeline_scale = min(avail_w / max(ref_w, 1), avail_h / max(ref_h, 1), 1.0)
 
         # Sliding animation with windowed timeline
-        # Max 2 seconds as requested
-        max_animation_frames = min(fps * 2, fps)  # Max 2 seconds
+        # Always 1 second as requested
+        max_animation_frames = fps * 1  # Always 1 second
 
         if time_size <= max_frames_visible:
             # All frames fit - just show them statically
