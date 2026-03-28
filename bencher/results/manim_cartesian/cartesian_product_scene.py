@@ -50,7 +50,7 @@ def _generate_unique_filename(cfg: CartesianProductCfg, width: int, height: int)
     # Create descriptive filename from key parameters
     dim_names = [f"{v.name}_{len(v.values)}" for v in cfg.all_vars if len(v.values) > 0]
     dims_str = "_".join(dim_names) if dim_names else "empty"
-    
+
     # Include resolution for uniqueness
     return f"cartesian_{dims_str}_{width}x{height}.png"
 
@@ -283,7 +283,9 @@ class TimelineShape(Shape):
         inner_draw = ImageDraw.Draw(inner_img)
         self.inner.draw(inner_draw, 0, 0, alpha)
         if scale < 1.0:
-            inner_img = inner_img.resize((int(iw * scale), int(ih * scale)), Image.Resampling.LANCZOS)
+            inner_img = inner_img.resize(
+                (int(iw * scale), int(ih * scale)), Image.Resampling.LANCZOS
+            )
         scaled_w, scaled_h = inner_img.size
 
         # Need the underlying PIL Image (not ImageDraw) for pasting
@@ -466,8 +468,8 @@ class StrobeShape(Shape):
 
 def render_animation(
     cfg: CartesianProductCfg,
-    width: int = 640,
-    height: int = 360,
+    width: int = 400,
+    height: int = 300,
     fps: int = 15,
     step_frames: int = 4,
     output_dir: str = "cachedir/cartesian",
@@ -494,7 +496,7 @@ def render_animation(
     """
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Generate unique filename to prevent collisions
     filename = _generate_unique_filename(cfg, width, height)
     out_path = str(out_dir / filename)

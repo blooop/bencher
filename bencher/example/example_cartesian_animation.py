@@ -67,7 +67,11 @@ def example_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
     bench = CartesianAnimationSweep().to_bench(run_cfg)
 
     bench.plot_sweep(
-        input_vars=["spatial_dims", bn.sweep("repeats", [0, 1,6, 100]),bn.sweep("time_steps", [0, 1, 6,30])],
+        input_vars=[
+            "spatial_dims",
+            bn.sweep("repeats", [0, 1, 6, 100]),
+            bn.sweep("time_steps", [0, 1, 6, 30]),
+        ],
     )
 
     return bench

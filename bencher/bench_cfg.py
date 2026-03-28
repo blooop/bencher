@@ -593,7 +593,7 @@ class BenchCfg(BenchRunCfg):
             from bencher.results.manim_cartesian import from_bench_cfg, render_animation
 
             cfg = from_bench_cfg(self)
-            return render_animation(cfg)
+            return render_animation(cfg, width=350, height=250)
         except Exception:
             return None
 
@@ -627,7 +627,7 @@ class BenchCfg(BenchRunCfg):
             from pathlib import Path
 
             abs_path = str(Path(animation_path).resolve())
-            parts.append(pn.pane.Image(abs_path, width=640))
+            parts.append(pn.pane.Image(abs_path, width=350))
 
         parts.append(desc)
         return pn.Column(*parts)
