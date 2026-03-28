@@ -17,7 +17,13 @@ logging.basicConfig(level=logging.INFO)
 
 
 class _CorsStaticHandler(StaticFileHandler):
-    """A Tornado static file handler that adds CORS headers."""
+    """A Tornado static file handler that adds CORS headers.
+
+    Required for rerun integration: the rerun web viewer (localhost:9090)
+    fetches .rrd files from the Panel server (localhost:8051).  Without
+    Access-Control-Allow-Origin and OPTIONS preflight handling the browser
+    silently blocks the cross-origin fetch and the viewer shows 0 B.
+    """
 
     def data_received(self, chunk):  # pragma: no cover
         pass
@@ -140,7 +146,12 @@ class BenchPlotServer:
 
     @staticmethod
     def _rrd_extra_patterns() -> list:
-        """Return Tornado route patterns for serving .rrd files with CORS headers."""
+        """Return Tornado route patterns for serving .rrd files with CORS headers.
+
+        Mounts ``cachedir/rrd/`` at ``/rrd_static/`` so that the local rerun
+        viewer can fetch ``.rrd`` files from the Panel server.  See the module
+        docstring in ``utils_rerun.py`` for the full architecture explanation.
+        """
         rrd_dir = Path("cachedir/rrd").resolve()
         if rrd_dir.is_dir():
             return [

@@ -1,3 +1,49 @@
+"""Rerun integration for bencher — embed rerun viewer panes in Panel reports.
+
+Architecture
+------------
+Displaying rerun data inside a Panel/Bokeh report requires three cooperating
+pieces.  Getting any one of them wrong results in blank viewers, CORS errors,
+or "data source left unexpectedly" messages.
+
+1. **Data capture** — ``capture_rerun_rrd()`` drains the in-memory rerun
+   recording to a *complete* ``.rrd`` file on disk.  Using ``rr.save()``
+   (which streams to an open file) does NOT work because the file is still
+   being written when the viewer tries to fetch it.  Always call
+   ``rr.log(...)`` first, then ``capture_rerun_rrd()`` / ``capture_rerun_window()``.
+
+2. **File serving** — The Panel server (Tornado) serves the ``.rrd`` files at
+   ``/rrd_static/`` with full CORS headers (including OPTIONS preflight).
+   This is configured in ``bench_plot_server.py`` via ``_rrd_extra_patterns()``.
+   A separate stdlib file server (``file_server.py``) also exists for
+   standalone use but is NOT needed for the normal report flow.
+
+   CORS is critical: the rerun web viewer runs on a different origin
+   (localhost:9090) and fetches ``.rrd`` files from the Panel origin
+   (localhost:8051).  Without ``Access-Control-Allow-Origin: *`` **and**
+   ``OPTIONS`` preflight handling, browsers silently block the fetch and the
+   viewer shows 0 B of data.
+
+3. **Viewer** — ``rr.start_web_viewer_server()`` launches a *local* rerun
+   web viewer on port 9090.  This is the viewer that actually renders the
+   data.  Do NOT use ``app.rerun.io`` — the CDN viewer's ``web_event://``
+   postMessage protocol does not work when embedded in Panel's Bokeh Div
+   (innerHTML does not execute ``<script>`` tags).
+
+Alternatives that were tried and do NOT work
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- **app.rerun.io + postMessage (``as_html()``)** — Panel sets innerHTML which
+  does not execute scripts, so the base64 data never reaches the viewer.
+  Wrapping in ``<iframe srcdoc="...">`` executes the script but the nested
+  postMessage still fails to deliver data (viewer shows 0 B).
+- **Data URIs in the viewer URL** — the rerun viewer cannot parse ``data:``
+  URIs as the ``?url=`` parameter.
+- **``rr.save()`` to a file + external file server** — the file is incomplete
+  (still being written) when the viewer fetches it, causing "data source
+  left unexpectedly" errors.  Also requires a separate server process which
+  is fragile (port conflicts, zombie processes).
+"""
+
 import logging
 from importlib.metadata import version as get_package_version, PackageNotFoundError
 from pathlib import Path
