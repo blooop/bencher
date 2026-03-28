@@ -16,7 +16,7 @@ from pathlib import Path
 
 import panel as pn
 
-from .utils import gen_rerun_data_path, publish_file  # noqa: F401 — re-exported
+from .utils import publish_file
 
 # Port for the Panel server (must be known at render time so iframe URLs can be built).
 PANEL_PORT = 8051
@@ -52,7 +52,7 @@ def publish_and_view_rrd(
     content_callback: callable,
     version: str | None = None,
 ):  # pragma: no cover
-    publish_file(file_path, remote=remote, branch_name="test_rrd")
+    publish_file(file_path, remote=remote, branch_name=branch_name)
     publish_path = content_callback(remote, branch_name, file_path)
     logging.info(publish_path)
     return rrd_to_pane(publish_path, version=version)

@@ -16,7 +16,7 @@ class SweepRerun(bn.ParametrizedSweep):
 
 
 def example_rerun(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """This example shows how to sample a 1 dimensional float variable and plot the result of passing that parameter sweep to the benchmarking function"""
+    """Sample a 1D float variable and plot the rerun capture for each sweep point."""
 
     bench = SweepRerun().to_bench(run_cfg)
     bench.plot_sweep()
