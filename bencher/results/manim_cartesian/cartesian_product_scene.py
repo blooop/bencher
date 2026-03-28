@@ -45,6 +45,16 @@ GROUP_GAP = 20
 GAP = "..."
 
 
+def _generate_unique_filename(cfg: CartesianProductCfg, width: int, height: int) -> str:
+    """Generate a unique filename based on animation parameters."""
+    # Create descriptive filename from key parameters
+    dim_names = [f"{v.name}_{len(v.values)}" for v in cfg.all_vars if len(v.values) > 0]
+    dims_str = "_".join(dim_names) if dim_names else "empty"
+    
+    # Include resolution for uniqueness
+    return f"cartesian_{dims_str}_{width}x{height}.png"
+
+
 @functools.lru_cache(maxsize=8)
 def _get_font(size: int):
     """Get a font, falling back to default if no TTF available."""
@@ -484,7 +494,10 @@ def render_animation(
     """
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = str(out_dir / "cartesian_product.png")
+    
+    # Generate unique filename to prevent collisions
+    filename = _generate_unique_filename(cfg, width, height)
+    out_path = str(out_dir / filename)
 
     logger.info("Rendering animation: %s", out_path)
     dims = []
