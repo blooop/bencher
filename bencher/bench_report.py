@@ -32,7 +32,7 @@ class BenchReport(BenchPlotServer):
         bench_name: str | None = None,
     ) -> None:
         self.bench_name = bench_name
-        self.pane = pn.Tabs(tabs_location="left", name=self.bench_name)
+        self.pane = pn.Tabs(tabs_location="above", name=self.bench_name)
         self.last_save_ms: float = 0.0
         self.bench_results: list[BenchResult] = []
 
@@ -204,9 +204,9 @@ class BenchReport(BenchPlotServer):
 <html><head><meta charset="utf-8"><title>Report</title>
 <style>
 body {{ margin:0; font-family:sans-serif; }}
-.tab-bar {{ display:flex; gap:2px; background:#e0e0e0; padding:4px; }}
-.tab-btn {{ padding:8px 16px; border:none; cursor:pointer; background:#ccc; font-size:14px; }}
-.tab-btn.active {{ background:#fff; font-weight:bold; }}
+.tab-bar {{ display:flex; gap:4px; background:rgba(0,0,0,0.9); padding:10px; position:sticky; top:0; z-index:100; }}
+.tab-btn {{ padding:10px 16px; border:none; cursor:pointer; background:rgba(255,255,255,0.15); color:#fff; font-size:14px; border-radius:4px; }}
+.tab-btn.active {{ background:rgba(255,255,255,0.9); color:#000; font-weight:bold; }}
 iframe {{ width:100%; border:none; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>

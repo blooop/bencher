@@ -39,6 +39,15 @@ class CartesianProductCfg:
     all_vars: list[SweepVar] = field(default_factory=list)
     result_names: list[str] = field(default_factory=list)
 
+    # Strobe repeat-animation tunables
+    strobe_color: tuple[int, int, int] = (80, 80, 80)  # neutral gray — distinct from spatial colors
+    strobe_pad: int = 12
+    strobe_mark_size: int = 2
+    strobe_mark_gap: int = 4
+    strobe_mark_row_h: int = 16
+    strobe_border_radius: int = 4
+    strobe_base_border_w: int = 2
+
     @property
     def ndim(self) -> int:
         """Number of dimensions."""
