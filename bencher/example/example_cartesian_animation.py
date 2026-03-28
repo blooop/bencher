@@ -69,8 +69,9 @@ def example_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
     bench.plot_sweep(
         input_vars=[
             "spatial_dims",
-            bn.sweep("repeats", [0, 1, 6, 100]),
-            bn.sweep("time_steps", [0, 1, 6, 30]),
+            # bn.sweep("repeats", [0, 1, 6, 100]),
+            # bn.sweep("repeats", [0,100]),
+            bn.sweep("time_steps", [0, 1,2,5 ,6,10, 30,100]),
         ],
     )
 
@@ -78,4 +79,4 @@ def example_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
 
 
 if __name__ == "__main__":
-    bn.run(example_cartesian_animation, level=4)
+    bn.run(example_cartesian_animation, level=4,cache_results=False)
