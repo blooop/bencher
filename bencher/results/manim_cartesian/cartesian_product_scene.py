@@ -22,7 +22,19 @@ logger = logging.getLogger(__name__)
 # Layout — light theme to match white page background
 CELL_SIZE = 20
 CELL_GAP = 3
-CELL_COLOR = (68, 136, 204)  # blue
+# Curated 10-color palette — pastel, distinct on white, cycles after 10
+DIM_PALETTE = [
+    (150, 190, 240),  # blue
+    (240, 160, 155),  # red
+    (150, 220, 160),  # green
+    (245, 225, 140),  # yellow
+    (220, 170, 235),  # purple
+    (245, 200, 150),  # orange
+    (170, 225, 225),  # cyan
+    (240, 180, 200),  # pink
+    (200, 215, 155),  # lime
+    (200, 185, 230),  # lavender
+]
 CELL_BORDER = (180, 180, 180)
 BG_COLOR = (255, 255, 255)  # white
 LABEL_COLOR = (30, 30, 30)  # dark text
@@ -54,11 +66,16 @@ class Shape:
     """
 
     def __init__(
-        self, children: list["Shape"] | None = None, direction: str = "right", depth: int = 0
+        self,
+        children: list["Shape"] | None = None,
+        direction: str = "right",
+        depth: int = 0,
+        color_index: int = 0,
     ):
         self.children = children  # None = leaf cell
         self.direction = direction  # right, down, stack
         self.depth = depth  # 0 = innermost (tight gap), higher = wider gap
+        self.color_index = color_index  # palette index for leaf cells
 
     @property
     def is_leaf(self) -> bool:
@@ -99,7 +116,8 @@ class Shape:
     def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0):
         """Draw this shape at position (x, y) on the image."""
         if self.is_leaf:
-            color = tuple(int(c * alpha) for c in CELL_COLOR)
+            base = DIM_PALETTE[self.color_index % len(DIM_PALETTE)]
+            color = tuple(int(c * alpha) for c in base)
             border = tuple(int(c * alpha) for c in CELL_BORDER)
             img.rectangle([x, y, x + CELL_SIZE, y + CELL_SIZE], fill=color, outline=border)
             return
@@ -125,14 +143,25 @@ class Shape:
                 child.draw(img, x, cy, alpha)
                 cy += child.size()[1] + g
 
-    def extrude(self, n: int, direction: str) -> "Shape":
+    def extrude(self, n: int, direction: str, color_index: int | None = None) -> "Shape":
         """Create a new shape by extruding this one n times along direction."""
-        copies = [self] + [self._deep_copy() for _ in range(n - 1)]
+        copies = [self._deep_copy() for _ in range(n)]
+        if color_index is not None:
+            for copy in copies:
+                copy.recolor(color_index)
         return Shape(children=copies, direction=direction, depth=self.depth + 1)
+
+    def recolor(self, color_index: int):
+        """Set all leaf cells to a new palette color."""
+        if self.is_leaf:
+            self.color_index = color_index
+        else:
+            for c in self.children:
+                c.recolor(color_index)
 
     def _deep_copy(self) -> "Shape":
         if self.is_leaf:
-            return Shape()
+            return Shape(color_index=self.color_index)
         return Shape(
             children=[c._deep_copy() for c in self.children],
             direction=self.direction,
@@ -427,11 +456,13 @@ def render_animation(
     # --- Phase 1: Extrude through each spatial dimension ---
     running_product = 1
     spatial_idx = 0
+    dim_color = 0  # palette index, incremented per dimension
     for name, size in spatial_dims:
         if size <= 1:
             running_product *= size
             logger.info("Spatial dim %d: '%s' skipped (size=1)", spatial_idx, name)
             spatial_idx += 1
+            dim_color += 1
             continue
 
         direction = _direction_for(spatial_idx)
@@ -446,19 +477,20 @@ def render_animation(
         old_shape = shape
         n_steps = size - 1  # k goes from 2..size
         for k in range(2, size + 1):
-            partial = old_shape.extrude(k, direction)
+            partial = old_shape.extrude(k, direction, color_index=dim_color)
             make_frame(partial, count_label=f"{running_product * k} combinations")
             # Hold so total growth time ≈ step_frames regardless of element count
             n_extra = max(0, round(step_frames / n_steps) - 1)
             for _ in range(n_extra):
                 make_frame(partial)
 
-        shape = old_shape.extrude(size, direction)
+        shape = old_shape.extrude(size, direction, color_index=dim_color)
         running_product *= size
 
         make_frame(shape, count_label=f"{running_product} combinations")
         hold(shape)
         spatial_idx += 1
+        dim_color += 1
 
     # --- Phase 2: Repeat — standard extrusion, same as spatial dims ---
     # Always shown (even ×1) to match the LaTeX summary.
@@ -474,17 +506,18 @@ def render_animation(
             old_shape = shape
             n_steps = repeat_size - 1
             for k in range(2, repeat_size + 1):
-                partial = old_shape.extrude(k, direction)
+                partial = old_shape.extrude(k, direction, color_index=dim_color)
                 make_frame(partial, count_label=f"{running_product * k} combinations")
                 n_extra = max(0, round(step_frames / n_steps) - 1)
                 for _ in range(n_extra):
                     make_frame(partial)
-            shape = old_shape.extrude(repeat_size, direction)
+            shape = old_shape.extrude(repeat_size, direction, color_index=dim_color)
 
         running_product *= repeat_size
         make_frame(shape, count_label=f"{running_product} combinations")
         hold(shape)
         spatial_idx += 1
+        dim_color += 1
 
     # --- Phase 3: over_time as film strip that slides in from the right ---
     # Always shown (even ×1) to match the LaTeX summary.
