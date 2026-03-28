@@ -36,7 +36,7 @@ or "data source left unexpectedly" messages.
 import rerun as rr
 
 from .utils import gen_rerun_data_path
-from .utils_rrd import _RERUN_VIEWER_PORT, rrd_file_to_pane  # noqa: F401 — re-exported
+from .utils_rrd import _RERUN_VIEWER_PORT, rrd_file_to_pane
 
 _viewer_started = False
 

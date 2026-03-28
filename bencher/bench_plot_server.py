@@ -23,9 +23,12 @@ class _CorsStaticHandler(StaticFileHandler):
     fetches .rrd files from the Panel server (localhost:8051).  Without
     Access-Control-Allow-Origin and OPTIONS preflight handling the browser
     silently blocks the cross-origin fetch and the viewer shows 0 B.
+
+    Note: ``Allow-Origin: *`` is appropriate here because this server is
+    intended for local development only, not public-facing deployments.
     """
 
-    def data_received(self, chunk):  # pragma: no cover
+    def data_received(self, chunk):  # pragma: no cover — abstract in RequestHandler
         pass
 
     def set_default_headers(self):

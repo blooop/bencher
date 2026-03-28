@@ -15,8 +15,10 @@ def example_rerun2_local():
     rr.log("s1", rr.Scalars(4))
     rr.log("s1", rr.Scalars(2))
 
+    server = bn.run_file_server()
+    port = server.server_address[1] if server else 8001
     row = pn.Row()
-    row.append(bn.rrd_to_pane(f"http://127.0.0.1:8001/{file_path}"))
+    row.append(bn.rrd_to_pane(f"http://127.0.0.1:{port}/{file_path}"))
     row.show()
 
 

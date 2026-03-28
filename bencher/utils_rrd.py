@@ -48,7 +48,7 @@ def rrd_to_pane(
 def publish_and_view_rrd(
     file_path: str,
     remote: str,
-    branch_name,
+    branch_name: str,
     content_callback: callable,
     version: str | None = None,
 ):  # pragma: no cover
@@ -58,9 +58,7 @@ def publish_and_view_rrd(
     return rrd_to_pane(publish_path, version=version)
 
 
-def rrd_file_to_pane(
-    file_path, width: int = 300, height: int = 300, **kwargs
-):  # pragma: no cover  # pylint: disable=unused-argument
+def rrd_file_to_pane(file_path, width: int = 300, height: int = 300):  # pragma: no cover
     """Create a rerun viewer pane from an .rrd file path.
 
     Uses an HTML iframe to display the .rrd file.  If the ``rerun-sdk``
@@ -68,10 +66,17 @@ def rrd_file_to_pane(
     for best results.  Otherwise the hosted viewer at ``app.rerun.io`` is
     used (requires the Panel server's CORS-enabled ``/rrd_static/`` route
     so the hosted viewer can fetch the file from localhost).
+
+    The file must be located under ``cachedir/rrd/``.
     """
     rrd_path = Path(file_path).resolve()
     cache_root = Path("cachedir/rrd").resolve()
-    relative = rrd_path.relative_to(cache_root)
+    try:
+        relative = rrd_path.relative_to(cache_root)
+    except ValueError:
+        raise ValueError(
+            f"rrd_file_to_pane expects files under {cache_root}, got {rrd_path}"
+        ) from None
     rrd_url = f"http://localhost:{PANEL_PORT}/rrd_static/{relative}"
 
     # Prefer the local rerun viewer when the SDK is available.
