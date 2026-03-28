@@ -1,4 +1,7 @@
-"""Rerun integration for bencher — embed rerun viewer panes in Panel reports.
+"""Rerun SDK integration for bencher — capture live recordings.
+
+This module requires the ``rerun-sdk`` package.  For functions that work
+with pre-recorded ``.rrd`` files without the SDK, see ``utils_rrd.py``.
 
 Architecture
 ------------
@@ -26,39 +29,16 @@ or "data source left unexpectedly" messages.
 
 3. **Viewer** — ``rr.start_web_viewer_server()`` launches a *local* rerun
    web viewer on port 9090.  This is the viewer that actually renders the
-   data.  Do NOT use ``app.rerun.io`` — the CDN viewer's ``web_event://``
-   postMessage protocol does not work when embedded in Panel's Bokeh Div
-   (innerHTML does not execute ``<script>`` tags).
-
-Alternatives that were tried and do NOT work
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-- **app.rerun.io + postMessage (``as_html()``)** — Panel sets innerHTML which
-  does not execute scripts, so the base64 data never reaches the viewer.
-  Wrapping in ``<iframe srcdoc="...">`` executes the script but the nested
-  postMessage still fails to deliver data (viewer shows 0 B).
-- **Data URIs in the viewer URL** — the rerun viewer cannot parse ``data:``
-  URIs as the ``?url=`` parameter.
-- **``rr.save()`` to a file + external file server** — the file is incomplete
-  (still being written) when the viewer fetches it, causing "data source
-  left unexpectedly" errors.  Also requires a separate server process which
-  is fragile (port conflicts, zombie processes).
+   data.  When the SDK is not available, ``rrd_file_to_pane`` (in
+   ``utils_rrd.py``) falls back to the hosted viewer at ``app.rerun.io``.
 """
 
-import logging
-from importlib.metadata import version as get_package_version, PackageNotFoundError
-from pathlib import Path
-
 import rerun as rr
-import panel as pn
-from .utils import publish_file, gen_rerun_data_path
 
+from .utils import gen_rerun_data_path
+from .utils_rrd import _RERUN_VIEWER_PORT, rrd_file_to_pane  # noqa: F401 — re-exported
 
-# Port for the local rerun web viewer server.
-_RERUN_VIEWER_PORT = 9090
 _viewer_started = False
-
-# Port for the Panel server (must be known at render time so iframe URLs can be built).
-PANEL_PORT = 8051
 
 
 def _ensure_rerun_init():  # pragma: no cover
@@ -75,39 +55,6 @@ def _ensure_rerun_viewer():  # pragma: no cover
         _viewer_started = True
 
 
-def _get_rerun_version() -> str:
-    """Get the installed rerun package version."""
-    try:
-        return get_package_version("rerun-sdk")
-    except PackageNotFoundError:
-        return "0.30.1"
-
-
-def rrd_to_pane(
-    url: str, width: int = 500, height: int = 600, version: str | None = None
-):  # pragma: no cover
-    """Display an .rrd file from a URL using the hosted rerun web viewer."""
-    if version is None:
-        version = _get_rerun_version()
-    return pn.pane.HTML(
-        f'<iframe src="https://app.rerun.io/version/{version}/?url={url}"'
-        f" width={width} height={height}></iframe>"
-    )
-
-
-def publish_and_view_rrd(
-    file_path: str,
-    remote: str,
-    branch_name,
-    content_callback: callable,
-    version: str | None = None,
-):  # pragma: no cover
-    publish_file(file_path, remote=remote, branch_name="test_rrd")
-    publish_path = content_callback(remote, branch_name, file_path)
-    logging.info(publish_path)
-    return rrd_to_pane(publish_path, version=version)
-
-
 def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pragma: no cover
     """Save the current rerun recording to an .rrd file and return the path.
 
@@ -122,28 +69,6 @@ def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pr
     with open(file_path, "wb") as f:
         f.write(rrd_bytes)
     return file_path
-
-
-def rrd_file_to_pane(
-    file_path, width: int = 300, height: int = 300, **kwargs
-):  # pragma: no cover  # pylint: disable=unused-argument
-    """Create a rerun viewer pane from an .rrd file path.
-
-    Uses an HTML iframe with the local rerun web viewer. The .rrd file is
-    served via the Panel server's CORS-enabled /rrd_static/ route.
-    """
-    _ensure_rerun_viewer()
-    rrd_path = Path(file_path).resolve()
-    cache_root = Path("cachedir/rrd").resolve()
-    relative = rrd_path.relative_to(cache_root)
-    rrd_url = f"http://localhost:{PANEL_PORT}/rrd_static/{relative}"
-    viewer_url = f"http://localhost:{_RERUN_VIEWER_PORT}/?url={rrd_url}"
-    return pn.pane.HTML(
-        f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-        f' frameborder="0" allowfullscreen></iframe>',
-        width=width,
-        height=height,
-    )
 
 
 def rerun_to_pane(

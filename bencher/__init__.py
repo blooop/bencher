@@ -85,17 +85,20 @@ from .utils import (
     github_content,
 )
 
+from .utils_rrd import (
+    publish_and_view_rrd,
+    rrd_to_pane,
+    rrd_file_to_pane,
+)
+from .file_server import run_file_server
+
 try:
     from .utils_rerun import (
-        publish_and_view_rrd,
-        rrd_to_pane,
         rerun_to_pane,
         capture_rerun_window,
         capture_rerun_rrd,
-        rrd_file_to_pane,
     )
-    from .file_server import run_file_server
-except ModuleNotFoundError as e:
+except ModuleNotFoundError:
     pass
 
 

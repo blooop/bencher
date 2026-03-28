@@ -127,7 +127,7 @@ class BenchPlotServer:
 
         # When serving .rrd files, use a known port so rerun iframe URLs work.
         if port is None and extra:
-            from bencher.utils_rerun import PANEL_PORT
+            from bencher.utils_rrd import PANEL_PORT
 
             port = PANEL_PORT
 
