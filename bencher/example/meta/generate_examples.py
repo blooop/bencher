@@ -196,6 +196,8 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
         run_cfg.use_optuna = run_kwargs["use_optuna"]
+    if "over_time" in run_kwargs:
+        run_cfg.over_time = run_kwargs["over_time"]
     optimise = run_kwargs.get("optimise", 0)
     print(f"Running {py_file}...")
     bench = example_fn(run_cfg)
