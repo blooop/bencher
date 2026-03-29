@@ -152,10 +152,10 @@ class HeatmapResult(HoloviewResult):
             if self._use_holomap_for_time(dataset):
 
                 def make_heatmap(ds_t):
-                    # Use the full dataset instead of extracting just the result variable
-                    # This preserves the coordinate structure needed for kdims
-                    hvds = hv.Dataset(ds_t)
-                    return hvds.to(hv.HeatMap, kdims=[x, y], vdims=[C]).opts(
+                    # Convert to DataFrame so hv.HeatMap gets proper column names;
+                    # hv.Dataset(xr.Dataset) drops categorical-only dims.
+                    df = ds_t[C].to_dataframe().reset_index()
+                    return hv.HeatMap(df, kdims=[x, y], vdims=[C]).opts(
                         cmap="plasma", title=title, xrotation=30, **kwargs
                     )
 
