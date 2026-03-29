@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.73.2] - 2026-03-29
+
+### Added
+- Restore rerun integration with Panel-served .rrd files (#855)
+- New rerun examples: `example_rerun.py` and `example_rerun2.py`
+- SDK-free .rrd utilities in `utils_rrd.py` that work without rerun-sdk dependency
+- Architecture documentation for rerun integration
+- HTTP file server using stdlib `http.server` to replace Flask dependency
+
+### Changed  
+- Auto-initialize rerun recording, removing need for manual `rr.init()` in examples
+- Split rerun code so `.rrd` utilities work without rerun-sdk
+- Replace Flask file server with stdlib `http.server` for better maintainability
+- Refactor rerun examples and clean up unused imports
+
+### Fixed
+- Restore working rerun viewer functionality 
+- Remove hardcoded branch names in examples
+- Clean up unused imports and fix example formatting
+
 ## [1.73.1] - 2026-03-27
 
 ### Fixed
