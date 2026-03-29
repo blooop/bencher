@@ -171,7 +171,7 @@ class Shape:
         if self.is_leaf:
             return Shape(color_index=self.color_index)
         return Shape(
-            children=[c._deep_copy() for c in self.children],
+            children=[c._deep_copy() for c in self.children],  # pylint: disable=protected-access
             direction=self.direction,
             depth=self.depth,
         )
@@ -181,7 +181,7 @@ class Shape:
         if self.is_leaf:
             return Shape(color_index=color_index)
         return Shape(
-            children=[c._deep_copy_recolored(color_index) for c in self.children],
+            children=[c._deep_copy_recolored(color_index) for c in self.children],  # pylint: disable=protected-access
             direction=self.direction,
             depth=self.depth,
         )
@@ -289,7 +289,7 @@ class TimelineShape(Shape):
         scaled_w, scaled_h = inner_img.size
 
         # Need the underlying PIL Image (not ImageDraw) for pasting
-        base_img = img._image
+        base_img = img.im
 
         frames_y = y + FILM_PAD + FILM_SPROCKET_H + FILM_SPROCKET_MARGIN
         font_label = _get_font(12)
@@ -334,7 +334,7 @@ class TimelineShape(Shape):
             )
 
     def _deep_copy(self) -> "Shape":
-        return TimelineShape(self.inner._deep_copy(), self.count)
+        return TimelineShape(self.inner._deep_copy(), self.count)  # pylint: disable=protected-access
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +392,7 @@ class StrobeShape(Shape):
         if self.flash > 0.3:
             fill_alpha = self.flash * 0.08
             overlay = Image.new("RGB", (total_w, box_h), c.strobe_color)
-            base_img = img._image
+            base_img = img.im
             base_img.paste(
                 Image.blend(base_img.crop((x, y, x + total_w, y + box_h)), overlay, fill_alpha),
                 (x, y),
@@ -463,7 +463,7 @@ class StrobeShape(Shape):
             img.text((lx, my - 1), label, fill=color, font=font)
 
     def _deep_copy(self) -> "Shape":
-        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)
+        return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)  # pylint: disable=protected-access
 
 
 def render_animation(
