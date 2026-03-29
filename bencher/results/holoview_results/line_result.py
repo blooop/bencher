@@ -159,6 +159,10 @@ class LineResult(HoloviewResult):
             )
             return self._apply_opts(plot, xrotation=30)
 
+        # No float vars and over_time was squeezed (single time point) — no x-axis
+        if not self.plt_cnt_cfg.float_vars:
+            return None
+
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None
         if self.plt_cnt_cfg.cat_cnt >= 1:
