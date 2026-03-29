@@ -583,18 +583,25 @@ class BenchCfg(BenchRunCfg):
     def to_cartesian_animation(self) -> str | None:
         """Render an animation of the Cartesian product data collection.
 
-        Uses matplotlib + moviepy for fast rendering.  Returns ``None``
-        on any import or rendering error so callers degrade gracefully.
+        Delegates to :func:`bencher.results.manim_cartesian.render_animation`,
+        which currently uses a PIL-based renderer. Returns the filesystem path
+        to the generated animated PNG (or other format, depending on the
+        renderer), or ``None`` on failure so callers can degrade gracefully.
 
         Returns:
-            str | None: Path to the rendered MP4 video file, or None on failure.
+            str | None: Path to the rendered animation file, or None on failure.
         """
         try:
             from bencher.results.manim_cartesian import from_bench_cfg, render_animation
 
             cfg = from_bench_cfg(self)
             return render_animation(cfg, width=350, height=250)
-        except (ImportError, AttributeError, ValueError, RuntimeError):
+        except (ImportError, AttributeError, ValueError, RuntimeError, OSError) as e:
+            # Log the exception so failures remain diagnosable while preserving
+            # the existing graceful fallback behavior.
+            logging.getLogger(__name__).exception(
+                "Failed to render Cartesian animation for bench config %r: %s", self, e
+            )
             return None
 
     def describe_sweep(

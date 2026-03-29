@@ -5,7 +5,7 @@ Shows how each dimension builds on the last:
     --repeat--> extrude --over_time--> film strip
     --dim4+--> sets of sets ...
 
-Renders frames directly with PIL (fast), saves as GIF.
+Renders frames directly with PIL (fast), saves as animated PNG (APNG).
 """
 
 from __future__ import annotations
@@ -43,6 +43,34 @@ DEPTH_DX = 10
 DEPTH_DY = -8
 GROUP_GAP = 20
 GAP = "..."
+
+
+def render_shape_to_image(
+    shape: Shape,
+    target_w: int,
+    target_h: int,
+    bg_color: tuple[int, int, int] = BG_COLOR,
+    alpha: float = 1.0,
+) -> Image.Image:
+    """Render `shape` into an offscreen image scaled to fit target_w x target_h.
+
+    The returned image is at most target_w x target_h and centered content-wise.
+    """
+    sw, sh = shape.size()
+    sw = max(sw, 1)
+    sh = max(sh, 1)
+
+    scale = min(target_w / sw, target_h / sh, 1.0)
+    base = Image.new("RGB", (sw, sh), bg_color)
+    draw = ImageDraw.Draw(base)
+    shape.draw(draw, 0, 0, alpha)
+
+    if scale < 1.0:
+        new_w = max(1, int(sw * scale))
+        new_h = max(1, int(sh * scale))
+        base = base.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    return base
 
 
 def _generate_unique_filename(cfg: CartesianProductCfg, width: int, height: int) -> str:
@@ -277,19 +305,12 @@ class TimelineShape(Shape):
         self._draw_sprockets(img, x, sprocket_y_bot, total_w)
 
         # --- Pre-render inner shape once, then paste into each frame ---
-        iw, ih = self.inner.size()
-        scale = min(self.FRAME_W / max(iw, 1), self.FRAME_H / max(ih, 1), 1.0)
-        inner_img = Image.new("RGB", (max(iw, 1), max(ih, 1)), BG_COLOR)
-        inner_draw = ImageDraw.Draw(inner_img)
-        self.inner.draw(inner_draw, 0, 0, alpha)
-        if scale < 1.0:
-            inner_img = inner_img.resize(
-                (int(iw * scale), int(ih * scale)), Image.Resampling.LANCZOS
-            )
+        # Pre-render inner shape once, scaled to frame window
+        inner_img = render_shape_to_image(self.inner, self.FRAME_W, self.FRAME_H, BG_COLOR, alpha)
         scaled_w, scaled_h = inner_img.size
 
         # Need the underlying PIL Image (not ImageDraw) for pasting
-        base_img = img.im
+        base_img: Image.Image = img._image  # pylint: disable=protected-access
 
         frames_y = y + FILM_PAD + FILM_SPROCKET_H + FILM_SPROCKET_MARGIN
         font_label = _get_font(12)
@@ -392,11 +413,11 @@ class StrobeShape(Shape):
         if self.flash > 0.3:
             fill_alpha = self.flash * 0.08
             overlay = Image.new("RGB", (total_w, box_h), c.strobe_color)
-            base_img = img.im
-            base_img.paste(
-                Image.blend(base_img.crop((x, y, x + total_w, y + box_h)), overlay, fill_alpha),
-                (x, y),
-            )
+            base_img = img._image  # pylint: disable=protected-access
+            # Crop the region, blend with overlay, then paste back
+            region = base_img.crop((x, y, x + total_w, y + box_h))
+            blended = Image.blend(region, overlay, fill_alpha)
+            base_img.paste(blended, (x, y))
 
         # Tally marks + count label below
         marks_y = y + box_h + 6
@@ -679,6 +700,7 @@ def render_animation(
     # Always shown (even ×1) to match the LaTeX summary.
     if time_dim:
         time_size = time_dim[0][1]
+        base_product = running_product  # Store base product before time multiplication
         running_product *= time_size
         logger.info("Over time: %d steps (film strip slide-in)", time_size)
 
@@ -686,7 +708,7 @@ def render_animation(
         hold()
 
         timeline_shape = TimelineShape(shape, time_size)
-        count_text = f"{running_product} combinations x ({time_size} times)"
+        count_text = f"{base_product} combinations × {time_size} times"
 
         # Slide the film strip in from the right with ease-out deceleration
         slide_n = max(4, fps // 2)  # ~0.5s of sliding

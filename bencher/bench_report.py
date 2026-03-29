@@ -205,7 +205,9 @@ class BenchReport(BenchPlotServer):
 <style>
 body {{ margin:0; font-family:sans-serif; }}
 .tab-bar {{ display:flex; gap:4px; background:rgba(0,0,0,0.9); padding:10px; position:sticky; top:0; z-index:100; }}
-.tab-btn {{ padding:10px 16px; border:none; cursor:pointer; background:rgba(255,255,255,0.15); color:#fff; font-size:14px; border-radius:4px; }}
+.tab-btn {{ padding:10px 16px; border:none; cursor:pointer; background:rgba(255,255,255,0.15); color:#fff; font-size:14px; border-radius:4px; transition:background 0.15s ease,color 0.15s ease; }}
+.tab-btn:hover {{ background:rgba(255,255,255,0.3); }}
+.tab-btn:focus-visible {{ background:rgba(255,255,255,0.3); outline:2px solid #fff; outline-offset:2px; }}
 .tab-btn.active {{ background:rgba(255,255,255,0.9); color:#000; font-weight:bold; }}
 iframe {{ width:100%; border:none; }}
 </style></head><body>
