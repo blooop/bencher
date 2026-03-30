@@ -24,6 +24,11 @@ To test a specific example: `pixi run python bencher/example/example_simple_floa
 ### Important
 - **ALWAYS use the pixi environment for every command.** Never run raw `python`, `pytest`, `ruff`, or any other tool directly — always prefix with `pixi run` (e.g. `pixi run python ...`, `pixi run pytest ...`). This ensures the correct dependencies and environment are used.
 
+### How to Use Bencher
+See **[docs/how_to_use_bencher.md](docs/how_to_use_bencher.md)** for the complete guide
+on using bencher — sweep types, result types, the `__call__` pattern, plot callbacks,
+and common mistakes. **Read this before writing any benchmark or example.**
+
 ### Updating Examples & Docs
 1. Add or modify the example implementation under `bencher/example/`.
 2. Register the example in `bencher/example/meta/generate_examples.py` so the documentation generator emits a notebook (pick an appropriate gallery subdirectory).

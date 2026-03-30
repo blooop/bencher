@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.74.0] - 2026-03-28
+
+### Added
+- **Cartesian Product Animations**: New PIL-based animation system that visualizes how parameter sweep dimensions build upon each other (point → line → grid → stack → film strip) (#feature/manim_summary)
+- `BenchCfg.to_cartesian_animation()` method for rendering dimensional progression animations
+- Automatic animation embedding in sweep descriptions via `BenchCfg.describe_sweep()`
+- `CartesianProductCfg` and `CartesianProductScene` classes for animation configuration and rendering
+- `bencher.results.manim_cartesian` module with Shape, StrobeShape, and TimelineShape classes
+- **Complete Usage Guide**: New comprehensive `docs/how_to_use_bencher.md` documentation covering sweep types, result types, and best practices
+- Tab bar sweep example (`example_tab_bar_sweep.py`) demonstrating UI layout testing with PIL rendering
+- Meta example generation system for creating animation galleries
+- 10-color pastel palette for dimensional visualization with proper contrast on white backgrounds
+- Film strip metaphor for `over_time` dimension with sprocket holes and frame labels
+- Strobe/flash animation for `repeat` dimension with tally mark counters
+
+### Changed 
+- **Dark Theme Tab Bar**: Report tabs now use dark background with improved contrast and sticky positioning
+- Tab bar styling updated with rounded corners, better spacing, and proper hover states
+- Meta example generation now includes animation examples in advanced gallery
+- Animation rendering uses unique filenames to prevent file path collisions
+- Improved tally mark visuals with thicker strikethrough, larger fonts, and centered labels
+
+### Fixed
+- Animation filepath collisions resolved with unique filename generation based on animation parameters
+- ListProxy pickle serialization issues for multiprocessing compatibility
+- Animation size optimization for better performance and smaller file sizes
+
+## [1.73.1] - 2026-03-27
+
+### Fixed
+- Generate optimisation reports for all benchmarks, not just the last (#852)
+- Include time event in over_time panel labels and default to last (#849)
+- Wrap long description strings in generated examples to fit 100-char line limit (#851)
+- Override RTD theme CSS to wrap long lines in docs code blocks (#851)
+
 ## [1.73.0] - 2026-03-26
 
 ### Added

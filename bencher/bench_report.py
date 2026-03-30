@@ -10,6 +10,8 @@ import tempfile
 from threading import Thread
 from dataclasses import dataclass
 
+import numpy as np
+import pandas as pd
 import panel as pn
 from bencher.results.bench_result import BenchResult
 from bencher.bench_plot_server import BenchPlotServer
@@ -30,7 +32,7 @@ class BenchReport(BenchPlotServer):
         bench_name: str | None = None,
     ) -> None:
         self.bench_name = bench_name
-        self.pane = pn.Tabs(tabs_location="left", name=self.bench_name)
+        self.pane = pn.Tabs(tabs_location="above", name=self.bench_name)
         self.last_save_ms: float = 0.0
         self.bench_results: list[BenchResult] = []
 
@@ -63,15 +65,45 @@ class BenchReport(BenchPlotServer):
             col = pn.Column(pane, name=pane.name)
         self.pane.append(col)
 
+    @staticmethod
+    def _time_event_label(bench_res: BenchResult) -> str | None:
+        """Extract a human-readable label for the latest time event from a result."""
+        if not bench_res.bench_cfg.over_time or "over_time" not in bench_res.ds.coords:
+            return None
+        time_vals = bench_res.ds.coords["over_time"].values
+        if len(time_vals) == 0:
+            return None
+        last = time_vals[-1]
+        if isinstance(last, (np.datetime64,)):
+            label = pd.Timestamp(last).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            label = str(last).replace("\n", " ")
+        if len(label) > 60:
+            label = label[:57] + "..."
+        return label
+
     def append_result(self, bench_res: BenchResult) -> None:
         self.bench_results.append(bench_res)
-        self.append_tab(bench_res.plot(), bench_res.bench_cfg.title)
+        title = bench_res.bench_cfg.title
+        label = self._time_event_label(bench_res)
+        if label:
+            title = f"{title} [{label}]"
+        self.append_tab(bench_res.plot(), title)
+
+    def append_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
+        """Append *pane* to the tab that belongs to *bench_res*."""
+        try:
+            idx = self.bench_results.index(bench_res)
+            self.pane[idx].append(pane)
+        except (ValueError, IndexError):
+            self.append(pane)
 
     def append_tab(self, pane: pn.panel, name: str | None = None) -> None:
         if pane is not None:
             if name is None:
                 name = pane.name
             self.pane.append(pn.Column(pane, name=name))
+            self.pane.active = len(self.pane) - 1
 
     def save_index(self, directory: str = "", filename: str = "index.html") -> Path:
         """Saves the result to index.html in the root folder so that it can be displayed by github pages.
@@ -157,23 +189,26 @@ class BenchReport(BenchPlotServer):
     @staticmethod
     def _write_iframe_index(index_path: Path, tab_files: list) -> None:
         """Write a lightweight HTML index with tab buttons and an iframe."""
+        last_idx = len(tab_files) - 1
         buttons = ""
         for i, (name, path) in enumerate(tab_files):
-            active = " active" if i == 0 else ""
+            active = " active" if i == last_idx else ""
             escaped_name = html.escape(name)
             buttons += (
                 f'<button class="tab-btn{active}" '
                 f"onclick=\"switchTab(this, '{path}')\">{escaped_name}</button>\n"
             )
-        first_src = tab_files[0][1] if tab_files else ""
+        first_src = tab_files[last_idx][1] if tab_files else ""
         page = f"""\
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Report</title>
 <style>
 body {{ margin:0; font-family:sans-serif; }}
-.tab-bar {{ display:flex; gap:2px; background:#e0e0e0; padding:4px; }}
-.tab-btn {{ padding:8px 16px; border:none; cursor:pointer; background:#ccc; font-size:14px; }}
-.tab-btn.active {{ background:#fff; font-weight:bold; }}
+.tab-bar {{ display:flex; gap:4px; background:rgba(0,0,0,0.9); padding:10px; position:sticky; top:0; z-index:100; }}
+.tab-btn {{ padding:10px 16px; border:none; cursor:pointer; background:rgba(255,255,255,0.15); color:#fff; font-size:14px; border-radius:4px; transition:background 0.15s ease,color 0.15s ease; }}
+.tab-btn:hover {{ background:rgba(255,255,255,0.3); }}
+.tab-btn:focus-visible {{ background:rgba(255,255,255,0.3); outline:2px solid #fff; outline-offset:2px; }}
+.tab-btn.active {{ background:rgba(255,255,255,0.9); color:#000; font-weight:bold; }}
 iframe {{ width:100%; border:none; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>

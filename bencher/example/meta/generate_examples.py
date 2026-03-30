@@ -196,13 +196,16 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
         run_cfg.use_optuna = run_kwargs["use_optuna"]
+    if run_kwargs.get("over_time"):
+        run_cfg.over_time = True
     optimise = run_kwargs.get("optimise", 0)
     print(f"Running {py_file}...")
     bench = example_fn(run_cfg)
 
     if optimise and bench.results:
         bench.optimize(n_trials=optimise, plot=False)
-        bench.report.append(bench.results[-1].to_optuna_plots())
+        for res in bench.results:
+            bench.report.append_to_result(res, res.to_optuna_plots())
 
     # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
     reports_output_dir = REPORTS_EXTRA_DIR / rel.parent
@@ -234,13 +237,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
 
 .. raw:: html
 
-   <iframe class="bencher-report"
-           src="_reports/{stem}/{bench.bench_name}.html"
-           scrolling="no"
-           style="width:100%; min-height:400px; border:none; overflow:hidden;">
-   </iframe>
-
-   <details class="bencher-source">
+   <details class="bencher-source" open>
    <summary>Source Code</summary>
 
 .. literalinclude:: {py_rel}
@@ -249,6 +246,12 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
 .. raw:: html
 
    </details>
+
+   <iframe class="bencher-report"
+           src="_reports/{stem}/{bench.bench_name}.html"
+           scrolling="no"
+           style="width:100%; min-height:400px; border:none; overflow:hidden;">
+   </iframe>
 """
     rst_path.write_text(rst_content, encoding="utf-8")
 
