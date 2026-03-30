@@ -110,10 +110,7 @@ def rrd_file_to_pane(  # pragma: no cover
     rrd_url = f"http://localhost:{PANEL_PORT}/rrd_static/{relative.as_posix()}"
 
     if viewer_version is not None and not _VERSION_RE.match(viewer_version):
-        raise ValueError(
-            f"Invalid viewer_version {viewer_version!r}: "
-            "must match [0-9A-Za-z._-]+"
-        )
+        raise ValueError(f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+")
 
     if viewer_version is not None:
         viewer_url = _cdn_viewer_url(relative, viewer_version)
