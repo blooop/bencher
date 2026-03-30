@@ -491,6 +491,15 @@ class StrobeShape(Shape):
         c = self.cfg
         return (iw + 2 * c.strobe_pad, ih + 2 * c.strobe_pad)
 
+    def draw_without_tally(self, img: ImageDraw.ImageDraw, x: int, y: int) -> None:
+        """Draw the shape without tallies, preserving previous state."""
+        prev = self._skip_tally
+        self._skip_tally = True
+        try:
+            self.draw(img, x, y)
+        finally:
+            self._skip_tally = prev
+
     def draw_tally_overlay(
         self, img: ImageDraw.ImageDraw, anchor_x: int, anchor_y: int, avail_w: int
     ):
@@ -498,6 +507,23 @@ class StrobeShape(Shape):
         c = self.cfg
         mark_color = tuple(int(v) for v in c.strobe_color)
         self._draw_tally(img, anchor_x, anchor_y, avail_w, mark_color, c)
+
+    def draw_tally_overlay_for_box(
+        self, img: ImageDraw.ImageDraw, box_x: int, box_y: int, box_w: int, box_h: int
+    ) -> None:
+        """Draw fixed-size tally overlay below a rendered box.
+
+        Spacing is derived from cfg fields so layout stays consistent
+        when configuration changes.
+        """
+        c = self.cfg
+        v_gap = c.strobe_mark_row_h // 2
+        tally_margin = 2 * c.strobe_pad
+        tally_min_w = 4 * c.strobe_pad
+        tally_y = box_y + box_h + v_gap
+        tally_avail_w = max(box_w - tally_margin, tally_min_w)
+        tally_x = box_x + (box_w - tally_avail_w) // 2
+        self.draw_tally_overlay(img, tally_x, tally_y, tally_avail_w)
 
     def _deep_copy(self) -> "Shape":
         return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)  # pylint: disable=protected-access
@@ -590,12 +616,11 @@ def render_animation(
         # Detect top-level StrobeShape for fixed-size tally overlay
         strobe_overlay = isinstance(shape, StrobeShape) and not isinstance(shape, TimelineShape)
         if strobe_overlay:
-            shape._skip_tally = True  # pylint: disable=protected-access
             # Use content box (no tally row) for scale — reserve fixed space for overlay
             sw, sh = shape.content_box_size()
-            tally_h = shape.cfg.strobe_mark_row_h + 6
+            tally_reserve = shape.cfg.strobe_mark_row_h + shape.cfg.strobe_mark_row_h // 2
             avail_w = width - 40
-            avail_h = height - shape_area_top - 10 - tally_h
+            avail_h = height - shape_area_top - 10 - tally_reserve
         else:
             sw, sh = shape.size()
             avail_w = width - 40
@@ -606,7 +631,10 @@ def render_animation(
         if scale < 1.0:
             big = Image.new("RGB", (sw + 40, sh + 10), BG_COLOR)
             big_draw = ImageDraw.Draw(big)
-            shape.draw(big_draw, 20, 5)
+            if strobe_overlay:
+                shape.draw_without_tally(big_draw, 20, 5)
+            else:
+                shape.draw(big_draw, 20, 5)
             new_w = int(big.width * scale)
             new_h = int(big.height * scale)
             big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
@@ -614,22 +642,15 @@ def render_animation(
             paste_y = shape_area_top + (avail_h - big.height) // 2
             img.paste(big, (paste_x, paste_y))
             if strobe_overlay:
-                tally_y = paste_y + new_h + 6
-                tally_avail_w = max(new_w - 20, 40)
-                tally_x = paste_x + (new_w - tally_avail_w) // 2
-                shape.draw_tally_overlay(draw, tally_x, tally_y, tally_avail_w)
+                shape.draw_tally_overlay_for_box(draw, paste_x, paste_y, new_w, new_h)
         else:
             sx = (width - sw) // 2 + x_offset
             sy = shape_area_top + (avail_h - sh) // 2
-            shape.draw(draw, sx, sy)
             if strobe_overlay:
-                tally_y = sy + sh + 6
-                tally_avail_w = sw - 2 * shape.cfg.strobe_pad
-                tally_x = sx + shape.cfg.strobe_pad
-                shape.draw_tally_overlay(draw, tally_x, tally_y, tally_avail_w)
-
-        if strobe_overlay:
-            shape._skip_tally = False  # pylint: disable=protected-access
+                shape.draw_without_tally(draw, sx, sy)
+                shape.draw_tally_overlay_for_box(draw, sx, sy, sw, sh)
+            else:
+                shape.draw(draw, sx, sy)
 
         # Line 1: dimension name (always visible)
         if current_dim_label:
