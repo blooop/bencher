@@ -12,6 +12,7 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 
 import logging
 import re
+import shutil
 from importlib.metadata import PackageNotFoundError, version as get_package_version
 from pathlib import Path
 from urllib.parse import quote
@@ -71,6 +72,7 @@ def rrd_file_to_pane(  # pragma: no cover
     width: int = 300,
     height: int = 300,
     viewer_version: str | None = None,
+    report_dir: str | Path | None = None,
 ):
     """Create a rerun viewer pane from an .rrd file path.
 
@@ -98,8 +100,23 @@ def rrd_file_to_pane(  # pragma: no cover
         a C++ SDK at 0.30.x while the Python SDK is 0.26.x).  The viewer
         page is written to ``cachedir/rrd/`` and served from the same
         HTTP origin as the .rrd files, avoiding mixed-content issues.
+    report_dir:
+        When set (together with ``viewer_version``), copies the .rrd and
+        viewer HTML into this directory and uses relative URLs in the iframe.
+        This makes the report portable — it works when served from any HTTP
+        origin (e.g. CI report hosting on GCS/S3) without a live Panel
+        server.  When ``None``, files stay in ``cachedir/rrd/`` and are
+        served by the Panel server at ``/rrd_static/``.
     """
     rrd_path = Path(file_path).resolve()
+
+    if report_dir is not None and viewer_version is not None:
+        if not _VERSION_RE.match(viewer_version):
+            raise ValueError(
+                f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+"
+            )
+        return _portable_rrd_pane(rrd_path, viewer_version, Path(report_dir), width, height)
+
     cache_root = _RRD_CACHE_DIR.resolve()
     try:
         relative = rrd_path.relative_to(cache_root)
@@ -151,7 +168,7 @@ try {{
     "https://cdn.jsdelivr.net/npm/@rerun-io/web-viewer@{version}/+esm"
   );
   const v = new WebViewer();
-  await v.start(new URL(url, location.origin).href,
+  await v.start(new URL(url, location.href).href,
                 document.getElementById("c"),
                 {{hide_welcome_screen:true,width:"100%",height:"100%"}});
 }} catch(e) {{
@@ -184,3 +201,45 @@ def _cdn_viewer_url(rrd_relative: Path, version: str) -> str:
     filename = _cdn_viewer_versions[version]
     rrd_url = quote(f"/rrd_static/{rrd_relative.as_posix()}", safe="/:")
     return f"http://localhost:{PANEL_PORT}/rrd_static/{filename}?url={rrd_url}"
+
+
+def _get_cdn_viewer_html(version: str) -> str:
+    """Return the viewer HTML string for a given rerun version (cached)."""
+    if version not in _cdn_viewer_versions:
+        _cdn_viewer_versions[version] = _CDN_VIEWER_TEMPLATE.format(version=version)
+    return _cdn_viewer_versions[version]
+
+
+def _portable_rrd_pane(
+    rrd_path: Path,
+    version: str,
+    report_dir: Path,
+    width: int,
+    height: int,
+) -> pn.pane.HTML:
+    """Create a self-contained pane with files copied into the report directory.
+
+    Copies the .rrd and a CDN viewer HTML page into ``report_dir/rrd/`` and
+    returns an iframe with a relative URL.  The resulting report can be served
+    from any HTTP origin without a live Panel server.
+    """
+    rrd_subdir = report_dir / "rrd"
+    rrd_subdir.mkdir(parents=True, exist_ok=True)
+
+    # Copy .rrd
+    rrd_dest = rrd_subdir / rrd_path.name
+    shutil.copy2(rrd_path, rrd_dest)
+
+    # Write viewer HTML (idempotent)
+    html = _get_cdn_viewer_html(version)
+    viewer_path = rrd_subdir / "viewer.html"
+    if not viewer_path.exists() or viewer_path.read_text() != html:
+        viewer_path.write_text(html)
+
+    viewer_url = f"rrd/viewer.html?url={quote(rrd_path.name)}"
+    return pn.pane.HTML(
+        f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
+        f' frameborder="0" allowfullscreen></iframe>',
+        width=width,
+        height=height,
+    )
