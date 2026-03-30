@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Report</title>
+<style>
+body { margin:0; font-family:sans-serif; }
+.tab-bar { display:flex; gap:4px; background:rgba(0,0,0,0.9); padding:10px; position:sticky; top:0; z-index:100; }
+.tab-btn { padding:10px 16px; border:none; cursor:pointer; background:rgba(255,255,255,0.15); color:#fff; font-size:14px; border-radius:4px; transition:background 0.15s ease,color 0.15s ease; }
+.tab-btn:hover { background:rgba(255,255,255,0.3); }
+.tab-btn:focus-visible { background:rgba(255,255,255,0.3); outline:2px solid #fff; outline-offset:2px; }
+.tab-btn.active { background:rgba(255,255,255,0.9); color:#000; font-weight:bold; }
+iframe { width:100%; border:none; }
+</style></head><body>
+<div class="tab-bar"><button class="tab-btn" onclick="switchTab(this, '_tabs/Time_by_File.html')">Time by File</button>
+<button class="tab-btn" onclick="switchTab(this, '_tabs/Slowest_Tests.html')">Slowest Tests</button>
+<button class="tab-btn active" onclick="switchTab(this, '_tabs/Summary.html')">Summary</button>
+</div>
+<iframe id="content" src="_tabs/Summary.html" scrolling="no"
+        style="overflow:hidden;"></iframe>
+<script>
+function switchTab(btn, src) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('content').src = src;
+}
+function resizeInner() {
+  var f = document.getElementById('content');
+  try {
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {
+      doc.documentElement.style.overflow = 'hidden';
+      doc.body.style.overflow = 'hidden';
+      var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+      if (h > 0) f.style.height = h + 'px';
+      var w = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
+      if (w > f.clientWidth) f.style.width = w + 'px';
+    }
+  } catch(e) {}
+  try { window.parent.postMessage({type:'bencher-resize'}, '*'); } catch(e) {}
+}
+function setupObserver() {
+  var f = document.getElementById('content');
+  try {
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {
+      new ResizeObserver(function() { resizeInner(); }).observe(doc.body);
+    }
+  } catch(e) {}
+}
+window.addEventListener('resize', resizeInner);
+document.getElementById('content').addEventListener('load', function() {
+  resizeInner(); setupObserver();
+  setTimeout(resizeInner, 500);
+  setTimeout(resizeInner, 1500);
+});
+resizeInner();
+</script></body></html>
