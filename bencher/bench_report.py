@@ -192,11 +192,13 @@ function resizeInner() {{
     if (doc && doc.body) {{
       doc.documentElement.style.overflow = 'hidden';
       doc.body.style.overflow = 'hidden';
-      var h = doc.documentElement.scrollHeight;
-      if (h > 0) {{ f.style.height = h + 'px'; return; }}
+      var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+      if (h > 0) f.style.height = h + 'px';
+      var w = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
+      if (w > f.clientWidth) f.style.width = w + 'px';
     }}
   }} catch(e) {{}}
-  f.style.height = (window.innerHeight - f.getBoundingClientRect().top) + 'px';
+  try {{ window.parent.postMessage({{type:'bencher-resize'}}, '*'); }} catch(e) {{}}
 }}
 function setupObserver() {{
   var f = document.getElementById('content');

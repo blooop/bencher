@@ -7,10 +7,12 @@
       if (!doc || !doc.body) return;
       doc.documentElement.style.overflow = "hidden";
       doc.body.style.overflow = "hidden";
-      var height = doc.documentElement.scrollHeight;
-      if (height > 0) {
-        iframe.style.height = height + "px";
-      }
+
+      var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+      if (h > 0) iframe.style.height = h + "px";
+
+      var w = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
+      if (w > iframe.clientWidth) iframe.style.width = w + "px";
     } catch (e) {
       // Cross-origin: fall back to min-height set via CSS
     }
@@ -30,6 +32,7 @@
         inner.addEventListener("load", function () {
           setTimeout(function () { resizeToContent(iframe); }, 200);
           setTimeout(function () { resizeToContent(iframe); }, 1000);
+          setTimeout(function () { resizeToContent(iframe); }, 3000);
         });
       }
     } catch (e) {
@@ -37,22 +40,23 @@
     }
   }
 
-  function makeFullWidth(iframe) {
-    iframe.style.width = "100vw";
-    iframe.style.maxWidth = "none";
-    iframe.style.position = "relative";
-    var rect = iframe.getBoundingClientRect();
-    iframe.style.left = -rect.left + "px";
-  }
-
   function setupIframe(iframe) {
-    makeFullWidth(iframe);
     resizeToContent(iframe);
     observeContent(iframe);
     setTimeout(function () { resizeToContent(iframe); }, 500);
     setTimeout(function () { resizeToContent(iframe); }, 1500);
     setTimeout(function () { resizeToContent(iframe); }, 3000);
   }
+
+  // Listen for resize messages posted by inner report iframes
+  window.addEventListener("message", function (e) {
+    if (e.data && e.data.type === "bencher-resize") {
+      var iframes = document.querySelectorAll("iframe.bencher-report");
+      iframes.forEach(function (iframe) {
+        resizeToContent(iframe);
+      });
+    }
+  });
 
   function initAll() {
     var iframes = document.querySelectorAll("iframe.bencher-report");
