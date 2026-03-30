@@ -141,6 +141,7 @@ class BenchPlotServer:
             address="0.0.0.0",
             websocket_origin=["*"],
             extra_patterns=extra,
+            session_token_expiration=3600,
         )
         if port is not None:
             serve_kwargs["port"] = port
