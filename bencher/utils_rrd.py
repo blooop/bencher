@@ -11,8 +11,10 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 """
 
 import logging
+import re
 from importlib.metadata import PackageNotFoundError, version as get_package_version
 from pathlib import Path
+from urllib.parse import quote
 
 import panel as pn
 
@@ -23,6 +25,12 @@ PANEL_PORT = 8051
 
 # Port for the local rerun web viewer server (when rerun-sdk is available).
 _RERUN_VIEWER_PORT = 9090
+
+# Root directory for cached .rrd files and viewer pages.
+_RRD_CACHE_DIR = Path("cachedir/rrd")
+
+# Pattern for valid viewer version strings (semver-like, e.g. "0.30.1", "0.30.0-alpha.1").
+_VERSION_RE = re.compile(r"^[0-9A-Za-z._-]+$")
 
 
 def _get_rerun_version() -> str:
@@ -92,14 +100,20 @@ def rrd_file_to_pane(  # pragma: no cover
         HTTP origin as the .rrd files, avoiding mixed-content issues.
     """
     rrd_path = Path(file_path).resolve()
-    cache_root = Path("cachedir/rrd").resolve()
+    cache_root = _RRD_CACHE_DIR.resolve()
     try:
         relative = rrd_path.relative_to(cache_root)
     except ValueError:
         raise ValueError(
             f"rrd_file_to_pane expects files under {cache_root}, got {rrd_path}"
         ) from None
-    rrd_url = f"http://localhost:{PANEL_PORT}/rrd_static/{relative}"
+    rrd_url = f"http://localhost:{PANEL_PORT}/rrd_static/{relative.as_posix()}"
+
+    if viewer_version is not None and not _VERSION_RE.match(viewer_version):
+        raise ValueError(
+            f"Invalid viewer_version {viewer_version!r}: "
+            "must match [0-9A-Za-z._-]+"
+        )
 
     if viewer_version is not None:
         viewer_url = _cdn_viewer_url(relative, viewer_version)
@@ -164,12 +178,12 @@ def _cdn_viewer_url(rrd_relative: Path, version: str) -> str:
     if version not in _cdn_viewer_versions:
         html = _CDN_VIEWER_TEMPLATE.format(version=version)
         filename = f"viewer_{version}.html"
-        viewer_path = Path("cachedir/rrd").resolve() / filename
+        viewer_path = _RRD_CACHE_DIR.resolve() / filename
         viewer_path.parent.mkdir(parents=True, exist_ok=True)
         if not viewer_path.exists() or viewer_path.read_text() != html:
             viewer_path.write_text(html)
         _cdn_viewer_versions[version] = filename
 
     filename = _cdn_viewer_versions[version]
-    rrd_url = f"/rrd_static/{rrd_relative}"
+    rrd_url = quote(f"/rrd_static/{rrd_relative.as_posix()}", safe="/:")
     return f"http://localhost:{PANEL_PORT}/rrd_static/{filename}?url={rrd_url}"
