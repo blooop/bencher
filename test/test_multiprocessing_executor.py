@@ -494,8 +494,6 @@ class TestWorkerWrapperPickle:
             pass_repeat=False,
         )
 
-        call_log = []
-
         # Need a module-level function for pickle, so we test via Job
         p = partial(worker_kwargs_wrapper, _simple_worker, cfg)
         # Can't directly test meta filtering after pickle with lambda,
@@ -604,7 +602,7 @@ class TestBenchMultiprocessingEndToEnd:
     run_job → worker_kwargs_wrapper → worker → results
     """
 
-    def _run_bench(self, worker_instance, input_vars, level=2):
+    def _run_bench(self, worker_instance, input_vars):
         bench = bn.Bench("mp_test", worker_instance)
         run_cfg = bn.BenchRunCfg()
         run_cfg.executor = Executors.MULTIPROCESSING

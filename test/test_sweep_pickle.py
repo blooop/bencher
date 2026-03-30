@@ -39,7 +39,7 @@ class Color(StrEnum):
     BLUE = auto()
 
 
-def _build_sweeps(tmp_path=None):
+def _build_sweeps():
     """Return a dict of sweep_name -> sweep instance covering every type."""
     sweeps = {
         "int": IntSweep(default=2, bounds=(0, 10)),
@@ -433,7 +433,7 @@ class TestParametrizedSweepPickle:
     def test_class_params_pickle_after_with_level(self):
         """Each class-level param, after with_level(), must pickle."""
         for p_name in ("color", "label", "enabled", "count", "ratio"):
-            param = SampleConfig.param[p_name]
+            param = SampleConfig.param[p_name]  # pylint: disable=unsubscriptable-object
             mutated = param.with_level(2)
             restored = _pickle_roundtrip(mutated)
             assert restored.values() == mutated.values(), (
