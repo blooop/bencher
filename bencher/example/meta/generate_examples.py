@@ -121,6 +121,9 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_publish import example_meta_publish
     from bencher.example.meta.generate_meta_rerun import example_meta_rerun
     from bencher.example.meta.generate_meta_aggregation import example_meta_aggregation
+    from bencher.example.meta.generate_meta_cartesian_animation import (
+        example_meta_cartesian_animation,
+    )
 
     example_meta()
     example_meta_result_types()
@@ -143,6 +146,7 @@ def generate_python_files():
     example_meta_publish()
     example_meta_rerun()
     example_meta_aggregation()
+    example_meta_cartesian_animation()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -428,6 +432,7 @@ SECTION_GROUPS = [
             ("Statistics", "statistics"),
             ("Workflows", "workflows"),
             ("YAML Sweeps", "yaml"),
+            ("Cartesian Animation", "cartesian_animation"),
             ("Advanced Patterns", "advanced"),
             ("Regression Detection", "regression"),
             ("Performance", "performance"),
