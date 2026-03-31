@@ -691,11 +691,11 @@ def render_animation(
             strip_img = shape.render_strip_image(v_scale)
             rendered_w, rendered_h = strip_img.size
 
-            # Center if fits, left-align if wider than canvas
+            # Center if fits, right-align if wider (show last frame)
             if rendered_w <= avail_w:
                 nominal_x = (width - rendered_w) // 2
             else:
-                nominal_x = 20
+                nominal_x = width - 20 - rendered_w
 
             paste_x = nominal_x + x_offset
             paste_y = shape_area_top + (avail_h - rendered_h) // 2
@@ -863,7 +863,8 @@ def render_animation(
         count_text = f"{base_product} combinations × {time_size} times"
 
         # Slide the film strip in from the right with ease-out deceleration
-        slide_n = max(4, fps // 2)  # ~0.5s of sliding
+        # Hard-cap at fps-1 frames so the animation is always < 1 second
+        slide_n = min(max(4, fps // 2), fps - 1)
         for f in range(slide_n):
             t = f / max(slide_n - 1, 1)  # 0 → 1
             ease = 1 - (1 - t) ** 3  # cubic ease-out
