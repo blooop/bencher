@@ -371,7 +371,7 @@ class TimelineShape(Shape):
             self._skip_labels = prev
 
     def draw_label_overlay(
-        self, img: ImageDraw.ImageDraw, strip_x: int, strip_y: int, strip_w: int, strip_h: int
+        self, img: ImageDraw.ImageDraw, strip_x: int, strip_y: int, strip_h: int
     ) -> None:
         """Draw frame labels at fixed pixel size on the final frame."""
         font_label = _get_font(12)
