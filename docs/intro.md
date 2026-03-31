@@ -65,7 +65,7 @@ As you add input parameters, Bencher automatically adapts the visualization:
 | 2 floats | [Heatmap](reference/meta/2_float/no_repeats/index) |
 | Categories only | [Bar chart](reference/meta/0_float/no_repeats/index) |
 
-No code changes to plotting logic are needed — the type signature of your parameters drives the selection. See [Automatic Plot Selection](concepts.md#automatic-plot-selection) for how this works.
+No code changes to plotting logic are needed — the type signature of your parameters drives the selection. See [Automatic Plot Selection](concepts.md#automatic-plot-selection) for how this works, and the [Cartesian Animation](reference/meta/cartesian_animation/index) gallery for an animated visualization of how each dimension builds on the last.
 
 ## Repeats and Statistics
 

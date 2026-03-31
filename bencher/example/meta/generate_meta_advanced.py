@@ -16,7 +16,6 @@ ADVANCED_EXAMPLES = [
     "max_time_events",
     "report_save",
     "agg_over_time",
-    "cartesian_animation",
 ]
 
 
