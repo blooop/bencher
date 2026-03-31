@@ -1,6 +1,9 @@
 (function () {
   "use strict";
 
+  var _heights = new WeakMap();
+  var _timer = null;
+
   function resizeToContent(iframe) {
     try {
       var doc = iframe.contentDocument || iframe.contentWindow.document;
@@ -9,13 +12,21 @@
       doc.body.style.overflow = "hidden";
 
       var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
-      if (h > 0) iframe.style.height = h + "px";
-
-      var w = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
-      if (w > iframe.clientWidth) iframe.style.width = w + "px";
+      if (h > 0 && h !== (_heights.get(iframe) || 0)) {
+        _heights.set(iframe, h);
+        iframe.style.height = h + "px";
+      }
     } catch (e) {
       // Cross-origin: fall back to min-height set via CSS
     }
+  }
+
+  function debouncedResize(iframe) {
+    if (_timer) return;
+    _timer = setTimeout(function () {
+      _timer = null;
+      resizeToContent(iframe);
+    }, 100);
   }
 
   function observeContent(iframe) {
@@ -23,7 +34,7 @@
       var doc = iframe.contentDocument || iframe.contentWindow.document;
       if (!doc || !doc.body) return;
       new ResizeObserver(function () {
-        resizeToContent(iframe);
+        debouncedResize(iframe);
       }).observe(doc.body);
 
       // Multi-tab reports have an inner iframe#content — re-resize on tab switch
@@ -47,16 +58,6 @@
     setTimeout(function () { resizeToContent(iframe); }, 1500);
     setTimeout(function () { resizeToContent(iframe); }, 3000);
   }
-
-  // Listen for resize messages posted by inner report iframes
-  window.addEventListener("message", function (e) {
-    if (e.data && e.data.type === "bencher-resize") {
-      var iframes = document.querySelectorAll("iframe.bencher-report");
-      iframes.forEach(function (iframe) {
-        resizeToContent(iframe);
-      });
-    }
-  });
 
   function initAll() {
     var iframes = document.querySelectorAll("iframe.bencher-report");

@@ -220,6 +220,7 @@ function switchTab(btn, src) {{
   btn.classList.add('active');
   document.getElementById('content').src = src;
 }}
+var _lastH = 0;
 function resizeInner() {{
   var f = document.getElementById('content');
   try {{
@@ -228,19 +229,21 @@ function resizeInner() {{
       doc.documentElement.style.overflow = 'hidden';
       doc.body.style.overflow = 'hidden';
       var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
-      if (h > 0) f.style.height = h + 'px';
-      var w = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
-      if (w > f.clientWidth) f.style.width = w + 'px';
+      if (h > 0 && h !== _lastH) {{ _lastH = h; f.style.height = h + 'px'; }}
     }}
   }} catch(e) {{}}
-  try {{ window.parent.postMessage({{type:'bencher-resize'}}, '*'); }} catch(e) {{}}
+}}
+var _resizeTimer = null;
+function debouncedResize() {{
+  if (_resizeTimer) return;
+  _resizeTimer = setTimeout(function() {{ _resizeTimer = null; resizeInner(); }}, 100);
 }}
 function setupObserver() {{
   var f = document.getElementById('content');
   try {{
     var doc = f.contentDocument || f.contentWindow.document;
     if (doc && doc.body) {{
-      new ResizeObserver(function() {{ resizeInner(); }}).observe(doc.body);
+      new ResizeObserver(debouncedResize).observe(doc.body);
     }}
   }} catch(e) {{}}
 }}
