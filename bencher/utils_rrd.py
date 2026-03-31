@@ -124,27 +124,45 @@ def rrd_file_to_pane(  # pragma: no cover
         raise ValueError(
             f"rrd_file_to_pane expects files under {cache_root}, got {rrd_path}"
         ) from None
-    rrd_url = f"http://localhost:{PANEL_PORT}/rrd_static/{relative.as_posix()}"
+    rrd_static_path = f"/rrd_static/{relative.as_posix()}"
 
     if viewer_version is not None and not _VERSION_RE.match(viewer_version):
         raise ValueError(f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+")
 
     if viewer_version is not None:
+        # CDN viewer page is served from the same Panel origin — relative URL works.
         viewer_url = _cdn_viewer_url(relative, viewer_version)
-    else:
-        # Prefer the local rerun viewer when the SDK is available.
-        try:
-            from .utils_rerun import _ensure_rerun_viewer
+        return pn.pane.HTML(
+            f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
+            f' frameborder="0" allowfullscreen></iframe>',
+            width=width,
+            height=height,
+        )
 
-            _ensure_rerun_viewer()
-            viewer_url = f"http://localhost:{_RERUN_VIEWER_PORT}/?url={rrd_url}"
-        except (ImportError, ModuleNotFoundError):
-            version = _get_rerun_version()
-            viewer_url = f"https://app.rerun.io/version/{version}/?url={rrd_url}"
+    # For the local rerun viewer or hosted viewer, the .rrd URL must be
+    # absolute (cross-origin fetch).  Use JavaScript so the correct Panel
+    # server port is resolved at render time instead of being hardcoded.
+    try:
+        from .utils_rerun import _ensure_rerun_viewer
+
+        _ensure_rerun_viewer()
+        viewer_tpl = f"http://localhost:{_RERUN_VIEWER_PORT}/?url="
+    except (ImportError, ModuleNotFoundError):
+        version = _get_rerun_version()
+        viewer_tpl = f"https://app.rerun.io/version/{version}/?url="
 
     return pn.pane.HTML(
-        f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-        f' frameborder="0" allowfullscreen></iframe>',
+        f'<div id="rrd-wrap-{id(rrd_path)}"></div>'
+        f"<script>"
+        f"(function(){{"
+        f'var rrdUrl=window.location.origin+"{rrd_static_path}";'
+        f'var el=document.getElementById("rrd-wrap-{id(rrd_path)}");'
+        f"el.innerHTML="
+        f"""'<iframe src="{viewer_tpl}'+encodeURIComponent(rrdUrl)+'"'"""
+        f""" +' width="{width}" height="{height}" frameborder="0"'"""
+        f""" +' allowfullscreen></iframe>';"""
+        f"}})();"
+        f"</script>",
         width=width,
         height=height,
     )
@@ -200,7 +218,7 @@ def _cdn_viewer_url(rrd_relative: Path, version: str) -> str:
 
     filename = _cdn_viewer_versions[version]
     rrd_url = quote(f"/rrd_static/{rrd_relative.as_posix()}", safe="/:")
-    return f"http://localhost:{PANEL_PORT}/rrd_static/{filename}?url={rrd_url}"
+    return f"/rrd_static/{filename}?url={rrd_url}"
 
 
 def _get_cdn_viewer_html(version: str) -> str:

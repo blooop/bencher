@@ -19,10 +19,10 @@ logging.basicConfig(level=logging.INFO)
 class _CorsStaticHandler(StaticFileHandler):
     """A Tornado static file handler that adds CORS headers.
 
-    Required for rerun integration: the rerun web viewer (localhost:9090)
-    fetches .rrd files from the Panel server (localhost:8051).  Without
-    Access-Control-Allow-Origin and OPTIONS preflight handling the browser
-    silently blocks the cross-origin fetch and the viewer shows 0 B.
+    Required for rerun integration: the rerun web viewer fetches .rrd files
+    from the Panel server.  Without Access-Control-Allow-Origin and OPTIONS
+    preflight handling the browser silently blocks the cross-origin fetch
+    and the viewer shows 0 B.
 
     Note: ``Allow-Origin: *`` is appropriate here because this server is
     intended for local development only, not public-facing deployments.
@@ -128,12 +128,6 @@ class BenchPlotServer:
 
         extra = self._rrd_extra_patterns()
 
-        # When serving .rrd files, use a known port so rerun iframe URLs work.
-        if port is None and extra:
-            from bencher.utils_rrd import PANEL_PORT
-
-            port = PANEL_PORT
-
         serve_kwargs = dict(
             title=bench_name,
             threaded=True,
@@ -141,9 +135,8 @@ class BenchPlotServer:
             address="0.0.0.0",
             websocket_origin=["*"],
             extra_patterns=extra,
+            port=port if port is not None else 0,
         )
-        if port is not None:
-            serve_kwargs["port"] = port
 
         return pn.serve(plots_instance, **serve_kwargs)
 

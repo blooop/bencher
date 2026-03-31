@@ -394,10 +394,11 @@ class BenchRunner:
             save (bool): Whether to save the report to disk
             debug (bool): Whether to enable debug mode for publishing
         """
-        if save:
-            report.save(
+        if save or show:
+            report_path = report.save(
                 directory="reports", filename=f"{report.bench_name}.html", in_html_folder=False
             )
+            logging.info("Static report: file://%s", report_path.absolute())
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
