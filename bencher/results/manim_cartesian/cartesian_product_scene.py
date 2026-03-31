@@ -370,44 +370,51 @@ class TimelineShape(Shape):
         finally:
             self._skip_labels = prev
 
-    def draw_label_overlay(
-        self, img: ImageDraw.ImageDraw, strip_x: int, strip_y: int, strip_h: int
-    ) -> None:
-        """Draw frame labels at fixed pixel size on the final frame."""
-        font_label = _get_font(12)
-        frame_w, _ = self._outer_frame_size()
-        for i in range(self.count):
-            label = f"t={i}"
-            bbox = img.textbbox((0, 0), label, font=font_label)
-            tw = bbox[2] - bbox[0]
-            fx = strip_x + FILM_PAD + i * (frame_w + FILM_FRAME_GAP)
-            lx = fx + (frame_w - tw) // 2
-            img.text((lx, strip_y + strip_h + 2), label, fill=FILM_LABEL_COLOR, font=font_label)
+    def render_strip_image(self, v_scale: float = 1.0) -> Image.Image:
+        """Render the strip (without labels) into an offscreen image.
 
-    def draw_label_overlay_for_box(
-        self, img: ImageDraw.ImageDraw, box_x: int, box_y: int, box_w: int, box_h: int
-    ) -> None:
-        """Draw fixed-size label overlay below a rendered box.
-
-        Recomputes frame positions proportionally from the rendered box width.
+        The strip is drawn at full resolution and then uniformly scaled by
+        *v_scale* (typically chosen to fit the canvas height).  The returned
+        image can be pasted directly — PIL clips any overflow naturally.
         """
+        sw, sh = self.strip_size()
+        strip = Image.new("RGB", (sw, sh), BG_COLOR)
+        draw = ImageDraw.Draw(strip)
+        self.draw_without_labels(draw, 0, 0)
+        if v_scale < 1.0:
+            new_w = max(1, int(sw * v_scale))
+            new_h = max(1, int(sh * v_scale))
+            strip = strip.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        return strip
+
+    def draw_label_overlay_for_viewport(
+        self,
+        img: ImageDraw.ImageDraw,
+        strip_x: int,
+        strip_y: int,
+        strip_h: int,
+        scale: float,
+        canvas_w: int,
+    ) -> None:
+        """Draw frame labels at fixed pixel size for frames visible on canvas."""
         font_label = _get_font(12)
-        # The strip content (without labels) spans the full box width.
-        # Compute proportional frame positions from the original layout.
-        orig_w, _ = self.strip_size()
-        scale = box_w / max(orig_w, 1)
         frame_w, _ = self._outer_frame_size()
-        scaled_frame_w = frame_w * scale
-        scaled_pad = FILM_PAD * scale
-        scaled_gap = FILM_FRAME_GAP * scale
-        label_y = box_y + box_h + 2
+        label_y = strip_y + strip_h + 2
         for i in range(self.count):
+            fx = strip_x + (FILM_PAD + i * (frame_w + FILM_FRAME_GAP)) * scale
+            scaled_fw = frame_w * scale
+            center = fx + scaled_fw / 2
+            if center < 0 or center > canvas_w:
+                continue
             label = f"t={i}"
             bbox = img.textbbox((0, 0), label, font=font_label)
             tw = bbox[2] - bbox[0]
-            fx = box_x + scaled_pad + i * (scaled_frame_w + scaled_gap)
-            lx = fx + (scaled_frame_w - tw) / 2
-            img.text((int(lx), label_y), label, fill=FILM_LABEL_COLOR, font=font_label)
+            img.text(
+                (int(fx + (scaled_fw - tw) / 2), label_y),
+                label,
+                fill=FILM_LABEL_COLOR,
+                font=font_label,
+            )
 
     def _deep_copy(self) -> "Shape":
         return TimelineShape(self.inner._deep_copy(), self.count)  # pylint: disable=protected-access
@@ -670,56 +677,70 @@ def render_animation(
 
         # Detect top-level StrobeShape for fixed-size tally overlay
         strobe_overlay = isinstance(shape, StrobeShape) and not isinstance(shape, TimelineShape)
-        # Detect top-level TimelineShape for fixed-size label overlay
+        # Detect top-level TimelineShape for constant-size rendering
         timeline_overlay = isinstance(shape, TimelineShape)
-        if strobe_overlay:
+
+        if timeline_overlay:
+            # Film strip: scale to fit vertically only, clip horizontally.
+            # This keeps sprockets/frames legible regardless of frame count.
+            sw, sh = shape.strip_size()
+            avail_w = width - 40
+            avail_h = height - shape_area_top - 10 - FILM_LABEL_H
+            v_scale = min(avail_h / max(sh, 1), 1.0)
+
+            strip_img = shape.render_strip_image(v_scale)
+            rendered_w, rendered_h = strip_img.size
+
+            # Center if fits, left-align if wider than canvas
+            if rendered_w <= avail_w:
+                nominal_x = (width - rendered_w) // 2
+            else:
+                nominal_x = 20
+
+            paste_x = nominal_x + x_offset
+            paste_y = shape_area_top + (avail_h - rendered_h) // 2
+            img.paste(strip_img, (paste_x, paste_y))
+
+            shape.draw_label_overlay_for_viewport(
+                draw, paste_x, paste_y, rendered_h, v_scale, width
+            )
+        elif strobe_overlay:
             # Use content box (no tally row) for scale — reserve fixed space for overlay
             sw, sh = shape.content_box_size()
             tally_reserve = shape.cfg.strobe_mark_row_h + shape.cfg.strobe_mark_row_h // 2
             avail_w = width - 40
             avail_h = height - shape_area_top - 10 - tally_reserve
-        elif timeline_overlay:
-            # Use strip size (no label row) for scale — reserve fixed space for overlay
-            sw, sh = shape.strip_size()
-            avail_w = width - 40
-            avail_h = height - shape_area_top - 10 - FILM_LABEL_H
         else:
             sw, sh = shape.size()
             avail_w = width - 40
             avail_h = height - shape_area_top - 10
 
-        scale = min(avail_w / max(sw, 1), avail_h / max(sh, 1), 1.0)
+        if not timeline_overlay:
+            scale = min(avail_w / max(sw, 1), avail_h / max(sh, 1), 1.0)
 
-        if scale < 1.0:
-            big = Image.new("RGB", (sw + 40, sh + 10), BG_COLOR)
-            big_draw = ImageDraw.Draw(big)
-            if strobe_overlay:
-                shape.draw_without_tally(big_draw, 20, 5)
-            elif timeline_overlay:
-                shape.draw_without_labels(big_draw, 20, 5)
+            if scale < 1.0:
+                big = Image.new("RGB", (sw + 40, sh + 10), BG_COLOR)
+                big_draw = ImageDraw.Draw(big)
+                if strobe_overlay:
+                    shape.draw_without_tally(big_draw, 20, 5)
+                else:
+                    shape.draw(big_draw, 20, 5)
+                new_w = int(big.width * scale)
+                new_h = int(big.height * scale)
+                big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                paste_x = (width - big.width) // 2 + x_offset
+                paste_y = shape_area_top + (avail_h - big.height) // 2
+                img.paste(big, (paste_x, paste_y))
+                if strobe_overlay:
+                    shape.draw_tally_overlay_for_box(draw, paste_x, paste_y, new_w, new_h)
             else:
-                shape.draw(big_draw, 20, 5)
-            new_w = int(big.width * scale)
-            new_h = int(big.height * scale)
-            big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
-            paste_x = (width - big.width) // 2 + x_offset
-            paste_y = shape_area_top + (avail_h - big.height) // 2
-            img.paste(big, (paste_x, paste_y))
-            if strobe_overlay:
-                shape.draw_tally_overlay_for_box(draw, paste_x, paste_y, new_w, new_h)
-            elif timeline_overlay:
-                shape.draw_label_overlay_for_box(draw, paste_x, paste_y, new_w, new_h)
-        else:
-            sx = (width - sw) // 2 + x_offset
-            sy = shape_area_top + (avail_h - sh) // 2
-            if strobe_overlay:
-                shape.draw_without_tally(draw, sx, sy)
-                shape.draw_tally_overlay_for_box(draw, sx, sy, sw, sh)
-            elif timeline_overlay:
-                shape.draw_without_labels(draw, sx, sy)
-                shape.draw_label_overlay_for_box(draw, sx, sy, sw, sh)
-            else:
-                shape.draw(draw, sx, sy)
+                sx = (width - sw) // 2 + x_offset
+                sy = shape_area_top + (avail_h - sh) // 2
+                if strobe_overlay:
+                    shape.draw_without_tally(draw, sx, sy)
+                    shape.draw_tally_overlay_for_box(draw, sx, sy, sw, sh)
+                else:
+                    shape.draw(draw, sx, sy)
 
         # Line 1: dimension name (always visible)
         if current_dim_label:
