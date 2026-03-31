@@ -130,7 +130,7 @@ class BenchMeta(bn.ParametrizedSweep):
             time_offsets = [0.0, 0.3, 0.7, 1.0]
             base_time = datetime(2000, 1, 1)
             for i, offset in enumerate(time_offsets):
-                benchable._time_offset = offset
+                benchable._time_offset = offset  # pylint: disable=protected-access
                 run_cfg.clear_cache = True
                 run_cfg.clear_history = i == 0
                 res = bench.plot_sweep(
