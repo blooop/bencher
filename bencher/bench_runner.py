@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Protocol, runtime_checkable
 import logging
+import threading
 import warnings
 import inspect
 from datetime import datetime
@@ -394,11 +395,10 @@ class BenchRunner:
             save (bool): Whether to save the report to disk
             debug (bool): Whether to enable debug mode for publishing
         """
-        if save or show:
-            report_path = report.save(
+        if save:
+            report.save(
                 directory="reports", filename=f"{report.bench_name}.html", in_html_folder=False
             )
-            logging.info("Static report: file://%s", report_path.absolute())
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
@@ -407,6 +407,25 @@ class BenchRunner:
                 report.publish(remote_callback=self.publisher, debug=debug)
         if show:
             self.servers.append(report.show(self.run_cfg))
+            if not save:
+                self._save_in_background(report)
+
+    @staticmethod
+    def _save_in_background(report: BenchReport) -> None:
+        """Save a static HTML copy in a daemon thread so it doesn't block the live server."""
+
+        def _save():
+            try:
+                report_path = report.save(
+                    directory="reports",
+                    filename=f"{report.bench_name}.html",
+                    in_html_folder=False,
+                )
+                logging.info("Static report: file://%s", report_path.absolute())
+            except Exception:  # pylint: disable=broad-except
+                logging.exception("Background report save failed")
+
+        threading.Thread(target=_save, daemon=True).start()
 
     def show(
         self,
