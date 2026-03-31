@@ -1,7 +1,5 @@
 """Auto-generated example: Plot Type: Line."""
 
-from typing import Any
-
 import bencher as bn
 
 import math
@@ -14,10 +12,8 @@ class LatencyProfile(bn.ParametrizedSweep):
 
     distance = bn.ResultVar("m", doc="Latency distance metric")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.distance = math.sin(math.pi * self.load) + 0.5
-        return super().__call__()
 
 
 def example_plot_line(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

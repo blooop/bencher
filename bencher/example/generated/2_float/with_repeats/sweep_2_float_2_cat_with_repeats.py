@@ -1,7 +1,5 @@
 """Auto-generated example: 2 Float, 2 Categorical (with repeats)."""
 
-from typing import Any
-
 import random
 import math
 
@@ -18,8 +16,7 @@ class CompressionSuite(bn.ParametrizedSweep):
 
     ratio = bn.ResultVar(units="x", doc="Compression ratio")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         codec_eff = {"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}[self.codec]
         effort_mult = {"fast": 0.8, "balanced": 1.0, "max": 1.15}[self.effort]
         self.ratio = (
@@ -29,7 +26,6 @@ class CompressionSuite(bn.ParametrizedSweep):
             * (1.0 + 0.3 * math.log2(self.block_size / 512))
         )
         self.ratio += random.gauss(0, 0.15 * 0.3)
-        return super().__call__()
 
 
 def example_sweep_2_float_2_cat_with_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

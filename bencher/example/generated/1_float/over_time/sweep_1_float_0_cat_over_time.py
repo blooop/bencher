@@ -1,7 +1,5 @@
 """Auto-generated example: 1 Float, 0 Categorical (over time)."""
 
-from typing import Any
-
 import random
 import math
 import bencher as bn
@@ -17,12 +15,10 @@ class SortBenchmark(bn.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.time = self.array_size * math.log2(self.array_size + 1) * 0.001
         self.time += random.gauss(0, 0.1 * self.time)
         self.time += self._time_offset * 10
-        return super().__call__()
 
 
 def example_sweep_1_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

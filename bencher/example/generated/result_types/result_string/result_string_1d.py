@@ -1,7 +1,5 @@
 """Auto-generated example: Result String: 1D input."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -15,12 +13,10 @@ class LogFormatter(bn.ParametrizedSweep):
 
     report = bn.ResultString(doc="Formatted log report")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         detail = int(math.ceil(self.verbosity * 5))
         text = f"Level: {self.level}\n\tVerbosity: {self.verbosity:.2f}\n\tDetail depth: {detail}"
         self.report = bn.tabs_in_markdown(text)
-        return super().__call__()
 
 
 def example_result_string_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

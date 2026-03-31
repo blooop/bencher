@@ -1,7 +1,5 @@
 """Auto-generated example: 1 Float, 3 Categorical (over time repeats)."""
 
-from typing import Any
-
 import random
 import math
 import bencher as bn
@@ -20,8 +18,7 @@ class SortFullMatrix(bn.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         algo_factor = {"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}[self.algorithm]
         dist_factor = {"uniform": 1.0, "sorted": 0.6, "reversed": 1.8}[self.distribution]
         stab_factor = {"stable": 1.1, "unstable": 1.0}[self.stability]
@@ -35,7 +32,6 @@ class SortFullMatrix(bn.ParametrizedSweep):
         )
         self.time += random.gauss(0, 0.15 * self.time)
         self.time += self._time_offset * 10
-        return super().__call__()
 
 
 def example_sweep_1_float_3_cat_over_time_repeats(

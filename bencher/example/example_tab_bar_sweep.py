@@ -19,9 +19,7 @@ class TabBarSweep(bn.ParametrizedSweep):
     rows_used = bn.ResultVar(units="rows", doc="How many rows the tabs wrap into")
     overflow = bn.ResultVar(units="bool", doc="1 if tabs exceed max bar height, else 0")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         btn_pad_x = MARKER_SIZE
         btn_pad_y = int(MARKER_SIZE * 0.7)
         char_w = MARKER_SIZE * 0.6
@@ -89,7 +87,6 @@ class TabBarSweep(bn.ParametrizedSweep):
         filepath = bn.gen_image_path("tab_bar")
         img.save(filepath, "PNG")
         self.tab_bar_image = str(filepath)
-        return super().__call__()
 
 
 def example_tab_bar_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

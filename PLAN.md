@@ -171,7 +171,11 @@ Add new tests:
 
 ## Verification
 
-1. After Phase 1: `pixi run ci` — all existing tests pass (backward compat confirmed)
-2. After Phase 2-4: `pixi run ci` — everything passes with new interface
-3. Spot-check: `pixi run python bencher/example/example_simple_float.py` works
-4. Verify deprecation: temporarily revert one example to `__call__` pattern, confirm warning is emitted
+1. After Phase 1: `pixi run ci` — all existing tests pass (backward compat confirmed) ✓
+2. After Phase 2-4: `pixi run ci` — everything passes with new interface ✓
+3. Spot-check: `pixi run python bencher/example/example_simple_float.py` works ✓
+4. Verify deprecation: test_benchmark_method.py confirms warning is emitted ✓
+
+## Status: IMPLEMENTED
+
+All phases complete. 1128 tests pass, 6 new tests added for benchmark() interface.

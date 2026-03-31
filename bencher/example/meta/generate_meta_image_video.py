@@ -5,8 +5,6 @@ simple sweeps and rich feature demonstrations (progressive sweeps, mixed
 results, video grids, composable containers).
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -43,15 +41,13 @@ class PolygonRenderer(bn.ParametrizedSweep):
     polygon = bn.ResultImage(doc="Rendered polygon image")
     area = bn.ResultVar("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
         filepath = bn.gen_image_path("polygon")
         img.save(filepath, "PNG")
         self.polygon = str(filepath)
-        self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (4 * math.tan(math.pi / self.sides))
-        return super().__call__()"""
+        self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (4 * math.tan(math.pi / self.sides))"""
 )
 
 _VIDEO_CLASS_CODE = (
@@ -66,8 +62,7 @@ class PolygonAnimator(bn.ParametrizedSweep):
     animation = bn.ResultVideo(doc="Rotating polygon video")
     frame_snapshot = bn.ResultImage(doc="Last frame snapshot")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         vid_writer = bn.VideoWriter()
         num_frames = 8
         for i in range(num_frames):
@@ -76,8 +71,7 @@ class PolygonAnimator(bn.ParametrizedSweep):
             img = _draw_polygon_image(points, "white", linewidth=3, size=200)
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
-        self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)
-        return super().__call__()"""
+        self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)"""
 )
 
 _EXTRA_IMPORTS = ["import math", "import numpy as np", "from PIL import Image, ImageDraw"]
@@ -103,12 +97,10 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
     result_kind = bn.StringSweep(["result_image", "result_video"], doc="Image or video")
     input_dims = bn.IntSweep(default=0, bounds=(0, 2), doc="Number of input dimensions")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         combos = IMAGE_SWEEP_COMBOS if self.result_kind == "result_image" else VIDEO_SWEEP_COMBOS
         if self.input_dims not in combos:
-            return super().__call__()
+            return
 
         info = combos[self.input_dims]
         if self.result_kind == "result_image":
@@ -141,8 +133,6 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
             run_kwargs={"level": level},
         )
 
-        return super().__call__()
-
 
 # --- Rich examples ---------------------------------------------------------
 
@@ -161,8 +151,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         doc="Rich example to generate",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         name = self.example_name
         generator = {
             "result_image_progressive": self._gen_progressive,
@@ -172,7 +161,6 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "result_image_over_time": self._gen_over_time,
         }[name]
         generator()
-        return super().__call__()
 
     # -- Progressive sweep (1 -> 2 -> 3 parameters) ---------------------------
 
@@ -308,8 +296,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             '    num_frames = bn.IntSweep(default=5, bounds=[2, 20], doc="Frame count")\n'
             "    polygon_vid = bn.ResultVideo()\n"
             "\n"
-            "    def __call__(self, **kwargs):\n"
-            "        self.update_params_from_kwargs(**kwargs)\n"
+            "    def benchmark(self):\n"
             "        vr = bn.ComposableContainerVideo()\n"
             "        for i in range(self.num_frames):\n"
             "            angle = 360.0 * i / self.num_frames\n"

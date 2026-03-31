@@ -1,7 +1,5 @@
 """Auto-generated example: 1 Float, 1 Categorical (no repeats)."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -15,11 +13,9 @@ class SortComparison(bn.ParametrizedSweep):
 
     time = bn.ResultVar(units="ms", doc="Sort duration")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         algo_factor = {"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}[self.algorithm]
         self.time = algo_factor * self.array_size * math.log2(self.array_size + 1) * 0.001
-        return super().__call__()
 
 
 def example_sweep_1_float_1_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

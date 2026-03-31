@@ -1,7 +1,5 @@
 """Auto-generated example: Composable Video: ComposeType.overlay."""
 
-from typing import Any
-
 import math
 import numpy as np
 from PIL import Image, ImageDraw
@@ -34,8 +32,7 @@ class BenchableImageResult(bn.ParametrizedSweep):
     polygon = bn.ResultImage(doc="Rendered polygon image")
     area = bn.ResultVar("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
         filepath = bn.gen_image_path("polygon")
@@ -44,7 +41,6 @@ class BenchableImageResult(bn.ParametrizedSweep):
         self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (
             4 * math.tan(math.pi / self.sides)
         )
-        return super().__call__()
 
 
 class _VideoComposeDemo(BenchableImageResult):
@@ -53,8 +49,7 @@ class _VideoComposeDemo(BenchableImageResult):
     num_frames = bn.IntSweep(default=6, bounds=[3, 12], doc="Number of frames")
     composed_video = bn.ResultVideo(doc="Composed video output")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         vid = bn.ComposableContainerVideo()
         for i in range(self.num_frames):
             angle = 360.0 * i / self.num_frames

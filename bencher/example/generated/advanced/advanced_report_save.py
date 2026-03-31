@@ -1,7 +1,5 @@
 """Auto-generated example: Report Customization — saving and appending content."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -11,10 +9,8 @@ class QuadraticFit(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
     y = bn.ResultVar(units="ul", doc="Quadratic output")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.y = self.x**2 - 1
-        return super().__call__()
 
 
 def example_advanced_report_save(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

@@ -1,7 +1,5 @@
 """Auto-generated example: Optimise 1 objective(s), 1D input."""
 
-from typing import Any
-
 import math
 import random
 
@@ -19,14 +17,12 @@ class ServerOptimizer(bn.ParametrizedSweep):
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.performance = math.log2(self.cpu_cores + 1) * math.sqrt(self.memory_gb) * 10
         self.cost = 0.05 * self.cpu_cores + 0.02 * self.memory_gb
         if self.noise_scale > 0:
             self.performance += random.gauss(0, self.noise_scale * 5)
             self.cost += random.gauss(0, self.noise_scale * 0.1)
-        return super().__call__()
 
 
 def example_optim_1_objective_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

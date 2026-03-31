@@ -199,12 +199,27 @@ class ParametrizedSweep(Parameterized):
         )
 
     def __call__(self, **kwargs) -> dict:
-        """This is the function that is called to record data samples in the benchmarking function.  It should be overridden with your custom logic and then call the parent method  "return super().__call__(**kwargs)"
+        """Dispatch to benchmark() if overridden, otherwise use legacy path.
 
         Returns:
-            dict: a dictionary with all the result variables in the ParametrisedSweep class as named key value pairs.
+            dict: a dictionary with all the result variables as named key value pairs.
         """
+        if type(self).benchmark is not ParametrizedSweep.benchmark:
+            # New-style: subclass overrides benchmark()
+            self.update_params_from_kwargs(**kwargs)
+            self.benchmark()
+            return self.get_results_values_as_dict()
+        # Legacy path: subclass overrides __call__() and handles
+        # update_params_from_kwargs + super().__call__() itself.
         return self.get_results_values_as_dict()
+
+    def benchmark(self):
+        """Override this with your benchmark logic.
+
+        When called, all sweep parameters (self.x, etc.) are already set.
+        Set result variables (self.result, etc.) directly on self.
+        No need to call update_params_from_kwargs or super().__call__().
+        """
 
     def plot_hmap(self, **kwargs):
         return self.__call__(**kwargs)["hmap"]

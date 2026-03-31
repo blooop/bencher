@@ -1,7 +1,5 @@
 """Auto-generated example: Max Time Events — cap over_time history."""
 
-from typing import Any
-
 import random
 import bencher as bn
 from datetime import datetime, timedelta
@@ -21,11 +19,9 @@ class LatencyMonitor(bn.ParametrizedSweep):
 
     _drift = 0.0  # set externally per snapshot
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"/api/users": 45, "/api/orders": 120}[self.endpoint]
         self.latency = base + self._drift + random.gauss(0, 5)
-        return super().__call__()
 
 
 def example_advanced_max_time_events(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

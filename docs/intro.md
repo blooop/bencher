@@ -12,10 +12,8 @@ class SimpleFloat(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], units="rad", samples=30)
     out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
-        return super().__call__(**kwargs)
 
 bench = SimpleFloat().to_bench()
 bench.plot_sweep()

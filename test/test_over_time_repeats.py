@@ -4,7 +4,6 @@
 
 import random
 from datetime import datetime, timedelta
-from typing import Any
 
 import holoviews as hv
 import panel as pn
@@ -21,11 +20,9 @@ class SimpleBench(bn.ParametrizedSweep):
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.2, "local": 0.3}[self.backend]
         self.latency = base + self.offset + random.gauss(0, 0.05)
-        return super().__call__()
 
 
 class FloatBench(bn.ParametrizedSweep):
@@ -37,11 +34,9 @@ class FloatBench(bn.ParametrizedSweep):
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.0, "local": 0.5}[self.backend]
         self.time = base * self.size * 0.01 + self.offset + random.gauss(0, 0.02)
-        return super().__call__()
 
 
 def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, **cfg_kwargs):
@@ -122,10 +117,8 @@ class ZeroDimBench(bn.ParametrizedSweep):
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.value = 2.844 + self.offset
-        return super().__call__()
 
 
 # Module-scoped fixtures for shared benchmark results to reduce test execution time

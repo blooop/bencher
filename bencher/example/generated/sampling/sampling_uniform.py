@@ -1,7 +1,5 @@
 """Auto-generated example: Sampling: Uniform."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -14,10 +12,8 @@ class UniformSampler(bn.ParametrizedSweep):
 
     latency = bn.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
-        return super().__call__()
 
 
 def example_sampling_uniform(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

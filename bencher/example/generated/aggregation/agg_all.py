@@ -1,7 +1,5 @@
 """Auto-generated example: Aggregate to 1-D (True)."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -13,15 +11,13 @@ class GradientScale(bn.ParametrizedSweep):
 
     out = bn.ResultVar(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.scale == "linear":
             self.out = self.x
         elif self.scale == "quadratic":
             self.out = self.x**2
         else:
             self.out = self.x**0.5
-        return super().__call__()
 
 
 def example_agg_all(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

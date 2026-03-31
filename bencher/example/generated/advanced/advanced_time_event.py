@@ -1,7 +1,5 @@
 """Auto-generated example: Time Events — track metrics across discrete events."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -19,12 +17,10 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
 
     _event_idx = 0  # set externally per event
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"light": 1000, "medium": 500, "heavy": 200}[self.workload]
         # Simulate gradual improvement across events
         self.throughput = base + self._event_idx * 30
-        return super().__call__()
 
 
 def example_advanced_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

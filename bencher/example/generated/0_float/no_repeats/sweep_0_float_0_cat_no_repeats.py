@@ -1,7 +1,5 @@
 """Auto-generated example: 0 Float, 0 Categorical (no repeats)."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -10,10 +8,8 @@ class BaselineCheck(bn.ParametrizedSweep):
 
     baseline = bn.ResultVar(units="ms", doc="Baseline latency")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.baseline = 42.0
-        return super().__call__()
 
 
 def example_sweep_0_float_0_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

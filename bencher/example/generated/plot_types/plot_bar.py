@@ -1,7 +1,5 @@
 """Auto-generated example: Plot Type: Bar."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -12,11 +10,9 @@ class CacheCompare(bn.ParametrizedSweep):
 
     distance = bn.ResultVar("m", doc="Response distance metric")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
         self.distance = lookup[self.backend]
-        return super().__call__()
 
 
 def example_plot_bar(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

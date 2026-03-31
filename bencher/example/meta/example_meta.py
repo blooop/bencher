@@ -1,4 +1,3 @@
-from typing import Any
 from datetime import datetime, timedelta
 
 import bencher as bn
@@ -48,9 +47,7 @@ class BenchableObject(bn.ParametrizedSweep):
     )
     _time_offset = 0.0  # offset added to output for over-time support
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         x, y, z = self.float1, self.float2, self.float3
 
         # Map categoricals to continuous parameters that shape the function.
@@ -82,8 +79,6 @@ class BenchableObject(bn.ParametrizedSweep):
             x=0, y=0, text=f"distance:{self.distance}\nnoise:{self.sample_noise}"
         )
 
-        return super().__call__()
-
 
 class BenchMeta(bn.ParametrizedSweep):
     """This class uses bencher to display the multidimensional types bencher can represent"""
@@ -102,9 +97,7 @@ class BenchMeta(bn.ParametrizedSweep):
 
     plots = bn.ResultReference(units="int")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         run_cfg = bn.BenchRunCfg()
         run_cfg.level = self.level
         run_cfg.repeats = self.sample_with_repeats
@@ -160,8 +153,6 @@ class BenchMeta(bn.ParametrizedSweep):
 
         self.plots = bn.ResultReference()
         self.plots.obj = res.to_auto()
-
-        return super().__call__()
 
 
 def example_meta(

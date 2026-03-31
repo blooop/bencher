@@ -1,7 +1,5 @@
 """Auto-generated example: Aggregate 2 Categoricals (list)."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -15,8 +13,7 @@ class GradientSurface(bn.ParametrizedSweep):
 
     out = bn.ResultVar(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.direction == "diagonal":
             base = self.x + self.y
         elif self.direction == "horizontal":
@@ -29,7 +26,6 @@ class GradientSurface(bn.ParametrizedSweep):
             self.out = base**2
         else:
             self.out = base**0.5
-        return super().__call__()
 
 
 def example_agg_list_2_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

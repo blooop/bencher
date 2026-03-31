@@ -26,7 +26,7 @@ To test a specific example: `pixi run python bencher/example/example_simple_floa
 
 ### How to Use Bencher
 See **[docs/how_to_use_bencher.md](docs/how_to_use_bencher.md)** for the complete guide
-on using bencher — sweep types, result types, the `__call__` pattern, plot callbacks,
+on using bencher — sweep types, result types, the `benchmark()` pattern, plot callbacks,
 and common mistakes. **Read this before writing any benchmark or example.**
 
 ### Updating Examples & Docs

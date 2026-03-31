@@ -1,7 +1,5 @@
 """Auto-generated example: Cache Patterns — run_tag and cache_samples."""
 
-from typing import Any
-
 import math
 import random
 import bencher as bn
@@ -23,12 +21,10 @@ class NoisySensor(bn.ParametrizedSweep):
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.reading = 0.5 + 0.03 * self.temperature + math.sin(self.temperature * 0.1)
         if self.noise_scale > 0:
             self.reading += random.gauss(0, self.noise_scale)
-        return super().__call__()
 
 
 def example_advanced_cache_patterns(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

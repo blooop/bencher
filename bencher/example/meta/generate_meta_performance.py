@@ -5,8 +5,6 @@ performance tracking across commits via the documentation gallery.
 """
 
 import inspect
-from typing import Any
-
 import bencher as bn
 from bencher.example.example_self_benchmark import BencherSelfBenchmark, TrivialWorkload
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
@@ -24,15 +22,11 @@ class MetaPerformance(MetaGeneratorBase):
 
     example = bn.StringSweep(PERFORMANCE_EXAMPLES, doc="Which performance example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "perf_self_benchmark":
             self._generate_self_benchmark()
         elif self.example == "perf_self_benchmark_over_time":
             self._generate_self_benchmark_over_time()
-
-        return super().__call__()
 
     def _generate_self_benchmark(self):
         """Generate the self-benchmark example."""

@@ -3,8 +3,6 @@
 Demonstrates how the level parameter controls sampling density.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -14,9 +12,7 @@ OUTPUT_DIR = "levels"
 class MetaLevels(MetaGeneratorBase):
     """Generate Python example demonstrating the level sampling system."""
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         imports = "import bencher as bn\nfrom bencher.example.meta.example_meta import BenchMeta"
         levels_desc = (
             "Sample levels let you perform parameter sweeps without "
@@ -58,8 +54,6 @@ class MetaLevels(MetaGeneratorBase):
             body=body,
             class_code="",
         )
-
-        return super().__call__()
 
 
 def example_meta_levels(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

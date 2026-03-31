@@ -11,12 +11,8 @@ class YamlConfigSweep(bn.ParametrizedSweep):
 
     total_workload = bn.ResultVar(units="tasks", doc="Total workload summed from the YAML list")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         self.total_workload = sum(self.workload.value())
-
-        return super().__call__()
 
 
 def example_yaml_sweep_list(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

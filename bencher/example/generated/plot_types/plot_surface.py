@@ -1,7 +1,5 @@
 """Auto-generated example: Plot Type: Surface."""
 
-from typing import Any
-
 import bencher as bn
 
 import math
@@ -15,10 +13,8 @@ class SurfaceDemo(bn.ParametrizedSweep):
 
     distance = bn.ResultVar("m", doc="Surface height")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
-        return super().__call__()
 
 
 def example_plot_surface(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

@@ -1,7 +1,5 @@
 """Auto-generated example: Rerun Capture — embed spatial visualizations in sweep reports."""
 
-from typing import Any
-
 import math
 import bencher as bn
 
@@ -29,8 +27,7 @@ class RerunSweep(bn.ParametrizedSweep):
 
     out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
 
         # To capture rerun output as a report panel:
@@ -41,8 +38,6 @@ class RerunSweep(bn.ParametrizedSweep):
         #
         # capture_rerun_window() embeds the data inline (base64) and loads
         # the rerun viewer from CDN — no local file server needed.
-
-        return super().__call__(**kwargs)
 
 
 def example_rerun_capture_window(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

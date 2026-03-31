@@ -3,8 +3,6 @@
 Shows uniform bounds, custom sample_values, and Int vs Float.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -22,10 +20,8 @@ class UniformSampler(bn.ParametrizedSweep):
 
     latency = bn.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
-        return super().__call__()'''
+    def benchmark(self):
+        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)'''
 
 _CUSTOM_CLASS_CODE = '''\
 class CustomSampler(bn.ParametrizedSweep):
@@ -35,10 +31,8 @@ class CustomSampler(bn.ParametrizedSweep):
 
     latency = bn.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
-        return super().__call__()'''
+    def benchmark(self):
+        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)'''
 
 _INT_FLOAT_CLASS_CODE = '''\
 class IntFloatCompare(bn.ParametrizedSweep):
@@ -49,10 +43,8 @@ class IntFloatCompare(bn.ParametrizedSweep):
 
     output = bn.ResultVar("ul", doc="Computed output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
-        return super().__call__()'''
+    def benchmark(self):
+        self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)'''
 
 
 class MetaSampling(MetaGeneratorBase):
@@ -60,9 +52,7 @@ class MetaSampling(MetaGeneratorBase):
 
     strategy = bn.StringSweep(STRATEGIES, doc="Sampling strategy to demonstrate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         filename = f"sampling_{self.strategy}"
         function_name = f"example_sampling_{self.strategy}"
         title = f"Sampling: {self.strategy.replace('_', ' ').title()}"
@@ -148,8 +138,6 @@ class MetaSampling(MetaGeneratorBase):
                 ),
                 run_kwargs={"level": 3},
             )
-
-        return super().__call__()
 
 
 def example_meta_sampling(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
