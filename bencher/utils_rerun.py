@@ -22,10 +22,12 @@ or "data source left unexpectedly" messages.
    standalone use but is NOT needed for the normal report flow.
 
    CORS is critical: the rerun web viewer runs on a different origin
-   (localhost:9090) and fetches ``.rrd`` files from the Panel origin
-   (localhost:8051).  Without ``Access-Control-Allow-Origin: *`` **and**
-   ``OPTIONS`` preflight handling, browsers silently block the fetch and the
-   viewer shows 0 B of data.
+   (localhost:9090) and fetches ``.rrd`` files from the Panel server.
+   Without ``Access-Control-Allow-Origin: *`` **and** ``OPTIONS`` preflight
+   handling, browsers silently block the fetch and the viewer shows 0 B of
+   data.  The Panel port is auto-assigned (port 0) so that multiple
+   benchmarks can run in parallel; iframe URLs are built with JavaScript
+   to resolve the actual port at render time.
 
 3. **Viewer** — ``rr.start_web_viewer_server()`` launches a *local* rerun
    web viewer on port 9090.  This is the viewer that actually renders the

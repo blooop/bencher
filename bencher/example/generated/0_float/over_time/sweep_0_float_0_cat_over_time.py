@@ -1,7 +1,5 @@
 """Auto-generated example: 0 Float, 0 Categorical (over time)."""
 
-from typing import Any
-
 import random
 import bencher as bn
 from datetime import datetime, timedelta
@@ -14,12 +12,10 @@ class BaselineCheck(bn.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.baseline = 42.0
         self.baseline += random.gauss(0, 0.1 * 5)
         self.baseline += self._time_offset * 10
-        return super().__call__()
 
 
 def example_sweep_0_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

@@ -12,10 +12,8 @@ class SimpleFloat(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], units="rad", samples=30)
     out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
-        return super().__call__(**kwargs)
 
 bench = SimpleFloat().to_bench()
 bench.plot_sweep()
@@ -67,7 +65,7 @@ As you add input parameters, Bencher automatically adapts the visualization:
 | 2 floats | [Heatmap](reference/meta/2_float/no_repeats/index) |
 | Categories only | [Bar chart](reference/meta/0_float/no_repeats/index) |
 
-No code changes to plotting logic are needed — the type signature of your parameters drives the selection. See [Automatic Plot Selection](concepts.md#automatic-plot-selection) for how this works.
+No code changes to plotting logic are needed — the type signature of your parameters drives the selection. See [Automatic Plot Selection](concepts.md#automatic-plot-selection) for how this works, and the [Cartesian Animation](reference/meta/cartesian_animation/index) gallery for an animated visualization of how each dimension builds on the last.
 
 ## Repeats and Statistics
 

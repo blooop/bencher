@@ -92,6 +92,10 @@ evaluations is `s1 * s2 * ... * sN * repeats`. Each combination is represented a
 index tuple (for storage in the N-D array) and a value tuple (for passing to the benchmark
 function).
 
+See the [Cartesian Animation](reference/meta/cartesian_animation/index) gallery for an
+animated visualization of how each dimension builds on the last — from a single point to a
+line, grid, 3D stack, repeated measurements, and time-series film strip.
+
 ### Execution
 
 Each parameter combination is hashed to produce a persistent cache key. Results are stored

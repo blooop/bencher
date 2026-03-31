@@ -1,7 +1,5 @@
 """Auto-generated example: Result Vec: 2D input."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -15,13 +13,11 @@ class SystemMetrics(bn.ParametrizedSweep):
 
     metrics = bn.ResultVec(3, "%", doc="CPU, memory, disk utilization")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         cpu = 20.0 + 70.0 * math.sin(math.pi * self.load / 2.0)
         mem = 30.0 + 50.0 * self.load * math.log1p(self.instances)
         disk = 10.0 + 40.0 * math.sqrt(self.load * self.instances / 10.0)
         self.metrics = [cpu, mem, disk]
-        return super().__call__()
 
 
 def example_result_vec_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

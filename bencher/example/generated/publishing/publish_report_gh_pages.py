@@ -1,7 +1,5 @@
 """Auto-generated example: Publish Report to GitHub Pages."""
 
-from typing import Any
-
 import math
 import bencher as bn
 
@@ -14,10 +12,8 @@ class SimpleFloat(bn.ParametrizedSweep):
     )
     out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
-        return super().__call__(**kwargs)
 
 
 def example_publish_report_gh_pages(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

@@ -1,7 +1,5 @@
 """Auto-generated example: 2 Float, 0 Categorical (over time)."""
 
-from typing import Any
-
 import random
 import math
 import bencher as bn
@@ -18,12 +16,10 @@ class CompressionBench(bn.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
         self.ratio += random.gauss(0, 0.1 * 0.3)
         self.ratio += self._time_offset * 10
-        return super().__call__()
 
 
 def example_sweep_2_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

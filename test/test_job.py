@@ -12,10 +12,8 @@ class CachedParamExample(bn.CachedParams):
 
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var1 + self.var2 + random.uniform(0, 1)
-        return self.get_results_values_as_dict()
 
 
 class TestJob(unittest.TestCase):

@@ -24,13 +24,11 @@ class BenchableBoolResult(bn.ParametrizedSweep):
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         score = math.sin(math.pi * self.threshold) * (1.0 - 0.5 * self.difficulty)
         if self.noise_scale > 0:
             score += random.gauss(0, self.noise_scale)
         self.pass_rate = score > 0.5
-        return super().__call__()
 
 
 class BenchableVecResult(bn.ParametrizedSweep):
@@ -43,8 +41,7 @@ class BenchableVecResult(bn.ParametrizedSweep):
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         vals = [
             math.sin(math.pi * self.x),
             math.cos(math.pi * self.y),
@@ -53,7 +50,6 @@ class BenchableVecResult(bn.ParametrizedSweep):
         if self.noise_scale > 0:
             vals = [v + random.gauss(0, self.noise_scale) for v in vals]
         self.position = vals
-        return super().__call__()
 
 
 class BenchableStringResult(bn.ParametrizedSweep):
@@ -64,13 +60,11 @@ class BenchableStringResult(bn.ParametrizedSweep):
 
     report = bn.ResultString(doc="Formatted report string")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         text = (
             f"Label: {self.label}\n\tValue: {self.value:.3f}\n\tScore: {math.sin(self.value):.3f}"
         )
         self.report = bn.tabs_in_markdown(text)
-        return super().__call__()
 
 
 class BenchablePathResult(bn.ParametrizedSweep):
@@ -80,13 +74,11 @@ class BenchablePathResult(bn.ParametrizedSweep):
 
     file_result = bn.ResultPath(doc="Generated report file")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         filename = bn.gen_path(self.content, suffix=".txt")
         with open(filename, "w", encoding="utf-8") as f:
             f.write(f"content: {self.content}\ntimestamp: deterministic")
         self.file_result = filename
-        return super().__call__()
 
 
 class BenchableDataSetResult(bn.ParametrizedSweep):
@@ -97,15 +89,13 @@ class BenchableDataSetResult(bn.ParametrizedSweep):
 
     result_ds = bn.ResultDataSet(doc="Generated dataset")
 
-    def __call__(self, **kwargs):
+    def benchmark(self):
         import xarray as xr
 
-        self.update_params_from_kwargs(**kwargs)
         vector = [self.scale * (v + self.value) for v in range(1, 5)]
         data_array = xr.DataArray(vector, dims=["index"], coords={"index": np.arange(len(vector))})
         result_df = xr.Dataset({"result_ds": data_array})
         self.result_ds = bn.ResultDataSet(result_df.to_pandas())
-        return super().__call__()
 
 
 class BenchableMultiObjective(bn.ParametrizedSweep):
@@ -119,14 +109,12 @@ class BenchableMultiObjective(bn.ParametrizedSweep):
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.performance = math.sin(math.pi * self.x) * math.cos(0.5 * math.pi * self.y) + 0.5
         self.cost = 0.3 + 0.7 * self.x + 0.5 * self.y**2
         if self.noise_scale > 0:
             self.performance += random.gauss(0, self.noise_scale)
             self.cost += random.gauss(0, self.noise_scale * 0.5)
-        return super().__call__()
 
 
 class BenchableIntFloat(bn.ParametrizedSweep):
@@ -137,10 +125,8 @@ class BenchableIntFloat(bn.ParametrizedSweep):
 
     output = bn.ResultVar("ul", doc="Computed output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
-        return super().__call__()
 
 
 def _polygon_points(radius, sides, start_angle=0.0):
@@ -171,8 +157,7 @@ class BenchableImageResult(bn.ParametrizedSweep):
     polygon = bn.ResultImage(doc="Rendered polygon image")
     area = bn.ResultVar("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
         filepath = bn.gen_image_path("polygon")
@@ -181,7 +166,6 @@ class BenchableImageResult(bn.ParametrizedSweep):
         self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (
             4 * math.tan(math.pi / self.sides)
         )
-        return super().__call__()
 
 
 class BenchableVideoResult(bn.ParametrizedSweep):
@@ -193,8 +177,7 @@ class BenchableVideoResult(bn.ParametrizedSweep):
     animation = bn.ResultVideo(doc="Rotating polygon video")
     frame_snapshot = bn.ResultImage(doc="Last frame snapshot")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         vid_writer = bn.VideoWriter()
         num_frames = 8
         for i in range(num_frames):
@@ -204,4 +187,3 @@ class BenchableVideoResult(bn.ParametrizedSweep):
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
         self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)
-        return super().__call__()

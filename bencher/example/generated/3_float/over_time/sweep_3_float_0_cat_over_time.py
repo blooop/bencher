@@ -1,7 +1,5 @@
 """Auto-generated example: 3 Float, 0 Categorical (over time)."""
 
-from typing import Any
-
 import random
 import math
 import bencher as bn
@@ -19,8 +17,7 @@ class HashBenchmark(bn.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.throughput = (
             500.0
             / (1.0 + 0.5 * math.log2(self.key_size / 8))
@@ -29,7 +26,6 @@ class HashBenchmark(bn.ParametrizedSweep):
         )
         self.throughput += random.gauss(0, 0.1 * 30)
         self.throughput += self._time_offset * 10
-        return super().__call__()
 
 
 def example_sweep_3_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

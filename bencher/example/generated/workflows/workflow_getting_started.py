@@ -1,7 +1,5 @@
 """Auto-generated example: Getting Started — progressive bencher tutorial."""
 
-from typing import Any
-
 import math
 import random
 
@@ -27,7 +25,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
     """A tutorial benchmark demonstrating core bencher features step by step.
 
     This class defines both inputs (sweep variables) and outputs (result
-    variables) in a single ParametrizedSweep. The __call__ method is the
+    variables) in a single ParametrizedSweep. The benchmark() method is the
     benchmark function -- it must be pure (no side effects) so that repeated
     calls produce statistically valid results.
 
@@ -54,9 +52,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
         doc="Algorithm accuracy - the metric we want to optimise",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         self.accuracy = 50 + math.sin(self.intensity) * 5
 
         match self.algo_setting:
@@ -66,8 +62,6 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
                 self.accuracy += 30
             case AlgoSetting.poor:
                 self.accuracy -= 20
-
-        return super().__call__(**kwargs)
 
 
 def example_workflow_getting_started(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

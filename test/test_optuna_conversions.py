@@ -34,10 +34,8 @@ class SweepCfg(bn.ParametrizedSweep):
     string_var = StringSweep(["a", "b", "c"])
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.float_var * 2
-        return super().__call__()
 
 
 class TestOptimizeFlag(unittest.TestCase):

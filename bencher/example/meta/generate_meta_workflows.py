@@ -4,8 +4,6 @@ Demonstrates BenchRunner, multiple sweeps per report, and the InputCfg/OutputCfg
 separation pattern — features that only existed in manual examples until now.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -24,9 +22,7 @@ class MetaWorkflows(MetaGeneratorBase):
 
     example = bn.StringSweep(WORKFLOW_EXAMPLES, doc="Which workflow example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "bench_runner":
             self._generate_bench_runner()
         elif self.example == "multi_sweep_report":
@@ -35,8 +31,6 @@ class MetaWorkflows(MetaGeneratorBase):
             self._generate_input_output_cfg()
         elif self.example == "getting_started":
             self._generate_getting_started()
-
-        return super().__call__()
 
     def _generate_bench_runner(self):
         """B1: BenchRunner example showing multiple benchmarks combined."""
@@ -48,10 +42,8 @@ class SineWave(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
     out_sin = bn.ResultVar(units="V", doc="Sine output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.out_sin = math.sin(self.theta)
-        return super().__call__()'''
+    def benchmark(self):
+        self.out_sin = math.sin(self.theta)'''
         body = """\
 # This example shows the building block that BenchRunner orchestrates.
 # To combine multiple independent benchmarks into one session, use:
@@ -98,12 +90,10 @@ class DataPipeline(bn.ParametrizedSweep):
     throughput = bn.ResultVar(units="rows/s", doc="Processing throughput")
     latency = bn.ResultVar(units="ms", doc="Per-batch latency")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         storage_factor = {"ssd": 1.0, "hdd": 0.4, "network": 0.25}[self.storage]
         self.throughput = self.batch_size * math.sqrt(self.parallelism) * storage_factor * 0.5
-        self.latency = 1000 * self.batch_size / max(self.throughput, 1)
-        return super().__call__()'''
+        self.latency = 1000 * self.batch_size / max(self.throughput, 1)'''
         body = """\
 bench = DataPipeline().to_bench(run_cfg)
 
@@ -186,7 +176,7 @@ class ServerConfig(bn.ParametrizedSweep):
         return output'''
         body = """\
 # The Bench constructor accepts the static function and the ServerConfig class.
-# This is an alternative to the ParametrizedSweep.__call__ pattern.
+# This is an alternative to the ParametrizedSweep.benchmark() pattern.
 bench = bn.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
 bench.plot_sweep(
     input_vars=[ServerConfig.param.worker_count],
@@ -233,7 +223,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
     """A tutorial benchmark demonstrating core bencher features step by step.
 
     This class defines both inputs (sweep variables) and outputs (result
-    variables) in a single ParametrizedSweep. The __call__ method is the
+    variables) in a single ParametrizedSweep. The benchmark() method is the
     benchmark function -- it must be pure (no side effects) so that repeated
     calls produce statistically valid results.
 
@@ -256,9 +246,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
         doc="Algorithm accuracy - the metric we want to optimise",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         self.accuracy = 50 + math.sin(self.intensity) * 5
 
         match self.algo_setting:
@@ -267,9 +255,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
             case AlgoSetting.optimum:
                 self.accuracy += 30
             case AlgoSetting.poor:
-                self.accuracy -= 20
-
-        return super().__call__(**kwargs)'''
+                self.accuracy -= 20'''
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=10)
 

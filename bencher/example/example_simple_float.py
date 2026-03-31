@@ -10,10 +10,8 @@ class SimpleFloat(bn.ParametrizedSweep):
     )
     out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
-        return super().__call__(**kwargs)
 
 
 def example_simple_float(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

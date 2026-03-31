@@ -28,9 +28,7 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
 
     animation = bn.ResultImage()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         all_spatial = [
             SweepVar("dim_1", [0, 1, 2]),
             SweepVar("dim_2", [0, 1, 2]),
@@ -60,7 +58,6 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
             height=200,
         )
         self.animation = animation_path
-        return super().__call__()
 
 
 def example_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

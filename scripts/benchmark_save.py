@@ -28,7 +28,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 import bokeh
 import holoviews as hv
@@ -125,12 +124,10 @@ class SimpleBench(bn.ParametrizedSweep):
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.r1 = self.x + self.offset
         self.r2 = self.x * 2 + self.offset
         self.r3 = self.x * 3 + self.offset
-        return super().__call__()
 
 
 class ComplexBench(bn.ParametrizedSweep):
@@ -146,15 +143,13 @@ class ComplexBench(bn.ParametrizedSweep):
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = self.x + self.offset
         self.r1 = base
         self.r2 = base * 1.5
         self.r3 = base * 2
         self.r4 = base * 0.5
         self.r5 = base * 3
-        return super().__call__()
 
 
 # ---------------------------------------------------------------------------

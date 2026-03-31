@@ -51,10 +51,8 @@ class BoolBenchDeterministic(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[0, 1], doc="Float input")
     out = bn.ResultBool(doc="Deterministic bool output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out = self.x > 0.5
-        return super().__call__(**kwargs)
 
 
 class BoolBenchAlternating(bn.ParametrizedSweep):
@@ -66,11 +64,9 @@ class BoolBenchAlternating(bn.ParametrizedSweep):
 
     _call_count = 0
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         BoolBenchAlternating._call_count += 1
         self.out = (BoolBenchAlternating._call_count % 2) == 0
-        return super().__call__(**kwargs)
 
 
 class BoolBenchAllTrue(bn.ParametrizedSweep):
@@ -79,10 +75,8 @@ class BoolBenchAllTrue(bn.ParametrizedSweep):
     cat = bn.EnumSweep(CatEnum, doc="Categorical input")
     out = bn.ResultBool(doc="Always true")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out = True
-        return super().__call__(**kwargs)
 
 
 class BoolBenchAllFalse(bn.ParametrizedSweep):
@@ -91,10 +85,8 @@ class BoolBenchAllFalse(bn.ParametrizedSweep):
     cat = bn.EnumSweep(CatEnum, doc="Categorical input")
     out = bn.ResultBool(doc="Always false")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out = False
-        return super().__call__(**kwargs)
 
 
 class TwoFloatBool(bn.ParametrizedSweep):
@@ -104,10 +96,8 @@ class TwoFloatBool(bn.ParametrizedSweep):
     x2 = bn.FloatSweep(default=0, bounds=[0, 1])
     out = bn.ResultBool(doc="bool output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out = (self.x1 + self.x2) > 1.0
-        return super().__call__(**kwargs)
 
 
 class ThreeFloatBool(bn.ParametrizedSweep):
@@ -118,10 +108,8 @@ class ThreeFloatBool(bn.ParametrizedSweep):
     x3 = bn.FloatSweep(default=0, bounds=[0, 1])
     out = bn.ResultBool(doc="bool output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out = (self.x1 + self.x2 + self.x3) > 1.5
-        return super().__call__(**kwargs)
 
 
 class BoolBenchNone(bn.ParametrizedSweep):
@@ -130,10 +118,8 @@ class BoolBenchNone(bn.ParametrizedSweep):
     cat = bn.EnumSweep(CatEnum, doc="Categorical input")
     out = bn.ResultBool(doc="None output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out = None
-        return super().__call__(**kwargs)
 
 
 # ---------------------------------------------------------------------------

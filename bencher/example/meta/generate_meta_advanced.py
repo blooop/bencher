@@ -4,8 +4,6 @@ Covers cache/context patterns, time events, and report customization —
 features previously only shown in hand-written examples.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -18,7 +16,6 @@ ADVANCED_EXAMPLES = [
     "max_time_events",
     "report_save",
     "agg_over_time",
-    "cartesian_animation",
 ]
 
 
@@ -27,9 +24,7 @@ class MetaAdvanced(MetaGeneratorBase):
 
     example = bn.StringSweep(ADVANCED_EXAMPLES, doc="Which advanced example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "cache_patterns":
             self._generate_cache_patterns()
         elif self.example == "time_event":
@@ -44,8 +39,6 @@ class MetaAdvanced(MetaGeneratorBase):
             self._generate_agg_over_time()
         elif self.example == "cartesian_animation":
             self._generate_cartesian_animation()
-
-        return super().__call__()
 
     def _generate_cache_patterns(self):
         """B3: Cache and context patterns."""
@@ -67,12 +60,10 @@ class NoisySensor(bn.ParametrizedSweep):
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.reading = 0.5 + 0.03 * self.temperature + math.sin(self.temperature * 0.1)
         if self.noise_scale > 0:
-            self.reading += random.gauss(0, self.noise_scale)
-        return super().__call__()'''
+            self.reading += random.gauss(0, self.noise_scale)'''
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5)
 
@@ -127,12 +118,10 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
 
     _event_idx = 0  # set externally per event
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"light": 1000, "medium": 500, "heavy": 200}[self.workload]
         # Simulate gradual improvement across events
-        self.throughput = base + self._event_idx * 30
-        return super().__call__()'''
+        self.throughput = base + self._event_idx * 30'''
         body = """\
 if run_cfg is None:
     run_cfg = bn.BenchRunCfg()
@@ -187,10 +176,8 @@ class ServerLatency(bn.ParametrizedSweep):
 
     latency = bn.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
-        return super().__call__()'''
+    def benchmark(self):
+        self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]'''
         body = """\
 bench = ServerLatency().to_bench(run_cfg)
 
@@ -237,11 +224,9 @@ class LatencyMonitor(bn.ParametrizedSweep):
 
     _drift = 0.0  # set externally per snapshot
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"/api/users": 45, "/api/orders": 120}[self.endpoint]
-        self.latency = base + self._drift + random.gauss(0, 5)
-        return super().__call__()'''
+        self.latency = base + self._drift + random.gauss(0, 5)'''
         body = """\
 if run_cfg is None:
     run_cfg = bn.BenchRunCfg()
@@ -292,10 +277,8 @@ class QuadraticFit(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
     y = bn.ResultVar(units="ul", doc="Quadratic output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.y = self.x**2 - 1
-        return super().__call__()'''
+    def benchmark(self):
+        self.y = self.x**2 - 1'''
         body = """\
 bench = QuadraticFit().to_bench(run_cfg)
 
@@ -349,15 +332,13 @@ class ThermalPlate(bn.ParametrizedSweep):
 
     _time_offset = 0.0  # set externally per snapshot
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         # Hot spot at centre, decaying over time
         self.temperature = (
             100 * math.sin(math.pi * self.x) * math.sin(math.pi * self.y)
             * math.exp(-0.3 * self._time_offset)
             + 20
-        )
-        return super().__call__()'''
+        )'''
         body = """\
 if run_cfg is None:
     run_cfg = bn.BenchRunCfg()
@@ -420,9 +401,7 @@ for i, offset in enumerate(time_offsets):
 
     animation = bn.ResultImage()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         all_spatial = [
             SweepVar("dim_1", [0, 1, 2]),
             SweepVar("dim_2", [0, 1, 2]),
@@ -451,8 +430,7 @@ for i, offset in enumerate(time_offsets):
             width=320,
             height=200,
         )
-        self.animation = animation_path
-        return super().__call__()'''
+        self.animation = animation_path'''
         body = """bench = CartesianAnimationSweep().to_bench(run_cfg)
 
 bench.plot_sweep(

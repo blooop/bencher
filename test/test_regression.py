@@ -480,10 +480,8 @@ class TestRegressionError:
 class _SimpleBench(bn.ParametrizedSweep):
     out_val = bn.ResultVar(units="s", direction=bn.OptDir.minimize)
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_val = 1.0
-        return super().__call__(**kwargs)
 
 
 _degrade_state = {"counter": 0}
@@ -492,11 +490,9 @@ _degrade_state = {"counter": 0}
 class _DegradingBench(bn.ParametrizedSweep):
     out_val = bn.ResultVar(units="s", direction=bn.OptDir.minimize)
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         _degrade_state["counter"] += 1
         self.out_val = float(_degrade_state["counter"]) * 100.0
-        return super().__call__(**kwargs)
 
 
 class TestEndToEnd:

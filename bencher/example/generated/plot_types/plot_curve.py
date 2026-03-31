@@ -1,7 +1,5 @@
 """Auto-generated example: Plot Type: Curve."""
 
-from typing import Any
-
 import bencher as bn
 
 import math
@@ -16,12 +14,10 @@ class LatencyNoisyProfile(bn.ParametrizedSweep):
 
     distance = bn.ResultVar("m", doc="Latency distance metric")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.distance = math.sin(math.pi * self.load) + 0.5
         if self.noise_scale > 0:
             self.distance += random.gauss(0, self.noise_scale)
-        return super().__call__()
 
 
 def example_plot_curve(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

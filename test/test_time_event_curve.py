@@ -1,7 +1,5 @@
 """Tests that curve plots use the float var as x-axis when over_time uses string-based TimeEvent."""
 
-from typing import Any
-
 import panel as pn
 
 import bencher as bn
@@ -15,10 +13,8 @@ class FloatWithTimeBench(bn.ParametrizedSweep):
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.throughput = self.size * 0.5 + self.offset
-        return super().__call__()
 
 
 class FloatCatWithTimeBench(bn.ParametrizedSweep):
@@ -30,11 +26,9 @@ class FloatCatWithTimeBench(bn.ParametrizedSweep):
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.0, "local": 2.0}[self.backend]
         self.throughput = self.size * base + self.offset
-        return super().__call__()
 
 
 def _run_string_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3):

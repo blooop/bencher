@@ -1,7 +1,5 @@
 """Auto-generated example: Result Dataset: 2D input."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -15,10 +13,9 @@ class TimeseriesCollector(bn.ParametrizedSweep):
 
     result_ds = bn.ResultDataSet(doc="Collected timeseries dataset")
 
-    def __call__(self, **kwargs: Any) -> Any:
+    def benchmark(self):
         import xarray as xr
 
-        self.update_params_from_kwargs(**kwargs)
         n_samples = max(1, int(self.duration * self.sample_rate))
         values = [
             math.sin(2 * math.pi * i / max(n_samples, 1)) * self.duration for i in range(n_samples)
@@ -26,7 +23,6 @@ class TimeseriesCollector(bn.ParametrizedSweep):
         data_array = xr.DataArray(values, dims=["time"], coords={"time": list(range(n_samples))})
         ds = xr.Dataset({"result_ds": data_array})
         self.result_ds = bn.ResultDataSet(ds.to_pandas())
-        return super().__call__()
 
 
 def example_result_dataset_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

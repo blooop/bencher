@@ -5,8 +5,6 @@ error bands on curves, distribution plots for categorical data, and the
 effect of increasing repeat count on confidence.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -20,17 +18,13 @@ class MetaStatistics(MetaGeneratorBase):
         default=0, bounds=(0, 2), doc="Which statistics example to generate"
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example_variant == 0:
             self._generate_error_bands()
         elif self.example_variant == 1:
             self._generate_distributions()
         else:
             self._generate_repeats_comparison()
-
-        return super().__call__()
 
     def _generate_error_bands(self):
         """Error bands: mean +/- std on a 1D float sweep with repeats."""

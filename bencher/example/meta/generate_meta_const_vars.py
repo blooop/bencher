@@ -3,8 +3,6 @@
 Shows how to use const_vars to fix parameters at specific values while sweeping others.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -27,8 +25,7 @@ class ServerBenchmark(bn.ParametrizedSweep):
     latency = bn.ResultVar(units="ms", doc="Request latency")
     throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         cache_factor = 0.6 if self.cache_enabled else 1.0
         db_base = {"postgres": 1.0, "mysql": 1.1, "sqlite": 0.7}[self.backend]
         log_penalty = {"debug": 1.3, "info": 1.0, "warn": 1.0}[self.log_level]
@@ -43,8 +40,7 @@ class ServerBenchmark(bn.ParametrizedSweep):
             import random
 
             self.latency += random.gauss(0, self.noise_scale * self.latency * 0.1)
-            self.throughput = 1000 / max(self.latency, 1)
-        return super().__call__()'''
+            self.throughput = 1000 / max(self.latency, 1)'''
 
 
 class MetaConstVars(MetaGeneratorBase):
@@ -52,9 +48,7 @@ class MetaConstVars(MetaGeneratorBase):
 
     example = bn.StringSweep(EXAMPLES, doc="Which const_vars example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "slice":
             self._gen_slice()
         elif self.example == "compare":
@@ -63,8 +57,6 @@ class MetaConstVars(MetaGeneratorBase):
             self._gen_categorical()
         elif self.example == "noise":
             self._gen_noise()
-
-        return super().__call__()
 
     def _gen_slice(self):
         """Fix disk_io=0.5 while sweeping cpu_load and memory_pct."""

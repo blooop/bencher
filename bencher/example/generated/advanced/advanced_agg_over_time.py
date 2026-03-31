@@ -1,7 +1,5 @@
 """Auto-generated example: Aggregate Over Time — 2D sweep to scalar curve with error bounds."""
 
-from typing import Any
-
 import math
 import bencher as bn
 from datetime import datetime, timedelta
@@ -23,8 +21,7 @@ class ThermalPlate(bn.ParametrizedSweep):
 
     _time_offset = 0.0  # set externally per snapshot
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         # Hot spot at centre, decaying over time
         self.temperature = (
             100
@@ -33,7 +30,6 @@ class ThermalPlate(bn.ParametrizedSweep):
             * math.exp(-0.3 * self._time_offset)
             + 20
         )
-        return super().__call__()
 
 
 def example_advanced_agg_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

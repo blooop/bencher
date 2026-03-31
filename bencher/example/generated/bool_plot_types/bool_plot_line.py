@@ -1,7 +1,5 @@
 """Auto-generated example: Bool Plot: Line."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -14,11 +12,9 @@ class HealthCheckFloat(bn.ParametrizedSweep):
 
     healthy = bn.ResultBool(doc="Whether the service is healthy")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         score = math.sin(math.pi * self.load)
         self.healthy = score > 0.5
-        return super().__call__()
 
 
 def example_bool_plot_line(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

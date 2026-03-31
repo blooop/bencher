@@ -62,9 +62,7 @@ class TuringPattern(bn.ParametrizedSweep):
             Z[:, 0] = Z[:, 1]
             Z[:, -1] = Z[:, -2]
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         n = int(self.time / self.dt)
         dx = 2.0 / self.size
 
@@ -88,7 +86,6 @@ class TuringPattern(bn.ParametrizedSweep):
         self.img_extracted = bn.video_writer.VideoWriter.extract_frame(self.video)
         print("img path", self.img_extracted)
         self.score = self.alpha + self.beta
-        return super().__call__()
 
 
 def example_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

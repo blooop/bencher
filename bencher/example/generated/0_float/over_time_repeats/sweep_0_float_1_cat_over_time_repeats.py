@@ -1,7 +1,5 @@
 """Auto-generated example: 0 Float, 1 Categorical (over time repeats)."""
 
-from typing import Any
-
 import random
 import bencher as bn
 from datetime import datetime, timedelta
@@ -16,12 +14,10 @@ class CacheBackend(bn.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.2, "memcached": 1.5, "local": 0.3}[self.backend]
         self.latency = base + random.gauss(0, 0.15 * base)
         self.latency += self._time_offset * 10
-        return super().__call__()
 
 
 def example_sweep_0_float_1_cat_over_time_repeats(

@@ -35,7 +35,7 @@ class ServerConfig(bn.ParametrizedSweep):
 def example_workflow_input_output_cfg(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """InputCfg/OutputCfg — separated input and output classes."""
     # The Bench constructor accepts the static function and the ServerConfig class.
-    # This is an alternative to the ParametrizedSweep.__call__ pattern.
+    # This is an alternative to the ParametrizedSweep.benchmark() pattern.
     bench = bn.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
     bench.plot_sweep(
         input_vars=[ServerConfig.param.worker_count],

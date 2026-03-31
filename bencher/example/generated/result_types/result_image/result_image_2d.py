@@ -1,7 +1,5 @@
 """Auto-generated example: Result Image: 2D input."""
 
-from typing import Any
-
 import math
 
 import numpy as np
@@ -34,8 +32,7 @@ class PolygonRenderer(bn.ParametrizedSweep):
     polygon = bn.ResultImage(doc="Rendered polygon image")
     area = bn.ResultVar("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
         filepath = bn.gen_image_path("polygon")
@@ -44,7 +41,6 @@ class PolygonRenderer(bn.ParametrizedSweep):
         self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (
             4 * math.tan(math.pi / self.sides)
         )
-        return super().__call__()
 
 
 def example_result_image_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

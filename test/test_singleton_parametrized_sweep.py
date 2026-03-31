@@ -16,10 +16,8 @@ class MySingletonSweep(ParametrizedSweepSingleton):
             self.init_count = 1
         super().__init__()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = float(self.theta)
-        return super().__call__(**kwargs)
 
 
 def benchable_singleton_fn(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:

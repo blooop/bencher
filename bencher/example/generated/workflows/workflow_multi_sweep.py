@@ -1,7 +1,5 @@
 """Auto-generated example: Multiple Sweeps — progressive report with tabs."""
 
-from typing import Any
-
 import math
 import bencher as bn
 
@@ -16,12 +14,10 @@ class DataPipeline(bn.ParametrizedSweep):
     throughput = bn.ResultVar(units="rows/s", doc="Processing throughput")
     latency = bn.ResultVar(units="ms", doc="Per-batch latency")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         storage_factor = {"ssd": 1.0, "hdd": 0.4, "network": 0.25}[self.storage]
         self.throughput = self.batch_size * math.sqrt(self.parallelism) * storage_factor * 0.5
         self.latency = 1000 * self.batch_size / max(self.throughput, 1)
-        return super().__call__()
 
 
 def example_workflow_multi_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

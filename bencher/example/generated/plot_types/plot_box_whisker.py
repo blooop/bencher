@@ -1,7 +1,5 @@
 """Auto-generated example: Plot Type: Box Whisker."""
 
-from typing import Any
-
 from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
 import bencher as bn
 
@@ -16,13 +14,11 @@ class JitterDemo(bn.ParametrizedSweep):
 
     distance = bn.ResultVar("m", doc="Jittered distance metric")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
         self.distance = lookup[self.backend]
         if self.noise_scale > 0:
             self.distance += random.gauss(0, self.noise_scale)
-        return super().__call__()
 
 
 def example_plot_box_whisker(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

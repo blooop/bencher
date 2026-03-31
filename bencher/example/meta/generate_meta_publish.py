@@ -4,8 +4,6 @@ Demonstrates how to publish benchmark reports to GitHub Pages using both
 the BenchReport API and BenchRunner publisher integration.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -22,15 +20,11 @@ class MetaPublish(MetaGeneratorBase):
 
     example = bn.StringSweep(PUBLISH_EXAMPLES, doc="Which publishing example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "report_publish":
             self._generate_report_publish()
         elif self.example == "runner_publish":
             self._generate_runner_publish()
-
-        return super().__call__()
 
     def _generate_report_publish(self):
         """Publish a single benchmark report to GitHub Pages."""
@@ -44,10 +38,8 @@ class SimpleFloat(bn.ParametrizedSweep):
     )
     out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-        self.out_sin = math.sin(self.theta)
-        return super().__call__(**kwargs)'''
+    def benchmark(self):
+        self.out_sin = math.sin(self.theta)'''
         body = """\
 bench = SimpleFloat().to_bench(run_cfg)
 bench.plot_sweep(
@@ -94,10 +86,8 @@ class WaveBenchmark(bn.ParametrizedSweep):
 
     out_wave = bn.ResultVar(units="v", doc="Wave output")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-        self.out_wave = self.amplitude * math.sin(self.theta)
-        return super().__call__(**kwargs)'''
+    def benchmark(self):
+        self.out_wave = self.amplitude * math.sin(self.theta)'''
         body = """\
 bench = WaveBenchmark().to_bench(run_cfg)
 bench.plot_sweep(

@@ -20,10 +20,8 @@ class MyBenchmark(bn.ParametrizedSweep):
     # Results — what the benchmark measures
     elapsed = bn.ResultVar(units="s")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.elapsed = run_benchmark(self.size, self.method)
-        return super().__call__()
 
 def example_benchmark(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = bn.Bench("my_bench", MyBenchmark(), run_cfg=run_cfg)
@@ -153,25 +151,26 @@ if __name__ == "__main__":
     bn.run(example_foo, level=4)    # level controls sweep detail depth
 ```
 
-## The __call__ Pattern
+## The benchmark() Method
 
-Every benchmark class inherits from `bn.ParametrizedSweep` and implements `__call__`:
+Every benchmark class inherits from `bn.ParametrizedSweep` and implements `benchmark()`:
 
 ```python
 class MyBench(bn.ParametrizedSweep):
     x = bn.FloatSweep(bounds=(0, 1))
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)  # REQUIRED: sets self.x etc from sweep
-        self.result = compute(self.x)              # store result
-        return super().__call__()                   # REQUIRED: returns results dict
+    def benchmark(self):
+        self.result = compute(self.x)
 ```
 
-Three required steps:
-1. `self.update_params_from_kwargs(**kwargs)` — applies the swept values
-2. Set result variables (`self.result = ...`)
-3. `return super().__call__()` — collects and returns results
+When `benchmark()` is called, all sweep parameters (`self.x`, etc.) are already set.
+Just set result variables directly on `self`. No boilerplate required.
+
+> **Migration from `__call__`:** The old pattern of overriding `__call__()` with
+> `self.update_params_from_kwargs(**kwargs)` and `return super().__call__()` is
+> deprecated. Simply rename `__call__` to `benchmark`, remove the two boilerplate
+> lines, and remove `**kwargs` from the signature.
 
 ## File-Based Results (Images, Videos)
 
@@ -185,12 +184,10 @@ class ImageBench(bn.ParametrizedSweep):
     width = bn.IntSweep(bounds=(100, 500))
     output = bn.ResultImage()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         path = bn.gen_image_path(f"output_{self.width}")
         render_image(self.width, path)
         self.output = str(path)
-        return super().__call__()
 ```
 
 ## Entry Point Convention
@@ -208,6 +205,5 @@ class ImageBench(bn.ParametrizedSweep):
 | One StringSweep encoding multiple independent toggles | Use separate BoolSweep / IntSweep per toggle |
 | Many small plot_sweep calls for different combos | One plot_sweep with all input_vars |
 | Building panel/HTML layouts manually | Use bencher's report system |
-| Forgetting `self.update_params_from_kwargs(**kwargs)` | Always call it first in `__call__` |
-| Forgetting `return super().__call__()` | Always return it last in `__call__` |
+| Using the old `__call__` pattern with boilerplate | Override `benchmark()` instead |
 | Caching file-path results | Set `run_cfg.cache_results = False` |

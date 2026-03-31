@@ -1,7 +1,5 @@
 """Auto-generated example: Sampling: Int Vs Float."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -15,10 +13,8 @@ class IntFloatCompare(bn.ParametrizedSweep):
 
     output = bn.ResultVar("ul", doc="Computed output")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
-        return super().__call__()
 
 
 def example_sampling_int_vs_float(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

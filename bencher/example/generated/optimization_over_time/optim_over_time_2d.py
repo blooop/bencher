@@ -1,7 +1,5 @@
 """Auto-generated example: Optimise Over Time: 2D input."""
 
-from typing import Any
-
 import math
 import random
 from datetime import datetime, timedelta
@@ -21,13 +19,11 @@ class ServerOptimizer(bn.ParametrizedSweep):
 
     _drift = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.performance = math.log2(self.cpu_cores + 1) * math.sqrt(self.memory_gb) * 10
         self.performance *= 1.0 - self._drift * 0.15  # degrade over time
         if self.noise_scale > 0:
             self.performance += random.gauss(0, self.noise_scale * 5)
-        return super().__call__()
 
 
 def example_optim_over_time_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

@@ -1,7 +1,5 @@
 """Auto-generated example: 3 Float, 1 Categorical (no repeats)."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -17,8 +15,7 @@ class HashComparison(bn.ParametrizedSweep):
 
     throughput = bn.ResultVar(units="MB/s", doc="Hash throughput")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         algo_speed = {"sha256": 1.0, "blake2": 1.4, "md5": 1.8}[self.algorithm]
         self.throughput = (
             algo_speed
@@ -27,7 +24,6 @@ class HashComparison(bn.ParametrizedSweep):
             / (1.0 + 0.3 * math.log2(self.payload_size / 64))
             * (self.iterations / 100)
         )
-        return super().__call__()
 
 
 def example_sweep_3_float_1_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
