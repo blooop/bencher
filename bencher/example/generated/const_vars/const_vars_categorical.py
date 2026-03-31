@@ -1,7 +1,5 @@
 """Auto-generated example: Const Vars: Fixing Categorical Parameters."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -19,8 +17,7 @@ class ServerBenchmark(bn.ParametrizedSweep):
     latency = bn.ResultVar(units="ms", doc="Request latency")
     throughput = bn.ResultVar(units="req/s", doc="Request throughput")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         cache_factor = 0.6 if self.cache_enabled else 1.0
         db_base = {"postgres": 1.0, "mysql": 1.1, "sqlite": 0.7}[self.backend]
         log_penalty = {"debug": 1.3, "info": 1.0, "warn": 1.0}[self.log_level]
@@ -36,7 +33,6 @@ class ServerBenchmark(bn.ParametrizedSweep):
 
             self.latency += random.gauss(0, self.noise_scale * self.latency * 0.1)
             self.throughput = 1000 / max(self.latency, 1)
-        return super().__call__()
 
 
 def example_const_vars_categorical(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

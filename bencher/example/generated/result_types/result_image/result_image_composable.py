@@ -1,7 +1,5 @@
 """Auto-generated example: ResultImage: Composable Container Video from Images."""
 
-from typing import Any
-
 import bencher as bn
 import math
 import numpy as np
@@ -38,8 +36,7 @@ class _ComposableImageDemo(bn.ParametrizedSweep):
     num_frames = bn.IntSweep(default=5, bounds=[2, 20], doc="Frame count")
     polygon_vid = bn.ResultVideo()
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         vr = bn.ComposableContainerVideo()
         for i in range(self.num_frames):
             angle = 360.0 * i / self.num_frames

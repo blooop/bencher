@@ -1,7 +1,5 @@
 """Auto-generated example: Bool Plot: Histogram."""
 
-from typing import Any
-
 import random
 
 from bencher.results.histogram_result import HistogramResult
@@ -15,11 +13,9 @@ class PassRateFloat(bn.ParametrizedSweep):
 
     passed = bn.ResultBool(doc="Whether the test passed")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         rate = 1.0 - 0.8 * self.complexity**1.5
         self.passed = random.random() < rate
-        return super().__call__()
 
 
 def example_bool_plot_histogram(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

@@ -1,7 +1,5 @@
 """Auto-generated example: BenchRunner — run multiple benchmarks in one session."""
 
-from typing import Any
-
 import math
 import bencher as bn
 
@@ -12,10 +10,8 @@ class SineWave(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
     out_sin = bn.ResultVar(units="V", doc="Sine output")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
-        return super().__call__()
 
 
 def example_workflow_bench_runner(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

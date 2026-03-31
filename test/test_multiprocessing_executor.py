@@ -57,10 +57,8 @@ class MultiTypeConfig(bn.ParametrizedSweep):
     ratio = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0), samples=5)
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.count * self.ratio
-        return self.get_results_values_as_dict()
 
 
 class StringOnlyConfig(bn.ParametrizedSweep):
@@ -69,10 +67,8 @@ class StringOnlyConfig(bn.ParametrizedSweep):
     algorithm = bn.StringSweep(["quick", "merge", "heap", "bubble"])
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = len(self.algorithm)
-        return self.get_results_values_as_dict()
 
 
 class EnumOnlyConfig(bn.ParametrizedSweep):
@@ -81,10 +77,8 @@ class EnumOnlyConfig(bn.ParametrizedSweep):
     algo = bn.EnumSweep(Algorithm)
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = len(self.algo)
-        return self.get_results_values_as_dict()
 
 
 class BoolOnlyConfig(bn.ParametrizedSweep):
@@ -93,10 +87,8 @@ class BoolOnlyConfig(bn.ParametrizedSweep):
     flag = bn.BoolSweep(default=True)
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = 1.0 if self.flag else 0.0
-        return self.get_results_values_as_dict()
 
 
 class MixedSelectorConfig(bn.ParametrizedSweep):
@@ -108,10 +100,8 @@ class MixedSelectorConfig(bn.ParametrizedSweep):
     weight = bn.FloatSweep(default=1.0, bounds=(0.0, 10.0), samples=3)
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.weight * (1.0 if self.active else -1.0)
-        return self.get_results_values_as_dict()
 
 
 # ---------------------------------------------------------------------------

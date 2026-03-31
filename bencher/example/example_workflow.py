@@ -34,8 +34,7 @@ class VolumeSweep(bn.ParametrizedSweep):
         "ul", direction=bn.OptDir.maximize, doc="The scalar value of the 3D volume field"
     )
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         cur_point = np.array([self.x, self.y, self.z])
         self.p1_dis = np.linalg.norm(p1 - cur_point)
         self.p2_dis = np.linalg.norm(p2 - cur_point)
@@ -49,7 +48,6 @@ class VolumeSweep(bn.ParametrizedSweep):
                 ]
             )
         )
-        return super().__call__()
 
 
 p1 = np.array([0.4, 0.6, 0.0])

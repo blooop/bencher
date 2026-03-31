@@ -1,7 +1,5 @@
 """Auto-generated example: Aggregate with Max."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -14,15 +12,13 @@ class GradientDirection(bn.ParametrizedSweep):
 
     out = bn.ResultVar(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.direction == "diagonal":
             self.out = self.x + self.y
         elif self.direction == "horizontal":
             self.out = self.x
         else:
             self.out = self.y
-        return super().__call__()
 
 
 def example_agg_fn_max(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

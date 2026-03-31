@@ -1,7 +1,5 @@
 """Auto-generated example: Rerun Publishing — share .rrd recordings via git or HTTP."""
 
-from typing import Any
-
 import math
 import bencher as bn
 
@@ -36,8 +34,7 @@ class WaveSweep(bn.ParametrizedSweep):
 
     amplitude = bn.ResultVar(units="v", doc="Peak amplitude")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.amplitude = math.sin(self.frequency * math.pi)
 
         # To publish rerun data:
@@ -58,8 +55,6 @@ class WaveSweep(bn.ParametrizedSweep):
         #       content_callback=bn.github_content,
         #   )
         #   pane.show()
-
-        return super().__call__(**kwargs)
 
 
 def example_rerun_rrd_publish(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

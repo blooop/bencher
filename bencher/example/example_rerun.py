@@ -7,12 +7,9 @@ class SweepRerun(bn.ParametrizedSweep):
 
     out_pane = bn.ResultContainer()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         rr.log("s1", rr.Boxes2D(half_sizes=[self.theta, 1]))
         self.out_pane = bn.capture_rerun_window(width=600, height=600)
-
-        return super().__call__(**kwargs)
 
 
 def example_rerun(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

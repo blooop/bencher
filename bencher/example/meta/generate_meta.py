@@ -1,5 +1,3 @@
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -334,8 +332,7 @@ def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset
         cls_lines.append("    _time_offset = 0.0")
 
     cls_lines.append("")
-    cls_lines.append("    def __call__(self, **kwargs: Any) -> Any:")
-    cls_lines.append("        self.update_params_from_kwargs(**kwargs)")
+    cls_lines.append("    def benchmark(self):")
 
     if noise_val > 0 and "noise_body" in info:
         for line in info["noise_body"]:
@@ -348,7 +345,6 @@ def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset
         result_name = list(info["result_vars"].keys())[0]
         cls_lines.append(f"        self.{result_name} += self._time_offset * 10")
 
-    cls_lines.append("        return super().__call__()")
     return "\n".join(cls_lines)
 
 
@@ -462,12 +458,10 @@ class BenchMetaGen(bn.ParametrizedSweep):
 
     plots = bn.ResultReference(units="int")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         key = (self.float_vars_count, self.categorical_vars_count)
         if key not in INLINE_CLASSES:
-            return super().__call__()
+            return
 
         info = INLINE_CLASSES[key]
         input_var_names = _get_input_var_names(
@@ -583,8 +577,6 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 post_description=post_description,
                 run_kwargs=run_kwargs,
             )
-
-        return super().__call__()
 
 
 def example_meta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

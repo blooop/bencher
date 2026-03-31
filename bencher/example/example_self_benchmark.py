@@ -20,10 +20,8 @@ class TrivialWorkload(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[0, 1], samples=2)
     result = bn.ResultVar(units="v", doc="trivial output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.x * 2
-        return super().__call__(**kwargs)
 
 
 class BencherSelfBenchmark(bn.ParametrizedSweep):
@@ -46,9 +44,7 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
     sample_cache_init_ms = bn.ResultVar(units="ms", doc="Sample cache initialization time")
     throughput = bn.ResultVar(units="samples/s", doc="Samples processed per second")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         workload = TrivialWorkload()
         x_sweep = bn.FloatSweep(default=0, bounds=[0, 1], samples=self.num_samples, doc="input")
         x_sweep.name = "x"
@@ -71,8 +67,6 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
         self.cache_check_ms = t.cache_check_ms
         self.sample_cache_init_ms = t.sample_cache_init_ms
         self.throughput = (self.num_samples / t.total_ms * 1000) if t.total_ms > 0 else 0
-
-        return super().__call__(**kwargs)
 
 
 def example_self_benchmark(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

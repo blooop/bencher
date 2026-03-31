@@ -1,7 +1,5 @@
 """Auto-generated example: Result Video: 2D input."""
 
-from typing import Any
-
 import math
 
 import numpy as np
@@ -33,8 +31,7 @@ class PolygonAnimator(bn.ParametrizedSweep):
     animation = bn.ResultVideo(doc="Rotating polygon video")
     frame_snapshot = bn.ResultImage(doc="Last frame snapshot")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         vid_writer = bn.VideoWriter()
         num_frames = 8
         for i in range(num_frames):
@@ -44,7 +41,6 @@ class PolygonAnimator(bn.ParametrizedSweep):
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
         self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)
-        return super().__call__()
 
 
 def example_result_video_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

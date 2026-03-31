@@ -1,7 +1,5 @@
 """Auto-generated example: Git Time Event — date + commit hash slider labels."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -18,10 +16,8 @@ class ServerLatency(bn.ParametrizedSweep):
 
     latency = bn.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]
-        return super().__call__()
 
 
 def example_advanced_git_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

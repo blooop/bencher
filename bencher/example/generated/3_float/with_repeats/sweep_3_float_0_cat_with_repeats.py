@@ -1,7 +1,5 @@
 """Auto-generated example: 3 Float, 0 Categorical (with repeats)."""
 
-from typing import Any
-
 import random
 import math
 
@@ -17,8 +15,7 @@ class HashBenchmark(bn.ParametrizedSweep):
 
     throughput = bn.ResultVar(units="MB/s", doc="Hash throughput")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.throughput = (
             500.0
             / (1.0 + 0.5 * math.log2(self.key_size / 8))
@@ -26,7 +23,6 @@ class HashBenchmark(bn.ParametrizedSweep):
             * (self.iterations / 100)
         )
         self.throughput += random.gauss(0, 0.15 * 30)
-        return super().__call__()
 
 
 def example_sweep_3_float_0_cat_with_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

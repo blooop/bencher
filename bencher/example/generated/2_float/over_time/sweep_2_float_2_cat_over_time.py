@@ -1,7 +1,5 @@
 """Auto-generated example: 2 Float, 2 Categorical (over time)."""
 
-from typing import Any
-
 import random
 import math
 import bencher as bn
@@ -20,8 +18,7 @@ class CompressionSuite(bn.ParametrizedSweep):
 
     _time_offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         codec_eff = {"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}[self.codec]
         effort_mult = {"fast": 0.8, "balanced": 1.0, "max": 1.15}[self.effort]
         self.ratio = (
@@ -32,7 +29,6 @@ class CompressionSuite(bn.ParametrizedSweep):
         )
         self.ratio += random.gauss(0, 0.1 * 0.3)
         self.ratio += self._time_offset * 10
-        return super().__call__()
 
 
 def example_sweep_2_float_2_cat_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

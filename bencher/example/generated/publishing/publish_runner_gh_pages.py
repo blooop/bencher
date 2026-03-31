@@ -1,7 +1,5 @@
 """Auto-generated example: BenchRunner Publishing with GithubPagesCfg."""
 
-from typing import Any
-
 import math
 import bencher as bn
 
@@ -16,10 +14,8 @@ class WaveBenchmark(bn.ParametrizedSweep):
 
     out_wave = bn.ResultVar(units="v", doc="Wave output")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_wave = self.amplitude * math.sin(self.theta)
-        return super().__call__(**kwargs)
 
 
 def example_publish_runner_gh_pages(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

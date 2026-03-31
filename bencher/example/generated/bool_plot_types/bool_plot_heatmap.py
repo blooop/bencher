@@ -1,7 +1,5 @@
 """Auto-generated example: Bool Plot: Heatmap."""
 
-from typing import Any
-
 import math
 import random
 
@@ -16,11 +14,9 @@ class HealthCheck2DNoisy(bn.ParametrizedSweep):
 
     healthy = bn.ResultBool(doc="Whether the service is healthy")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         probability = 0.5 + 0.4 * math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
         self.healthy = random.random() < probability
-        return super().__call__()
 
 
 def example_bool_plot_heatmap(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

@@ -13,9 +13,8 @@ class TstBench(bn.ParametrizedSweep):
     cat_var = bn.StringSweep(["a", "b", "c", "d", "e"])
     result = bn.ResultVar()
 
-    def __call__(self, **kwargs):
+    def benchmark(self):
         self.result = 1
-        return super().__call__()
 
 
 class TestAggOverDimsStd(unittest.TestCase):

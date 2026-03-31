@@ -5,8 +5,6 @@ animated dimensional extrusions — showing how each dimension builds on the
 last (point → line → grid → stack → repeats → film strip).
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -16,10 +14,8 @@ OUTPUT_DIR = "cartesian_animation"
 class MetaCartesianAnimation(MetaGeneratorBase):
     """Generate the Cartesian product animation example."""
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self._generate_cartesian_animation()
-        return super().__call__()
 
     def _generate_cartesian_animation(self):
         """Generate Cartesian product animations across dimensionality combinations."""
@@ -57,9 +53,7 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
 
     animation = bn.ResultImage()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         all_spatial = [
             SweepVar("dim_1", [0, 1, 2]),
             SweepVar("dim_2", [0, 1, 2]),
@@ -90,8 +84,7 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
             width=320,
             height=200,
         )
-        self.animation = animation_path
-        return super().__call__()'''
+        self.animation = animation_path'''
         body = """\
 bench = CartesianAnimationSweep().to_bench(run_cfg)
 

@@ -59,16 +59,13 @@ class ExampleBenchCfg(ParametrizedSweep):
     out_cos = ResultVar(units="v", direction=OptDir.minimize, doc="cos of theta with some noise")
     out_bool = ResultVar(units="%", doc="sin > 0.5")
 
-    def __call__(self, **kwwargs) -> dict:
-        self.update_params_from_kwargs(**kwwargs)
-
+    def benchmark(self):
         noise = self.calculate_noise()
         postprocess_fn = abs if self.postprocess_fn == PostprocessFn.absolute else negate_fn
 
         self.out_sin = postprocess_fn(self.offset + math.sin(self.theta) + noise)
         self.out_cos = postprocess_fn(self.offset + math.cos(self.theta) + noise)
         self.out_bool = self.out_sin > 0.5
-        return self.get_results_values_as_dict()
 
     def calculate_noise(self):
         noise = 0.0
@@ -100,10 +97,8 @@ class AllSweepVars(ParametrizedSweep):
 
     result = ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var_float + self.var_int
-        return self.get_results_values_as_dict()
 
 
 class SimpleBenchClass(ParametrizedSweep):
@@ -111,10 +106,8 @@ class SimpleBenchClass(ParametrizedSweep):
 
     result = ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var1
-        return self.get_results_values_as_dict()
 
 
 class SimpleBenchClassFloat(ParametrizedSweep):
@@ -122,7 +115,5 @@ class SimpleBenchClassFloat(ParametrizedSweep):
 
     result = ResultVar()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var1
-        return self.get_results_values_as_dict()

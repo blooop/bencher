@@ -13,9 +13,7 @@ class YamlDictConfig(bn.ParametrizedSweep):
     total_duration = bn.ResultVar(units="min", doc="Sum of all scheduled durations")
     average_duration = bn.ResultVar(units="min", doc="Average scheduled duration")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         key, config = self.plan
         durations = config.get("durations", [])
         total = sum(durations)
@@ -29,8 +27,6 @@ class YamlDictConfig(bn.ParametrizedSweep):
             "durations": list(durations),
             "resources": dict(config.get("resources", {})),
         }
-
-        return super().__call__()
 
 
 def example_yaml_sweep_dict(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

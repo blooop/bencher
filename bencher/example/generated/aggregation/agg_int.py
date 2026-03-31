@@ -1,7 +1,5 @@
 """Auto-generated example: Aggregate Last N (int)."""
 
-from typing import Any
-
 import bencher as bn
 
 
@@ -14,8 +12,7 @@ class GradientDirectionScale(bn.ParametrizedSweep):
 
     out = bn.ResultVar(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.direction == "positive":
             base = self.x
         elif self.direction == "negative":
@@ -28,7 +25,6 @@ class GradientDirectionScale(bn.ParametrizedSweep):
             self.out = base**2
         else:
             self.out = base**0.5
-        return super().__call__()
 
 
 def example_agg_int(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

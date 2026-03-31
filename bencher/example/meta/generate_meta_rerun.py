@@ -6,8 +6,6 @@ patterns but guard the rerun import so they run safely without the optional
 rerun-sdk dependency installed.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -24,15 +22,11 @@ class MetaRerun(MetaGeneratorBase):
 
     example = bn.StringSweep(RERUN_EXAMPLES, doc="Which rerun example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "capture_window":
             self._generate_capture_window()
         elif self.example == "rrd_publish":
             self._generate_rrd_publish()
-
-        return super().__call__()
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
@@ -64,8 +58,7 @@ class RerunSweep(bn.ParametrizedSweep):
 
     out_sin = bn.ResultVar(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
 
         # To capture rerun output as a report panel:
@@ -75,9 +68,7 @@ class RerunSweep(bn.ParametrizedSweep):
         #   self.out_pane = bn.capture_rerun_window(width=300, height=300)
         #
         # capture_rerun_window() embeds the data inline (base64) and loads
-        # the rerun viewer from CDN — no local file server needed.
-
-        return super().__call__(**kwargs)'''
+        # the rerun viewer from CDN — no local file server needed.'''
         body = """\
 bench = RerunSweep().to_bench(run_cfg)
 bench.plot_sweep(
@@ -142,8 +133,7 @@ class WaveSweep(bn.ParametrizedSweep):
 
     amplitude = bn.ResultVar(units="v", doc="Peak amplitude")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.amplitude = math.sin(self.frequency * math.pi)
 
         # To publish rerun data:
@@ -163,9 +153,7 @@ class WaveSweep(bn.ParametrizedSweep):
         #       branch_name="rerun_data",
         #       content_callback=bn.github_content,
         #   )
-        #   pane.show()
-
-        return super().__call__(**kwargs)'''
+        #   pane.show()'''
         body = """\
 bench = WaveSweep().to_bench(run_cfg)
 bench.plot_sweep(

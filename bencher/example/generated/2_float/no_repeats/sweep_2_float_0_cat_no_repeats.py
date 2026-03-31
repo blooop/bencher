@@ -1,7 +1,5 @@
 """Auto-generated example: 2 Float, 0 Categorical (no repeats)."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -15,10 +13,8 @@ class CompressionBench(bn.ParametrizedSweep):
 
     ratio = bn.ResultVar(units="x", doc="Compression ratio")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))
-        return super().__call__()
 
 
 def example_sweep_2_float_0_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

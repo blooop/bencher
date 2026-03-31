@@ -1,7 +1,5 @@
 """Auto-generated example: Result Var: 1D input."""
 
-from typing import Any
-
 import math
 
 import bencher as bn
@@ -15,11 +13,9 @@ class ResponseTimer(bn.ParametrizedSweep):
 
     latency = bn.ResultVar(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"api/users": 12.0, "api/orders": 25.0}[self.endpoint]
         self.latency = base + 0.5 * math.log1p(self.concurrency)
-        return super().__call__()
 
 
 def example_result_var_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

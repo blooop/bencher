@@ -1,7 +1,5 @@
 """Auto-generated example: Aggregated Optimisation."""
 
-from typing import Any
-
 import math
 import random
 
@@ -20,13 +18,11 @@ class AlgorithmBench(bn.ParametrizedSweep):
 
     loss = bn.ResultVar("loss", bn.OptDir.minimize, doc="Training loss (minimize)")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         algo_sensitivity = {"gradient_descent": 1.0, "adam": 0.6, "rmsprop": 0.8}
         optimal_lr = 0.01 * algo_sensitivity[self.algorithm]
         self.loss = (math.log10(self.learning_rate) - math.log10(optimal_lr)) ** 2
         self.loss += random.gauss(0, 0.02)
-        return super().__call__()
 
 
 def example_optim_aggregated(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
