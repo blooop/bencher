@@ -10,6 +10,7 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 (live capture, recording management, etc.).
 """
 
+import hashlib
 import logging
 import re
 import shutil
@@ -20,9 +21,6 @@ from urllib.parse import quote
 import panel as pn
 
 from .utils import publish_file
-
-# Port for the Panel server (must be known at render time so iframe URLs can be built).
-PANEL_PORT = 8051
 
 # Port for the local rerun web viewer server (when rerun-sdk is available).
 _RERUN_VIEWER_PORT = 9090
@@ -151,12 +149,14 @@ def rrd_file_to_pane(  # pragma: no cover
         version = _get_rerun_version()
         viewer_tpl = f"https://app.rerun.io/version/{version}/?url="
 
+    # Use a hash of the path for a stable, unique element ID.
+    uid = hashlib.sha256(str(rrd_path).encode()).hexdigest()[:12]
     return pn.pane.HTML(
-        f'<div id="rrd-wrap-{id(rrd_path)}"></div>'
+        f'<div id="rrd-wrap-{uid}"></div>'
         f"<script>"
         f"(function(){{"
         f'var rrdUrl=window.location.origin+"{rrd_static_path}";'
-        f'var el=document.getElementById("rrd-wrap-{id(rrd_path)}");'
+        f'var el=document.getElementById("rrd-wrap-{uid}");'
         f"el.innerHTML="
         f"""'<iframe src="{viewer_tpl}'+encodeURIComponent(rrdUrl)+'"'"""
         f""" +' width="{width}" height="{height}" frameborder="0"'"""
@@ -195,8 +195,11 @@ try {{
 </script></body></html>
 """
 
-# Cache of generated viewer HTML pages keyed by version.
-_cdn_viewer_versions: dict[str, str] = {}
+# Cache of written viewer page filenames, keyed by version (for /rrd_static/ URLs).
+_cdn_viewer_files: dict[str, str] = {}
+
+# Cache of rendered viewer HTML strings, keyed by version (for portable reports).
+_cdn_viewer_html: dict[str, str] = {}
 
 
 def _cdn_viewer_url(rrd_relative: Path, version: str) -> str:
@@ -207,25 +210,25 @@ def _cdn_viewer_url(rrd_relative: Path, version: str) -> str:
     from the jsDelivr CDN.  Both the viewer page and the .rrd are on the
     same HTTP origin, avoiding mixed-content blocks.
     """
-    if version not in _cdn_viewer_versions:
+    if version not in _cdn_viewer_files:
         html = _CDN_VIEWER_TEMPLATE.format(version=version)
         filename = f"viewer_{version}.html"
         viewer_path = _RRD_CACHE_DIR.resolve() / filename
         viewer_path.parent.mkdir(parents=True, exist_ok=True)
         if not viewer_path.exists() or viewer_path.read_text() != html:
             viewer_path.write_text(html)
-        _cdn_viewer_versions[version] = filename
+        _cdn_viewer_files[version] = filename
 
-    filename = _cdn_viewer_versions[version]
+    filename = _cdn_viewer_files[version]
     rrd_url = quote(f"/rrd_static/{rrd_relative.as_posix()}", safe="/:")
     return f"/rrd_static/{filename}?url={rrd_url}"
 
 
 def _get_cdn_viewer_html(version: str) -> str:
     """Return the viewer HTML string for a given rerun version (cached)."""
-    if version not in _cdn_viewer_versions:
-        _cdn_viewer_versions[version] = _CDN_VIEWER_TEMPLATE.format(version=version)
-    return _cdn_viewer_versions[version]
+    if version not in _cdn_viewer_html:
+        _cdn_viewer_html[version] = _CDN_VIEWER_TEMPLATE.format(version=version)
+    return _cdn_viewer_html[version]
 
 
 def _portable_rrd_pane(
