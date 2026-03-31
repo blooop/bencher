@@ -1,4 +1,4 @@
-"""Auto-generated example: Cartesian Product Animations — Visual exploration of parameter spaces."""
+"""Auto-generated example: Cartesian Product Animation — Visual exploration of parameter spaces."""
 
 from typing import Any
 
@@ -67,8 +67,8 @@ class CartesianAnimationSweep(bn.ParametrizedSweep):
         return super().__call__()
 
 
-def example_advanced_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Cartesian Product Animations — Visual exploration of parameter spaces."""
+def example_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    """Cartesian Product Animation — Visual exploration of parameter spaces."""
     bench = CartesianAnimationSweep().to_bench(run_cfg)
 
     bench.plot_sweep(
@@ -79,14 +79,17 @@ def example_advanced_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) 
             bn.sweep("time_steps", [0, 1, 6, 30]),
         ],
         result_vars=["animation"],
-        description="Demonstrates advanced animation generation by visualizing Cartesian product "
-        "exploration across different dimensionality combinations. Each animation shows how the "
-        "parameter space grid changes with varying spatial dimensions, repeat counts, and time steps.",
-        post_description="The animations illustrate the complexity scaling of parameter sweeps "
-        "and provide visual insight into multi-dimensional benchmark design patterns.",
+        description="Visualizes Cartesian product parameter spaces as animated "
+        "dimensional extrusions. Each animation shows how the parameter space "
+        "grid builds up: point to line to grid to 3D stack, with repeats shown "
+        "as tally marks and time steps as a film strip.",
+        post_description="The animations illustrate the complexity scaling of "
+        "parameter sweeps and provide visual insight into multi-dimensional "
+        "benchmark design patterns.",
     )
+
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_cartesian_animation, level=4, cache_results=False)
+    bn.run(example_cartesian_animation, level=4, cache_results=False)

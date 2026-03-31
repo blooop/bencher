@@ -375,6 +375,7 @@ class StrobeShape(Shape):
         self.count = count
         self.cfg = cfg
         self.flash = flash
+        self._skip_tally = False  # when True, draw() skips tallies (overlay mode)
         super().__init__(children=None, direction="right", depth=0)
 
     @property
@@ -419,11 +420,12 @@ class StrobeShape(Shape):
             blended = Image.blend(region, overlay, fill_alpha)
             base_img.paste(blended, (x, y))
 
-        # Tally marks + count label below
-        marks_y = y + box_h + 6
-        mark_color = tuple(int(v * alpha) for v in c.strobe_color)
-        avail_w = total_w - 2 * c.strobe_pad
-        self._draw_tally(img, x + c.strobe_pad, marks_y, avail_w, mark_color, c)
+        # Tally marks + count label below (skipped when drawn as fixed-size overlay)
+        if not self._skip_tally:
+            marks_y = y + box_h + 6
+            mark_color = tuple(int(v * alpha) for v in c.strobe_color)
+            avail_w = total_w - 2 * c.strobe_pad
+            self._draw_tally(img, x + c.strobe_pad, marks_y, avail_w, mark_color, c)
 
     def _draw_tally(self, img, mx0, my, avail_w, color, c):
         """Proper tally marks (vertical lines, diagonal strike every 5) + xN label.
@@ -482,6 +484,46 @@ class StrobeShape(Shape):
             tw = bbox[2] - bbox[0]
             lx = mx0 + (avail_w - tw) // 2
             img.text((lx, my - 1), label, fill=color, font=font)
+
+    def content_box_size(self) -> tuple[int, int]:
+        """Size of border + inner shape, excluding the tally mark row."""
+        iw, ih = self.inner.size()
+        c = self.cfg
+        return (iw + 2 * c.strobe_pad, ih + 2 * c.strobe_pad)
+
+    def draw_without_tally(self, img: ImageDraw.ImageDraw, x: int, y: int) -> None:
+        """Draw the shape without tallies, preserving previous state."""
+        prev = self._skip_tally
+        self._skip_tally = True
+        try:
+            self.draw(img, x, y)
+        finally:
+            self._skip_tally = prev
+
+    def draw_tally_overlay(
+        self, img: ImageDraw.ImageDraw, anchor_x: int, anchor_y: int, avail_w: int
+    ):
+        """Draw tally marks at fixed pixel size on the final frame."""
+        c = self.cfg
+        mark_color = tuple(int(v) for v in c.strobe_color)
+        self._draw_tally(img, anchor_x, anchor_y, avail_w, mark_color, c)
+
+    def draw_tally_overlay_for_box(
+        self, img: ImageDraw.ImageDraw, box_x: int, box_y: int, box_w: int, box_h: int
+    ) -> None:
+        """Draw fixed-size tally overlay below a rendered box.
+
+        Spacing is derived from cfg fields so layout stays consistent
+        when configuration changes.
+        """
+        c = self.cfg
+        v_gap = c.strobe_mark_row_h // 2
+        tally_margin = 2 * c.strobe_pad
+        tally_min_w = 4 * c.strobe_pad
+        tally_y = box_y + box_h + v_gap
+        tally_avail_w = max(box_w - tally_margin, tally_min_w)
+        tally_x = box_x + (box_w - tally_avail_w) // 2
+        self.draw_tally_overlay(img, tally_x, tally_y, tally_avail_w)
 
     def _deep_copy(self) -> "Shape":
         return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)  # pylint: disable=protected-access
@@ -570,25 +612,45 @@ def render_animation(
 
         # Reserve top 55px for text
         shape_area_top = 55
-        sw, sh = shape.size()
-        avail_w = width - 40
-        avail_h = height - shape_area_top - 10
+
+        # Detect top-level StrobeShape for fixed-size tally overlay
+        strobe_overlay = isinstance(shape, StrobeShape) and not isinstance(shape, TimelineShape)
+        if strobe_overlay:
+            # Use content box (no tally row) for scale — reserve fixed space for overlay
+            sw, sh = shape.content_box_size()
+            tally_reserve = shape.cfg.strobe_mark_row_h + shape.cfg.strobe_mark_row_h // 2
+            avail_w = width - 40
+            avail_h = height - shape_area_top - 10 - tally_reserve
+        else:
+            sw, sh = shape.size()
+            avail_w = width - 40
+            avail_h = height - shape_area_top - 10
+
         scale = min(avail_w / max(sw, 1), avail_h / max(sh, 1), 1.0)
 
         if scale < 1.0:
             big = Image.new("RGB", (sw + 40, sh + 10), BG_COLOR)
             big_draw = ImageDraw.Draw(big)
-            shape.draw(big_draw, 20, 5)
+            if strobe_overlay:
+                shape.draw_without_tally(big_draw, 20, 5)
+            else:
+                shape.draw(big_draw, 20, 5)
             new_w = int(big.width * scale)
             new_h = int(big.height * scale)
             big = big.resize((new_w, new_h), Image.Resampling.LANCZOS)
             paste_x = (width - big.width) // 2 + x_offset
             paste_y = shape_area_top + (avail_h - big.height) // 2
             img.paste(big, (paste_x, paste_y))
+            if strobe_overlay:
+                shape.draw_tally_overlay_for_box(draw, paste_x, paste_y, new_w, new_h)
         else:
             sx = (width - sw) // 2 + x_offset
             sy = shape_area_top + (avail_h - sh) // 2
-            shape.draw(draw, sx, sy)
+            if strobe_overlay:
+                shape.draw_without_tally(draw, sx, sy)
+                shape.draw_tally_overlay_for_box(draw, sx, sy, sw, sh)
+            else:
+                shape.draw(draw, sx, sy)
 
         # Line 1: dimension name (always visible)
         if current_dim_label:
