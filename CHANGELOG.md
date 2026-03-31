@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Deprecated `__call__()` in favor of `benchmark()`**: `ParametrizedSweep` subclasses should now override `benchmark()` instead of `__call__()`. The new method removes the need for `self.update_params_from_kwargs(**kwargs)` and `return super().__call__()` boilerplate. The old `__call__()` pattern still works but emits a `DeprecationWarning`.
 
+## [1.75.2] - 2026-03-31
+
+### Fixed
+- `.rrd` iframe URLs no longer hardcode `localhost:8051` — CDN viewer uses relative URLs, local/hosted viewer resolves `window.location.origin` at render time via JavaScript, so reports work behind container port mappings and on any Panel server port (#866)
+- Panel server uses `port=0` (OS-assigned) when no explicit port is given, preventing `OSError: Address already in use` when other services occupy the default port (#866)
+- `_cdn_viewer_versions` cache collision between `_cdn_viewer_url` (filenames) and `_get_cdn_viewer_html` (HTML strings) — split into separate caches (#866)
+
+### Changed
+- `show=True` in `BenchRunner.run()` now auto-saves a static HTML report to `reports/` alongside the live server, with the path logged for offline viewing (#866)
+
+### Removed
+- `PANEL_PORT` constant from `utils_rrd` — no longer needed since iframe URLs are resolved dynamically (#866)
+
 ## [1.74.0] - 2026-03-28
 
 ### Added
