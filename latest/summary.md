@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
 | Total tests | 1136 |
-| Total time | 105.40s |
-| Mean | 0.0928s |
+| Total time | 105.82s |
+| Mean | 0.0932s |
 | Median | 0.0010s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 23.017 |
-| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.261 |
-| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 3.971 |
-| `test.test_generated_examples::test_generated_example[cartesian_animation/cartesian_animation.py]` | 3.167 |
-| `test.test_generated_examples::test_generated_example[result_types/result_image/result_image_to_video.py]` | 2.822 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.600 |
-| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.229 |
-| `test.test_time_event_curve.TestTimeEventCurvePlot::test_curve_with_string_time_src_and_cat` | 1.165 |
-| `test.test_optuna_result.TestOptunaReportRouting::test_optuna_plots_per_sweep_tab` | 1.123 |
-| `test.test_bencher.TestBencher::test_combinations` | 1.055 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 23.444 |
+| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.334 |
+| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 3.794 |
+| `test.test_generated_examples::test_generated_example[cartesian_animation/cartesian_animation.py]` | 3.059 |
+| `test.test_generated_examples::test_generated_example[result_types/result_image/result_image_to_video.py]` | 2.864 |
+| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.652 |
+| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.245 |
+| `test.test_bench_result_base.TestAggOverDimsStd::test_2d_agg_both_dims` | 1.227 |
+| `test.test_bencher.TestBencher::test_combinations` | 1.092 |
+| `test.test_optuna_result.TestOptunaReportRouting::test_optuna_plots_per_sweep_tab` | 1.090 |
 
 </details>
