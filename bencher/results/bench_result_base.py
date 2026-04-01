@@ -218,6 +218,7 @@ class BenchResultBase:
             reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
         rv_key = result_var.name if isinstance(result_var, Parameter) else result_var
         dims_key = tuple(agg_over_dims) if agg_over_dims else None
+        # Default mirrors the fallback in to_dataset(): `fn = (agg_fn or "mean").lower()`
         fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
         return (reduce, rv_key, level, dims_key, fn_key)
 
@@ -236,14 +237,19 @@ class BenchResultBase:
 
         Returns:
             xr.Dataset: results in the form of an xarray dataset
+
+        Note:
+            Returned datasets are cached per instance. Do not mutate them in-place;
+            subsequent calls with the same arguments will return the same object.
         """
         cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
         cached = self._to_dataset_cache.get(cache_key)
         if cached is not None:
             return cached
 
-        # Use the resolved reduce from the cache key (AUTO already mapped)
-        reduce = cache_key[0]
+        # Resolve AUTO → concrete type (mirrors _to_dataset_cache_key logic)
+        if reduce == ReduceType.AUTO:
+            reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
 
         # Avoid an upfront copy for REDUCE/MINMAX — those reductions (.mean(),
         # .std(), .min(), .max()) always allocate new arrays, so the copy is
