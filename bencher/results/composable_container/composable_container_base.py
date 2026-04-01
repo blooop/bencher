@@ -40,6 +40,11 @@ class PaneLayout(StrEnum):
     tabs = auto()
     tabs_and_grid = auto()
 
+    @classmethod
+    def all(cls) -> list[PaneLayout]:
+        """Return all layout values.  Use this instead of hard-coded name lists."""
+        return list(cls)
+
 
 @dataclass(kw_only=True)
 class ComposableContainerBase:

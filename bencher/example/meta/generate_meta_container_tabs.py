@@ -13,14 +13,13 @@ OUTPUT_DIR = "container_tabs"
 _BENCHABLE_MODULE = "bencher.example.example_image"
 _BENCHABLE_CLASS = "BenchPolygons"
 
+_LAYOUT_NAMES = [pl.value for pl in bn.PaneLayout.all()]
+
 
 class MetaContainerTabLayout(MetaGeneratorBase):
     """Generate examples showing each PaneLayout with 2 input dimensions."""
 
-    layout = bn.StringSweep(
-        ["grid", "tabs", "tabs_and_grid"],
-        doc="Pane layout mode",
-    )
+    layout = bn.StringSweep(_LAYOUT_NAMES, doc="Pane layout mode")
 
     def benchmark(self):
         layout = self.layout
@@ -47,10 +46,7 @@ class MetaContainerTabLayout(MetaGeneratorBase):
 class MetaContainerTabLayout3D(MetaGeneratorBase):
     """Generate examples showing each PaneLayout with 3 input dimensions."""
 
-    layout = bn.StringSweep(
-        ["grid", "tabs", "tabs_and_grid"],
-        doc="Pane layout mode",
-    )
+    layout = bn.StringSweep(_LAYOUT_NAMES, doc="Pane layout mode")
 
     def benchmark(self):
         layout = self.layout
@@ -79,18 +75,16 @@ class MetaContainerTabLayout3D(MetaGeneratorBase):
 
 def example_meta_container_tabs(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Generate all container tab layout meta-examples."""
-    # 2D layout examples: one per PaneLayout
     bench = MetaContainerTabLayout().to_bench(run_cfg)
     bench.plot_sweep(
         title="Container Tab Layout Examples (2D)",
-        input_vars=[bn.sweep("layout", ["grid", "tabs", "tabs_and_grid"])],
+        input_vars=[bn.sweep("layout", _LAYOUT_NAMES)],
     )
 
-    # 3D layout examples: one per PaneLayout
     bench3d = MetaContainerTabLayout3D().to_bench(run_cfg)
     bench3d.plot_sweep(
         title="Container Tab Layout Examples (3D)",
-        input_vars=[bn.sweep("layout", ["grid", "tabs", "tabs_and_grid"])],
+        input_vars=[bn.sweep("layout", _LAYOUT_NAMES)],
     )
 
     return bench

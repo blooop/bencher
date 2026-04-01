@@ -676,6 +676,30 @@ class BenchResultBase:
             **kwargs,
         )
 
+    @staticmethod
+    def _child_pane_layout(pane_layout: PaneLayout) -> PaneLayout:
+        """Return the layout to use for child dimensions during recursion."""
+        if pane_layout == PaneLayout.tabs_and_grid:
+            return PaneLayout.grid
+        return pane_layout
+
+    def _iter_pane_slices(
+        self, dataset, selected_dim, plot_callback, target_dimension, result_var, child_layout
+    ):
+        """Yield (label_val, panes) for each slice along selected_dim."""
+        for i in range(dataset.sizes[selected_dim]):
+            sliced = dataset.isel({selected_dim: i})
+            label_val = sliced.coords[selected_dim].values.item()
+            panes = self._to_panes_da(
+                sliced,
+                plot_callback=plot_callback,
+                target_dimension=target_dimension,
+                horizontal=len(sliced.sizes) <= target_dimension + 1,
+                result_var=result_var,
+                pane_layout=child_layout,
+            )
+            yield label_val, panes
+
     def _to_panes_da(
         self,
         dataset: xr.Dataset,
@@ -698,14 +722,16 @@ class BenchResultBase:
         if num_pane_dims > target_dimension and num_pane_dims != 0:
             selected_dim = pane_dims[-1]
             dim_color = color_tuple_to_css(int_to_col(num_pane_dims - 2, 0.05, 1.0))
-
-            # Determine whether this dimension level uses tabs or grid
             use_tabs = pane_layout in (PaneLayout.tabs, PaneLayout.tabs_and_grid)
-
-            # For child dimensions: tabs stays tabs, tabs_and_grid becomes grid
-            child_layout = pane_layout
-            if pane_layout == PaneLayout.tabs_and_grid:
-                child_layout = PaneLayout.grid
+            child_layout = self._child_pane_layout(pane_layout)
+            slices = self._iter_pane_slices(
+                dataset,
+                selected_dim,
+                plot_callback,
+                target_dimension,
+                result_var,
+                child_layout,
+            )
 
             if use_tabs:
                 outer_container = ComposableContainerPanel(
@@ -713,19 +739,8 @@ class BenchResultBase:
                     background_col=dim_color,
                     compose_method=ComposeType.sequence,
                 )
-                for i in range(dataset.sizes[selected_dim]):
-                    sliced = dataset.isel({selected_dim: i})
-                    label_val = sliced.coords[selected_dim].values.item()
+                for label_val, panes in slices:
                     label = ComposableContainerBase.label_formatter(selected_dim, label_val)
-
-                    panes = self._to_panes_da(
-                        sliced,
-                        plot_callback=plot_callback,
-                        target_dimension=target_dimension,
-                        horizontal=len(sliced.sizes) <= target_dimension + 1,
-                        result_var=result_var,
-                        pane_layout=child_layout,
-                    )
                     outer_container.append((label, panes))
             else:
                 outer_container = ComposableContainerPanel(
@@ -734,24 +749,13 @@ class BenchResultBase:
                     compose_method=ComposeType.down if not horizontal else ComposeType.right,
                 )
                 max_len = 0
-                for i in range(dataset.sizes[selected_dim]):
-                    sliced = dataset.isel({selected_dim: i})
-                    label_val = sliced.coords[selected_dim].values.item()
+                for label_val, panes in slices:
                     inner_container = ComposableContainerPanel(
                         name=outer_container.name,
                         width=num_pane_dims - target_dimension,
                         var_name=selected_dim,
                         var_value=label_val,
                         compose_method=ComposeType.down if horizontal else ComposeType.right,
-                    )
-
-                    panes = self._to_panes_da(
-                        sliced,
-                        plot_callback=plot_callback,
-                        target_dimension=target_dimension,
-                        horizontal=len(sliced.sizes) <= target_dimension + 1,
-                        result_var=result_var,
-                        pane_layout=child_layout,
                     )
                     max_len = max(max_len, inner_container.label_len)
                     inner_container.append(panes)
