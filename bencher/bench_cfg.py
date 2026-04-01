@@ -13,6 +13,7 @@ from copy import deepcopy
 from bencher.variables.sweep_base import hash_sha1, describe_variable
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
+from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.job import Executors
 from bencher.results.laxtex_result import to_latex
 
@@ -217,6 +218,15 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")
+
+    pane_layout = param.Selector(
+        default=PaneLayout.grid,
+        objects=list(PaneLayout),
+        doc="Controls how multi-dimensional data is laid out in panel displays. "
+        "'grid' uses rows/columns (default). "
+        "'tabs' uses tabs for all outer dimensions. "
+        "'tabs_and_grid' uses tabs for the outermost dimension and grid for inner ones.",
+    )
 
     # ==================== TIME & HISTORY PARAMETERS ====================
     # These parameters control time-based features and historical tracking

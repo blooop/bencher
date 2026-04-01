@@ -27,7 +27,7 @@ from bencher.variables.results import ResultReference, ResultDataSet, ResultVide
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
-from bencher.results.composable_container.composable_container_base import ComposeType
+from bencher.results.composable_container.composable_container_base import ComposeType, PaneLayout
 
 from collections import defaultdict
 
@@ -519,6 +519,7 @@ class BenchResultBase:
         pane_collection: pn.pane = None,
         zip_results=False,
         reduce: ReduceType | None = None,
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.Row | None:
         if hv_dataset is None:
@@ -543,6 +544,7 @@ class BenchResultBase:
                         rv,
                         plot_callback=partial(plot_callback, **kwargs),
                         target_dimension=target_dimension,
+                        pane_layout=pane_layout,
                     )
                 )
 
@@ -570,6 +572,7 @@ class BenchResultBase:
         hv_dataset: hv.Dataset | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel | None:
         # Initialize default filters if not provided to avoid shared mutable defaults
@@ -634,6 +637,7 @@ class BenchResultBase:
                 result_types=result_types,
                 pane_collection=pane_collection,
                 reduce=reduce,
+                pane_layout=pane_layout,
                 **kwargs,
             )
         return matches_res.to_panel()
@@ -644,6 +648,7 @@ class BenchResultBase:
         result_var: ResultVar,
         plot_callback: Callable | None = None,
         target_dimension: int = 1,
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ):
         dims = len(hv_dataset.dimensions())
@@ -663,6 +668,7 @@ class BenchResultBase:
             target_dimension=target_dimension,
             horizontal=pane_dims <= target_dimension + 1,
             result_var=result_var,
+            pane_layout=pane_layout,
             **kwargs,
         )
 
@@ -673,6 +679,7 @@ class BenchResultBase:
         target_dimension=1,
         horizontal=False,
         result_var=None,
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel:
         dims = list(d for d in dataset.sizes)
@@ -686,38 +693,67 @@ class BenchResultBase:
 
         if num_pane_dims > target_dimension and num_pane_dims != 0:
             selected_dim = pane_dims[-1]
-            # print(f"selected dim {dim_sel}")
             dim_color = color_tuple_to_css(int_to_col(num_pane_dims - 2, 0.05, 1.0))
 
-            outer_container = ComposableContainerPanel(
-                name=" vs ".join(pane_dims),
-                background_col=dim_color,
-                compose_method=ComposeType.down if not horizontal else ComposeType.right,
-            )
-            max_len = 0
-            for i in range(dataset.sizes[selected_dim]):
-                sliced = dataset.isel({selected_dim: i})
-                label_val = sliced.coords[selected_dim].values.item()
-                inner_container = ComposableContainerPanel(
-                    name=outer_container.name,
-                    width=num_pane_dims - target_dimension,
-                    var_name=selected_dim,
-                    var_value=label_val,
-                    compose_method=ComposeType.down if horizontal else ComposeType.right,
-                )
+            # Determine whether this dimension level uses tabs or grid
+            use_tabs = pane_layout in (PaneLayout.tabs, PaneLayout.tabs_and_grid)
 
-                panes = self._to_panes_da(
-                    sliced,
-                    plot_callback=plot_callback,
-                    target_dimension=target_dimension,
-                    horizontal=len(sliced.sizes) <= target_dimension + 1,
-                    result_var=result_var,
+            # For child dimensions: tabs stays tabs, tabs_and_grid becomes grid
+            child_layout = pane_layout
+            if pane_layout == PaneLayout.tabs_and_grid:
+                child_layout = PaneLayout.grid
+
+            if use_tabs:
+                outer_container = ComposableContainerPanel(
+                    name=" vs ".join(pane_dims),
+                    background_col=dim_color,
+                    compose_method=ComposeType.sequence,
                 )
-                max_len = max(max_len, inner_container.label_len)
-                inner_container.append(panes)
-                outer_container.append(inner_container.container)
-            for c in outer_container.container:
-                c[0].width = max_len * 7
+                for i in range(dataset.sizes[selected_dim]):
+                    sliced = dataset.isel({selected_dim: i})
+                    label_val = sliced.coords[selected_dim].values.item()
+                    label = ComposableContainerBase.label_formatter(selected_dim, label_val)
+
+                    panes = self._to_panes_da(
+                        sliced,
+                        plot_callback=plot_callback,
+                        target_dimension=target_dimension,
+                        horizontal=len(sliced.sizes) <= target_dimension + 1,
+                        result_var=result_var,
+                        pane_layout=child_layout,
+                    )
+                    outer_container.append((label, panes))
+            else:
+                outer_container = ComposableContainerPanel(
+                    name=" vs ".join(pane_dims),
+                    background_col=dim_color,
+                    compose_method=ComposeType.down if not horizontal else ComposeType.right,
+                )
+                max_len = 0
+                for i in range(dataset.sizes[selected_dim]):
+                    sliced = dataset.isel({selected_dim: i})
+                    label_val = sliced.coords[selected_dim].values.item()
+                    inner_container = ComposableContainerPanel(
+                        name=outer_container.name,
+                        width=num_pane_dims - target_dimension,
+                        var_name=selected_dim,
+                        var_value=label_val,
+                        compose_method=ComposeType.down if horizontal else ComposeType.right,
+                    )
+
+                    panes = self._to_panes_da(
+                        sliced,
+                        plot_callback=plot_callback,
+                        target_dimension=target_dimension,
+                        horizontal=len(sliced.sizes) <= target_dimension + 1,
+                        result_var=result_var,
+                        pane_layout=child_layout,
+                    )
+                    max_len = max(max_len, inner_container.label_len)
+                    inner_container.append(panes)
+                    outer_container.append(inner_container.container)
+                for c in outer_container.container:
+                    c[0].width = max_len * 7
         else:
             # When over_time is active with >1 time points, the dataset still
             # contains the over_time dimension (it was excluded from pane recursion
@@ -733,7 +769,7 @@ class BenchResultBase:
                 return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
-        return outer_container.container
+        return outer_container.render()
 
     def _pane_over_time_slider(
         self,

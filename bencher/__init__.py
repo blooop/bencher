@@ -39,6 +39,7 @@ from .variables.results import (
 from .results.composable_container.composable_container_base import (
     ComposeType,
     ComposableContainerBase,
+    PaneLayout,
 )
 from .results.composable_container.composable_container_video import (
     ComposableContainerVideo,

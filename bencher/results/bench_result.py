@@ -254,6 +254,7 @@ class BenchResult(
             )
             plot_cols.append(self.to(BandResult, aggregate=input_names))
 
+        kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
