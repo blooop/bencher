@@ -96,6 +96,7 @@ class BenchResultBase:
         self.dataset_list = []
         self.regression_report = None
         self.perf_report = None
+        self._to_dataset_cache: dict = {}
 
         # self.width=600/
         # self.height=600
@@ -159,6 +160,7 @@ class BenchResultBase:
         self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg)
         self.bench_cfg = self.wrap_long_time_labels(self.bench_cfg)
         self.ds = convert_dataset_bool_dims_to_str(self.ds)
+        self._to_dataset_cache.clear()
 
     def result_samples(self) -> int:
         """The number of samples in the results dataframe"""
@@ -202,6 +204,23 @@ class BenchResultBase:
             )
         )
 
+    def _to_dataset_cache_key(
+        self,
+        reduce: ReduceType,
+        result_var: ResultVar | str | None,
+        level: int | None,
+        agg_over_dims: list[str] | None,
+        agg_fn: str | None,
+    ) -> tuple:
+        """Build a hashable cache key from normalized to_dataset() arguments."""
+        # Resolve AUTO so that AUTO and its resolved type share the same cache entry
+        if reduce == ReduceType.AUTO:
+            reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+        rv_key = result_var.name if isinstance(result_var, Parameter) else result_var
+        dims_key = tuple(agg_over_dims) if agg_over_dims else None
+        fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
+        return (reduce, rv_key, level, dims_key, fn_key)
+
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
@@ -218,8 +237,13 @@ class BenchResultBase:
         Returns:
             xr.Dataset: results in the form of an xarray dataset
         """
-        if reduce == ReduceType.AUTO:
-            reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+        cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
+        cached = self._to_dataset_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Use the resolved reduce from the cache key (AUTO already mapped)
+        reduce = cache_key[0]
 
         # Avoid an upfront copy for REDUCE/MINMAX — those reductions (.mean(),
         # .std(), .min(), .max()) always allocate new arrays, so the copy is
@@ -334,7 +358,10 @@ class BenchResultBase:
             for c, v in ds_out.coords.items():
                 if c != "repeat":
                     coords_no_repeat[c] = with_level(v.to_numpy(), level)
-            return ds_out.sel(coords_no_repeat)
+            ds_out = ds_out.sel(coords_no_repeat)
+            self._to_dataset_cache[cache_key] = ds_out
+            return ds_out
+        self._to_dataset_cache[cache_key] = ds_out
         return ds_out
 
     def get_optimal_vec(

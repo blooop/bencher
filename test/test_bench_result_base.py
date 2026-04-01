@@ -489,3 +489,42 @@ class TestBenchResultBase(unittest.TestCase):
         res = self._make_1d_result()
         samples = res.result_samples()
         self.assertIsNotNone(samples)
+
+    def test_to_dataset_cache_returns_same_object(self):
+        """Identical args should return the exact same cached object."""
+        res = self._make_1d_result(repeats=2)
+        ds1 = res.to_dataset(reduce=ReduceType.REDUCE)
+        ds2 = res.to_dataset(reduce=ReduceType.REDUCE)
+        self.assertIs(ds1, ds2)
+
+    def test_to_dataset_cache_auto_resolves(self):
+        """AUTO and its resolved type should share the same cache entry."""
+        res = self._make_1d_result(repeats=2)
+        ds_auto = res.to_dataset(reduce=ReduceType.AUTO)
+        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE)
+        self.assertIs(ds_auto, ds_reduce)
+
+    def test_to_dataset_cache_different_args(self):
+        """Different args should produce different cache entries."""
+        res = self._make_1d_result(repeats=2)
+        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE)
+        ds_none = res.to_dataset(reduce=ReduceType.NONE)
+        self.assertIsNot(ds_reduce, ds_none)
+
+    def test_to_dataset_cache_result_var_normalization(self):
+        """Parameter and string for the same result_var should hit same cache entry."""
+        res = self._make_1d_result()
+        rv_param = res.bench_cfg.result_vars[0]
+        ds_param = res.to_dataset(result_var=rv_param)
+        ds_str = res.to_dataset(result_var=rv_param.name)
+        self.assertIs(ds_param, ds_str)
+
+    def test_to_dataset_cache_cleared_on_post_setup(self):
+        """Cache should be invalidated when post_setup() is called."""
+        res = self._make_1d_result()
+        ds1 = res.to_dataset()
+        self.assertTrue(len(res._to_dataset_cache) > 0)  # pylint: disable=protected-access
+        res.post_setup()
+        self.assertEqual(len(res._to_dataset_cache), 0)  # pylint: disable=protected-access
+        ds2 = res.to_dataset()
+        self.assertIsNot(ds1, ds2)
