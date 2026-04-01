@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
-| Total tests | 1136 |
-| Total time | 111.55s |
-| Mean | 0.0982s |
+| Total tests | 1145 |
+| Total time | 103.77s |
+| Mean | 0.0906s |
 | Median | 0.0010s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 24.596 |
-| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.624 |
-| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 4.046 |
-| `test.test_generated_examples::test_generated_example[cartesian_animation/cartesian_animation.py]` | 3.086 |
-| `test.test_generated_examples::test_generated_example[result_types/result_image/result_image_to_video.py]` | 2.994 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.765 |
-| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.300 |
-| `test.test_optuna_result.TestOptunaReportRouting::test_optuna_plots_per_sweep_tab` | 1.161 |
-| `test.test_bencher.TestBencher::test_combinations` | 1.132 |
-| `test.test_generated_examples::test_generated_example[1_float/over_time_repeats/sweep_1_float_3_cat_over_time_repeats.py]` | 1.120 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 23.328 |
+| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.059 |
+| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 3.621 |
+| `test.test_generated_examples::test_generated_example[result_types/result_image/result_image_to_video.py]` | 3.606 |
+| `test.test_generated_examples::test_generated_example[cartesian_animation/cartesian_animation.py]` | 2.879 |
+| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.560 |
+| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.150 |
+| `test.test_generated_examples::test_generated_example[3_float/over_time/sweep_3_float_2_cat_over_time.py]` | 1.143 |
+| `test.test_over_time_repeats.TestShowAggregatedTimeTab::test_curve_aggregated_tab_absent_when_disabled` | 1.055 |
+| `test.test_optuna_result.TestOptunaReportRouting::test_optuna_plots_per_sweep_tab` | 1.035 |
 
 </details>
