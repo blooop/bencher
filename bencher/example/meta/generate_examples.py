@@ -124,6 +124,7 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_cartesian_animation import (
         example_meta_cartesian_animation,
     )
+    from bencher.example.meta.generate_meta_container_tabs import example_meta_container_tabs
 
     example_meta()
     example_meta_result_types()
@@ -147,6 +148,7 @@ def generate_python_files():
     example_meta_rerun()
     example_meta_aggregation()
     example_meta_cartesian_animation()
+    example_meta_container_tabs()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -427,6 +429,7 @@ SECTION_GROUPS = [
             ("Level System", "levels"),
             ("Sampling Strategies", "sampling"),
             ("Composable Containers", "composable_containers"),
+            ("Container Tab Layouts", "container_tabs"),
             ("Aggregation", "aggregation"),
             ("Constant Variables", "const_vars"),
             ("Statistics", "statistics"),

@@ -119,6 +119,7 @@ are:
 | `rerun_` | `rerun/` | example |
 | `agg_` | `aggregation/` | aggregation form, agg_fn |
 | `cartesian_` | `cartesian_animation/` | (single example) |
+| `container_tab_` | `container_tabs/` | layout mode, dimensionality |
 
 **Rules for adding new generators:**
 1. Pick a short, unique section prefix that does not collide with existing prefixes.
