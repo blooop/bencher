@@ -27,7 +27,11 @@ from bencher.variables.results import ResultReference, ResultDataSet, ResultVide
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
-from bencher.results.composable_container.composable_container_base import ComposeType, PaneLayout
+from bencher.results.composable_container.composable_container_base import (
+    ComposeType,
+    ComposableContainerBase,
+    PaneLayout,
+)
 
 from collections import defaultdict
 
