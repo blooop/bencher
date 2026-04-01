@@ -650,7 +650,7 @@ Every change in this plan must pass:
 | **P1** | 2.1 Deduplicate `plot_sweep()` copies | Low | Low | Moderate | **DONE** (single-copy pattern in place) |
 | **P1** | 2.5 Filter-then-copy kwargs | Low | Low | High for large sweeps | **DONE** (PR #816) |
 | **P1** | 4.1 Avoid dataset copy in `to_dataset()` | Medium | High | High | **DONE** — skip copy for REDUCE/MINMAX (reductions create new arrays); deep copy only for SQUEEZE/NONE |
-| **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | |
+| **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | **DONE** — eliminated redundant entry-level deepcopy; per-iteration copy retained (needed for isolation) |
 | **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | **DONE** (PR #811) |
 | **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | **DONE** (PR #813) |
 | **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |

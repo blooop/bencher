@@ -322,10 +322,12 @@ class BenchRunner:
             if repeats == 1:  # Only override if repeats is still default
                 repeats = start_repeats
 
-        if run_cfg is None:
-            run_cfg = deepcopy(self.run_cfg)
+        # setup_run_cfg() always deepcopies its input, so passing self.run_cfg
+        # directly is safe — no redundant intermediate copy needed.
         run_cfg = BenchRunner.setup_run_cfg(
-            run_cfg, cache_results=cache_results, over_time=over_time
+            run_cfg if run_cfg is not None else self.run_cfg,
+            cache_results=cache_results,
+            over_time=over_time,
         )
 
         # Set up level and repeat ranges
