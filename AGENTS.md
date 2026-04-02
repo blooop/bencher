@@ -59,6 +59,7 @@ Bencher is a benchmarking framework built around these core concepts:
 - **ComposableContainer**: Framework for combining multiple result types
 - **Video/Image Results**: Support for multimedia outputs
 - Results automatically cached using diskcache based on parameter hashes
+- **Result type selection**: Use `ResultBool` for binary outcomes (success/failure), `ResultVar` for continuous metrics, `ResultString` for text, `ResultImage`/`ResultVideo`/`ResultPath` for files
 
 ### Data Flow
 1. Define parameter sweep configuration class inheriting from ParametrizedSweep
