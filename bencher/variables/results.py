@@ -90,7 +90,11 @@ class OptDir(StrEnum):
 
 
 class ResultVar(Number):
-    """A class to represent result variables and the desired optimisation direction"""
+    """A class to represent continuous result variables and the desired optimisation direction.
+
+    For boolean (success/failure) outcomes, use ``ResultBool`` instead — it locks
+    bounds to [0, 1] and produces correct boolean-style plots.
+    """
 
     __slots__ = ["units", "direction"]
 
