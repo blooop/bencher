@@ -18,7 +18,7 @@ class UniformSampler(bn.ParametrizedSweep):
 
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     def benchmark(self):
         self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)'''
@@ -29,7 +29,7 @@ class CustomSampler(bn.ParametrizedSweep):
 
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     def benchmark(self):
         self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)'''
@@ -41,7 +41,7 @@ class IntFloatCompare(bn.ParametrizedSweep):
     int_input = bn.IntSweep(default=5, bounds=[0, 10], doc="Discrete integer input")
     float_input = bn.FloatSweep(default=5.0, bounds=[0.0, 10.0], doc="Continuous float input")
 
-    output = bn.ResultVar("ul", doc="Computed output")
+    output = bn.ResultFloat("ul", doc="Computed output")
 
     def benchmark(self):
         self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)'''

@@ -118,9 +118,9 @@ class SimpleBench(bn.ParametrizedSweep):
     """Simple fixture: 1 float input, 3 result vars."""
 
     x = bn.FloatSweep(default=1.0, bounds=[0, 2], samples=5, doc="x")
-    r1 = bn.ResultVar(units="s", doc="result 1")
-    r2 = bn.ResultVar(units="s", doc="result 2")
-    r3 = bn.ResultVar(units="s", doc="result 3")
+    r1 = bn.ResultFloat(units="s", doc="result 1")
+    r2 = bn.ResultFloat(units="s", doc="result 2")
+    r3 = bn.ResultFloat(units="s", doc="result 3")
 
     offset = 0.0
 
@@ -135,11 +135,11 @@ class ComplexBench(bn.ParametrizedSweep):
 
     x = bn.FloatSweep(default=1.0, bounds=[0, 2], samples=5, doc="x")
     cat = bn.StringSweep(["alpha", "beta", "gamma"], doc="category")
-    r1 = bn.ResultVar(units="s", doc="result 1")
-    r2 = bn.ResultVar(units="s", doc="result 2")
-    r3 = bn.ResultVar(units="s", doc="result 3")
-    r4 = bn.ResultVar(units="s", doc="result 4")
-    r5 = bn.ResultVar(units="s", doc="result 5")
+    r1 = bn.ResultFloat(units="s", doc="result 1")
+    r2 = bn.ResultFloat(units="s", doc="result 2")
+    r3 = bn.ResultFloat(units="s", doc="result 3")
+    r4 = bn.ResultFloat(units="s", doc="result 4")
+    r5 = bn.ResultFloat(units="s", doc="result 5")
 
     offset = 0.0
 

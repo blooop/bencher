@@ -13,7 +13,7 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
 
     workload = bn.StringSweep(["light", "medium", "heavy"], doc="Workload intensity")
 
-    throughput = bn.ResultVar(units="req/s", doc="Requests per second")
+    throughput = bn.ResultFloat(units="req/s", doc="Requests per second")
 
     _event_idx = 0  # set externally per event
 

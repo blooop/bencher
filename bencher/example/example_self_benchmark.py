@@ -18,7 +18,7 @@ class TrivialWorkload(bn.ParametrizedSweep):
     """A near-zero-cost worker so we measure framework overhead, not compute."""
 
     x = bn.FloatSweep(default=0, bounds=[0, 1], samples=2)
-    result = bn.ResultVar(units="v", doc="trivial output")
+    result = bn.ResultFloat(units="v", doc="trivial output")
 
     def benchmark(self):
         self.result = self.x * 2
@@ -36,13 +36,13 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
     use_cache = bn.BoolSweep(default=False, doc="Whether sample caching is enabled")
 
     # Result variables — one per timing phase
-    total_ms = bn.ResultVar(units="ms", doc="Total sweep wall-clock time")
-    dataset_setup_ms = bn.ResultVar(units="ms", doc="Dataset initialization time")
-    job_submission_ms = bn.ResultVar(units="ms", doc="Job creation and submission time")
-    job_execution_ms = bn.ResultVar(units="ms", doc="Worker execution and result storage time")
-    cache_check_ms = bn.ResultVar(units="ms", doc="Benchmark cache lookup time")
-    sample_cache_init_ms = bn.ResultVar(units="ms", doc="Sample cache initialization time")
-    throughput = bn.ResultVar(units="samples/s", doc="Samples processed per second")
+    total_ms = bn.ResultFloat(units="ms", doc="Total sweep wall-clock time")
+    dataset_setup_ms = bn.ResultFloat(units="ms", doc="Dataset initialization time")
+    job_submission_ms = bn.ResultFloat(units="ms", doc="Job creation and submission time")
+    job_execution_ms = bn.ResultFloat(units="ms", doc="Worker execution and result storage time")
+    cache_check_ms = bn.ResultFloat(units="ms", doc="Benchmark cache lookup time")
+    sample_cache_init_ms = bn.ResultFloat(units="ms", doc="Sample cache initialization time")
+    throughput = bn.ResultFloat(units="samples/s", doc="Samples processed per second")
 
     def benchmark(self):
         workload = TrivialWorkload()

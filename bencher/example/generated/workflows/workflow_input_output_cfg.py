@@ -7,8 +7,10 @@ import bencher as bn
 class ServerMetrics(bn.ParametrizedSweep):
     """Output metrics from the server benchmark."""
 
-    throughput = bn.ResultVar(units="req/s", direction=bn.OptDir.maximize, doc="Request throughput")
-    latency = bn.ResultVar(units="ms", direction=bn.OptDir.minimize, doc="Response latency")
+    throughput = bn.ResultFloat(
+        units="req/s", direction=bn.OptDir.maximize, doc="Request throughput"
+    )
+    latency = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize, doc="Response latency")
 
 
 class ServerConfig(bn.ParametrizedSweep):

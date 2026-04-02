@@ -8,7 +8,7 @@ Every `ParametrizedSweep` subclass currently requires users to override `__call_
 # CURRENT — verbose, error-prone
 class MyBench(bn.ParametrizedSweep):
     x = bn.FloatSweep(bounds=(0, 1))
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)  # boilerplate
@@ -22,7 +22,7 @@ The goal is to replace this with a streamlined `benchmark()` method:
 # NEW — clean, no boilerplate
 class MyBench(bn.ParametrizedSweep):
     x = bn.FloatSweep(bounds=(0, 1))
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = math.sin(self.x)

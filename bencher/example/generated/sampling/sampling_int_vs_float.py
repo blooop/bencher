@@ -11,7 +11,7 @@ class IntFloatCompare(bn.ParametrizedSweep):
     int_input = bn.IntSweep(default=5, bounds=[0, 10], doc="Discrete integer input")
     float_input = bn.FloatSweep(default=5.0, bounds=[0.0, 10.0], doc="Continuous float input")
 
-    output = bn.ResultVar("ul", doc="Computed output")
+    output = bn.ResultFloat("ul", doc="Computed output")
 
     def benchmark(self):
         self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)

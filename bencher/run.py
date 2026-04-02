@@ -135,7 +135,7 @@ def run(
                     _pn.pane.Markdown(
                         "**Optimisation skipped**: no result variables have an optimization "
                         "direction. Set `direction=OptDir.minimize` or `OptDir.maximize` "
-                        "on your `ResultVar`."
+                        "on your `ResultFloat`."
                     )
                 )
             elif bench.results:

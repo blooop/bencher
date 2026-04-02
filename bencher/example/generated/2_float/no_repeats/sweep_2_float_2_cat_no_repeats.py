@@ -13,7 +13,7 @@ class CompressionSuite(bn.ParametrizedSweep):
     codec = bn.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")
     effort = bn.StringSweep(["fast", "balanced", "max"], doc="Compression effort")
 
-    ratio = bn.ResultVar(units="x", doc="Compression ratio")
+    ratio = bn.ResultFloat(units="x", doc="Compression ratio")
 
     def benchmark(self):
         codec_eff = {"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}[self.codec]

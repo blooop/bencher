@@ -14,7 +14,7 @@ class ServerLatency(bn.ParametrizedSweep):
 
     endpoint = bn.StringSweep(["/api/users", "/api/orders", "/api/health"], doc="API endpoint")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     def benchmark(self):
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]

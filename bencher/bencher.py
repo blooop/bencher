@@ -996,7 +996,7 @@ class Bench(BenchPlotServer):
             logging.warning(
                 "No result variables with an optimization direction found. "
                 "Skipping optimization. Set direction=OptDir.minimize or "
-                "OptDir.maximize on your ResultVar to enable optimization."
+                "OptDir.maximize on your ResultFloat to enable optimization."
             )
             return None
         directions = [t.direction for t in targets]

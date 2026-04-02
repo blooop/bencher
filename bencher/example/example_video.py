@@ -30,7 +30,7 @@ class TuringPattern(bn.ParametrizedSweep):
     dt = bn.FloatSweep(default=0.001, doc="simulation time step")
 
     video = bn.ResultVideo()
-    score = bn.ResultVar()
+    score = bn.ResultFloat()
     img = bn.ResultImage()
     img_extracted = bn.ResultImage()
 

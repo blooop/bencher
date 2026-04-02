@@ -11,7 +11,7 @@ class HeatmapDemo(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Surface height")
+    distance = bn.ResultFloat("m", doc="Surface height")
 
     def benchmark(self):
         self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)

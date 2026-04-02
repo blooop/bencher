@@ -55,7 +55,7 @@ class TestResultCollector(unittest.TestCase):
         self.assertGreater(total_jobs, 0)
 
     def test_setup_dataset_result_vars_scalar(self):
-        """Test ResultVar creates float data_vars."""
+        """Test ResultFloat creates float data_vars."""
         instance = ExampleBenchCfg()
         instance.param.theta.samples = 3
 
@@ -349,7 +349,7 @@ class TestCacheOperations(unittest.TestCase):
             mock_concat.assert_not_called()
 
     def test_add_metadata_to_dataset_scalar_result(self):
-        """add_metadata_to_dataset should set attrs for scalar ResultVar."""
+        """add_metadata_to_dataset should set attrs for scalar ResultFloat."""
         instance = ExampleBenchCfg()
         bench_cfg = BenchCfg(
             input_vars=[instance.param.theta],

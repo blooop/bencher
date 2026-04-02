@@ -13,7 +13,7 @@ class SortAnalysis(bn.ParametrizedSweep):
     algorithm = bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
     distribution = bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")
 
-    time = bn.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultFloat(units="ms", doc="Sort duration")
 
     _time_offset = 0.0
 

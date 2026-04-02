@@ -9,7 +9,7 @@ class GradientScale(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[0, 1], doc="X position")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
     def benchmark(self):
         if self.scale == "linear":

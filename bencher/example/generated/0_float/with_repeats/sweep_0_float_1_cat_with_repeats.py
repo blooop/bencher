@@ -10,7 +10,7 @@ class CacheBackend(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
 
-    latency = bn.ResultVar(units="ms", doc="Cache lookup latency")
+    latency = bn.ResultFloat(units="ms", doc="Cache lookup latency")
 
     def benchmark(self):
         base = {"redis": 1.2, "memcached": 1.5, "local": 0.3}[self.backend]

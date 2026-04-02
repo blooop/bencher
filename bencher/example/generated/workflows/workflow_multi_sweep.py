@@ -11,8 +11,8 @@ class DataPipeline(bn.ParametrizedSweep):
     parallelism = bn.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
     storage = bn.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
 
-    throughput = bn.ResultVar(units="rows/s", doc="Processing throughput")
-    latency = bn.ResultVar(units="ms", doc="Per-batch latency")
+    throughput = bn.ResultFloat(units="rows/s", doc="Processing throughput")
+    latency = bn.ResultFloat(units="ms", doc="Per-batch latency")
 
     def benchmark(self):
         storage_factor = {"ssd": 1.0, "hdd": 0.4, "network": 0.25}[self.storage]

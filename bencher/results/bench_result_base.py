@@ -18,7 +18,7 @@ from bencher.variables.inputs import with_level
 
 from bencher.variables.results import OptDir
 from copy import deepcopy
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import ResultFloat, ResultBool
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
@@ -171,7 +171,7 @@ class BenchResultBase:
     def to_hv_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
@@ -209,7 +209,7 @@ class BenchResultBase:
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | str | None = None,
+        result_var: ResultFloat | str | None = None,
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
@@ -458,7 +458,7 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[ResultVar]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[Parameter]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(
@@ -518,7 +518,7 @@ class BenchResultBase:
         plot_callback: Callable,
         hv_dataset: hv.Dataset = None,
         target_dimension: int = 2,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         zip_results=False,
@@ -569,7 +569,7 @@ class BenchResultBase:
         input_range: VarRange | None = None,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         override=False,
@@ -649,7 +649,7 @@ class BenchResultBase:
     def to_panes_multi_panel(
         self,
         hv_dataset: hv.Dataset,
-        result_var: ResultVar,
+        result_var: ResultFloat,
         plot_callback: Callable | None = None,
         target_dimension: int = 1,
         pane_layout: PaneLayout = PaneLayout.grid,
