@@ -13,7 +13,7 @@ class ServerOptimizer(bn.ParametrizedSweep):
     cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")
     memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")
 
-    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance score")
+    performance = bn.ResultFloat("score", bn.OptDir.maximize, doc="Performance score")
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 

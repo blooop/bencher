@@ -17,7 +17,7 @@ class ThermalPlate(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Horizontal position on plate")
     y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate")
 
-    temperature = bn.ResultVar(units="C", doc="Measured temperature")
+    temperature = bn.ResultFloat(units="C", doc="Measured temperature")
 
     _time_offset = 0.0  # set externally per snapshot
 

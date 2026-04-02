@@ -11,7 +11,7 @@ class GradientSurface(bn.ParametrizedSweep):
     direction = bn.StringSweep(["diagonal", "horizontal", "vertical"], doc="Gradient direction")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
     def benchmark(self):
         if self.direction == "diagonal":

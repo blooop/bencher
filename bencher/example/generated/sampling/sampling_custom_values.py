@@ -9,7 +9,7 @@ class CustomSampler(bn.ParametrizedSweep):
 
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     def benchmark(self):
         self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)

@@ -9,7 +9,7 @@ class NetworkConfig(bn.ParametrizedSweep):
     protocol = bn.StringSweep(["http", "grpc"], doc="Network protocol")
     region = bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
 
-    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
+    throughput = bn.ResultFloat(units="req/s", doc="Request throughput")
 
     def benchmark(self):
         proto_factor = {"http": 1.0, "grpc": 1.8}[self.protocol]

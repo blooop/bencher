@@ -32,7 +32,7 @@ class WaveSweep(bn.ParametrizedSweep):
 
     frequency = bn.FloatSweep(default=1.0, bounds=[0.5, 4.0], doc="Wave frequency", units="Hz")
 
-    amplitude = bn.ResultVar(units="v", doc="Peak amplitude")
+    amplitude = bn.ResultFloat(units="v", doc="Peak amplitude")
 
     def benchmark(self):
         self.amplitude = math.sin(self.frequency * math.pi)

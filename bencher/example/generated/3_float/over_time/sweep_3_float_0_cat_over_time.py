@@ -13,7 +13,7 @@ class HashBenchmark(bn.ParametrizedSweep):
     payload_size = bn.FloatSweep(default=1024, bounds=[64, 65536], doc="Payload size in bytes")
     iterations = bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")
 
-    throughput = bn.ResultVar(units="MB/s", doc="Hash throughput")
+    throughput = bn.ResultFloat(units="MB/s", doc="Hash throughput")
 
     _time_offset = 0.0
 

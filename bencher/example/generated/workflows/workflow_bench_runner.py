@@ -8,7 +8,7 @@ class SineWave(bn.ParametrizedSweep):
     """A sine wave — one of two benchmarks combined by BenchRunner."""
 
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
-    out_sin = bn.ResultVar(units="V", doc="Sine output")
+    out_sin = bn.ResultFloat(units="V", doc="Sine output")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)

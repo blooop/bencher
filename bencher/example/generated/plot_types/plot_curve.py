@@ -12,7 +12,7 @@ class LatencyNoisyProfile(bn.ParametrizedSweep):
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Latency distance metric")
+    distance = bn.ResultFloat("m", doc="Latency distance metric")
 
     def benchmark(self):
         self.distance = math.sin(math.pi * self.load) + 0.5

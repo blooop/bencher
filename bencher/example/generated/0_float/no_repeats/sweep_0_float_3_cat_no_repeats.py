@@ -10,7 +10,7 @@ class DeploymentConfig(bn.ParametrizedSweep):
     region = bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
     log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging level")
 
-    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
+    throughput = bn.ResultFloat(units="req/s", doc="Request throughput")
 
     def benchmark(self):
         proto_factor = {"http": 1.0, "grpc": 1.8}[self.protocol]

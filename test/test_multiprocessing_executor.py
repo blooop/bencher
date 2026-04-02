@@ -55,7 +55,7 @@ class MultiTypeConfig(bn.ParametrizedSweep):
     enabled = bn.BoolSweep(default=True)
     count = bn.IntSweep(default=5, bounds=(1, 10))
     ratio = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0), samples=5)
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = self.count * self.ratio
@@ -65,7 +65,7 @@ class StringOnlyConfig(bn.ParametrizedSweep):
     """Config with string sweep — the type most affected by PR #854."""
 
     algorithm = bn.StringSweep(["quick", "merge", "heap", "bubble"])
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = len(self.algorithm)
@@ -75,7 +75,7 @@ class EnumOnlyConfig(bn.ParametrizedSweep):
     """Config with enum sweep."""
 
     algo = bn.EnumSweep(Algorithm)
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = len(self.algo)
@@ -85,7 +85,7 @@ class BoolOnlyConfig(bn.ParametrizedSweep):
     """Config with bool sweep."""
 
     flag = bn.BoolSweep(default=True)
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = 1.0 if self.flag else 0.0
@@ -98,7 +98,7 @@ class MixedSelectorConfig(bn.ParametrizedSweep):
     label = bn.StringSweep(["x", "y", "z"])
     active = bn.BoolSweep()
     weight = bn.FloatSweep(default=1.0, bounds=(0.0, 10.0), samples=3)
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = self.weight * (1.0 if self.active else -1.0)

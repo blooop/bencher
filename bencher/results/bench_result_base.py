@@ -18,7 +18,7 @@ from bencher.variables.inputs import with_level
 
 from bencher.variables.results import OptDir
 from copy import deepcopy
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import ResultFloat, ResultBool
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
@@ -173,7 +173,7 @@ class BenchResultBase:
     def to_hv_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
@@ -233,7 +233,7 @@ class BenchResultBase:
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | str | None = None,
+        result_var: ResultFloat | str | None = None,
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
@@ -492,7 +492,7 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[ResultVar]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[Parameter]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(
@@ -552,7 +552,7 @@ class BenchResultBase:
         plot_callback: Callable,
         hv_dataset: hv.Dataset = None,
         target_dimension: int = 2,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         zip_results=False,
@@ -568,23 +568,51 @@ class BenchResultBase:
 
         row = EmptyContainer(pane_collection)
 
-        # kwargs= self.set_plot_size(**kwargs)
-        for rv in self.get_results_var_list(result_var):
-            if result_types is None or isinstance(rv, result_types):
-                rv_dataset = hv_dataset
-                if isinstance(rv, ResultBool) and "repeat" in hv_dataset.data.dims:
-                    non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
-                    if non_repeat_dims:
-                        rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
-                row.append(
-                    self.to_panes_multi_panel(
-                        rv_dataset,
-                        rv,
-                        plot_callback=partial(plot_callback, **kwargs),
-                        target_dimension=target_dimension,
-                        pane_layout=pane_layout,
-                    )
+        # When any result variable has share_axis=False, enable axiswise so each
+        # plot scales its y-axis independently instead of sharing a common range.
+        active_rvs = [
+            rv
+            for rv in self.get_results_var_list(result_var)
+            if result_types is None or isinstance(rv, result_types)
+        ]
+        needs_axiswise = any(not getattr(rv, "share_axis", True) for rv in active_rvs)
+
+        base_cb = partial(plot_callback, **kwargs)
+        axiswise_cb = base_cb
+
+        if needs_axiswise:
+
+            def _make_axiswise_cb(inner):
+                def _axiswise_cb(**cb_kwargs):
+                    result = inner(**cb_kwargs)
+                    if result is not None:
+                        if hasattr(result, "opts"):
+                            return result.opts(axiswise=True)
+                        if hasattr(result, "object") and hasattr(result.object, "opts"):
+                            result.object = result.object.opts(axiswise=True)
+                    return result
+
+                return _axiswise_cb
+
+            axiswise_cb = _make_axiswise_cb(base_cb)
+
+        for rv in active_rvs:
+            rv_dataset = hv_dataset
+            if isinstance(rv, ResultBool) and "repeat" in hv_dataset.data.dims:
+                non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
+                if non_repeat_dims:
+                    rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
+
+            cb = axiswise_cb if needs_axiswise and not getattr(rv, "share_axis", True) else base_cb
+            row.append(
+                self.to_panes_multi_panel(
+                    rv_dataset,
+                    rv,
+                    plot_callback=cb,
+                    target_dimension=target_dimension,
+                    pane_layout=pane_layout,
                 )
+            )
 
         if zip_results:
             return self.zip_results1D2(row.get())
@@ -603,7 +631,7 @@ class BenchResultBase:
         input_range: VarRange | None = None,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         override=False,
@@ -683,7 +711,7 @@ class BenchResultBase:
     def to_panes_multi_panel(
         self,
         hv_dataset: hv.Dataset,
-        result_var: ResultVar,
+        result_var: ResultFloat,
         plot_callback: Callable | None = None,
         target_dimension: int = 1,
         pane_layout: PaneLayout = PaneLayout.grid,

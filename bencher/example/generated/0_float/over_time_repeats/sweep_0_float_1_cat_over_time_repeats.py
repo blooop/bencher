@@ -10,7 +10,7 @@ class CacheBackend(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"], doc="Cache backend")
 
-    latency = bn.ResultVar(units="ms", doc="Cache lookup latency")
+    latency = bn.ResultFloat(units="ms", doc="Cache lookup latency")
 
     _time_offset = 0.0
 

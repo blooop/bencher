@@ -71,7 +71,7 @@ making them introspectable and hashable.
 
 Result types declare what a benchmark function returns:
 
-- `ResultVar` — a numeric scalar with units and an optimization direction (minimize/maximize)
+- `ResultFloat` — a numeric scalar with units and an optimization direction (minimize/maximize)
 - `ResultBool` — a boolean result (stored as 0/1 numeric)
 - `ResultVec` — a fixed-size numeric vector
 - `ResultImage` — a file path to an image
@@ -143,7 +143,7 @@ The type signature system deserves elaboration because it is central to Bencher'
 "declare, don't configure" philosophy.
 
 When you define a `ParametrizedSweep` with, say, one `FloatSweep`, one `EnumSweep`, and one
-`ResultVar`, Bencher counts: 1 continuous input, 1 categorical input, and determines the
+`ResultFloat`, Bencher counts: 1 continuous input, 1 categorical input, and determines the
 repeat count from the run configuration. This signature `(1, 1, ...)` is matched against each
 registered plot type's `PlotFilter`.
 

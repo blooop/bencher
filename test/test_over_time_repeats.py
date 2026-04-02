@@ -16,7 +16,7 @@ class SimpleBench(bn.ParametrizedSweep):
     """Minimal benchmark for testing over_time + repeats."""
 
     backend = bn.StringSweep(["redis", "local"], doc="Backend")
-    latency = bn.ResultVar(units="ms", doc="Latency")
+    latency = bn.ResultFloat(units="ms", doc="Latency")
 
     offset = 0.0
 
@@ -30,7 +30,7 @@ class FloatBench(bn.ParametrizedSweep):
 
     size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
     backend = bn.StringSweep(["redis", "local"], doc="Backend")
-    time = bn.ResultVar(units="ms", doc="Duration")
+    time = bn.ResultFloat(units="ms", doc="Duration")
 
     offset = 0.0
 
@@ -113,7 +113,7 @@ def _find_all_over_time_widgets(obj, depth=0):
 class ZeroDimBench(bn.ParametrizedSweep):
     """Benchmark with no input vars — 0D numeric result for over_time regression test."""
 
-    value = bn.ResultVar(units="m", doc="Value")
+    value = bn.ResultFloat(units="m", doc="Value")
 
     offset = 0.0
 
@@ -144,7 +144,7 @@ def float_bench_repeats3_snapshots3():
 
 
 class TestNumericOverTimeNotRoutedToImageSlider:
-    """Regression tests: numeric ResultVar must not be routed to _pane_over_time_slider.
+    """Regression tests: numeric ResultFloat must not be routed to _pane_over_time_slider.
 
     Commit 9279dd32 unconditionally routed all result types through the image/video
     slider when over_time was active.  Numeric values (e.g. 2.844) were then treated

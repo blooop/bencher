@@ -11,7 +11,7 @@ from bencher.results.bench_result_base import ReduceType
 class TstBench(bn.ParametrizedSweep):
     float_var = bn.FloatSweep(default=0, bounds=[0, 4])
     cat_var = bn.StringSweep(["a", "b", "c", "d", "e"])
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = 1
@@ -528,3 +528,80 @@ class TestBenchResultBase(unittest.TestCase):
         self.assertEqual(len(res._to_dataset_cache), 0)  # pylint: disable=protected-access
         ds2 = res.to_dataset()
         self.assertIsNot(ds1, ds2)
+
+
+class _IndependentAxisBench(bn.ParametrizedSweep):
+    """Helper with two result vars that opt out of shared axes."""
+
+    cat = bn.StringSweep(["a", "b"])
+    fast = bn.ResultFloat(units="s", share_axis=False)
+    slow = bn.ResultFloat(units="s", share_axis=False)
+
+    def benchmark(self):
+        self.fast = 2.0
+        self.slow = 100.0
+
+
+class _SharedAxisBench(bn.ParametrizedSweep):
+    """Helper with two result vars that share axes (default)."""
+
+    cat = bn.StringSweep(["a", "b"])
+    metric_a = bn.ResultFloat(units="ms")
+    metric_b = bn.ResultFloat(units="ms")
+
+    def benchmark(self):
+        self.metric_a = 5.0
+        self.metric_b = 10.0
+
+
+def _collect_hv_elements(panel_obj):
+    """Recursively collect holoviews elements from a Panel layout."""
+    elements = []
+    if hasattr(panel_obj, "opts") and hasattr(panel_obj, "kdims"):
+        # It's a holoviews object
+        elements.append(panel_obj)
+    elif hasattr(panel_obj, "object") and hasattr(panel_obj.object, "opts"):
+        elements.append(panel_obj.object)
+    elif hasattr(panel_obj, "__iter__"):
+        for child in panel_obj:
+            elements.extend(_collect_hv_elements(child))
+    return elements
+
+
+class TestAxiswiseShareAxis(unittest.TestCase):
+    """Verify that share_axis=False on result vars triggers axiswise=True."""
+
+    def test_share_axis_false_gets_axiswise(self):
+        bench = _IndependentAxisBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat"],
+            result_vars=["fast", "slow"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        plots = res.to_auto()
+        elements = _collect_hv_elements(plots)
+        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        for elem in elements:
+            norm = hv.Store.lookup_options("bokeh", elem, "norm")
+            self.assertTrue(
+                norm.kwargs.get("axiswise", False),
+                f"Expected axiswise=True on {type(elem).__name__} (share_axis=False), "
+                f"got norm opts: {norm.kwargs}",
+            )
+
+    def test_share_axis_default_no_axiswise(self):
+        bench = _SharedAxisBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat"],
+            result_vars=["metric_a", "metric_b"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        plots = res.to_auto()
+        elements = _collect_hv_elements(plots)
+        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        for elem in elements:
+            norm = hv.Store.lookup_options("bokeh", elem, "norm")
+            self.assertFalse(
+                norm.kwargs.get("axiswise", False),
+                f"Expected axiswise=False (share_axis=True default), got norm opts: {norm.kwargs}",
+            )

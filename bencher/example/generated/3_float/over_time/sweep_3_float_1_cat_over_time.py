@@ -14,7 +14,7 @@ class HashComparison(bn.ParametrizedSweep):
     iterations = bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")
     algorithm = bn.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")
 
-    throughput = bn.ResultVar(units="MB/s", doc="Hash throughput")
+    throughput = bn.ResultFloat(units="MB/s", doc="Hash throughput")
 
     _time_offset = 0.0
 

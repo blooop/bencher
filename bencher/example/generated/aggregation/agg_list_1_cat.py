@@ -10,7 +10,7 @@ class GradientDirection(bn.ParametrizedSweep):
     y = bn.FloatSweep(default=0, bounds=[0, 1], doc="Y position")
     direction = bn.StringSweep(["diagonal", "horizontal", "vertical"], doc="Gradient direction")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
     def benchmark(self):
         if self.direction == "diagonal":

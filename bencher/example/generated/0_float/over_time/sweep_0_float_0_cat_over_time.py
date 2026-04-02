@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 class BaselineCheck(bn.ParametrizedSweep):
     """Measures a fixed baseline metric with no swept parameters."""
 
-    baseline = bn.ResultVar(units="ms", doc="Baseline latency")
+    baseline = bn.ResultFloat(units="ms", doc="Baseline latency")
 
     _time_offset = 0.0
 
