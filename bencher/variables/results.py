@@ -328,6 +328,8 @@ PANEL_TYPES = (
 )
 
 
+SCALAR_RESULT_TYPES = (ResultFloat, ResultBool)
+
 XARRAY_MULTIDIM_RESULT_TYPES = (
     ResultFloat,
     ResultBool,

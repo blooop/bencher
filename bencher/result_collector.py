@@ -22,8 +22,8 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
     XARRAY_MULTIDIM_RESULT_TYPES,
+    SCALAR_RESULT_TYPES,
     ResultFloat,
-    ResultBool,
     ResultVec,
     ResultPath,
     ResultVideo,
@@ -150,7 +150,7 @@ class ResultCollector:
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, (ResultFloat, ResultBool)):
+            if isinstance(rv, SCALAR_RESULT_TYPES):
                 result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(rv, (ResultReference, ResultDataSet)):

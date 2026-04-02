@@ -7,7 +7,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultFloat, ResultBool
+from bencher.variables.results import SCALAR_RESULT_TYPES
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -45,7 +45,7 @@ class BandResult(HoloviewResult):
             reduce=ReduceType.NONE,
             target_dimension=None,
             result_var=result_var,
-            result_types=(ResultFloat, ResultBool),
+            result_types=SCALAR_RESULT_TYPES,
             override=override,
             agg_over_dims=None,
             band_agg_dims=band_agg_dims,
