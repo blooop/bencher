@@ -114,7 +114,11 @@ class ResultVar(Number):
 
 
 class ResultBool(ResultVar):
-    """A ResultVar subclass for boolean (0/1) results with bounds locked to [0, 1]."""
+    """A result type for binary outcomes (success/failure, pass/fail, reachable/unreachable).
+
+    Bounds are locked to [0, 1] and plots use boolean-style rendering.
+    For continuous scalar metrics (time, distance, score), use ``ResultVar`` instead.
+    """
 
     def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
