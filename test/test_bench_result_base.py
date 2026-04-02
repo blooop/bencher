@@ -489,3 +489,84 @@ class TestBenchResultBase(unittest.TestCase):
         res = self._make_1d_result()
         samples = res.result_samples()
         self.assertIsNotNone(samples)
+
+
+class _DifferentUnitsBench(bn.ParametrizedSweep):
+    """Helper with two result vars that have different units."""
+
+    cat = bn.StringSweep(["a", "b"])
+    fast = bn.ResultVar(units="s (fast)")
+    slow = bn.ResultVar(units="s (slow)")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.fast = 2.0
+        self.slow = 100.0
+        return super().__call__()
+
+
+class _SameUnitsBench(bn.ParametrizedSweep):
+    """Helper with two result vars that share the same units."""
+
+    cat = bn.StringSweep(["a", "b"])
+    metric_a = bn.ResultVar(units="ms")
+    metric_b = bn.ResultVar(units="ms")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.metric_a = 5.0
+        self.metric_b = 10.0
+        return super().__call__()
+
+
+def _collect_hv_elements(panel_obj):
+    """Recursively collect holoviews elements from a Panel layout."""
+    elements = []
+    if hasattr(panel_obj, "opts") and hasattr(panel_obj, "kdims"):
+        # It's a holoviews object
+        elements.append(panel_obj)
+    elif hasattr(panel_obj, "object") and hasattr(panel_obj.object, "opts"):
+        elements.append(panel_obj.object)
+    elif hasattr(panel_obj, "__iter__"):
+        for child in panel_obj:
+            elements.extend(_collect_hv_elements(child))
+    return elements
+
+
+class TestAxiswiseByUnits(unittest.TestCase):
+    """Verify that result vars with different units get axiswise=True."""
+
+    def test_different_units_get_axiswise(self):
+        bench = _DifferentUnitsBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat"],
+            result_vars=["fast", "slow"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        plots = res.to_auto()
+        elements = _collect_hv_elements(plots)
+        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        for elem in elements:
+            norm = hv.Store.lookup_options("bokeh", elem, "norm")
+            self.assertTrue(
+                norm.kwargs.get("axiswise", False),
+                f"Expected axiswise=True on {type(elem).__name__} (different units), "
+                f"got norm opts: {norm.kwargs}",
+            )
+
+    def test_same_units_no_axiswise(self):
+        bench = _SameUnitsBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat"],
+            result_vars=["metric_a", "metric_b"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        plots = res.to_auto()
+        elements = _collect_hv_elements(plots)
+        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        for elem in elements:
+            norm = hv.Store.lookup_options("bokeh", elem, "norm")
+            self.assertFalse(
+                norm.kwargs.get("axiswise", False),
+                f"Expected axiswise=False (same units), got norm opts: {norm.kwargs}",
+            )

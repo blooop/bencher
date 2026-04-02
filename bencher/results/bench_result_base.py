@@ -534,23 +534,47 @@ class BenchResultBase:
 
         row = EmptyContainer(pane_collection)
 
-        # kwargs= self.set_plot_size(**kwargs)
-        for rv in self.get_results_var_list(result_var):
-            if result_types is None or isinstance(rv, result_types):
-                rv_dataset = hv_dataset
-                if isinstance(rv, ResultBool) and "repeat" in hv_dataset.data.dims:
-                    non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
-                    if non_repeat_dims:
-                        rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
-                row.append(
-                    self.to_panes_multi_panel(
-                        rv_dataset,
-                        rv,
-                        plot_callback=partial(plot_callback, **kwargs),
-                        target_dimension=target_dimension,
-                        pane_layout=pane_layout,
-                    )
+        # When result variables use different units, enable axiswise so each
+        # plot scales its y-axis independently instead of sharing a common range.
+        active_rvs = [
+            rv
+            for rv in self.get_results_var_list(result_var)
+            if result_types is None or isinstance(rv, result_types)
+        ]
+        all_units = {getattr(rv, "units", None) for rv in active_rvs}
+        needs_axiswise = len(all_units) > 1
+
+        for rv in active_rvs:
+            rv_dataset = hv_dataset
+            if isinstance(rv, ResultBool) and "repeat" in hv_dataset.data.dims:
+                non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
+                if non_repeat_dims:
+                    rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
+
+            cb = partial(plot_callback, **kwargs)
+            if needs_axiswise:
+                inner = cb
+
+                def _axiswise_cb(inner=inner, **cb_kwargs):
+                    result = inner(**cb_kwargs)
+                    if result is not None:
+                        if hasattr(result, "opts"):
+                            return result.opts(axiswise=True)
+                        if hasattr(result, "object") and hasattr(result.object, "opts"):
+                            result.object = result.object.opts(axiswise=True)
+                    return result
+
+                cb = _axiswise_cb
+
+            row.append(
+                self.to_panes_multi_panel(
+                    rv_dataset,
+                    rv,
+                    plot_callback=cb,
+                    target_dimension=target_dimension,
+                    pane_layout=pane_layout,
                 )
+            )
 
         if zip_results:
             return self.zip_results1D2(row.get())
