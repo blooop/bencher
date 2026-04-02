@@ -11,7 +11,7 @@ from bencher.results.bench_result_base import ReduceType
 class TstBench(bn.ParametrizedSweep):
     float_var = bn.FloatSweep(default=0, bounds=[0, 4])
     cat_var = bn.StringSweep(["a", "b", "c", "d", "e"])
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = 1

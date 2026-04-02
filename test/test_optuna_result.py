@@ -96,19 +96,19 @@ class TestOptunaResult(unittest.TestCase):
 class _AggCfg(bn.ParametrizedSweep):
     algorithm = bn.StringSweep(["algo_a", "algo_b"], optimize=False)
     param1 = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0))
-    score = bn.ResultVar(units="score", direction=bn.OptDir.minimize)
+    score = bn.ResultFloat(units="score", direction=bn.OptDir.minimize)
 
     def benchmark(self):
         self.score = (self.param1 - 0.3) ** 2
 
 
 class _MultiAggCfg(bn.ParametrizedSweep):
-    """Helper config to exercise multi-output aggregation (two ResultVars)."""
+    """Helper config to exercise multi-output aggregation (two ResultFloats)."""
 
     algorithm = bn.StringSweep(["algo_a", "algo_b"], optimize=False)
     param1 = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0))
-    score = bn.ResultVar(units="score", direction=bn.OptDir.minimize)
-    aux_score = bn.ResultVar(units="aux", direction=bn.OptDir.minimize)
+    score = bn.ResultFloat(units="score", direction=bn.OptDir.minimize)
+    aux_score = bn.ResultFloat(units="aux", direction=bn.OptDir.minimize)
 
     def benchmark(self):
         baseline = (self.param1 - 0.3) ** 2
@@ -119,7 +119,7 @@ class _MultiAggCfg(bn.ParametrizedSweep):
 class _TrialCfg(bn.ParametrizedSweep):
     category = bn.StringSweep(["cat_a", "cat_b"], optimize=False)
     value = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0), samples=3)
-    result = bn.ResultVar(units="v", direction=bn.OptDir.minimize)
+    result = bn.ResultFloat(units="v", direction=bn.OptDir.minimize)
 
     def benchmark(self):
         self.result = self.value * 2
@@ -127,7 +127,7 @@ class _TrialCfg(bn.ParametrizedSweep):
 
 class _AllFalseCfg(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=(0.0, 1.0), optimize=False)
-    result = bn.ResultVar(units="v", direction=bn.OptDir.minimize)
+    result = bn.ResultFloat(units="v", direction=bn.OptDir.minimize)
 
     def benchmark(self):
         self.result = self.x

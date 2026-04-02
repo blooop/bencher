@@ -15,7 +15,7 @@ class LatencyMonitor(bn.ParametrizedSweep):
 
     endpoint = bn.StringSweep(["/api/users", "/api/orders"], doc="API endpoint")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     _drift = 0.0  # set externally per snapshot
 

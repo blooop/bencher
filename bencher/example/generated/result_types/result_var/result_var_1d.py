@@ -11,7 +11,7 @@ class ResponseTimer(bn.ParametrizedSweep):
     endpoint = bn.StringSweep(["api/users", "api/orders"], doc="API endpoint")
     concurrency = bn.FloatSweep(default=50, bounds=[1, 100], doc="Concurrent requests")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     def benchmark(self):
         base = {"api/users": 12.0, "api/orders": 25.0}[self.endpoint]

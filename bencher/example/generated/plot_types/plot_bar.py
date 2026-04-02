@@ -8,7 +8,7 @@ class CacheCompare(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bn.ResultVar("m", doc="Response distance metric")
+    distance = bn.ResultFloat("m", doc="Response distance metric")
 
     def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}

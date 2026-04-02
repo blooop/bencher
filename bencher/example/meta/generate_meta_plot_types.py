@@ -23,7 +23,7 @@ class CacheCompare(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bn.ResultVar("m", doc="Response distance metric")
+    distance = bn.ResultFloat("m", doc="Response distance metric")
 
     def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
@@ -38,7 +38,7 @@ class LatencyProfile(bn.ParametrizedSweep):
 
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Latency distance metric")
+    distance = bn.ResultFloat("m", doc="Latency distance metric")
 
     def benchmark(self):
         self.distance = math.sin(math.pi * self.load) + 0.5"""
@@ -54,7 +54,7 @@ class LatencyNoisyProfile(bn.ParametrizedSweep):
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Latency distance metric")
+    distance = bn.ResultFloat("m", doc="Latency distance metric")
 
     def benchmark(self):
         self.distance = math.sin(math.pi * self.load) + 0.5
@@ -67,7 +67,7 @@ class ThroughputCompare(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bn.ResultVar("m", doc="Throughput distance metric")
+    distance = bn.ResultFloat("m", doc="Throughput distance metric")
 
     def benchmark(self):
         lookup = {"redis": 5.4, "memcached": 4.1, "local": 8.7}
@@ -83,7 +83,7 @@ class HeatmapDemo(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Surface height")
+    distance = bn.ResultFloat("m", doc="Surface height")
 
     def benchmark(self):
         self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)"""
@@ -98,7 +98,7 @@ class SurfaceDemo(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Surface height")
+    distance = bn.ResultFloat("m", doc="Surface height")
 
     def benchmark(self):
         self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)"""
@@ -113,7 +113,7 @@ class JitterDemo(bn.ParametrizedSweep):
     backend = bn.StringSweep(["redis", "memcached", "local"])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Jittered distance metric")
+    distance = bn.ResultFloat("m", doc="Jittered distance metric")
 
     def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
@@ -131,7 +131,7 @@ class ScatterJitterDemo(bn.ParametrizedSweep):
     backend = bn.StringSweep(["redis", "memcached", "local"])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Jittered distance metric")
+    distance = bn.ResultFloat("m", doc="Jittered distance metric")
 
     def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}

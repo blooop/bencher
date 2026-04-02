@@ -15,7 +15,7 @@ class HashAnalysis(bn.ParametrizedSweep):
     algorithm = bn.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")
     mode = bn.StringSweep(["stream", "block"], doc="Processing mode")
 
-    throughput = bn.ResultVar(units="MB/s", doc="Hash throughput")
+    throughput = bn.ResultFloat(units="MB/s", doc="Hash throughput")
 
     _time_offset = 0.0
 

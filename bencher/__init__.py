@@ -20,8 +20,10 @@ from .variables.time import TimeSnapshot
 
 from .variables.inputs import box, p, sweep
 from .variables.results import (
+    ResultFloat,
     ResultVar,
     ResultBool,
+    SCALAR_RESULT_TYPES,
     ResultVec,
     ResultHmap,
     ResultPath,

@@ -8,7 +8,7 @@ import random
 from enum import auto
 from strenum import StrEnum
 from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
-from bencher.variables.results import ResultVar, OptDir
+from bencher.variables.results import ResultFloat, OptDir
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 
@@ -55,9 +55,9 @@ class ExampleBenchCfg(ParametrizedSweep):
         units="v",
     )
 
-    out_sin = ResultVar(units="v", direction=OptDir.minimize, doc="sin of theta with some noise")
-    out_cos = ResultVar(units="v", direction=OptDir.minimize, doc="cos of theta with some noise")
-    out_bool = ResultVar(units="%", doc="sin > 0.5")
+    out_sin = ResultFloat(units="v", direction=OptDir.minimize, doc="sin of theta with some noise")
+    out_cos = ResultFloat(units="v", direction=OptDir.minimize, doc="cos of theta with some noise")
+    out_bool = ResultFloat(units="%", doc="sin > 0.5")
 
     def benchmark(self):
         noise = self.calculate_noise()
@@ -95,7 +95,7 @@ class AllSweepVars(ParametrizedSweep):
     var_string = StringSweep(["string1", "string2"])
     var_enum = EnumSweep(PostprocessFn)
 
-    result = ResultVar()
+    result = ResultFloat()
 
     def benchmark(self):
         self.result = self.var_float + self.var_int
@@ -104,7 +104,7 @@ class AllSweepVars(ParametrizedSweep):
 class SimpleBenchClass(ParametrizedSweep):
     var1 = IntSweep(default=0, bounds=[0, 2])
 
-    result = ResultVar()
+    result = ResultFloat()
 
     def benchmark(self):
         self.result = self.var1
@@ -113,7 +113,7 @@ class SimpleBenchClass(ParametrizedSweep):
 class SimpleBenchClassFloat(ParametrizedSweep):
     var1 = FloatSweep(bounds=[0, 100])
 
-    result = ResultVar()
+    result = ResultFloat()
 
     def benchmark(self):
         self.result = self.var1

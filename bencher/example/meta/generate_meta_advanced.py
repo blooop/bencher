@@ -56,7 +56,7 @@ class NoisySensor(bn.ParametrizedSweep):
         default=25.0, bounds=[0.0, 100.0], doc="Sensor temperature", units="C"
     )
 
-    reading = bn.ResultVar(units="V", doc="Sensor voltage reading")
+    reading = bn.ResultFloat(units="V", doc="Sensor voltage reading")
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
@@ -114,7 +114,7 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
         ["light", "medium", "heavy"], doc="Workload intensity"
     )
 
-    throughput = bn.ResultVar(units="req/s", doc="Requests per second")
+    throughput = bn.ResultFloat(units="req/s", doc="Requests per second")
 
     _event_idx = 0  # set externally per event
 
@@ -174,7 +174,7 @@ class ServerLatency(bn.ParametrizedSweep):
         ["/api/users", "/api/orders", "/api/health"], doc="API endpoint"
     )
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     def benchmark(self):
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]'''
@@ -220,7 +220,7 @@ class LatencyMonitor(bn.ParametrizedSweep):
         ["/api/users", "/api/orders"], doc="API endpoint"
     )
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     _drift = 0.0  # set externally per snapshot
 
@@ -275,7 +275,7 @@ class QuadraticFit(bn.ParametrizedSweep):
     """A simple quadratic function for demonstrating report features."""
 
     x = bn.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
-    y = bn.ResultVar(units="ul", doc="Quadratic output")
+    y = bn.ResultFloat(units="ul", doc="Quadratic output")
 
     def benchmark(self):
         self.y = self.x**2 - 1'''
@@ -328,7 +328,7 @@ class ThermalPlate(bn.ParametrizedSweep):
         default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate"
     )
 
-    temperature = bn.ResultVar(units="C", doc="Measured temperature")
+    temperature = bn.ResultFloat(units="C", doc="Measured temperature")
 
     _time_offset = 0.0  # set externally per snapshot
 

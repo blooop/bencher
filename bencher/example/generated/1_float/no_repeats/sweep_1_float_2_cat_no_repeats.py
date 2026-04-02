@@ -12,7 +12,7 @@ class SortAnalysis(bn.ParametrizedSweep):
     algorithm = bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
     distribution = bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")
 
-    time = bn.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultFloat(units="ms", doc="Sort duration")
 
     def benchmark(self):
         algo_factor = {"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}[self.algorithm]

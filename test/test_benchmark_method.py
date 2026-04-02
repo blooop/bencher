@@ -10,7 +10,7 @@ class NewStyleBench(bn.ParametrizedSweep):
     """Uses the new benchmark() interface."""
 
     x = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
-    result = bn.ResultVar(units="v")
+    result = bn.ResultFloat(units="v")
 
     def benchmark(self):
         self.result = math.sin(self.x)
@@ -20,7 +20,7 @@ class LegacyStyleBench(bn.ParametrizedSweep):
     """Uses the old __call__() interface for backward compat testing."""
 
     x = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
-    result = bn.ResultVar(units="v")
+    result = bn.ResultFloat(units="v")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -32,7 +32,7 @@ class NoOverrideBench(bn.ParametrizedSweep):
     """Neither benchmark() nor __call__() overridden — returns defaults."""
 
     x = bn.FloatSweep(default=0, bounds=[0, 1], samples=3)
-    result = bn.ResultVar(units="v")
+    result = bn.ResultFloat(units="v")
 
 
 def test_benchmark_method_works():

@@ -25,7 +25,7 @@ class RerunSweep(bn.ParametrizedSweep):
 
     theta = bn.FloatSweep(default=1, bounds=[1, 4], doc="Box half-size", units="rad", samples=5)
 
-    out_sin = bn.ResultVar(units="v", doc="sin of theta")
+    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)

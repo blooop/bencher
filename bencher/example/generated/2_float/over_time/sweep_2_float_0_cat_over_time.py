@@ -12,7 +12,7 @@ class CompressionBench(bn.ParametrizedSweep):
     block_size = bn.FloatSweep(default=4096, bounds=[512, 65536], doc="Block size in bytes")
     entropy = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
 
-    ratio = bn.ResultVar(units="x", doc="Compression ratio")
+    ratio = bn.ResultFloat(units="x", doc="Compression ratio")
 
     _time_offset = 0.0
 

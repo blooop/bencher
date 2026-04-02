@@ -30,7 +30,7 @@ class BenchableImageResult(bn.ParametrizedSweep):
     color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
 
     polygon = bn.ResultImage(doc="Rendered polygon image")
-    area = bn.ResultVar("u^2", doc="Polygon area")
+    area = bn.ResultFloat("u^2", doc="Polygon area")
 
     def benchmark(self):
         points = _polygon_points(self.radius, self.sides)

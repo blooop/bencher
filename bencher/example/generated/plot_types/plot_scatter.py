@@ -8,7 +8,7 @@ class ThroughputCompare(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bn.ResultVar("m", doc="Throughput distance metric")
+    distance = bn.ResultFloat("m", doc="Throughput distance metric")
 
     def benchmark(self):
         lookup = {"redis": 5.4, "memcached": 4.1, "local": 8.7}

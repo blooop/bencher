@@ -32,7 +32,7 @@ class SweepCfg(bn.ParametrizedSweep):
     enum_var = EnumSweep(SweepColor)
     bool_var = BoolSweep(default=True)
     string_var = StringSweep(["a", "b", "c"])
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = self.float_var * 2

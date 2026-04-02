@@ -39,7 +39,7 @@ class PolygonRenderer(bn.ParametrizedSweep):
     radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
     color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
     polygon = bn.ResultImage(doc="Rendered polygon image")
-    area = bn.ResultVar("u^2", doc="Polygon area")
+    area = bn.ResultFloat("u^2", doc="Polygon area")
 
     def benchmark(self):
         points = _polygon_points(self.radius, self.sides)

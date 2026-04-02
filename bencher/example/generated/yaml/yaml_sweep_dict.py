@@ -10,8 +10,8 @@ class YamlDictConfig(bn.ParametrizedSweep):
     plan = bn.YamlSweep(_YAML_PATH, doc="Dictionary-based configurations stored in YAML")
 
     plan_summary = bn.ResultContainer(doc="Captured dictionary for the selected plan")
-    total_duration = bn.ResultVar(units="min", doc="Sum of all scheduled durations")
-    average_duration = bn.ResultVar(units="min", doc="Average scheduled duration")
+    total_duration = bn.ResultFloat(units="min", doc="Sum of all scheduled durations")
+    average_duration = bn.ResultFloat(units="min", doc="Average scheduled duration")
 
     def benchmark(self):
         key, config = self.plan

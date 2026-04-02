@@ -87,7 +87,7 @@ class ScatterResult(HoloviewResult):
     #         reduce=ReduceType.NONE,
     #         target_dimension=2,
     #         result_var=result_var,
-    #         result_types=(ResultVar),
+    #         result_types=(ResultFloat),
     #         override=override,
     #         **kwargs,
     #     )

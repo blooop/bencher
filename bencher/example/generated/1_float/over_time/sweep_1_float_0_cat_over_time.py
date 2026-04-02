@@ -11,7 +11,7 @@ class SortBenchmark(bn.ParametrizedSweep):
 
     array_size = bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
 
-    time = bn.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultFloat(units="ms", doc="Sort duration")
 
     _time_offset = 0.0
 

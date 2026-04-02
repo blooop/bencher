@@ -14,8 +14,8 @@ class ServerBenchmark(bn.ParametrizedSweep):
     log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging verbosity")
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    latency = bn.ResultVar(units="ms", doc="Request latency")
-    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
+    latency = bn.ResultFloat(units="ms", doc="Request latency")
+    throughput = bn.ResultFloat(units="req/s", doc="Request throughput")
 
     def benchmark(self):
         cache_factor = 0.6 if self.cache_enabled else 1.0

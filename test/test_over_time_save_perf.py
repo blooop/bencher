@@ -11,9 +11,9 @@ class MultiResultBench(bn.ParametrizedSweep):
     """Benchmark with multiple result vars to amplify save cost."""
 
     x = bn.FloatSweep(default=1.0, bounds=[0, 2], samples=3, doc="x")
-    r1 = bn.ResultVar(units="s", doc="r1")
-    r2 = bn.ResultVar(units="s", doc="r2")
-    r3 = bn.ResultVar(units="s", doc="r3")
+    r1 = bn.ResultFloat(units="s", doc="r1")
+    r2 = bn.ResultFloat(units="s", doc="r2")
+    r3 = bn.ResultFloat(units="s", doc="r3")
 
     offset = 0.0
 

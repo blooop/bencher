@@ -18,7 +18,7 @@ class MyBenchmark(bn.ParametrizedSweep):
     method = bn.StringSweep(["brute", "optimized"], doc="Algorithm")
 
     # Results — what the benchmark measures
-    elapsed = bn.ResultVar(units="s")
+    elapsed = bn.ResultFloat(units="s")
 
     def benchmark(self):
         self.elapsed = run_benchmark(self.size, self.method)
@@ -82,7 +82,7 @@ Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magn
 
 | Type | Use for | Set to |
 |---|---|---|
-| `bn.ResultVar(units="s")` | Continuous scalar metrics (time, distance, score) | `self.elapsed = 0.42` |
+| `bn.ResultFloat(units="s")` | Continuous scalar metrics (time, distance, score) | `self.elapsed = 0.42` |
 | `bn.ResultBool()` | Success/failure, pass/fail, any binary outcome | `self.success = True` |
 | `bn.ResultString()` | Text outputs, labels, error messages | `self.error_msg = "timeout"` |
 | `bn.ResultImage()` | Images, GIFs | `self.img = "/path/to/output.png"` |
@@ -91,9 +91,9 @@ Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magn
 | `bn.ResultContainer()` | Embeddable HTML/panel content | `self.widget = pane` |
 | `bn.ResultVec(size=3)` | Fixed-size vector results (x, y, z) | `self.position = [1.0, 2.0, 3.0]` |
 
-**Choosing between ResultVar and ResultBool:** If a result is binary (success/failure,
+**Choosing between ResultFloat and ResultBool:** If a result is binary (success/failure,
 reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds to [0, 1]
-and produces correct boolean-style plots. Only use `ResultVar` for continuous metrics.
+and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
@@ -167,7 +167,7 @@ Every benchmark class inherits from `bn.ParametrizedSweep` and implements `bench
 ```python
 class MyBench(bn.ParametrizedSweep):
     x = bn.FloatSweep(bounds=(0, 1))
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = compute(self.x)
@@ -216,4 +216,4 @@ class ImageBench(bn.ParametrizedSweep):
 | Building panel/HTML layouts manually | Use bencher's report system |
 | Using the old `__call__` pattern with boilerplate | Override `benchmark()` instead |
 | Caching file-path results | Set `run_cfg.cache_results = False` |
-| Using `ResultVar` for success/failure booleans | Use `ResultBool()` — bounds are [0, 1], plots render correctly |
+| Using `ResultFloat` for success/failure booleans | Use `ResultBool()` — bounds are [0, 1], plots render correctly |

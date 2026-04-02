@@ -25,12 +25,12 @@ class VolumeSweep(bn.ParametrizedSweep):
     surf_y = bn.FloatSweep(default=0, bounds=[-1.0, 1.0], doc="surface y coordinate", samples=11)
 
     # Results
-    p1_dis = bn.ResultVar("m", direction=bn.OptDir.minimize, doc="The distance to p1")
-    p2_dis = bn.ResultVar("m", direction=bn.OptDir.minimize, doc="The distance to p2")
-    total_dis = bn.ResultVar(
+    p1_dis = bn.ResultFloat("m", direction=bn.OptDir.minimize, doc="The distance to p1")
+    p2_dis = bn.ResultFloat("m", direction=bn.OptDir.minimize, doc="The distance to p2")
+    total_dis = bn.ResultFloat(
         "m", direction=bn.OptDir.minimize, doc="The total distance to all points"
     )
-    surf_value = bn.ResultVar(
+    surf_value = bn.ResultFloat(
         "ul", direction=bn.OptDir.maximize, doc="The scalar value of the 3D volume field"
     )
 

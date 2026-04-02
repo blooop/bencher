@@ -13,7 +13,7 @@ class CompressionCodec(bn.ParametrizedSweep):
     entropy = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")
     codec = bn.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")
 
-    ratio = bn.ResultVar(units="x", doc="Compression ratio")
+    ratio = bn.ResultFloat(units="x", doc="Compression ratio")
 
     _time_offset = 0.0
 

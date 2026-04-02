@@ -16,8 +16,8 @@ class TabBarSweep(bn.ParametrizedSweep):
     num_tabs = bn.IntSweep(default=10, bounds=(1, 100), doc="Number of tabs in the bar")
 
     tab_bar_image = bn.ResultImage()
-    rows_used = bn.ResultVar(units="rows", doc="How many rows the tabs wrap into")
-    overflow = bn.ResultVar(units="bool", doc="1 if tabs exceed max bar height, else 0")
+    rows_used = bn.ResultFloat(units="rows", doc="How many rows the tabs wrap into")
+    overflow = bn.ResultFloat(units="bool", doc="1 if tabs exceed max bar height, else 0")
 
     def benchmark(self):
         btn_pad_x = MARKER_SIZE

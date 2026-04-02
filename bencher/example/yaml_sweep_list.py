@@ -9,7 +9,7 @@ class YamlConfigSweep(bn.ParametrizedSweep):
 
     workload = bn.YamlSweep(_YAML_PATH, doc="Workload lists stored in yaml_sweep_list.yaml")
 
-    total_workload = bn.ResultVar(units="tasks", doc="Total workload summed from the YAML list")
+    total_workload = bn.ResultFloat(units="tasks", doc="Total workload summed from the YAML list")
 
     def benchmark(self):
         self.total_workload = sum(self.workload.value())

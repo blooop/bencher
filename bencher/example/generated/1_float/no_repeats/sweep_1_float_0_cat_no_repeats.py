@@ -10,7 +10,7 @@ class SortBenchmark(bn.ParametrizedSweep):
 
     array_size = bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
 
-    time = bn.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultFloat(units="ms", doc="Sort duration")
 
     def benchmark(self):
         self.time = self.array_size * math.log2(self.array_size + 1) * 0.001
