@@ -1,6 +1,7 @@
 from bencher.results.composable_container.composable_container_base import (
     ComposeType,
     ComposableContainerBase,
+    PaneLayout,
 )
 from bencher.results.composable_container.composable_container_video import (
     ComposableContainerVideo,
