@@ -97,14 +97,16 @@ class ResultFloat(Number):
     bounds to [0, 1] and produces correct boolean-style plots.
     """
 
-    __slots__ = ["units", "direction"]
+    __slots__ = ["units", "direction", "share_axis"]
+    _hash_exclude = ("share_axis",)  # display-only, not part of benchmark data
 
-    def __init__(self, units="ul", direction: OptDir = OptDir.minimize, **params):
+    def __init__(self, units="ul", direction: OptDir = OptDir.minimize, share_axis=True, **params):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
         self.default = 0  # json is terrible and does not support nan values
         self.direction = direction
+        self.share_axis = share_axis
 
     def as_dim(self) -> hv.Dimension:
         return hv.Dimension((self.name, self.name), unit=self.units)
