@@ -534,15 +534,29 @@ class BenchResultBase:
 
         row = EmptyContainer(pane_collection)
 
-        # When result variables use different units, enable axiswise so each
+        # When any result variable has share_axis=False, enable axiswise so each
         # plot scales its y-axis independently instead of sharing a common range.
         active_rvs = [
             rv
             for rv in self.get_results_var_list(result_var)
             if result_types is None or isinstance(rv, result_types)
         ]
-        all_units = {getattr(rv, "units", None) for rv in active_rvs}
-        needs_axiswise = len(all_units) > 1
+        needs_axiswise = any(not getattr(rv, "share_axis", True) for rv in active_rvs)
+
+        cb = partial(plot_callback, **kwargs)
+        if needs_axiswise:
+            inner = cb
+
+            def _axiswise_cb(**cb_kwargs):
+                result = inner(**cb_kwargs)
+                if result is not None:
+                    if hasattr(result, "opts"):
+                        return result.opts(axiswise=True)
+                    if hasattr(result, "object") and hasattr(result.object, "opts"):
+                        result.object = result.object.opts(axiswise=True)
+                return result
+
+            cb = _axiswise_cb
 
         for rv in active_rvs:
             rv_dataset = hv_dataset
@@ -550,21 +564,6 @@ class BenchResultBase:
                 non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
                 if non_repeat_dims:
                     rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
-
-            cb = partial(plot_callback, **kwargs)
-            if needs_axiswise:
-                inner = cb
-
-                def _axiswise_cb(inner=inner, **cb_kwargs):
-                    result = inner(**cb_kwargs)
-                    if result is not None:
-                        if hasattr(result, "opts"):
-                            return result.opts(axiswise=True)
-                        if hasattr(result, "object") and hasattr(result.object, "opts"):
-                            result.object = result.object.opts(axiswise=True)
-                    return result
-
-                cb = _axiswise_cb
 
             row.append(
                 self.to_panes_multi_panel(

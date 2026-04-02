@@ -491,12 +491,12 @@ class TestBenchResultBase(unittest.TestCase):
         self.assertIsNotNone(samples)
 
 
-class _DifferentUnitsBench(bn.ParametrizedSweep):
-    """Helper with two result vars that have different units."""
+class _IndependentAxisBench(bn.ParametrizedSweep):
+    """Helper with two result vars that opt out of shared axes."""
 
     cat = bn.StringSweep(["a", "b"])
-    fast = bn.ResultVar(units="s (fast)")
-    slow = bn.ResultVar(units="s (slow)")
+    fast = bn.ResultFloat(units="s", share_axis=False)
+    slow = bn.ResultFloat(units="s", share_axis=False)
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -505,12 +505,12 @@ class _DifferentUnitsBench(bn.ParametrizedSweep):
         return super().__call__()
 
 
-class _SameUnitsBench(bn.ParametrizedSweep):
-    """Helper with two result vars that share the same units."""
+class _SharedAxisBench(bn.ParametrizedSweep):
+    """Helper with two result vars that share axes (default)."""
 
     cat = bn.StringSweep(["a", "b"])
-    metric_a = bn.ResultVar(units="ms")
-    metric_b = bn.ResultVar(units="ms")
+    metric_a = bn.ResultFloat(units="ms")
+    metric_b = bn.ResultFloat(units="ms")
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -533,11 +533,11 @@ def _collect_hv_elements(panel_obj):
     return elements
 
 
-class TestAxiswiseByUnits(unittest.TestCase):
-    """Verify that result vars with different units get axiswise=True."""
+class TestAxiswiseShareAxis(unittest.TestCase):
+    """Verify that share_axis=False on result vars triggers axiswise=True."""
 
-    def test_different_units_get_axiswise(self):
-        bench = _DifferentUnitsBench().to_bench()
+    def test_share_axis_false_gets_axiswise(self):
+        bench = _IndependentAxisBench().to_bench()
         res = bench.plot_sweep(
             input_vars=["cat"],
             result_vars=["fast", "slow"],
@@ -550,12 +550,12 @@ class TestAxiswiseByUnits(unittest.TestCase):
             norm = hv.Store.lookup_options("bokeh", elem, "norm")
             self.assertTrue(
                 norm.kwargs.get("axiswise", False),
-                f"Expected axiswise=True on {type(elem).__name__} (different units), "
+                f"Expected axiswise=True on {type(elem).__name__} (share_axis=False), "
                 f"got norm opts: {norm.kwargs}",
             )
 
-    def test_same_units_no_axiswise(self):
-        bench = _SameUnitsBench().to_bench()
+    def test_share_axis_default_no_axiswise(self):
+        bench = _SharedAxisBench().to_bench()
         res = bench.plot_sweep(
             input_vars=["cat"],
             result_vars=["metric_a", "metric_b"],
@@ -568,5 +568,5 @@ class TestAxiswiseByUnits(unittest.TestCase):
             norm = hv.Store.lookup_options("bokeh", elem, "norm")
             self.assertFalse(
                 norm.kwargs.get("axiswise", False),
-                f"Expected axiswise=False (same units), got norm opts: {norm.kwargs}",
+                f"Expected axiswise=False (share_axis=True default), got norm opts: {norm.kwargs}",
             )
