@@ -178,7 +178,9 @@ def _find_example_function(mod):
     return None
 
 
-def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, page=None):
+def run_example_and_save(
+    py_file: Path, docs_dir: Path, generated_dir: Path, page=None, skip_thumbnails=False
+):
     """Run a Python example, save HTML report, write RST doc page.
 
     Returns a metadata dict for gallery generation, or None on failure.
@@ -221,13 +223,16 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     )
     print(f"  Saved report to {report_path}")
 
-    # Generate thumbnail screenshot
+    # Generate thumbnail screenshot (skipped on RTD to save build time)
     thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
-    try:
-        _take_thumbnail(Path(report_path), thumb_path, page=page)
-        print(f"  Saved thumbnail to {thumb_path}")
-    except Exception as e:  # pylint: disable=broad-except
-        print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
+    if skip_thumbnails:
+        print(f"  Skipping thumbnail for {stem}")
+    else:
+        try:
+            _take_thumbnail(Path(report_path), thumb_path, page=page)
+            print(f"  Saved thumbnail to {thumb_path}")
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
     # Generate RST that shows source + embeds HTML report
     title_text = stem.replace("_", " ").title()
@@ -548,24 +553,35 @@ def generate_all() -> list[Path]:
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
 
     # Create a shared playwright browser for thumbnail screenshots
+    # Skip on RTD to stay within build time limits
+    skip_thumbnails = os.environ.get("READTHEDOCS") == "True"
     pw_context = None
     browser = None
     page = None
-    try:
-        from playwright.sync_api import sync_playwright  # pylint: disable=import-error
+    if skip_thumbnails:
+        print("Running on Read the Docs — skipping thumbnail screenshots")
+    else:
+        try:
+            from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
-        pw_context = sync_playwright().start()
-        browser = pw_context.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 1200, "height": 900})
-        print("Started headless Chromium for thumbnail screenshots")
-    except Exception as e:  # pylint: disable=broad-except
-        print(f"WARNING: Could not start browser for thumbnails: {e}")
+            pw_context = sync_playwright().start()
+            browser = pw_context.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1200, "height": 900})
+            print("Started headless Chromium for thumbnail screenshots")
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"WARNING: Could not start browser for thumbnails: {e}")
 
     try:
         for py_file in py_files:
             if py_file.name == "__init__.py":
                 continue
-            meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR, page=page)
+            meta = run_example_and_save(
+                py_file,
+                META_DOCS_DIR,
+                GENERATED_DIR,
+                page=page,
+                skip_thumbnails=skip_thumbnails,
+            )
             if meta:
                 examples_metadata.append(meta)
     finally:
