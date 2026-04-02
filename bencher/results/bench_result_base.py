@@ -208,6 +208,12 @@ class BenchResultBase:
             )
         )
 
+    def _resolve_auto(self, reduce: ReduceType) -> ReduceType:
+        """Resolve AUTO to a concrete ReduceType based on repeat count."""
+        if reduce == ReduceType.AUTO:
+            return ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+        return reduce
+
     def _to_dataset_cache_key(
         self,
         reduce: ReduceType,
@@ -217,12 +223,10 @@ class BenchResultBase:
         agg_fn: str | None,
     ) -> tuple:
         """Build a hashable cache key from normalized to_dataset() arguments."""
-        # Resolve AUTO so that AUTO and its resolved type share the same cache entry
-        if reduce == ReduceType.AUTO:
-            reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+        reduce = self._resolve_auto(reduce)
         rv_key = result_var.name if isinstance(result_var, Parameter) else result_var
         dims_key = tuple(agg_over_dims) if agg_over_dims else None
-        # Default mirrors the fallback in to_dataset(): `fn = (agg_fn or "mean").lower()`
+        # fn is irrelevant when no agg dims — aggregation is skipped entirely
         fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
         return (reduce, rv_key, level, dims_key, fn_key)
 
@@ -247,13 +251,10 @@ class BenchResultBase:
             subsequent calls with the same arguments will return the same object.
         """
         cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
-        cached = self._to_dataset_cache.get(cache_key)
-        if cached is not None:
-            return cached
+        if cache_key in self._to_dataset_cache:
+            return self._to_dataset_cache[cache_key]
 
-        # Resolve AUTO → concrete type (mirrors _to_dataset_cache_key logic)
-        if reduce == ReduceType.AUTO:
-            reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+        reduce = self._resolve_auto(reduce)
 
         # Avoid an upfront copy for REDUCE/MINMAX — those reductions (.mean(),
         # .std(), .min(), .max()) always allocate new arrays, so the copy is
