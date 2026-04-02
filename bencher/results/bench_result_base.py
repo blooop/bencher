@@ -217,7 +217,7 @@ class BenchResultBase:
     def _to_dataset_cache_key(
         self,
         reduce: ReduceType,
-        result_var: ResultVar | str | None,
+        result_var: ResultFloat | str | None,
         level: int | None,
         agg_over_dims: list[str] | None,
         agg_fn: str | None,
