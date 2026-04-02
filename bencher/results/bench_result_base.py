@@ -458,9 +458,7 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(
-        self, result_var: ParametrizedSweep | None = None
-    ) -> list[ResultFloat]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[Parameter]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(

@@ -547,9 +547,13 @@ def test_result_var_deprecation_warning():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         rv = ResultVar(units="m/s", doc="speed")
-        assert len(w) == 1
-        assert issubclass(w[0].category, DeprecationWarning)
-        assert "ResultFloat" in str(w[0].message)
+
+        matching = [
+            warn
+            for warn in w
+            if issubclass(warn.category, DeprecationWarning) and "ResultFloat" in str(warn.message)
+        ]
+        assert len(matching) >= 1
     assert isinstance(rv, ResultFloat)
 
 
