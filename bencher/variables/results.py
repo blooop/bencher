@@ -28,6 +28,7 @@ IMPORTANT — hash_persistent() contract:
 
 from __future__ import annotations
 
+import warnings
 from enum import auto
 from typing import Callable, Any
 from functools import partial
@@ -49,7 +50,7 @@ def _hash_slots(instance):
 
     Walks the MRO from the concrete class up to (but not including) param framework
     base classes, collecting __slots__ from each ancestor. This supports Result class
-    inheritance (e.g. ResultBool extends ResultVar). Attributes listed in _hash_exclude
+    inheritance (e.g. ResultBool extends ResultFloat). Attributes listed in _hash_exclude
     on any class in the hierarchy are skipped.
 
     The class name is always included in the hash to prevent collisions between different
@@ -89,8 +90,8 @@ class OptDir(StrEnum):
     none = auto()  # If none this var will not appear in pareto plots
 
 
-class ResultVar(Number):
-    """A class to represent result variables and the desired optimisation direction"""
+class ResultFloat(Number):
+    """A class to represent float result variables and the desired optimisation direction"""
 
     __slots__ = ["units", "direction"]
 
@@ -109,8 +110,8 @@ class ResultVar(Number):
         return _hash_slots(self)
 
 
-class ResultBool(ResultVar):
-    """A ResultVar subclass for boolean (0/1) results with bounds locked to [0, 1]."""
+class ResultBool(ResultFloat):
+    """A ResultFloat subclass for boolean (0/1) results with bounds locked to [0, 1]."""
 
     def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
@@ -320,7 +321,7 @@ PANEL_TYPES = (
 
 
 XARRAY_MULTIDIM_RESULT_TYPES = (
-    ResultVar,
+    ResultFloat,
     ResultBool,
     ResultVideo,
     ResultImage,
@@ -330,7 +331,7 @@ XARRAY_MULTIDIM_RESULT_TYPES = (
 )
 
 ALL_RESULT_TYPES = (
-    ResultVar,
+    ResultFloat,
     ResultBool,
     ResultVec,
     ResultHmap,
@@ -343,3 +344,15 @@ ALL_RESULT_TYPES = (
     ResultReference,
     ResultVolume,
 )
+
+
+class ResultVar(ResultFloat):
+    """Deprecated: use ResultFloat instead."""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "ResultVar is deprecated, use ResultFloat instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)

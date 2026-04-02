@@ -8,7 +8,7 @@ import bencher as bn
 class BaselineCheck(bn.ParametrizedSweep):
     """Measures a fixed baseline metric with no swept parameters."""
 
-    baseline = bn.ResultVar(units="ms", doc="Baseline latency")
+    baseline = bn.ResultFloat(units="ms", doc="Baseline latency")
 
     def benchmark(self):
         self.baseline = 42.0

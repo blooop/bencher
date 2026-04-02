@@ -14,7 +14,7 @@ class ExampleEnum(StrEnum):
 
 class Cfg(bn.ParametrizedSweep):
     enum1 = bn.EnumSweep(ExampleEnum)
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     # def __call__(self,**kwargs) -> Any:
     #     self.update_params_from_kwargs(**kwargs)

@@ -56,7 +56,7 @@ class RerunSweep(bn.ParametrizedSweep):
         default=1, bounds=[1, 4], doc="Box half-size", units="rad", samples=5
     )
 
-    out_sin = bn.ResultVar(units="v", doc="sin of theta")
+    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)
@@ -131,7 +131,7 @@ class WaveSweep(bn.ParametrizedSweep):
         default=1.0, bounds=[0.5, 4.0], doc="Wave frequency", units="Hz"
     )
 
-    amplitude = bn.ResultVar(units="v", doc="Peak amplitude")
+    amplitude = bn.ResultFloat(units="v", doc="Peak amplitude")
 
     def benchmark(self):
         self.amplitude = math.sin(self.frequency * math.pi)

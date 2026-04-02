@@ -9,7 +9,7 @@ class FloatWithTimeBench(bn.ParametrizedSweep):
     """Benchmark with one float input for testing TimeEvent + curve interaction."""
 
     size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
-    throughput = bn.ResultVar(units="MB/s", doc="Throughput")
+    throughput = bn.ResultFloat(units="MB/s", doc="Throughput")
 
     offset = 0.0
 
@@ -22,7 +22,7 @@ class FloatCatWithTimeBench(bn.ParametrizedSweep):
 
     size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
     backend = bn.StringSweep(["redis", "local"], doc="Backend")
-    throughput = bn.ResultVar(units="MB/s", doc="Throughput")
+    throughput = bn.ResultFloat(units="MB/s", doc="Throughput")
 
     offset = 0.0
 

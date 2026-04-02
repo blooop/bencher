@@ -9,7 +9,7 @@ class OrderExample(bn.ParametrizedSweep):
     b = bn.IntSweep(default=0, bounds=[0, 1])  # 2 samples
 
     # RESULTS
-    call_index = bn.ResultVar()
+    call_index = bn.ResultFloat()
 
     def benchmark(self):
         # Maintain a per-instance counter to reflect traversal order

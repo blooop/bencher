@@ -17,7 +17,7 @@ class NoisySensor(bn.ParametrizedSweep):
         default=25.0, bounds=[0.0, 100.0], doc="Sensor temperature", units="C"
     )
 
-    reading = bn.ResultVar(units="V", doc="Sensor voltage reading")
+    reading = bn.ResultFloat(units="V", doc="Sensor voltage reading")
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 

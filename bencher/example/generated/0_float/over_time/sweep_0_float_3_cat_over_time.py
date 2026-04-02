@@ -12,7 +12,7 @@ class DeploymentConfig(bn.ParametrizedSweep):
     region = bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")
     log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging level")
 
-    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
+    throughput = bn.ResultFloat(units="req/s", doc="Request throughput")
 
     _time_offset = 0.0
 

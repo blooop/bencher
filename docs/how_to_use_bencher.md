@@ -18,7 +18,7 @@ class MyBenchmark(bn.ParametrizedSweep):
     method = bn.StringSweep(["brute", "optimized"], doc="Algorithm")
 
     # Results — what the benchmark measures
-    elapsed = bn.ResultVar(units="s")
+    elapsed = bn.ResultFloat(units="s")
 
     def benchmark(self):
         self.elapsed = run_benchmark(self.size, self.method)
@@ -82,7 +82,7 @@ Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magn
 
 | Type | Use for | Set to |
 |---|---|---|
-| `bn.ResultVar(units="s")` | Scalar metrics | `self.elapsed = 0.42` |
+| `bn.ResultFloat(units="s")` | Scalar metrics | `self.elapsed = 0.42` |
 | `bn.ResultImage()` | Images, GIFs | `self.img = "/path/to/output.png"` |
 | `bn.ResultVideo()` | Videos | `self.vid = video_writer.write()` |
 
@@ -158,7 +158,7 @@ Every benchmark class inherits from `bn.ParametrizedSweep` and implements `bench
 ```python
 class MyBench(bn.ParametrizedSweep):
     x = bn.FloatSweep(bounds=(0, 1))
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = compute(self.x)

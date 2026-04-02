@@ -30,7 +30,7 @@ from bencher.results.holoview_results.table_result import TableResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.volume_result import VolumeResult
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import ResultFloat, ResultBool
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +231,7 @@ class TestBarResult(unittest.TestCase):
 
 
 # ===========================================================================
-# Category 3: Line (SHOULD WORK — LineResult has result_types=(ResultVar, ResultBool))
+# Category 3: Line (SHOULD WORK — LineResult has result_types=(ResultFloat, ResultBool))
 # ===========================================================================
 
 
@@ -250,7 +250,7 @@ class TestLineResult(unittest.TestCase):
 
 
 # ===========================================================================
-# Category 4: Curve (SHOULD WORK — CurveResult has result_types=(ResultVar, ResultBool))
+# Category 4: Curve (SHOULD WORK — CurveResult has result_types=(ResultFloat, ResultBool))
 # ===========================================================================
 
 
@@ -277,7 +277,7 @@ class TestCurveResult(unittest.TestCase):
 
 
 class TestHeatmapResult(unittest.TestCase):
-    """HeatmapResult supports ResultBool via inheritance from ResultVar."""
+    """HeatmapResult supports ResultBool via inheritance from ResultFloat."""
 
     def test_heatmap_2input_1repeat(self):
         """Heatmap should produce a plot for ResultBool data."""
@@ -292,7 +292,7 @@ class TestHeatmapResult(unittest.TestCase):
 
 
 class TestSurfaceResult(unittest.TestCase):
-    """SurfaceResult supports ResultBool via inheritance from ResultVar."""
+    """SurfaceResult supports ResultBool via inheritance from ResultFloat."""
 
     def test_surface_2float_multi_repeat(self):
         """Surface should produce a plot for ResultBool data."""
@@ -307,7 +307,7 @@ class TestSurfaceResult(unittest.TestCase):
 
 
 class TestVolumeResult(unittest.TestCase):
-    """VolumeResult supports ResultBool via inheritance from ResultVar."""
+    """VolumeResult supports ResultBool via inheritance from ResultFloat."""
 
     def test_volume_3float_multi_repeat(self):
         """Volume should produce a plot for ResultBool data."""
@@ -323,7 +323,7 @@ class TestVolumeResult(unittest.TestCase):
 
 class TestDistributionResult(unittest.TestCase):
     """DistributionResult, ViolinResult, BoxWhiskerResult, and ScatterJitterResult
-    all support ResultBool via inheritance from ResultVar."""
+    all support ResultBool via inheritance from ResultFloat."""
 
     def setUp(self):
         BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
@@ -397,7 +397,7 @@ class TestTableResult(unittest.TestCase):
 
 
 class TestHistogramResult(unittest.TestCase):
-    """HistogramResult supports ResultBool via inheritance from ResultVar."""
+    """HistogramResult supports ResultBool via inheritance from ResultFloat."""
 
     def setUp(self):
         BoolBenchAlternating._call_count = 0  # pylint: disable=protected-access
@@ -435,10 +435,10 @@ class TestResultBoolClass(unittest.TestCase):
     """Tests for the ResultBool class itself."""
 
     def test_isinstance_hierarchy(self):
-        """ResultBool is a ResultVar (and therefore also a Number)."""
+        """ResultBool is a ResultFloat (and therefore also a Number)."""
         rb = ResultBool()
         self.assertIsInstance(rb, Number)
-        self.assertIsInstance(rb, ResultVar)
+        self.assertIsInstance(rb, ResultFloat)
 
     def test_as_dim_returns_hv_dimension(self):
         """as_dim() should return an hv.Dimension.
@@ -537,6 +537,20 @@ class TestBinomialSE(unittest.TestCase):
         ds = res.to_hv_dataset(reduce=bn.ReduceType.REDUCE).data
         for val in ds["out_std"].values.flat:
             self.assertAlmostEqual(float(val), 0.0)
+
+
+def test_result_var_deprecation_warning():
+    """ResultVar still works but emits a DeprecationWarning."""
+    import warnings
+    from bencher.variables.results import ResultVar  # pylint: disable=reimported
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        rv = ResultVar(units="m/s", doc="speed")
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "ResultFloat" in str(w[0].message)
+    assert isinstance(rv, ResultFloat)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ class SortComparison(bn.ParametrizedSweep):
     array_size = bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")
     algorithm = bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")
 
-    time = bn.ResultVar(units="ms", doc="Sort duration")
+    time = bn.ResultFloat(units="ms", doc="Sort duration")
 
     def benchmark(self):
         algo_factor = {"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}[self.algorithm]

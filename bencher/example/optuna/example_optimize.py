@@ -17,7 +17,7 @@ class Rastrigin(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
     y = bn.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
 
-    loss = bn.ResultVar("ul", bn.OptDir.minimize)
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
 
     def benchmark(self):
         A = 10

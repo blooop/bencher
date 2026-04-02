@@ -7,7 +7,7 @@ class QuadraticFit(bn.ParametrizedSweep):
     """A simple quadratic function for demonstrating report features."""
 
     x = bn.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
-    y = bn.ResultVar(units="ul", doc="Quadratic output")
+    y = bn.ResultFloat(units="ul", doc="Quadratic output")
 
     def benchmark(self):
         self.y = self.x**2 - 1

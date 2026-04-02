@@ -17,7 +17,7 @@ from bencher.utils import (
 from bencher.results.video_result import VideoResult
 from bencher.results.bench_result_base import ReduceType
 
-from bencher.variables.results import ResultVar, ResultImage, ResultVideo
+from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
 hv.extension("bokeh", "plotly")
 
@@ -383,7 +383,7 @@ class HoloviewResult(VideoResult):
         reduce_type: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
         result_var: Parameter | None = None,
-        result_types: tuple | None = (ResultVar,),
+        result_types: tuple | None = (ResultFloat,),
         **kwargs,
     ) -> pn.pane.panel | None:
         """Convert the data to a HoloViews container with specified dimensions and options.
@@ -393,7 +393,7 @@ class HoloviewResult(VideoResult):
             reduce_type (ReduceType, optional): How to reduce the dataset dimensions. Defaults to ReduceType.AUTO.
             target_dimension (int, optional): Target dimension for the visualization. Defaults to 2.
             result_var (Parameter, optional): Specific result variable to visualize. Defaults to None.
-            result_types (tuple, optional): Types of result variables to include. Defaults to (ResultVar).
+            result_types (tuple, optional): Types of result variables to include. Defaults to (ResultFloat).
             **kwargs: Additional visualization options.
 
         Returns:

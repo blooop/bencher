@@ -46,7 +46,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
         samples=10,
     )
 
-    accuracy = bn.ResultVar(
+    accuracy = bn.ResultFloat(
         units="%",
         direction=bn.OptDir.maximize,
         doc="Algorithm accuracy - the metric we want to optimise",

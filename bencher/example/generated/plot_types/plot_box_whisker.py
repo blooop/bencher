@@ -12,7 +12,7 @@ class JitterDemo(bn.ParametrizedSweep):
     backend = bn.StringSweep(["redis", "memcached", "local"])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Jittered distance metric")
+    distance = bn.ResultFloat("m", doc="Jittered distance metric")
 
     def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}

@@ -16,7 +16,7 @@ class AlgorithmBench(bn.ParametrizedSweep):
     )
     learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0], doc="Learning rate")
 
-    loss = bn.ResultVar("loss", bn.OptDir.minimize, doc="Training loss (minimize)")
+    loss = bn.ResultFloat("loss", bn.OptDir.minimize, doc="Training loss (minimize)")
 
     def benchmark(self):
         algo_sensitivity = {"gradient_descent": 1.0, "adam": 0.6, "rmsprop": 0.8}

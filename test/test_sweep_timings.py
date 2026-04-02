@@ -24,7 +24,7 @@ def test_sweep_timings_summary():
 
 class TrivialSweep(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
-    out = bn.ResultVar(units="v", doc="output")
+    out = bn.ResultFloat(units="v", doc="output")
 
     def benchmark(self):
         self.out = math.sin(self.theta)

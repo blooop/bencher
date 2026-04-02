@@ -43,7 +43,7 @@ _BENCHABLE_IMAGE_CLASS = (
     '    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")\n'
     "\n"
     '    polygon = bn.ResultImage(doc="Rendered polygon image")\n'
-    '    area = bn.ResultVar("u^2", doc="Polygon area")\n'
+    '    area = bn.ResultFloat("u^2", doc="Polygon area")\n'
     "\n"
     "    def benchmark(self):\n"
     "        points = _polygon_points(self.radius, self.sides)\n"

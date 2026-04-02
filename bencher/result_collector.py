@@ -22,7 +22,7 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
     XARRAY_MULTIDIM_RESULT_TYPES,
-    ResultVar,
+    ResultFloat,
     ResultBool,
     ResultVec,
     ResultPath,
@@ -150,7 +150,7 @@ class ResultCollector:
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, (ResultVar, ResultBool)):
+            if isinstance(rv, (ResultFloat, ResultBool)):
                 result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
                 data_vars[rv.name] = (dims_cfg.dims_name, result_data)
             if isinstance(rv, (ResultReference, ResultDataSet)):
@@ -377,7 +377,7 @@ class ResultCollector:
             input_var: The variable to extract metadata from
         """
         for rv in bench_res.bench_cfg.result_vars:
-            if isinstance(rv, ResultVar):
+            if isinstance(rv, ResultFloat):
                 bench_res.ds[rv.name].attrs["units"] = rv.units
                 bench_res.ds[rv.name].attrs["long_name"] = rv.name
             elif type(rv) is ResultVec:

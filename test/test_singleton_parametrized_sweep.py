@@ -9,7 +9,7 @@ class MySingletonSweep(ParametrizedSweepSingleton):
     """Simple singleton sweep used to validate BenchRunner reruns."""
 
     theta = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3, doc="angle")
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def __init__(self):
         if self.init_singleton():
