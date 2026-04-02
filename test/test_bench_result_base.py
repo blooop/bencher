@@ -498,11 +498,9 @@ class _IndependentAxisBench(bn.ParametrizedSweep):
     fast = bn.ResultFloat(units="s", share_axis=False)
     slow = bn.ResultFloat(units="s", share_axis=False)
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.fast = 2.0
         self.slow = 100.0
-        return super().__call__()
 
 
 class _SharedAxisBench(bn.ParametrizedSweep):
@@ -512,11 +510,9 @@ class _SharedAxisBench(bn.ParametrizedSweep):
     metric_a = bn.ResultFloat(units="ms")
     metric_b = bn.ResultFloat(units="ms")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.metric_a = 5.0
         self.metric_b = 10.0
-        return super().__call__()
 
 
 def _collect_hv_elements(panel_obj):

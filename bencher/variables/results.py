@@ -98,6 +98,7 @@ class ResultFloat(Number):
     """
 
     __slots__ = ["units", "direction", "share_axis"]
+    _hash_exclude = ("share_axis",)  # display-only, not part of benchmark data
 
     def __init__(self, units="ul", direction: OptDir = OptDir.minimize, share_axis=True, **params):
         Number.__init__(self, **params)

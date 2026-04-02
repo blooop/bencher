@@ -543,20 +543,23 @@ class BenchResultBase:
         ]
         needs_axiswise = any(not getattr(rv, "share_axis", True) for rv in active_rvs)
 
-        cb = partial(plot_callback, **kwargs)
+        base_cb = partial(plot_callback, **kwargs)
+
         if needs_axiswise:
-            inner = cb
 
-            def _axiswise_cb(**cb_kwargs):
-                result = inner(**cb_kwargs)
-                if result is not None:
-                    if hasattr(result, "opts"):
-                        return result.opts(axiswise=True)
-                    if hasattr(result, "object") and hasattr(result.object, "opts"):
-                        result.object = result.object.opts(axiswise=True)
-                return result
+            def _make_axiswise_cb(inner):
+                def _axiswise_cb(**cb_kwargs):
+                    result = inner(**cb_kwargs)
+                    if result is not None:
+                        if hasattr(result, "opts"):
+                            return result.opts(axiswise=True)
+                        if hasattr(result, "object") and hasattr(result.object, "opts"):
+                            result.object = result.object.opts(axiswise=True)
+                    return result
 
-            cb = _axiswise_cb
+                return _axiswise_cb
+
+            axiswise_cb = _make_axiswise_cb(base_cb)
 
         for rv in active_rvs:
             rv_dataset = hv_dataset
@@ -565,6 +568,7 @@ class BenchResultBase:
                 if non_repeat_dims:
                     rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
 
+            cb = axiswise_cb if needs_axiswise and not getattr(rv, "share_axis", True) else base_cb
             row.append(
                 self.to_panes_multi_panel(
                     rv_dataset,
