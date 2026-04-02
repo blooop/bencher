@@ -544,6 +544,7 @@ class BenchResultBase:
         needs_axiswise = any(not getattr(rv, "share_axis", True) for rv in active_rvs)
 
         base_cb = partial(plot_callback, **kwargs)
+        axiswise_cb = base_cb
 
         if needs_axiswise:
 
