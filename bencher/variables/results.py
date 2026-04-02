@@ -91,7 +91,11 @@ class OptDir(StrEnum):
 
 
 class ResultFloat(Number):
-    """A class to represent float result variables and the desired optimisation direction"""
+    """A class to represent continuous float result variables and the desired optimisation direction.
+
+    For boolean (success/failure) outcomes, use ``ResultBool`` instead — it locks
+    bounds to [0, 1] and produces correct boolean-style plots.
+    """
 
     __slots__ = ["units", "direction"]
 
@@ -111,7 +115,11 @@ class ResultFloat(Number):
 
 
 class ResultBool(ResultFloat):
-    """A ResultFloat subclass for boolean (0/1) results with bounds locked to [0, 1]."""
+    """A result type for binary outcomes (success/failure, pass/fail, reachable/unreachable).
+
+    Bounds are locked to [0, 1] and plots use boolean-style rendering.
+    For continuous scalar metrics (time, distance, score), use ``ResultFloat`` instead.
+    """
 
     def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
