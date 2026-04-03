@@ -24,8 +24,6 @@ class MetaRerun(MetaGeneratorBase):
     def benchmark(self):
         if self.example == "capture_window":
             self._generate_capture_window()
-        elif self.example == "rrd_publish":
-            self._generate_rrd_publish()
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
@@ -67,92 +65,6 @@ bench.plot_sweep(
             output_dir=OUTPUT_DIR,
             filename="rerun_capture_window",
             function_name="example_rerun_capture_window",
-            imports=imports,
-            body=body,
-            class_code=class_code,
-            run_kwargs={"level": 3},
-        )
-
-    def _generate_rrd_publish(self):
-        """Publish .rrd recordings to a git branch for sharing."""
-        imports = "import math\nimport bencher as bn"
-        class_code = '''\
-# Rerun recordings can be published to a git branch and viewed via the
-# hosted rerun web viewer at https://app.rerun.io/.
-#
-# Workflow:
-#   1. rr.init("my_app", spawn=True)  -- start rerun with a local .rrd file
-#   2. rr.save("data.rrd")            -- persist the recording
-#   3. Log data with rr.log(...)
-#   4. bn.publish_and_view_rrd(...)    -- push .rrd to a git branch and
-#      return a Panel pane that loads it in the hosted viewer
-#
-# Alternatively, use bn.rrd_to_pane(url) to view any .rrd file served
-# over HTTP (local or remote) in a Panel HTML pane.
-#
-# Functions:
-#   bn.rrd_to_pane(url, width, height)
-#       -> Panel HTML pane embedding the rerun web viewer for the given URL
-#
-#   bn.publish_and_view_rrd(file_path, remote, branch_name, content_callback)
-#       -> Pushes the .rrd file to a git branch and returns rrd_to_pane()
-#
-#   bn.run_file_server()
-#       -> Starts a local file server to serve .rrd files from the cache dir
-
-
-class WaveSweep(bn.ParametrizedSweep):
-    """A simple sweep for demonstrating .rrd publishing patterns."""
-
-    frequency = bn.FloatSweep(
-        default=1.0, bounds=[0.5, 4.0], doc="Wave frequency", units="Hz"
-    )
-
-    amplitude = bn.ResultFloat(units="v", doc="Peak amplitude")
-
-    def benchmark(self):
-        self.amplitude = math.sin(self.frequency * math.pi)
-
-        # To publish rerun data:
-        #   import rerun as rr
-        #   rr.init("my_app", spawn=True)
-        #   rr.save("data.rrd")
-        #   rr.log("wave", rr.Scalars(self.amplitude))
-        #
-        # Then view locally:
-        #   pane = bn.rrd_to_pane("http://127.0.0.1:8001/data.rrd")
-        #   pane.show()
-        #
-        # Or publish to a git branch:
-        #   pane = bn.publish_and_view_rrd(
-        #       "data.rrd",
-        #       remote="https://github.com/user/repo.git",
-        #       branch_name="rerun_data",
-        #       content_callback=bn.github_content,
-        #   )
-        #   pane.show()'''
-        body = """\
-bench = WaveSweep().to_bench(run_cfg)
-bench.plot_sweep(
-    input_vars=["frequency"],
-    result_vars=["amplitude"],
-    description="Rerun .rrd recordings can be shared by publishing them to a "
-    "git branch or serving them over HTTP. Use bn.rrd_to_pane(url) to embed "
-    "the hosted rerun web viewer in a Panel pane, or "
-    "bn.publish_and_view_rrd() to push the .rrd file to a git branch and "
-    "view it immediately. Start a local file server with "
-    "bn.run_file_server() to serve .rrd files from the cache directory.\\n"
-    "The file server uses Python's stdlib http.server — no extra dependencies.",
-    post_description="This example shows the sweep pattern. To see live rerun "
-    "output, install rerun-sdk (pip install rerun-sdk) and uncomment the "
-    "rr.log() calls in the class definition.",
-)
-"""
-        self.generate_example(
-            title="Rerun Publishing — share .rrd recordings via git or HTTP",
-            output_dir=OUTPUT_DIR,
-            filename="rerun_rrd_publish",
-            function_name="example_rerun_rrd_publish",
             imports=imports,
             body=body,
             class_code=class_code,
