@@ -84,9 +84,11 @@ def rerun_to_pane(
 def capture_rerun_window(
     width: int = 500, height: int = 500, recording: rr.RecordingStream | None = None
 ):  # pragma: no cover
-    """Capture the current rerun recording as an inline Panel widget.
+    """Capture the current rerun recording and return the .rrd file path.
 
     Data must be logged BEFORE calling this function so that the in-memory
-    recording has content to drain.
+    recording has content to drain.  The returned path is stored by
+    ``ResultRerun``; rendering into an HTML viewer pane happens later via
+    ``ResultRerun.to_container()``.
     """
-    return rerun_to_pane(width=width, height=height, recording=recording)
+    return capture_rerun_rrd(recording=recording)
