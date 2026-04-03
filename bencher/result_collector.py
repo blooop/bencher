@@ -58,7 +58,7 @@ def set_xarray_multidim(
     Returns:
         xr.DataArray: The modified data array
     """
-    data_array[index_tuple] = value
+    data_array.values[index_tuple] = value
     return data_array
 
 
