@@ -278,15 +278,19 @@ def inline_rrd_iframes(html_path: Path) -> None:
         if not viewer_path.exists() or viewer_path.read_text() != viewer_html:
             viewer_path.write_text(viewer_html, encoding="utf-8")
 
-        # Rewrite the iframe src to the local viewer + rrd (same escaping level).
+        # Rewrite the iframe src to the local viewer + rrd.
+        # Use SINGLE entity encoding (&lt; not &amp;lt;) so that Bokeh's
+        # innerHTML assignment decodes it into an actual <iframe> tag.
+        # The double-encoded &amp;lt; from Panel's save only decodes to
+        # &lt; (text), which never renders as a real element.
         relative_url = f"_rrd/{viewer_name}?url={rrd_path.name}"
         changed = True
         return (
-            f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
-            f" width=&amp;quot;{width}&amp;quot;"
-            f" height=&amp;quot;{height}&amp;quot;"
-            f" frameborder=&amp;quot;0&amp;quot;"
-            f" allowfullscreen&amp;gt;&amp;lt;/iframe&amp;gt;"
+            f"&lt;iframe src=&quot;{relative_url}&quot;"
+            f" width=&quot;{width}&quot;"
+            f" height=&quot;{height}&quot;"
+            f" frameborder=&quot;0&quot;"
+            f" allowfullscreen&gt;&lt;/iframe&gt;"
         )
 
     new_html = _RRD_IFRAME_RE.sub(_replace, html)
