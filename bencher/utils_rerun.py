@@ -56,7 +56,9 @@ def rerun_to_pane(
     return rrd_file_to_pane(file_path, width=width, height=height)
 
 
-def capture_rerun_window(recording: rr.RecordingStream | None = None, **_kwargs) -> str:  # pragma: no cover
+def capture_rerun_window(
+    recording: rr.RecordingStream | None = None, **_kwargs
+) -> str:  # pragma: no cover
     """Capture the current rerun recording and return the .rrd file path.
 
     Data must be logged BEFORE calling this function so that the in-memory
