@@ -417,8 +417,7 @@ class TestBenchRunner(unittest.TestCase):
             bench_runner.run(cache_results=False)
             self.assertTrue(
                 any(
-                    "cache_results parameter is deprecated" in str(warning.message)
-                    for warning in w
+                    "cache_results parameter is deprecated" in str(warning.message) for warning in w
                 )
             )
 
