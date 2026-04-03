@@ -653,13 +653,13 @@ Every change in this plan must pass:
 | **P2** | 2.2 Single copy in `BenchRunner.run()` | Medium | Medium | Moderate | **DONE** — eliminated redundant entry-level deepcopy; per-iteration copy retained (needed for isolation) |
 | **P2** | 2.3 Lazy Cartesian product | Low | Low-Med | High for large sweeps | **DONE** (PR #811) |
 | **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | **DONE** (PR #813) |
-| **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |
+| **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | **DONE** (PR #816 — removed dead `function_input_signature_benchmark_context` hash; remaining `@cached_property` refactor has no impact since hash is always accessed) |
 | **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | **DONE** |
 | **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | **DONE** |
 | **P3** | 2.4 Deduplicate reversed product | Low | Low | Low | |
 | **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
 | **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
-| **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps | |
+| **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps | **DONE** — replaced double-query (`key in cache` + `cache[key]`) with single `cache.get()`, added `prefetch()` batch phase before submission loop |
 | **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low | |
 | **P3** | 4.2 DynamicMap for over_time (live serve only) | Medium | Low-Med | Moderate (only for live server, not static HTML) | **REJECTED** — requires a live Panel server; not viable for static HTML reports (the only supported output mode) |
 | **P3** | 4.3 Pre-filter before to_dataframe | Low | Low | Low | DONE (PR #814 — fast path; PR #822 — curve groupby path uses xarray sel) |
