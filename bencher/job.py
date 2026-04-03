@@ -233,7 +233,7 @@ class FutureCache:
             return {}
         results = {}
         for key in keys:
-            val = self.cache.get(key, default=_MISSING)
+            val = self.cache.get(key, _MISSING)
             if val is not _MISSING:
                 results[key] = val
         return results
@@ -261,7 +261,7 @@ class FutureCache:
             return JobFuture(job=job, res=prefetched[job.job_key])
 
         if self.cache is not None and not self.overwrite:
-            cached = self.cache.get(job.job_key, default=_MISSING)
+            cached = self.cache.get(job.job_key, _MISSING)
             if cached is not _MISSING:
                 logging.info(f"Found job: {job.job_id} in cache, loading...")
                 self.worker_cache_call_count += 1
