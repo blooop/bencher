@@ -808,8 +808,12 @@ class Bench(BenchPlotServer):
         timings.job_submission_ms = elapsed()
 
         with phase_timer() as elapsed:
+            prefetched = self.sample_cache.prefetch([cj.job_key for cj in cache_jobs])
+        timings.cache_check_ms += elapsed()
+
+        with phase_timer() as elapsed:
             for job, cache_job in zip(jobs, cache_jobs):
-                result = self.sample_cache.submit(cache_job)
+                result = self.sample_cache.submit(cache_job, prefetched=prefetched)
                 results_list.append(result)
                 # For serial execution, store results immediately so that
                 # completed results are cached to disk before later jobs

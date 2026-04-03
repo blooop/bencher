@@ -13,6 +13,9 @@ except ImportError as e:
     scoop_future_executor = None
 
 
+_MISSING = object()  # Sentinel for cache.get() miss detection
+
+
 class Job:
     """Represents a benchmarking job to be executed or retrieved from cache.
 
@@ -220,30 +223,49 @@ class FutureCache:
         self.worker_fn_call_count = 0
         self.worker_cache_call_count = 0
 
-    def submit(self, job: Job) -> JobFuture:
+    def prefetch(self, keys: list[str]) -> dict:
+        """Pre-load cached values for a batch of keys in one pass.
+
+        Returns a dict mapping key -> cached value for all cache hits.
+        This avoids per-job cache round-trips in the submit loop.
+        """
+        if self.cache is None or self.overwrite:
+            return {}
+        results = {}
+        for key in keys:
+            val = self.cache.get(key, default=_MISSING)
+            if val is not _MISSING:
+                results[key] = val
+        return results
+
+    def submit(self, job: Job, prefetched: dict | None = None) -> JobFuture:
         """Submit a job for execution, with caching if enabled.
 
-        This method first checks if the job result is already in the cache (if caching is enabled
-        and overwrite is False). If not found in the cache, it executes the job either serially
+        This method first checks the prefetched dict (if provided), then falls back to
+        a single cache.get() query. If not found, it executes the job either serially
         or using the configured executor.
 
         Args:
             job (Job): The job to submit
+            prefetched (dict, optional): Pre-fetched cache results from prefetch().
+                Defaults to None.
 
         Returns:
             JobFuture: A future representing the job execution
         """
         self.worker_wrapper_call_count += 1
 
-        if self.cache is not None:
-            if not self.overwrite and job.job_key in self.cache:
+        if prefetched is not None and job.job_key in prefetched:
+            logging.info(f"Found job: {job.job_id} in cache (prefetched)")
+            self.worker_cache_call_count += 1
+            return JobFuture(job=job, res=prefetched[job.job_key])
+
+        if self.cache is not None and not self.overwrite:
+            cached = self.cache.get(job.job_key, default=_MISSING)
+            if cached is not _MISSING:
                 logging.info(f"Found job: {job.job_id} in cache, loading...")
-                # logging.info(f"Found key: {job.job_key} in cache")
                 self.worker_cache_call_count += 1
-                return JobFuture(
-                    job=job,
-                    res=self.cache[job.job_key],
-                )
+                return JobFuture(job=job, res=cached)
 
         self.worker_fn_call_count += 1
 
