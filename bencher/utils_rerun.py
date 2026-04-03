@@ -5,9 +5,7 @@ with pre-recorded ``.rrd`` files without the SDK, see ``utils_rrd.py``.
 
 Architecture
 ------------
-Displaying rerun data inside a Panel/Bokeh report requires three cooperating
-pieces.  Getting any one of them wrong results in blank viewers, CORS errors,
-or "data source left unexpectedly" messages.
+Displaying rerun data inside a Panel/Bokeh report requires two pieces:
 
 1. **Data capture** — ``capture_rerun_rrd()`` drains the in-memory rerun
    recording to a *complete* ``.rrd`` file on disk.  Using ``rr.save()``
@@ -15,46 +13,23 @@ or "data source left unexpectedly" messages.
    being written when the viewer tries to fetch it.  Always call
    ``rr.log(...)`` first, then ``capture_rerun_rrd()`` / ``capture_rerun_window()``.
 
-2. **File serving** — The Panel server (Tornado) serves the ``.rrd`` files at
-   ``/rrd_static/`` with full CORS headers (including OPTIONS preflight).
-   This is configured in ``bench_plot_server.py`` via ``_rrd_extra_patterns()``.
-   A separate stdlib file server (``file_server.py``) also exists for
-   standalone use but is NOT needed for the normal report flow.
-
-   CORS is critical: the rerun web viewer runs on a different origin
-   (localhost:9090) and fetches ``.rrd`` files from the Panel server.
-   Without ``Access-Control-Allow-Origin: *`` **and** ``OPTIONS`` preflight
-   handling, browsers silently block the fetch and the viewer shows 0 B of
-   data.  The Panel port is auto-assigned (port 0) so that multiple
-   benchmarks can run in parallel; iframe URLs are built with JavaScript
-   to resolve the actual port at render time.
-
-3. **Viewer** — ``rr.start_web_viewer_server()`` launches a *local* rerun
-   web viewer on port 9090.  This is the viewer that actually renders the
-   data.  When the SDK is not available, ``rrd_file_to_pane`` (in
-   ``utils_rrd.py``) falls back to the hosted viewer at ``app.rerun.io``.
+2. **Viewer** — ``rrd_file_to_pane()`` (in ``utils_rrd.py``) writes a
+   small HTML page that loads the ``@rerun-io/web-viewer`` from CDN and
+   points it at the ``.rrd`` file.  Both the viewer page and the data are
+   served by the Panel server at ``/rrd_static/``, keeping everything on
+   the same HTTP origin (no CORS, no extra ports).
 """
 
 import rerun as rr
 
 from .utils import gen_rerun_data_path
-from .utils_rrd import _RERUN_VIEWER_PORT, rrd_file_to_pane
-
-_viewer_started = False
+from .utils_rrd import rrd_file_to_pane
 
 
 def _ensure_rerun_init():  # pragma: no cover
     """Ensure a rerun recording exists, creating one if needed."""
     if rr.get_global_data_recording() is None:
         rr.init("bencher")
-
-
-def _ensure_rerun_viewer():  # pragma: no cover
-    """Start the local rerun web viewer server if not already running."""
-    global _viewer_started  # noqa: PLW0603  # pylint: disable=global-statement
-    if not _viewer_started:
-        rr.start_web_viewer_server(port=_RERUN_VIEWER_PORT)
-        _viewer_started = True
 
 
 def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pragma: no cover

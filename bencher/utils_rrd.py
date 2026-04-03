@@ -10,7 +10,6 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 (live capture, recording management, etc.).
 """
 
-import hashlib
 import logging
 import re
 import shutil
@@ -21,9 +20,6 @@ from urllib.parse import quote
 import panel as pn
 
 from .utils import publish_file
-
-# Port for the local rerun web viewer server (when rerun-sdk is available).
-_RERUN_VIEWER_PORT = 9090
 
 # Root directory for cached .rrd files and viewer pages.
 _RRD_CACHE_DIR = Path("cachedir/rrd")
@@ -74,11 +70,11 @@ def rrd_file_to_pane(  # pragma: no cover
 ):
     """Create a rerun viewer pane from an .rrd file path.
 
-    Uses an HTML iframe to display the .rrd file.  If the ``rerun-sdk``
-    package is installed, a local viewer server is started on port 9090
-    for best results.  Otherwise the hosted viewer at ``app.rerun.io`` is
-    used (requires the Panel server's CORS-enabled ``/rrd_static/`` route
-    so the hosted viewer can fetch the file from localhost).
+    Uses an HTML iframe to display the .rrd file.  By default the viewer
+    is loaded from the ``@rerun-io/web-viewer`` CDN at the installed
+    ``rerun-sdk`` version.  The viewer page and the ``.rrd`` data are
+    both served from the Panel server's ``/rrd_static/`` route, keeping
+    everything on a single origin (no CORS, no extra ports).
 
     The file must be located under ``cachedir/rrd/``.
 
@@ -91,28 +87,26 @@ def rrd_file_to_pane(  # pragma: no cover
     height:
         Height of the viewer iframe in pixels.
     viewer_version:
-        When set, uses a self-contained viewer page loaded from the
-        ``@rerun-io/web-viewer`` CDN at this exact version instead of the
-        locally installed ``rerun-sdk``.  This is useful when the .rrd was
-        recorded with a different SDK version than the one installed (e.g.
-        a C++ SDK at 0.30.x while the Python SDK is 0.26.x).  The viewer
-        page is written to ``cachedir/rrd/`` and served from the same
-        HTTP origin as the .rrd files, avoiding mixed-content issues.
+        Rerun web-viewer version to load from CDN.  Defaults to the
+        installed ``rerun-sdk`` version.  Set explicitly when the .rrd
+        was recorded with a different SDK version.
     report_dir:
-        When set (together with ``viewer_version``), copies the .rrd and
-        viewer HTML into this directory and uses relative URLs in the iframe.
-        This makes the report portable — it works when served from any HTTP
-        origin (e.g. CI report hosting on GCS/S3) without a live Panel
-        server.  When ``None``, files stay in ``cachedir/rrd/`` and are
-        served by the Panel server at ``/rrd_static/``.
+        When set, copies the .rrd and viewer HTML into this directory
+        and uses relative URLs in the iframe.  This makes the report
+        portable — it works when served from any HTTP origin without a
+        live Panel server.
     """
     rrd_path = Path(file_path).resolve()
 
-    if report_dir is not None and viewer_version is not None:
-        if not _VERSION_RE.match(viewer_version):
-            raise ValueError(
-                f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+"
-            )
+    # Resolve viewer version: explicit > installed SDK > fallback.
+    if viewer_version is None:
+        viewer_version = _get_rerun_version()
+    if not _VERSION_RE.match(viewer_version):
+        raise ValueError(
+            f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+"
+        )
+
+    if report_dir is not None:
         return _portable_rrd_pane(rrd_path, viewer_version, Path(report_dir), width, height)
 
     cache_root = _RRD_CACHE_DIR.resolve()
@@ -122,47 +116,12 @@ def rrd_file_to_pane(  # pragma: no cover
         raise ValueError(
             f"rrd_file_to_pane expects files under {cache_root}, got {rrd_path}"
         ) from None
-    rrd_static_path = f"/rrd_static/{relative.as_posix()}"
 
-    if viewer_version is not None and not _VERSION_RE.match(viewer_version):
-        raise ValueError(f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+")
-
-    if viewer_version is not None:
-        # CDN viewer page is served from the same Panel origin — relative URL works.
-        viewer_url = _cdn_viewer_url(relative, viewer_version)
-        return pn.pane.HTML(
-            f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-            f' frameborder="0" allowfullscreen></iframe>',
-            width=width,
-            height=height,
-        )
-
-    # For the local rerun viewer or hosted viewer, the .rrd URL must be
-    # absolute (cross-origin fetch).  Use JavaScript so the correct Panel
-    # server port is resolved at render time instead of being hardcoded.
-    try:
-        from .utils_rerun import _ensure_rerun_viewer
-
-        _ensure_rerun_viewer()
-        viewer_tpl = f"http://localhost:{_RERUN_VIEWER_PORT}/?url="
-    except (ImportError, ModuleNotFoundError):
-        version = _get_rerun_version()
-        viewer_tpl = f"https://app.rerun.io/version/{version}/?url="
-
-    # Use a hash of the path for a stable, unique element ID.
-    uid = hashlib.sha256(str(rrd_path).encode()).hexdigest()[:12]
+    # CDN viewer page is served from the same Panel origin — relative URL works.
+    viewer_url = _cdn_viewer_url(relative, viewer_version)
     return pn.pane.HTML(
-        f'<div id="rrd-wrap-{uid}"></div>'
-        f"<script>"
-        f"(function(){{"
-        f'var rrdUrl=window.location.origin+"{rrd_static_path}";'
-        f'var el=document.getElementById("rrd-wrap-{uid}");'
-        f"el.innerHTML="
-        f"""'<iframe src="{viewer_tpl}'+encodeURIComponent(rrdUrl)+'"'"""
-        f""" +' width="{width}" height="{height}" frameborder="0"'"""
-        f""" +' allowfullscreen></iframe>';"""
-        f"}})();"
-        f"</script>",
+        f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
+        f' frameborder="0" allowfullscreen></iframe>',
         width=width,
         height=height,
     )
