@@ -195,7 +195,7 @@ class FutureCache:
         cache_name: str = "fcache",
         tag_index: bool = True,
         size_limit: int = int(20e9),  # 20 GB
-        cache_results: bool = True,
+        cache_samples: bool = True,
     ):
         """Initialize a FutureCache with optional caching and execution settings.
 
@@ -205,11 +205,11 @@ class FutureCache:
             cache_name (str, optional): Base name for the cache directory. Defaults to "fcache".
             tag_index (bool, optional): Whether to enable tag-based indexing in the cache. Defaults to True.
             size_limit (int, optional): Maximum size of the cache in bytes. Defaults to 20GB.
-            cache_results (bool, optional): Whether to cache results at all. Defaults to True.
+            cache_samples (bool, optional): Whether to cache results at all. Defaults to True.
         """
         self.executor_type = executor
         self.executor = None
-        if cache_results:
+        if cache_samples:
             self.cache = Cache(f"cachedir/{cache_name}", tag_index=tag_index, size_limit=size_limit)
             logging.info(f"cache dir: {self.cache.directory}")
         else:

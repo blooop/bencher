@@ -505,7 +505,7 @@ class TestFutureCacheMultiprocessing:
         cache = FutureCache(
             executor=Executors.MULTIPROCESSING,
             overwrite=True,
-            cache_results=False,
+            cache_samples=False,
         )
         cfg = BenchCfg(
             input_vars=[bn.StringSweep(["a", "b"]).with_level(2)],
@@ -526,7 +526,7 @@ class TestFutureCacheMultiprocessing:
         cache = FutureCache(
             executor=Executors.MULTIPROCESSING,
             overwrite=True,
-            cache_results=False,
+            cache_samples=False,
         )
         cfg = BenchCfg(
             input_vars=[bn.EnumSweep(Color).with_level(2)],
@@ -552,7 +552,7 @@ class TestFutureCacheMultiprocessing:
         cache = FutureCache(
             executor=Executors.MULTIPROCESSING,
             overwrite=True,
-            cache_results=False,
+            cache_samples=False,
         )
         input_vars = [
             bn.StringSweep(["x", "y", "z"]).with_level(3),

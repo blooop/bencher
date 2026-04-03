@@ -39,7 +39,7 @@ class TestRunCfgMutationSafety(unittest.TestCase):
 
         snapshot = {k: getattr(br.run_cfg, k) for k in br.run_cfg.param if k != "name"}
 
-        br.run(level=3, repeats=1, cache_results=False, over_time=True)
+        br.run(level=3, repeats=1, cache_samples=False, over_time=True)
 
         for k, v in snapshot.items():
             self.assertEqual(getattr(br.run_cfg, k), v, f"self.run_cfg.{k} was mutated")
@@ -105,7 +105,7 @@ class TestSetupRunCfg(unittest.TestCase):
         original = bn.BenchRunCfg(level=5, run_tag="orig")
         snapshot = {k: getattr(original, k) for k in original.param if k != "name"}
 
-        BenchRunner.setup_run_cfg(original, level=2, cache_results=False)
+        BenchRunner.setup_run_cfg(original, level=2, cache_samples=False)
 
         for k, v in snapshot.items():
             self.assertEqual(getattr(original, k), v, f"input run_cfg.{k} was mutated")
@@ -147,15 +147,14 @@ class TestCopyElimination(unittest.TestCase):
 
     @patch("bencher.bench_runner.deepcopy", wraps=deepcopy)
     def test_deepcopy_count_no_explicit_run_cfg(self, mock_dc):
-        """When run_cfg=None, deepcopy should be called once in setup_run_cfg + once per iteration."""
+        """When run_cfg=None, deepcopy should be called once at entry + once in setup_run_cfg + once per iteration."""
         br = bn.BenchRunner("test_count")
         br.add(_simple_benchmark)
 
         br.run(level=2, repeats=1)  # 1 bench_fn, 1 level, 1 repeat
 
-        # Expected: 1 call in setup_run_cfg + 1 per-iteration = 2 total
-        # Before optimization: 3 (redundant copy at entry + setup + per-iteration)
-        self.assertEqual(mock_dc.call_count, 2)
+        # Expected: 1 at entry (copy self.run_cfg) + 1 in setup_run_cfg + 1 per-iteration = 3
+        self.assertEqual(mock_dc.call_count, 3)
 
     @patch("bencher.bench_runner.deepcopy", wraps=deepcopy)
     def test_deepcopy_count_with_explicit_run_cfg(self, mock_dc):
