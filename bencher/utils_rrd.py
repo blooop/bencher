@@ -102,9 +102,7 @@ def rrd_file_to_pane(  # pragma: no cover
     if viewer_version is None:
         viewer_version = _get_rerun_version()
     if not _VERSION_RE.match(viewer_version):
-        raise ValueError(
-            f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+"
-        )
+        raise ValueError(f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+")
 
     if report_dir is not None:
         return _portable_rrd_pane(rrd_path, viewer_version, Path(report_dir), width, height)
