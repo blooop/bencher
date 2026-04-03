@@ -687,7 +687,7 @@ All measurements taken on Linux, Python 3.13, `auto_plot=False`.
 | Repeat (5×3 = 15 jobs) | 17ms | job_execution 5ms | |
 | Large reversed (20×20×5 = 2000) | 1085ms | job_execution ~1000ms | dataset_setup 7.3ms (vs 2.8ms sequential) |
 
-**cProfile hotspots (500 jobs, all cache hits)**:
+**cProfile hotspots (500 jobs, all cache hits, pre-2.6/2.7)**:
 
 | Function | Calls | cumtime | tottime | % of total |
 |----------|-------|---------|---------|------------|
@@ -701,6 +701,27 @@ All measurements taken on Linux, Python 3.13, `auto_plot=False`.
 **Key insight**: After all previous optimizations, the dominant bottleneck on the execution
 path is **xarray's fancy-indexing overhead** in `set_xarray_multidim` (58% of runtime).
 Bypassing xarray with `data_array.values[idx] = value` is 159× faster per write (see item 2.6).
+
+#### Updated baseline (2026-04-03, post items 2.6, 2.7, 2.9, 2.10)
+
+| Workload | Total | Top phase | Notes |
+|----------|-------|-----------|-------|
+| Medium (500 jobs, cache hits) | ~103ms | cache_check 35ms | 36% faster vs 159ms pre-2.9/2.10; 58% faster vs 244ms pre-2.6/2.7 |
+
+**cProfile hotspots (500 jobs, all cache hits, post-2.9/2.10)**:
+
+| Function | Calls | cumtime | tottime | % of total |
+|----------|-------|---------|---------|------------|
+| `prefetch` (→ diskcache `get`) | 500 | 30ms | 1ms | 29% |
+| SQLite `execute` | 666 | 19ms | 19ms | 19% |
+| `store_results` | 500 | 16ms | 9ms | 16% |
+| `setup_hashes` (→ `hash_sha1`) | 500 | 14ms | 3ms | 14% |
+| `pickle.load` (cache deser.) | 500 | 8ms | 8ms | 8% |
+
+**Key insight**: After hoisting shared allocations (2.9) and pre-caching numpy arrays (2.10),
+`store_results` dropped from 57ms to 16ms (72% reduction) and `job_submission` from 26ms
+to 19ms. The remaining dominant cost is SQLite I/O in `prefetch` (29% of runtime) and
+`pickle.load` deserialization (8%), which are inherent to the cache layer.
 
 **`to_dataset()` micro-benchmarks**:
 
@@ -754,8 +775,8 @@ Every change in this plan must pass:
 | **P0** | 1.1 Default `show_aggregated_time_tab` to `False` | Trivial | None | **High** — eliminates 2× regression vs v1.70.4 for all `over_time` users | **DONE** (v1.72.1) |
 | **P0** | 1.2 Add `report_save_ms` to SweepTimings | Low | None | **High** — enables visibility into the dominant bottleneck | **DONE** (PR #787, v1.72.1) |
 | **P0** | 1.3 Default `max_slider_points` to 20 | Trivial | Low | **High** — prevents superlinear embed cost for long histories | **DONE** (v1.72.1, default=10) |
-| **P1** | 2.6 Direct numpy indexing in `set_xarray_multidim()` | Trivial | Low | **High** — measured 159× speedup per write; saves ~346ms/500 jobs (58% of runtime on cache-hit sweeps) | |
-| **P1** | 2.7 Cache `get_input_and_results()` per class | Low | Low | **Moderate** — measured 130× speedup for namedtuple reuse; saves ~62ms/500 jobs | |
+| **P1** | 2.6 Direct numpy indexing in `set_xarray_multidim()` | Trivial | Low | **High** — measured 159× speedup per write; saves ~346ms/500 jobs (58% of runtime on cache-hit sweeps) | **DONE** (PR #885) |
+| **P1** | 2.7 Cache `get_input_and_results()` per class | Low | Low | **Moderate** — measured 130× speedup for namedtuple reuse; saves ~62ms/500 jobs | **DONE** (PR #885) |
 | **P1** | 1.7 Disable HoloViews pipeline tracking during save | Trivial | Low | Predicted **High** — profiling showed 3.3s cumtime for 4998 `pipelined_fn` calls | **REJECTED** — benchmarked; `pipelined_fn` tottime is only 28ms (overhead is in child calls, not the wrapper). `disable_pipeline()` measured same-or-slower than baseline. |
 | **P1** | 1.8 Pre-compute and freeze plot ranges | Low | Medium | Predicted **Moderate** — profiling showed 3.4s cumtime for 162 `compute_ranges` calls | **REJECTED** — `compute_ranges` tottime is only 2.5ms; the 3.4s cumtime is dominated by child data operations, not range computation itself. |
 | **P1** | 1.5 Profile Panel embed hotspots | Medium | None | **Critical** — informs all other report.save() optimizations | **DONE** — profiled in SAVE_PERFORMANCE_REPORT.md. Key finding: the bottleneck is Panel's per-state re-rendering (`plot.update`: 60 calls, 6.6s cumtime), not any single wrapping layer. `pipelined_fn` and `compute_ranges` have low tottime (~30ms combined); their high cumtimes reflect the underlying render cost, not addressable overhead. |
@@ -770,6 +791,8 @@ Every change in this plan must pass:
 | **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | **DONE** (PR #816 — removed dead `function_input_signature_benchmark_context` hash; remaining `@cached_property` refactor has no impact since hash is always accessed) |
 | **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | **DONE** |
 | **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | **DONE** |
+| **P2** | 2.9 Hoist shared allocations out of per-job loop | Trivial | None | **Moderate** — saves ~7ms/500 jobs (hoists `partial()`, pre-computes title/tag) | **DONE** |
+| **P2** | 2.10 Pre-cache numpy arrays for `store_results()` | Trivial | None | **High** — saves ~41ms/500 jobs (bypasses 500× xarray `Dataset.__getitem__`) | **DONE** |
 | **P3** | 2.4 Deduplicate reversed product | Low | Low | Low — measured only 4.5ms overhead at 2000 jobs | |
 | **P3** | 2.8 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
 | **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |
