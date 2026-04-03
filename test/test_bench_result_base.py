@@ -491,62 +491,62 @@ class TestBenchResultBase(unittest.TestCase):
         self.assertIsNotNone(samples)
 
     def test_to_dataset_cache_returns_same_object(self):
-        """Identical args should return the exact same cached object."""
+        """Identical args with deep=False should return the exact same cached object."""
         res = self._make_1d_result(repeats=2)
-        ds1 = res.to_dataset(reduce=ReduceType.REDUCE)
-        ds2 = res.to_dataset(reduce=ReduceType.REDUCE)
+        ds1 = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
+        ds2 = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
         self.assertIs(ds1, ds2)
 
     def test_to_dataset_cache_auto_resolves(self):
         """AUTO and its resolved type should share the same cache entry."""
         res = self._make_1d_result(repeats=2)
-        ds_auto = res.to_dataset(reduce=ReduceType.AUTO)
-        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE)
+        ds_auto = res.to_dataset(reduce=ReduceType.AUTO, deep=False)
+        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
         self.assertIs(ds_auto, ds_reduce)
 
     def test_to_dataset_cache_different_args(self):
         """Different args should produce different cache entries."""
         res = self._make_1d_result(repeats=2)
-        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE)
-        ds_none = res.to_dataset(reduce=ReduceType.NONE)
+        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
+        ds_none = res.to_dataset(reduce=ReduceType.NONE, deep=False)
         self.assertIsNot(ds_reduce, ds_none)
 
     def test_to_dataset_cache_result_var_normalization(self):
         """Parameter and string for the same result_var should hit same cache entry."""
         res = self._make_1d_result()
         rv_param = res.bench_cfg.result_vars[0]
-        ds_param = res.to_dataset(result_var=rv_param)
-        ds_str = res.to_dataset(result_var=rv_param.name)
+        ds_param = res.to_dataset(result_var=rv_param, deep=False)
+        ds_str = res.to_dataset(result_var=rv_param.name, deep=False)
         self.assertIs(ds_param, ds_str)
 
     def test_to_dataset_cache_different_levels(self):
         """Different level values should produce different cache entries."""
         res = self._make_1d_result()
-        ds_none = res.to_dataset(level=None)
-        ds_1 = res.to_dataset(level=1)
+        ds_none = res.to_dataset(level=None, deep=False)
+        ds_1 = res.to_dataset(level=1, deep=False)
         self.assertIsNot(ds_none, ds_1)
 
-    def test_to_dataset_deep_returns_copy(self):
-        """deep=True should return a distinct object that is safe to mutate."""
+    def test_to_dataset_deep_default_returns_copy(self):
+        """Default (deep=True) should return a distinct object safe to mutate."""
         res = self._make_1d_result()
-        ds_cached = res.to_dataset()
-        ds_deep = res.to_dataset(deep=True)
+        ds_cached = res.to_dataset(deep=False)
+        ds_deep = res.to_dataset()  # deep=True is the default
         self.assertIsNot(ds_cached, ds_deep)
         # Mutating the deep copy must not affect the cached version
         for var in ds_deep.data_vars:
             ds_deep[var].values[:] = -999
             break
-        ds_again = res.to_dataset()
+        ds_again = res.to_dataset(deep=False)
         self.assertIs(ds_again, ds_cached)
 
     def test_to_dataset_cache_cleared_on_post_setup(self):
         """Cache should be invalidated when post_setup() is called."""
         res = self._make_1d_result()
-        ds1 = res.to_dataset()
+        ds1 = res.to_dataset(deep=False)
         self.assertTrue(len(res._to_dataset_cache) > 0)  # pylint: disable=protected-access
         res.post_setup()
         self.assertEqual(len(res._to_dataset_cache), 0)  # pylint: disable=protected-access
-        ds2 = res.to_dataset()
+        ds2 = res.to_dataset(deep=False)
         self.assertIsNot(ds1, ds2)
 
 

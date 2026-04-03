@@ -194,6 +194,7 @@ class BenchResultBase:
                 level=level,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
+                deep=False,
             )
             # Filter kdims to only those that survived aggregation
             kdims = [i.name for i in self.bench_cfg.all_vars if i.name in ds_out.dims]
@@ -205,6 +206,7 @@ class BenchResultBase:
                 level=level,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
+                deep=False,
             )
         )
 
@@ -238,22 +240,23 @@ class BenchResultBase:
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
-        deep: bool = False,
+        deep: bool = True,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
 
         Args:
             reduce (ReduceType, optional): Optionally perform reduce options on the dataset.  By default the returned dataset will calculate the mean and standard deviation over the "repeat" dimension so that the dataset plays nicely with most of the holoviews plot types.  Reduce.Sqeeze is used if there is only 1 repeat and you want the "reduce" variable removed from the dataset. ReduceType.None returns an unaltered dataset. Defaults to ReduceType.AUTO.
-            deep (bool, optional): If True, return a deep copy that is safe to mutate.
-                Defaults to False (returns the cached object directly).
+            deep (bool, optional): If True (default), return a deep copy that is safe
+                to mutate. Pass False to get the cached object directly for read-only
+                use (avoids the copy cost).
 
         Returns:
             xr.Dataset: results in the form of an xarray dataset
 
         Note:
-            Returned datasets are cached per instance. When *deep* is False (default)
-            do not mutate them in-place; subsequent calls with the same arguments will
-            return the same object. Pass ``deep=True`` to get a mutable copy.
+            Results are computed once and cached per instance. By default (``deep=True``)
+            a deep copy is returned so callers can safely mutate the result. Internal
+            hot paths pass ``deep=False`` to reuse the cached object directly.
         """
         cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
         if cache_key in self._to_dataset_cache:

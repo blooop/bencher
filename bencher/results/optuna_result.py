@@ -141,12 +141,12 @@ class OptunaResult(BenchResultBase):
 
         if include_meta:
             # Importance analysis: every raw data point becomes a trial with all vars
-            df = self.to_dataset(reduce=ReduceType.NONE).to_dataframe().reset_index()
+            df = self.to_dataset(reduce=ReduceType.NONE, deep=False).to_dataframe().reset_index()
             trial_vars = list(self.bench_cfg.all_vars)
         else:
             # Optimization mode: partition by optimize flag, aggregate non-optimized
             input_vars = self.bench_cfg.input_vars
-            df = self.to_dataset(reduce=ReduceType.AUTO).to_dataframe().reset_index()
+            df = self.to_dataset(reduce=ReduceType.AUTO, deep=False).to_dataframe().reset_index()
             opt_vars, non_opt_vars = self.bench_cfg.partition_input_vars(input_vars)
 
             if not opt_vars:
