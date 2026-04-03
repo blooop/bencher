@@ -214,12 +214,30 @@ class ResultCollector:
             bench_cfg.iv_time = [iv_over_time]
         return extra_vars
 
+    @staticmethod
+    def precompute_result_arrays(bench_res: BenchResult) -> dict[str, np.ndarray]:
+        """Pre-fetch the underlying numpy arrays for all result variables.
+
+        This avoids repeated xarray Dataset.__getitem__ lookups (which trigger
+        _construct_dataarray) during the per-job store loop.  The returned arrays
+        are views into the dataset, so writes go directly into bench_res.ds.
+        """
+        rv_arrays: dict[str, np.ndarray] = {}
+        for rv in bench_res.bench_cfg.result_vars:
+            if type(rv) is ResultVec:
+                for i in range(rv.size):
+                    rv_arrays[rv.index_name(i)] = bench_res.ds[rv.index_name(i)].values
+            else:
+                rv_arrays[rv.name] = bench_res.ds[rv.name].values
+        return rv_arrays
+
     def store_results(
         self,
         job_result: JobFuture,
         bench_res: BenchResult,
         worker_job: WorkerJob,
         bench_run_cfg: BenchRunCfg,
+        rv_arrays: dict[str, np.ndarray] | None = None,
     ) -> None:
         """Store the results from a benchmark worker job into the benchmark result dataset.
 
@@ -232,6 +250,8 @@ class ResultCollector:
             bench_res (BenchResult): The benchmark result object to store results in
             worker_job (WorkerJob): The job metadata needed to index the result
             bench_run_cfg (BenchRunCfg): Configuration for how results should be handled
+            rv_arrays (dict, optional): Pre-computed numpy arrays from
+                precompute_result_arrays(). Falls back to dataset lookup if None.
 
         Raises:
             RuntimeError: If an unsupported result variable type is encountered
@@ -244,6 +264,7 @@ class ResultCollector:
                     logger.info(f"\t {k}:{v}")
 
             result_dict = result if isinstance(result, dict) else result.param.values()
+            idx = worker_job.index_tuple
 
             for rv in bench_res.bench_cfg.result_vars:
                 result_value = result_dict[rv.name]
@@ -251,31 +272,34 @@ class ResultCollector:
                     logger.info(f"{rv.name}: {result_value}")
 
                 if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
-                    set_xarray_multidim(bench_res.ds[rv.name], worker_job.index_tuple, result_value)
+                    if rv_arrays is not None:
+                        rv_arrays[rv.name][idx] = result_value
+                    else:
+                        set_xarray_multidim(bench_res.ds[rv.name], idx, result_value)
                 elif isinstance(rv, ResultDataSet):
                     bench_res.dataset_list.append(result_value)
-                    set_xarray_multidim(
-                        bench_res.ds[rv.name],
-                        worker_job.index_tuple,
-                        len(bench_res.dataset_list) - 1,
-                    )
+                    store_idx = len(bench_res.dataset_list) - 1
+                    if rv_arrays is not None:
+                        rv_arrays[rv.name][idx] = store_idx
+                    else:
+                        set_xarray_multidim(bench_res.ds[rv.name], idx, store_idx)
                 elif isinstance(rv, ResultReference):
                     bench_res.object_index.append(result_value)
-                    set_xarray_multidim(
-                        bench_res.ds[rv.name],
-                        worker_job.index_tuple,
-                        len(bench_res.object_index) - 1,
-                    )
+                    store_idx = len(bench_res.object_index) - 1
+                    if rv_arrays is not None:
+                        rv_arrays[rv.name][idx] = store_idx
+                    else:
+                        set_xarray_multidim(bench_res.ds[rv.name], idx, store_idx)
 
                 elif isinstance(rv, ResultVec):
                     if isinstance(result_value, (list, np.ndarray)):
                         if len(result_value) == rv.size:
                             for i in range(rv.size):
-                                set_xarray_multidim(
-                                    bench_res.ds[rv.index_name(i)],
-                                    worker_job.index_tuple,
-                                    result_value[i],
-                                )
+                                name = rv.index_name(i)
+                                if rv_arrays is not None:
+                                    rv_arrays[name][idx] = result_value[i]
+                                else:
+                                    set_xarray_multidim(bench_res.ds[name], idx, result_value[i])
 
                 else:
                     raise RuntimeError("Unsupported result type")

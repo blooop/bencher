@@ -775,12 +775,17 @@ class Bench(BenchPlotServer):
             constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
         timings.dataset_setup_ms = elapsed()
 
-        callcount = 1
         results_list = []
         jobs = []
         cache_jobs = []
 
+        # Hoist shared allocations out of the per-job loop
+        bench_title = bench_res.bench_cfg.title
+        bench_tag = bench_res.bench_cfg.tag
+        worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
+
         with phase_timer() as elapsed:
+            callcount = 1
             for idx_tuple, function_input_vars in func_inputs:
                 job = WorkerJob(
                     function_input_vars,
@@ -788,16 +793,14 @@ class Bench(BenchPlotServer):
                     dims_name,
                     constant_inputs,
                     bench_cfg_sample_hash,
-                    bench_res.bench_cfg.tag,
+                    bench_tag,
                 )
                 job.setup_hashes()
                 jobs.append(job)
 
-                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{total_jobs}"
-                worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
                 cache_jobs.append(
                     Job(
-                        job_id=jid,
+                        job_id=f"{bench_title}:call {callcount}/{total_jobs}",
                         function=worker,
                         job_args=job.function_input,
                         job_key=job.function_input_signature_pure,
@@ -811,6 +814,11 @@ class Bench(BenchPlotServer):
             prefetched = self.sample_cache.prefetch([cj.job_key for cj in cache_jobs])
         timings.cache_check_ms += elapsed()
 
+        # Pre-cache numpy array references to avoid per-job xarray Dataset
+        # lookups (~28ms/500 jobs). The arrays are views into the dataset so
+        # writes go directly into bench_res.ds.
+        rv_arrays = self._collector.precompute_result_arrays(bench_res)
+
         with phase_timer() as elapsed:
             for job, cache_job in zip(jobs, cache_jobs):
                 result = self.sample_cache.submit(cache_job, prefetched=prefetched)
@@ -819,10 +827,10 @@ class Bench(BenchPlotServer):
                 # completed results are cached to disk before later jobs
                 # may crash.
                 if bench_run_cfg.executor == Executors.SERIAL:
-                    self.store_results(result, bench_res, job, bench_run_cfg)
+                    self.store_results(result, bench_res, job, bench_run_cfg, rv_arrays)
             if bench_run_cfg.executor != Executors.SERIAL:
                 for job, res in zip(jobs, results_list):
-                    self.store_results(res, bench_res, job, bench_run_cfg)
+                    self.store_results(res, bench_res, job, bench_run_cfg, rv_arrays)
         timings.job_execution_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:
@@ -836,9 +844,10 @@ class Bench(BenchPlotServer):
         bench_res: BenchResult,
         worker_job: WorkerJob,
         bench_run_cfg: BenchRunCfg,
+        rv_arrays: dict | None = None,
     ) -> None:
         """Store worker job results into the n-dimensional result dataset."""
-        self._collector.store_results(job_result, bench_res, worker_job, bench_run_cfg)
+        self._collector.store_results(job_result, bench_res, worker_job, bench_run_cfg, rv_arrays)
 
     def init_sample_cache(self, run_cfg: BenchRunCfg) -> FutureCache:
         """Initialize the FutureCache for storing benchmark function results."""
