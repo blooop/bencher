@@ -78,6 +78,30 @@ backend = bn.StringSweep(["cpu", "gpu"])
 Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magnitude
 (e.g., number of retries, repeat count, number of threads).
 
+## The Level System
+
+Instead of specifying `samples` on each sweep variable, you can use the `level`
+parameter to control sampling density globally with a single knob:
+
+| Level | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| Samples per dimension | 1 | 2 | 3 | 5 | 9 | 17 | 33 |
+
+Higher levels reuse all lower-level samples (binary subdivision), so cached results
+carry over automatically. Start low for quick iteration, increase for publication
+quality:
+
+```python
+# Quick check — 2 samples per dimension
+bn.run(example_benchmark, level=2)
+
+# Publication quality — 9 samples per dimension
+bn.run(example_benchmark, level=5)
+```
+
+See [Concepts: The Level System](concepts.md#the-level-system) for the full formula
+and theory.
+
 ## Result Types
 
 | Type | Use for | Set to |
@@ -149,6 +173,20 @@ bench.plot_sweep(
 
 ## Run Configuration
 
+`BenchRunCfg` has many options, but you rarely need more than a few:
+
+| Parameter | Default | What it does |
+|---|---|---|
+| `level` | 0 | Sampling density per dimension (see Level System above) |
+| `repeats` | 1 | How many times to evaluate each combination |
+| `cache_samples` | False | Cache individual results across runs (resume interrupted sweeps) |
+| `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
+| `over_time` | False | Track results across multiple runs for time-series analysis |
+| `headless` | False | Skip opening a browser to display results |
+
+All other parameters have sensible defaults. See `BenchRunCfg`'s docstring for the
+full reference.
+
 ```python
 def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     run_cfg.cache_results = False   # disable for file-based / non-deterministic results
@@ -205,6 +243,29 @@ class ImageBench(bn.ParametrizedSweep):
 - Accept `run_cfg: bn.BenchRunCfg | None = None`
 - Return the `bn.Bench` instance
 - Use `bn.run(example_func)` in `__main__`
+
+## Aggregating Dimensions
+
+When sweeping many dimensions, the visualizations can become unwieldy. Use the
+`aggregate` parameter on `plot_sweep()` to collapse dimensions into summary
+statistics (mean, std, etc.):
+
+```python
+bench.plot_sweep(
+    "Aggregated view",
+    input_vars=["x", "y", "method"],
+    result_vars=["elapsed"],
+    aggregate=True,          # collapse all dimensions except the first
+    # aggregate=2,           # collapse the last 2 dimensions
+    # aggregate=["method"],  # collapse only the "method" dimension
+    agg_fn="mean",           # aggregation function: mean, sum, max, min, median
+)
+```
+
+- `aggregate=True` — collapse all dimensions except the first into a single
+  aggregated statistic
+- `aggregate=N` (int) — collapse the last N dimensions
+- `aggregate=["var1", "var2"]` — collapse only the named dimensions
 
 ## Common Mistakes
 

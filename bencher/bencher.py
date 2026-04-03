@@ -371,6 +371,17 @@ class Bench(BenchPlotServer):
         for i in range(len(result_vars_in)):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
 
+        if not result_vars_in:
+            import warnings
+
+            warnings.warn(
+                f"No result variables found for '{self.bench_name}'. "
+                "Define at least one result variable on your class "
+                "(e.g., output = bn.ResultFloat()).",
+                UserWarning,
+                stacklevel=2,
+            )
+
         for r in result_vars_in:
             r_name = getattr(r, "name", str(r))
             logging.info("result var: %s", r_name)
@@ -451,6 +462,26 @@ class Bench(BenchPlotServer):
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
         )
+        if run_cfg.dry_run:
+            total = 1
+            summary_parts = []
+            for iv in input_vars_in:
+                vals = iv.values()
+                n = len(vals)
+                total *= n
+                lo, hi = vals[0], vals[-1]
+                summary_parts.append(f"  {iv.name}: {n} values [{lo} .. {hi}]")
+            evals = total * run_cfg.repeats
+            logging.info(
+                "Dry run for '%s':\n%s\n  Total: %d combinations x %d repeats = %d evaluations",
+                title,
+                "\n".join(summary_parts) if summary_parts else "  (no input vars)",
+                total,
+                run_cfg.repeats,
+                evals,
+            )
+            return BenchResult(bench_cfg)
+
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
     @staticmethod

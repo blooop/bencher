@@ -114,6 +114,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")
 
+    dry_run: bool = param.Boolean(
+        False,
+        doc="When True, plot_sweep() computes the sweep grid and logs a summary "
+        "(total combinations, parameter ranges, evaluation count) without "
+        "executing the benchmark function.",
+    )
+
     # ==================== CACHE PARAMETERS ====================
     # These parameters control caching behavior at both benchmark and sample level
 

@@ -579,6 +579,12 @@ class FloatSweep(Number, SweepBase):
         """
         samps = self.samples
         if self.sample_values is None:
+            if self.sweep_bounds is None:
+                raise RuntimeError(
+                    "FloatSweep requires bounds or sample_values. "
+                    "Use FloatSweep(bounds=[lo, hi]) or "
+                    "FloatSweep(sample_values=[...])."
+                )
             if self.step is None:
                 return np.linspace(self.sweep_bounds[0], self.sweep_bounds[1], samps)
 

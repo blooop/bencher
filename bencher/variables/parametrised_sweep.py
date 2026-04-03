@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from functools import partial
 from typing import Any
 from param import Parameter, Parameterized
@@ -223,6 +224,14 @@ class ParametrizedSweep(Parameterized):
             return self.get_results_values_as_dict()
         # Legacy path: subclass overrides __call__() and handles
         # update_params_from_kwargs + super().__call__() itself.
+        if type(self).__call__ is ParametrizedSweep.__call__:
+            warnings.warn(
+                f"{type(self).__name__} does not override benchmark(). "
+                "Results will contain only default values. "
+                "Define a benchmark() method on your class.",
+                UserWarning,
+                stacklevel=2,
+            )
         return self.get_results_values_as_dict()
 
     def benchmark(self):

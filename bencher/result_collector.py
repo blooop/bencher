@@ -246,7 +246,16 @@ class ResultCollector:
             result_dict = result if isinstance(result, dict) else result.param.values()
 
             for rv in bench_res.bench_cfg.result_vars:
-                result_value = result_dict[rv.name]
+                try:
+                    result_value = result_dict[rv.name]
+                except KeyError:
+                    available = list(result_dict.keys())
+                    raise KeyError(
+                        f"Result variable '{rv.name}' was not set by the "
+                        f"benchmark function. Available keys: {available}. "
+                        f"Make sure your benchmark() method sets "
+                        f"self.{rv.name}."
+                    ) from None
                 if bench_run_cfg.print_bench_results:
                     logger.info(f"{rv.name}: {result_value}")
 
