@@ -5,3 +5,4 @@ sphinx-autoapi
 sphinx_copybutton
 playwright
 Pillow
+rerun-sdk>=0.31.1,<0.32

@@ -283,6 +283,16 @@ class ResultRerun(ResultContainer):
         super().__init__(default=default, units=units, **params)
         self.width = width
         self.height = height
+        # Eagerly create a rerun recording so that rr.log() calls in
+        # benchmark() have somewhere to write before capture_rerun_rrd()
+        # is called.  Without this, the very first benchmark iteration
+        # silently drops its data.
+        try:
+            from bencher.utils_rerun import _ensure_rerun_init
+
+            _ensure_rerun_init()
+        except ImportError:
+            pass
 
     def to_container(self):
         """Return a callable that renders an .rrd file path as a rerun viewer pane."""
