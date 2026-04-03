@@ -468,7 +468,7 @@ class IntSweep(Integer, SweepBase):
         # Redirect bounds -> softbounds so param doesn't hard-enforce them
         user_bounds = params.pop("bounds", None)
         if user_bounds is not None:
-            params["softbounds"] = user_bounds
+            params["softbounds"] = (int(user_bounds[0]), int(user_bounds[1]))
         Integer.__init__(self, **params)
 
         self.units = units
@@ -478,15 +478,18 @@ class IntSweep(Integer, SweepBase):
             if samples is None:
                 if self.sweep_bounds is None:
                     raise RuntimeError("You must define bounds for integer types")
-                self.samples = 1 + self.sweep_bounds[1] - self.sweep_bounds[0]
+                self.samples = int(1 + self.sweep_bounds[1] - self.sweep_bounds[0])
             else:
                 self.samples = samples
             self.sample_values = None
         else:
-            self.sample_values = sample_values
+            self.sample_values = [int(v) for v in sample_values]
             self.samples = len(self.sample_values)
             if "default" not in params:
-                self.default = sample_values[0]
+                self.default = self.sample_values[0]
+
+    def _coerce_bound(self, value):
+        return int(value)
 
     def values(self) -> list[int]:
         """Return all the values for the parameter sweep.
@@ -553,20 +556,25 @@ class FloatSweep(Number, SweepBase):
         # Redirect bounds -> softbounds so param doesn't hard-enforce them
         user_bounds = params.pop("bounds", None)
         if user_bounds is not None:
-            params["softbounds"] = user_bounds
+            params["softbounds"] = (float(user_bounds[0]), float(user_bounds[1]))
         Number.__init__(self, step=step, **params)
 
         self.units = units
         self.optimize = optimize
 
-        self.sample_values = sample_values
+        self.sample_values = (
+            [float(v) for v in sample_values] if sample_values is not None else None
+        )
 
         if sample_values is None:
             self.samples = samples
         else:
             self.samples = len(self.sample_values)
             if "default" not in params:
-                self.default = sample_values[0]
+                self.default = self.sample_values[0]
+
+    def _coerce_bound(self, value):
+        return float(value)
 
     def values(self) -> list[float]:
         """Return all the values for the parameter sweep.
@@ -588,7 +596,7 @@ class FloatSweep(Number, SweepBase):
             if self.step is None:
                 return np.linspace(self.sweep_bounds[0], self.sweep_bounds[1], samps)
 
-            return np.arange(self.sweep_bounds[0], self.sweep_bounds[1], self.step)
+            return np.arange(self.sweep_bounds[0], self.sweep_bounds[1], self.step, dtype=float)
         return self.sample_values
 
 
@@ -696,8 +704,8 @@ def p(
 def with_level(arr: list, level: int) -> list:
     """Apply level-based sampling to a list of values.
 
-    This function uses an IntSweep with the provided values and applies level-based
-    sampling to it, returning the resulting values.
+    Uses the same level→sample-count table as SweepBase.with_level and picks
+    evenly spaced items from *arr* by index.
 
     Args:
         arr (list): list of values to sample from
@@ -706,5 +714,7 @@ def with_level(arr: list, level: int) -> list:
     Returns:
         list: The level-sampled values
     """
-    return IntSweep(sample_values=arr).with_level(level).values()
-    # return tmp.with_sample_values(arr).with_level(level).values()
+    assert level >= 1
+    level_samples = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+    n = level_samples[min(12, level)]
+    return SweepBase.indices_to_samples(None, n, list(arr))
