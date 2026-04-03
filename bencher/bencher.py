@@ -466,8 +466,10 @@ class Bench(BenchPlotServer):
                 vals = iv.values()
                 n = len(vals)
                 total *= n
-                lo, hi = vals[0], vals[-1]
-                summary_parts.append(f"  {iv.name}: {n} values [{lo} .. {hi}]")
+                if n > 0:
+                    summary_parts.append(f"  {iv.name}: {n} values [{vals[0]} .. {vals[-1]}]")
+                else:
+                    summary_parts.append(f"  {iv.name}: 0 values")
             evals = total * run_cfg.repeats
             logging.info(
                 "Dry run for '%s':\n%s\n  Total: %d combinations x %d repeats = %d evaluations",
