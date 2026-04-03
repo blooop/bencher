@@ -183,6 +183,7 @@ bench.plot_sweep(
 | `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
 | `over_time` | False | Track results across multiple runs for time-series analysis |
 | `headless` | False | Skip opening a browser to display results |
+| `dry_run` | False | Log the sweep grid summary without executing the benchmark |
 
 All other parameters have sensible defaults. See `BenchRunCfg`'s docstring for the
 full reference.

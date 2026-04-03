@@ -372,8 +372,6 @@ class Bench(BenchPlotServer):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
 
         if not result_vars_in:
-            import warnings
-
             warnings.warn(
                 f"No result variables found for '{self.bench_name}'. "
                 "Define at least one result variable on your class "
