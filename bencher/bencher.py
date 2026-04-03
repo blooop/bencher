@@ -8,6 +8,7 @@ from param import Parameter
 from typing import Callable, Any
 from copy import deepcopy
 import param
+import numpy as np
 import xarray as xr
 from contextlib import suppress
 from functools import partial
@@ -844,7 +845,7 @@ class Bench(BenchPlotServer):
         bench_res: BenchResult,
         worker_job: WorkerJob,
         bench_run_cfg: BenchRunCfg,
-        rv_arrays: dict | None = None,
+        rv_arrays: dict[str, np.ndarray] | None = None,
     ) -> None:
         """Store worker job results into the n-dimensional result dataset."""
         self._collector.store_results(job_result, bench_res, worker_job, bench_run_cfg, rv_arrays)

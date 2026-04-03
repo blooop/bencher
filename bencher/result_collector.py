@@ -62,6 +62,20 @@ def set_xarray_multidim(
     return data_array
 
 
+def _set_result_value(
+    bench_res: "BenchResult",
+    rv_arrays: dict[str, np.ndarray] | None,
+    name: str,
+    idx: tuple,
+    value: Any,
+) -> None:
+    """Write a single result value, using pre-cached numpy arrays when available."""
+    if rv_arrays is not None:
+        rv_arrays[name][idx] = value
+    else:
+        set_xarray_multidim(bench_res.ds[name], idx, value)
+
+
 class ResultCollector:
     """Manages benchmark result collection, storage, and caching.
 
@@ -224,7 +238,7 @@ class ResultCollector:
         """
         rv_arrays: dict[str, np.ndarray] = {}
         for rv in bench_res.bench_cfg.result_vars:
-            if type(rv) is ResultVec:
+            if isinstance(rv, ResultVec):
                 for i in range(rv.size):
                     rv_arrays[rv.index_name(i)] = bench_res.ds[rv.index_name(i)].values
             else:
@@ -272,34 +286,25 @@ class ResultCollector:
                     logger.info(f"{rv.name}: {result_value}")
 
                 if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
-                    if rv_arrays is not None:
-                        rv_arrays[rv.name][idx] = result_value
-                    else:
-                        set_xarray_multidim(bench_res.ds[rv.name], idx, result_value)
+                    _set_result_value(bench_res, rv_arrays, rv.name, idx, result_value)
                 elif isinstance(rv, ResultDataSet):
                     bench_res.dataset_list.append(result_value)
-                    store_idx = len(bench_res.dataset_list) - 1
-                    if rv_arrays is not None:
-                        rv_arrays[rv.name][idx] = store_idx
-                    else:
-                        set_xarray_multidim(bench_res.ds[rv.name], idx, store_idx)
+                    _set_result_value(
+                        bench_res, rv_arrays, rv.name, idx, len(bench_res.dataset_list) - 1
+                    )
                 elif isinstance(rv, ResultReference):
                     bench_res.object_index.append(result_value)
-                    store_idx = len(bench_res.object_index) - 1
-                    if rv_arrays is not None:
-                        rv_arrays[rv.name][idx] = store_idx
-                    else:
-                        set_xarray_multidim(bench_res.ds[rv.name], idx, store_idx)
+                    _set_result_value(
+                        bench_res, rv_arrays, rv.name, idx, len(bench_res.object_index) - 1
+                    )
 
                 elif isinstance(rv, ResultVec):
                     if isinstance(result_value, (list, np.ndarray)):
                         if len(result_value) == rv.size:
                             for i in range(rv.size):
-                                name = rv.index_name(i)
-                                if rv_arrays is not None:
-                                    rv_arrays[name][idx] = result_value[i]
-                                else:
-                                    set_xarray_multidim(bench_res.ds[name], idx, result_value[i])
+                                _set_result_value(
+                                    bench_res, rv_arrays, rv.index_name(i), idx, result_value[i]
+                                )
 
                 else:
                     raise RuntimeError("Unsupported result type")
