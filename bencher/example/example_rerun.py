@@ -21,5 +21,5 @@ def example_rerun(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_rerun,show=True,save=True)
+    bn.run(example_rerun, show=True, save=True)
     # example_rerun(bn.BenchRunCfg(level=3)).report.show()

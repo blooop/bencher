@@ -25,7 +25,7 @@ def _inline_rrd(html_path: Path) -> None:
 
         inline_rrd_iframes(html_path)
     except Exception:  # pylint: disable=broad-except
-        logging.debug("inline_rrd_iframes skipped for %s", html_path, exc_info=True)
+        logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
 
 @dataclass

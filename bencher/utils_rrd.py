@@ -33,7 +33,7 @@ def _get_rerun_version() -> str:
     try:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
-        return "0.30.1"
+        return "0.31.1"
 
 
 def rrd_to_pane(
@@ -188,6 +188,26 @@ def _get_cdn_viewer_html(version: str) -> str:
     return _cdn_viewer_html[version]
 
 
+def _write_rrd_sidecar(rrd_path: Path, version: str, dest_dir: Path) -> tuple[str, str]:
+    """Copy an .rrd file and its CDN viewer page into *dest_dir*.
+
+    Returns ``(viewer_filename, rrd_filename)`` — both relative to *dest_dir*.
+    The viewer page is written idempotently (skipped if already up-to-date).
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    rrd_dest = dest_dir / rrd_path.name
+    shutil.copy2(rrd_path, rrd_dest)
+
+    viewer_html = _get_cdn_viewer_html(version)
+    viewer_name = f"viewer_{version}.html"
+    viewer_path = dest_dir / viewer_name
+    if not viewer_path.exists() or viewer_path.read_text() != viewer_html:
+        viewer_path.write_text(viewer_html, encoding="utf-8")
+
+    return viewer_name, rrd_path.name
+
+
 def _portable_rrd_pane(
     rrd_path: Path,
     version: str,
@@ -197,24 +217,14 @@ def _portable_rrd_pane(
 ) -> pn.pane.HTML:
     """Create a self-contained pane with files copied into the report directory.
 
-    Copies the .rrd and a CDN viewer HTML page into ``report_dir/rrd/`` and
+    Copies the .rrd and a CDN viewer HTML page into ``report_dir/_rrd/`` and
     returns an iframe with a relative URL.  The resulting report can be served
     from any HTTP origin without a live Panel server.
     """
-    rrd_subdir = report_dir / "rrd"
-    rrd_subdir.mkdir(parents=True, exist_ok=True)
+    rrd_subdir = report_dir / "_rrd"
+    viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_subdir)
 
-    # Copy .rrd
-    rrd_dest = rrd_subdir / rrd_path.name
-    shutil.copy2(rrd_path, rrd_dest)
-
-    # Write viewer HTML (idempotent)
-    html = _get_cdn_viewer_html(version)
-    viewer_path = rrd_subdir / "viewer.html"
-    if not viewer_path.exists() or viewer_path.read_text() != html:
-        viewer_path.write_text(html)
-
-    viewer_url = f"rrd/viewer.html?url={quote(rrd_path.name)}"
+    viewer_url = f"_rrd/{viewer_name}?url={quote(rrd_name)}"
     return pn.pane.HTML(
         f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
         f' frameborder="0" allowfullscreen></iframe>',
@@ -228,6 +238,12 @@ def _portable_rrd_pane(
 # Regex matching rerun viewer iframes in Panel-saved HTML.
 # Panel's Bokeh serialization double-escapes: < → &amp;lt; " → &amp;quot;
 # Captures: (1) viewer version, (2) rrd file relative path, (3) width, (4) height.
+#
+# FRAGILE: This pattern depends on Bokeh's exact double-entity-encoding behaviour
+# (tested with Bokeh 3.9 / Panel 1.6).  If Bokeh changes its serialization (attribute
+# order, quoting style, escaping depth), this regex will silently miss iframes.
+# inline_rrd_iframes() logs a warning when it detects /rrd_static/ references but
+# the regex finds no matches.
 _RRD_IFRAME_RE = re.compile(
     r"&amp;lt;iframe src=&amp;quot;/rrd_static/viewer_([0-9A-Za-z._-]+)\.html"
     r"\?url=/rrd_static/([^&]+\.rrd)&amp;quot;"
@@ -265,23 +281,12 @@ def inline_rrd_iframes(html_path: Path) -> None:
             logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
             return m.group(0)
 
-        rrd_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy the .rrd file so it's served as a regular static file.
-        rrd_dest = rrd_dir / rrd_path.name
-        shutil.copy2(rrd_path, rrd_dest)
-
-        # Write a CDN viewer page that references the .rrd via relative URL.
-        viewer_html = _get_cdn_viewer_html(version)
-        viewer_name = f"viewer_{version}.html"
-        viewer_path = rrd_dir / viewer_name
-        if not viewer_path.exists() or viewer_path.read_text() != viewer_html:
-            viewer_path.write_text(viewer_html, encoding="utf-8")
+        viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_dir)
 
         # Rewrite the iframe src to the local viewer + rrd.
         # Keep the same double encoding (&amp;lt;) as Panel's save uses for
         # all HTML content — Bokeh JS decodes two levels when rendering.
-        relative_url = f"_rrd/{viewer_name}?url={rrd_path.name}"
+        relative_url = f"_rrd/{viewer_name}?url={rrd_name}"
         changed = True
         return (
             f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
@@ -294,3 +299,9 @@ def inline_rrd_iframes(html_path: Path) -> None:
     new_html = _RRD_IFRAME_RE.sub(_replace, html)
     if changed:
         html_path.write_text(new_html, encoding="utf-8")
+    elif "/rrd_static/" in html:
+        logging.warning(
+            "inline_rrd_iframes: %s contains /rrd_static/ references but the iframe "
+            "regex matched nothing — Bokeh's HTML encoding may have changed",
+            html_path,
+        )

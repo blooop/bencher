@@ -21,7 +21,7 @@ class RerunSweep(bn.ParametrizedSweep):
     def benchmark(self):
         self.out_sin = math.sin(self.theta)
         rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta, 1]))
-        self.out_rerun = bn.capture_rerun_window(width=400, height=400)
+        self.out_rerun = bn.capture_rerun_window()
 
 
 def example_rerun_capture_window(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

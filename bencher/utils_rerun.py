@@ -66,9 +66,17 @@ def capture_rerun_window(
     ``ResultRerun``; rendering into an HTML viewer pane happens later via
     ``ResultRerun.to_container()``.
 
-    .. note::
-       Viewer dimensions (``width``/``height``) are now taken from the
-       ``ResultRerun`` descriptor, so any keyword arguments passed here
-       are accepted but ignored.
+    Viewer dimensions (``width``/``height``) are now taken from the
+    ``ResultRerun`` descriptor.  Passing them here is deprecated and they
+    will be ignored.
     """
+    if _kwargs:
+        import warnings
+
+        warnings.warn(
+            "capture_rerun_window() no longer accepts width/height; "
+            "set them on ResultRerun instead. Extra kwargs will be removed in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     return capture_rerun_rrd(recording=recording)
