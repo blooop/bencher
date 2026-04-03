@@ -13,7 +13,6 @@ OUTPUT_DIR = "rerun"
 
 RERUN_EXAMPLES = [
     "capture_window",
-    "rrd_publish",
 ]
 
 
