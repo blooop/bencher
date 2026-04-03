@@ -271,33 +271,42 @@ def inline_rrd_iframes(html_path: Path) -> None:
 
     Scans the HTML file for rerun viewer iframes (those pointing at
     ``/rrd_static/``), reads the referenced ``.rrd`` files from the local
-    cache, base64-encodes them, and replaces each iframe with a
-    self-contained ``srcdoc`` iframe.  This makes the report work on any
-    static host (RTD, GitHub Pages, local file://) without a Panel server.
+    cache, base64-encodes them, and writes standalone viewer HTML files
+    next to the report.  The iframe ``src`` is rewritten to point at
+    these local files so the report works on any static host (RTD,
+    GitHub Pages, ``file://``) without a Panel server.
 
     Called automatically by ``BenchReport.save()``.
     """
     html = html_path.read_text(encoding="utf-8")
     cache_root = _RRD_CACHE_DIR.resolve()
+    report_dir = html_path.parent
+    rrd_dir = report_dir / "_rrd"
+
+    changed = False
 
     def _replace(m: re.Match) -> str:
+        nonlocal changed
         version, rrd_rel, width, height = m.group(1), m.group(2), m.group(3), m.group(4)
         rrd_path = cache_root / rrd_rel
         if not rrd_path.is_file():
             logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
             return m.group(0)
+
+        rrd_dir.mkdir(parents=True, exist_ok=True)
         rrd_b64 = base64.b64encode(rrd_path.read_bytes()).decode("ascii")
         viewer_html = _INLINE_VIEWER_TEMPLATE.format(version=version, rrd_base64=rrd_b64)
-        # The replacement must use the same escaping level as the surrounding HTML.
-        # Panel's save produces &amp;lt; / &amp;quot; for embedded HTML content.
-        escaped = (
-            viewer_html.replace("&", "&amp;amp;")
-            .replace("<", "&amp;lt;")
-            .replace(">", "&amp;gt;")
-            .replace('"', "&amp;quot;")
-        )
+
+        # Write a standalone viewer HTML file next to the report.
+        viewer_name = rrd_path.stem + ".html"
+        viewer_path = rrd_dir / viewer_name
+        viewer_path.write_text(viewer_html, encoding="utf-8")
+
+        # Rewrite the iframe src to the local file (same escaping level).
+        relative_url = f"_rrd/{viewer_name}"
+        changed = True
         return (
-            f"&amp;lt;iframe srcdoc=&amp;quot;{escaped}&amp;quot;"
+            f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
             f" width=&amp;quot;{width}&amp;quot;"
             f" height=&amp;quot;{height}&amp;quot;"
             f" frameborder=&amp;quot;0&amp;quot;"
@@ -305,5 +314,5 @@ def inline_rrd_iframes(html_path: Path) -> None:
         )
 
     new_html = _RRD_IFRAME_RE.sub(_replace, html)
-    if new_html != html:
+    if changed:
         html_path.write_text(new_html, encoding="utf-8")
