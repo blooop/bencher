@@ -56,14 +56,17 @@ def rerun_to_pane(
     return rrd_file_to_pane(file_path, width=width, height=height)
 
 
-def capture_rerun_window(
-    width: int = 500, height: int = 500, recording: rr.RecordingStream | None = None
-):  # pragma: no cover
+def capture_rerun_window(recording: rr.RecordingStream | None = None, **_kwargs) -> str:  # pragma: no cover
     """Capture the current rerun recording and return the .rrd file path.
 
     Data must be logged BEFORE calling this function so that the in-memory
     recording has content to drain.  The returned path is stored by
     ``ResultRerun``; rendering into an HTML viewer pane happens later via
     ``ResultRerun.to_container()``.
+
+    .. note::
+       Viewer dimensions (``width``/``height``) are now taken from the
+       ``ResultRerun`` descriptor, so any keyword arguments passed here
+       are accepted but ignored.
     """
     return capture_rerun_rrd(recording=recording)
