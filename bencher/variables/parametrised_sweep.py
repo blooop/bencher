@@ -75,7 +75,7 @@ class ParametrizedSweep(Parameterized):
         key = (cls, include_name)
         cached = _input_result_cache.get(key)
         if cached is not None:
-            return cached
+            return _InputResult(inputs=dict(cached.inputs), results=dict(cached.results))
 
         inputs = {}
         results = {}
