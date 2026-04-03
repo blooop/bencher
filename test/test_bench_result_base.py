@@ -519,6 +519,26 @@ class TestBenchResultBase(unittest.TestCase):
         ds_str = res.to_dataset(result_var=rv_param.name)
         self.assertIs(ds_param, ds_str)
 
+    def test_to_dataset_cache_different_levels(self):
+        """Different level values should produce different cache entries."""
+        res = self._make_1d_result()
+        ds_none = res.to_dataset(level=None)
+        ds_1 = res.to_dataset(level=1)
+        self.assertIsNot(ds_none, ds_1)
+
+    def test_to_dataset_deep_returns_copy(self):
+        """deep=True should return a distinct object that is safe to mutate."""
+        res = self._make_1d_result()
+        ds_cached = res.to_dataset()
+        ds_deep = res.to_dataset(deep=True)
+        self.assertIsNot(ds_cached, ds_deep)
+        # Mutating the deep copy must not affect the cached version
+        for var in ds_deep.data_vars:
+            ds_deep[var].values[:] = -999
+            break
+        ds_again = res.to_dataset()
+        self.assertIs(ds_again, ds_cached)
+
     def test_to_dataset_cache_cleared_on_post_setup(self):
         """Cache should be invalidated when post_setup() is called."""
         res = self._make_1d_result()

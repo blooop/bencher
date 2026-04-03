@@ -225,7 +225,8 @@ class BenchResultBase:
         """Build a hashable cache key from normalized to_dataset() arguments."""
         reduce = self._resolve_auto(reduce)
         rv_key = result_var.name if isinstance(result_var, Parameter) else result_var
-        dims_key = tuple(agg_over_dims) if agg_over_dims else None
+        # Normalize dimension order so aggregation over the same set shares cache entries
+        dims_key = tuple(sorted(agg_over_dims)) if agg_over_dims else None
         # fn is irrelevant when no agg dims — aggregation is skipped entirely
         fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
         return (reduce, rv_key, level, dims_key, fn_key)
@@ -237,22 +238,27 @@ class BenchResultBase:
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
+        deep: bool = False,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
 
         Args:
             reduce (ReduceType, optional): Optionally perform reduce options on the dataset.  By default the returned dataset will calculate the mean and standard deviation over the "repeat" dimension so that the dataset plays nicely with most of the holoviews plot types.  Reduce.Sqeeze is used if there is only 1 repeat and you want the "reduce" variable removed from the dataset. ReduceType.None returns an unaltered dataset. Defaults to ReduceType.AUTO.
+            deep (bool, optional): If True, return a deep copy that is safe to mutate.
+                Defaults to False (returns the cached object directly).
 
         Returns:
             xr.Dataset: results in the form of an xarray dataset
 
         Note:
-            Returned datasets are cached per instance. Do not mutate them in-place;
-            subsequent calls with the same arguments will return the same object.
+            Returned datasets are cached per instance. When *deep* is False (default)
+            do not mutate them in-place; subsequent calls with the same arguments will
+            return the same object. Pass ``deep=True`` to get a mutable copy.
         """
         cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
         if cache_key in self._to_dataset_cache:
-            return self._to_dataset_cache[cache_key]
+            cached = self._to_dataset_cache[cache_key]
+            return cached.copy(deep=True) if deep else cached
 
         reduce = self._resolve_auto(reduce)
 
@@ -370,10 +376,8 @@ class BenchResultBase:
                 if c != "repeat":
                     coords_no_repeat[c] = with_level(v.to_numpy(), level)
             ds_out = ds_out.sel(coords_no_repeat)
-            self._to_dataset_cache[cache_key] = ds_out
-            return ds_out
         self._to_dataset_cache[cache_key] = ds_out
-        return ds_out
+        return ds_out.copy(deep=True) if deep else ds_out
 
     def get_optimal_vec(
         self,
