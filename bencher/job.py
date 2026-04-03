@@ -195,7 +195,7 @@ class FutureCache:
         cache_name: str = "fcache",
         tag_index: bool = True,
         size_limit: int = int(20e9),  # 20 GB
-        cache_samples: bool = True,
+        cache_samples: bool = True,  # internal default; public APIs default to False/None
     ):
         """Initialize a FutureCache with optional caching and execution settings.
 

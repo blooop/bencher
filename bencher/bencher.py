@@ -119,8 +119,9 @@ class Bench(BenchPlotServer):
         self.plot = True
 
     def close(self) -> None:
-        """Close the sample cache so on-disk resources are released."""
+        """Close sample and collector caches so on-disk resources are released."""
         self._executor.close_cache()
+        self._collector.close_caches()
 
     @property
     def sample_cache(self):

@@ -5,7 +5,7 @@ These tests verify that:
 2. Each benchmark iteration receives an independent run_cfg object
 3. setup_run_cfg() never mutates its input
 4. BenchRunCfg has no mutable param fields (guard test)
-5. The redundant entry-level deepcopy has been eliminated
+5. Settings are applied in-place on the owned copy (no extra setup_run_cfg copy)
 
 All tests except test_deepcopy_count_* should pass BEFORE and AFTER the optimization.
 """
@@ -147,14 +147,14 @@ class TestCopyElimination(unittest.TestCase):
 
     @patch("bencher.bench_runner.deepcopy", wraps=deepcopy)
     def test_deepcopy_count_no_explicit_run_cfg(self, mock_dc):
-        """When run_cfg=None, deepcopy should be called once at entry + once in setup_run_cfg + once per iteration."""
+        """When run_cfg=None, deepcopy should be called once at entry + once per iteration."""
         br = bn.BenchRunner("test_count")
         br.add(_simple_benchmark)
 
         br.run(level=2, repeats=1)  # 1 bench_fn, 1 level, 1 repeat
 
-        # Expected: 1 at entry (copy self.run_cfg) + 1 in setup_run_cfg + 1 per-iteration = 3
-        self.assertEqual(mock_dc.call_count, 3)
+        # Expected: 1 at entry (copy self.run_cfg) + 1 per-iteration = 2 total
+        self.assertEqual(mock_dc.call_count, 2)
 
     @patch("bencher.bench_runner.deepcopy", wraps=deepcopy)
     def test_deepcopy_count_with_explicit_run_cfg(self, mock_dc):

@@ -13,6 +13,29 @@ from bencher.bench_report import BenchReport, GithubPagesCfg
 from copy import deepcopy
 
 
+def _resolve_cache_samples(cache_samples, kwargs, stacklevel=2):
+    """Handle deprecated ``cache_results`` kwarg, returning resolved *cache_samples*.
+
+    Pops ``cache_results`` from *kwargs*, emits a ``DeprecationWarning``, and
+    raises ``TypeError`` on conflicts or unexpected kwargs.
+    """
+    if "cache_results" in kwargs:
+        if cache_samples is not None:
+            raise TypeError(
+                "Cannot pass both 'cache_samples' and deprecated 'cache_results'. "
+                "Use 'cache_samples' only."
+            )
+        warnings.warn(
+            "cache_results parameter is deprecated. Use 'cache_samples' instead.",
+            DeprecationWarning,
+            stacklevel=stacklevel + 1,
+        )
+        cache_samples = kwargs.pop("cache_results")
+    if kwargs:
+        raise TypeError(f"Unexpected keyword arguments: {', '.join(kwargs)}")
+    return cache_samples
+
+
 @runtime_checkable
 class BenchableV1(Protocol):
     """Legacy two-argument bench callable: bench(run_cfg, report)."""
@@ -306,21 +329,7 @@ class BenchRunner:
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
         """
-        # Handle deprecated cache_results keyword
-        if "cache_results" in kwargs:
-            if cache_samples is not None:
-                raise TypeError(
-                    "Cannot pass both 'cache_samples' and deprecated 'cache_results'. "
-                    "Use 'cache_samples' only."
-                )
-            warnings.warn(
-                "cache_results parameter is deprecated. Use 'cache_samples' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            cache_samples = kwargs.pop("cache_results")
-        if kwargs:
-            raise TypeError(f"Unexpected keyword arguments: {', '.join(kwargs)}")
+        cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 
         # Handle deprecation warnings for legacy parameters
         if min_level is not None:
@@ -341,8 +350,9 @@ class BenchRunner:
             if repeats == 1:  # Only override if repeats is still default
                 repeats = start_repeats
 
-        if run_cfg is None:
-            run_cfg = deepcopy(self.run_cfg)
+        # deepcopy once to protect self.run_cfg / caller's object, then apply
+        # settings directly — no second copy via setup_run_cfg needed.
+        run_cfg = deepcopy(self.run_cfg if run_cfg is None else run_cfg)
 
         # Set up level and repeat ranges
         min_level = level
@@ -364,9 +374,10 @@ class BenchRunner:
             else:
                 cache_samples = False
 
-        run_cfg = BenchRunner.setup_run_cfg(
-            run_cfg, cache_samples=cache_samples, over_time=over_time
-        )
+        run_cfg.cache_samples = cache_samples
+        run_cfg.only_hash_tag = cache_samples
+        if over_time is not None:
+            run_cfg.over_time = over_time
 
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_level, final_max_level + 1):

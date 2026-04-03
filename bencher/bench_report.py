@@ -37,7 +37,10 @@ class BenchReport(BenchPlotServer):
         self.bench_results: list[BenchResult] = []
 
     def clear(self) -> None:
-        """Remove all tabs and results so the report can be reused."""
+        """Remove all tabs and results so the report can be reused between runs.
+
+        Not safe to call while the report is being served to a live Panel session.
+        """
         self.pane.clear()
         self.bench_results.clear()
 

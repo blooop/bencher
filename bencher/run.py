@@ -104,25 +104,9 @@ def run(
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
-    import warnings
+    from bencher.bench_runner import BenchRunner, _resolve_cache_samples
 
-    from bencher.bench_runner import BenchRunner
-
-    # Handle deprecated cache_results keyword
-    if "cache_results" in kwargs:
-        if cache_samples is not None:
-            raise TypeError(
-                "Cannot pass both 'cache_samples' and deprecated 'cache_results'. "
-                "Use 'cache_samples' only."
-            )
-        warnings.warn(
-            "cache_results parameter is deprecated. Use 'cache_samples' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        cache_samples = kwargs.pop("cache_results")
-    if kwargs:
-        raise TypeError(f"Unexpected keyword arguments: {', '.join(kwargs)}")
+    cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 
     # Case 2: ParametrizedSweep class (not instance) — instantiate it
     if isinstance(target, type) and issubclass(target, ParametrizedSweep):
