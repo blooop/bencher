@@ -261,6 +261,37 @@ class ResultContainer(param.Parameter):
         return _hash_slots(self)
 
 
+class ResultRerun(ResultContainer):
+    """Result type for rerun .rrd spatial visualizations.
+
+    Stores a path to an .rrd file (like ResultContainer) but carries viewer
+    sizing metadata and provides a dedicated ``to_container()`` that renders
+    the file with the rerun web viewer.
+
+    Usage in a ParametrizedSweep::
+
+        out_rerun = ResultRerun(width=600, height=600)
+
+        def benchmark(self):
+            rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta, 1]))
+            self.out_rerun = bn.capture_rerun_window(width=600, height=600)
+    """
+
+    __slots__ = ["width", "height"]
+
+    def __init__(self, default=None, units="rerun", width=600, height=600, **params):
+        super().__init__(default=default, units=units, **params)
+        self.width = width
+        self.height = height
+
+    def to_container(self):
+        """Return a callable that renders an .rrd file path as a rerun viewer pane."""
+        from bencher.utils_rrd import rrd_file_to_pane
+
+        width, height = self.width, self.height
+        return partial(rrd_file_to_pane, width=width, height=height)
+
+
 class ResultReference(param.Parameter):
     """Use this class to save arbitrary objects that are not picklable or native to panel.  You can pass a container callback that takes the object and returns a panel pane to be displayed"""
 
@@ -324,6 +355,7 @@ PANEL_TYPES = (
     ResultImage,
     ResultVideo,
     ResultContainer,
+    ResultRerun,
     ResultString,
     ResultReference,
     ResultDataSet,
@@ -339,6 +371,7 @@ XARRAY_MULTIDIM_RESULT_TYPES = (
     ResultImage,
     ResultString,
     ResultContainer,
+    ResultRerun,
     ResultPath,
 )
 
@@ -352,6 +385,7 @@ ALL_RESULT_TYPES = (
     ResultImage,
     ResultString,
     ResultContainer,
+    ResultRerun,
     ResultDataSet,
     ResultReference,
     ResultVolume,
