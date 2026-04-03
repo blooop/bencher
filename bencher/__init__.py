@@ -31,6 +31,7 @@ from .variables.results import (
     ResultImage,
     ResultString,
     ResultContainer,
+    ResultRerun,
     ResultReference,
     ResultVolume,
     OptDir,
