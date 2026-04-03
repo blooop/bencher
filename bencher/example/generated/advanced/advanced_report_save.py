@@ -1,23 +1,19 @@
 """Auto-generated example: Report Customization — saving and appending content."""
 
-from typing import Any
-
-import bencher as bch
+import bencher as bn
 
 
-class QuadraticFit(bch.ParametrizedSweep):
+class QuadraticFit(bn.ParametrizedSweep):
     """A simple quadratic function for demonstrating report features."""
 
-    x = bch.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
-    y = bch.ResultVar(units="ul", doc="Quadratic output")
+    x = bn.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
+    y = bn.ResultFloat(units="ul", doc="Quadratic output")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.y = self.x**2 - 1
-        return super().__call__()
 
 
-def example_advanced_report_save(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_advanced_report_save(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Report Customization — saving and appending content."""
     bench = QuadraticFit().to_bench(run_cfg)
 
@@ -42,4 +38,4 @@ def example_advanced_report_save(run_cfg: bch.BenchRunCfg | None = None) -> bch.
 
 
 if __name__ == "__main__":
-    bch.run(example_advanced_report_save, level=3)
+    bn.run(example_advanced_report_save, level=3)

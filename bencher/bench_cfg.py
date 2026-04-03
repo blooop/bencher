@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from typing import List, Optional, Dict, Any, Union, TypeVar
+from typing import Any, TypeVar
 
 import param
 import panel as pn
@@ -13,6 +13,7 @@ from copy import deepcopy
 from bencher.variables.sweep_base import hash_sha1, describe_variable
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
+from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.job import Executors
 from bencher.results.laxtex_result import to_latex
 
@@ -32,7 +33,7 @@ class BenchPlotSrvCfg(param.Parameterized):
         show (bool): Open the served page in a web browser
     """
 
-    port: Optional[int] = param.Integer(None, doc="The port to launch panel with")
+    port: int | None = param.Integer(None, doc="The port to launch panel with")
     allow_ws_origin: bool = param.Boolean(
         False,
         doc="Add the port to the whitelist, (warning will disable remote access if set to true)",
@@ -60,6 +61,10 @@ class BenchRunCfg(BenchPlotSrvCfg):
         print_bench_results (bool): Print the results of the benchmark function
                                    every time it is called
         clear_history (bool): Clear historical results
+        max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
+        max_slider_points (int): Maximum time points in the over_time slider. Defaults to 10, None means all.
+        show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots. Defaults to False.
+        show_aggregate_plots (bool): Show aggregated BandResult plots when aggregate is set.
         print_pandas (bool): Print a pandas summary of the results to the console
         print_xarray (bool): Print an xarray summary of the results to the console
         serve_pandas (bool): Serve a pandas summary on the results webpage
@@ -145,6 +150,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
         False, doc="Do not attempt to calculate benchmarks if no results are found in the cache"
     )
 
+    cache_size: int = param.Integer(
+        default=None,
+        allow_None=True,
+        bounds=(1, None),
+        doc="Maximum size of the disk cache in megabytes (MB). If None, uses the default (100 GB).",
+    )
+
     # ==================== DISPLAY PARAMETERS ====================
     # These parameters control console output and reporting
 
@@ -194,20 +206,27 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     use_optuna: bool = param.Boolean(False, doc="show optuna plots")
 
-    plot_size: Optional[int] = param.Integer(
-        default=None, doc="Sets the width and height of the plot"
-    )
+    plot_size: int | None = param.Integer(default=None, doc="Sets the width and height of the plot")
 
-    plot_width: Optional[int] = param.Integer(
+    plot_width: int | None = param.Integer(
         default=None,
         doc="Sets with width of the plots, this will override the plot_size parameter",
     )
 
-    plot_height: Optional[int] = param.Integer(
+    plot_height: int | None = param.Integer(
         default=None, doc="Sets the height of the plot, this will override the plot_size parameter"
     )
 
     raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")
+
+    pane_layout = param.Selector(
+        default=PaneLayout.grid,
+        objects=list(PaneLayout),
+        doc="Controls how multi-dimensional data is laid out in panel displays. "
+        "'grid' uses rows/columns (default). "
+        "'tabs' uses tabs for all outer dimensions. "
+        "'tabs_and_grid' uses tabs for the outermost dimension and grid for inner ones.",
+    )
 
     # ==================== TIME & HISTORY PARAMETERS ====================
     # These parameters control time-based features and historical tracking
@@ -219,7 +238,38 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
-    time_event: Optional[str] = param.String(
+    max_time_events: int | None = param.Integer(
+        None,
+        bounds=[1, None],
+        allow_None=True,
+        doc="Maximum number of over_time events to retain. Oldest events are trimmed. None means unlimited.",
+    )
+
+    max_slider_points: int | None = param.Integer(
+        10,
+        bounds=[2, None],
+        allow_None=True,
+        doc="Maximum number of time points shown in the over_time slider. "
+        "Evenly subsampled (first and last always included). "
+        "The aggregated tab still uses all data. "
+        "Defaults to 10 to cap embed cost. Set to None for no subsampling.",
+    )
+
+    show_aggregated_time_tab: bool = param.Boolean(
+        False,
+        doc="When over_time is active, show an 'All Time Points (aggregated)' tab "
+        "alongside the per-time-point slider. Defaults to False for performance. "
+        "Set True to enable the aggregation view.",
+    )
+
+    show_aggregate_plots: bool = param.Boolean(
+        True,
+        doc="When aggregate is set on plot_sweep, show the aggregated BandResult "
+        "plots in the auto-plots view. Set False to skip the aggregation "
+        "computation and extra render, improving performance.",
+    )
+
+    time_event: str | None = param.String(
         None,
         doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",
     )
@@ -232,6 +282,38 @@ class BenchRunCfg(BenchPlotSrvCfg):
     run_date: datetime = param.Date(
         default=None,
         doc="The date the bench run was performed",
+    )
+
+    # ==================== REGRESSION DETECTION PARAMETERS ====================
+    # These parameters control automatic regression detection for over_time benchmarks
+
+    regression_detection: bool = param.Boolean(
+        False,
+        doc="Enable regression detection when over_time is True. After loading history, "
+        "statistically compare the latest run against historical data.",
+    )
+
+    regression_method: str = param.Selector(
+        default="percentage",
+        objects=["percentage", "iqr", "ttest"],
+        doc="Detection method: 'percentage' (mean comparison), "
+        "'iqr' (IQR outlier detection), 'ttest' (Welch's t-test).",
+    )
+
+    regression_threshold: float = param.Number(
+        default=None,
+        allow_None=True,
+        doc="Threshold for regression detection. Interpretation depends on method: "
+        "'percentage' = percent change (default 5.0), "
+        "'iqr' = IQR multiplier (default 1.5), "
+        "'ttest' = significance level alpha (default 0.05). "
+        "If None, the per-method default is used automatically.",
+    )
+
+    regression_fail: bool = param.Boolean(
+        False,
+        doc="If True, raise RegressionError when a regression is detected. "
+        "Useful for failing CI pipelines on benchmark regressions.",
     )
 
     def __init__(self, **params: Any) -> None:
@@ -295,6 +377,33 @@ class BenchRunCfg(BenchPlotSrvCfg):
     def deep(self):
         return deepcopy(self)
 
+    @classmethod
+    def with_defaults(cls, run_cfg=None, **defaults):
+        """Merge *defaults* into *run_cfg*, creating a new instance when needed.
+
+        When *run_cfg* is ``None`` a fresh ``BenchRunCfg`` is created with *defaults*.
+        When *run_cfg* is provided, a shallow copy is made and each default is applied
+        only if the corresponding field is still at its param-level default value
+        (i.e. the caller did not explicitly set it).  The original *run_cfg* is never
+        mutated.  This lets benchmark functions declare sensible defaults while still
+        allowing callers to override::
+
+            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
+
+        Raises:
+            ValueError: If any key in *defaults* is not a recognised parameter.
+        """
+        unknown = set(defaults) - set(cls.param)
+        if unknown:
+            raise ValueError(f"Unknown BenchRunCfg parameter(s): {', '.join(sorted(unknown))}")
+        if run_cfg is None:
+            return cls(**defaults)
+        result = deepcopy(run_cfg)
+        for key, value in defaults.items():
+            if getattr(result, key) == cls.param[key].default:  # pylint: disable=unsubscriptable-object
+                setattr(result, key, value)
+        return result
+
 
 class BenchCfg(BenchRunCfg):
     """Complete configuration for a benchmark protocol.
@@ -309,14 +418,13 @@ class BenchCfg(BenchRunCfg):
     descriptive summaries and visualizations of the benchmark configuration.
 
     Attributes:
-        input_vars (List): A list of ParameterizedSweep variables to perform a parameter sweep over
-        result_vars (List): A list of ParameterizedSweep results to collect and plot
-        const_vars (List): Variables to keep constant but are different from the default value
-        result_hmaps (List): A list of holomap results
-        meta_vars (List): Meta variables such as recording time and repeat id
-        all_vars (List): Stores a list of both the input_vars and meta_vars
-        iv_time (List[TimeSnapshot | TimeEvent]): Parameter for sampling the same inputs over time
-        iv_time_event (List[TimeEvent]): Parameter for sampling inputs over time as a discrete type
+        input_vars (list): A list of ParameterizedSweep variables to perform a parameter sweep over
+        result_vars (list): A list of ParameterizedSweep results to collect and plot
+        const_vars (list): Variables to keep constant but are different from the default value
+        result_hmaps (list): A list of holomap results
+        meta_vars (list): Meta variables such as recording time and repeat id
+        all_vars (list): Stores a list of both the input_vars and meta_vars
+        iv_time (list[TimeSnapshot | TimeEvent]): Parameter for sampling the same inputs over time
         over_time (bool): Controls whether the function is sampled over time
         name (str): The name of the benchmarkCfg
         title (str): The title of the benchmark
@@ -328,7 +436,7 @@ class BenchCfg(BenchRunCfg):
         pass_repeat (bool): Whether to pass the 'repeat' kwarg to the benchmark function
         tag (str): Tags for grouping different benchmarks
         hash_value (str): Stored hash value of the config
-        plot_callbacks (List): Callables that take a BenchResult and return panel representation
+        plot_callbacks (list): Callables that take a BenchResult and return panel representation
     """
 
     input_vars = param.List(
@@ -357,30 +465,24 @@ class BenchCfg(BenchRunCfg):
     )
     iv_time = param.List(
         default=[],
-        item_type=Union[TimeSnapshot, TimeEvent],
+        item_type=TimeSnapshot | TimeEvent,
         doc="A parameter to represent the sampling the same inputs over time as a scalar type",
     )
 
-    iv_time_event = param.List(
-        default=[],
-        item_type=TimeEvent,
-        doc="A parameter to represent the sampling the same inputs over time as a discrete type",
-    )
-
     # Note: over_time is already inherited from BenchRunCfg
-    name: Optional[str] = param.String(None, doc="The name of the benchmarkCfg")
-    title: Optional[str] = param.String(None, doc="The title of the benchmark")
+    name: str | None = param.String(None, doc="The name of the benchmarkCfg")
+    title: str | None = param.String(None, doc="The title of the benchmark")
     raise_duplicate_exception: bool = param.Boolean(
         False, doc="Use this while debugging if filename generation is unique"
     )
-    bench_name: Optional[str] = param.String(
+    bench_name: str | None = param.String(
         None, doc="The name of the benchmark and the name of the save folder"
     )
-    description: Optional[str] = param.String(
+    description: str | None = param.String(
         None,
         doc="A place to store a longer description of the function of the benchmark",
     )
-    post_description: Optional[str] = param.String(
+    post_description: str | None = param.String(
         None, doc="A place to comment on the output of the graphs"
     )
 
@@ -407,6 +509,18 @@ class BenchCfg(BenchRunCfg):
     plot_callbacks = param.List(
         None,
         doc="A callable that takes a BenchResult and returns panel representation of the results",
+    )
+
+    agg_over_dims = param.List(
+        default=None,
+        doc="Dimension names to aggregate over when auto-appending aggregated views. "
+        "When set, run_sweep will automatically append CurveResult (mean +/- std) "
+        "and BandResult (percentile bands) with these dims collapsed.",
+    )
+    agg_fn = param.ObjectSelector(
+        default="mean",
+        objects=["mean", "sum", "max", "min", "median"],
+        doc="Aggregation function to use when agg_over_dims is set.",
     )
 
     def __init__(self, **params: Any) -> None:
@@ -460,25 +574,49 @@ class BenchCfg(BenchRunCfg):
 
         return hash_val
 
-    def inputs_as_str(self) -> List[str]:
+    def inputs_as_str(self) -> list[str]:
         """Get a list of input variable names.
 
         Returns:
-            List[str]: List of the names of input variables
+            list[str]: List of the names of input variables
         """
         return [i.name for i in self.input_vars]
 
-    def to_latex(self) -> Optional[pn.pane.LaTeX]:
+    def to_latex(self) -> pn.pane.LaTeX | None:
         """Convert benchmark configuration to LaTeX representation.
 
         Returns:
-            Optional[pn.pane.LaTeX]: LaTeX representation of the benchmark configuration
+            pn.pane.LaTeX | None: LaTeX representation of the benchmark configuration
         """
         return to_latex(self)
 
+    def to_cartesian_animation(self) -> str | None:
+        """Render an animation of the Cartesian product data collection.
+
+        Delegates to :func:`bencher.results.manim_cartesian.render_animation`,
+        which currently uses a PIL-based renderer. Returns the filesystem path
+        to the generated animated PNG (or other format, depending on the
+        renderer), or ``None`` on failure so callers can degrade gracefully.
+
+        Returns:
+            str | None: Path to the rendered animation file, or None on failure.
+        """
+        try:
+            from bencher.results.manim_cartesian import from_bench_cfg, render_animation
+
+            cfg = from_bench_cfg(self)
+            return render_animation(cfg, width=350, height=250)
+        except (ImportError, AttributeError, ValueError, RuntimeError, OSError) as e:
+            # Log the exception so failures remain diagnosable while preserving
+            # the existing graceful fallback behavior.
+            logging.getLogger(__name__).exception(
+                "Failed to render Cartesian animation for bench config %r: %s", self, e
+            )
+            return None
+
     def describe_sweep(
         self, width: int = 800, accordion: bool = True
-    ) -> Union[pn.pane.Markdown, pn.Column]:
+    ) -> pn.pane.Markdown | pn.Column:
         """Produce a markdown summary of the sweep settings.
 
         Args:
@@ -486,7 +624,7 @@ class BenchCfg(BenchRunCfg):
             accordion (bool): Whether to wrap the description in an accordion. Defaults to True.
 
         Returns:
-            Union[pn.pane.Markdown, pn.Column]: Panel containing the sweep description
+            pn.pane.Markdown | pn.Column: Panel containing the sweep description
         """
 
         latex = self.to_latex()
@@ -495,9 +633,21 @@ class BenchCfg(BenchRunCfg):
             desc = pn.Accordion(("Expand Full Data Collection Parameters", desc))
 
         sentence = self.sweep_sentence()
+
+        parts = [sentence]
         if latex is not None:
-            return pn.Column(sentence, latex, desc)
-        return pn.Column(sentence, desc)
+            parts.append(latex)
+
+        # Render Cartesian product animation (gracefully skipped on error)
+        animation_path = self.to_cartesian_animation()
+        if animation_path is not None:
+            from pathlib import Path
+
+            abs_path = str(Path(animation_path).resolve())
+            parts.append(pn.pane.Image(abs_path, width=350))
+
+        parts.append(desc)
+        return pn.Column(*parts)
 
     def sweep_sentence(self) -> pn.pane.Markdown:
         """Generate a concise summary sentence of the sweep configuration.
@@ -558,11 +708,11 @@ class BenchCfg(BenchRunCfg):
         benchmark_sampling_str = "\n".join(benchmark_sampling_str)
         return benchmark_sampling_str
 
-    def to_title(self, panel_name: Optional[str] = None) -> pn.pane.Markdown:
+    def to_title(self, panel_name: str | None = None) -> pn.pane.Markdown:
         """Create a markdown panel with the benchmark title.
 
         Args:
-            panel_name (Optional[str]): The name for the panel. Defaults to the benchmark title.
+            panel_name (str | None): The name for the panel. Defaults to the benchmark title.
 
         Returns:
             pn.pane.Markdown: A panel with the benchmark title as a heading
@@ -595,7 +745,7 @@ class BenchCfg(BenchRunCfg):
 
     def to_sweep_summary(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         description: bool = True,
         describe_sweep: bool = True,
         results_suffix: bool = True,
@@ -604,7 +754,7 @@ class BenchCfg(BenchRunCfg):
         """Produce panel output summarising the title, description and sweep setting.
 
         Args:
-            name (Optional[str]): Name for the panel. Defaults to benchmark title or
+            name (str | None): Name for the panel. Defaults to benchmark title or
                                  "Data Collection Parameters" if title is False.
             description (bool): Whether to include the benchmark description. Defaults to True.
             describe_sweep (bool): Whether to include the sweep description. Defaults to True.
@@ -630,7 +780,24 @@ class BenchCfg(BenchRunCfg):
             col.append(pn.pane.Markdown("## Results:"))
         return col
 
-    def optuna_targets(self, as_var: bool = False) -> List[Any]:
+    @staticmethod
+    def partition_input_vars(vars_) -> tuple[list, list]:
+        """Split variables into (optimized, non-optimized) based on the optimize flag."""
+        opt = [v for v in vars_ if getattr(v, "optimize", True)]
+        non_opt = [v for v in vars_ if not getattr(v, "optimize", True)]
+        return opt, non_opt
+
+    @property
+    def optimized_input_vars(self) -> list:
+        """Return input variables where optimize=True (suggested by Optuna)."""
+        return self.partition_input_vars(self.input_vars or [])[0]
+
+    @property
+    def non_optimized_input_vars(self) -> list:
+        """Return input variables where optimize=False (swept/aggregated, not suggested)."""
+        return self.partition_input_vars(self.input_vars or [])[1]
+
+    def optuna_targets(self, as_var: bool = False) -> list[Any]:
         """Get the list of result variables that are optimization targets.
 
         Args:
@@ -638,7 +805,7 @@ class BenchCfg(BenchRunCfg):
                           Defaults to False.
 
         Returns:
-            List[Any]: List of result variable names or objects that are optimization targets
+            list[Any]: List of result variable names or objects that are optimization targets
         """
         targets = []
         for rv in self.result_vars:
@@ -658,12 +825,12 @@ class DimsCfg:
     It is used to set up the structure for analyzing and visualizing benchmark results.
 
     Attributes:
-        dims_name (List[str]): Names of the benchmark dimensions
-        dim_ranges (List[List[Any]]): Values for each dimension
-        dims_size (List[int]): Size (number of values) for each dimension
-        dim_ranges_index (List[List[int]]): Indices for each dimension value
-        dim_ranges_str (List[str]): String representation of dimension ranges
-        coords (Dict[str, List[Any]]): Mapping of dimension names to their values
+        dims_name (list[str]): Names of the benchmark dimensions
+        dim_ranges (list[list[Any]]): Values for each dimension
+        dims_size (list[int]): Size (number of values) for each dimension
+        dim_ranges_index (list[list[int]]): Indices for each dimension value
+        dim_ranges_str (list[str]): String representation of dimension ranges
+        coords (dict[str, list[Any]]): Mapping of dimension names to their values
     """
 
     def __init__(self, bench_cfg: BenchCfg) -> None:
@@ -675,13 +842,13 @@ class DimsCfg:
         Args:
             bench_cfg (BenchCfg): The benchmark configuration containing dimension information
         """
-        self.dims_name: List[str] = [i.name for i in bench_cfg.all_vars]
+        self.dims_name: list[str] = [i.name for i in bench_cfg.all_vars]
 
-        self.dim_ranges: List[List[Any]] = [i.values() for i in bench_cfg.all_vars]
-        self.dims_size: List[int] = [len(p) for p in self.dim_ranges]
-        self.dim_ranges_index: List[List[int]] = [list(range(i)) for i in self.dims_size]
-        self.dim_ranges_str: List[str] = [f"{s}\n" for s in self.dim_ranges]
-        self.coords: Dict[str, List[Any]] = dict(zip(self.dims_name, self.dim_ranges))
+        self.dim_ranges: list[list[Any]] = [i.values() for i in bench_cfg.all_vars]
+        self.dims_size: list[int] = [len(p) for p in self.dim_ranges]
+        self.dim_ranges_index: list[list[int]] = [list(range(i)) for i in self.dims_size]
+        self.dim_ranges_str: list[str] = [f"{s}\n" for s in self.dim_ranges]
+        self.coords: dict[str, list[Any]] = dict(zip(self.dims_name, self.dim_ranges))
 
         logging.debug(f"dims_name: {self.dims_name}")
         logging.debug(f"dim_ranges {self.dim_ranges_str}")

@@ -1,19 +1,19 @@
 """Auto-generated example: InputCfg/OutputCfg — separated input and output classes."""
 
 import math
-import bencher as bch
+import bencher as bn
 
 
-class ServerMetrics(bch.ParametrizedSweep):
+class ServerMetrics(bn.ParametrizedSweep):
     """Output metrics from the server benchmark."""
 
-    throughput = bch.ResultVar(
-        units="req/s", direction=bch.OptDir.maximize, doc="Request throughput"
+    throughput = bn.ResultFloat(
+        units="req/s", direction=bn.OptDir.maximize, doc="Request throughput"
     )
-    latency = bch.ResultVar(units="ms", direction=bch.OptDir.minimize, doc="Response latency")
+    latency = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize, doc="Response latency")
 
 
-class ServerConfig(bch.ParametrizedSweep):
+class ServerConfig(bn.ParametrizedSweep):
     """Server configuration parameters.
 
     The static bench_function method takes a ServerConfig instance and
@@ -21,8 +21,8 @@ class ServerConfig(bch.ParametrizedSweep):
     which variables are inputs and which are outputs.
     """
 
-    worker_count = bch.FloatSweep(default=4, bounds=[1, 32], doc="Number of worker threads")
-    cache_size = bch.StringSweep(["small", "medium", "large"], doc="Cache tier size")
+    worker_count = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of worker threads")
+    cache_size = bn.StringSweep(["small", "medium", "large"], doc="Cache tier size")
 
     @staticmethod
     def bench_function(cfg: "ServerConfig") -> ServerMetrics:
@@ -34,11 +34,11 @@ class ServerConfig(bch.ParametrizedSweep):
         return output
 
 
-def example_workflow_input_output_cfg(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_workflow_input_output_cfg(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """InputCfg/OutputCfg — separated input and output classes."""
     # The Bench constructor accepts the static function and the ServerConfig class.
-    # This is an alternative to the ParametrizedSweep.__call__ pattern.
-    bench = bch.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
+    # This is an alternative to the ParametrizedSweep.benchmark() pattern.
+    bench = bn.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
     bench.plot_sweep(
         input_vars=[ServerConfig.param.worker_count],
         result_vars=[ServerMetrics.param.throughput, ServerMetrics.param.latency],
@@ -57,4 +57,4 @@ def example_workflow_input_output_cfg(run_cfg: bch.BenchRunCfg | None = None) ->
 
 
 if __name__ == "__main__":
-    bch.run(example_workflow_input_output_cfg, level=3)
+    bn.run(example_workflow_input_output_cfg, level=3)

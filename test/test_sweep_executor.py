@@ -282,6 +282,92 @@ class TestWorkerKwargsWrapper(unittest.TestCase):
         self.assertNotIn("time_event", call_log[0])
         self.assertIn("theta", call_log[0])
 
+    def test_does_not_mutate_original_kwargs(self):
+        """Verify that the original kwargs dict is not mutated by filtering."""
+
+        def my_worker(**_kwargs):
+            return {"result": 1}
+
+        bench_cfg = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            pass_repeat=False,
+        )
+
+        original = {"theta": 1.0, "repeat": 1, "over_time": "2024-01-01", "time_event": "ev1"}
+        snapshot = dict(original)
+
+        worker_kwargs_wrapper(my_worker, bench_cfg, **original)
+
+        self.assertEqual(original, snapshot)
+
+    def test_worker_mutation_of_mutable_value_does_not_leak(self):
+        """Verify deepcopy prevents worker mutations of mutable values from leaking back."""
+        shared_list = [1, 2, 3]
+
+        def mutating_worker(**kwargs):
+            kwargs["data"].append(999)
+            return {"result": 1}
+
+        bench_cfg = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            pass_repeat=False,
+        )
+
+        original = {"data": shared_list, "repeat": 1}
+        worker_kwargs_wrapper(mutating_worker, bench_cfg, **original)
+
+        self.assertEqual(shared_list, [1, 2, 3])
+
+    def test_no_meta_keys_present(self):
+        """Test behavior when no metadata keys are in kwargs."""
+        call_log = []
+
+        def my_worker(**kwargs):
+            call_log.append(kwargs)
+            return {"result": 1}
+
+        bench_cfg = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            pass_repeat=True,
+        )
+
+        worker_kwargs_wrapper(my_worker, bench_cfg, theta=1.0, phi=2.0)
+
+        self.assertEqual(call_log[0], {"theta": 1.0, "phi": 2.0})
+
+    def test_only_meta_keys(self):
+        """Test that worker receives empty dict when only metadata keys are present."""
+        call_log = []
+
+        def my_worker(**kwargs):
+            call_log.append(kwargs)
+            return {"result": 1}
+
+        bench_cfg = BenchCfg(
+            input_vars=[],
+            result_vars=[],
+            const_vars=[],
+            bench_name="test",
+            title="test",
+            pass_repeat=False,
+        )
+
+        worker_kwargs_wrapper(my_worker, bench_cfg, repeat=1, over_time="t", time_event="e")
+
+        self.assertEqual(call_log[0], {})
+
 
 if __name__ == "__main__":
     unittest.main()

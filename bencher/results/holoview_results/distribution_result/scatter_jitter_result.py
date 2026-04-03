@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Any
+from typing import Any
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -11,7 +11,7 @@ from bencher.results.holoview_results.distribution_result.distribution_result im
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 
 
 class ScatterJitterResult(DistributionResult):
@@ -32,12 +32,12 @@ class ScatterJitterResult(DistributionResult):
 
     def to_plot(
         self,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         jitter: float = 0.1,
-        target_dimension: Optional[int] = None,
+        target_dimension: int | None = None,
         **kwargs: Any,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a scatter jitter plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a scatter plot
@@ -64,7 +64,7 @@ class ScatterJitterResult(DistributionResult):
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar,),
+            result_types=(ResultFloat,),
             override=override,
             jitter=jitter,
             **kwargs,

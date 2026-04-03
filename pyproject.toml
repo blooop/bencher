@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.62.0"
+version = "1.78.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -12,13 +12,13 @@ requires-python = ">=3.10,<3.14"
 dependencies = [
     "holoviews>=1.15,<=1.22.1",
     "numpy>=1.0,<=2.4.1",
-    "param>=1.13.0,<=2.3.2",
+    "param>=1.13.0,<=2.3.3",
     "hvplot>=0.12.0,<=0.12.2",
-    "panel>=1.3.6,<=1.8.7",
+    "panel>=1.3.6,<=1.8.10",
     "diskcache>=5.6,<=5.6.3",
-    "optuna>=3.2,<=4.7.0",
+    "optuna>=3.2,<=4.8.0",
     "xarray>=2023.7,<=2025.6.1",
-    "plotly>=5.15,<=6.5.2",
+    "plotly>=5.15,<=6.6.0",
     "pandas>=2.0,<=3.0.0",
     "strenum>=0.4.0,<=0.4.15",
     "scikit-learn>=1.2,<=1.7.2",
@@ -61,22 +61,22 @@ holobench = { path = ".", editable = true }
 [project.optional-dependencies]
 test = [
     "nbformat",
-    "nbclient>=0.7,<=0.10.2",
+    "nbclient>=0.7,<=0.10.4",
     "ipykernel",
     "pip",
     "jupyter_bokeh",
     "pylint>=3.2.5,<=4.0.5",
-    "pytest-cov>=4.1,<=7.0.0",
+    "pytest-cov>=4.1,<=7.1.0",
     "pytest>=7.4,<=9.0.2",
-    "hypothesis>=6.104.2,<=6.151.9",
-    "ruff>=0.5.0,<=0.15.4",
-    "coverage>=7.5.4,<=7.13.4",
+    "hypothesis>=6.104.2,<=6.151.10",
+    "ruff>=0.5.0,<=0.15.8",
+    "coverage>=7.5.4,<=7.13.5",
     "prek>=0.2.28,<0.4.0",
-    "ty>=0.0.13,<=0.0.19",
+    "ty>=0.0.13,<=0.0.27",
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.30.1", "rerun-notebook>=0.30.1", "flask", "flask-cors"]
+rerun = ["rerun-sdk>=0.31.1,<0.32", "rerun-notebook>=0.31.1,<0.32"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
@@ -103,6 +103,7 @@ py313 = ["py313", "test", "rerun"]
 agent-iterate = { depends-on = [
     "generate-docs",
     "ci",
+    "perf-track",
     "git-commit-all",
     "fix-commit-push",
 ] }
@@ -120,7 +121,10 @@ dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = [
     "dev-add-docker",
 ] }
 prek = "prek run -a"
+prek-install = "prek install"
 prek-update = "prek autoupdate"
+perf = "python bencher/example/example_self_benchmark.py"
+perf-track = "python -c \"from bencher.example.example_self_benchmark import example_self_benchmark_over_time; example_self_benchmark_over_time()\""
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
@@ -151,7 +155,6 @@ git-commit-all = "git add -A && git commit -m 'Add all untracked files' || true"
 ci-push = { depends-on = ["format", "ruff-lint", "update-lock", "ci", "push"] }
 clear-pixi = "rm -rf .pixi pixi.lock"
 ralph = "ralph"
-setup-git-merge-driver = "git config merge.ourslock.driver true"
 update-from-template-repo = "./scripts/update_from_template.sh"
 dev-use-prebuilt = "./scripts/devcontainer_use_prebuilt.sh"
 dev-use-local = "./scripts/devcontainer_use_local.sh"
@@ -160,17 +163,25 @@ dev-use-local = "./scripts/devcontainer_use_local.sh"
 generate-examples = "python -c \"from bencher.example.meta.generate_examples import generate_python_files; generate_python_files()\""
 # Generate + run + produce docs (HTML reports + RST)
 generate-docs = "python bencher/example/meta/generate_examples.py"
-docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = ["generate-docs"] }
+docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = [
+    "generate-docs",
+] }
 
 
 #demos
+benchmark-save = "python scripts/benchmark_save.py"
 demo = "python3 bencher/example/example_image.py"
 demo_rerun = "python3 bencher/example/example_rerun.py"
+
+#performance tracking
+test-timing-xml = "pytest --junit-xml=test-results.xml"
+test-timing-report = "python3 -m bencher.test_timing_report test-results.xml reports"
+test-timing = { depends-on = ["test-timing-xml", "test-timing-report"] }
 
 
 [tool.pylint]
 extension-pkg-whitelist = ["numpy", "scipy"]
-jobs = 16                                    #detect number of cores
+jobs = 16                                                  #detect number of cores
 ignore-paths = ["docs/.*", "bencher/example/generated/.*"]
 
 [tool.pylint.'MESSAGES CONTROL']

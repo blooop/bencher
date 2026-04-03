@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List
 import pytest
 from bencher.results.laxtex_result import (
     latex_text,
+    latex_value,
     format_values_list,
     create_matrix_array,
     input_var_to_latex,
@@ -14,7 +16,7 @@ from bencher.results.laxtex_result import (
 @dataclass
 class MockVar:
     name: str
-    _values: List
+    _values: list
 
     def values(self):
         return self._values
@@ -22,8 +24,8 @@ class MockVar:
 
 @dataclass
 class MockBenchConfig:
-    all_vars: List[MockVar]
-    result_vars: List[MockVar]
+    all_vars: list[MockVar]
+    result_vars: list[MockVar]
 
 
 def test_latex_text():
@@ -38,6 +40,14 @@ def test_format_values_list():
 
     assert format_values_list(short_list) == short_list
     assert format_values_list(long_list) == [1, 2, 1, 6, 7]
+
+
+def test_latex_value():
+    assert latex_value(42) == "42"
+    assert latex_value(3.14) == "3.14"
+    assert latex_value("no_spaces") == "no_spaces"
+    assert latex_value("2024-06-15 14:59 abc1234") == r"\text{2024-06-15 14:59 abc1234}"
+    assert latex_value("has_under score") == r"\text{has under score}"
 
 
 def test_create_matrix_array():
@@ -95,3 +105,17 @@ def test_input_var_sizes(name, values, expected_size):
     var = MockVar(name=name, _values=values)
     result = input_var_to_latex(var)
     assert f"{expected_size}\\times1" in result
+
+
+def test_time_event_values_preserve_spaces():
+    """Time event values like '2024-06-15 14:59 abc1234' must keep spaces in LaTeX."""
+    var = MockVar(name="over_time", _values=["2024-06-15 14:59 abc1234"])
+    result = input_var_to_latex(var)
+    assert r"\text{2024-06-15 14:59 abc1234}" in result
+
+
+def test_create_matrix_array_with_time_events():
+    vals = ["2024-06-15 14:59 abc1234", "2024-06-16 10:00 def5678"]
+    result = create_matrix_array(vals)
+    assert r"\text{2024-06-15 14:59 abc1234}" in result
+    assert r"\text{2024-06-16 10:00 def5678}" in result

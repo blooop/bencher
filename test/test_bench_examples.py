@@ -1,5 +1,7 @@
+import inspect
 import unittest
-import bencher as bch
+
+import bencher as bn
 
 from bencher.example.meta.example_meta import example_meta
 
@@ -13,8 +15,8 @@ class TestBenchExamples(unittest.TestCase):
         super().__init__(*args, **kwargs)
         self.generate_all = False
 
-    def create_run_cfg(self) -> bch.BenchRunCfg:
-        cfg = bch.BenchRunCfg()
+    def create_run_cfg(self) -> bn.BenchRunCfg:
+        cfg = bn.BenchRunCfg()
         if not self.generate_all:
             cfg.repeats = 2
             cfg.level = 2
@@ -28,4 +30,9 @@ class TestBenchExamples(unittest.TestCase):
             self.assertTrue(os.path.exists(path))
 
     def test_example_meta(self) -> None:
-        self.examples_asserts(example_meta(self.create_run_cfg()))
+        self.examples_asserts(example_meta(self.create_run_cfg(), sample_repeats_values=[1, 3]))
+
+    def test_example_meta_default_sample_repeats(self) -> None:
+        """Verify the default sample_repeats_values is [1, 10] without running the full sweep."""
+        sig = inspect.signature(example_meta)
+        self.assertIsNone(sig.parameters["sample_repeats_values"].default)

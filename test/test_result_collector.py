@@ -44,15 +44,18 @@ class TestResultCollector(unittest.TestCase):
             repeats=2,
         )
 
-        bench_res, _, dims_name = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, dims_name, total_jobs = self.collector.setup_dataset(
+            bench_cfg, datetime(2024, 1, 1)
+        )
 
         self.assertIsNotNone(bench_res)
         self.assertIsNotNone(bench_res.ds)
         self.assertIn("theta", dims_name)
         self.assertIn("repeat", dims_name)
+        self.assertGreater(total_jobs, 0)
 
     def test_setup_dataset_result_vars_scalar(self):
-        """Test ResultVar creates float data_vars."""
+        """Test ResultFloat creates float data_vars."""
         instance = ExampleBenchCfg()
         instance.param.theta.samples = 3
 
@@ -65,7 +68,7 @@ class TestResultCollector(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         self.assertIn("out_sin", bench_res.ds.data_vars)
         self.assertEqual(bench_res.ds["out_sin"].dtype, np.float64)
@@ -134,7 +137,7 @@ class TestResultCollector(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Should not raise any errors
         self.collector.report_results(bench_res, print_xarray=False, print_pandas=False)
@@ -171,6 +174,96 @@ class TestResultCollector(unittest.TestCase):
             self.assertEqual(len(extra_vars), 1)
 
 
+class TestCacheReuse(unittest.TestCase):
+    """Tests for reusing diskcache.Cache instances across calls."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def tearDown(self):
+        self.collector.close_caches()
+
+    def test_benchmark_cache_reused_across_cache_results_calls(self):
+        """The same Cache instance should be returned on repeated access."""
+        cache1 = self.collector.get_benchmark_cache()
+        cache2 = self.collector.get_benchmark_cache()
+        self.assertIs(cache1, cache2)
+
+    def test_history_cache_reused_across_calls(self):
+        """The same history Cache instance should be returned on repeated access."""
+        cache1 = self.collector.get_history_cache()
+        cache2 = self.collector.get_history_cache()
+        self.assertIs(cache1, cache2)
+
+    def test_benchmark_and_history_caches_are_distinct(self):
+        """Benchmark and history caches should be different instances."""
+        bc = self.collector.get_benchmark_cache()
+        hc = self.collector.get_history_cache()
+        self.assertIsNot(bc, hc)
+
+    def test_close_caches_allows_reopen(self):
+        """After close_caches(), new instances should be created on next access."""
+        cache1 = self.collector.get_benchmark_cache()
+        self.collector.close_caches()
+        cache2 = self.collector.get_benchmark_cache()
+        self.assertIsNot(cache1, cache2)
+
+    def test_close_caches_idempotent(self):
+        """Calling close_caches() multiple times should not raise."""
+        self.collector.close_caches()
+        self.collector.close_caches()
+
+    def test_cache_results_uses_persistent_cache(self):
+        """cache_results should use the persistent benchmark cache, not open a new one."""
+        instance = ExampleBenchCfg()
+        bench_cfg = BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test_reuse",
+            title="test",
+            repeats=1,
+        )
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+
+        hashes = []
+        self.collector.cache_results(bench_res, "hash-a", hashes)
+        self.collector.cache_results(bench_res, "hash-b", hashes)
+
+        # Both writes should have gone to the same cache instance
+        cache = self.collector.get_benchmark_cache()
+        self.assertIn("hash-a", cache)
+        self.assertIn("hash-b", cache)
+
+    def test_sequential_plot_sweep_calls_reuse_cache(self):
+        """Multiple sequential cache operations should reuse the same Cache instance.
+
+        This is the core regression test: verify identical cache behavior
+        across multiple sequential operations (simulating plot_sweep() calls).
+        """
+        instance = ExampleBenchCfg()
+        bench_cfg = BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test_sequential",
+            title="test",
+            repeats=1,
+        )
+
+        all_hashes = []
+        for i in range(3):
+            bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+            self.collector.cache_results(bench_res, f"seq-hash-{i}", all_hashes)
+
+        self.assertEqual(all_hashes, ["seq-hash-0", "seq-hash-1", "seq-hash-2"])
+
+        # All results retrievable from the single persistent cache
+        cache = self.collector.get_benchmark_cache()
+        for i in range(3):
+            self.assertIn(f"seq-hash-{i}", cache)
+
+
 class TestCacheOperations(unittest.TestCase):
     """Tests for cache_results and load_history_cache."""
 
@@ -182,6 +275,7 @@ class TestCacheOperations(unittest.TestCase):
         self.original_history_dir = "cachedir/history"
 
     def tearDown(self):
+        self.collector.close_caches()
         # Clean up temp directory
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
@@ -197,7 +291,7 @@ class TestCacheOperations(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Start with empty list
         bench_cfg_hashes = []
@@ -222,7 +316,7 @@ class TestCacheOperations(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Set object_index to something non-empty
         bench_res.object_index = ["obj-1", "obj-2"]
@@ -255,7 +349,7 @@ class TestCacheOperations(unittest.TestCase):
             mock_concat.assert_not_called()
 
     def test_add_metadata_to_dataset_scalar_result(self):
-        """add_metadata_to_dataset should set attrs for scalar ResultVar."""
+        """add_metadata_to_dataset should set attrs for scalar ResultFloat."""
         instance = ExampleBenchCfg()
         bench_cfg = BenchCfg(
             input_vars=[instance.param.theta],
@@ -266,7 +360,7 @@ class TestCacheOperations(unittest.TestCase):
             repeats=1,
         )
 
-        bench_res, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
         # Add metadata for theta input
         self.collector.add_metadata_to_dataset(bench_res, instance.param.theta)
@@ -278,6 +372,229 @@ class TestCacheOperations(unittest.TestCase):
         # Check input var coordinate has metadata
         self.assertEqual(bench_res.ds["theta"].attrs.get("long_name"), "theta")
         self.assertEqual(bench_res.ds["theta"].attrs.get("units"), "rad")
+
+
+class TestMaxTimeEvents(unittest.TestCase):
+    """Tests for max_time_events trimming in load_history_cache."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def _make_over_time_dataset(self, n_slices):
+        """Create a dataset with n over_time slices."""
+        slices = []
+        for i in range(n_slices):
+            ds = xr.Dataset({"var": (["x", "over_time"], [[float(i)]])})
+            slices.append(ds)
+        return xr.concat(slices, "over_time")
+
+    def test_max_time_events_trims_oldest(self):
+        """max_time_events should keep only the N most recent slices."""
+        dataset = self._make_over_time_dataset(5)
+        unique_hash = f"trim-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=3
+        )
+
+        self.assertEqual(result.sizes["over_time"], 3)
+        # Should keep the last 3 slices (values 2, 3, 4)
+        expected = [2.0, 3.0, 4.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_none_unlimited(self):
+        """max_time_events=None should not trim anything."""
+        dataset = self._make_over_time_dataset(5)
+        unique_hash = f"unlimited-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=None
+        )
+
+        self.assertEqual(result.sizes["over_time"], 5)
+
+    def test_max_time_events_exact_count_no_trim(self):
+        """When over_time count equals max_time_events, no trimming occurs."""
+        dataset = self._make_over_time_dataset(3)
+        unique_hash = f"exact-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=3
+        )
+
+        self.assertEqual(result.sizes["over_time"], 3)
+        expected = [0.0, 1.0, 2.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_with_clear_history(self):
+        """clear_history + max_time_events: in practice clear_history yields a single slice,
+        but trimming is still correct if the incoming dataset has multiple over_time slices."""
+        dataset = self._make_over_time_dataset(5)
+        unique_hash = f"clear-trim-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=True, max_time_events=2
+        )
+
+        self.assertEqual(result.sizes["over_time"], 2)
+        expected = [3.0, 4.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_incremental_accumulation(self):
+        """Simulates repeated plot_sweep() calls: cache should stay bounded."""
+        unique_hash = f"incremental-test-{uuid.uuid4()}"
+
+        for i in range(10):
+            single_slice = xr.Dataset({"var": (["x", "over_time"], [[float(i)]])})
+            result = self.collector.load_history_cache(
+                single_slice, unique_hash, clear_history=False, max_time_events=3
+            )
+
+        # After 10 incremental calls with max_time_events=3, only the last 3 should remain
+        self.assertEqual(result.sizes["over_time"], 3)
+        expected = [7.0, 8.0, 9.0]
+        actual = list(result["var"].values[0])
+        self.assertEqual(actual, expected)
+
+    def test_max_time_events_no_over_time_dim(self):
+        """max_time_events should be a no-op when dataset has no over_time dim."""
+        dataset = xr.Dataset({"var": (["x"], [1, 2, 3])})
+        unique_hash = f"nodim-test-{uuid.uuid4()}"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, max_time_events=2
+        )
+
+        self.assertTrue(result.equals(dataset))
+
+
+class TestDTypeIncompatibleHistory(unittest.TestCase):
+    """Test that load_history_cache handles dtype changes in over_time coords."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def test_datetime_then_string_over_time_no_crash(self):
+        """Switching from datetime to string over_time coords should not crash."""
+        unique_hash = f"dtype-compat-{uuid.uuid4()}"
+
+        # First run: datetime over_time coord (TimeSnapshot style)
+        ds_datetime = xr.Dataset(
+            {"var": (["x", "over_time"], [[1.0]])},
+            coords={"over_time": [np.datetime64("2024-01-01")]},
+        )
+        self.collector.load_history_cache(ds_datetime, unique_hash, clear_history=False)
+
+        # Second run: string over_time coord (TimeEvent style)
+        ds_string = xr.Dataset(
+            {"var": (["x", "over_time"], [[2.0]])},
+            coords={"over_time": ["v1.0"]},
+        )
+        with self.assertLogs(level="WARNING") as captured_logs:
+            result = self.collector.load_history_cache(ds_string, unique_hash, clear_history=False)
+
+        # Should warn about discarded history
+        self.assertTrue(
+            any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
+        )
+        # Old data discarded, result matches the new dataset exactly
+        self.assertTrue(result.equals(ds_string))
+
+    def test_string_then_datetime_over_time_no_crash(self):
+        """Switching from string to datetime over_time coords should not crash."""
+        unique_hash = f"dtype-compat-reverse-{uuid.uuid4()}"
+
+        # First run: string over_time coord (TimeEvent style)
+        ds_string = xr.Dataset(
+            {"var": (["x", "over_time"], [[1.0]])},
+            coords={"over_time": ["v1.0"]},
+        )
+        self.collector.load_history_cache(ds_string, unique_hash, clear_history=False)
+
+        # Second run: datetime over_time coord (TimeSnapshot style)
+        ds_datetime = xr.Dataset(
+            {"var": (["x", "over_time"], [[2.0]])},
+            coords={"over_time": [np.datetime64("2024-06-15")]},
+        )
+        with self.assertLogs(level="WARNING") as captured_logs:
+            result = self.collector.load_history_cache(
+                ds_datetime, unique_hash, clear_history=False
+            )
+
+        self.assertTrue(
+            any("Discarding incompatible historical data" in msg for msg in captured_logs.output)
+        )
+        self.assertTrue(result.equals(ds_datetime))
+
+
+class TestLazyCartesianProduct(unittest.TestCase):
+    """Tests for lazy Cartesian product in setup_dataset (plan item 1.3)."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def _make_bench_cfg(self, n_theta_samples=3, repeats=2):
+        instance = ExampleBenchCfg()
+        instance.param.theta.samples = n_theta_samples
+        return BenchCfg(
+            input_vars=[instance.param.theta],
+            result_vars=[instance.param.out_sin],
+            const_vars=[],
+            bench_name="test_lazy",
+            title="test_lazy",
+            repeats=repeats,
+        )
+
+    def test_setup_dataset_returns_lazy_iterator(self):
+        """function_inputs should be a lazy zip, not a list."""
+        bench_cfg = self._make_bench_cfg()
+        _, func_inputs, _, total_jobs = self.collector.setup_dataset(
+            bench_cfg, datetime(2024, 1, 1)
+        )
+        self.assertNotIsInstance(func_inputs, list)
+        self.assertIsInstance(func_inputs, zip)
+        self.assertEqual(total_jobs, 3 * 2)  # theta_samples * repeats
+
+    def test_total_jobs_matches_iterator_length(self):
+        """total_jobs count must match the number of items yielded by the iterator."""
+        bench_cfg = self._make_bench_cfg(n_theta_samples=5, repeats=3)
+        _, func_inputs, _, total_jobs = self.collector.setup_dataset(
+            bench_cfg, datetime(2024, 1, 1)
+        )
+        items = list(func_inputs)
+        self.assertEqual(len(items), total_jobs)
+
+    def test_iterator_yields_correct_values(self):
+        """Materialized iterator should match the expected Cartesian product."""
+        bench_cfg = self._make_bench_cfg(n_theta_samples=3, repeats=2)
+        _, func_inputs, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        items = list(func_inputs)
+        # Each item is (index_tuple, value_tuple)
+        # With 3 theta samples and 2 repeats, expect 6 items
+        self.assertEqual(len(items), 6)
+        # First element should be indices, second should be values
+        for idx_tuple, val_tuple in items:
+            self.assertIsInstance(idx_tuple, tuple)
+            self.assertIsInstance(val_tuple, tuple)
+            self.assertEqual(len(idx_tuple), 2)  # theta dim + repeat dim
+            self.assertEqual(len(val_tuple), 2)
+
+    def test_iteration_does_not_mutate_bench_cfg(self):
+        """Consuming the iterator must not change bench_cfg."""
+        bench_cfg = self._make_bench_cfg()
+        input_vars_before = list(bench_cfg.input_vars)
+        all_vars_before = list(bench_cfg.all_vars) if bench_cfg.all_vars else None
+
+        _, func_inputs, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
+        # Consume the iterator fully
+        _ = list(func_inputs)
+
+        self.assertEqual(bench_cfg.input_vars, input_vars_before)
+        if all_vars_before is not None:
+            self.assertEqual(list(bench_cfg.all_vars), all_vars_before)
 
 
 class TestSetXarrayMultidim(unittest.TestCase):

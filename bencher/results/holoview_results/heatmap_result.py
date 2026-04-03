@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import List, Optional
 import panel as pn
 import holoviews as hv
 from param import Parameter
@@ -12,7 +11,7 @@ from bencher.utils import (
 )
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import PlotFilter, VarRange
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -35,7 +34,7 @@ class HeatmapResult(HoloviewResult):
         override: bool = True,
         use_tap: bool | None = None,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a heatmap visualization from benchmark data.
 
         This is a convenience method that calls to_heatmap() with the same parameters.
@@ -51,7 +50,7 @@ class HeatmapResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the heatmap if data is appropriate,
+            pn.panel | None: A panel containing the heatmap if data is appropriate,
                               otherwise returns filter match results.
         """
         return self.to_heatmap(
@@ -75,7 +74,7 @@ class HeatmapResult(HoloviewResult):
         override: bool = True,
         use_tap: bool | None = None,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a heatmap visualization from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a heatmap
@@ -94,7 +93,7 @@ class HeatmapResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the heatmap if data is appropriate,
+            pn.panel | None: A panel containing the heatmap if data is appropriate,
                               otherwise returns filter match results.
         """
         if tap_var is None:
@@ -120,14 +119,14 @@ class HeatmapResult(HoloviewResult):
             panel_range=VarRange(0, None),
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar),
+            result_types=(ResultFloat,),
             override=override,
             **kwargs,
         )
 
     def to_heatmap_ds(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> Optional[hv.HeatMap | hv.HoloMap]:
+    ) -> hv.HeatMap | hv.HoloMap | None:
         """Creates a basic heatmap from the provided dataset.
 
         Given a filtered dataset, this method generates a heatmap visualization showing
@@ -141,7 +140,7 @@ class HeatmapResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the heatmap options.
 
         Returns:
-            Optional[hv.HeatMap | hv.HoloMap]: A heatmap visualization if the dataset has
+            hv.HeatMap | hv.HoloMap | None: A heatmap visualization if the dataset has
                 at least 2 dimensions, otherwise returns None.
         """
         if len(dataset.dims) >= 2:
@@ -151,29 +150,28 @@ class HeatmapResult(HoloviewResult):
             title = f"Heatmap of {result_var.name}"
 
             if self._use_holomap_for_time(dataset):
-                da = dataset[C]
-                holomap = hv.HoloMap(kdims=self._over_time_kdims())
-                for t in da.coords["over_time"].values:
-                    da_t = da.sel(over_time=t)
-                    plot_t = da_t.hvplot.heatmap(
-                        x=x, y=y, C=C, cmap="plasma", title=title, **kwargs
-                    )
-                    if hasattr(plot_t, "opts"):
-                        plot_t = plot_t.opts(xrotation=30)
-                    holomap[t] = plot_t
-                return self._holomap_with_slider_bottom(holomap)
 
-            plot = dataset.hvplot.heatmap(x=x, y=y, C=C, cmap="plasma", title=title, **kwargs)
-            if hasattr(plot, "opts"):
-                plot = plot.opts(xrotation=30)
-            return plot
+                def make_heatmap(ds_t):
+                    # Convert to DataFrame so hv.HeatMap gets proper column names;
+                    # hv.Dataset(xr.Dataset) drops categorical-only dims.
+                    df = ds_t[C].to_dataframe().reset_index()
+                    return hv.HeatMap(df, kdims=[x, y], vdims=[C]).opts(
+                        cmap="plasma", title=title, xrotation=30, **kwargs
+                    )
+
+                return self._build_time_holomap(dataset, C, make_heatmap)
+
+            plot = dataset.hvplot.heatmap(
+                x=x, y=y, C=C, cmap="plasma", title=title, widget_location="bottom", **kwargs
+            )
+            return self._apply_opts(plot, xrotation=30)
         return None
 
     def to_heatmap_container_tap_ds(
         self,
         dataset: xr.Dataset,
         result_var: Parameter,
-        result_var_plots: List[Parameter] | None = None,
+        result_var_plots: list[Parameter] | None = None,
         container: pn.pane.panel = None,
         tap_container_direction: pn.Column | pn.Row | None = None,
         **kwargs,
@@ -186,7 +184,7 @@ class HeatmapResult(HoloviewResult):
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
             result_var (Parameter): The primary result variable to plot in the heatmap.
-            result_var_plots (List[Parameter], optional): Additional result variables to display when a point is tapped.
+            result_var_plots (list[Parameter], optional): Additional result variables to display when a point is tapped.
             container (pn.pane.panel, optional): Container to display tapped information.
             tap_container_direction (pn.Column | pn.Row, optional): Layout direction for the tap containers.
             **kwargs: Additional keyword arguments passed to the heatmap options.

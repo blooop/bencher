@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import namedtuple
 import xarray as xr
 import hashlib
@@ -7,7 +9,7 @@ from colorsys import hsv_to_rgb
 from pathlib import Path
 from uuid import uuid4
 from functools import partial
-from typing import Callable, Any, List, Tuple
+from typing import Callable, Any
 import logging
 import os
 import tempfile
@@ -67,7 +69,7 @@ def get_nearest_coords(dataset: xr.Dataset, collapse_list: bool = False, **kwarg
     return cd2
 
 
-def get_nearest_coords1D(val: Any, coords: List[Any]) -> Any:
+def get_nearest_coords1D(val: Any, coords: list[Any]) -> Any:
     """Find the closest coordinate to a given value in a list of coordinates.
 
     For numeric values, finds the value in coords that is closest to val.
@@ -75,7 +77,7 @@ def get_nearest_coords1D(val: Any, coords: List[Any]) -> Any:
 
     Args:
         val (Any): The value to find the closest coordinate for
-        coords (List[Any]): The list of coordinates to search in
+        coords (list[Any]): The list of coordinates to search in
 
     Returns:
         Any: The closest coordinate value from the list
@@ -130,15 +132,15 @@ def un_camel(camel: str) -> str:
     return capitalise_words(re.sub("([a-z])([A-Z])", r"\g<1> \g<2>", camel.replace("_", " ")))
 
 
-def mult_tuple(inp: Tuple[float, ...], val: float) -> Tuple[float, ...]:
+def mult_tuple(inp: tuple[float, ...], val: float) -> tuple[float, ...]:
     """Multiply each element in a tuple by a scalar value.
 
     Args:
-        inp (Tuple[float, ...]): The input tuple of floats to multiply
+        inp (tuple[float, ...]): The input tuple of floats to multiply
         val (float): The scalar value to multiply each element by
 
     Returns:
-        Tuple[float, ...]: A new tuple with each element multiplied by val
+        tuple[float, ...]: A new tuple with each element multiplied by val
     """
     return tuple(np.array(inp) * val)
 
@@ -287,6 +289,67 @@ def gen_rerun_data_path(rrd_name: str = "rrd", filetype: str = ".rrd") -> str:
     return gen_path(rrd_name, "rrd", filetype)
 
 
+def resolve_aggregate(
+    aggregate: bool | int | list[str] | None,
+    input_var_names: list[str] | None = None,
+) -> list[str] | None:
+    """Resolve the ``aggregate`` convenience parameter into a list of dimension names.
+
+    Args:
+        aggregate: Aggregation specification.
+            - None / False: no aggregation
+            - True: aggregate all but the first input dim, collapsing data
+              to 1-D (the minimum for meaningful plots). With 0 or 1 input
+              vars there is nothing to aggregate and None is returned.
+            - int N: aggregate last N input dims (requires input_var_names)
+            - list[str]: aggregate exactly these dims (validated only when
+              input_var_names is provided)
+        input_var_names: Names of input variables (in order).  When None,
+            list[str] values pass through without validation and True/int
+            raise ValueError (no context to resolve against).
+
+    Returns:
+        List of dimension names to aggregate over, or None.
+
+    Raises:
+        ValueError: If int is out of range, list contains unknown names, or
+            True/int used without input_var_names.
+        TypeError: If aggregate is an unsupported type.
+    """
+    if aggregate is None or aggregate is False:
+        return None
+    if aggregate is True:
+        if input_var_names is None:
+            raise ValueError("aggregate=True requires input_var_names")
+        if len(input_var_names) <= 1:
+            return None
+        # Keep the first input dim (x-axis) and aggregate the rest
+        return list(input_var_names[1:])
+    if isinstance(aggregate, int):
+        if input_var_names is None:
+            raise ValueError("aggregate=<int> requires input_var_names")
+        if aggregate < 1:
+            raise ValueError(f"aggregate must be >= 1, got {aggregate}")
+        if aggregate > len(input_var_names):
+            raise ValueError(
+                f"aggregate={aggregate} exceeds number of input vars ({len(input_var_names)})"
+            )
+        return list(input_var_names[-aggregate:])
+    if isinstance(aggregate, list):
+        non_str = [v for v in aggregate if not isinstance(v, str)]
+        if non_str:
+            bad_types = sorted({type(v).__name__ for v in non_str})
+            raise TypeError(f"aggregate list elements must be str, got element types {bad_types}")
+        if input_var_names is not None:
+            unknown = set(aggregate) - set(input_var_names)
+            if unknown:
+                raise ValueError(f"aggregate contains unknown input var names: {sorted(unknown)}")
+        return list(aggregate)
+    raise TypeError(
+        f"aggregate must be bool, int, list[str], or None, got {type(aggregate).__name__}"
+    )
+
+
 def callable_name(any_callable: Callable[..., Any]) -> str:
     """Extract the name of a callable object, handling various callable types.
 
@@ -307,7 +370,7 @@ def callable_name(any_callable: Callable[..., Any]) -> str:
         return str(any_callable)
 
 
-def listify(obj: Any) -> List[Any] | None:
+def listify(obj: Any) -> list[Any] | None:
     """Convert an object to a list if it's not already a list.
 
     This function handles conversion of various object types to lists, with special
@@ -317,7 +380,7 @@ def listify(obj: Any) -> List[Any] | None:
         obj (Any): The object to convert to a list
 
     Returns:
-        List[Any] | None: A list containing the object, the object itself if it was
+        list[Any] | None: A list containing the object, the object itself if it was
             already a list, a list from the tuple if it was a tuple, or None if the
             input was None
     """
@@ -344,14 +407,14 @@ def get_name(var: Any) -> str:
     return var
 
 
-def params_to_str(param_list: List[param.Parameter]) -> List[str]:
+def params_to_str(param_list: list[param.Parameter]) -> list[str]:
     """Convert a list of param.Parameter objects to a list of their names.
 
     Args:
-        param_list (List[param.Parameter]): List of parameter objects
+        param_list (list[param.Parameter]): List of parameter objects
 
     Returns:
-        List[str]: List of parameter names
+        list[str]: List of parameter names
     """
     return [get_name(i) for i in param_list]
 
@@ -361,14 +424,14 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma
 
     .. code-block:: python
 
-        def publish_args(branch_name) -> Tuple[str, str]:
+        def publish_args(branch_name) -> tuple[str, str]:
             return (
                 "https://github.com/blooop/bencher.git",
                 f"https://github.com/blooop/bencher/blob/{branch_name}")
 
 
     Args:
-        remote (Callable): A function the returns a tuple of the publishing urls. It must follow the signature def publish_args(branch_name) -> Tuple[str, str].  The first url is the git repo name, the second url needs to match the format for viewable html pages on your git provider.  The second url can use the argument branch_name to point to the file on a specified branch.
+        remote (Callable): A function the returns a tuple of the publishing urls. It must follow the signature def publish_args(branch_name) -> tuple[str, str].  The first url is the git repo name, the second url needs to match the format for viewable html pages on your git provider.  The second url can use the argument branch_name to point to the file on a specified branch.
 
     Returns:
         str: the url of the published file

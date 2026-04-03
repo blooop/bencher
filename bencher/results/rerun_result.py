@@ -74,7 +74,7 @@ class RerunResult(BenchResultBase):
                 "**rerun** is not installed. Install it with `pip install rerun-sdk`."
             )
         from bencher.utils import gen_rerun_data_path
-        from bencher.utils_rerun import rrd_to_pane
+        from bencher.utils_rrd import rrd_to_pane
 
         bench_name = self.bench_cfg.bench_name or "bencher"
         recording = rr.RecordingStream(

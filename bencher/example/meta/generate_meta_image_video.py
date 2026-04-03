@@ -5,9 +5,7 @@ simple sweeps and rich feature demonstrations (progressive sweeps, mixed
 results, video grids, composable containers).
 """
 
-from typing import Any
-
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "result_types"
@@ -35,23 +33,21 @@ _IMAGE_CLASS_CODE = (
     + """
 
 
-class PolygonRenderer(bch.ParametrizedSweep):
+class PolygonRenderer(bn.ParametrizedSweep):
     \"\"\"Renders polygon images with configurable sides, radius, and color.\"\"\"
-    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
-    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
-    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")
-    polygon = bch.ResultImage(doc="Rendered polygon image")
-    area = bch.ResultVar("u^2", doc="Polygon area")
+    sides = bn.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
+    radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
+    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
+    polygon = bn.ResultImage(doc="Rendered polygon image")
+    area = bn.ResultFloat("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
-        filepath = bch.gen_image_path("polygon")
+        filepath = bn.gen_image_path("polygon")
         img.save(filepath, "PNG")
         self.polygon = str(filepath)
-        self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (4 * math.tan(math.pi / self.sides))
-        return super().__call__()"""
+        self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (4 * math.tan(math.pi / self.sides))"""
 )
 
 _VIDEO_CLASS_CODE = (
@@ -59,16 +55,15 @@ _VIDEO_CLASS_CODE = (
     + """
 
 
-class PolygonAnimator(bch.ParametrizedSweep):
+class PolygonAnimator(bn.ParametrizedSweep):
     \"\"\"Renders rotating polygon animations.\"\"\"
-    sides = bch.IntSweep(default=4, bounds=(3, 7), doc="Number of polygon sides")
-    speed = bch.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
-    animation = bch.ResultVideo(doc="Rotating polygon video")
-    frame_snapshot = bch.ResultImage(doc="Last frame snapshot")
+    sides = bn.IntSweep(default=4, bounds=(3, 7), doc="Number of polygon sides")
+    speed = bn.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
+    animation = bn.ResultVideo(doc="Rotating polygon video")
+    frame_snapshot = bn.ResultImage(doc="Last frame snapshot")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        vid_writer = bch.VideoWriter()
+    def benchmark(self):
+        vid_writer = bn.VideoWriter()
         num_frames = 8
         for i in range(num_frames):
             angle = self.speed * (360.0 * i / num_frames)
@@ -76,8 +71,7 @@ class PolygonAnimator(bch.ParametrizedSweep):
             img = _draw_polygon_image(points, "white", linewidth=3, size=200)
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
-        self.frame_snapshot = bch.VideoWriter.extract_frame(self.animation)
-        return super().__call__()"""
+        self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)"""
 )
 
 _EXTRA_IMPORTS = ["import math", "import numpy as np", "from PIL import Image, ImageDraw"]
@@ -100,15 +94,13 @@ VIDEO_SWEEP_COMBOS = {
 class MetaImageVideoSweeps(MetaGeneratorBase):
     """Generate simple sweep examples for ResultImage and ResultVideo."""
 
-    result_kind = bch.StringSweep(["result_image", "result_video"], doc="Image or video")
-    input_dims = bch.IntSweep(default=0, bounds=(0, 2), doc="Number of input dimensions")
+    result_kind = bn.StringSweep(["result_image", "result_video"], doc="Image or video")
+    input_dims = bn.IntSweep(default=0, bounds=(0, 2), doc="Number of input dimensions")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         combos = IMAGE_SWEEP_COMBOS if self.result_kind == "result_image" else VIDEO_SWEEP_COMBOS
         if self.input_dims not in combos:
-            return super().__call__()
+            return
 
         info = combos[self.input_dims]
         if self.result_kind == "result_image":
@@ -141,8 +133,6 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
             run_kwargs={"level": level},
         )
 
-        return super().__call__()
-
 
 # --- Rich examples ---------------------------------------------------------
 
@@ -150,36 +140,36 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
 class MetaImageVideoRich(MetaGeneratorBase):
     """Generate rich feature-demonstration examples for image/video results."""
 
-    example_name = bch.StringSweep(
+    example_name = bn.StringSweep(
         [
             "result_image_progressive",
             "result_image_mixed",
             "result_image_to_video",
             "result_image_composable",
+            "result_image_over_time",
         ],
         doc="Rich example to generate",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         name = self.example_name
         generator = {
             "result_image_progressive": self._gen_progressive,
             "result_image_mixed": self._gen_mixed,
             "result_image_to_video": self._gen_to_video,
             "result_image_composable": self._gen_composable,
+            "result_image_over_time": self._gen_over_time,
         }[name]
         generator()
-        return super().__call__()
 
     # -- Progressive sweep (1 -> 2 -> 3 parameters) ---------------------------
 
     def _gen_progressive(self):
-        imports = "\n".join(["import bencher as bch"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
-            "bench.add_plot_callback(bch.BenchResult.to_sweep_summary)\n"
-            "bench.add_plot_callback(bch.BenchResult.to_panes, level=3)\n"
+            "bench.add_plot_callback(bn.BenchResult.to_sweep_summary)\n"
+            "bench.add_plot_callback(bn.BenchResult.to_panes, level=3)\n"
             'sweep_vars = ["sides", "radius", "color"]\n'
             "for i in range(1, len(sweep_vars) + 1):\n"
             "    bench.plot_sweep(\n"
@@ -202,7 +192,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
     # -- Mixed image + scalar results ----------------------------------------
 
     def _gen_mixed(self):
-        imports = "\n".join(["import bencher as bch"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "res = bench.plot_sweep(\n"
@@ -225,17 +215,17 @@ class MetaImageVideoRich(MetaGeneratorBase):
     # -- Image sweep to video grid -------------------------------------------
 
     def _gen_to_video(self):
-        imports = "\n".join(["import bencher as bch"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
-            "bench.add_plot_callback(bch.BenchResult.to_sweep_summary)\n"
+            "bench.add_plot_callback(bn.BenchResult.to_sweep_summary)\n"
             "bench.add_plot_callback(\n"
-            "    bch.BenchResult.to_video_grid,\n"
+            "    bn.BenchResult.to_video_grid,\n"
             "    target_duration=0.06,\n"
             "    compose_method_list=[\n"
-            "        bch.ComposeType.right,\n"
-            "        bch.ComposeType.right,\n"
-            "        bch.ComposeType.sequence,\n"
+            "        bn.ComposeType.right,\n"
+            "        bn.ComposeType.right,\n"
+            "        bn.ComposeType.sequence,\n"
             "    ],\n"
             ")\n"
             'bench.plot_sweep(input_vars=["sides"])\n'
@@ -252,38 +242,72 @@ class MetaImageVideoRich(MetaGeneratorBase):
             run_kwargs={"level": 3},
         )
 
+    # -- Image over_time slider ------------------------------------------------
+
+    def _gen_over_time(self):
+        imports = "\n".join(
+            ["import bencher as bn", "from datetime import datetime, timedelta"] + _EXTRA_IMPORTS
+        )
+        body = (
+            "if run_cfg is None:\n"
+            "    run_cfg = bn.BenchRunCfg()\n"
+            "benchable = PolygonRenderer()\n"
+            "bench = benchable.to_bench(run_cfg)\n"
+            "_base_time = datetime(2000, 1, 1)\n"
+            "for i, radius in enumerate([0.3, 0.6, 0.9]):\n"
+            "    benchable.radius = radius\n"
+            "    run_cfg.clear_cache = True\n"
+            "    run_cfg.clear_history = i == 0\n"
+            "    bench.plot_sweep(\n"
+            '        "Image Over Time",\n'
+            '        input_vars=["sides"],\n'
+            '        result_vars=["polygon"],\n'
+            "        run_cfg=run_cfg,\n"
+            "        time_src=_base_time + timedelta(seconds=i),\n"
+            "    )\n"
+        )
+        self.generate_example(
+            title="ResultImage: Over Time Slider",
+            output_dir=f"{OUTPUT_DIR}/result_image",
+            filename="result_image_over_time",
+            function_name="example_result_image_over_time",
+            imports=imports,
+            body=body,
+            class_code=_IMAGE_CLASS_CODE,
+            run_kwargs={"level": 3, "over_time": True},
+        )
+
     # -- Composable container video from images ------------------------------
 
     def _gen_composable(self):
         composable_class_code = (
             _POLYGON_HELPERS + "\n\n\n"
-            "class _ComposableImageDemo(bch.ParametrizedSweep):\n"
+            "class _ComposableImageDemo(bn.ParametrizedSweep):\n"
             '    """Composable polygon renderer with video output."""\n'
-            '    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")\n'
-            "    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), "
+            '    sides = bn.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")\n'
+            "    radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), "
             'doc="Polygon radius")\n'
-            '    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")\n'
-            "    compose_method = bch.EnumSweep(\n"
-            "        bch.ComposeType,\n"
-            "        default=bch.ComposeType.right,\n"
+            '    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")\n'
+            "    compose_method = bn.EnumSweep(\n"
+            "        bn.ComposeType,\n"
+            "        default=bn.ComposeType.right,\n"
             "        doc='Compose method',\n"
             "    )\n"
-            '    num_frames = bch.IntSweep(default=5, bounds=[2, 20], doc="Frame count")\n'
-            "    polygon_vid = bch.ResultVideo()\n"
+            '    num_frames = bn.IntSweep(default=5, bounds=[2, 20], doc="Frame count")\n'
+            "    polygon_vid = bn.ResultVideo()\n"
             "\n"
-            "    def __call__(self, **kwargs):\n"
-            "        self.update_params_from_kwargs(**kwargs)\n"
-            "        vr = bch.ComposableContainerVideo()\n"
+            "    def benchmark(self):\n"
+            "        vr = bn.ComposableContainerVideo()\n"
             "        for i in range(self.num_frames):\n"
             "            angle = 360.0 * i / self.num_frames\n"
             "            points = _polygon_points(self.radius, self.sides, "
             "start_angle=angle)\n"
             "            img = _draw_polygon_image(points, self.color, linewidth=3)\n"
-            '            filepath = bch.gen_image_path("composable")\n'
+            '            filepath = bn.gen_image_path("composable")\n'
             '            img.save(filepath, "PNG")\n'
             "            vr.append(str(filepath))\n"
             "        self.polygon_vid = vr.to_video(\n"
-            "            bch.RenderCfg(\n"
+            "            bn.RenderCfg(\n"
             "                compose_method=self.compose_method,\n"
             "                max_frame_duration=1.0 / 20.0,\n"
             "            )\n"
@@ -291,15 +315,15 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "        return self.get_results_values_as_dict()"
         )
 
-        imports = "\n".join(["import bencher as bch"] + _EXTRA_IMPORTS)
+        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
         body = (
             "bench = _ComposableImageDemo().to_bench(run_cfg)\n"
             "bench.plot_sweep(\n"
             "    input_vars=[\n"
-            "        bch.p(\n"
+            "        bn.sweep(\n"
             '            "compose_method",\n'
-            "            [bch.ComposeType.right, bch.ComposeType.sequence, "
-            "bch.ComposeType.down],\n"
+            "            [bn.ComposeType.right, bn.ComposeType.sequence, "
+            "bn.ComposeType.down],\n"
             "        )\n"
             "    ]\n"
             ")\n"
@@ -319,15 +343,15 @@ class MetaImageVideoRich(MetaGeneratorBase):
 # --- Entry point -----------------------------------------------------------
 
 
-def example_meta_image_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_image_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Generate all image/video meta-examples."""
     # Simple sweep examples
     bench = MetaImageVideoSweeps().to_bench(run_cfg)
     bench.plot_sweep(
         title="Image/Video Sweeps",
         input_vars=[
-            bch.p("result_kind", ["result_image", "result_video"]),
-            bch.p("input_dims", [0, 1, 2]),
+            bn.sweep("result_kind", ["result_image", "result_video"]),
+            bn.sweep("input_dims", [0, 1, 2]),
         ],
     )
 
@@ -336,13 +360,14 @@ def example_meta_image_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
     bench2.plot_sweep(
         title="Image/Video Rich Examples",
         input_vars=[
-            bch.p(
+            bn.sweep(
                 "example_name",
                 [
                     "result_image_progressive",
                     "result_image_mixed",
                     "result_image_to_video",
                     "result_image_composable",
+                    "result_image_over_time",
                 ],
             ),
         ],
@@ -352,4 +377,4 @@ def example_meta_image_video(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_image_video)
+    bn.run(example_meta_image_video)

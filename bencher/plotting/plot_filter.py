@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 from dataclasses import dataclass, field
 from bencher.plotting.plt_cnt_cfg import PltCntCfg
 import logging
@@ -141,14 +140,14 @@ class PlotMatchesResult:
         # if self.plt_cnt_cfg.print_debug:
         logging.info(self.matches_info)
 
-    def to_panel(self, **kwargs) -> Optional[pn.pane.Markdown]:
+    def to_panel(self, **kwargs) -> pn.pane.Markdown | None:
         """Convert match information to a Panel Markdown pane if debug mode is enabled.
 
         Args:
             **kwargs: Additional keyword arguments to pass to the Panel Markdown constructor
 
         Returns:
-            Optional[pn.pane.Markdown]: A Markdown pane containing match information if in debug mode,
+            pn.pane.Markdown | None: A Markdown pane containing match information if in debug mode,
                                         None otherwise
         """
         if self.plt_cnt_cfg.print_debug:

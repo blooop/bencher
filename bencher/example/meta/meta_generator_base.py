@@ -1,14 +1,14 @@
 import textwrap
 
-import bencher as bch
+import bencher as bn
 
 from .generate_examples import GENERATED_DIR
 
 
-class MetaGeneratorBase(bch.ParametrizedSweep):
+class MetaGeneratorBase(bn.ParametrizedSweep):
     """Shared base class for meta-generators that produce Python example files."""
 
-    plots = bch.ResultReference(units="int")
+    plots = bn.ResultReference(units="int")
 
     def generate_example(
         self,
@@ -32,7 +32,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
             imports: Import lines placed at the top of the file.
             body: Unindented function body lines. Indentation is applied automatically.
             class_code: Optional class definition emitted between imports and function.
-            run_kwargs: Dict of keyword args for ``bch.run()`` in ``__main__``
+            run_kwargs: Dict of keyword args for ``bn.run()`` in ``__main__``
                         (e.g. ``{"level": 4, "repeats": 10}``).
         """
         if run_kwargs is None:
@@ -40,15 +40,7 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
         indented_body = textwrap.indent(body, "    ")
         kwargs_str = "".join(f", {k}={v!r}" for k, v in run_kwargs.items())
 
-        # When class_code is provided, add type hints to __call__ and ensure Any import
-        if class_code:
-            if "def __call__(self, **kwargs):" in class_code:
-                class_code = class_code.replace(
-                    "def __call__(self, **kwargs):",
-                    "def __call__(self, **kwargs: Any) -> Any:",
-                )
-            if "Any" in class_code and "from typing import Any" not in imports:
-                imports = f"from typing import Any\n\n{imports}"
+        # No special handling needed for class_code — benchmark() has no type hint requirements
 
         class_block = f"\n\n{class_code}" if class_code else ""
         content = f'''"""Auto-generated example: {title}."""
@@ -56,14 +48,14 @@ class MetaGeneratorBase(bch.ParametrizedSweep):
 {imports}{class_block}
 
 
-def {function_name}(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def {function_name}(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """{title}."""
 {indented_body}
     return bench
 
 
 if __name__ == "__main__":
-    bch.run({function_name}{kwargs_str})
+    bn.run({function_name}{kwargs_str})
 '''
         fpath = GENERATED_DIR / output_dir / f"{filename}.py"
         fpath.parent.mkdir(parents=True, exist_ok=True)
@@ -90,6 +82,8 @@ if __name__ == "__main__":
         extra_imports=None,
         run_kwargs=None,
         module_docstring=None,
+        aggregate=None,
+        agg_fn=None,
     ):
         """Build imports + body and call generate_example() for a standard sweep.
 
@@ -106,19 +100,50 @@ if __name__ == "__main__":
             post_sweep_line: Optional line after plot_sweep (e.g. 'res.to_bar()').
             run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
             extra_imports: Optional list of additional import lines.
-            run_kwargs: Dict of kwargs for bch.run() (e.g. {"level": 4, "repeats": 10}).
+            run_kwargs: Dict of kwargs for bn.run() (e.g. {"level": 4, "repeats": 10}).
             module_docstring: Optional override for the module-level docstring.
         """
-        import_lines = ["import bencher as bch"]
-        if benchable_module is not None:
-            import_lines.append(f"from {benchable_module} import {benchable_class}")
+        import_lines = []
         if extra_imports:
             import_lines.extend(extra_imports)
-        imports = "\n".join(import_lines)
+        import_lines.append("import bencher as bn")
+        if benchable_module is not None:
+            import_lines.append(f"from {benchable_module} import {benchable_class}")
+
+        # Separate stdlib imports from third-party for correct ordering
+        _KNOWN_STDLIB = frozenset(
+            {
+                "math",
+                "random",
+                "os",
+                "sys",
+                "typing",
+                "enum",
+                "collections",
+                "functools",
+                "pathlib",
+                "datetime",
+                "json",
+                "re",
+            }
+        )
+
+        def _is_stdlib(line):
+            parts = line.split()
+            if parts[0] in ("import", "from"):
+                return parts[1].split(".")[0] in _KNOWN_STDLIB
+            return False
+
+        stdlib = [line for line in import_lines if _is_stdlib(line)]
+        non_stdlib = [line for line in import_lines if not _is_stdlib(line)]
+        if stdlib:
+            imports = "\n".join(stdlib) + "\n\n" + "\n".join(non_stdlib)
+        else:
+            imports = "\n".join(import_lines)
 
         body_lines = []
         if run_cfg_lines:
-            body_lines.append("run_cfg = run_cfg or bch.BenchRunCfg()")
+            body_lines.append("if run_cfg is None:\n    run_cfg = bn.BenchRunCfg()")
             body_lines.extend(run_cfg_lines)
 
         body_lines.append(f"bench = {benchable_class}().to_bench(run_cfg)")
@@ -132,6 +157,10 @@ if __name__ == "__main__":
             sweep_parts.append(f"description={description!r}")
         if post_description:
             sweep_parts.append(f"post_description={post_description!r}")
+        if aggregate is not None:
+            sweep_parts.append(f"aggregate={aggregate!r}")
+        if agg_fn is not None:
+            sweep_parts.append(f"agg_fn={agg_fn!r}")
         sweep_args = ", ".join(sweep_parts)
 
         use_res = post_sweep_line is not None

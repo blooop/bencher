@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import holoviews as hv
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -7,7 +6,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import SCALAR_RESULT_TYPES
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -22,7 +21,7 @@ class CurveResult(HoloviewResult):
 
     def to_plot(
         self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> Optional[hv.Curve]:
+    ) -> hv.Curve | None:
         """Generates a curve plot from benchmark data.
 
         This is a convenience method that calls to_curve() with the same parameters.
@@ -33,7 +32,7 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[hv.Curve]: A curve plot if data is appropriate,
+            hv.Curve | None: A curve plot if data is appropriate,
                               otherwise returns filter match results.
         """
         return self.to_curve(result_var=result_var, override=override, **kwargs)
@@ -57,7 +56,7 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[hv.Curve]: A curve plot if data is appropriate,
+            hv.Curve | None: A curve plot if data is appropriate,
                               otherwise returns filter match results.
         """
         return self.filter(
@@ -68,14 +67,12 @@ class CurveResult(HoloviewResult):
             reduce=ReduceType.REDUCE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar, ResultBool),
+            result_types=SCALAR_RESULT_TYPES,
             override=override,
             **kwargs,
         )
 
-    def to_curve_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> Optional[hv.Curve]:
+    def to_curve_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs) -> hv.Curve | None:
         """Creates a curve plot from the provided dataset.
 
         Given a filtered dataset, this method generates a curve visualization showing
@@ -83,24 +80,23 @@ class CurveResult(HoloviewResult):
         When multiple benchmark repetitions are available, standard deviation bounds
         can also be displayed using a spread plot.
 
+        When over_time is active with multiple time points, builds per-time-point
+        curves inside an hv.HoloMap so the slider controls the time dimension.
+
         Args:
             dataset (xr.Dataset): The dataset containing benchmark results.
             result_var (Parameter): The result variable to plot.
             **kwargs: Additional keyword arguments passed to the curve plot options.
 
         Returns:
-            Optional[hv.Curve]: A curve plot with optional standard deviation spread.
+            hv.Curve | None: A curve plot with optional standard deviation spread.
         """
-        var = result_var.name
-        std_var = f"{var}_std"
-        title = self.title_from_ds(dataset, result_var, **kwargs)
-
-        hvds = hv.Dataset(dataset)
-        pt = hv.Overlay()
-        pt *= hvds.to(hv.Curve, vdims=var, label=var).opts(title=title, **kwargs)
-        if std_var in dataset.data_vars:
-            pt *= hvds.to(hv.Spread, vdims=[var, std_var])
-        pt = pt.opts(legend_position="right")
         if self._use_holomap_for_time(dataset):
-            pt = self._holomap_with_slider_bottom(pt)
-        return pt
+            var = result_var.name
+
+            def make_curve(ds_t):
+                return self._build_curve_overlay(ds_t, result_var, **kwargs)
+
+            return self._build_time_holomap(dataset, var, make_curve)
+
+        return self._build_curve_overlay(dataset, result_var, **kwargs)

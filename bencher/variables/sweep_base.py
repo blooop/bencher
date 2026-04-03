@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Any, Tuple
+from typing import Any
 from copy import deepcopy
 
 import numpy as np
@@ -11,12 +11,12 @@ from bencher.utils import hash_sha1
 
 # slots that are shared across all Sweep classes
 # param and slots don't work easily with multiple inheritance so define here
-shared_slots = ["units", "samples"]
+shared_slots = ["units", "samples", "optimize"]
 
 
 def describe_variable(
     v: Parameterized, include_samples: bool, value: Any | None = None
-) -> List[str]:
+) -> list[str]:
     """Generate a string description of a variable
 
     Args:
@@ -54,13 +54,29 @@ class SweepBase(param.Parameter):
     # slots = ["units", "samples"]
     # __slots__ = shared_slots
 
+    @property
+    def sweep_bounds(self) -> tuple | None:
+        """Return the sweep range (low, high).
+
+        FloatSweep/IntSweep store user-supplied bounds as param softbounds
+        (not hard bounds) so that values outside the range are not rejected.
+        This property provides a single access point.
+        """
+        sb = getattr(self, "softbounds", None)
+        if sb is not None:
+            return tuple(sb)
+        b = getattr(self, "bounds", None)
+        if b is not None:
+            return tuple(b)
+        return None
+
     def values(
         self,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """All sweep classes must implement this method. This generates sample values from based on the parameters bounds and sample number.
 
         Returns:
-            List[Any]: A list of samples from the variable
+            list[Any]: A list of samples from the variable
         """
         raise NotImplementedError
 
@@ -95,12 +111,11 @@ class SweepBase(param.Parameter):
         name_tuple = (self.name, self.name)
 
         params = {}
-        if hasattr(self, "bounds") and self.bounds is not None:
+        if self.sweep_bounds is not None:
             if compute_values:
                 params["values"] = self.values()
-                # params["range"] = tuple(self.bounds)
             else:
-                params["range"] = tuple(self.bounds)
+                params["range"] = tuple(self.sweep_bounds)
                 params["default"] = self.default
 
         else:
@@ -135,6 +150,38 @@ class SweepBase(param.Parameter):
             output.step = None  # pylint: disable = attribute-defined-outside-init
         return output
 
+    def with_bounds(self, low: float, high: float, samples: int | None = None) -> SweepBase:
+        """Create a copy with overridden sweep bounds (and optionally sample count).
+
+        Args:
+            low: Lower bound of the sweep range.
+            high: Upper bound of the sweep range.
+            samples: Number of samples.  When *None* the existing sample count is kept.
+
+        Returns:
+            SweepBase: A new sweep with the specified bounds.
+
+        Raises:
+            ValueError: If *low* >= *high* or the sweep has no bounds attributes.
+        """
+        if low >= high:
+            raise ValueError(f"low must be less than high, got low={low}, high={high}")
+        output = deepcopy(self)
+        if hasattr(output, "softbounds"):
+            output.softbounds = (low, high)  # pylint: disable=attribute-defined-outside-init
+        elif hasattr(output, "bounds"):
+            output.bounds = (low, high)  # pylint: disable=attribute-defined-outside-init
+        else:
+            raise ValueError(
+                f"{type(self).__name__} has neither 'softbounds' nor 'bounds'; "
+                "with_bounds() cannot override the range"
+            )
+        if samples is not None:
+            output.samples = samples  # pylint: disable=attribute-defined-outside-init
+        if hasattr(output, "step"):
+            output.step = None  # pylint: disable=attribute-defined-outside-init
+        return output
+
     def with_sample_values(self, sample_values: list) -> SweepBase:
         output = deepcopy(self)
         # TODO set up class properly. Slightly complicated due to slots
@@ -145,14 +192,51 @@ class SweepBase(param.Parameter):
         output.samples = len(sample_values)  # pylint: disable = attribute-defined-outside-init
         return output
 
-    def with_const(self, const_value: Any) -> Tuple[SweepBase, Any]:
+    def __call__(
+        self,
+        values: list | None = None,
+        *,
+        samples: int | None = None,
+        bounds: tuple[float, float] | None = None,
+    ) -> SweepBase:
+        """Shorthand for creating a sweep with specific values, sample count, or bounds.
+
+        Usage::
+
+            Cfg.param.theta([0, 0.5, 1.0])            # explicit values
+            Cfg.param.theta(samples=5)                  # override sample count
+            Cfg.param.theta(bounds=(0, 1))              # override range
+            Cfg.param.theta(bounds=(0, 1), samples=10)  # override range and count
+
+        Args:
+            values: Explicit list of values to sweep through.
+            samples: Number of samples to take from the sweep range.
+            bounds: ``(low, high)`` tuple to override the sweep range.
+
+        Returns:
+            SweepBase: A copy of this sweep with the specified configuration.
+        """
+        if values is not None and (bounds is not None or samples is not None):
+            raise ValueError(
+                "Cannot combine 'values' with 'bounds' or 'samples'. "
+                "Use values alone, or bounds/samples together."
+            )
+        if values is not None:
+            return self.with_sample_values(values)
+        if bounds is not None:
+            return self.with_bounds(bounds[0], bounds[1], samples)
+        if samples is not None:
+            return self.with_samples(samples)
+        return deepcopy(self)
+
+    def with_const(self, const_value: Any) -> tuple[SweepBase, Any]:
         """Create a new instance of SweepBase with a constant value.
 
         Args:
             const_value (Any): The constant value to be associated with the new instance.
 
         Returns:
-            Tuple[SweepBase, Any]: A tuple containing the new instance of SweepBase and the constant value.
+            tuple[SweepBase, Any]: A tuple containing the new instance of SweepBase and the constant value.
         """
         return (deepcopy(self), const_value)
 
@@ -160,5 +244,9 @@ class SweepBase(param.Parameter):
         assert level >= 1
         # TODO work out if the order can be returned in level order always
         samples = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
-        out = self.with_sample_values(self.with_samples(samples[min(max_level, level)]).values())
+        sampled = self.with_samples(samples[min(max_level, level)])
+        # list() is required because SweepSelector.values() may return a param
+        # ListProxy that holds a circular reference back to the original parameter
+        # via ListProxy._parameter, which breaks pickle (and therefore multiprocessing).
+        out = self.with_sample_values(list(sampled.values()))
         return out

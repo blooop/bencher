@@ -1,58 +1,92 @@
-import logging
-from importlib.metadata import version as get_package_version, PackageNotFoundError
+"""Rerun SDK integration for bencher — capture live recordings.
+
+This module requires the ``rerun-sdk`` package.  For functions that work
+with pre-recorded ``.rrd`` files without the SDK, see ``utils_rrd.py``.
+
+Architecture
+------------
+Displaying rerun data inside a Panel/Bokeh report requires three cooperating
+pieces.  Getting any one of them wrong results in blank viewers, CORS errors,
+or "data source left unexpectedly" messages.
+
+1. **Data capture** — ``capture_rerun_rrd()`` drains the in-memory rerun
+   recording to a *complete* ``.rrd`` file on disk.  Using ``rr.save()``
+   (which streams to an open file) does NOT work because the file is still
+   being written when the viewer tries to fetch it.  Always call
+   ``rr.log(...)`` first, then ``capture_rerun_rrd()`` / ``capture_rerun_window()``.
+
+2. **File serving** — The Panel server (Tornado) serves the ``.rrd`` files at
+   ``/rrd_static/`` with full CORS headers (including OPTIONS preflight).
+   This is configured in ``bench_plot_server.py`` via ``_rrd_extra_patterns()``.
+   A separate stdlib file server (``file_server.py``) also exists for
+   standalone use but is NOT needed for the normal report flow.
+
+   CORS is critical: the rerun web viewer runs on a different origin
+   (localhost:9090) and fetches ``.rrd`` files from the Panel server.
+   Without ``Access-Control-Allow-Origin: *`` **and** ``OPTIONS`` preflight
+   handling, browsers silently block the fetch and the viewer shows 0 B of
+   data.  The Panel port is auto-assigned (port 0) so that multiple
+   benchmarks can run in parallel; iframe URLs are built with JavaScript
+   to resolve the actual port at render time.
+
+3. **Viewer** — ``rr.start_web_viewer_server()`` launches a *local* rerun
+   web viewer on port 9090.  This is the viewer that actually renders the
+   data.  When the SDK is not available, ``rrd_file_to_pane`` (in
+   ``utils_rrd.py``) falls back to the hosted viewer at ``app.rerun.io``.
+"""
 
 import rerun as rr
-import panel as pn
-from rerun_notebook import Viewer
-from .utils import publish_file, gen_rerun_data_path
+
+from .utils import gen_rerun_data_path
+from .utils_rrd import _RERUN_VIEWER_PORT, rrd_file_to_pane
+
+_viewer_started = False
 
 
-def _get_rerun_version() -> str:
-    """Get the installed rerun package version."""
-    try:
-        return get_package_version("rerun-sdk")
-    except PackageNotFoundError:
-        return "0.30.1"
+def _ensure_rerun_init():  # pragma: no cover
+    """Ensure a rerun recording exists, creating one if needed."""
+    if rr.get_global_data_recording() is None:
+        rr.init("bencher")
+
+
+def _ensure_rerun_viewer():  # pragma: no cover
+    """Start the local rerun web viewer server if not already running."""
+    global _viewer_started  # noqa: PLW0603  # pylint: disable=global-statement
+    if not _viewer_started:
+        rr.start_web_viewer_server(port=_RERUN_VIEWER_PORT)
+        _viewer_started = True
+
+
+def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pragma: no cover
+    """Save the current rerun recording to an .rrd file and return the path.
+
+    Data must be logged BEFORE calling this function so that the in-memory
+    recording has content to drain.  Calls ``rr.init()`` automatically if no
+    recording exists yet.
+    """
+    _ensure_rerun_init()
+    rec = recording or rr.get_global_data_recording()
+    rrd_bytes = rec.memory_recording().drain_as_bytes()
+    file_path = gen_rerun_data_path()
+    with open(file_path, "wb") as f:
+        f.write(rrd_bytes)
+    return file_path
 
 
 def rerun_to_pane(
     width: int = 950, height: int = 712, recording: rr.RecordingStream | None = None
 ):  # pragma: no cover
-    """Render the current rerun recording as an inline Panel widget."""
-    if recording is None:
-        recording = rr.get_global_data_recording()
-    viewer = Viewer(width=width, height=height)
-    viewer.send_rrd(recording.memory_recording().drain_as_bytes())
-    return pn.pane.IPyWidget(viewer)
+    """Render the current rerun recording as an inline HTML pane."""
+    file_path = capture_rerun_rrd(recording=recording)
+    return rrd_file_to_pane(file_path, width=width, height=height)
 
 
-def rrd_to_pane(
-    url: str, width: int = 500, height: int = 600, version: str | None = None
+def capture_rerun_window(
+    width: int = 500, height: int = 500, recording: rr.RecordingStream | None = None
 ):  # pragma: no cover
-    """Display an .rrd file from a URL using the hosted rerun web viewer."""
-    if version is None:
-        version = _get_rerun_version()
-    return pn.pane.HTML(
-        f'<iframe src="https://app.rerun.io/version/{version}/?url={url}"'
-        f" width={width} height={height}></iframe>"
-    )
+    """Capture the current rerun recording as an inline Panel widget.
 
-
-def publish_and_view_rrd(
-    file_path: str,
-    remote: str,
-    branch_name,
-    content_callback: callable,
-    version: str | None = None,
-):  # pragma: no cover
-    publish_file(file_path, remote=remote, branch_name="test_rrd")
-    publish_path = content_callback(remote, branch_name, file_path)
-    logging.info(publish_path)
-    return rrd_to_pane(publish_path, version=version)
-
-
-def capture_rerun_window(width: int = 500, height: int = 500):
-    rrd_path = gen_rerun_data_path()
-    rr.save(rrd_path)
-    path = rrd_path.split("cachedir")[1]
-    return rrd_to_pane(f"http://127.0.0.1:8001/{path}", width=width, height=height)
+    Data must be logged BEFORE calling this function so that the in-memory
+    recording has content to drain.
+    """
+    return rerun_to_pane(width=width, height=height, recording=recording)

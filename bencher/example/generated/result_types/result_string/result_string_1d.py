@@ -1,28 +1,25 @@
 """Auto-generated example: Result String: 1D input."""
 
-from typing import Any
-
-import bencher as bch
 import math
 
+import bencher as bn
 
-class LogFormatter(bch.ParametrizedSweep):
+
+class LogFormatter(bn.ParametrizedSweep):
     """Formats a structured log report string."""
 
-    level = bch.StringSweep(["info", "warn", "error"], doc="Log severity level")
-    verbosity = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Output verbosity")
+    level = bn.StringSweep(["info", "warn", "error"], doc="Log severity level")
+    verbosity = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Output verbosity")
 
-    report = bch.ResultString(doc="Formatted log report")
+    report = bn.ResultString(doc="Formatted log report")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         detail = int(math.ceil(self.verbosity * 5))
         text = f"Level: {self.level}\n\tVerbosity: {self.verbosity:.2f}\n\tDetail depth: {detail}"
-        self.report = bch.tabs_in_markdown(text)
-        return super().__call__()
+        self.report = bn.tabs_in_markdown(text)
 
 
-def example_result_string_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_string_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Result String: 1D input."""
     bench = LogFormatter().to_bench(run_cfg)
     bench.plot_sweep(
@@ -35,4 +32,4 @@ def example_result_string_1d(run_cfg: bch.BenchRunCfg | None = None) -> bch.Benc
 
 
 if __name__ == "__main__":
-    bch.run(example_result_string_1d, level=3)
+    bn.run(example_result_string_1d, level=3)

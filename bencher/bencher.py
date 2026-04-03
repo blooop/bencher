@@ -1,18 +1,24 @@
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from itertools import product, combinations
 
 from param import Parameter
-from typing import Callable, List, Optional, Tuple, Any
+from typing import Callable, Any
 from copy import deepcopy
 import param
 import xarray as xr
-from diskcache import Cache
 from contextlib import suppress
 from functools import partial
 import panel as pn
 
+import optuna
+
 from bencher.worker_job import WorkerJob
+from bencher.results.optimize_result import OptimizeResult
+from bencher.optuna_conversions import sweep_var_to_suggest, sweep_var_to_optuna_dist
+from bencher.variables.sweep_base import hash_sha1
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
@@ -23,8 +29,10 @@ from bencher.variables.results import ResultHmap
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str
+from bencher.utils import params_to_str, resolve_aggregate
 from bencher.sample_order import SampleOrder
+from bencher.regression import detect_regressions, RegressionError
+from bencher.sweep_timings import SweepTimings, phase_timer
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
@@ -176,16 +184,18 @@ class Bench(BenchPlotServer):
     def sweep_sequential(
         self,
         title: str = "",
-        input_vars: List[ParametrizedSweep] | None = None,
-        result_vars: List[ParametrizedSweep] | None = None,
-        const_vars: List[ParametrizedSweep] | None = None,
+        input_vars: list[ParametrizedSweep] | None = None,
+        result_vars: list[ParametrizedSweep] | None = None,
+        const_vars: list[ParametrizedSweep] | None = None,
         optimise_var: ParametrizedSweep | None = None,
         run_cfg: BenchRunCfg | None = None,
         group_size: int = 1,
         iterations: int = 1,
         relationship_cb: Callable | None = None,
-        plot_callbacks: List[Callable] | bool | None = None,
-    ) -> List[BenchResult]:
+        plot_callbacks: list[Callable] | bool | None = None,
+        aggregate: bool | int | list[str] | None = None,
+        agg_fn: str = "mean",
+    ) -> list[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
         This method performs sweeps on combinations of input variables, potentially
@@ -193,10 +203,10 @@ class Bench(BenchPlotServer):
 
         Args:
             title (str, optional): Base title for all the benchmark sweeps. Defaults to "".
-            input_vars (List[ParametrizedSweep], optional): Input variables to sweep through.
+            input_vars (list[ParametrizedSweep], optional): Input variables to sweep through.
                 If None, defaults to all input variables from the worker class instance.
-            result_vars (List[ParametrizedSweep], optional): Result variables to collect. Defaults to None.
-            const_vars (List[ParametrizedSweep], optional): Variables to keep constant. Defaults to None.
+            result_vars (list[ParametrizedSweep], optional): Result variables to collect. Defaults to None.
+            const_vars (list[ParametrizedSweep], optional): Variables to keep constant. Defaults to None.
             optimise_var (ParametrizedSweep, optional): Variable to optimize on each sweep iteration.
                 The optimal value will be used as constant input for subsequent sweeps. Defaults to None.
             run_cfg (BenchRunCfg, optional): Run configuration. Defaults to None.
@@ -204,11 +214,11 @@ class Bench(BenchPlotServer):
             iterations (int, optional): Number of optimization iterations to perform. Defaults to 1.
             relationship_cb (Callable, optional): Function to determine how to group variables for sweeping.
                 Defaults to itertools.combinations if None.
-            plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting or bool to enable/disable.
+            plot_callbacks (list[Callable] | bool, optional): Callbacks for plotting or bool to enable/disable.
                 Defaults to None.
 
         Returns:
-            List[BenchResult]: A list of results from all the sweep runs
+            list[BenchResult]: A list of results from all the sweep runs
         """
         if relationship_cb is None:
             relationship_cb = combinations
@@ -227,6 +237,8 @@ class Bench(BenchPlotServer):
                     const_vars=const_vars,
                     run_cfg=run_cfg,
                     plot_callbacks=plot_callbacks,
+                    aggregate=aggregate,
+                    agg_fn=agg_fn,
                 )
 
                 if optimise_var is not None:
@@ -237,17 +249,19 @@ class Bench(BenchPlotServer):
     def plot_sweep(
         self,
         title: str | None = None,
-        input_vars: List[ParametrizedSweep] | None = None,
-        result_vars: List[ParametrizedSweep] | None = None,
-        const_vars: List[ParametrizedSweep] | None = None,
+        input_vars: list[ParametrizedSweep] | None = None,
+        result_vars: list[ParametrizedSweep] | None = None,
+        const_vars: list[ParametrizedSweep] | None = None,
         time_src: datetime | None = None,
         description: str | None = None,
         post_description: str | None = None,
         pass_repeat: bool = False,
         tag: str = "",
         run_cfg: BenchRunCfg | None = None,
-        plot_callbacks: List[Callable] | bool | None = None,
+        plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
+        aggregate: bool | int | list[str] | None = None,
+        agg_fn: str = "mean",
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -257,11 +271,11 @@ class Bench(BenchPlotServer):
         Args:
             title (str, optional): The title of the benchmark. If None, a title will be
                 generated based on the input variables. Defaults to None.
-            input_vars (List[ParametrizedSweep], optional): Variables to sweep through in the benchmark.
+            input_vars (list[ParametrizedSweep], optional): Variables to sweep through in the benchmark.
                 If None and worker_class_instance exists, uses input variables from it. Defaults to None.
-            result_vars (List[ParametrizedSweep], optional): Variables to collect results for.
+            result_vars (list[ParametrizedSweep], optional): Variables to collect results for.
                 If None and worker_class_instance exists, uses result variables from it. Defaults to None.
-            const_vars (List[ParametrizedSweep], optional): Variables to keep constant with specified values.
+            const_vars (list[ParametrizedSweep], optional): Variables to keep constant with specified values.
                 If None and worker_class_instance exists, uses default input values. Defaults to None.
             time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.
                 Defaults to None, which will use the current time.
@@ -273,7 +287,7 @@ class Bench(BenchPlotServer):
             tag (str, optional): Tag to group different benchmarks together. Defaults to "".
             run_cfg (BenchRunCfg, optional): Configuration for how the benchmarks are run.
                 If None, uses the instance's run_cfg or creates a default one. Defaults to None.
-            plot_callbacks (List[Callable] | bool, optional): Callbacks for plotting results.
+            plot_callbacks (list[Callable] | bool, optional): Callbacks for plotting results.
                 If True, uses default plotting. If False, disables plotting.
                 If a list, uses the provided callbacks. Defaults to None.
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
@@ -288,12 +302,10 @@ class Bench(BenchPlotServer):
             FileNotFoundError: If only_plot=True and no cached results exist
         """
 
-        input_vars_in = deepcopy(input_vars)
-        result_vars_in = deepcopy(result_vars)
-        const_vars_in = deepcopy(const_vars)
-
         if self.worker_class_instance is not None:
-            if input_vars_in is None:
+            if input_vars is not None:
+                input_vars_in = deepcopy(input_vars)
+            else:
                 logging.info(
                     "No input variables passed, using all param variables in bench class as inputs"
                 )
@@ -303,7 +315,10 @@ class Bench(BenchPlotServer):
                     input_vars_in = deepcopy(self.input_vars)
                 for i in input_vars_in:
                     logging.info(f"input var: {i.name}")
-            if result_vars_in is None:
+
+            if result_vars is not None:
+                result_vars_in = deepcopy(result_vars)
+            else:
                 logging.info(
                     "No results variables passed, using all result variables in bench class:"
                 )
@@ -312,18 +327,17 @@ class Bench(BenchPlotServer):
                 else:
                     result_vars_in = deepcopy(self.result_vars)
 
-            if const_vars_in is None:
+            if const_vars is not None:
+                const_vars_in = deepcopy(const_vars)
+            else:
                 if self.const_vars is None:
                     const_vars_in = self.worker_class_instance.get_input_defaults()
                 else:
                     const_vars_in = deepcopy(self.const_vars)
         else:
-            if input_vars_in is None:
-                input_vars_in = []
-            if result_vars_in is None:
-                result_vars_in = []
-            if const_vars_in is None:
-                const_vars_in = []
+            input_vars_in = deepcopy(input_vars) if input_vars is not None else []
+            result_vars_in = deepcopy(result_vars) if result_vars is not None else []
+            const_vars_in = deepcopy(const_vars) if const_vars is not None else []
 
         if run_cfg is None:
             if self.run_cfg is None:
@@ -339,22 +353,21 @@ class Bench(BenchPlotServer):
         self.last_run_cfg = run_cfg
 
         if isinstance(input_vars_in, dict):
-            input_lists = []
-            for k, v in input_vars_in.items():
-                param_var = self.convert_vars_to_params(k, "input", run_cfg)
-                if isinstance(v, list):
-                    if len(v) == 0:
-                        raise ValueError(f"Input variable '{k}' cannot be an empty list")
-                    param_var = param_var.with_sample_values(v)
+            import warnings
 
-                else:
-                    raise RuntimeError("Unsupported type")
-                input_lists.append(param_var)
+            warnings.warn(
+                "Passing input_vars as a dict is deprecated. "
+                "Use a list of bn.sweep() specs instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            input_vars_in = [
+                {"name": k, "values": v if isinstance(v, list) else None}
+                for k, v in input_vars_in.items()
+            ]
 
-            input_vars_in = input_lists
-        else:
-            for i in range(len(input_vars_in)):
-                input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
+        for i in range(len(input_vars_in)):
+            input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
         for i in range(len(result_vars_in)):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
 
@@ -410,9 +423,7 @@ class Bench(BenchPlotServer):
                 result_vars_only.append(i)
 
         if post_description is None:
-            post_description = (
-                "## Results Description\nPlease set post_description to explain these results"
-            )
+            post_description = ""
 
         if plot_callbacks is None:
             if self.plot_callbacks is not None and len(self.plot_callbacks) == 0:
@@ -421,6 +432,9 @@ class Bench(BenchPlotServer):
                 plot_callbacks = self.plot_callbacks
         elif isinstance(plot_callbacks, bool):
             plot_callbacks = [BenchResult.to_auto_plots] if plot_callbacks else []
+
+        input_var_names = [i.name for i in input_vars_in]
+        agg_over_dims = resolve_aggregate(aggregate, input_var_names)
 
         bench_cfg = BenchCfg(
             input_vars=input_vars_in,
@@ -434,13 +448,15 @@ class Bench(BenchPlotServer):
             pass_repeat=pass_repeat,
             tag=run_cfg.run_tag + tag,
             plot_callbacks=plot_callbacks,
+            agg_over_dims=agg_over_dims,
+            agg_fn=agg_fn,
         )
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
     @staticmethod
     def filter_overridable_params(
         bench_cfg: BenchCfg, run_cfg: BenchRunCfg
-    ) -> Tuple[dict, List[str], List[str]]:
+    ) -> tuple[dict, list[str], list[str]]:
         """Filter run_cfg parameters to only those that can override bench_cfg.
 
         Param 2.3 enforces constant Parameters (e.g. the implicit `name`), which cannot
@@ -504,6 +520,19 @@ class Bench(BenchPlotServer):
         Raises:
             FileNotFoundError: If only_plot=True and no cached results exist
         """
+        timings = SweepTimings()
+
+        if run_cfg.cache_size is not None:
+            cache_size_bytes = run_cfg.cache_size * 1_000_000
+            self.cache_size = cache_size_bytes
+            self._executor.cache_size = cache_size_bytes
+            self._collector.cache_size = cache_size_bytes
+            self._collector.close_caches()
+            # Invalidate existing sample cache so it gets recreated with the new size
+            if self.sample_cache is not None:
+                self.sample_cache.close()
+                self._executor.sample_cache = None
+
         # Filter run_cfg parameters to only those that can override bench_cfg
         # (param 2.3 enforces constant parameters that cannot be overridden)
         run_cfg_values, missing_keys, constant_keys = self.filter_overridable_params(
@@ -531,13 +560,16 @@ class Bench(BenchPlotServer):
         # does not include repeats in hash as sample_hash already includes repeat as part of the per sample hash
         bench_cfg_sample_hash = bench_cfg.hash_persistent(False)
 
-        if self.sample_cache is None:
-            self.sample_cache = self.init_sample_cache(run_cfg)
-        if bench_cfg.clear_sample_cache:
-            self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
+        with phase_timer() as elapsed:
+            if self.sample_cache is None:
+                self.sample_cache = self.init_sample_cache(run_cfg)
+            if bench_cfg.clear_sample_cache:
+                self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
+        timings.sample_cache_init_ms = elapsed()
 
         calculate_results = True
-        with Cache("cachedir/benchmark_inputs", size_limit=self.cache_size) as c:
+        with phase_timer() as elapsed:
+            c = self._collector.get_benchmark_cache()
             if run_cfg.clear_cache:
                 c.delete(bench_cfg_hash)
                 logging.info("cleared cache")
@@ -554,23 +586,43 @@ class Bench(BenchPlotServer):
                     logging.info("did not detect results in cache")
                     if run_cfg.only_plot:
                         raise FileNotFoundError("Was not able to load the results to plot!")
+        timings.cache_check_ms = elapsed()
+
+        if run_cfg.time_event is not None:
+            time_src = run_cfg.time_event
+        elif isinstance(time_src, str):
+            bench_cfg.time_event = time_src
 
         if calculate_results:
-            if run_cfg.time_event is not None:
-                time_src = run_cfg.time_event
             bench_res = self.calculate_benchmark_results(
-                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order
+                bench_cfg, time_src, bench_cfg_sample_hash, run_cfg, sample_order, timings
             )
 
             # use the hash of the inputs to look up historical values in the cache
             if run_cfg.over_time:
-                bench_res.ds = self.load_history_cache(
-                    bench_res.ds, bench_cfg_hash, run_cfg.clear_history
-                )
-                # sync the over_time meta variable with the actual accumulated values
-                if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
-                    bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
-                    bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
+                with phase_timer() as elapsed:
+                    bench_res.ds = self.load_history_cache(
+                        bench_res.ds,
+                        bench_cfg_hash,
+                        run_cfg.clear_history,
+                        run_cfg.max_time_events,
+                    )
+                    # sync the over_time meta variable with the actual accumulated values
+                    if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
+                        bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
+                        bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
+                timings.history_merge_ms = elapsed()
+
+            # Regression detection runs after load_history_cache (which merges the current
+            # run into the dataset) but before cache_results. The dataset already contains
+            # the current run as the last over_time entry, so detect_regressions splits at
+            # isel(over_time=-1) for current vs all prior entries for historical.
+            if run_cfg.over_time and run_cfg.regression_detection:
+                bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
+                if bench_res.regression_report.has_regressions:
+                    logging.warning(bench_res.regression_report.summary())
+                    if run_cfg.regression_fail:
+                        raise RegressionError(bench_res.regression_report.summary())
 
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)
@@ -578,10 +630,17 @@ class Bench(BenchPlotServer):
         logging.info(self.sample_cache.stats())
         self.sample_cache.close()
 
-        bench_res.post_setup()
+        with phase_timer() as elapsed:
+            bench_res.post_setup()
+        timings.post_setup_ms = elapsed()
 
         if bench_cfg.auto_plot:
-            self.report.append_result(bench_res)
+            with phase_timer() as elapsed:
+                self.report.append_result(bench_res)
+            timings.render_ms = elapsed()
+
+        timings.total_ms = timings.compute_total()
+        bench_res.timings = timings
 
         self.results.append(bench_res)
         return bench_res
@@ -591,7 +650,7 @@ class Bench(BenchPlotServer):
         self,
         variable: param.Parameter | str | dict | tuple,
         var_type: str,
-        run_cfg: Optional[BenchRunCfg],
+        run_cfg: BenchRunCfg | None,
     ) -> param.Parameter:
         """Convert various input formats (str, dict, tuple) to param.Parameter objects."""
         return self._executor.convert_vars_to_params(
@@ -627,24 +686,30 @@ class Bench(BenchPlotServer):
     #     return BenchPlotServer().plot_server(self.bench_name, run_cfg, pane)
 
     def load_history_cache(
-        self, dataset: xr.Dataset, bench_cfg_hash: str, clear_history: bool
+        self,
+        dataset: xr.Dataset,
+        bench_cfg_hash: str,
+        clear_history: bool,
+        max_time_events: int | None = None,
     ) -> xr.Dataset:
         """Load and concatenate historical benchmark data from cache."""
-        return self._collector.load_history_cache(dataset, bench_cfg_hash, clear_history)
+        return self._collector.load_history_cache(
+            dataset, bench_cfg_hash, clear_history, max_time_events
+        )
 
     def setup_dataset(
         self, bench_cfg: BenchCfg, time_src: datetime | str
-    ) -> tuple[BenchResult, List[tuple], List[str]]:
+    ) -> tuple[BenchResult, zip, list[str], int]:
         """Initialize n-dimensional xarray dataset for storing benchmark results."""
         return self._collector.setup_dataset(bench_cfg, time_src)
 
-    def define_const_inputs(self, const_vars: List[Tuple[param.Parameter, Any]]) -> Optional[dict]:
+    def define_const_inputs(self, const_vars: list[tuple[param.Parameter, Any]]) -> dict | None:
         """Convert constant variable tuples into a name-value dictionary."""
         return self._executor.define_const_inputs(const_vars)
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> List[IntSweep]:
+    ) -> list[IntSweep]:
         """Define meta variables (repeat count, timestamps) for benchmark tracking."""
         return self._collector.define_extra_vars(bench_cfg, repeats, time_src)
 
@@ -655,6 +720,7 @@ class Bench(BenchPlotServer):
         bench_cfg_sample_hash: str,
         bench_run_cfg: BenchRunCfg,
         sample_order: SampleOrder = SampleOrder.INORDER,
+        timings: SweepTimings | None = None,
     ) -> BenchResult:
         """Execute the benchmark runs and collect results into an n-dimensional array.
 
@@ -667,75 +733,93 @@ class Bench(BenchPlotServer):
             time_src (datetime | str): Timestamp or event name for the benchmark run
             bench_cfg_sample_hash (str): Hash of the benchmark configuration without repeats
             bench_run_cfg (BenchRunCfg): Configuration for how the benchmark should be executed
+            timings (SweepTimings, optional): Timing collector to populate. Defaults to None.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
         """
-        bench_res, func_inputs, dims_name = self.setup_dataset(bench_cfg, time_src)
-        # Adjust only the sampling traversal; leave dims/plotting unchanged
-        if sample_order == SampleOrder.REVERSED:
-            total_dims = len(dims_name)
-            num_input_dims = len(bench_res.bench_cfg.input_vars)
+        if timings is None:
+            timings = SweepTimings()
 
-            # Extract coordinate values from the dataset to rebuild the Cartesian product
-            dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
-            dim_indices = [list(range(len(v))) for v in dim_values]
+        with phase_timer() as elapsed:
+            bench_res, func_inputs, dims_name, total_jobs = self.setup_dataset(bench_cfg, time_src)
+            # Adjust only the sampling traversal; leave dims/plotting unchanged
+            if sample_order == SampleOrder.REVERSED:
+                total_dims = len(dims_name)
+                num_input_dims = len(bench_res.bench_cfg.input_vars)
 
-            # Build iteration order: reverse the input portion only
-            iter_order = list(range(num_input_dims))[::-1] + list(range(num_input_dims, total_dims))
+                # Extract coordinate values from the dataset to rebuild the Cartesian product
+                dim_values = [list(bench_res.ds.coords[n].values) for n in dims_name]
+                dim_indices = [list(range(len(v))) for v in dim_values]
 
-            # Generate product in iter_order and map back to original order
-            ordered = []
-            for idx_ord, val_ord in zip(
-                product(*[dim_indices[i] for i in iter_order]),
-                product(*[dim_values[i] for i in iter_order]),
-            ):
-                idx_orig = [None] * total_dims
-                val_orig = [None] * total_dims
-                for j, pos in enumerate(iter_order):
-                    idx_orig[pos] = idx_ord[j]
-                    val_orig[pos] = val_ord[j]
-                ordered.append((tuple(idx_orig), tuple(val_orig)))
+                # Build iteration order: reverse the input portion only
+                iter_order = list(range(num_input_dims))[::-1] + list(
+                    range(num_input_dims, total_dims)
+                )
 
-            func_inputs = ordered
-        bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
-        constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
+                # Generate product in iter_order and map back to original order
+                ordered = []
+                for idx_ord, val_ord in zip(
+                    product(*[dim_indices[i] for i in iter_order]),
+                    product(*[dim_values[i] for i in iter_order]),
+                ):
+                    idx_orig = [None] * total_dims
+                    val_orig = [None] * total_dims
+                    for j, pos in enumerate(iter_order):
+                        idx_orig[pos] = idx_ord[j]
+                        val_orig[pos] = val_ord[j]
+                    ordered.append((tuple(idx_orig), tuple(val_orig)))
+
+                func_inputs = ordered
+            bench_res.bench_cfg.hmap_kdims = sorted(dims_name)
+            constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
+        timings.dataset_setup_ms = elapsed()
+
         callcount = 1
-
         results_list = []
         jobs = []
+        cache_jobs = []
 
-        for idx_tuple, function_input_vars in func_inputs:
-            job = WorkerJob(
-                function_input_vars,
-                idx_tuple,
-                dims_name,
-                constant_inputs,
-                bench_cfg_sample_hash,
-                bench_res.bench_cfg.tag,
-            )
-            job.setup_hashes()
-            jobs.append(job)
+        with phase_timer() as elapsed:
+            for idx_tuple, function_input_vars in func_inputs:
+                job = WorkerJob(
+                    function_input_vars,
+                    idx_tuple,
+                    dims_name,
+                    constant_inputs,
+                    bench_cfg_sample_hash,
+                    bench_res.bench_cfg.tag,
+                )
+                job.setup_hashes()
+                jobs.append(job)
 
-            jid = f"{bench_res.bench_cfg.title}:call {callcount}/{len(func_inputs)}"
-            worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
-            cache_job = Job(
-                job_id=jid,
-                function=worker,
-                job_args=job.function_input,
-                job_key=job.function_input_signature_pure,
-                tag=job.tag,
-            )
-            result = self.sample_cache.submit(cache_job)
-            results_list.append(result)
-            callcount += 1
+                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{total_jobs}"
+                worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
+                cache_jobs.append(
+                    Job(
+                        job_id=jid,
+                        function=worker,
+                        job_args=job.function_input,
+                        job_key=job.function_input_signature_pure,
+                        tag=job.tag,
+                    )
+                )
+                callcount += 1
+        timings.job_submission_ms = elapsed()
 
-            if bench_run_cfg.executor == Executors.SERIAL:
-                self.store_results(result, bench_res, job, bench_run_cfg)
-
-        if bench_run_cfg.executor != Executors.SERIAL:
-            for job, res in zip(jobs, results_list):
-                self.store_results(res, bench_res, job, bench_run_cfg)
+        with phase_timer() as elapsed:
+            for job, cache_job in zip(jobs, cache_jobs):
+                result = self.sample_cache.submit(cache_job)
+                results_list.append(result)
+                # For serial execution, store results immediately so that
+                # completed results are cached to disk before later jobs
+                # may crash.
+                if bench_run_cfg.executor == Executors.SERIAL:
+                    self.store_results(result, bench_res, job, bench_run_cfg)
+            if bench_run_cfg.executor != Executors.SERIAL:
+                for job, res in zip(jobs, results_list):
+                    self.store_results(res, bench_res, job, bench_run_cfg)
+        timings.job_execution_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:
             self.add_metadata_to_dataset(bench_res, inp)
@@ -816,7 +900,7 @@ class Bench(BenchPlotServer):
         branch_name = f"{self.bench_name}_{self.run_cfg.run_tag}"
         return self.report.publish(remote_callback, branch_name=branch_name)
 
-    def get_result_vars(self, as_str: bool = True) -> List[str | ParametrizedSweep]:
+    def get_result_vars(self, as_str: bool = True) -> list[str | ParametrizedSweep]:
         """
         Retrieve the result variables from the worker class instance.
 
@@ -826,7 +910,7 @@ class Bench(BenchPlotServer):
                            Default is True.
 
         Returns:
-            List[str | ParametrizedSweep]: A list of result variables, either as strings or in their original form.
+            list[str | ParametrizedSweep]: A list of result variables, either as strings or in their original form.
 
         Raises:
             RuntimeError: If the worker class instance is not set.
@@ -837,10 +921,332 @@ class Bench(BenchPlotServer):
             return self.worker_class_instance.get_results_only()
         raise RuntimeError("Worker class instance not set")
 
+    # ------------------------------------------------------------------
+    # First-class optimization API
+    # ------------------------------------------------------------------
+
+    def optimize(
+        self,
+        title: str | None = None,
+        input_vars=None,
+        result_vars=None,
+        const_vars=None,
+        n_trials: int = 100,
+        sampler: optuna.samplers.BaseSampler | None = None,
+        warm_start: bool = True,
+        tag: str = "",
+        run_cfg: BenchRunCfg | None = None,
+        plot: bool = True,
+    ) -> OptimizeResult | None:
+        """Run optuna optimization directly — no full grid sweep required.
+
+        Args:
+            title: Study name. Auto-generated when *None*.
+            input_vars: Input variables to optimize over.  Detected from
+                ``worker_class_instance`` when *None*.
+            result_vars: Result variables (objectives).  Detected when *None*.
+            const_vars: Constant variables.  Detected when *None*.
+            n_trials: Number of new optuna trials to run.
+            sampler: Optuna sampler.  Defaults to ``TPESampler``.
+            warm_start: Seed the study with previously cached evaluations.
+            tag: Cache tag (same semantics as ``plot_sweep``).
+            run_cfg: Run configuration.  Defaults to ``BenchRunCfg()``.
+            plot: If *True*, append visualisation to ``self.report``.
+
+        Returns:
+            OptimizeResult wrapping the completed ``optuna.Study``.
+        """
+        if run_cfg is None:
+            run_cfg = deepcopy(self.run_cfg) if self.run_cfg is not None else BenchRunCfg()
+
+        # --- resolve variables (mirrors plot_sweep logic) ---------------
+        input_vars_in, result_vars_in, const_vars_in = self._resolve_optimize_vars(
+            input_vars, result_vars, const_vars, run_cfg
+        )
+        constant_inputs = self.define_const_inputs(const_vars_in) or {}
+
+        if title is None:
+            title = "Optimize " + " vs ".join(iv.name for iv in input_vars_in)
+
+        # --- build lightweight BenchCfg for metadata --------------------
+        result_hmaps = [r for r in result_vars_in if isinstance(r, ResultHmap)]
+        result_vars_only = [r for r in result_vars_in if not isinstance(r, ResultHmap)]
+
+        bench_cfg = BenchCfg(
+            input_vars=input_vars_in,
+            result_vars=result_vars_only,
+            result_hmaps=result_hmaps,
+            const_vars=const_vars_in,
+            bench_name=self.bench_name,
+            title=title,
+            tag=run_cfg.run_tag + tag,
+        )
+
+        # --- (re)initialize sample cache for reading + writing -----------
+        if self.sample_cache is not None:
+            with suppress(Exception):
+                self.sample_cache.close()
+        run_cfg_for_cache = deepcopy(run_cfg)
+        run_cfg_for_cache.overwrite_sample_cache = False
+        self.sample_cache = self.init_sample_cache(run_cfg_for_cache)
+
+        # --- determine optimisation directions --------------------------
+        targets = bench_cfg.optuna_targets(as_var=True)
+        if not targets:
+            logging.warning(
+                "No result variables with an optimization direction found. "
+                "Skipping optimization. Set direction=OptDir.minimize or "
+                "OptDir.maximize on your ResultFloat to enable optimization."
+            )
+            return None
+        directions = [t.direction for t in targets]
+        target_names = [t.name for t in targets]
+
+        # --- create study -----------------------------------------------
+        if sampler is None:
+            sampler = optuna.samplers.TPESampler()
+        study = optuna.create_study(
+            sampler=sampler,
+            directions=directions,
+            study_name=title,
+        )
+
+        # --- warm-start from cache / prior results ----------------------
+        n_warm = 0
+        if warm_start:
+            n_warm = self._warm_start_from_cache(
+                study, bench_cfg, input_vars_in, constant_inputs, target_names
+            )
+
+        # --- run optimisation -------------------------------------------
+        objective = self._make_optuna_objective(
+            input_vars_in, constant_inputs, target_names, bench_cfg.tag
+        )
+        study.optimize(objective, n_trials=n_trials)
+
+        # --- clean up cache -------------------------------------------------
+        logging.info(self.sample_cache.stats())
+        self.sample_cache.close()
+
+        result = OptimizeResult(
+            study=study,
+            n_warm_start_trials=n_warm,
+            n_new_trials=n_trials,
+            target_names=target_names,
+            bench_cfg=bench_cfg,
+        )
+
+        if plot and self.results:
+            for res in self.results:
+                self.report.append_to_result(res, res.to_optuna_plots())
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Private helpers for optimize()
+    # ------------------------------------------------------------------
+
+    def _resolve_optimize_vars(self, input_vars, result_vars, const_vars, run_cfg):
+        """Deep-copy and convert variable lists to param.Parameter objects."""
+        input_vars_in = deepcopy(input_vars)
+        result_vars_in = deepcopy(result_vars)
+        const_vars_in = deepcopy(const_vars)
+
+        # Prefer variables from the last plot_sweep result so that
+        # optimize() matches the preceding sweep by default.
+        last_cfg = self.results[-1].bench_cfg if self.results else None
+        if last_cfg is not None:
+            if input_vars_in is None:
+                input_vars_in = deepcopy(last_cfg.input_vars)
+            if result_vars_in is None:
+                result_vars_in = deepcopy(last_cfg.result_vars)
+            if const_vars_in is None:
+                const_vars_in = deepcopy(last_cfg.const_vars)
+
+        # Use worker_class_instance if available; fall back to extracting
+        # the ParametrizedSweep from a bound-method worker so that
+        # optimize() can auto-detect variables even when the Bench was
+        # created with e.g. ``Bench("name", explorer.some_method)``.
+        instance = self.worker_class_instance
+        if instance is None:
+            bound_self = getattr(self.worker, "__self__", None)
+            if bound_self is not None and isinstance(bound_self, ParametrizedSweep):
+                instance = bound_self
+
+        if instance is not None:
+            if input_vars_in is None:
+                input_vars_in = (
+                    deepcopy(self.input_vars)
+                    if self.input_vars is not None
+                    else instance.get_inputs_only()
+                )
+            if result_vars_in is None:
+                result_vars_in = (
+                    deepcopy(self.result_vars)
+                    if self.result_vars is not None
+                    else instance.get_results_only()
+                )
+            if const_vars_in is None:
+                const_vars_in = (
+                    deepcopy(self.const_vars)
+                    if self.const_vars is not None
+                    else instance.get_input_defaults()
+                )
+        else:
+            input_vars_in = input_vars_in or []
+            result_vars_in = result_vars_in or []
+            const_vars_in = const_vars_in or []
+
+        def _convert_seq(seq, kind):
+            return [self.convert_vars_to_params(v, kind, run_cfg) for v in seq]
+
+        input_vars_in = _convert_seq(input_vars_in, "input")
+        result_vars_in = _convert_seq(result_vars_in, "result")
+
+        if isinstance(const_vars_in, dict):
+            const_vars_in = list(const_vars_in.items())
+        const_vars_in = [
+            (self.convert_vars_to_params(k, "const", run_cfg), v) for k, v in const_vars_in
+        ]
+
+        # Remove inputs that appear in const_vars
+        input_names = {iv.name for iv in input_vars_in}
+        const_vars_in = [c for c in const_vars_in if c[0].name not in input_names]
+
+        return input_vars_in, result_vars_in, const_vars_in
+
+    @staticmethod
+    def _build_cache_key(inputs: dict, tag: str) -> str:
+        """Build a deterministic cache key from an input dict and tag."""
+        return hash_sha1((sorted(inputs.items()), tag))
+
+    def _warm_from_results(self, study: optuna.Study) -> int:
+        """Seed *study* from in-memory BenchResult objects. Returns count added."""
+        added = 0
+        for res in self.results:
+            try:
+                if len(res.ds.sizes) > 0:
+                    trials = res.bench_results_to_optuna_trials(True)
+                    study.add_trials(trials)
+                    added += len(trials)
+            except Exception:  # pylint: disable=broad-except
+                logging.debug("Failed to warm-start from result", exc_info=True)
+        return added
+
+    def _warm_from_sample_cache(
+        self,
+        study: optuna.Study,
+        bench_cfg: BenchCfg,
+        input_vars: list,
+        constant_inputs: dict,
+        target_names: list[str],
+    ) -> int:
+        """Seed *study* from the on-disk sample cache. Returns count added."""
+        cache = self.sample_cache.cache
+        if cache is None or len(cache) == 0:
+            return 0
+
+        distributions = {iv.name: sweep_var_to_optuna_dist(iv) for iv in input_vars}
+
+        iv_grid_values = []
+        iv_names = []
+        for iv in input_vars:
+            try:
+                vals = list(iv.values())
+            except Exception:  # pylint: disable=broad-except
+                continue
+            iv_grid_values.append(vals)
+            iv_names.append(iv.name)
+
+        if not iv_grid_values:
+            return 0
+
+        added = 0
+        resolved_tag = bench_cfg.tag
+
+        for combo in product(*iv_grid_values):
+            input_dict = dict(zip(iv_names, combo))
+            input_dict.update(constant_inputs)
+            input_dict["repeat"] = 1
+
+            key = self._build_cache_key(input_dict, resolved_tag)
+
+            if key in cache:
+                result_dict = cache[key]
+                if not isinstance(result_dict, dict):
+                    continue
+                values = []
+                skip = False
+                for tn in target_names:
+                    if tn not in result_dict:
+                        skip = True
+                        break
+                    values.append(result_dict[tn])
+                if skip:
+                    continue
+
+                params = dict(zip(iv_names, combo))
+                try:
+                    trial = optuna.trial.create_trial(
+                        params=params,
+                        distributions=distributions,
+                        values=values,
+                    )
+                    study.add_trial(trial)
+                    added += 1
+                except Exception:  # pylint: disable=broad-except
+                    logging.debug("Failed to warm-start trial from cache", exc_info=True)
+
+        return added
+
+    def _warm_start_from_cache(
+        self,
+        study: optuna.Study,
+        bench_cfg: BenchCfg,
+        input_vars: list,
+        constant_inputs: dict,
+        target_names: list[str],
+    ) -> int:
+        """Seed *study* with cached evaluations. Returns count of added trials."""
+        added = self._warm_from_results(study)
+        added += self._warm_from_sample_cache(
+            study, bench_cfg, input_vars, constant_inputs, target_names
+        )
+        return added
+
+    def _make_optuna_objective(self, input_vars, constant_inputs, target_names, tag):
+        """Return an objective function compatible with ``study.optimize()``."""
+
+        def objective(trial: optuna.trial.Trial):
+            kwargs = {}
+            for iv in input_vars:
+                kwargs[iv.name] = sweep_var_to_suggest(iv, trial)
+
+            full_input = dict(kwargs)
+            full_input.update(constant_inputs)
+            full_input["repeat"] = 1
+
+            cache_key = self._build_cache_key(full_input, tag)
+
+            job = Job(
+                job_id=f"optimize:trial_{trial.number}",
+                function=self.worker,
+                job_args=kwargs,
+                job_key=cache_key,
+                tag=tag,
+            )
+            job_future = self.sample_cache.submit(job)
+            result_dict = job_future.result()
+
+            output = [result_dict[tn] for tn in target_names]
+            return tuple(output) if len(output) > 1 else output[0]
+
+        return objective
+
     def to(
         self,
         result_type: BenchResult,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         **kwargs: Any,
     ) -> BenchResult:
@@ -857,7 +1263,7 @@ class Bench(BenchPlotServer):
     def add(
         self,
         result_type: BenchResult,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         override: bool = True,
         **kwargs: Any,
     ):

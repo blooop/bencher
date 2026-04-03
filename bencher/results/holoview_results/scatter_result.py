@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
 
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -25,7 +24,7 @@ class ScatterResult(HoloviewResult):
     - to_scatter: Creates standard scatter plots that can be grouped by categorical variables
     """
 
-    def to_plot(self, override: bool = True, **kwargs) -> Optional[pn.panel]:
+    def to_plot(self, override: bool = True, **kwargs) -> pn.panel | None:
         """Creates a standard scatter plot from benchmark data.
 
         This is a convenience method that calls to_scatter() with the same parameters.
@@ -35,12 +34,12 @@ class ScatterResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the scatter plot options.
 
         Returns:
-            Optional[pn.panel]: A panel containing the scatter plot if data is appropriate,
+            pn.panel | None: A panel containing the scatter plot if data is appropriate,
                               otherwise returns filter match results.
         """
         return self.to_scatter(override=override, **kwargs)
 
-    def to_scatter(self, override: bool = True, **kwargs) -> Optional[pn.panel]:
+    def to_scatter(self, override: bool = True, **kwargs) -> pn.panel | None:
         """Creates a standard scatter plot from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a scatter plot
@@ -52,7 +51,7 @@ class ScatterResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the scatter plot options.
 
         Returns:
-            Optional[pn.panel]: A panel containing the scatter plot if data is appropriate,
+            pn.panel | None: A panel containing the scatter plot if data is appropriate,
                               otherwise returns filter match results.
         """
         match_res = PlotFilter(
@@ -67,14 +66,19 @@ class ScatterResult(HoloviewResult):
             if self.plt_cnt_cfg.cat_cnt > 1:
                 by = [v.name for v in self.bench_cfg.input_vars[1:]]
                 subplots = False
-            return hv_ds.data.hvplot.scatter(by=by, subplots=subplots, **kwargs).opts(
-                title=self.to_plot_title()
+            plot = hv_ds.data.hvplot.scatter(
+                by=by,
+                subplots=subplots,
+                widget_location="bottom",
+                title=self.to_plot_title(),
+                **kwargs,
             )
+            return self._apply_opts(plot, xrotation=30)
         return match_res.to_panel(**kwargs)
 
     # def to_scatter_jitter(
     #     self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    # ) -> Optional[pn.panel]:
+    # ) -> pn.panel | None:
     #     return self.filter(
     #         self.to_scatter_ds,
     #         float_range=VarRange(0, 0),
@@ -83,7 +87,7 @@ class ScatterResult(HoloviewResult):
     #         reduce=ReduceType.NONE,
     #         target_dimension=2,
     #         result_var=result_var,
-    #         result_types=(ResultVar),
+    #         result_types=(ResultFloat),
     #         override=override,
     #         **kwargs,
     #     )

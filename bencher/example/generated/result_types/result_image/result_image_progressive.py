@@ -1,8 +1,6 @@
 """Auto-generated example: ResultImage: Progressive Multi-Parameter Sweep."""
 
-from typing import Any
-
-import bencher as bch
+import bencher as bn
 import math
 import numpy as np
 from PIL import Image, ImageDraw
@@ -24,33 +22,31 @@ def _draw_polygon_image(points, color, linewidth, size=200):
     return img
 
 
-class PolygonRenderer(bch.ParametrizedSweep):
+class PolygonRenderer(bn.ParametrizedSweep):
     """Renders polygon images with configurable sides, radius, and color."""
 
-    sides = bch.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
-    radius = bch.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
-    color = bch.StringSweep(["red", "green", "blue"], doc="Line color")
-    polygon = bch.ResultImage(doc="Rendered polygon image")
-    area = bch.ResultVar("u^2", doc="Polygon area")
+    sides = bn.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
+    radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
+    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
+    polygon = bn.ResultImage(doc="Rendered polygon image")
+    area = bn.ResultFloat("u^2", doc="Polygon area")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         points = _polygon_points(self.radius, self.sides)
         img = _draw_polygon_image(points, self.color, linewidth=3)
-        filepath = bch.gen_image_path("polygon")
+        filepath = bn.gen_image_path("polygon")
         img.save(filepath, "PNG")
         self.polygon = str(filepath)
         self.area = (self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2) / (
             4 * math.tan(math.pi / self.sides)
         )
-        return super().__call__()
 
 
-def example_result_image_progressive(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_result_image_progressive(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """ResultImage: Progressive Multi-Parameter Sweep."""
     bench = PolygonRenderer().to_bench(run_cfg)
-    bench.add_plot_callback(bch.BenchResult.to_sweep_summary)
-    bench.add_plot_callback(bch.BenchResult.to_panes, level=3)
+    bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
+    bench.add_plot_callback(bn.BenchResult.to_panes, level=3)
     sweep_vars = ["sides", "radius", "color"]
     for i in range(1, len(sweep_vars) + 1):
         bench.plot_sweep(
@@ -63,4 +59,4 @@ def example_result_image_progressive(run_cfg: bch.BenchRunCfg | None = None) -> 
 
 
 if __name__ == "__main__":
-    bch.run(example_result_image_progressive, level=3)
+    bn.run(example_result_image_progressive, level=3)

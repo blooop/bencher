@@ -1,26 +1,26 @@
 # import random
 
-# import bencher as bch
+# import bencher as bn
 
 
-# class GaussianDist(bch.ParametrizedSweep):
+# class GaussianDist(bn.ParametrizedSweep):
 #     """A class to represent a gaussian distribution."""
 
-#     mean = bch.FloatSweep(
+#     mean = bn.FloatSweep(
 #         default=0, bounds=[-1.0, 1.0], doc="mean of the gaussian distribution", samples=3
 #     )
-#     sigma = bch.FloatSweep(
+#     sigma = bn.FloatSweep(
 #         default=1, bounds=[0, 1.0], doc="standard deviation of gaussian distribution", samples=4
 #     )
 
 
-# class Example2DGaussianResult(bch.ParametrizedSweep):
+# class Example2DGaussianResult(bn.ParametrizedSweep):
 #     """A class to represent the properties of a volume sample."""
 
-#     gauss_x = bch.ResultVar("m", doc="x value of the 2D gaussian")
-#     gauss_y = bch.ResultVar("m", doc="y value of the 2D gaussian")
+#     gauss_x = bn.ResultFloat("m", doc="x value of the 2D gaussian")
+#     gauss_y = bn.ResultFloat("m", doc="y value of the 2D gaussian")
 
-#     point2D = bch.ResultVec(2, "m", doc="2D vector of the point")
+#     point2D = bn.ResultVec(2, "m", doc="2D vector of the point")
 
 
 # def bench_fn(dist: GaussianDist) -> Example2DGaussianResult:
@@ -41,7 +41,7 @@
 #     return output
 
 
-# def example_floats2D_scatter(run_cfg: bch.BenchRunCfg) -> bch.Bench:
+# def example_floats2D_scatter(run_cfg: bn.BenchRunCfg) -> bn.Bench:
 #     """Example of how to perform a 3D floating point parameter sweep
 
 #     Args:
@@ -50,8 +50,8 @@
 #     Returns:
 #         Bench: results of the parameter sweep
 #     """
-#     bench = bch.Bench(
-#         "Bencher_Example_Floats_Scatter", bench_fn, GaussianDist, plot_lib=bch.PlotLibrary.default()
+#     bench = bn.Bench(
+#         "Bencher_Example_Floats_Scatter", bench_fn, GaussianDist, plot_lib=bn.PlotLibrary.default()
 #     )
 
 #     bench.plot_sweep(
@@ -102,7 +102,7 @@
 
 
 # if __name__ == "__main__":
-#     ex_run_cfg = bch.BenchRunCfg()
+#     ex_run_cfg = bn.BenchRunCfg()
 #     ex_run_cfg.repeats = 50
 #     ex_run_cfg.over_time = True
 #     # ex_run_cfg.clear_history = True

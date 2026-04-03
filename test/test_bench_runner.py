@@ -2,22 +2,22 @@
 import unittest
 from unittest.mock import Mock
 from bencher.example.benchmark_data import SimpleBenchClass, SimpleBenchClassFloat
-import bencher as bch
+import bencher as bn
 
 
 class TestBenchRunner(unittest.TestCase):
-    # Tests that bch.BenchRunner can be created with default configuration and the import statement in the bch.BenchRunner class is fixed
+    # Tests that bn.BenchRunner can be created with default configuration and the import statement in the bn.BenchRunner class is fixed
     def test_benchrunner_default_configuration_fixed(self):
-        bench_runner = bch.BenchRunner("bench_runner_test")
+        bench_runner = bn.BenchRunner("bench_runner_test")
         self.assertEqual(bench_runner.run_cfg.cache_samples, True)
         self.assertEqual(bench_runner.run_cfg.only_hash_tag, True)
         self.assertEqual(bench_runner.run_cfg.level, 2)
         self.assertEqual(bench_runner.publisher, None)
         self.assertEqual(bench_runner.bench_fns, [])
 
-    # Tests that Benchable functions can be added to bch.BenchRunner instance
+    # Tests that Benchable functions can be added to bn.BenchRunner instance
     def test_benchrunner_add_benchable_functions(self):
-        bench_runner = bch.BenchRunner("bench_runner_test")
+        bench_runner = bn.BenchRunner("bench_runner_test")
         bench_fn1 = Mock()
         bench_fn2 = Mock()
         bench_runner.add(bench_fn1)
@@ -27,14 +27,14 @@ class TestBenchRunner(unittest.TestCase):
         self.assertIn(bench_fn2, bench_runner.bench_fns)
 
     def test_benchrunner_handle_empty_list(self):
-        bench_runner = bch.BenchRunner("bench_runner_test")
+        bench_runner = bn.BenchRunner("bench_runner_test")
         results = bench_runner.run()
         self.assertEqual(len(results), 0)
 
     def test_benchrunner_benchable_class(self):
-        bench_runner = bch.BenchRunner("bench_runner_test")
+        bench_runner = bn.BenchRunner("bench_runner_test")
         bench_runner.add_bench(SimpleBenchClass())
-        results = bench_runner.run(run_cfg=bch.BenchRunCfg(run_tag="1"))
+        results = bench_runner.run(run_cfg=bn.BenchRunCfg(run_tag="1"))
 
         self.assertEqual(results[0].bench_cfg.run_tag, "1")
 
@@ -43,15 +43,15 @@ class TestBenchRunner(unittest.TestCase):
 
         run_tag = str(datetime.now())
 
-        bench_runner = bch.BenchRunner(
-            "bench_runner_test_cache", run_cfg=bch.BenchRunCfg(run_tag=run_tag)
+        bench_runner = bn.BenchRunner(
+            "bench_runner_test_cache", run_cfg=bn.BenchRunCfg(run_tag=run_tag)
         )
 
         bench_class = SimpleBenchClass()
-        # bench = bch.Bench("test_bench", bench_class, run_cfg=run_cfg, report=report            )
+        # bench = bn.Bench("test_bench", bench_class, run_cfg=run_cfg, report=report            )
 
-        def run_bench_class(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
-            bench = bch.Bench("test_bench1_cache", bench_class, run_cfg=run_cfg, report=report)
+        def run_bench_class(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
+            bench = bn.Bench("test_bench1_cache", bench_class, run_cfg=run_cfg, report=report)
             bench.plot_sweep("bench_1")
             return bench
 
@@ -79,27 +79,27 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(results[0].run_cfg.run_tag, run_tag)
 
     def test_benchrunner_benchable_class_run_constructor(self):
-        bench_runner = bch.BenchRunner("bench_runner_test", run_cfg=bch.BenchRunCfg(run_tag="1"))
+        bench_runner = bn.BenchRunner("bench_runner_test", run_cfg=bn.BenchRunCfg(run_tag="1"))
         bench_runner.add_bench(SimpleBenchClass())
         results = bench_runner.run()
         self.assertEqual(results[0].bench_cfg.run_tag, "1")
 
     # def test_benchrunner_level_1(self):
-    #     results = bch.BenchRunner("bench_runner_test", AllSweepVars()).run(min_level=1)
+    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(min_level=1)
     #     self.assertEqual(results[0].result_samples(), 1)
 
     # def test_benchrunner_level_1_only(self):
-    #     results = bch.BenchRunner("bench_runner_test", AllSweepVars()).run(level=1)
+    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(level=1)
     #     self.assertEqual(results[0].result_samples(), 1)
 
     def test_benchrunner_repeats(self):
-        res = bch.Bench(
-            "float", SimpleBenchClassFloat(), run_cfg=bch.BenchRunCfg(level=2, repeats=1)
+        res = bn.Bench(
+            "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=1)
         ).plot_sweep("float")
         self.assertEqual(res.result_samples(), 2)
 
-        res = bch.Bench(
-            "float", SimpleBenchClassFloat(), run_cfg=bch.BenchRunCfg(level=2, repeats=5)
+        res = bn.Bench(
+            "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=5)
         ).plot_sweep("float")
         self.assertEqual(res.result_samples(), 10)
 
@@ -108,13 +108,13 @@ class TestBenchRunner(unittest.TestCase):
         # Track what configurations are run
         executed_configs = []
 
-        def simple_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
+        def simple_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
             executed_configs.append((run_cfg.level, run_cfg.repeats))
-            bench = bch.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            bench = bn.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
             return bench.plot_sweep("test")
 
         # Test 1: Single level and repeats (no max values)
-        br1 = bch.BenchRunner()
+        br1 = bn.BenchRunner()
         br1.add(simple_benchmark)
         executed_configs.clear()
         results = br1.run(level=2, repeats=1)
@@ -123,7 +123,7 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(executed_configs[0], (2, 1))
 
         # Test 2: Progressive levels (level=2, max_level=3, repeats=1)
-        br2 = bch.BenchRunner()
+        br2 = bn.BenchRunner()
         br2.add(simple_benchmark)
         executed_configs.clear()
         results = br2.run(level=2, repeats=1, max_level=3)
@@ -133,7 +133,7 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(len(executed_configs), 2)
 
         # Test 3: Progressive repeats (level=2, repeats=1, max_repeats=2)
-        br3 = bch.BenchRunner()
+        br3 = bn.BenchRunner()
         br3.add(simple_benchmark)
         executed_configs.clear()
         results = br3.run(level=2, repeats=1, max_repeats=2)
@@ -143,7 +143,7 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(len(executed_configs), 2)
 
         # Test 4: Both progressive (level=2-3, repeats=1-2) = 4 combinations
-        br4 = bch.BenchRunner()
+        br4 = bn.BenchRunner()
         br4.add(simple_benchmark)
         executed_configs.clear()
         results = br4.run(level=2, repeats=1, max_level=3, max_repeats=2)
@@ -156,11 +156,11 @@ class TestBenchRunner(unittest.TestCase):
         """Test that legacy parameters show deprecation warnings."""
         import warnings
 
-        bench_runner = bch.BenchRunner("test_deprecation")
+        bench_runner = bn.BenchRunner("test_deprecation")
 
         # Very simple function that returns immediately
-        def simple_test(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:  # pylint: disable=unused-argument
-            cfg = bch.BenchCfg()
+        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:  # pylint: disable=unused-argument
+            cfg = bn.BenchCfg()
             cfg.run_cfg = run_cfg
             return cfg
 
@@ -185,7 +185,7 @@ class TestBenchRunner(unittest.TestCase):
 
     def test_benchrunner_no_name_instantiation(self):
         """Test that BenchRunner can be instantiated without a name."""
-        bench_runner = bch.BenchRunner()
+        bench_runner = bn.BenchRunner()
 
         # Should have auto-generated name
         self.assertIsNotNone(bench_runner.name)
@@ -193,8 +193,8 @@ class TestBenchRunner(unittest.TestCase):
         self.assertTrue(bench_runner.name.startswith("bench_runner_"))
 
         # Should work normally
-        def test_benchmark(run_cfg: bch.BenchRunCfg, report: bch.BenchReport) -> bch.BenchCfg:
-            bench = bch.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+        def test_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
+            bench = bn.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
             return bench.plot_sweep("test")
 
         bench_runner.add(test_benchmark)
@@ -202,19 +202,19 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(len(results), 1)
 
     # def test_benchrunner_cache(self):
-    #     res = bch.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bch.BenchRunCfg(level=2, repeats=1)
+    #     res = bn.Bench(
+    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=1)
     #     ).plot_sweep("float")
 
-    #     res = bch.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bch.BenchRunCfg(level=2, repeats=5)
+    #     res = bn.Bench(
+    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=5)
     #     ).plot_sweep("float")
     #     self.assertEqual(res.result_samples(), 10)
 
-    # # Tests that bch.BenchRunner can run Benchable functions with default configuration (fixed)
+    # # Tests that bn.BenchRunner can run Benchable functions with default configuration (fixed)
     # def test_benchrunner_run_default_configuration_fixed(self):
 
-    #     bench_runner = bch.BenchRunner()
+    #     bench_runner = bn.BenchRunner()
     #     bench_fn1 = Mock()
     #     bench_fn2 = Mock()
     #     bench_runner.add_run(bench_fn1)
@@ -233,15 +233,15 @@ class TestBenchRunner(unittest.TestCase):
     #     self.assertEqual(results[8].level, 5)
     #     self.assertEqual(results[9].level, 5)
 
-    # Tests that bch.BenchRunner can run Benchable functions with custom configuration, after fixing the import statements
+    # Tests that bn.BenchRunner can run Benchable functions with custom configuration, after fixing the import statements
     # def test_benchrunner_run_custom_configuration_fixed_fixed_import_statements(self):
 
-    #     bench_runner = bch.BenchRunner()
+    #     bench_runner = bn.BenchRunner()
     #     bench_fn1 = Mock()
     #     bench_fn2 = Mock()
     #     bench_runner.add_run(bench_fn1)
     #     bench_runner.add_run(bench_fn2)
-    #     run_cfg = bch.BenchRunCfg()
+    #     run_cfg = bn.BenchRunCfg()
     #     run_cfg.cache_samples = False
     #     run_cfg.only_hash_tag = False
     #     run_cfg.level = 3
@@ -250,13 +250,13 @@ class TestBenchRunner(unittest.TestCase):
     #     self.assertEqual(results[0].level, 3)
     #     self.assertEqual(results[1].level, 3)
 
-    # Tests that bch.BenchRunner can publish results of Benchable functions (fixed)
+    # Tests that bn.BenchRunner can publish results of Benchable functions (fixed)
     # def test_benchrunner_publish_results_fixed(self):
     #     class MockBenchable:
-    #         def bench(self, run_cfg: bch.BenchRunCfg) -> bch.BenchCfg:
-    #             return bch.BenchCfg()
+    #         def bench(self, run_cfg: bn.BenchRunCfg) -> bn.BenchCfg:
+    #             return bn.BenchCfg()
 
-    #     bench_runner = bch.BenchRunner(publisher=Mock())
+    #     bench_runner = bn.BenchRunner(publisher=Mock())
     #     bench_fn1 = MockBenchable()
     #     bench_fn2 = MockBenchable()
     #     bench_runner.add_run(bench_fn1)
@@ -279,7 +279,7 @@ class TestBenchRunner(unittest.TestCase):
         """Test that add_run() emits a DeprecationWarning."""
         import warnings
 
-        bench_runner = bch.BenchRunner("test_add_run_deprecation")
+        bench_runner = bn.BenchRunner("test_add_run_deprecation")
         bench_fn = Mock()
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -288,18 +288,115 @@ class TestBenchRunner(unittest.TestCase):
         # Function should still have been added
         self.assertIn(bench_fn, bench_runner.bench_fns)
 
-    # Tests that bch.BenchRunner can handle empty list of Benchable functions
+    def test_benchrunner_grouped(self):
+        """Test running benchmarks in grouped mode."""
+        bench_runner = bn.BenchRunner("test_grouped")
+        bench_runner.add_bench(SimpleBenchClass())
+        results = bench_runner.run(level=2, repeats=1, grouped=True)
+        self.assertTrue(len(results) > 0)
+
+    def test_benchrunner_v2_signature(self):
+        """Test that BenchRunner handles V2 (single-arg) benchmark functions."""
+
+        def v2_benchmark(run_cfg: bn.BenchRunCfg) -> bn.BenchCfg:
+            bench = bn.Bench("v2_test", SimpleBenchClassFloat(), run_cfg=run_cfg)
+            return bench.plot_sweep("v2_sweep")
+
+        bench_runner = bn.BenchRunner("test_v2")
+        bench_runner.add(v2_benchmark)
+        results = bench_runner.run(level=2, repeats=1)
+        self.assertEqual(len(results), 1)
+
+    def test_benchrunner_progressive_levels(self):
+        """Test progressive level runs."""
+        executed = []
+
+        def tracking_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
+            executed.append(run_cfg.level)
+            bench = bn.Bench("track", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("track_sweep")
+
+        br = bn.BenchRunner("test_progressive")
+        br.add(tracking_benchmark)
+        br.run(level=2, max_level=3, repeats=1)
+        self.assertEqual(sorted(executed), [2, 3])
+
+    def test_benchrunner_merge_reports(self):
+        """Test the _merge_reports method."""
+        from bencher.bench_report import BenchReport
+
+        br = bn.BenchRunner("test_merge")
+        target = BenchReport("target")
+        source = BenchReport("source")
+        source.pane.append("test_pane")
+
+        initial_count = len(target.pane)
+        br._merge_reports(target, source)  # pylint: disable=protected-access
+        # After merge, target should have more panes
+        self.assertGreater(len(target.pane), initial_count)
+
+    def test_benchrunner_merge_reports_none(self):
+        """Test _merge_reports with None source leaves target unchanged."""
+        from bencher.bench_report import BenchReport
+
+        br = bn.BenchRunner("test_merge_none")
+        target = BenchReport("target")
+        initial_count = len(target.pane)
+        br._merge_reports(target, None)  # pylint: disable=protected-access
+        self.assertEqual(len(target.pane), initial_count)
+
+    def test_benchrunner_merge_reports_same(self):
+        """Test _merge_reports when target is source leaves target unchanged."""
+        from bencher.bench_report import BenchReport
+
+        br = bn.BenchRunner("test_merge_same")
+        report = BenchReport("same")
+        initial_count = len(report.pane)
+        br._merge_reports(report, report)  # pylint: disable=protected-access
+        self.assertEqual(len(report.pane), initial_count)
+
+    def test_benchrunner_name_from_callable(self):
+        """Test that BenchRunner auto-names from a callable."""
+
+        def my_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
+            bench = bn.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("test")
+
+        br = bn.BenchRunner(my_benchmark)
+        self.assertEqual(br.name, "my_benchmark")
+        self.assertEqual(len(br.bench_fns), 1)
+
+    def test_benchrunner_add_chaining(self):
+        """Test that add() supports method chaining."""
+        br = bn.BenchRunner("test_chain")
+        result = br.add(Mock())
+        self.assertIs(result, br)
+
+    def test_benchrunner_show_no_results(self):
+        """Test that show() raises with no results."""
+        br = bn.BenchRunner("test_show_empty")
+        with self.assertRaises(RuntimeError):
+            br.show()
+
+    def test_benchrunner_shutdown(self):
+        """Test shutdown method."""
+        br = bn.BenchRunner("test_shutdown")
+        br.servers = [Mock()]
+        br.shutdown()
+        self.assertEqual(len(br.servers), 0)
+
+    # Tests that bn.BenchRunner can handle empty list of Benchable functions
     # def test_benchrunner_handle_empty_list(self):
 
-    #     def benchable(run_cfg:bch.BenchRunCfg)->bch.BenchCfg:
-    #         bench = bch.Bench("sbc",SimpleBenchClass(),run_cfg=run_cfg)
+    #     def benchable(run_cfg:bn.BenchRunCfg)->bn.BenchCfg:
+    #         bench = bn.Bench("sbc",SimpleBenchClass(),run_cfg=run_cfg)
     #         return bench.plot_sweep("sweep1")
 
-    #     bench_runner = bch.BenchRunner()
+    #     bench_runner = bn.BenchRunner()
     #     bench_runner.add_run(benchable)
 
-    #     results = bench_runner.run(run_cfg=bch.BenchRunCfg(run_tag="1"))
+    #     results = bench_runner.run(run_cfg=bn.BenchRunCfg(run_tag="1"))
 
     #     self.assertEqual(results[0].bench_cfg.run_tag, "1")
 
-    # Tests that bch.BenchRunner can handle empty list of Benchable functions
+    # Tests that bn.BenchRunner can handle empty list of Benchable functions

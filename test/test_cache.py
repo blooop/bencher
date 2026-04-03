@@ -1,13 +1,13 @@
 import unittest
-import bencher as bch
+import bencher as bn
 import random
 
 
-class CachedParamExample(bch.CachedParams):
-    var1 = bch.FloatSweep(default=0, bounds=[0, 10])
-    var2 = bch.IntSweep(default=10, bounds=[0, 10])
+class CachedParamExample(bn.CachedParams):
+    var1 = bn.FloatSweep(default=0, bounds=[0, 10])
+    var2 = bn.IntSweep(default=10, bounds=[0, 10])
 
-    result = bch.ResultVar()
+    result = bn.ResultFloat()
 
     def call(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)

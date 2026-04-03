@@ -1,0 +1,256 @@
+"""Meta-generator: ResultBool Plot Types.
+
+Shows ResultBool output with each plot type that supports it.
+Each generated example is fully self-contained with an inline class definition.
+"""
+
+import bencher as bn
+from bencher.example.meta.meta_generator_base import MetaGeneratorBase
+
+OUTPUT_DIR = "bool_plot_types"
+
+# ---------------------------------------------------------------------------
+# Inline class code for each plot type
+# ---------------------------------------------------------------------------
+
+_HEALTH_CHECK_CAT_CODE = """\
+class HealthCheckCat(bn.ParametrizedSweep):
+    \"\"\"Check service health across backends with varying reliability.\"\"\"
+
+    backend = bn.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
+
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
+
+    def benchmark(self):
+        rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
+        self.healthy = random.random() < rates[self.backend]"""
+
+_HEALTH_CHECK_FLOAT_CODE = """\
+class HealthCheckFloat(bn.ParametrizedSweep):
+    \"\"\"Check if service health exceeds a threshold.\"\"\"
+
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
+
+    def benchmark(self):
+        score = math.sin(math.pi * self.load)
+        self.healthy = score > 0.5"""
+
+_HEALTH_CHECK_FLOAT_NOISY_CODE = """\
+class HealthCheckFloatNoisy(bn.ParametrizedSweep):
+    \"\"\"Check health with noise — repeated runs produce different outcomes.\"\"\"
+
+    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
+
+    def benchmark(self):
+        probability = math.sin(math.pi * self.load)
+        self.healthy = random.random() < probability"""
+
+_HEALTH_CHECK_2D_NOISY_CODE = """\
+class HealthCheck2DNoisy(bn.ParametrizedSweep):
+    \"\"\"2D health check with noise for repeated-run surface plots.\"\"\"
+
+    x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
+
+    def benchmark(self):
+        probability = 0.5 + 0.4 * math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
+        self.healthy = random.random() < probability"""
+
+_RELIABILITY_CAT_CODE = """\
+class ReliabilityCat(bn.ParametrizedSweep):
+    \"\"\"Service reliability check with varying pass rates across backends.\"\"\"
+
+    backend = bn.StringSweep(["postgres", "redis", "memcached", "sqlite", "local"])
+
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
+
+    def benchmark(self):
+        rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
+        self.healthy = random.random() < rates[self.backend]"""
+
+_PASS_RATE_FLOAT_CODE = """\
+class PassRateFloat(bn.ParametrizedSweep):
+    \"\"\"Test pass rate that decreases with complexity.\"\"\"
+
+    complexity = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+
+    passed = bn.ResultBool(doc="Whether the test passed")
+
+    def benchmark(self):
+        rate = 1.0 - 0.8 * self.complexity ** 1.5
+        self.passed = random.random() < rate"""
+
+# ---------------------------------------------------------------------------
+# Plot configuration table
+# ---------------------------------------------------------------------------
+
+BOOL_PLOT_CONFIGS = {
+    "bar": {
+        "float_dims": 0,
+        "repeats": 30,
+        "plot_call": "res.to_bar()",
+        "extra_imports": ["import random"],
+        "input_vars": '["backend"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "HealthCheckCat",
+        "class_code": _HEALTH_CHECK_CAT_CODE,
+    },
+    "line": {
+        "float_dims": 1,
+        "repeats": 1,
+        "plot_call": "res.to_line()",
+        "input_vars": '["load"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "HealthCheckFloat",
+        "class_code": _HEALTH_CHECK_FLOAT_CODE,
+        "extra_imports": ["import math"],
+    },
+    "curve": {
+        "float_dims": 1,
+        "repeats": 20,
+        "plot_call": "res.to_curve()",
+        "input_vars": '["load"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "HealthCheckFloatNoisy",
+        "class_code": _HEALTH_CHECK_FLOAT_NOISY_CODE,
+        "extra_imports": ["import math", "import random"],
+    },
+    "heatmap": {
+        "float_dims": 2,
+        "repeats": 10,
+        "plot_call": "res.to_heatmap()",
+        "input_vars": '["x", "y"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "HealthCheck2DNoisy",
+        "class_code": _HEALTH_CHECK_2D_NOISY_CODE,
+        "extra_imports": ["import math", "import random"],
+    },
+    "surface": {
+        "float_dims": 2,
+        "repeats": 10,
+        "plot_call": "res.to_surface()",
+        "input_vars": '["x", "y"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "HealthCheck2DNoisy",
+        "class_code": _HEALTH_CHECK_2D_NOISY_CODE,
+        "extra_imports": ["import math", "import random"],
+    },
+    "violin": {
+        "float_dims": 0,
+        "repeats": 50,
+        "plot_call": "res.to(ViolinResult)",
+        "extra_imports": [
+            "import random",
+            (
+                "from bencher.results.holoview_results.distribution_result"
+                ".violin_result import ViolinResult"
+            ),
+        ],
+        "input_vars": '["backend"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "ReliabilityCat",
+        "class_code": _RELIABILITY_CAT_CODE,
+    },
+    "box_whisker": {
+        "float_dims": 0,
+        "repeats": 50,
+        "plot_call": "res.to(BoxWhiskerResult)",
+        "extra_imports": [
+            "import random",
+            (
+                "from bencher.results.holoview_results.distribution_result"
+                ".box_whisker_result import BoxWhiskerResult"
+            ),
+        ],
+        "input_vars": '["backend"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "ReliabilityCat",
+        "class_code": _RELIABILITY_CAT_CODE,
+    },
+    "scatter_jitter": {
+        "float_dims": 0,
+        "repeats": 50,
+        "plot_call": "res.to(ScatterJitterResult)",
+        "extra_imports": [
+            "import random",
+            (
+                "from bencher.results.holoview_results.distribution_result"
+                ".scatter_jitter_result import ScatterJitterResult"
+            ),
+        ],
+        "input_vars": '["backend"]',
+        "result_vars": '["healthy"]',
+        "benchable_class": "ReliabilityCat",
+        "class_code": _RELIABILITY_CAT_CODE,
+    },
+    "histogram": {
+        "float_dims": 1,
+        "repeats": 30,
+        "plot_call": "res.to(HistogramResult)",
+        "extra_imports": [
+            "import random",
+            "from bencher.results.histogram_result import HistogramResult",
+        ],
+        "input_vars": '["complexity"]',
+        "result_vars": '["passed"]',
+        "benchable_class": "PassRateFloat",
+        "class_code": _PASS_RATE_FLOAT_CODE,
+    },
+}
+
+BOOL_PLOT_NAMES = list(BOOL_PLOT_CONFIGS.keys())
+
+
+class MetaBoolPlotTypes(MetaGeneratorBase):
+    """Generate Python examples demonstrating ResultBool with each plot type."""
+
+    plot_type = bn.StringSweep(BOOL_PLOT_NAMES, doc="Plot type to demonstrate with ResultBool")
+
+    def benchmark(self):
+        cfg = BOOL_PLOT_CONFIGS[self.plot_type]
+        filename = f"bool_plot_{self.plot_type}"
+        function_name = f"example_bool_plot_{self.plot_type}"
+        title = f"Bool Plot: {self.plot_type.replace('_', ' ').title()}"
+
+        extra_imports = cfg.get("extra_imports")
+
+        level = 2 if cfg["float_dims"] >= 2 else 3
+        run_kwargs = {"level": level}
+        if cfg["repeats"] > 1:
+            run_kwargs["repeats"] = cfg["repeats"]
+
+        self.generate_sweep_example(
+            title=title,
+            output_dir=OUTPUT_DIR,
+            filename=filename,
+            function_name=function_name,
+            benchable_class=cfg["benchable_class"],
+            benchable_module=None,
+            input_vars=cfg["input_vars"],
+            result_vars=cfg["result_vars"],
+            post_sweep_line=cfg["plot_call"],
+            extra_imports=extra_imports,
+            run_kwargs=run_kwargs,
+            class_code=cfg["class_code"],
+        )
+
+
+def example_meta_bool_plot_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    bench = MetaBoolPlotTypes().to_bench(run_cfg)
+
+    bench.plot_sweep(
+        title="Bool Plot Types",
+        input_vars=[bn.sweep("plot_type", BOOL_PLOT_NAMES)],
+    )
+
+    return bench
+
+
+if __name__ == "__main__":
+    bn.run(example_meta_bool_plot_types)

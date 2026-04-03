@@ -4,9 +4,7 @@ Demonstrates each result type at different input dimensionalities.
 Each generated example is self-contained with an inline class definition.
 """
 
-from typing import Any
-
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "result_types"
@@ -43,19 +41,17 @@ def _build_response_timer_code():
         },
         "\n".join(
             [
-                "class ResponseTimer(bch.ParametrizedSweep):",
+                "class ResponseTimer(bn.ParametrizedSweep):",
                 '    """Measures HTTP request latency across endpoints and concurrency levels."""',
                 "",
-                '    endpoint = bch.StringSweep(["api/users", "api/orders"], doc="API endpoint")',
-                '    concurrency = bch.FloatSweep(default=50, bounds=[1, 100], doc="Concurrent requests")',
+                '    endpoint = bn.StringSweep(["api/users", "api/orders"], doc="API endpoint")',
+                '    concurrency = bn.FloatSweep(default=50, bounds=[1, 100], doc="Concurrent requests")',
                 "",
-                '    latency = bch.ResultVar(units="ms", doc="Response latency")',
+                '    latency = bn.ResultFloat(units="ms", doc="Response latency")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 '        base = {"api/users": 12.0, "api/orders": 25.0}[self.endpoint]',
                 "        self.latency = base + 0.5 * math.log1p(self.concurrency)",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -74,19 +70,17 @@ def _build_health_checker_code():
         },
         "\n".join(
             [
-                "class HealthChecker(bch.ParametrizedSweep):",
+                "class HealthChecker(bn.ParametrizedSweep):",
                 '    """Checks whether a service passes its health threshold."""',
                 "",
-                '    threshold = bch.FloatSweep(default=0.5, bounds=[0.1, 0.9], doc="Decision threshold")',
-                '    difficulty = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Problem difficulty")',
+                '    threshold = bn.FloatSweep(default=0.5, bounds=[0.1, 0.9], doc="Decision threshold")',
+                '    difficulty = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Problem difficulty")',
                 "",
-                '    healthy = bch.ResultBool(doc="Whether the service is healthy")',
+                '    healthy = bn.ResultBool(doc="Whether the service is healthy")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 "        score = math.sin(math.pi * self.threshold) * (1.0 - 0.5 * self.difficulty)",
                 "        self.healthy = score > 0.5",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -104,21 +98,19 @@ def _build_system_metrics_code():
         },
         "\n".join(
             [
-                "class SystemMetrics(bch.ParametrizedSweep):",
+                "class SystemMetrics(bn.ParametrizedSweep):",
                 '    """Returns a [cpu, mem, disk] utilization vector."""',
                 "",
-                '    load = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="System load factor")',
-                '    instances = bch.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Number of instances")',
+                '    load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="System load factor")',
+                '    instances = bn.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Number of instances")',
                 "",
-                '    metrics = bch.ResultVec(3, "%", doc="CPU, memory, disk utilization")',
+                '    metrics = bn.ResultVec(3, "%", doc="CPU, memory, disk utilization")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 "        cpu = 20.0 + 70.0 * math.sin(math.pi * self.load / 2.0)",
                 "        mem = 30.0 + 50.0 * self.load * math.log1p(self.instances)",
                 "        disk = 10.0 + 40.0 * math.sqrt(self.load * self.instances / 10.0)",
                 "        self.metrics = [cpu, mem, disk]",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -136,24 +128,22 @@ def _build_log_formatter_code():
         },
         "\n".join(
             [
-                "class LogFormatter(bch.ParametrizedSweep):",
+                "class LogFormatter(bn.ParametrizedSweep):",
                 '    """Formats a structured log report string."""',
                 "",
-                '    level = bch.StringSweep(["info", "warn", "error"], doc="Log severity level")',
-                '    verbosity = bch.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Output verbosity")',
+                '    level = bn.StringSweep(["info", "warn", "error"], doc="Log severity level")',
+                '    verbosity = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Output verbosity")',
                 "",
-                '    report = bch.ResultString(doc="Formatted log report")',
+                '    report = bn.ResultString(doc="Formatted log report")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 "        detail = int(math.ceil(self.verbosity * 5))",
                 "        text = (",
                 '            f"Level: {self.level}\\n"',
                 '            f"\\tVerbosity: {self.verbosity:.2f}\\n"',
                 '            f"\\tDetail depth: {detail}"',
                 "        )",
-                "        self.report = bch.tabs_in_markdown(text)",
-                "        return super().__call__()",
+                "        self.report = bn.tabs_in_markdown(text)",
             ]
         ),
     )
@@ -171,22 +161,20 @@ def _build_report_exporter_code():
         },
         "\n".join(
             [
-                "class ReportExporter(bch.ParametrizedSweep):",
+                "class ReportExporter(bn.ParametrizedSweep):",
                 '    """Writes a text report file in the requested format."""',
                 "",
-                '    format_type = bch.StringSweep(["summary", "detailed", "raw"], doc="Report format")',
+                '    format_type = bn.StringSweep(["summary", "detailed", "raw"], doc="Report format")',
                 "",
-                '    file_result = bch.ResultPath(doc="Generated report file")',
+                '    file_result = bn.ResultPath(doc="Generated report file")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
-                '        filename = bch.gen_path(self.format_type, suffix=".txt")',
+                "    def benchmark(self):",
+                '        filename = bn.gen_path(self.format_type, suffix=".txt")',
                 '        line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]',
                 '        with open(filename, "w", encoding="utf-8") as f:',
                 "            for i in range(line_count):",
                 '                f.write(f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\\n")',
                 "        self.file_result = filename",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -204,24 +192,22 @@ def _build_timeseries_collector_code():
         },
         "\n".join(
             [
-                "class TimeseriesCollector(bch.ParametrizedSweep):",
+                "class TimeseriesCollector(bn.ParametrizedSweep):",
                 '    """Collects a timeseries and returns it as an xarray dataset."""',
                 "",
-                '    duration = bch.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Collection duration")',
-                '    sample_rate = bch.FloatSweep(default=1.0, bounds=[0.5, 2.0], doc="Samples per second")',
+                '    duration = bn.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Collection duration")',
+                '    sample_rate = bn.FloatSweep(default=1.0, bounds=[0.5, 2.0], doc="Samples per second")',
                 "",
-                '    result_ds = bch.ResultDataSet(doc="Collected timeseries dataset")',
+                '    result_ds = bn.ResultDataSet(doc="Collected timeseries dataset")',
                 "",
-                "    def __call__(self, **kwargs):",
+                "    def benchmark(self):",
                 "        import xarray as xr",
                 "",
-                "        self.update_params_from_kwargs(**kwargs)",
                 "        n_samples = max(1, int(self.duration * self.sample_rate))",
                 "        values = [math.sin(2 * math.pi * i / max(n_samples, 1)) * self.duration for i in range(n_samples)]",
                 '        data_array = xr.DataArray(values, dims=["time"], coords={"time": list(range(n_samples))})',
                 '        ds = xr.Dataset({"result_ds": data_array})',
-                "        self.result_ds = bch.ResultDataSet(ds.to_pandas())",
-                "        return super().__call__()",
+                "        self.result_ds = bn.ResultDataSet(ds.to_pandas())",
             ]
         ),
     )
@@ -240,14 +226,12 @@ BENCHABLE_MAP = {
 class MetaResultTypes(MetaGeneratorBase):
     """Generate Python examples demonstrating each result type."""
 
-    result_type = bch.StringSweep(RESULT_TYPES, doc="Result type to demonstrate")
-    input_dims = bch.IntSweep(default=0, bounds=(0, 2), doc="Number of input dimensions")
+    result_type = bn.StringSweep(RESULT_TYPES, doc="Result type to demonstrate")
+    input_dims = bn.IntSweep(default=0, bounds=(0, 2), doc="Number of input dimensions")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.input_dims not in VALID_COMBOS.get(self.result_type, []):
-            return super().__call__()
+            return
 
         imports, class_name, result_vars, input_vars_map, class_code = BENCHABLE_MAP[
             self.result_type
@@ -288,17 +272,15 @@ class MetaResultTypes(MetaGeneratorBase):
             run_kwargs={"level": level},
         )
 
-        return super().__call__()
 
-
-def example_meta_result_types(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_meta_result_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaResultTypes().to_bench(run_cfg)
 
     bench.plot_sweep(
         title="Result Types",
         input_vars=[
-            bch.p("result_type", RESULT_TYPES),
-            bch.p("input_dims", [0, 1, 2]),
+            bn.sweep("result_type", RESULT_TYPES),
+            bn.sweep("input_dims", [0, 1, 2]),
         ],
     )
 
@@ -306,4 +288,4 @@ def example_meta_result_types(run_cfg: bch.BenchRunCfg | None = None) -> bch.Ben
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_result_types)
+    bn.run(example_meta_result_types)

@@ -1,0 +1,221 @@
+import unittest
+
+from bencher.utils import resolve_aggregate
+
+
+class TestResolveAggregate(unittest.TestCase):
+    """Unit tests for the resolve_aggregate helper."""
+
+    def setUp(self):
+        self.vars3 = ["x", "y", "z"]
+        self.vars2 = ["x", "y"]
+        self.vars1 = ["x"]
+        self.vars0 = []
+
+    # --- None / False: no aggregation ---
+
+    def test_none_returns_none(self):
+        self.assertIsNone(resolve_aggregate(None, self.vars3))
+
+    def test_false_returns_none(self):
+        self.assertIsNone(resolve_aggregate(False, self.vars3))
+
+    # --- True: collapse to 1-D (aggregate all but first) ---
+
+    def test_true_3_keeps_first(self):
+        self.assertEqual(resolve_aggregate(True, self.vars3), ["y", "z"])
+
+    def test_true_2_keeps_first(self):
+        self.assertEqual(resolve_aggregate(True, self.vars2), ["y"])
+
+    def test_true_1_nothing_to_aggregate(self):
+        self.assertIsNone(resolve_aggregate(True, self.vars1))
+
+    def test_true_empty_nothing_to_aggregate(self):
+        self.assertIsNone(resolve_aggregate(True, self.vars0))
+
+    # --- int: last N dims ---
+
+    def test_int_1_of_3(self):
+        self.assertEqual(resolve_aggregate(1, self.vars3), ["z"])
+
+    def test_int_2_of_3(self):
+        self.assertEqual(resolve_aggregate(2, self.vars3), ["y", "z"])
+
+    def test_int_3_of_3(self):
+        self.assertEqual(resolve_aggregate(3, self.vars3), ["x", "y", "z"])
+
+    def test_int_exceeds_length(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(4, self.vars3)
+        self.assertIn("aggregate=4 exceeds", str(cm.exception))
+
+    def test_int_zero(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(0, self.vars3)
+        self.assertIn("must be >= 1", str(cm.exception))
+
+    def test_int_negative(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(-1, self.vars3)
+        self.assertIn("must be >= 1", str(cm.exception))
+
+    # --- list[str]: named dims ---
+
+    def test_list_valid_subset(self):
+        self.assertEqual(resolve_aggregate(["x", "z"], self.vars3), ["x", "z"])
+
+    def test_list_all(self):
+        self.assertEqual(resolve_aggregate(["x", "y", "z"], self.vars3), ["x", "y", "z"])
+
+    def test_list_single(self):
+        self.assertEqual(resolve_aggregate(["y"], self.vars3), ["y"])
+
+    def test_list_unknown_name(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(["x", "bogus"], self.vars3)
+        self.assertIn("unknown input var names", str(cm.exception))
+
+    def test_list_empty(self):
+        self.assertEqual(resolve_aggregate([], self.vars3), [])
+
+    def test_list_non_string_elements(self):
+        with self.assertRaises(TypeError) as cm:
+            resolve_aggregate([1, 2], self.vars3)
+        self.assertIn("aggregate list elements must be str", str(cm.exception))
+
+    def test_list_mixed_elements(self):
+        with self.assertRaises(TypeError) as cm:
+            resolve_aggregate(["x", 42], self.vars3)
+        self.assertIn("aggregate list elements must be str", str(cm.exception))
+
+    # --- input_var_names=None ---
+
+    def test_true_with_none_input_var_names(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(True, None)
+        self.assertIn("requires input_var_names", str(cm.exception))
+
+    def test_int_with_none_input_var_names(self):
+        with self.assertRaises(ValueError) as cm:
+            resolve_aggregate(2, None)
+        self.assertIn("requires input_var_names", str(cm.exception))
+
+    def test_list_with_none_input_var_names_passes_through(self):
+        """When input_var_names is None, list aggregate is returned unvalidated."""
+        self.assertEqual(resolve_aggregate(["x", "bogus"], None), ["x", "bogus"])
+
+    # --- type errors ---
+
+    def test_unsupported_type_string(self):
+        with self.assertRaises(TypeError):
+            resolve_aggregate("x", self.vars3)
+
+    def test_unsupported_type_float(self):
+        with self.assertRaises(TypeError):
+            resolve_aggregate(2.5, self.vars3)
+
+
+class TestResolveAggregateIntegration(unittest.TestCase):
+    """Integration: verify aggregate=True matches explicit dim list via plot_sweep."""
+
+    @classmethod
+    def setUpClass(cls):
+        import bencher as bn
+        from bencher.example.meta.example_meta import BenchableObject
+
+        bench = BenchableObject().to_bench()
+        run_cfg = bn.BenchRunCfg(repeats=1, auto_plot=False)
+
+        cls.res_explicit = bench.plot_sweep(
+            "agg_explicit",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=run_cfg,
+            plot_callbacks=False,
+        )
+        cls.res_agg_true = bench.plot_sweep(
+            "agg_true",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=run_cfg,
+            plot_callbacks=False,
+            aggregate=True,
+        )
+
+    def test_aggregate_true_sets_agg_over_dims(self):
+        """aggregate=True should resolve to all but the first input dim on BenchCfg."""
+        cfg = self.res_agg_true.bench_cfg
+        self.assertEqual(cfg.agg_over_dims, ["float2"])
+
+    def test_no_aggregate_has_none(self):
+        """Without aggregate, agg_over_dims should be None."""
+        cfg = self.res_explicit.bench_cfg
+        self.assertIsNone(cfg.agg_over_dims)
+
+    def test_aggregate_int_selects_last_n(self):
+        """aggregate=1 should select only the last input dim."""
+        import bencher as bn
+        from bencher.example.meta.example_meta import BenchableObject
+
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_int",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1, auto_plot=False),
+            plot_callbacks=False,
+            aggregate=1,
+        )
+        self.assertEqual(res.bench_cfg.agg_over_dims, ["float2"])
+
+    def test_show_aggregate_plots_false_skips_band_result(self):
+        """show_aggregate_plots=False suppresses aggregate section in to_auto_plots."""
+        import panel as pn
+
+        import bencher as bn
+        from bencher.example.meta.example_meta import BenchableObject
+
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_disabled",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=2, auto_plot=False, show_aggregate_plots=False),
+            aggregate=True,
+        )
+        # agg_over_dims is still set on the config
+        self.assertIsNotNone(res.bench_cfg.agg_over_dims)
+        plots = res.to_auto_plots()
+        # The "Aggregated View" markdown should not appear
+        md_texts = [
+            p.object
+            for p in plots
+            if isinstance(p, pn.pane.Markdown)
+            and "Aggregated View" in str(getattr(p, "object", ""))
+        ]
+        self.assertEqual(len(md_texts), 0, "Aggregated View section should be suppressed")
+
+    def test_show_aggregate_plots_true_renders_band_result(self):
+        """show_aggregate_plots=True (default) renders the aggregate section."""
+        import panel as pn
+
+        import bencher as bn
+        from bencher.example.meta.example_meta import BenchableObject
+
+        bench = BenchableObject().to_bench()
+        res = bench.plot_sweep(
+            "agg_enabled",
+            input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=2, auto_plot=False),
+            aggregate=True,
+        )
+        plots = res.to_auto_plots()
+        md_texts = [
+            p.object
+            for p in plots
+            if isinstance(p, pn.pane.Markdown)
+            and "Aggregated View" in str(getattr(p, "object", ""))
+        ]
+        self.assertGreater(len(md_texts), 0, "Aggregated View section should be present")

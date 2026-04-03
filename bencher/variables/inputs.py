@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from enum import Enum
-from functools import lru_cache
 from pathlib import Path
-from typing import List, Any, Dict
+from typing import Any
 
 import numpy as np
 from param import Integer, Number, Selector
@@ -37,7 +39,9 @@ class SweepSelector(Selector, SweepBase):
 
     __slots__ = shared_slots
 
-    def __init__(self, units: str = "ul", samples: int | None = None, **params):
+    def __init__(
+        self, units: str = "ul", samples: int | None = None, optimize: bool = True, **params
+    ):
         SweepBase.__init__(self)
         Selector.__init__(self, **params)
 
@@ -46,12 +50,13 @@ class SweepSelector(Selector, SweepBase):
             self.samples = len(self.objects)
         else:
             self.samples = samples
+        self.optimize = optimize
 
-    def values(self) -> List[Any]:
+    def values(self) -> list[Any]:
         """Return all the values for the parameter sweep.
 
         Returns:
-            List[Any]: A list of parameter values to sweep through
+            list[Any]: A list of parameter values to sweep through
         """
         return self.indices_to_samples(self.samples, self.objects)
 
@@ -162,12 +167,18 @@ class BoolSweep(SweepSelector):
     """
 
     def __init__(
-        self, units: str = "ul", samples: int | None = None, default: bool = True, **params
+        self,
+        units: str = "ul",
+        samples: int | None = None,
+        default: bool = True,
+        optimize: bool = True,
+        **params,
     ):
         SweepSelector.__init__(
             self,
             units=units,
             samples=samples,
+            optimize=optimize,
             default=default,
             objects=[True, False] if default else [False, True],
             **params,
@@ -187,9 +198,10 @@ class StringSweep(SweepSelector):
 
     def __init__(
         self,
-        string_list: List[str],
+        string_list: list[str],
         units: str = "ul",
         samples: int | None = None,
+        optimize: bool = True,
         **params,
     ):
         SweepSelector.__init__(
@@ -198,6 +210,7 @@ class StringSweep(SweepSelector):
             instantiate=True,
             units=units,
             samples=samples,
+            optimize=optimize,
             **params,
         )
 
@@ -252,7 +265,12 @@ class EnumSweep(SweepSelector):
     __slots__ = shared_slots
 
     def __init__(
-        self, enum_type: Enum | List[Enum], units: str = "ul", samples: int | None = None, **params
+        self,
+        enum_type: Enum | list[Enum],
+        units: str = "ul",
+        samples: int | None = None,
+        optimize: bool = True,
+        **params,
     ):
         # The enum can either be an Enum type or a list of enums
         list_of_enums = isinstance(enum_type, list)
@@ -263,6 +281,7 @@ class EnumSweep(SweepSelector):
             instantiate=True,
             units=units,
             samples=samples,
+            optimize=optimize,
             **params,
         )
         if not list_of_enums:  # Grab the docs from the enum type def
@@ -346,6 +365,7 @@ class YamlSweep(SweepSelector):
         units: str = "ul",
         samples: int | None = None,
         default_key: str | None = None,
+        optimize: bool = True,
         **params,
     ):
         path = Path(yaml_path)
@@ -384,33 +404,26 @@ class YamlSweep(SweepSelector):
             instantiate=False,
             units=units,
             samples=samples,
+            optimize=optimize,
             default=default_value,
             **params,
         )
 
-    @classmethod
-    def _load_yaml(cls, path: Path) -> Mapping[str, Any]:
-        resolved = path.resolve()
-        stat = path.stat()
-        data = cls._read_yaml(str(resolved), stat.st_mtime_ns, stat.st_size)
+    @staticmethod
+    def _load_yaml(path: Path) -> Any:
+        with path.open("r", encoding="utf-8") as stream:
+            data = yaml.safe_load(stream)
         return data if data is not None else {}
 
-    @staticmethod
-    @lru_cache(maxsize=64)
-    def _read_yaml(path_str: str, modified_ns: int, size: int) -> Any:
-        _ = modified_ns, size  # values are part of the cache key
-        with Path(path_str).open("r", encoding="utf-8") as stream:
-            return yaml.safe_load(stream)
-
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         key_list = list(self._entries.keys())
         return self.indices_to_samples(self.samples, key_list)
 
-    def items(self) -> List[tuple[str, Any]]:
+    def items(self) -> list[tuple[str, Any]]:
         selected_keys = self.keys()
         return [(key, self._entries[key].value()) for key in selected_keys]
 
-    def values(self) -> List[Any]:
+    def values(self) -> list[Any]:
         selected_keys = self.keys()
         return [self._entries[key] for key in selected_keys]
 
@@ -437,7 +450,7 @@ class IntSweep(Integer, SweepBase):
     Attributes:
         units (str): The units of measurement for the parameter
         samples (int): The number of samples to take from the range
-        sample_values (List[int], optional): Specific integer values to use as samples instead of
+        sample_values (list[int], optional): Specific integer values to use as samples instead of
             generating them from bounds. If provided, overrides the samples parameter.
     """
 
@@ -447,19 +460,25 @@ class IntSweep(Integer, SweepBase):
         self,
         units: str = "ul",
         samples: int | None = None,
-        sample_values: List[int] | None = None,
+        sample_values: list[int] | None = None,
+        optimize: bool = True,
         **params,
     ):
         SweepBase.__init__(self)
+        # Redirect bounds -> softbounds so param doesn't hard-enforce them
+        user_bounds = params.pop("bounds", None)
+        if user_bounds is not None:
+            params["softbounds"] = user_bounds
         Integer.__init__(self, **params)
 
         self.units = units
+        self.optimize = optimize
 
         if sample_values is None:
             if samples is None:
-                if self.bounds is None:
+                if self.sweep_bounds is None:
                     raise RuntimeError("You must define bounds for integer types")
-                self.samples = 1 + self.bounds[1] - self.bounds[0]
+                self.samples = 1 + self.sweep_bounds[1] - self.sweep_bounds[0]
             else:
                 self.samples = samples
             self.sample_values = None
@@ -469,19 +488,19 @@ class IntSweep(Integer, SweepBase):
             if "default" not in params:
                 self.default = sample_values[0]
 
-    def values(self) -> List[int]:
+    def values(self) -> list[int]:
         """Return all the values for the parameter sweep.
 
         If sample_values is provided, returns those values. Otherwise generates values
         within the specified bounds.
 
         Returns:
-            List[int]: A list of integer values to sweep through
+            list[int]: A list of integer values to sweep through
         """
         sample_values = (
             self.sample_values
             if self.sample_values is not None
-            else list(range(int(self.bounds[0]), int(self.bounds[1] + 1)))
+            else list(range(int(self.sweep_bounds[0]), int(self.sweep_bounds[1] + 1)))
         )
 
         return self.indices_to_samples(self.samples, sample_values)
@@ -514,7 +533,7 @@ class FloatSweep(Number, SweepBase):
     Attributes:
         units (str): The units of measurement for the parameter
         samples (int): The number of samples to take from the range
-        sample_values (List[float], optional): Specific float values to use as samples instead of
+        sample_values (list[float], optional): Specific float values to use as samples instead of
             generating them from bounds. If provided, overrides the samples parameter.
         step (float, optional): Step size between samples when generating values from bounds
     """
@@ -525,14 +544,20 @@ class FloatSweep(Number, SweepBase):
         self,
         units: str = "ul",
         samples: int = 10,
-        sample_values: List[float] | None = None,
+        sample_values: list[float] | None = None,
         step: float | None = None,
+        optimize: bool = True,
         **params,
     ):
         SweepBase.__init__(self)
+        # Redirect bounds -> softbounds so param doesn't hard-enforce them
+        user_bounds = params.pop("bounds", None)
+        if user_bounds is not None:
+            params["softbounds"] = user_bounds
         Number.__init__(self, step=step, **params)
 
         self.units = units
+        self.optimize = optimize
 
         self.sample_values = sample_values
 
@@ -543,21 +568,21 @@ class FloatSweep(Number, SweepBase):
             if "default" not in params:
                 self.default = sample_values[0]
 
-    def values(self) -> List[float]:
+    def values(self) -> list[float]:
         """Return all the values for the parameter sweep.
 
         If sample_values is provided, returns those values. Otherwise generates values
         within the specified bounds, either using linspace (when step is None) or arange.
 
         Returns:
-            List[float]: A list of float values to sweep through
+            list[float]: A list of float values to sweep through
         """
         samps = self.samples
         if self.sample_values is None:
             if self.step is None:
-                return np.linspace(self.bounds[0], self.bounds[1], samps)
+                return np.linspace(self.sweep_bounds[0], self.sweep_bounds[1], samps)
 
-            return np.arange(self.bounds[0], self.bounds[1], self.step)
+            return np.arange(self.sweep_bounds[0], self.sweep_bounds[1], self.step)
         return self.sample_values
 
 
@@ -580,30 +605,86 @@ def box(name: str, center: float, width: float) -> FloatSweep:
     return var
 
 
-def p(
-    name: str,
-    values: List[Any] | None = None,
+def sweep(
+    name: str | SweepBase,
+    values: list[Any] | None = None,
+    *,
     samples: int | None = None,
+    bounds: tuple[float, float] | None = None,
     max_level: int | None = None,
-) -> Dict[str, Any]:
-    """
-    Create a parameter dictionary with optional values, samples, and max_level.
+) -> dict[str, Any] | SweepBase:
+    """Create a parameter specification for use in plot_sweep input_vars.
+
+    Accepts either a string parameter name (returns a dict for deferred lookup)
+    or a SweepBase parameter object (returns a configured sweep directly).
+
+    Examples::
+
+        bn.sweep("theta", [0, 0.5, 1.0])                  # explicit values
+        bn.sweep("theta", samples=5)                        # override sample count
+        bn.sweep("theta", bounds=(0, 1))                    # override range
+        bn.sweep("theta", bounds=(0, 1), samples=10)        # override range + count
+        bn.sweep(Cfg.param.theta, bounds=(0, 1), samples=5) # SweepBase object
 
     Args:
-        name (str): The name of the parameter.
-        values (List[Any], optional): A list of values for the parameter. Defaults to None.
-        samples (int, optional): The number of samples. Must be greater than 0 if provided. Defaults to None.
-        max_level (int, optional): The maximum level. Must be greater than 0 if provided. Defaults to None.
+        name: The parameter name (str) or a param object (e.g. ``Cfg.param.theta``).
+        values: A list of values for the parameter.
+        samples: The number of samples. Must be > 0 if provided.
+        bounds: ``(low, high)`` tuple to override the sweep range.
+        max_level: The maximum level. Must be > 0 if provided.
 
     Returns:
-        Dict[str, Any]: A dictionary containing the parameter details.
+        dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.
     """
     if max_level is not None and max_level <= 0:
         raise ValueError("max_level must be greater than 0")
 
     if samples is not None and samples <= 0:
         raise ValueError("samples must be greater than 0")
-    return {"name": name, "values": values, "max_level": max_level, "samples": samples}
+
+    if values is not None and (bounds is not None or samples is not None):
+        raise ValueError(
+            "Cannot combine 'values' with 'bounds' or 'samples'. "
+            "Use values alone, or bounds/samples together."
+        )
+
+    # If a SweepBase param object is passed, delegate to its methods directly
+    if isinstance(name, SweepBase):
+        if max_level is not None:
+            raise ValueError(
+                "max_level is not supported when passing a SweepBase object to sweep(). "
+                "Use the string-based API instead: sweep('param_name', max_level=N)"
+            )
+        if values is not None:
+            return name.with_sample_values(values)
+        if bounds is not None:
+            return name.with_bounds(bounds[0], bounds[1], samples)
+        if samples is not None:
+            return name.with_samples(samples)
+        return deepcopy(name)
+
+    return {
+        "name": name,
+        "values": values,
+        "max_level": max_level,
+        "samples": samples,
+        "bounds": bounds,
+    }
+
+
+def p(
+    name: str | SweepBase,
+    values: list[Any] | None = None,
+    *,
+    samples: int | None = None,
+    bounds: tuple[float, float] | None = None,
+    max_level: int | None = None,
+) -> dict[str, Any] | SweepBase:
+    """Deprecated: use ``bn.sweep()`` instead."""
+    import warnings
+
+    warnings.warn("bn.p() is deprecated, use bn.sweep() instead", DeprecationWarning, stacklevel=2)
+    return sweep(name, values, samples=samples, bounds=bounds, max_level=max_level)
 
 
 def with_level(arr: list, level: int) -> list:
@@ -613,7 +694,7 @@ def with_level(arr: list, level: int) -> list:
     sampling to it, returning the resulting values.
 
     Args:
-        arr (list): List of values to sample from
+        arr (list): list of values to sample from
         level (int): The sampling level to apply (higher levels provide more samples)
 
     Returns:

@@ -1,126 +1,198 @@
-"""Meta-generator: Rerun Backend examples.
+"""Meta-generator: Rerun visualization integration examples.
 
-Shows ``res.to_rerun()`` for various dimensionality configurations.
+Demonstrates how to use the rerun spatial logging library with bencher for
+interactive 2D/3D result visualization. The generated examples show the API
+patterns but guard the rerun import so they run safely without the optional
+rerun-sdk dependency installed.
 """
 
-from typing import Any
-
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
-OUTPUT_DIR = "rerun_backend"
+OUTPUT_DIR = "rerun"
 
-_DEFAULT_CLASS = "BenchableObject"
-_DEFAULT_MODULE = "bencher.example.meta.example_meta"
-
-RERUN_CONFIGS = {
-    "rerun_0d": {
-        "float_dims": 0,
-        "cat_dims": 0,
-        "repeats": 1,
-    },
-    "rerun_1d_float": {
-        "float_dims": 1,
-        "cat_dims": 0,
-        "repeats": 1,
-    },
-    "rerun_2d_float": {
-        "float_dims": 2,
-        "cat_dims": 0,
-        "repeats": 1,
-    },
-    "rerun_3d_float": {
-        "float_dims": 3,
-        "cat_dims": 0,
-        "repeats": 1,
-    },
-    "rerun_1d_cat": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 1,
-    },
-    "rerun_float_cat": {
-        "float_dims": 1,
-        "cat_dims": 1,
-        "repeats": 1,
-    },
-    "rerun_curve": {
-        "float_dims": 1,
-        "cat_dims": 0,
-        "repeats": 5,
-    },
-    "rerun_scatter": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 10,
-    },
-    "rerun_histogram": {
-        "float_dims": 0,
-        "cat_dims": 0,
-        "repeats": 10,
-    },
-}
-
-RERUN_NAMES = list(RERUN_CONFIGS.keys())
-
-_FLOAT_VARS = ["float1", "float2", "float3"]
-_CAT_VARS = ["wave", "variant"]
+RERUN_EXAMPLES = [
+    "capture_window",
+    "rrd_publish",
+]
 
 
-def _input_vars_for(cfg: dict) -> str:
-    """Build the input_vars code string from float_dims and cat_dims counts."""
-    names = _FLOAT_VARS[: cfg["float_dims"]] + _CAT_VARS[: cfg["cat_dims"]]
-    return repr(names)
+class MetaRerun(MetaGeneratorBase):
+    """Generate Python examples demonstrating rerun integration."""
+
+    example = bn.StringSweep(RERUN_EXAMPLES, doc="Which rerun example to generate")
+
+    def benchmark(self):
+        if self.example == "capture_window":
+            self._generate_capture_window()
+        elif self.example == "rrd_publish":
+            self._generate_rrd_publish()
+
+    def _generate_capture_window(self):
+        """Capture a rerun viewer window as a Panel widget inside a sweep."""
+        imports = "import math\nimport bencher as bn"
+        class_code = '''\
+# Rerun integration requires the optional rerun-sdk package.
+# Install with: pip install rerun-sdk
+#
+# bn.capture_rerun_window() captures the current rerun recording and returns
+# a self-contained Panel HTML pane with base64-encoded data inline.
+# No local file server is needed — the rerun web viewer is loaded from CDN.
+#
+# Usage pattern:
+#   1. rr.init("my_app")                    -- initialise a recording
+#   2. Log data with rr.log(...)            -- shapes, scalars, images, etc.
+#   3. self.out = bn.capture_rerun_window() -- capture inline into the report
 
 
-class MetaRerunBackend(MetaGeneratorBase):
-    """Generate Python examples demonstrating the rerun backend."""
+class RerunSweep(bn.ParametrizedSweep):
+    """Demonstrates capturing rerun visualizations during a parameter sweep.
 
-    rerun_config = bch.StringSweep(RERUN_NAMES, doc="Rerun example configuration")
+    Each parameter combination logs 2D geometry to rerun and captures the
+    viewer state as a ResultContainer panel widget.
+    """
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    theta = bn.FloatSweep(
+        default=1, bounds=[1, 4], doc="Box half-size", units="rad", samples=5
+    )
 
-        cfg = RERUN_CONFIGS[self.rerun_config]
-        filename = self.rerun_config
-        function_name = f"example_{self.rerun_config}"
-        title = f"Rerun Backend: {self.rerun_config.replace('_', ' ').title()}"
+    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
 
-        input_vars = _input_vars_for(cfg)
-        const_vars = "dict(noise_scale=0.15)" if cfg["repeats"] > 1 else None
+    def benchmark(self):
+        self.out_sin = math.sin(self.theta)
 
-        level = 2 if cfg["float_dims"] >= 2 else 3
-        run_kwargs = {"level": level}
-        if cfg["repeats"] > 1:
-            run_kwargs["repeats"] = cfg["repeats"]
-
-        self.generate_sweep_example(
-            title=title,
+        # To capture rerun output as a report panel:
+        #   import rerun as rr
+        #   rr.init("my_app")
+        #   rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta, 1]))
+        #   self.out_pane = bn.capture_rerun_window(width=300, height=300)
+        #
+        # capture_rerun_window() embeds the data inline (base64) and loads
+        # the rerun viewer from CDN — no local file server needed.'''
+        body = """\
+bench = RerunSweep().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=["theta"],
+    result_vars=["out_sin"],
+    description="Rerun is a spatial logging library for 2D/3D visualization. "
+    "Bencher integrates with rerun via bn.capture_rerun_window(), which "
+    "captures the current recording with base64-encoded data inline and "
+    "returns a self-contained Panel HTML pane. No local file server needed. "
+    "Install rerun-sdk and uncomment the rr.log() calls in the class to "
+    "see live rerun output.",
+    post_description="The ResultContainer type stores arbitrary Panel widgets "
+    "(HTML, images, embedded viewers). For rerun, each sweep point gets its "
+    "own inline snapshot that can be explored interactively in the report.",
+)
+"""
+        self.generate_example(
+            title="Rerun Capture — embed spatial visualizations in sweep reports",
             output_dir=OUTPUT_DIR,
-            filename=filename,
-            function_name=function_name,
-            benchable_class=_DEFAULT_CLASS,
-            benchable_module=_DEFAULT_MODULE,
-            input_vars=input_vars,
-            result_vars='["distance"]',
-            const_vars=const_vars,
-            post_sweep_line="res.to_rerun()",
-            run_kwargs=run_kwargs,
+            filename="rerun_capture_window",
+            function_name="example_rerun_capture_window",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"level": 3},
         )
 
-        return super().__call__()
+    def _generate_rrd_publish(self):
+        """Publish .rrd recordings to a git branch for sharing."""
+        imports = "import math\nimport bencher as bn"
+        class_code = '''\
+# Rerun recordings can be published to a git branch and viewed via the
+# hosted rerun web viewer at https://app.rerun.io/.
+#
+# Workflow:
+#   1. rr.init("my_app", spawn=True)  -- start rerun with a local .rrd file
+#   2. rr.save("data.rrd")            -- persist the recording
+#   3. Log data with rr.log(...)
+#   4. bn.publish_and_view_rrd(...)    -- push .rrd to a git branch and
+#      return a Panel pane that loads it in the hosted viewer
+#
+# Alternatively, use bn.rrd_to_pane(url) to view any .rrd file served
+# over HTTP (local or remote) in a Panel HTML pane.
+#
+# Functions:
+#   bn.rrd_to_pane(url, width, height)
+#       -> Panel HTML pane embedding the rerun web viewer for the given URL
+#
+#   bn.publish_and_view_rrd(file_path, remote, branch_name, content_callback)
+#       -> Pushes the .rrd file to a git branch and returns rrd_to_pane()
+#
+#   bn.run_file_server()
+#       -> Starts a local file server to serve .rrd files from the cache dir
 
 
-def example_meta_rerun(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
-    bench = MetaRerunBackend().to_bench(run_cfg)
+class WaveSweep(bn.ParametrizedSweep):
+    """A simple sweep for demonstrating .rrd publishing patterns."""
+
+    frequency = bn.FloatSweep(
+        default=1.0, bounds=[0.5, 4.0], doc="Wave frequency", units="Hz"
+    )
+
+    amplitude = bn.ResultFloat(units="v", doc="Peak amplitude")
+
+    def benchmark(self):
+        self.amplitude = math.sin(self.frequency * math.pi)
+
+        # To publish rerun data:
+        #   import rerun as rr
+        #   rr.init("my_app", spawn=True)
+        #   rr.save("data.rrd")
+        #   rr.log("wave", rr.Scalars(self.amplitude))
+        #
+        # Then view locally:
+        #   pane = bn.rrd_to_pane("http://127.0.0.1:8001/data.rrd")
+        #   pane.show()
+        #
+        # Or publish to a git branch:
+        #   pane = bn.publish_and_view_rrd(
+        #       "data.rrd",
+        #       remote="https://github.com/user/repo.git",
+        #       branch_name="rerun_data",
+        #       content_callback=bn.github_content,
+        #   )
+        #   pane.show()'''
+        body = """\
+bench = WaveSweep().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=["frequency"],
+    result_vars=["amplitude"],
+    description="Rerun .rrd recordings can be shared by publishing them to a "
+    "git branch or serving them over HTTP. Use bn.rrd_to_pane(url) to embed "
+    "the hosted rerun web viewer in a Panel pane, or "
+    "bn.publish_and_view_rrd() to push the .rrd file to a git branch and "
+    "view it immediately. Start a local file server with "
+    "bn.run_file_server() to serve .rrd files from the cache directory.\\n"
+    "The file server uses Python's stdlib http.server — no extra dependencies.",
+    post_description="This example shows the sweep pattern. To see live rerun "
+    "output, install rerun-sdk (pip install rerun-sdk) and uncomment the "
+    "rr.log() calls in the class definition.",
+)
+"""
+        self.generate_example(
+            title="Rerun Publishing — share .rrd recordings via git or HTTP",
+            output_dir=OUTPUT_DIR,
+            filename="rerun_rrd_publish",
+            function_name="example_rerun_rrd_publish",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"level": 3},
+        )
+
+
+def example_meta_rerun(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    bench = MetaRerun().to_bench(run_cfg)
 
     bench.plot_sweep(
-        title="Rerun Backend",
-        input_vars=[bch.p("rerun_config", RERUN_NAMES)],
+        title="Rerun Integration",
+        input_vars=[bn.sweep("example", RERUN_EXAMPLES)],
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bch.run(example_meta_rerun)
+    bn.run(example_meta_rerun)
