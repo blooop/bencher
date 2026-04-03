@@ -1,4 +1,4 @@
-"""Tests for usability improvements: compute method, level_to_samples, samples_per_var, factories."""
+"""Tests for usability improvements: level_to_samples, samples_per_var, factories."""
 
 import math
 import unittest
@@ -8,57 +8,14 @@ from bencher.bench_cfg import BenchRunCfg
 from bencher.variables.sweep_base import LEVEL_SAMPLES
 
 
-# ---------- compute() method auto-wrapping ----------
-
-
-class ComputeFloat(bn.ParametrizedSweep):
-    """Test class using the new compute() pattern."""
+class BenchFloat(bn.ParametrizedSweep):
+    """Test class using the benchmark() pattern."""
 
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
     out_sin = bn.ResultVar(units="v")
 
-    def compute(self, **kwargs):
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
-
-
-class ClassicFloat(bn.ParametrizedSweep):
-    """Same benchmark using the classic __call__ pattern."""
-
-    theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
-    out_sin = bn.ResultVar(units="v")
-
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.out_sin = math.sin(self.theta)
-        return super().__call__(**kwargs)
-
-
-class TestComputeMethod(unittest.TestCase):
-    def test_compute_returns_dict(self):
-        """compute()-based class returns a result dict from __call__."""
-        obj = ComputeFloat()
-        result = obj(theta=1.0)
-        self.assertIsInstance(result, dict)
-        self.assertIn("out_sin", result)
-        self.assertAlmostEqual(result["out_sin"], math.sin(1.0))
-
-    def test_compute_matches_classic(self):
-        """compute()-based class produces the same results as classic __call__."""
-        for theta in [0.0, 0.5, 1.0, math.pi / 2, math.pi]:
-            r_new = ComputeFloat()(theta=theta)
-            r_old = ClassicFloat()(theta=theta)
-            self.assertAlmostEqual(r_new["out_sin"], r_old["out_sin"])
-
-    def test_compute_works_with_bench(self):
-        """compute()-based class works end-to-end with Bench."""
-        bench = ComputeFloat().to_bench(bn.BenchRunCfg(headless=True))
-        bench.plot_sweep()
-
-    def test_classic_call_still_works(self):
-        """Classic __call__ pattern is unaffected by __init_subclass__."""
-        obj = ClassicFloat()
-        result = obj(theta=1.0)
-        self.assertIn("out_sin", result)
 
 
 # ---------- LEVEL_SAMPLES constant ----------
@@ -102,14 +59,14 @@ class TestSamplesPerVar(unittest.TestCase):
 
     def test_samples_per_var_overrides_level(self):
         """When samples_per_var is set, the bench should use that count regardless of level."""
-        bench = ComputeFloat().to_bench(bn.BenchRunCfg(headless=True, samples_per_var=7))
+        bench = BenchFloat().to_bench(bn.BenchRunCfg(headless=True, samples_per_var=7))
         result = bench.plot_sweep()
         # The sweep should have used 7 samples for theta
         ds = result.ds
         self.assertEqual(len(ds.coords["theta"]), 7)
 
     def test_level_still_works(self):
-        bench = ComputeFloat().to_bench(bn.BenchRunCfg(headless=True, level=3))
+        bench = BenchFloat().to_bench(bn.BenchRunCfg(headless=True, level=3))
         result = bench.plot_sweep()
         ds = result.ds
         # level 3 → 3 samples
