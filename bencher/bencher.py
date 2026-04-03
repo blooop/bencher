@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from datetime import datetime
 from itertools import product, combinations
 
@@ -353,8 +354,6 @@ class Bench(BenchPlotServer):
         self.last_run_cfg = run_cfg
 
         if isinstance(input_vars_in, dict):
-            import warnings
-
             warnings.warn(
                 "Passing input_vars as a dict is deprecated. "
                 "Use a list of bn.sweep() specs instead.",
