@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from datetime import datetime
 from itertools import product, combinations
 
@@ -354,8 +355,6 @@ class Bench(BenchPlotServer):
         self.last_run_cfg = run_cfg
 
         if isinstance(input_vars_in, dict):
-            import warnings
-
             warnings.warn(
                 "Passing input_vars as a dict is deprecated. "
                 "Use a list of bn.sweep() specs instead.",
@@ -371,6 +370,15 @@ class Bench(BenchPlotServer):
             input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
         for i in range(len(result_vars_in)):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
+
+        if not result_vars_in:
+            warnings.warn(
+                f"No result variables found for '{self.bench_name}'. "
+                "Define at least one result variable on your class "
+                "(e.g., output = bn.ResultFloat()).",
+                UserWarning,
+                stacklevel=2,
+            )
 
         for r in result_vars_in:
             r_name = getattr(r, "name", str(r))
@@ -452,6 +460,28 @@ class Bench(BenchPlotServer):
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
         )
+        if run_cfg.dry_run:
+            total = 1
+            summary_parts = []
+            for iv in input_vars_in:
+                vals = iv.values()
+                n = len(vals)
+                total *= n
+                if n > 0:
+                    summary_parts.append(f"  {iv.name}: {n} values [{vals[0]} .. {vals[-1]}]")
+                else:
+                    summary_parts.append(f"  {iv.name}: 0 values")
+            evals = total * run_cfg.repeats
+            logging.info(
+                "Dry run for '%s':\n%s\n  Total: %d combinations x %d repeats = %d evaluations",
+                title,
+                "\n".join(summary_parts) if summary_parts else "  (no input vars)",
+                total,
+                run_cfg.repeats,
+                evals,
+            )
+            return BenchResult(bench_cfg)
+
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
     @staticmethod

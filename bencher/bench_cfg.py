@@ -83,6 +83,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         nightly (bool): Run a more extensive set of tests for a nightly benchmark
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
+        dry_run (bool): Preview sweep grid without executing the benchmark function
         level (int): Method of defining the number of samples to sweep over
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
@@ -113,6 +114,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")
+
+    dry_run: bool = param.Boolean(
+        False,
+        doc="When True, plot_sweep() computes the sweep grid and logs a summary "
+        "(total combinations, parameter ranges, evaluation count) without "
+        "executing the benchmark function.",
+    )
 
     # ==================== CACHE PARAMETERS ====================
     # These parameters control caching behavior at both benchmark and sample level
