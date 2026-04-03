@@ -1,10 +1,10 @@
 """Auto-generated example: Rerun Backend: Rerun Curve."""
 
-import bencher as bch
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 
 
-def example_rerun_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
+def example_rerun_curve(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Rerun Backend: Rerun Curve."""
     bench = BenchableObject().to_bench(run_cfg)
     res = bench.plot_sweep(
@@ -16,4 +16,4 @@ def example_rerun_curve(run_cfg: bch.BenchRunCfg | None = None) -> bch.Bench:
 
 
 if __name__ == "__main__":
-    bch.run(example_rerun_curve, level=3, repeats=5)
+    bn.run(example_rerun_curve, level=3, repeats=5)
