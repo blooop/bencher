@@ -42,17 +42,10 @@ class TestIntSweepTypeCoercion:
         vals = IntSweep(bounds=[0.0, 5.0]).values()
         assert all(isinstance(v, (int, np.integer)) for v in vals)
 
-    def test_non_numeric_sample_values_preserved(self):
-        """IntSweep is used as a generic index-based selector (e.g. with_level),
-        so sample_values must not be coerced."""
-        vals = IntSweep(sample_values=["a", "b", "c"]).values()
-        assert vals == ["a", "b", "c"]
-
-    def test_float_sample_values_preserved(self):
-        """Float sample_values passed to IntSweep for index-based subsampling
-        must not be truncated to int."""
-        vals = IntSweep(sample_values=[0.2, 0.5, 1.0]).values()
-        assert vals == [0.2, 0.5, 1.0]
+    def test_float_sample_values_coerced_to_int(self):
+        vals = IntSweep(sample_values=[1.0, 2.0, 3.0]).values()
+        assert all(isinstance(v, (int, np.integer)) for v in vals)
+        assert vals == [1, 2, 3]
 
     def test_with_bounds_float_args_stored_as_int(self):
         ints = IntSweep(bounds=[0, 5]).with_bounds(0.0, 10.0)

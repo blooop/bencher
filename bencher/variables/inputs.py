@@ -483,10 +483,10 @@ class IntSweep(Integer, SweepBase):
                 self.samples = samples
             self.sample_values = None
         else:
-            self.sample_values = sample_values
+            self.sample_values = [int(v) for v in sample_values]
             self.samples = len(self.sample_values)
             if "default" not in params:
-                self.default = sample_values[0]
+                self.default = self.sample_values[0]
 
     def _coerce_bound(self, value):
         return int(value)
@@ -704,8 +704,8 @@ def p(
 def with_level(arr: list, level: int) -> list:
     """Apply level-based sampling to a list of values.
 
-    This function uses an IntSweep with the provided values and applies level-based
-    sampling to it, returning the resulting values.
+    Uses the same level→sample-count table as SweepBase.with_level and picks
+    evenly spaced items from *arr* by index.
 
     Args:
         arr (list): list of values to sample from
@@ -714,5 +714,7 @@ def with_level(arr: list, level: int) -> list:
     Returns:
         list: The level-sampled values
     """
-    return IntSweep(sample_values=arr).with_level(level).values()
-    # return tmp.with_sample_values(arr).with_level(level).values()
+    assert level >= 1
+    level_samples = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+    n = level_samples[min(12, level)]
+    return SweepBase.indices_to_samples(None, n, list(arr))
