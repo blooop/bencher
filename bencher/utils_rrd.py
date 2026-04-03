@@ -10,7 +10,6 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 (live capture, recording management, etc.).
 """
 
-import base64
 import logging
 import re
 import shutil
@@ -224,34 +223,7 @@ def _portable_rrd_pane(
     )
 
 
-# --- Inline .rrd support for saved reports ---
-
-# HTML template for a self-contained viewer with inline base64 .rrd data.
-# Used by inline_rrd_iframes() to make saved reports work on static hosting.
-_INLINE_VIEWER_TEMPLATE = """\
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"/>
-<style>html,body{{margin:0;padding:0;width:100%;height:100%;overflow:hidden}}</style>
-</head><body>
-<div id="c" style="width:100vw;height:100vh"></div>
-<div id="e" style="color:red;padding:20px;font-family:monospace;white-space:pre-wrap"></div>
-<script type="module">
-try {{
-  const b64 = "{rrd_base64}";
-  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-  const blob = new Blob([bytes]);
-  const url = URL.createObjectURL(blob);
-  const {{WebViewer}} = await import(
-    "https://cdn.jsdelivr.net/npm/@rerun-io/web-viewer@{version}/+esm"
-  );
-  const v = new WebViewer();
-  await v.start(url, document.getElementById("c"),
-                {{hide_welcome_screen:true,width:"100%",height:"100%"}});
-}} catch(e) {{
-  document.getElementById("e").textContent = e.message + "\\n" + e.stack;
-}}
-</script></body></html>
-"""
+# --- Static .rrd support for saved reports ---
 
 # Regex matching rerun viewer iframes in Panel-saved HTML.
 # Panel's Bokeh serialization double-escapes: < → &amp;lt; " → &amp;quot;
@@ -267,14 +239,14 @@ _RRD_IFRAME_RE = re.compile(
 
 
 def inline_rrd_iframes(html_path: Path) -> None:
-    """Post-process a saved HTML report to inline .rrd data.
+    """Post-process a saved HTML report for static hosting.
 
     Scans the HTML file for rerun viewer iframes (those pointing at
-    ``/rrd_static/``), reads the referenced ``.rrd`` files from the local
-    cache, base64-encodes them, and writes standalone viewer HTML files
-    next to the report.  The iframe ``src`` is rewritten to point at
-    these local files so the report works on any static host (RTD,
-    GitHub Pages, ``file://``) without a Panel server.
+    ``/rrd_static/``), copies the referenced ``.rrd`` files from the
+    local cache, writes a CDN viewer HTML page alongside each one, and
+    rewrites the iframe ``src`` to a relative URL.  The result works on
+    any static host (RTD, GitHub Pages, ``file://``) without a Panel
+    server.
 
     Called automatically by ``BenchReport.save()``.
     """
@@ -294,16 +266,20 @@ def inline_rrd_iframes(html_path: Path) -> None:
             return m.group(0)
 
         rrd_dir.mkdir(parents=True, exist_ok=True)
-        rrd_b64 = base64.b64encode(rrd_path.read_bytes()).decode("ascii")
-        viewer_html = _INLINE_VIEWER_TEMPLATE.format(version=version, rrd_base64=rrd_b64)
 
-        # Write a standalone viewer HTML file next to the report.
-        viewer_name = rrd_path.stem + ".html"
+        # Copy the .rrd file so it's served as a regular static file.
+        rrd_dest = rrd_dir / rrd_path.name
+        shutil.copy2(rrd_path, rrd_dest)
+
+        # Write a CDN viewer page that references the .rrd via relative URL.
+        viewer_html = _get_cdn_viewer_html(version)
+        viewer_name = f"viewer_{version}.html"
         viewer_path = rrd_dir / viewer_name
-        viewer_path.write_text(viewer_html, encoding="utf-8")
+        if not viewer_path.exists() or viewer_path.read_text() != viewer_html:
+            viewer_path.write_text(viewer_html, encoding="utf-8")
 
-        # Rewrite the iframe src to the local file (same escaping level).
-        relative_url = f"_rrd/{viewer_name}"
+        # Rewrite the iframe src to the local viewer + rrd (same escaping level).
+        relative_url = f"_rrd/{viewer_name}?url={rrd_path.name}"
         changed = True
         return (
             f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
