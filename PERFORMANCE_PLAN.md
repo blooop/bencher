@@ -655,7 +655,7 @@ Every change in this plan must pass:
 | **P2** | 3.1 Reuse cache instances | Low | Low | Moderate | **DONE** (PR #813) |
 | **P2** | 3.4 Lazy hash computation | Low | Low | Low-Moderate | PARTIAL (PR #816 — removed dead `function_input_signature_benchmark_context` hash) |
 | **P2** | 4.4 Single-pass reduction | Medium | Medium | Moderate | **DONE** |
-| **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | |
+| **P2** | 4.5 Memoize `to_dataset()` | Medium | Low-Med | High for many plots | **DONE** |
 | **P3** | 2.4 Deduplicate reversed product | Low | Low | Low | |
 | **P3** | 2.6 Streaming parallel results | Medium | Medium | High for parallel | Deprioritized — parallel execution rarely used |
 | **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | Deprioritized — parallel execution rarely used |

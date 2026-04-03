@@ -265,6 +265,7 @@ class BenchResult(
             reduce=ReduceType.REDUCE,
             agg_over_dims=self.bench_cfg.agg_over_dims,
             agg_fn=self.bench_cfg.agg_fn,
+            deep=False,
         )
         rows = []
         for rv in self.bench_cfg.result_vars:
