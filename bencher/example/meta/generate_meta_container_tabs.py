@@ -24,8 +24,8 @@ class MetaContainerTabLayout(MetaGeneratorBase):
 
     def benchmark(self):
         layout = self.layout
-        filename = f"example_container_tab_{layout}"
         function_name = f"example_container_tab_{layout}"
+        filename = function_name
         title = f"Container Layout: PaneLayout.{layout}"
 
         self.generate_sweep_example(

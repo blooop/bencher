@@ -113,8 +113,8 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
             class_code = _VIDEO_CLASS_CODE
 
         sub_dir = f"{OUTPUT_DIR}/{self.result_kind}"
-        filename = f"example_{self.result_kind}_{self.input_dims}d"
         function_name = f"example_{self.result_kind}_{self.input_dims}d"
+        filename = function_name
         title = f"{self.result_kind.replace('_', ' ').title()}: {info['dims_label']} input"
 
         level = 2 if self.input_dims >= 2 else 3

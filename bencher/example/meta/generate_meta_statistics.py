@@ -59,8 +59,8 @@ class MetaStatistics(MetaGeneratorBase):
     def _generate_repeats_comparison(self):
         """Side-by-side comparison of 1 vs 5 vs 20 repeats on a categorical sweep."""
         title = "Repeats Comparison: 1 vs 5 vs 20 repeats on a categorical sweep"
-        filename = "example_stats_repeats_comparison"
         function_name = "example_stats_repeats_comparison"
+        filename = function_name
 
         imports = "\n".join(
             [

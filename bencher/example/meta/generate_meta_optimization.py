@@ -86,8 +86,8 @@ class MetaOptimization(MetaGeneratorBase):
 
     def benchmark(self):
         obj_word = "1_objective" if self.n_objectives == 1 else "2_objectives"
-        filename = f"example_optim_{obj_word}_{self.input_dims}d"
         function_name = f"example_optim_{obj_word}_{self.input_dims}d"
+        filename = function_name
         title = f"Optimise {self.n_objectives} objective(s), {self.input_dims}D input"
 
         if self.n_objectives == 1:
@@ -147,8 +147,8 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
     input_dims = bn.IntSweep(default=1, bounds=(1, 2), doc="Number of input dimensions")
 
     def benchmark(self):
-        filename = f"example_optim_over_time_{self.input_dims}d"
         function_name = f"example_optim_over_time_{self.input_dims}d"
+        filename = function_name
         title = f"Optimise Over Time: {self.input_dims}D input"
 
         if self.input_dims == 1:
@@ -214,8 +214,8 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
 
     def benchmark(self):
         if self.with_over_time:
-            filename = "example_optim_aggregated_over_time"
             function_name = "example_optim_aggregated_over_time"
+            filename = function_name
             title = "Aggregated Optimisation (Over Time)"
             description = (
                 "Finds the best learning rate averaged across algorithms, tracked over time. "
@@ -260,8 +260,8 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 run_kwargs={"level": 3, "optimise": 30, "over_time": True},
             )
         else:
-            filename = "example_optim_aggregated"
             function_name = "example_optim_aggregated"
+            filename = function_name
             title = "Aggregated Optimisation"
             description = (
                 "Finds the best learning rate averaged across algorithms. "

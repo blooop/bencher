@@ -94,11 +94,10 @@ be **globally unique** across the entire generated tree — no two files may sha
 even if they are in different subdirectories. This is required because the documentation
 build uses filenames as RST page stems and thumbnail identifiers.
 
-**Pattern:** `example_{section}_{descriptive_dimensions}.py`
+**Pattern:** `{section_prefix}{descriptive_dimensions}.py`
 
-Every filename starts with `example_` followed by a short **section prefix** that
-identifies which generator produced it, followed by all varying dimensions encoded in
-the name. The section prefixes are:
+Every filename uses a **section prefix** from the table below (each already includes
+the `example_` prefix), followed by the varying dimensions encoded in the name:
 
 | Section Prefix | Output Directory | Varying Dimensions |
 |---|---|---|
