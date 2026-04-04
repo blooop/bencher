@@ -534,9 +534,7 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
 def _print_timing_summary(examples_metadata: list[dict]) -> None:
     """Print a summary of example execution and thumbnail times, sorted by total duration."""
     timed = [
-        (m.get("exec_s", 0) + m.get("thumb_s", 0), m)
-        for m in examples_metadata
-        if "exec_s" in m
+        (m.get("exec_s", 0) + m.get("thumb_s", 0), m) for m in examples_metadata if "exec_s" in m
     ]
     timed.sort(key=lambda x: x[0], reverse=True)
     total_exec = sum(m["exec_s"] for m in examples_metadata if "exec_s" in m)
