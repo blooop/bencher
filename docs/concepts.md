@@ -46,6 +46,10 @@ Just as the grammar of graphics decomposes a chart into Data, Aesthetics, Geomet
 Bencher decomposes a benchmark into three stages — each mapping directly onto the grammar
 primitives introduced below:
 
+```{raw} html
+<div style="max-width: 800px;">
+```
+
 ```{mermaid}
 flowchart LR
     subgraph Problem ["① Problem Definition"]
@@ -89,6 +93,10 @@ flowchart LR
     style PS fill:#0288d1,color:#fff,stroke:#01579b,stroke-width:2px
     style SW fill:#7b1fa2,color:#fff,stroke:#4a148c,stroke-width:2px
     style RN fill:#388e3c,color:#fff,stroke:#1b5e20,stroke-width:2px
+```
+
+```{raw} html
+</div>
 ```
 
 Every auto-generated example follows this pattern:
