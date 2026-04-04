@@ -230,6 +230,7 @@ def run_example_and_save(
 
     # Generate thumbnail screenshot (skipped on RTD to save build time)
     thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
+    thumb_elapsed = 0.0
     if skip_thumbnails:
         print(f"  Skipping thumbnail for {stem}")
     else:
