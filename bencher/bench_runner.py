@@ -439,21 +439,10 @@ class BenchRunner:
             save (bool): Whether to save the report to disk
             debug (bool): Whether to enable debug mode for publishing
         """
-        if save or show:
-            # Always save a static copy — either explicitly requested (save=True)
-            # or as a convenience alongside the live server (show=True).
-            # Must happen synchronously before pn.serve() to avoid racing for
-            # Bokeh model document ownership ("Models must be owned by only a
-            # single document" errors).
-            try:
-                report_path = report.save(
-                    directory="reports",
-                    filename=f"{report.bench_name}.html",
-                    in_html_folder=False,
-                )
-                logging.info("Static report: file://%s", report_path.absolute())
-            except Exception:  # pylint: disable=broad-except
-                logging.exception("Report save failed")
+        if save:
+            report.save(
+                directory="reports", filename=f"{report.bench_name}.html", in_html_folder=False
+            )
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
