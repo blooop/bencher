@@ -1,9 +1,8 @@
-# How to Use Bencher
+# Getting Started
 
-Bencher is a Python framework for running parameter sweeps and visualizing results.
-You define dimensions (input parameters), a benchmark function, and result variables.
-Bencher computes the Cartesian product of all dimensions, executes each combination,
-and produces interactive reports with auto-detected plot types.
+A practical quick-start reference — install bencher, write your first benchmark, and
+learn the core patterns. For a tour of all features (repeats, over-time tracking,
+optimization), see the [Feature Guide](intro.md).
 
 Install: `pip install holobench`
 

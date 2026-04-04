@@ -1,63 +1,8 @@
-# Usage
+# Feature Guide
 
-## Minimal Example
-
-Define a `ParametrizedSweep` class with typed input parameters and result variables, then call `plot_sweep()`:
-
-```python
-import math
-import bencher as bn
-
-class SimpleFloat(bn.ParametrizedSweep):
-    theta = bn.FloatSweep(default=0, bounds=[0, math.pi], units="rad", samples=30)
-    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
-
-    def benchmark(self):
-        self.out_sin = math.sin(self.theta)
-
-bench = SimpleFloat().to_bench()
-bench.plot_sweep()
-```
-
-Or use `bn.run()` for the same thing with less boilerplate:
-
-```python
-bn.run(SimpleFloat, level=3)
-```
-
-`bn.run()` accepts a `ParametrizedSweep` class, an instance, or a function. It handles `to_bench()`, `plot_sweep()`, and serving the report automatically.
-
-Bencher computes the Cartesian product of all input parameters, evaluates your function at every combination, caches the results, and automatically selects appropriate visualizations based on parameter types.
-
-Every example follows three stages: **Problem Definition** (the class), **Sweep
-Definition** (`plot_sweep`), and **Run Definition** (`bn.run`). See
-[Architecture Overview](concepts.md#architecture-overview) for the full picture, or
-[How to Use Bencher](how_to_use_bencher.md) for a practical walkthrough.
-
-## Input Types
-
-Define your search space with typed sweep classes:
-
-- `FloatSweep` — continuous float range with bounds
-- `IntSweep` — discrete integer range with bounds
-- `EnumSweep` — Python enum members
-- `BoolSweep` — True/False
-- `StringSweep` — categorical string values
-- `YamlSweep` — configurations loaded from a YAML file
-
-Input types should be basic datatypes so that the data can be hashed, cached, and processed with xarray. See the [Bencher's Primitives](concepts.md#benchers-primitives) section in A Grammar of Benchmarking for details.
-
-## Result Types
-
-Declare what your benchmark function returns:
-
-- `ResultFloat` — a numeric scalar with units and an optimization direction (minimize/maximize)
-- `ResultBool` — a boolean result
-- `ResultVec` — a fixed-size numeric vector
-- `ResultImage`, `ResultVideo`, `ResultPath` — file outputs
-- `ResultString`, `ResultDataSet` — structured outputs
-
-See the [Result Types](reference/meta/result_types/index) gallery for examples of each type.
+A tour of bencher's capabilities — what happens as you add dimensions, repeats,
+time-tracking, and optimization. For installation, quick-start code, and API tables,
+see [Getting Started](how_to_use_bencher.md).
 
 ## Adding Dimensions
 

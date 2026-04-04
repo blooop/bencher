@@ -47,39 +47,25 @@ Bencher decomposes a benchmark into three stages — each mapping directly onto 
 primitives introduced below:
 
 ```{mermaid}
-flowchart TB
-    subgraph Stage1 ["1. Problem Definition"]
-        PS["ParametrizedSweep subclass"]
-        Inputs["FloatSweep, IntSweep, EnumSweep, ..."]
-        Results["ResultFloat, ResultBool, ResultImage, ..."]
-        Fn["def benchmark(self): ..."]
-        PS --- Inputs
-        PS --- Results
-        PS --- Fn
+flowchart LR
+    subgraph Problem ["1. Problem Definition"]
+        PS["<b>ParametrizedSweep</b><br/>FloatSweep · IntSweep · EnumSweep · ...<br/>ResultFloat · ResultBool · ResultImage · ...<br/><i>def benchmark(self)</i>"]
     end
 
-    subgraph Stage2 ["2. Sweep Definition"]
-        PlotSweep["bench.plot_sweep(...)"]
-        IV["input_vars: which params to vary"]
-        RV["result_vars: which outputs to collect"]
-        CV["const_vars: pin other params"]
-        PlotSweep --- IV
-        PlotSweep --- RV
-        PlotSweep --- CV
+    subgraph Sweep ["2. Sweep Definition"]
+        SW["<b>bench.plot_sweep(...)</b><br/>input_vars — which params to vary<br/>result_vars — which outputs to collect<br/>const_vars — pin other params"]
     end
 
-    subgraph Stage3 ["3. Run Definition"]
-        Run["bn.run(example_fn, ...)"]
-        Level["level: sampling density"]
-        Repeats["repeats: statistical power"]
-        Opts["save, optimise, over_time, ..."]
-        Run --- Level
-        Run --- Repeats
-        Run --- Opts
+    subgraph Run ["3. Run Definition"]
+        RN["<b>bn.run(example_fn, ...)</b><br/>level — sampling density<br/>repeats — statistical power<br/>save · optimise · over_time"]
     end
 
-    Stage1 -- ".to_bench(run_cfg)" --> Stage2
-    Stage2 -- "bn.run()" --> Stage3
+    Problem -- ".to_bench()" --> Sweep
+    Sweep -- "bn.run()" --> Run
+
+    style Problem fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b
+    style Sweep fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c
+    style Run fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20
 ```
 
 Every auto-generated example follows this pattern:
