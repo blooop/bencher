@@ -63,7 +63,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Rerun Capture — embed spatial visualizations in sweep reports",
             output_dir=OUTPUT_DIR,
-            filename="rerun_capture_window",
+            filename="example_rerun_capture_window",
             function_name="example_rerun_capture_window",
             imports=imports,
             body=body,

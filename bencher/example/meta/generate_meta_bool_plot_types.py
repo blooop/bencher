@@ -214,7 +214,7 @@ class MetaBoolPlotTypes(MetaGeneratorBase):
 
     def benchmark(self):
         cfg = BOOL_PLOT_CONFIGS[self.plot_type]
-        filename = f"bool_plot_{self.plot_type}"
+        filename = f"example_bool_plot_{self.plot_type}"
         function_name = f"example_bool_plot_{self.plot_type}"
         title = f"Bool Plot: {self.plot_type.replace('_', ' ').title()}"
 

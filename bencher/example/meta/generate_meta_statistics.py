@@ -31,7 +31,7 @@ class MetaStatistics(MetaGeneratorBase):
         self.generate_sweep_example(
             title="Error Bands: mean +/- std deviation on a 1D sweep with 10 repeats",
             output_dir=OUTPUT_DIR,
-            filename="stats_error_bands",
+            filename="example_stats_error_bands",
             function_name="example_stats_error_bands",
             benchable_class="BenchableObject",
             benchable_module="bencher.example.meta.example_meta",
@@ -46,7 +46,7 @@ class MetaStatistics(MetaGeneratorBase):
         self.generate_sweep_example(
             title="Distributions: box-whisker and scatter-jitter for categorical sweeps",
             output_dir=OUTPUT_DIR,
-            filename="stats_distributions",
+            filename="example_stats_distributions",
             function_name="example_stats_distributions",
             benchable_class="BenchableObject",
             benchable_module="bencher.example.meta.example_meta",
@@ -59,7 +59,7 @@ class MetaStatistics(MetaGeneratorBase):
     def _generate_repeats_comparison(self):
         """Side-by-side comparison of 1 vs 5 vs 20 repeats on a categorical sweep."""
         title = "Repeats Comparison: 1 vs 5 vs 20 repeats on a categorical sweep"
-        filename = "stats_repeats_comparison"
+        filename = "example_stats_repeats_comparison"
         function_name = "example_stats_repeats_comparison"
 
         imports = "\n".join(

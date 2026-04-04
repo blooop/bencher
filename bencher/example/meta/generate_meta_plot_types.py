@@ -263,7 +263,7 @@ class MetaPlotTypes(MetaGeneratorBase):
 
     def benchmark(self):
         cfg = PLOT_CONFIGS[self.plot_type]
-        filename = f"plot_{self.plot_type}"
+        filename = f"example_plot_{self.plot_type}"
         function_name = f"example_plot_{self.plot_type}"
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 

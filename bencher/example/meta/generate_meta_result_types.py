@@ -239,7 +239,7 @@ class MetaResultTypes(MetaGeneratorBase):
         input_vars_code = input_vars_map[self.input_dims]
 
         sub_dir = f"{OUTPUT_DIR}/{self.result_type}"
-        filename = f"{self.result_type}_{self.input_dims}d"
+        filename = f"example_{self.result_type}_{self.input_dims}d"
         function_name = f"example_{self.result_type}_{self.input_dims}d"
         title = f"{self.result_type.replace('_', ' ').title()}: {self.input_dims}D input"
 

@@ -67,7 +67,7 @@ class MetaComposableVideo(MetaGeneratorBase):
 
     def benchmark(self):
         compose = self.compose
-        filename = f"composable_video_{compose}"
+        filename = f"example_composable_video_{compose}"
         function_name = f"example_composable_video_{compose}"
         title = f"Composable Video: ComposeType.{compose}"
 
@@ -132,7 +132,7 @@ class MetaComposablePanel(MetaGeneratorBase):
 
     def benchmark(self):
         compose = self.compose
-        filename = f"composable_panel_{compose}"
+        filename = f"example_composable_panel_{compose}"
         function_name = f"example_composable_panel_{compose}"
         title = f"Composable Panel: ComposeType.{compose}"
 
@@ -186,7 +186,7 @@ class MetaComposableDataset(MetaGeneratorBase):
 
     def benchmark(self):
         compose = self.compose
-        filename = f"composable_dataset_{compose}"
+        filename = f"example_composable_dataset_{compose}"
         function_name = f"example_composable_dataset_{compose}"
         title = f"Composable Dataset: ComposeType.{compose}"
 
@@ -279,7 +279,7 @@ class MetaComposableAllTypes(MetaGeneratorBase):
         self.generate_example(
             title="Composable Container: All ComposeTypes Compared",
             output_dir=OUTPUT_DIR,
-            filename="composable_all_compose_types",
+            filename="example_composable_all_compose_types",
             function_name="example_composable_all_compose_types",
             imports=imports,
             body=body,
