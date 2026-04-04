@@ -48,24 +48,47 @@ primitives introduced below:
 
 ```{mermaid}
 flowchart LR
-    subgraph Problem ["1. Problem Definition"]
-        PS["<b>ParametrizedSweep</b><br/>FloatSweep · IntSweep · EnumSweep · ...<br/>ResultFloat · ResultBool · ResultImage · ...<br/><i>def benchmark(self)</i>"]
+    subgraph Problem ["① Problem Definition"]
+        direction TB
+        PS([ParametrizedSweep])
+        Inputs[FloatSweep · IntSweep · EnumSweep]
+        Results[ResultFloat · ResultBool · ResultImage]
+        Fn["def benchmark(self)"]
+        PS --- Inputs
+        PS --- Results
+        PS --- Fn
     end
 
-    subgraph Sweep ["2. Sweep Definition"]
-        SW["<b>bench.plot_sweep(...)</b><br/>input_vars — which params to vary<br/>result_vars — which outputs to collect<br/>const_vars — pin other params"]
+    subgraph Sweep ["② Sweep Definition"]
+        direction TB
+        SW([plot_sweep])
+        IV[input_vars]
+        RV[result_vars]
+        CV[const_vars]
+        SW --- IV
+        SW --- RV
+        SW --- CV
     end
 
-    subgraph Run ["3. Run Definition"]
-        RN["<b>bn.run(example_fn, ...)</b><br/>level — sampling density<br/>repeats — statistical power<br/>save · optimise · over_time"]
+    subgraph Run ["③ Run Definition"]
+        direction TB
+        RN([bn.run])
+        Level[level]
+        Repeats[repeats]
+        Opts[save · optimise · over_time]
+        RN --- Level
+        RN --- Repeats
+        RN --- Opts
     end
 
-    Problem -- ".to_bench()" --> Sweep
-    Sweep -- "bn.run()" --> Run
+    Problem == .to_bench() ==> Sweep == bn.run() ==> Run
 
-    style Problem fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b
-    style Sweep fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c
-    style Run fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20
+    style Problem fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    style Sweep fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Run fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style PS fill:#0288d1,color:#fff,stroke:#01579b,stroke-width:2px
+    style SW fill:#7b1fa2,color:#fff,stroke:#4a148c,stroke-width:2px
+    style RN fill:#388e3c,color:#fff,stroke:#1b5e20,stroke-width:2px
 ```
 
 Every auto-generated example follows this pattern:
