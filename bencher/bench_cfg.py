@@ -13,6 +13,7 @@ from copy import deepcopy
 from bencher.variables.sweep_base import hash_sha1, describe_variable
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
+from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.job import Executors
 from bencher.results.laxtex_result import to_latex
 
@@ -82,6 +83,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         nightly (bool): Run a more extensive set of tests for a nightly benchmark
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
+        dry_run (bool): Preview sweep grid without executing the benchmark function
         level (int): Method of defining the number of samples to sweep over
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
@@ -112,6 +114,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")
+
+    dry_run: bool = param.Boolean(
+        False,
+        doc="When True, plot_sweep() computes the sweep grid and logs a summary "
+        "(total combinations, parameter ranges, evaluation count) without "
+        "executing the benchmark function.",
+    )
 
     # ==================== CACHE PARAMETERS ====================
     # These parameters control caching behavior at both benchmark and sample level
@@ -217,6 +226,15 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")
+
+    pane_layout = param.Selector(
+        default=PaneLayout.grid,
+        objects=list(PaneLayout),
+        doc="Controls how multi-dimensional data is laid out in panel displays. "
+        "'grid' uses rows/columns (default). "
+        "'tabs' uses tabs for all outer dimensions. "
+        "'tabs_and_grid' uses tabs for the outermost dimension and grid for inner ones.",
+    )
 
     # ==================== TIME & HISTORY PARAMETERS ====================
     # These parameters control time-based features and historical tracking

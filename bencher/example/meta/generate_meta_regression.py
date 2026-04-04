@@ -33,8 +33,8 @@ class ServerBenchmark(bn.ParametrizedSweep):
     connections = bn.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
     payload_kb = bn.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
 
-    response_time = bn.ResultVar(units="ms", direction=bn.OptDir.minimize)
-    throughput = bn.ResultVar(units="req/s", direction=bn.OptDir.maximize)
+    response_time = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
+    throughput = bn.ResultFloat(units="req/s", direction=bn.OptDir.maximize)
 
     _time_offset = 0.0  # set externally per snapshot
 
@@ -83,7 +83,7 @@ if report is not None:
         self.generate_example(
             title="Regression detection — percentage threshold over time",
             output_dir=OUTPUT_DIR,
-            filename="regression_percentage",
+            filename="example_regression_percentage",
             function_name="example_regression_percentage",
             imports=imports,
             body=body,

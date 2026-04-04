@@ -104,8 +104,8 @@ class BenchableMultiObjective(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Design parameter X")
     y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Design parameter Y")
 
-    performance = bn.ResultVar("score", bn.OptDir.maximize, doc="Performance (maximize)")
-    cost = bn.ResultVar("$", bn.OptDir.minimize, doc="Cost (minimize)")
+    performance = bn.ResultFloat("score", bn.OptDir.maximize, doc="Performance (maximize)")
+    cost = bn.ResultFloat("$", bn.OptDir.minimize, doc="Cost (minimize)")
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
@@ -123,7 +123,7 @@ class BenchableIntFloat(bn.ParametrizedSweep):
     int_input = bn.IntSweep(default=5, bounds=[0, 10], doc="Discrete integer input")
     float_input = bn.FloatSweep(default=5.0, bounds=[0.0, 10.0], doc="Continuous float input")
 
-    output = bn.ResultVar("ul", doc="Computed output")
+    output = bn.ResultFloat("ul", doc="Computed output")
 
     def benchmark(self):
         self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
@@ -155,7 +155,7 @@ class BenchableImageResult(bn.ParametrizedSweep):
     color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
 
     polygon = bn.ResultImage(doc="Rendered polygon image")
-    area = bn.ResultVar("u^2", doc="Polygon area")
+    area = bn.ResultFloat("u^2", doc="Polygon area")
 
     def benchmark(self):
         points = _polygon_points(self.radius, self.sides)

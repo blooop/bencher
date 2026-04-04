@@ -39,7 +39,7 @@ class PolygonRenderer(bn.ParametrizedSweep):
     radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
     color = bn.StringSweep(["red", "green", "blue"], doc="Line color")
     polygon = bn.ResultImage(doc="Rendered polygon image")
-    area = bn.ResultVar("u^2", doc="Polygon area")
+    area = bn.ResultFloat("u^2", doc="Polygon area")
 
     def benchmark(self):
         points = _polygon_points(self.radius, self.sides)
@@ -113,8 +113,8 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
             class_code = _VIDEO_CLASS_CODE
 
         sub_dir = f"{OUTPUT_DIR}/{self.result_kind}"
-        filename = f"{self.result_kind}_{self.input_dims}d"
         function_name = f"example_{self.result_kind}_{self.input_dims}d"
+        filename = function_name
         title = f"{self.result_kind.replace('_', ' ').title()}: {info['dims_label']} input"
 
         level = 2 if self.input_dims >= 2 else 3
@@ -181,7 +181,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         self.generate_example(
             title="ResultImage: Progressive Multi-Parameter Sweep",
             output_dir=f"{OUTPUT_DIR}/result_image",
-            filename="result_image_progressive",
+            filename="example_result_image_progressive",
             function_name="example_result_image_progressive",
             imports=imports,
             body=body,
@@ -204,7 +204,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         self.generate_example(
             title="ResultImage: Mixed Image and Scalar Results",
             output_dir=f"{OUTPUT_DIR}/result_image",
-            filename="result_image_mixed",
+            filename="example_result_image_mixed",
             function_name="example_result_image_mixed",
             imports=imports,
             body=body,
@@ -234,7 +234,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         self.generate_example(
             title="ResultImage: Image Sweep to Video Grid",
             output_dir=f"{OUTPUT_DIR}/result_image",
-            filename="result_image_to_video",
+            filename="example_result_image_to_video",
             function_name="example_result_image_to_video",
             imports=imports,
             body=body,
@@ -269,7 +269,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         self.generate_example(
             title="ResultImage: Over Time Slider",
             output_dir=f"{OUTPUT_DIR}/result_image",
-            filename="result_image_over_time",
+            filename="example_result_image_over_time",
             function_name="example_result_image_over_time",
             imports=imports,
             body=body,
@@ -331,7 +331,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         self.generate_example(
             title="ResultImage: Composable Container Video from Images",
             output_dir=f"{OUTPUT_DIR}/result_image",
-            filename="result_image_composable",
+            filename="example_result_image_composable",
             function_name="example_result_image_composable",
             imports=imports,
             body=body,

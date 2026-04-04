@@ -11,7 +11,7 @@ from bencher.results.bench_result_base import ReduceType
 class TstBench(bn.ParametrizedSweep):
     float_var = bn.FloatSweep(default=0, bounds=[0, 4])
     cat_var = bn.StringSweep(["a", "b", "c", "d", "e"])
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = 1
@@ -489,3 +489,139 @@ class TestBenchResultBase(unittest.TestCase):
         res = self._make_1d_result()
         samples = res.result_samples()
         self.assertIsNotNone(samples)
+
+    def test_to_dataset_cache_returns_same_object(self):
+        """Identical args with deep=False should return the exact same cached object."""
+        res = self._make_1d_result(repeats=2)
+        ds1 = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
+        ds2 = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
+        self.assertIs(ds1, ds2)
+
+    def test_to_dataset_cache_auto_resolves(self):
+        """AUTO and its resolved type should share the same cache entry."""
+        res = self._make_1d_result(repeats=2)
+        ds_auto = res.to_dataset(reduce=ReduceType.AUTO, deep=False)
+        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
+        self.assertIs(ds_auto, ds_reduce)
+
+    def test_to_dataset_cache_different_args(self):
+        """Different args should produce different cache entries."""
+        res = self._make_1d_result(repeats=2)
+        ds_reduce = res.to_dataset(reduce=ReduceType.REDUCE, deep=False)
+        ds_none = res.to_dataset(reduce=ReduceType.NONE, deep=False)
+        self.assertIsNot(ds_reduce, ds_none)
+
+    def test_to_dataset_cache_result_var_normalization(self):
+        """Parameter and string for the same result_var should hit same cache entry."""
+        res = self._make_1d_result()
+        rv_param = res.bench_cfg.result_vars[0]
+        ds_param = res.to_dataset(result_var=rv_param, deep=False)
+        ds_str = res.to_dataset(result_var=rv_param.name, deep=False)
+        self.assertIs(ds_param, ds_str)
+
+    def test_to_dataset_cache_different_levels(self):
+        """Different level values should produce different cache entries."""
+        res = self._make_1d_result()
+        ds_none = res.to_dataset(level=None, deep=False)
+        ds_1 = res.to_dataset(level=1, deep=False)
+        self.assertIsNot(ds_none, ds_1)
+
+    def test_to_dataset_deep_default_returns_copy(self):
+        """Default (deep=True) should return a distinct object safe to mutate."""
+        res = self._make_1d_result()
+        ds_cached = res.to_dataset(deep=False)
+        ds_deep = res.to_dataset()  # deep=True is the default
+        self.assertIsNot(ds_cached, ds_deep)
+        # Mutating the deep copy must not affect the cached version
+        for var in ds_deep.data_vars:
+            ds_deep[var].values[:] = -999
+            break
+        ds_again = res.to_dataset(deep=False)
+        self.assertIs(ds_again, ds_cached)
+
+    def test_to_dataset_cache_cleared_on_post_setup(self):
+        """Cache should be invalidated when post_setup() is called."""
+        res = self._make_1d_result()
+        ds1 = res.to_dataset(deep=False)
+        self.assertTrue(len(res._to_dataset_cache) > 0)  # pylint: disable=protected-access
+        res.post_setup()
+        self.assertEqual(len(res._to_dataset_cache), 0)  # pylint: disable=protected-access
+        ds2 = res.to_dataset(deep=False)
+        self.assertIsNot(ds1, ds2)
+
+
+class _IndependentAxisBench(bn.ParametrizedSweep):
+    """Helper with two result vars that opt out of shared axes."""
+
+    cat = bn.StringSweep(["a", "b"])
+    fast = bn.ResultFloat(units="s", share_axis=False)
+    slow = bn.ResultFloat(units="s", share_axis=False)
+
+    def benchmark(self):
+        self.fast = 2.0
+        self.slow = 100.0
+
+
+class _SharedAxisBench(bn.ParametrizedSweep):
+    """Helper with two result vars that share axes (default)."""
+
+    cat = bn.StringSweep(["a", "b"])
+    metric_a = bn.ResultFloat(units="ms")
+    metric_b = bn.ResultFloat(units="ms")
+
+    def benchmark(self):
+        self.metric_a = 5.0
+        self.metric_b = 10.0
+
+
+def _collect_hv_elements(panel_obj):
+    """Recursively collect holoviews elements from a Panel layout."""
+    elements = []
+    if hasattr(panel_obj, "opts") and hasattr(panel_obj, "kdims"):
+        # It's a holoviews object
+        elements.append(panel_obj)
+    elif hasattr(panel_obj, "object") and hasattr(panel_obj.object, "opts"):
+        elements.append(panel_obj.object)
+    elif hasattr(panel_obj, "__iter__"):
+        for child in panel_obj:
+            elements.extend(_collect_hv_elements(child))
+    return elements
+
+
+class TestAxiswiseShareAxis(unittest.TestCase):
+    """Verify that share_axis=False on result vars triggers axiswise=True."""
+
+    def test_share_axis_false_gets_axiswise(self):
+        bench = _IndependentAxisBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat"],
+            result_vars=["fast", "slow"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        plots = res.to_auto()
+        elements = _collect_hv_elements(plots)
+        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        for elem in elements:
+            norm = hv.Store.lookup_options("bokeh", elem, "norm")
+            self.assertTrue(
+                norm.kwargs.get("axiswise", False),
+                f"Expected axiswise=True on {type(elem).__name__} (share_axis=False), "
+                f"got norm opts: {norm.kwargs}",
+            )
+
+    def test_share_axis_default_no_axiswise(self):
+        bench = _SharedAxisBench().to_bench()
+        res = bench.plot_sweep(
+            input_vars=["cat"],
+            result_vars=["metric_a", "metric_b"],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+        )
+        plots = res.to_auto()
+        elements = _collect_hv_elements(plots)
+        self.assertGreater(len(elements), 0, "Expected at least one holoviews element")
+        for elem in elements:
+            norm = hv.Store.lookup_options("bokeh", elem, "norm")
+            self.assertFalse(
+                norm.kwargs.get("axiswise", False),
+                f"Expected axiswise=False (share_axis=True default), got norm opts: {norm.kwargs}",
+            )

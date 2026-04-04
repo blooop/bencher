@@ -267,9 +267,9 @@ class TestDetectRegressions:
 
     def test_single_time_point(self):
         ds = self._make_dataset(n_times=1, values=np.array([[1.0, 2.0]]))
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv])
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -286,9 +286,9 @@ class TestDetectRegressions:
             ]
         )
         ds = self._make_dataset(n_times=4, n_repeats=2, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", threshold=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -306,9 +306,9 @@ class TestDetectRegressions:
             ]
         )
         ds = self._make_dataset(n_times=4, n_repeats=2, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", threshold=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -326,9 +326,9 @@ class TestDetectRegressions:
             ]
         )
         ds = self._make_dataset(n_times=6, n_repeats=2, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv], method="iqr", threshold=1.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -340,9 +340,9 @@ class TestDetectRegressions:
         curr = rng.normal(200, 1, (1, 10))
         values = np.vstack([hist, curr])
         ds = self._make_dataset(n_times=6, n_repeats=10, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv], method="ttest", threshold=0.05)
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -351,9 +351,9 @@ class TestDetectRegressions:
     def test_all_nan(self):
         values = np.full((3, 2), np.nan)
         ds = self._make_dataset(n_times=3, n_repeats=2, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv])
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -370,11 +370,11 @@ class TestDetectRegressions:
             },
             coords={"over_time": np.arange(3), "repeat": [0]},
         )
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv_a = ResultVar(units="s", direction=OptDir.minimize)
+        rv_a = ResultFloat(units="s", direction=OptDir.minimize)
         rv_a.name = "metric_a"
-        rv_b = ResultVar(units="s", direction=OptDir.minimize)
+        rv_b = ResultFloat(units="s", direction=OptDir.minimize)
         rv_b.name = "metric_b"
         bench_cfg, run_cfg = self._make_cfg([rv_a, rv_b], method="percentage", threshold=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -388,9 +388,9 @@ class TestDetectRegressions:
         """Unknown regression method should fall back to percentage detection."""
         values = np.array([[100.0, 100.0], [100.0, 100.0], [200.0, 200.0]])
         ds = self._make_dataset(n_times=3, n_repeats=2, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv], method="bogus", threshold=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -401,9 +401,9 @@ class TestDetectRegressions:
         """Result var not present in dataset should be silently skipped."""
         values = np.array([[100.0, 100.0], [200.0, 200.0]])
         ds = self._make_dataset(n_times=2, n_repeats=2, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "nonexistent"
         bench_cfg, run_cfg = self._make_cfg([rv])
         report = detect_regressions(ds, bench_cfg, run_cfg)
@@ -426,9 +426,9 @@ class TestDetectRegressions:
         # 10% change — regresses with threshold=5, not with threshold=15
         values = np.array([[100.0, 100.0], [100.0, 100.0], [110.0, 110.0]])
         ds = self._make_dataset(n_times=3, n_repeats=2, values=values)
-        from bencher.variables.results import ResultVar
+        from bencher.variables.results import ResultFloat
 
-        rv = ResultVar(units="s", direction=OptDir.minimize)
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
 
         bench_cfg_strict, run_cfg_strict = self._make_cfg([rv], method="percentage", threshold=5.0)
@@ -478,7 +478,7 @@ class TestRegressionError:
 
 
 class _SimpleBench(bn.ParametrizedSweep):
-    out_val = bn.ResultVar(units="s", direction=bn.OptDir.minimize)
+    out_val = bn.ResultFloat(units="s", direction=bn.OptDir.minimize)
 
     def benchmark(self):
         self.out_val = 1.0
@@ -488,7 +488,7 @@ _degrade_state = {"counter": 0}
 
 
 class _DegradingBench(bn.ParametrizedSweep):
-    out_val = bn.ResultVar(units="s", direction=bn.OptDir.minimize)
+    out_val = bn.ResultFloat(units="s", direction=bn.OptDir.minimize)
 
     def benchmark(self):
         _degrade_state["counter"] += 1

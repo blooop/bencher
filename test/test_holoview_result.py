@@ -8,7 +8,7 @@ import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.bench_result_base import ReduceType
-from bencher.variables.results import ResultVar, ResultImage, ResultVideo
+from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
 
 class TestHoloviewResult(unittest.TestCase):
@@ -118,7 +118,7 @@ class TestHoloviewResult(unittest.TestCase):
 
     def test_result_var_to_container_column(self):
         # Static-like method — no sweep data needed
-        container = HoloviewResult.result_var_to_container(self.res_1d, ResultVar())
+        container = HoloviewResult.result_var_to_container(self.res_1d, ResultFloat())
         self.assertEqual(container, pn.Column)
 
     def test_result_var_to_container_image(self):
@@ -130,14 +130,14 @@ class TestHoloviewResult(unittest.TestCase):
         self.assertEqual(container, pn.pane.Video)
 
     def test_setup_results_and_containers_default(self):
-        rv = ResultVar()
+        rv = ResultFloat()
         vars_out, containers = self.res_1d.setup_results_and_containers(rv)
         self.assertEqual(len(vars_out), 1)
         self.assertEqual(len(containers), 1)
         self.assertIsInstance(containers[0], pn.Column)
 
     def test_setup_results_and_containers_explicit(self):
-        rv = ResultVar()
+        rv = ResultFloat()
         vars_out, containers = self.res_1d.setup_results_and_containers(rv, container=pn.Column)
         self.assertEqual(len(vars_out), 1)
         self.assertEqual(len(containers), 1)

@@ -8,7 +8,7 @@ class SimpleFloat(bn.ParametrizedSweep):
     theta = bn.FloatSweep(
         default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=30
     )
-    out_sin = bn.ResultVar(units="v", doc="sin of theta")
+    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)

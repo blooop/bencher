@@ -5,7 +5,7 @@ import bencher as bn
 class SweepRerun(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=1, bounds=[1, 4], doc="Input angle", units="rad", samples=30)
 
-    out_pane = bn.ResultContainer()
+    out_pane = bn.ResultRerun(width=600, height=600)
 
     def benchmark(self):
         rr.log("s1", rr.Boxes2D(half_sizes=[self.theta, 1]))
@@ -21,4 +21,5 @@ def example_rerun(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    example_rerun(bn.BenchRunCfg(level=3)).report.show()
+    bn.run(example_rerun, show=True, save=True)
+    # example_rerun(bn.BenchRunCfg(level=3)).report.show()

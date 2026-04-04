@@ -20,8 +20,10 @@ from .variables.time import TimeSnapshot
 
 from .variables.inputs import box, p, sweep
 from .variables.results import (
+    ResultFloat,
     ResultVar,
     ResultBool,
+    SCALAR_RESULT_TYPES,
     ResultVec,
     ResultHmap,
     ResultPath,
@@ -29,6 +31,7 @@ from .variables.results import (
     ResultImage,
     ResultString,
     ResultContainer,
+    ResultRerun,
     ResultReference,
     ResultVolume,
     OptDir,
@@ -39,6 +42,7 @@ from .variables.results import (
 from .results.composable_container.composable_container_base import (
     ComposeType,
     ComposableContainerBase,
+    PaneLayout,
 )
 from .results.composable_container.composable_container_video import (
     ComposableContainerVideo,

@@ -11,7 +11,7 @@ INLINE_CLASSES = {
         "imports": "import bencher as bn",
         "params": {},
         "result_vars": {
-            "baseline": 'bn.ResultVar(units="ms", doc="Baseline latency")',
+            "baseline": 'bn.ResultFloat(units="ms", doc="Baseline latency")',
         },
         "call_body": ["self.baseline = 42.0"],
         "noise_body": [
@@ -27,7 +27,7 @@ INLINE_CLASSES = {
             "backend": 'bn.StringSweep(["redis", "memcached", "local"], doc="Cache backend")',
         },
         "result_vars": {
-            "latency": 'bn.ResultVar(units="ms", doc="Cache lookup latency")',
+            "latency": 'bn.ResultFloat(units="ms", doc="Cache lookup latency")',
         },
         "call_body": [
             'base = {{"redis": 1.2, "memcached": 1.5, "local": 0.3}}[self.backend]',
@@ -47,7 +47,7 @@ INLINE_CLASSES = {
             "region": 'bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="req/s", doc="Request throughput")',
+            "throughput": 'bn.ResultFloat(units="req/s", doc="Request throughput")',
         },
         "call_body": [
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
@@ -70,7 +70,7 @@ INLINE_CLASSES = {
             "log_level": 'bn.StringSweep(["debug", "info", "warn"], doc="Logging level")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="req/s", doc="Request throughput")',
+            "throughput": 'bn.ResultFloat(units="req/s", doc="Request throughput")',
         },
         "call_body": [
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
@@ -93,7 +93,7 @@ INLINE_CLASSES = {
             "array_size": 'bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             "self.time = self.array_size * math.log2(self.array_size + 1) * 0.001",
@@ -112,7 +112,7 @@ INLINE_CLASSES = {
             "algorithm": 'bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -134,7 +134,7 @@ INLINE_CLASSES = {
             "distribution": 'bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -159,7 +159,7 @@ INLINE_CLASSES = {
             "stability": 'bn.StringSweep(["stable", "unstable"], doc="Sort stability")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -184,7 +184,7 @@ INLINE_CLASSES = {
             "entropy": 'bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
         },
         "result_vars": {
-            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultFloat(units="x", doc="Compression ratio")',
         },
         "call_body": [
             "self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))",
@@ -204,7 +204,7 @@ INLINE_CLASSES = {
             "codec": 'bn.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")',
         },
         "result_vars": {
-            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultFloat(units="x", doc="Compression ratio")',
         },
         "call_body": [
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
@@ -227,7 +227,7 @@ INLINE_CLASSES = {
             "effort": 'bn.StringSweep(["fast", "balanced", "max"], doc="Compression effort")',
         },
         "result_vars": {
-            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultFloat(units="x", doc="Compression ratio")',
         },
         "call_body": [
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
@@ -251,7 +251,7 @@ INLINE_CLASSES = {
             "iterations": 'bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultFloat(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             "self.throughput = 500.0 / (1.0 + 0.5 * math.log2(self.key_size / 8)) / (1.0 + 0.3 * math.log2(self.payload_size / 64)) * (self.iterations / 100)",
@@ -272,7 +272,7 @@ INLINE_CLASSES = {
             "algorithm": 'bn.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultFloat(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
@@ -296,7 +296,7 @@ INLINE_CLASSES = {
             "mode": 'bn.StringSweep(["stream", "block"], doc="Processing mode")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultFloat(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
@@ -483,8 +483,8 @@ class BenchMetaGen(bn.ParametrizedSweep):
             f"{self.float_vars_count} Float, {self.categorical_vars_count} Categorical"
             f" ({variant.replace('_', ' ')})"
         )
-        filename = f"sweep_{base_title}_{variant}"
         function_name = f"example_sweep_{base_title}_{variant}"
+        filename = function_name
 
         result_var_names = list(info["result_vars"].keys())
 

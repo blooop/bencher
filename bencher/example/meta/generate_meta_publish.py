@@ -36,7 +36,7 @@ class SimpleFloat(bn.ParametrizedSweep):
     theta = bn.FloatSweep(
         default=0, bounds=[0, math.pi], doc="Input angle", units="rad", samples=30
     )
-    out_sin = bn.ResultVar(units="v", doc="sin of theta")
+    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)'''
@@ -64,7 +64,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Publish Report to GitHub Pages",
             output_dir=OUTPUT_DIR,
-            filename="publish_report_gh_pages",
+            filename="example_publish_report_gh_pages",
             function_name="example_publish_report_gh_pages",
             imports=imports,
             body=body,
@@ -84,7 +84,7 @@ class WaveBenchmark(bn.ParametrizedSweep):
     )
     amplitude = bn.FloatSweep(default=1.0, bounds=[0.5, 2.0], doc="Wave amplitude")
 
-    out_wave = bn.ResultVar(units="v", doc="Wave output")
+    out_wave = bn.ResultFloat(units="v", doc="Wave output")
 
     def benchmark(self):
         self.out_wave = self.amplitude * math.sin(self.theta)'''
@@ -117,7 +117,7 @@ bench.plot_sweep(
         self.generate_example(
             title="BenchRunner Publishing with GithubPagesCfg",
             output_dir=OUTPUT_DIR,
-            filename="publish_runner_gh_pages",
+            filename="example_publish_runner_gh_pages",
             function_name="example_publish_runner_gh_pages",
             imports=imports,
             body=body,

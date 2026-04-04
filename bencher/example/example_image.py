@@ -19,8 +19,8 @@ class BenchPolygons(bn.ParametrizedSweep):
     color = bn.StringSweep(["red", "green", "blue"])
     start_angle = bn.FloatSweep(default=0, bounds=[0, 360])
     polygon = bn.ResultImage()
-    area = bn.ResultVar()
-    side_length = bn.ResultVar()
+    area = bn.ResultFloat()
+    side_length = bn.ResultFloat()
 
     def benchmark(self):
         points = polygon_points(self.radius, self.sides, self.start_angle)

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from datetime import datetime
+from concurrent.futures import as_completed
 from itertools import product, combinations
 
 from param import Parameter
 from typing import Callable, Any
 from copy import deepcopy
 import param
+import numpy as np
 import xarray as xr
 from contextlib import suppress
 from functools import partial
@@ -115,6 +118,11 @@ class Bench(BenchPlotServer):
         self.const_vars = None
         self.plot_callbacks = []
         self.plot = True
+
+    def close(self) -> None:
+        """Close sample and collector caches so on-disk resources are released."""
+        self._executor.close_cache()
+        self._collector.close_caches()
 
     @property
     def sample_cache(self):
@@ -353,8 +361,6 @@ class Bench(BenchPlotServer):
         self.last_run_cfg = run_cfg
 
         if isinstance(input_vars_in, dict):
-            import warnings
-
             warnings.warn(
                 "Passing input_vars as a dict is deprecated. "
                 "Use a list of bn.sweep() specs instead.",
@@ -370,6 +376,15 @@ class Bench(BenchPlotServer):
             input_vars_in[i] = self.convert_vars_to_params(input_vars_in[i], "input", run_cfg)
         for i in range(len(result_vars_in)):
             result_vars_in[i] = self.convert_vars_to_params(result_vars_in[i], "result", run_cfg)
+
+        if not result_vars_in:
+            warnings.warn(
+                f"No result variables found for '{self.bench_name}'. "
+                "Define at least one result variable on your class "
+                "(e.g., output = bn.ResultFloat()).",
+                UserWarning,
+                stacklevel=2,
+            )
 
         for r in result_vars_in:
             r_name = getattr(r, "name", str(r))
@@ -451,6 +466,28 @@ class Bench(BenchPlotServer):
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
         )
+        if run_cfg.dry_run:
+            total = 1
+            summary_parts = []
+            for iv in input_vars_in:
+                vals = iv.values()
+                n = len(vals)
+                total *= n
+                if n > 0:
+                    summary_parts.append(f"  {iv.name}: {n} values [{vals[0]} .. {vals[-1]}]")
+                else:
+                    summary_parts.append(f"  {iv.name}: 0 values")
+            evals = total * run_cfg.repeats
+            logging.info(
+                "Dry run for '%s':\n%s\n  Total: %d combinations x %d repeats = %d evaluations",
+                title,
+                "\n".join(summary_parts) if summary_parts else "  (no input vars)",
+                total,
+                run_cfg.repeats,
+                evals,
+            )
+            return BenchResult(bench_cfg)
+
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
 
     @staticmethod
@@ -775,12 +812,17 @@ class Bench(BenchPlotServer):
             constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
         timings.dataset_setup_ms = elapsed()
 
-        callcount = 1
         results_list = []
         jobs = []
         cache_jobs = []
 
+        # Hoist shared allocations out of the per-job loop
+        bench_title = bench_res.bench_cfg.title
+        bench_tag = bench_res.bench_cfg.tag
+        worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
+
         with phase_timer() as elapsed:
+            callcount = 1
             for idx_tuple, function_input_vars in func_inputs:
                 job = WorkerJob(
                     function_input_vars,
@@ -788,16 +830,14 @@ class Bench(BenchPlotServer):
                     dims_name,
                     constant_inputs,
                     bench_cfg_sample_hash,
-                    bench_res.bench_cfg.tag,
+                    bench_tag,
                 )
                 job.setup_hashes()
                 jobs.append(job)
 
-                jid = f"{bench_res.bench_cfg.title}:call {callcount}/{total_jobs}"
-                worker = partial(worker_kwargs_wrapper, self.worker, bench_res.bench_cfg)
                 cache_jobs.append(
                     Job(
-                        job_id=jid,
+                        job_id=f"{bench_title}:call {callcount}/{total_jobs}",
                         function=worker,
                         job_args=job.function_input,
                         job_key=job.function_input_signature_pure,
@@ -808,17 +848,36 @@ class Bench(BenchPlotServer):
         timings.job_submission_ms = elapsed()
 
         with phase_timer() as elapsed:
+            prefetched = self.sample_cache.prefetch([cj.job_key for cj in cache_jobs])
+        timings.cache_check_ms += elapsed()
+
+        # Pre-cache numpy array references to avoid per-job xarray Dataset
+        # lookups (~28ms/500 jobs). The arrays are views into the dataset so
+        # writes go directly into bench_res.ds.
+        rv_arrays = self._collector.precompute_result_arrays(bench_res)
+
+        with phase_timer() as elapsed:
             for job, cache_job in zip(jobs, cache_jobs):
-                result = self.sample_cache.submit(cache_job)
+                result = self.sample_cache.submit(cache_job, prefetched=prefetched)
                 results_list.append(result)
                 # For serial execution, store results immediately so that
                 # completed results are cached to disk before later jobs
                 # may crash.
                 if bench_run_cfg.executor == Executors.SERIAL:
-                    self.store_results(result, bench_res, job, bench_run_cfg)
+                    self.store_results(result, bench_res, job, bench_run_cfg, rv_arrays)
             if bench_run_cfg.executor != Executors.SERIAL:
-                for job, res in zip(jobs, results_list):
-                    self.store_results(res, bench_res, job, bench_run_cfg)
+                # Separate cache hits (immediate) from pending futures so we
+                # can use as_completed() to overlap result storage with
+                # remaining computation.
+                pending = {}  # concurrent.futures.Future -> (WorkerJob, JobFuture)
+                for job, job_future in zip(jobs, results_list):
+                    if job_future.future is not None:
+                        pending[job_future.future] = (job, job_future)
+                    else:
+                        self.store_results(job_future, bench_res, job, bench_run_cfg, rv_arrays)
+                for done in as_completed(pending):
+                    worker_job, job_future = pending.pop(done)
+                    self.store_results(job_future, bench_res, worker_job, bench_run_cfg, rv_arrays)
         timings.job_execution_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:
@@ -832,9 +891,10 @@ class Bench(BenchPlotServer):
         bench_res: BenchResult,
         worker_job: WorkerJob,
         bench_run_cfg: BenchRunCfg,
+        rv_arrays: dict[str, np.ndarray] | None = None,
     ) -> None:
         """Store worker job results into the n-dimensional result dataset."""
-        self._collector.store_results(job_result, bench_res, worker_job, bench_run_cfg)
+        self._collector.store_results(job_result, bench_res, worker_job, bench_run_cfg, rv_arrays)
 
     def init_sample_cache(self, run_cfg: BenchRunCfg) -> FutureCache:
         """Initialize the FutureCache for storing benchmark function results."""
@@ -996,7 +1056,7 @@ class Bench(BenchPlotServer):
             logging.warning(
                 "No result variables with an optimization direction found. "
                 "Skipping optimization. Set direction=OptDir.minimize or "
-                "OptDir.maximize on your ResultVar to enable optimization."
+                "OptDir.maximize on your ResultFloat to enable optimization."
             )
             return None
         directions = [t.direction for t in targets]

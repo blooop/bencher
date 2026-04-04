@@ -37,8 +37,8 @@ class BenchableObject(bn.ParametrizedSweep):
 
     transform = bn.StringSweep(["normal", "inverted"])
 
-    distance = bn.ResultVar("m", doc="The distance from the sample point to the origin")
-    sample_noise = bn.ResultVar("m", doc="The amount of noise added to the distance sample")
+    distance = bn.ResultFloat("m", doc="The distance from the sample point to the origin")
+    sample_noise = bn.ResultFloat("m", doc="The amount of noise added to the distance sample")
 
     result_hmap = bn.ResultHmap()
 

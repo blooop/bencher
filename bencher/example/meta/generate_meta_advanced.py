@@ -16,6 +16,7 @@ ADVANCED_EXAMPLES = [
     "max_time_events",
     "report_save",
     "agg_over_time",
+    "share_axis",
 ]
 
 
@@ -37,6 +38,8 @@ class MetaAdvanced(MetaGeneratorBase):
             self._generate_report_save()
         elif self.example == "agg_over_time":
             self._generate_agg_over_time()
+        elif self.example == "share_axis":
+            self._generate_share_axis()
         elif self.example == "cartesian_animation":
             self._generate_cartesian_animation()
 
@@ -56,7 +59,7 @@ class NoisySensor(bn.ParametrizedSweep):
         default=25.0, bounds=[0.0, 100.0], doc="Sensor temperature", units="C"
     )
 
-    reading = bn.ResultVar(units="V", doc="Sensor voltage reading")
+    reading = bn.ResultFloat(units="V", doc="Sensor voltage reading")
 
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
@@ -90,7 +93,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Cache Patterns — run_tag and cache_samples",
             output_dir=OUTPUT_DIR,
-            filename="advanced_cache_patterns",
+            filename="example_advanced_cache_patterns",
             function_name="example_advanced_cache_patterns",
             imports=imports,
             body=body,
@@ -114,7 +117,7 @@ class PullRequestBenchmark(bn.ParametrizedSweep):
         ["light", "medium", "heavy"], doc="Workload intensity"
     )
 
-    throughput = bn.ResultVar(units="req/s", doc="Requests per second")
+    throughput = bn.ResultFloat(units="req/s", doc="Requests per second")
 
     _event_idx = 0  # set externally per event
 
@@ -149,7 +152,7 @@ for i, event_name in enumerate(events):
         self.generate_example(
             title="Time Events — track metrics across discrete events",
             output_dir=OUTPUT_DIR,
-            filename="advanced_time_event",
+            filename="example_advanced_time_event",
             function_name="example_advanced_time_event",
             imports=imports,
             body=body,
@@ -174,7 +177,7 @@ class ServerLatency(bn.ParametrizedSweep):
         ["/api/users", "/api/orders", "/api/health"], doc="API endpoint"
     )
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     def benchmark(self):
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]'''
@@ -196,7 +199,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Git Time Event — date + commit hash slider labels",
             output_dir=OUTPUT_DIR,
-            filename="advanced_git_time_event",
+            filename="example_advanced_git_time_event",
             function_name="example_advanced_git_time_event",
             imports=imports,
             body=body,
@@ -220,7 +223,7 @@ class LatencyMonitor(bn.ParametrizedSweep):
         ["/api/users", "/api/orders"], doc="API endpoint"
     )
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
     _drift = 0.0  # set externally per snapshot
 
@@ -259,7 +262,7 @@ for i in range(5):
         self.generate_example(
             title="Max Time Events — cap over_time history",
             output_dir=OUTPUT_DIR,
-            filename="advanced_max_time_events",
+            filename="example_advanced_max_time_events",
             function_name="example_advanced_max_time_events",
             imports=imports,
             body=body,
@@ -275,7 +278,7 @@ class QuadraticFit(bn.ParametrizedSweep):
     """A simple quadratic function for demonstrating report features."""
 
     x = bn.FloatSweep(default=0, bounds=[-2, 2], doc="Input value")
-    y = bn.ResultVar(units="ul", doc="Quadratic output")
+    y = bn.ResultFloat(units="ul", doc="Quadratic output")
 
     def benchmark(self):
         self.y = self.x**2 - 1'''
@@ -300,7 +303,7 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
         self.generate_example(
             title="Report Customization — saving and appending content",
             output_dir=OUTPUT_DIR,
-            filename="advanced_report_save",
+            filename="example_advanced_report_save",
             function_name="example_advanced_report_save",
             imports=imports,
             body=body,
@@ -328,7 +331,7 @@ class ThermalPlate(bn.ParametrizedSweep):
         default=0.5, bounds=[0.0, 1.0], doc="Vertical position on plate"
     )
 
-    temperature = bn.ResultVar(units="C", doc="Measured temperature")
+    temperature = bn.ResultFloat(units="C", doc="Measured temperature")
 
     _time_offset = 0.0  # set externally per snapshot
 
@@ -365,12 +368,56 @@ for i, offset in enumerate(time_offsets):
         self.generate_example(
             title="Aggregate Over Time — 2D sweep to scalar curve with error bounds",
             output_dir=OUTPUT_DIR,
-            filename="advanced_agg_over_time",
+            filename="example_advanced_agg_over_time",
             function_name="example_advanced_agg_over_time",
             imports=imports,
             body=body,
             class_code=class_code,
             run_kwargs={"level": 4, "over_time": True},
+        )
+
+    def _generate_share_axis(self):
+        """Demonstrate share_axis=False for independent y-axis scaling."""
+        imports = "import bencher as bn"
+        class_code = '''\
+class StartupShutdown(bn.ParametrizedSweep):
+    """Benchmarks with very different magnitude results.
+
+    When result variables have different scales (e.g. startup ~60-100s vs
+    shutdown ~5-15s), shared y-axes make the smaller result hard to read.
+    Setting share_axis=False on a ResultFloat gives each plot its own
+    independent y-axis range.
+    """
+
+    node = bn.StringSweep(["node_A", "node_B", "node_C"], doc="Cluster node")
+
+    startup = bn.ResultFloat(units="s", share_axis=False, doc="Startup time")
+    shutdown = bn.ResultFloat(units="s", share_axis=False, doc="Shutdown time")
+
+    def benchmark(self):
+        base_startup = {"node_A": 62, "node_B": 85, "node_C": 74}
+        base_shutdown = {"node_A": 5, "node_B": 12, "node_C": 8}
+        self.startup = base_startup[self.node]
+        self.shutdown = base_shutdown[self.node]'''
+        body = """\
+bench = StartupShutdown().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=["node"],
+    result_vars=["startup", "shutdown"],
+    description="share_axis=False gives each result variable its own y-axis scale. "
+    "Without it, the shutdown bars (~5-15s) would be nearly flat next to "
+    "startup (~60-85s).",
+)
+"""
+        self.generate_example(
+            title="Share Axis — independent y-axis scaling per result variable",
+            output_dir=OUTPUT_DIR,
+            filename="example_advanced_share_axis",
+            function_name="example_advanced_share_axis",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"level": 3},
         )
 
     def _generate_cartesian_animation(self):
@@ -446,12 +493,12 @@ bench.plot_sweep(
         self.generate_example(
             title="Cartesian Product Animations — Visual exploration of parameter spaces",
             output_dir=OUTPUT_DIR,
-            filename="advanced_cartesian_animation",
+            filename="example_advanced_cartesian_animation",
             function_name="example_advanced_cartesian_animation",
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "cache_results": False},
+            run_kwargs={"level": 4, "cache_samples": False},
         )
 
 

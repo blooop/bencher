@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import logging
 import signal
 import sys
 import time
@@ -69,9 +70,10 @@ def run(
     save: bool = False,
     publish: bool = False,
     grouped: bool = False,
-    cache_results: bool = True,
+    cache_samples: bool | None = None,
     over_time: bool | None = None,
     optimise: int | bool = 0,
+    **kwargs,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
 
@@ -93,7 +95,8 @@ def run(
         save: Save results to disk. Defaults to False.
         publish: Publish results. Defaults to False.
         grouped: Produce a single HTML page with all benchmarks. Defaults to False.
-        cache_results: Use sample cache for previous results. Defaults to True.
+        cache_samples: Use sample cache for previous results. None (default) auto-enables
+            for progressive runs. Pass False to disable even for progressive runs.
         over_time: Enable time-series benchmarking. None preserves run_cfg value.
         optimise: When > 0, appends optuna analysis plots (parameter importance,
             with/without repeats comparison, best parameters) from the sweep results
@@ -102,30 +105,35 @@ def run(
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
-    from bencher.bench_runner import BenchRunner
+    from bencher.bench_runner import BenchRunner, _resolve_cache_samples
+
+    cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 
     # Case 2: ParametrizedSweep class (not instance) — instantiate it
     if isinstance(target, type) and issubclass(target, ParametrizedSweep):
         target = target()
 
     # Case 3: ParametrizedSweep instance — wrap in a bench function
+    bench_to_close = None
     if isinstance(target, ParametrizedSweep):
         instance = target
+        bench = instance.to_bench()
 
-        def _sweep_fn(run_cfg: BenchRunCfg | None = None) -> Bench:
-            bench = instance.to_bench(run_cfg)
+        def _sweep_fn(run_cfg: BenchRunCfg | None = None) -> "Bench":
+            bench.run_cfg = run_cfg
+            bench.report.clear()
             bench.plot_sweep()
             return bench
 
         _sweep_fn.__name__ = f"bench_{instance.name}"
         target = _sweep_fn
+        bench_to_close = bench
 
     # Wrap target to add optimisation analysis from sweep results
     if optimise > 0:
         _original_target = target
 
         def _with_optimise(run_cfg: BenchRunCfg | None = None) -> "Bench":
-            import logging as _log
             import panel as _pn
 
             bench = _original_target(run_cfg)
@@ -135,7 +143,7 @@ def run(
                     _pn.pane.Markdown(
                         "**Optimisation skipped**: no result variables have an optimization "
                         "direction. Set `direction=OptDir.minimize` or `OptDir.maximize` "
-                        "on your `ResultVar`."
+                        "on your `ResultFloat`."
                     )
                 )
             elif bench.results:
@@ -143,7 +151,7 @@ def run(
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
                     except Exception as e:  # pylint: disable=broad-except
-                        _log.exception(e)
+                        logging.exception(e)
                         bench.report.append(
                             _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
                         )
@@ -154,19 +162,26 @@ def run(
 
     # Case 1: Callable — wrap in BenchRunner
     br = BenchRunner(target)
-    results = br.run(
-        level=level,
-        repeats=repeats,
-        max_level=max_level,
-        max_repeats=max_repeats,
-        run_cfg=run_cfg,
-        show=show,
-        save=save,
-        publish=publish,
-        grouped=grouped,
-        cache_results=cache_results,
-        over_time=over_time,
-    )
+    try:
+        results = br.run(
+            level=level,
+            repeats=repeats,
+            max_level=max_level,
+            max_repeats=max_repeats,
+            run_cfg=run_cfg,
+            show=show,
+            save=save,
+            publish=publish,
+            grouped=grouped,
+            cache_samples=cache_samples,
+            over_time=over_time,
+        )
+    finally:
+        if bench_to_close is not None:
+            try:
+                bench_to_close.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Error closing bench")
     if show and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.
         _active_runners.append(br)

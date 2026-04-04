@@ -10,7 +10,6 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 (live capture, recording management, etc.).
 """
 
-import hashlib
 import logging
 import re
 import shutil
@@ -21,9 +20,6 @@ from urllib.parse import quote
 import panel as pn
 
 from .utils import publish_file
-
-# Port for the local rerun web viewer server (when rerun-sdk is available).
-_RERUN_VIEWER_PORT = 9090
 
 # Root directory for cached .rrd files and viewer pages.
 _RRD_CACHE_DIR = Path("cachedir/rrd")
@@ -37,7 +33,7 @@ def _get_rerun_version() -> str:
     try:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
-        return "0.30.1"
+        return "0.31.1"
 
 
 def rrd_to_pane(
@@ -74,11 +70,11 @@ def rrd_file_to_pane(  # pragma: no cover
 ):
     """Create a rerun viewer pane from an .rrd file path.
 
-    Uses an HTML iframe to display the .rrd file.  If the ``rerun-sdk``
-    package is installed, a local viewer server is started on port 9090
-    for best results.  Otherwise the hosted viewer at ``app.rerun.io`` is
-    used (requires the Panel server's CORS-enabled ``/rrd_static/`` route
-    so the hosted viewer can fetch the file from localhost).
+    Uses an HTML iframe to display the .rrd file.  By default the viewer
+    is loaded from the ``@rerun-io/web-viewer`` CDN at the installed
+    ``rerun-sdk`` version.  The viewer page and the ``.rrd`` data are
+    both served from the Panel server's ``/rrd_static/`` route, keeping
+    everything on a single origin (no CORS, no extra ports).
 
     The file must be located under ``cachedir/rrd/``.
 
@@ -91,28 +87,24 @@ def rrd_file_to_pane(  # pragma: no cover
     height:
         Height of the viewer iframe in pixels.
     viewer_version:
-        When set, uses a self-contained viewer page loaded from the
-        ``@rerun-io/web-viewer`` CDN at this exact version instead of the
-        locally installed ``rerun-sdk``.  This is useful when the .rrd was
-        recorded with a different SDK version than the one installed (e.g.
-        a C++ SDK at 0.30.x while the Python SDK is 0.26.x).  The viewer
-        page is written to ``cachedir/rrd/`` and served from the same
-        HTTP origin as the .rrd files, avoiding mixed-content issues.
+        Rerun web-viewer version to load from CDN.  Defaults to the
+        installed ``rerun-sdk`` version.  Set explicitly when the .rrd
+        was recorded with a different SDK version.
     report_dir:
-        When set (together with ``viewer_version``), copies the .rrd and
-        viewer HTML into this directory and uses relative URLs in the iframe.
-        This makes the report portable — it works when served from any HTTP
-        origin (e.g. CI report hosting on GCS/S3) without a live Panel
-        server.  When ``None``, files stay in ``cachedir/rrd/`` and are
-        served by the Panel server at ``/rrd_static/``.
+        When set, copies the .rrd and viewer HTML into this directory
+        and uses relative URLs in the iframe.  This makes the report
+        portable — it works when served from any HTTP origin without a
+        live Panel server.
     """
     rrd_path = Path(file_path).resolve()
 
-    if report_dir is not None and viewer_version is not None:
-        if not _VERSION_RE.match(viewer_version):
-            raise ValueError(
-                f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+"
-            )
+    # Resolve viewer version: explicit > installed SDK > fallback.
+    if viewer_version is None:
+        viewer_version = _get_rerun_version()
+    if not _VERSION_RE.match(viewer_version):
+        raise ValueError(f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+")
+
+    if report_dir is not None:
         return _portable_rrd_pane(rrd_path, viewer_version, Path(report_dir), width, height)
 
     cache_root = _RRD_CACHE_DIR.resolve()
@@ -122,47 +114,12 @@ def rrd_file_to_pane(  # pragma: no cover
         raise ValueError(
             f"rrd_file_to_pane expects files under {cache_root}, got {rrd_path}"
         ) from None
-    rrd_static_path = f"/rrd_static/{relative.as_posix()}"
 
-    if viewer_version is not None and not _VERSION_RE.match(viewer_version):
-        raise ValueError(f"Invalid viewer_version {viewer_version!r}: must match [0-9A-Za-z._-]+")
-
-    if viewer_version is not None:
-        # CDN viewer page is served from the same Panel origin — relative URL works.
-        viewer_url = _cdn_viewer_url(relative, viewer_version)
-        return pn.pane.HTML(
-            f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-            f' frameborder="0" allowfullscreen></iframe>',
-            width=width,
-            height=height,
-        )
-
-    # For the local rerun viewer or hosted viewer, the .rrd URL must be
-    # absolute (cross-origin fetch).  Use JavaScript so the correct Panel
-    # server port is resolved at render time instead of being hardcoded.
-    try:
-        from .utils_rerun import _ensure_rerun_viewer
-
-        _ensure_rerun_viewer()
-        viewer_tpl = f"http://localhost:{_RERUN_VIEWER_PORT}/?url="
-    except (ImportError, ModuleNotFoundError):
-        version = _get_rerun_version()
-        viewer_tpl = f"https://app.rerun.io/version/{version}/?url="
-
-    # Use a hash of the path for a stable, unique element ID.
-    uid = hashlib.sha256(str(rrd_path).encode()).hexdigest()[:12]
+    # CDN viewer page is served from the same Panel origin — relative URL works.
+    viewer_url = _cdn_viewer_url(relative, viewer_version)
     return pn.pane.HTML(
-        f'<div id="rrd-wrap-{uid}"></div>'
-        f"<script>"
-        f"(function(){{"
-        f'var rrdUrl=window.location.origin+"{rrd_static_path}";'
-        f'var el=document.getElementById("rrd-wrap-{uid}");'
-        f"el.innerHTML="
-        f"""'<iframe src="{viewer_tpl}'+encodeURIComponent(rrdUrl)+'"'"""
-        f""" +' width="{width}" height="{height}" frameborder="0"'"""
-        f""" +' allowfullscreen></iframe>';"""
-        f"}})();"
-        f"</script>",
+        f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
+        f' frameborder="0" allowfullscreen></iframe>',
         width=width,
         height=height,
     )
@@ -231,6 +188,26 @@ def _get_cdn_viewer_html(version: str) -> str:
     return _cdn_viewer_html[version]
 
 
+def _write_rrd_sidecar(rrd_path: Path, version: str, dest_dir: Path) -> tuple[str, str]:
+    """Copy an .rrd file and its CDN viewer page into *dest_dir*.
+
+    Returns ``(viewer_filename, rrd_filename)`` — both relative to *dest_dir*.
+    The viewer page is written idempotently (skipped if already up-to-date).
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    rrd_dest = dest_dir / rrd_path.name
+    shutil.copy2(rrd_path, rrd_dest)
+
+    viewer_html = _get_cdn_viewer_html(version)
+    viewer_name = f"viewer_{version}.html"
+    viewer_path = dest_dir / viewer_name
+    if not viewer_path.exists() or viewer_path.read_text() != viewer_html:
+        viewer_path.write_text(viewer_html, encoding="utf-8")
+
+    return viewer_name, rrd_path.name
+
+
 def _portable_rrd_pane(
     rrd_path: Path,
     version: str,
@@ -240,27 +217,91 @@ def _portable_rrd_pane(
 ) -> pn.pane.HTML:
     """Create a self-contained pane with files copied into the report directory.
 
-    Copies the .rrd and a CDN viewer HTML page into ``report_dir/rrd/`` and
+    Copies the .rrd and a CDN viewer HTML page into ``report_dir/_rrd/`` and
     returns an iframe with a relative URL.  The resulting report can be served
     from any HTTP origin without a live Panel server.
     """
-    rrd_subdir = report_dir / "rrd"
-    rrd_subdir.mkdir(parents=True, exist_ok=True)
+    rrd_subdir = report_dir / "_rrd"
+    viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_subdir)
 
-    # Copy .rrd
-    rrd_dest = rrd_subdir / rrd_path.name
-    shutil.copy2(rrd_path, rrd_dest)
-
-    # Write viewer HTML (idempotent)
-    html = _get_cdn_viewer_html(version)
-    viewer_path = rrd_subdir / "viewer.html"
-    if not viewer_path.exists() or viewer_path.read_text() != html:
-        viewer_path.write_text(html)
-
-    viewer_url = f"rrd/viewer.html?url={quote(rrd_path.name)}"
+    viewer_url = f"_rrd/{viewer_name}?url={quote(rrd_name)}"
     return pn.pane.HTML(
         f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
         f' frameborder="0" allowfullscreen></iframe>',
         width=width,
         height=height,
     )
+
+
+# --- Static .rrd support for saved reports ---
+
+# Regex matching rerun viewer iframes in Panel-saved HTML.
+# Panel's Bokeh serialization double-escapes: < → &amp;lt; " → &amp;quot;
+# Captures: (1) viewer version, (2) rrd file relative path, (3) width, (4) height.
+#
+# FRAGILE: This pattern depends on Bokeh's exact double-entity-encoding behaviour
+# (tested with Bokeh 3.9 / Panel 1.6).  If Bokeh changes its serialization (attribute
+# order, quoting style, escaping depth), this regex will silently miss iframes.
+# inline_rrd_iframes() logs a warning when it detects /rrd_static/ references but
+# the regex finds no matches.
+_RRD_IFRAME_RE = re.compile(
+    r"&amp;lt;iframe src=&amp;quot;/rrd_static/viewer_([0-9A-Za-z._-]+)\.html"
+    r"\?url=/rrd_static/([^&]+\.rrd)&amp;quot;"
+    r" width=&amp;quot;(\d+)&amp;quot;"
+    r" height=&amp;quot;(\d+)&amp;quot;"
+    r" frameborder=&amp;quot;0&amp;quot;"
+    r" allowfullscreen&amp;gt;&amp;lt;/iframe&amp;gt;"
+)
+
+
+def inline_rrd_iframes(html_path: Path) -> None:
+    """Post-process a saved HTML report for static hosting.
+
+    Scans the HTML file for rerun viewer iframes (those pointing at
+    ``/rrd_static/``), copies the referenced ``.rrd`` files from the
+    local cache, writes a CDN viewer HTML page alongside each one, and
+    rewrites the iframe ``src`` to a relative URL.  The result works on
+    any static host (RTD, GitHub Pages, ``file://``) without a Panel
+    server.
+
+    Called automatically by ``BenchReport.save()``.
+    """
+    html = html_path.read_text(encoding="utf-8")
+    cache_root = _RRD_CACHE_DIR.resolve()
+    report_dir = html_path.parent
+    rrd_dir = report_dir / "_rrd"
+
+    changed = False
+
+    def _replace(m: re.Match) -> str:
+        nonlocal changed
+        version, rrd_rel, width, height = m.group(1), m.group(2), m.group(3), m.group(4)
+        rrd_path = cache_root / rrd_rel
+        if not rrd_path.is_file():
+            logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
+            return m.group(0)
+
+        viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_dir)
+
+        # Rewrite the iframe src to the local viewer + rrd.
+        # Keep the same double encoding (&amp;lt;) as Panel's save uses for
+        # all HTML content — Bokeh JS decodes two levels when rendering.
+        relative_url = f"_rrd/{viewer_name}?url={rrd_name}"
+        changed = True
+        return (
+            f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
+            f" width=&amp;quot;{width}&amp;quot;"
+            f" height=&amp;quot;{height}&amp;quot;"
+            f" frameborder=&amp;quot;0&amp;quot;"
+            f" allowfullscreen&amp;gt;&amp;lt;/iframe&amp;gt;"
+        )
+
+    new_html = _RRD_IFRAME_RE.sub(_replace, html)
+    if changed:
+        html_path.write_text(new_html, encoding="utf-8")
+    elif "/rrd_static/" in html:
+        logging.warning(
+            "inline_rrd_iframes: %s contains /rrd_static/ references but the iframe "
+            "regex matched nothing — Bokeh's HTML encoding may have changed",
+            html_path,
+        )

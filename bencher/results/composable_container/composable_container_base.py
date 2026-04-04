@@ -28,6 +28,24 @@ class ComposeType(StrEnum):
         return ComposeType.right if horizontal else ComposeType.down
 
 
+class PaneLayout(StrEnum):
+    """Controls how multi-dimensional data is laid out in panel displays.
+
+    grid: Use rows/columns for all dimensions (default, existing behavior)
+    tabs: Use tabs for all outer dimensions, only the innermost uses grid
+    tabs_and_grid: Use tabs for the outermost dimension, grid for inner dimensions
+    """
+
+    grid = auto()
+    tabs = auto()
+    tabs_and_grid = auto()
+
+    @classmethod
+    def all(cls) -> list[PaneLayout]:
+        """Return all layout values.  Use this instead of hard-coded name lists."""
+        return list(cls)
+
+
 @dataclass(kw_only=True)
 class ComposableContainerBase:
     """A base class for renderer backends.  A composable renderer"""

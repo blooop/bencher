@@ -18,7 +18,7 @@ class GradientDirection(bn.ParametrizedSweep):
     y = bn.FloatSweep(default=0, bounds=[0, 1], doc="Y position")
     direction = bn.StringSweep(["diagonal", "horizontal", "vertical"], doc="Gradient direction")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
     def benchmark(self):
         if self.direction == "diagonal":
@@ -35,7 +35,7 @@ class GradientScale(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[0, 1], doc="X position")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
     def benchmark(self):
         if self.scale == "linear":
@@ -53,7 +53,7 @@ class GradientDirectionScale(bn.ParametrizedSweep):
     direction = bn.StringSweep(["positive", "negative", "symmetric"], doc="Gradient direction")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
     def benchmark(self):
         if self.direction == "positive":
@@ -78,7 +78,7 @@ class GradientSurface(bn.ParametrizedSweep):
     direction = bn.StringSweep(["diagonal", "horizontal", "vertical"], doc="Gradient direction")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
     def benchmark(self):
         if self.direction == "diagonal":
@@ -103,7 +103,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate by Name (list)",
         output_dir="aggregation",
-        filename="agg_list_1_cat",
+        filename="example_agg_list_1_cat",
         function_name="example_agg_list_1_cat",
         benchable_class="GradientDirection",
         benchable_module=None,
@@ -130,7 +130,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate to 1-D (True)",
         output_dir="aggregation",
-        filename="agg_all",
+        filename="example_agg_all",
         function_name="example_agg_all",
         benchable_class="GradientScale",
         benchable_module=None,
@@ -156,7 +156,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate Last N (int)",
         output_dir="aggregation",
-        filename="agg_int",
+        filename="example_agg_int",
         function_name="example_agg_int",
         benchable_class="GradientDirectionScale",
         benchable_module=None,
@@ -182,7 +182,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate 2 Categoricals (list)",
         output_dir="aggregation",
-        filename="agg_list_2_cat",
+        filename="example_agg_list_2_cat",
         function_name="example_agg_list_2_cat",
         benchable_class="GradientSurface",
         benchable_module=None,
@@ -211,7 +211,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate with Max",
         output_dir="aggregation",
-        filename="agg_fn_max",
+        filename="example_agg_fn_max",
         function_name="example_agg_fn_max",
         benchable_class="GradientDirection",
         benchable_module=None,

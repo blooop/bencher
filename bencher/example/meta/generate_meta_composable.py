@@ -43,7 +43,7 @@ _BENCHABLE_IMAGE_CLASS = (
     '    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")\n'
     "\n"
     '    polygon = bn.ResultImage(doc="Rendered polygon image")\n'
-    '    area = bn.ResultVar("u^2", doc="Polygon area")\n'
+    '    area = bn.ResultFloat("u^2", doc="Polygon area")\n'
     "\n"
     "    def benchmark(self):\n"
     "        points = _polygon_points(self.radius, self.sides)\n"
@@ -67,8 +67,8 @@ class MetaComposableVideo(MetaGeneratorBase):
 
     def benchmark(self):
         compose = self.compose
-        filename = f"composable_video_{compose}"
         function_name = f"example_composable_video_{compose}"
+        filename = function_name
         title = f"Composable Video: ComposeType.{compose}"
 
         imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
@@ -132,8 +132,8 @@ class MetaComposablePanel(MetaGeneratorBase):
 
     def benchmark(self):
         compose = self.compose
-        filename = f"composable_panel_{compose}"
         function_name = f"example_composable_panel_{compose}"
+        filename = function_name
         title = f"Composable Panel: ComposeType.{compose}"
 
         imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
@@ -186,8 +186,8 @@ class MetaComposableDataset(MetaGeneratorBase):
 
     def benchmark(self):
         compose = self.compose
-        filename = f"composable_dataset_{compose}"
         function_name = f"example_composable_dataset_{compose}"
+        filename = function_name
         title = f"Composable Dataset: ComposeType.{compose}"
 
         class_code = (
@@ -279,7 +279,7 @@ class MetaComposableAllTypes(MetaGeneratorBase):
         self.generate_example(
             title="Composable Container: All ComposeTypes Compared",
             output_dir=OUTPUT_DIR,
-            filename="composable_all_compose_types",
+            filename="example_composable_all_compose_types",
             function_name="example_composable_all_compose_types",
             imports=imports,
             body=body,

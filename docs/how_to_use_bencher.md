@@ -18,7 +18,7 @@ class MyBenchmark(bn.ParametrizedSweep):
     method = bn.StringSweep(["brute", "optimized"], doc="Algorithm")
 
     # Results — what the benchmark measures
-    elapsed = bn.ResultVar(units="s")
+    elapsed = bn.ResultFloat(units="s")
 
     def benchmark(self):
         self.elapsed = run_benchmark(self.size, self.method)
@@ -78,13 +78,46 @@ backend = bn.StringSweep(["cpu", "gpu"])
 Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magnitude
 (e.g., number of retries, repeat count, number of threads).
 
+## The Level System
+
+Instead of specifying `samples` on each sweep variable, you can use the `level`
+parameter to control sampling density globally with a single knob:
+
+| Level | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| Samples per dimension | 1 | 2 | 3 | 5 | 9 | 17 | 33 |
+
+Higher levels reuse all lower-level samples (binary subdivision), so cached results
+carry over automatically. Start low for quick iteration, increase for publication
+quality:
+
+```python
+# Quick check — 2 samples per dimension
+bn.run(example_benchmark, level=2)
+
+# Publication quality — 9 samples per dimension
+bn.run(example_benchmark, level=5)
+```
+
+See [Concepts: The Level System](concepts.md#the-level-system) for the full formula
+and theory.
+
 ## Result Types
 
 | Type | Use for | Set to |
 |---|---|---|
-| `bn.ResultVar(units="s")` | Scalar metrics | `self.elapsed = 0.42` |
+| `bn.ResultFloat(units="s")` | Continuous scalar metrics (time, distance, score) | `self.elapsed = 0.42` |
+| `bn.ResultBool()` | Success/failure, pass/fail, any binary outcome | `self.success = True` |
+| `bn.ResultString()` | Text outputs, labels, error messages | `self.error_msg = "timeout"` |
 | `bn.ResultImage()` | Images, GIFs | `self.img = "/path/to/output.png"` |
 | `bn.ResultVideo()` | Videos | `self.vid = video_writer.write()` |
+| `bn.ResultPath()` | Downloadable file outputs | `self.artifact = "/path/to/file"` |
+| `bn.ResultContainer()` | Embeddable HTML/panel content | `self.widget = pane` |
+| `bn.ResultVec(size=3)` | Fixed-size vector results (x, y, z) | `self.position = [1.0, 2.0, 3.0]` |
+
+**Choosing between ResultFloat and ResultBool:** If a result is binary (success/failure,
+reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds to [0, 1]
+and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
@@ -140,6 +173,21 @@ bench.plot_sweep(
 
 ## Run Configuration
 
+`BenchRunCfg` has many options, but you rarely need more than a few:
+
+| Parameter | Default | What it does |
+|---|---|---|
+| `level` | 0 | Sampling density per dimension (see Level System above) |
+| `repeats` | 1 | How many times to evaluate each combination |
+| `cache_samples` | False | Cache individual results across runs (resume interrupted sweeps) |
+| `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
+| `over_time` | False | Track results across multiple runs for time-series analysis |
+| `headless` | False | Skip opening a browser to display results |
+| `dry_run` | False | Log the sweep grid summary without executing the benchmark |
+
+All other parameters have sensible defaults. See `BenchRunCfg`'s docstring for the
+full reference.
+
 ```python
 def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     run_cfg.cache_results = False   # disable for file-based / non-deterministic results
@@ -158,7 +206,7 @@ Every benchmark class inherits from `bn.ParametrizedSweep` and implements `bench
 ```python
 class MyBench(bn.ParametrizedSweep):
     x = bn.FloatSweep(bounds=(0, 1))
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def benchmark(self):
         self.result = compute(self.x)
@@ -197,6 +245,29 @@ class ImageBench(bn.ParametrizedSweep):
 - Return the `bn.Bench` instance
 - Use `bn.run(example_func)` in `__main__`
 
+## Aggregating Dimensions
+
+When sweeping many dimensions, the visualizations can become unwieldy. Use the
+`aggregate` parameter on `plot_sweep()` to collapse dimensions into summary
+statistics (mean, std, etc.):
+
+```python
+bench.plot_sweep(
+    "Aggregated view",
+    input_vars=["x", "y", "method"],
+    result_vars=["elapsed"],
+    aggregate=True,          # collapse all dimensions except the first
+    # aggregate=2,           # collapse the last 2 dimensions
+    # aggregate=["method"],  # collapse only the "method" dimension
+    agg_fn="mean",           # aggregation function: mean, sum, max, min, median
+)
+```
+
+- `aggregate=True` — collapse all dimensions except the first into a single
+  aggregated statistic
+- `aggregate=N` (int) — collapse the last N dimensions
+- `aggregate=["var1", "var2"]` — collapse only the named dimensions
+
 ## Common Mistakes
 
 | Mistake | Fix |
@@ -207,3 +278,4 @@ class ImageBench(bn.ParametrizedSweep):
 | Building panel/HTML layouts manually | Use bencher's report system |
 | Using the old `__call__` pattern with boilerplate | Override `benchmark()` instead |
 | Caching file-path results | Set `run_cfg.cache_results = False` |
+| Using `ResultFloat` for success/failure booleans | Use `ResultBool()` — bounds are [0, 1], plots render correctly |

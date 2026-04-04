@@ -40,7 +40,7 @@ class SineWave(bn.ParametrizedSweep):
     """A sine wave — one of two benchmarks combined by BenchRunner."""
 
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
-    out_sin = bn.ResultVar(units="V", doc="Sine output")
+    out_sin = bn.ResultFloat(units="V", doc="Sine output")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)'''
@@ -68,7 +68,7 @@ bench.plot_sweep(
         self.generate_example(
             title="BenchRunner — run multiple benchmarks in one session",
             output_dir=OUTPUT_DIR,
-            filename="workflow_bench_runner",
+            filename="example_workflow_bench_runner",
             function_name="example_workflow_bench_runner",
             imports=imports,
             body=body,
@@ -87,8 +87,8 @@ class DataPipeline(bn.ParametrizedSweep):
     parallelism = bn.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
     storage = bn.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
 
-    throughput = bn.ResultVar(units="rows/s", doc="Processing throughput")
-    latency = bn.ResultVar(units="ms", doc="Per-batch latency")
+    throughput = bn.ResultFloat(units="rows/s", doc="Processing throughput")
+    latency = bn.ResultFloat(units="ms", doc="Per-batch latency")
 
     def benchmark(self):
         storage_factor = {"ssd": 1.0, "hdd": 0.4, "network": 0.25}[self.storage]
@@ -128,7 +128,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Multiple Sweeps — progressive report with tabs",
             output_dir=OUTPUT_DIR,
-            filename="workflow_multi_sweep",
+            filename="example_workflow_multi_sweep",
             function_name="example_workflow_multi_sweep",
             imports=imports,
             body=body,
@@ -143,10 +143,10 @@ bench.plot_sweep(
 class ServerMetrics(bn.ParametrizedSweep):
     """Output metrics from the server benchmark."""
 
-    throughput = bn.ResultVar(
+    throughput = bn.ResultFloat(
         units="req/s", direction=bn.OptDir.maximize, doc="Request throughput"
     )
-    latency = bn.ResultVar(
+    latency = bn.ResultFloat(
         units="ms", direction=bn.OptDir.minimize, doc="Response latency"
     )
 
@@ -195,7 +195,7 @@ bench.plot_sweep(
         self.generate_example(
             title="InputCfg/OutputCfg — separated input and output classes",
             output_dir=OUTPUT_DIR,
-            filename="workflow_input_output_cfg",
+            filename="example_workflow_input_output_cfg",
             function_name="example_workflow_input_output_cfg",
             imports=imports,
             body=body,
@@ -241,7 +241,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
         doc="Continuous input that affects the output", units="ul", samples=10,
     )
 
-    accuracy = bn.ResultVar(
+    accuracy = bn.ResultFloat(
         units="%", direction=bn.OptDir.maximize,
         doc="Algorithm accuracy - the metric we want to optimise",
     )
@@ -311,7 +311,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Getting Started — progressive bencher tutorial",
             output_dir=OUTPUT_DIR,
-            filename="workflow_getting_started",
+            filename="example_workflow_getting_started",
             function_name="example_workflow_getting_started",
             imports=imports,
             body=body,

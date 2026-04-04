@@ -10,7 +10,7 @@ import bencher as bn
 
 class SimpleFloat(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], units="rad", samples=30)
-    out_sin = bn.ResultVar(units="v", doc="sin of theta")
+    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)
@@ -46,7 +46,7 @@ Input types should be basic datatypes so that the data can be hashed, cached, an
 
 Declare what your benchmark function returns:
 
-- `ResultVar` — a numeric scalar with units and an optimization direction (minimize/maximize)
+- `ResultFloat` — a numeric scalar with units and an optimization direction (minimize/maximize)
 - `ResultBool` — a boolean result
 - `ResultVec` — a fixed-size numeric vector
 - `ResultImage`, `ResultVideo`, `ResultPath` — file outputs
@@ -139,7 +139,7 @@ Mark a variable with `optimize=False` to sweep it without optimising — Optuna 
 class MyBench(bn.ParametrizedSweep):
     algorithm = bn.StringSweep(["adam", "sgd", "rmsprop"], optimize=False)
     learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0])
-    loss = bn.ResultVar("loss", bn.OptDir.minimize)
+    loss = bn.ResultFloat("loss", bn.OptDir.minimize)
 ```
 
 Optuna only suggests `learning_rate` and reports the mean loss across all algorithms. This finds settings that work best **across** categories rather than the best (category, setting) pair. See the [Aggregated](reference/meta/optimization_aggregated/index) examples.

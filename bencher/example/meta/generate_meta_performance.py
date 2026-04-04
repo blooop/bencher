@@ -54,7 +54,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Bencher self-introspection: overhead vs problem size",
             output_dir=OUTPUT_DIR,
-            filename="perf_self_benchmark",
+            filename="example_perf_self_benchmark",
             function_name="example_perf_self_benchmark",
             imports=imports,
             body=body,
@@ -88,7 +88,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Bencher self-introspection: overhead tracked over time",
             output_dir=OUTPUT_DIR,
-            filename="perf_self_benchmark_over_time",
+            filename="example_perf_self_benchmark_over_time",
             function_name="example_perf_self_benchmark_over_time",
             imports=imports,
             body=body,

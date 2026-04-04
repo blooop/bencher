@@ -47,7 +47,7 @@ def _build_response_timer_code():
                 '    endpoint = bn.StringSweep(["api/users", "api/orders"], doc="API endpoint")',
                 '    concurrency = bn.FloatSweep(default=50, bounds=[1, 100], doc="Concurrent requests")',
                 "",
-                '    latency = bn.ResultVar(units="ms", doc="Response latency")',
+                '    latency = bn.ResultFloat(units="ms", doc="Response latency")',
                 "",
                 "    def benchmark(self):",
                 '        base = {"api/users": 12.0, "api/orders": 25.0}[self.endpoint]',
@@ -239,8 +239,8 @@ class MetaResultTypes(MetaGeneratorBase):
         input_vars_code = input_vars_map[self.input_dims]
 
         sub_dir = f"{OUTPUT_DIR}/{self.result_type}"
-        filename = f"{self.result_type}_{self.input_dims}d"
         function_name = f"example_{self.result_type}_{self.input_dims}d"
+        filename = function_name
         title = f"{self.result_type.replace('_', ' ').title()}: {self.input_dims}D input"
 
         desc_map = {

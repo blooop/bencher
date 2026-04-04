@@ -9,11 +9,11 @@ class UnreliableClass(bn.ParametrizedSweep):
         bounds=[0, 3],
         doc="If check limit=True the crashy_fn will crash if this value is >1",
     )
-    return_value = bn.ResultVar(
+    return_value = bn.ResultFloat(
         units="ul",
         doc="This is a dummy result variable. In this example, it is the same as the value passed in.",
     )
-    trigger_crash = bn.ResultVar(
+    trigger_crash = bn.ResultFloat(
         units="True/False",
         doc="if true crashy_fn will crash when input_val >1",
     )
