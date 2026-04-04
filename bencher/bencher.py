@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import warnings
 from datetime import datetime
+from concurrent.futures import as_completed
 from itertools import product, combinations
 
 from param import Parameter
@@ -865,8 +866,18 @@ class Bench(BenchPlotServer):
                 if bench_run_cfg.executor == Executors.SERIAL:
                     self.store_results(result, bench_res, job, bench_run_cfg, rv_arrays)
             if bench_run_cfg.executor != Executors.SERIAL:
-                for job, res in zip(jobs, results_list):
-                    self.store_results(res, bench_res, job, bench_run_cfg, rv_arrays)
+                # Separate cache hits (immediate) from pending futures so we
+                # can use as_completed() to overlap result storage with
+                # remaining computation.
+                pending = {}  # concurrent.futures.Future -> (WorkerJob, JobFuture)
+                for job, job_future in zip(jobs, results_list):
+                    if job_future.future is not None:
+                        pending[job_future.future] = (job, job_future)
+                    else:
+                        self.store_results(job_future, bench_res, job, bench_run_cfg, rv_arrays)
+                for done in as_completed(pending):
+                    worker_job, job_future = pending.pop(done)
+                    self.store_results(job_future, bench_res, worker_job, bench_run_cfg, rv_arrays)
         timings.job_execution_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:
