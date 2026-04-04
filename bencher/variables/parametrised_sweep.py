@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import warnings
 from functools import partial
 from typing import Any
@@ -20,6 +21,8 @@ _input_result_cache: dict[tuple, _InputResult] = {}
 
 class ParametrizedSweep(Parameterized):
     """Parent class for all Sweep types that need a custom hash"""
+
+    _result_validation_done = False
 
     @staticmethod
     def param_hash(param_type: Parameterized, hash_value: bool = True) -> int:
@@ -220,18 +223,33 @@ class ParametrizedSweep(Parameterized):
         if type(self).benchmark is not ParametrizedSweep.benchmark:
             # New-style: subclass overrides benchmark()
             self.update_params_from_kwargs(**kwargs)
+            result_keys = list(self.get_input_and_results().results.keys())
+            defaults_before = {k: self.param.values()[k] for k in result_keys}
             self.benchmark()
+            if result_keys and not getattr(self, "_result_validation_done", False):
+                values_after = self.param.values()
+                unchanged = [k for k in result_keys if values_after[k] == defaults_before[k]]
+                if len(unchanged) == len(result_keys):
+                    self._result_validation_done = True
+                    logging.warning(
+                        "%s.benchmark() did not set any result variables. "
+                        "Results will contain default values. "
+                        "Assign to self.<result_var> in your benchmark() method. "
+                        "Unset results: %s",
+                        type(self).__name__,
+                        unchanged,
+                    )
             return self.get_results_values_as_dict()
         # Legacy path: subclass overrides __call__() and handles
         # update_params_from_kwargs + super().__call__() itself.
         if type(self).__call__ is ParametrizedSweep.__call__:
-            warnings.warn(
+            msg = (
                 f"{type(self).__name__} does not override benchmark(). "
                 "Results will contain only default values. "
-                "Define a benchmark() method on your class.",
-                UserWarning,
-                stacklevel=2,
+                "Define a benchmark() method on your class."
             )
+            logging.warning(msg)
+            warnings.warn(msg, UserWarning, stacklevel=2)
         return self.get_results_values_as_dict()
 
     def benchmark(self):

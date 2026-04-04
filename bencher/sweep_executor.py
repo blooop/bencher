@@ -109,9 +109,26 @@ class SweepExecutor:
                     f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
                 )
         if isinstance(variable, str):
-            variable = worker_class_instance.param.objects(instance=False)[variable]
+            all_params = worker_class_instance.param.objects(instance=False)
+            if variable not in all_params:
+                available = sorted(k for k in all_params if k != "name")
+                raise KeyError(
+                    f"{var_type.capitalize()} variable '{variable}' not found on "
+                    f"{type(worker_class_instance).__name__}. "
+                    f"Available parameters: {available}"
+                ) from None
+            variable = all_params[variable]
         if isinstance(variable, dict):
-            param_var = worker_class_instance.param.objects(instance=False)[variable["name"]]
+            all_params = worker_class_instance.param.objects(instance=False)
+            var_name = variable["name"]
+            if var_name not in all_params:
+                available = sorted(k for k in all_params if k != "name")
+                raise KeyError(
+                    f"{var_type.capitalize()} variable '{var_name}' not found on "
+                    f"{type(worker_class_instance).__name__}. "
+                    f"Available parameters: {available}"
+                ) from None
+            param_var = all_params[var_name]
             if variable.get("values"):
                 param_var = param_var.with_sample_values(variable["values"])
             elif variable.get("bounds"):
