@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Callable, Protocol, runtime_checkable
 import logging
-import threading
 import warnings
 import inspect
 from datetime import datetime
@@ -440,26 +439,12 @@ class BenchRunner:
             save (bool): Whether to save the report to disk
             debug (bool): Whether to enable debug mode for publishing
         """
-        if save:
-            report.save(
-                directory="reports", filename=f"{report.bench_name}.html", in_html_folder=False
-            )
-        if publish and self.publisher is not None:
-            if isinstance(self.publisher, GithubPagesCfg):
-                p = self.publisher
-                report.publish_gh_pages(p.github_user, p.repo_name, p.folder_name, p.branch_name)
-            else:
-                report.publish(remote_callback=self.publisher, debug=debug)
-        if show:
-            self.servers.append(report.show(self.run_cfg))
-            if not save:
-                self._save_in_background(report)
-
-    @staticmethod
-    def _save_in_background(report: BenchReport) -> None:
-        """Save a static HTML copy in a daemon thread so it doesn't block the live server."""
-
-        def _save():
+        if save or show:
+            # Always save a static copy — either explicitly requested (save=True)
+            # or as a convenience alongside the live server (show=True).
+            # Must happen synchronously before pn.serve() to avoid racing for
+            # Bokeh model document ownership ("Models must be owned by only a
+            # single document" errors).
             try:
                 report_path = report.save(
                     directory="reports",
@@ -468,9 +453,15 @@ class BenchRunner:
                 )
                 logging.info("Static report: file://%s", report_path.absolute())
             except Exception:  # pylint: disable=broad-except
-                logging.exception("Background report save failed")
-
-        threading.Thread(target=_save, daemon=True).start()
+                logging.exception("Report save failed")
+        if publish and self.publisher is not None:
+            if isinstance(self.publisher, GithubPagesCfg):
+                p = self.publisher
+                report.publish_gh_pages(p.github_user, p.repo_name, p.folder_name, p.branch_name)
+            else:
+                report.publish(remote_callback=self.publisher, debug=debug)
+        if show:
+            self.servers.append(report.show(self.run_cfg))
 
     def show(
         self,
