@@ -31,7 +31,10 @@ Or with the manual API:
 bench.plot_sweep(run_cfg=bn.BenchRunCfg(repeats=10))
 ```
 
-With repeats, plots automatically show mean +/- standard deviation. See the [Repeated](reference/meta/0_float/with_repeats/index) gallery sections for examples.
+With repeats, plots automatically show mean +/- standard deviation. See the
+[Repeated](reference/meta/0_float/with_repeats/index) gallery for examples, and the
+[Statistics gallery](reference/meta/statistics/index) for distributions, error bands, and
+repeat-count comparisons.
 
 Bencher assumes your function is a stochastic pure function — given the same inputs it returns the same output +/- random noise. Each call must not be influenced by external state.
 
@@ -59,7 +62,7 @@ for i in range(5):
     )
 ```
 
-Each run adds a time slider to the plots. When combined with repeats, the Optuna importance analysis shows both `repeat` and `over_time` alongside input parameters — revealing whether measurement noise or temporal drift dominates. See the [Over Time](reference/meta/0_float/over_time/index) and [Over Time + Repeated](reference/meta/0_float/over_time_repeats/index) gallery sections.
+Each run adds a time slider to the plots. When combined with repeats, the Optuna importance analysis shows both `repeat` and `over_time` alongside input parameters — revealing whether measurement noise or temporal drift dominates. See the [Over Time](reference/meta/0_float/over_time/index) and [Over Time + Repeated](reference/meta/0_float/over_time_repeats/index) gallery sections, plus the [Time Event](reference/meta/advanced/example_advanced_time_event) and [Git Time Event](reference/meta/advanced/example_advanced_git_time_event) advanced examples.
 
 ## Optimisation
 
@@ -79,7 +82,7 @@ res = bench.plot_sweep(run_cfg=run_cfg)
 bench.report.append(res.to_optuna_plots())
 ```
 
-The importance plots show which parameters matter most, including `repeat` (measurement noise) and `over_time` (temporal drift) when present. See the [Optimisation](reference/meta/optimisation/index) gallery section.
+The importance plots show which parameters matter most, including `repeat` (measurement noise) and `over_time` (temporal drift) when present. See the [Optimization gallery](reference/meta/optimization/index) for 1D and 2D examples with single and multi-objective optimization.
 
 ### Aggregated Optimisation
 

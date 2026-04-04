@@ -88,7 +88,9 @@ backend = bn.StringSweep(["cpu", "gpu"])
 ```
 
 Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magnitude
-(e.g., number of retries, repeat count, number of threads).
+(e.g., number of retries, repeat count, number of threads). See the
+[Sampling Strategies gallery](reference/meta/sampling/index) for examples of how different
+sweep types produce different sample distributions.
 
 ## The Level System
 
@@ -135,6 +137,8 @@ See the [Result Types gallery](reference/meta/result_types/index) for examples o
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
+See the [ResultImage gallery](reference/meta/result_types/result_image/index) and
+[ResultVideo gallery](reference/meta/result_types/result_video/index) for working examples.
 
 ## Running a Sweep
 
@@ -184,6 +188,9 @@ bench.plot_sweep(
     const_vars=dict(backend="cpu"),
 )
 ```
+
+See the [Constant Variables gallery](reference/meta/const_vars/index) for examples of
+slicing, comparing, and pinning parameters.
 
 ## Run Configuration
 
@@ -259,6 +266,9 @@ class ImageBench(bn.ParametrizedSweep):
 - Return the `bn.Bench` instance
 - Use `bn.run(example_func)` in `__main__`
 
+See the [Workflows gallery](reference/meta/workflows/index) for complete examples showing
+this convention in action, including multi-sweep and BenchRunner patterns.
+
 ## Aggregating Dimensions
 
 When sweeping many dimensions, the visualizations can become unwieldy. Use the
@@ -281,6 +291,8 @@ bench.plot_sweep(
   aggregated statistic
 - `aggregate=N` (int) — collapse the last N dimensions
 - `aggregate=["var1", "var2"]` — collapse only the named dimensions
+
+See the [Aggregation gallery](reference/meta/aggregation/index) for examples of each mode.
 
 ## Common Mistakes
 

@@ -175,7 +175,9 @@ function).
 
 See the [Cartesian Animation](reference/meta/cartesian_animation/index) gallery for an
 animated visualization of how each dimension builds on the last — from a single point to a
-line, grid, 3D stack, repeated measurements, and time-series film strip.
+line, grid, 3D stack, repeated measurements, and time-series film strip. The
+[Sampling Strategies gallery](reference/meta/sampling/index) shows how different sweep types
+(uniform, custom values, int vs float) produce different sample distributions.
 
 ### Execution
 
@@ -185,7 +187,10 @@ points. The `repeats` meta-variable controls how many times each combination is 
 enabling statistical analysis of stochastic functions. Compare the
 [no repeats](reference/meta/1_float/no_repeats/index) and
 [with repeats](reference/meta/1_float/with_repeats/index) galleries to see how repeats
-add confidence intervals to plots.
+add confidence intervals to plots. The
+[Statistics gallery](reference/meta/statistics/index) shows distributions, error bands,
+and the effect of different repeat counts. For caching patterns, see the
+[Cache Patterns example](reference/meta/advanced/example_advanced_cache_patterns).
 
 ### Presentation (Automatic Plot Selection)
 
