@@ -250,8 +250,9 @@ function resizeInner() {{
       doc.body.style.overflowY = 'hidden';
       var availW = f.clientWidth;
       var contentW = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
+      var MIN_ZOOM = 0.5;
       if (availW > 0 && contentW > availW) {{
-        doc.body.style.zoom = (availW / contentW).toString();
+        doc.body.style.zoom = Math.max(MIN_ZOOM, availW / contentW).toString();
       }} else {{
         doc.body.style.zoom = '1';
       }}
