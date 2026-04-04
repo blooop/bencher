@@ -46,6 +46,14 @@ class BenchReport(BenchPlotServer):
         self.last_save_ms: float = 0.0
         self.bench_results: list[BenchResult] = []
 
+    def clear(self) -> None:
+        """Remove all tabs and results so the report can be reused between runs.
+
+        Not safe to call while the report is being served to a live Panel session.
+        """
+        self.pane.clear()
+        self.bench_results.clear()
+
     def append_title(self, title: str, new_tab: bool = True):
         if new_tab:
             return self.append_tab(pn.pane.Markdown(f"# {title}", name=title), title)
