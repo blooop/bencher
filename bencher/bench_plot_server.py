@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import random
@@ -16,6 +17,11 @@ from tornado.web import StaticFileHandler
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
 
 logging.basicConfig(level=logging.INFO)
+
+# IANA dynamic/private port range used by _find_free_port()
+_PORT_RANGE_MIN = 49152
+_PORT_RANGE_MAX = 65535
+_PORT_PROBE_ATTEMPTS = 100
 
 
 class _CorsStaticHandler(StaticFileHandler):
@@ -116,17 +122,24 @@ class BenchPlotServer:
         (notably 6.x) because the kernel deterministically assigns the same
         ephemeral port, causing ``EADDRINUSE`` when a previous server is
         still running.  Picking a random port from the IANA dynamic range
-        (49152-65535) avoids this.
+        avoids this.
+
+        Note: there is an inherent TOCTOU race between probing the port here
+        and the actual ``bind()`` inside Panel/Bokeh.  In practice the window
+        is very small and the random selection makes collisions unlikely, but
+        callers should be prepared for a rare ``OSError`` on server start.
         """
-        for _ in range(100):
-            port = random.randint(49152, 65535)
+        for _ in range(_PORT_PROBE_ATTEMPTS):
+            port = random.randint(_PORT_RANGE_MIN, _PORT_RANGE_MAX)
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.bind(("0.0.0.0", port))
                     return port
-            except OSError:
-                continue
-        raise RuntimeError("Could not find a free port after 100 attempts")
+            except OSError as exc:
+                if exc.errno == errno.EADDRINUSE:
+                    continue
+                raise
+        raise RuntimeError(f"Could not find a free port after {_PORT_PROBE_ATTEMPTS} attempts")
 
     def serve(
         self,
