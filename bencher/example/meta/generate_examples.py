@@ -215,6 +215,14 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
         for res in bench.results:
             bench.report.append_to_result(res, res.to_optuna_plots())
 
+    # Append a rerun backend tab for each result
+    try:
+        for res in bench.results:
+            title = res.bench_cfg.title or "Rerun"
+            bench.report.append_tab(res.to_rerun(), f"Rerun: {title}")
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"  WARNING: Could not add rerun tab for {stem}: {e}")
+
     # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
     reports_output_dir = REPORTS_EXTRA_DIR / rel.parent
     reports_output_dir.mkdir(parents=True, exist_ok=True)
