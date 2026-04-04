@@ -52,8 +52,9 @@ primitives introduced below:
 
 ```{mermaid}
 flowchart LR
-    subgraph Problem ["① Problem Definition"]
+    subgraph Problem [" "]
         direction TB
+        PT["① Problem Definition"]
         subgraph PS ["ParametrizedSweep"]
             direction TB
             Inputs[FloatSweep · IntSweep · EnumSweep]
@@ -61,10 +62,12 @@ flowchart LR
             Fn["def benchmark(self)"]
             Inputs ~~~ Results ~~~ Fn
         end
+        PT ~~~ PS
     end
 
-    subgraph Sweep ["② Sweep Definition"]
+    subgraph Sweep [" "]
         direction TB
+        ST["② Sweep Definition"]
         subgraph SW ["plot_sweep()"]
             direction TB
             IV[input_vars]
@@ -72,10 +75,12 @@ flowchart LR
             CV[const_vars]
             IV ~~~ RV ~~~ CV
         end
+        ST ~~~ SW
     end
 
-    subgraph Run ["③ Run Definition"]
+    subgraph Run [" "]
         direction TB
+        RT["③ Run Definition"]
         subgraph RN ["bn.run()"]
             direction TB
             Level[level]
@@ -83,16 +88,24 @@ flowchart LR
             Opts[save · optimise · over_time]
             Level ~~~ Repeats ~~~ Opts
         end
+        RT ~~~ RN
     end
 
     Problem == .to_bench() ==> Sweep == bn.run() ==> Run
 
-    classDef light fill:#e8f4fc,stroke:#c8dff0,color:#3a6a8a
-    class Inputs,Results,Fn,IV,RV,CV,Level,Repeats,Opts light
+    classDef title fill:none,stroke:none,color:#2a2a2a,font-size:16px
+    classDef blueLight fill:#e8f4fc,stroke:#c8dff0,color:#3a6a8a
+    classDef purpleLight fill:#f4ecf8,stroke:#e0d0ea,color:#5a4068
+    classDef greenLight fill:#ecf6ee,stroke:#cce6d2,color:#3a5e40
 
-    style Problem fill:#fafcfe,stroke:#a8d4f0,stroke-width:2px
-    style Sweep fill:#fdfafe,stroke:#c4a4dc,stroke-width:2px
-    style Run fill:#fafefa,stroke:#98d0a4,stroke-width:2px
+    class PT,ST,RT title
+    class Inputs,Results,Fn blueLight
+    class IV,RV,CV purpleLight
+    class Level,Repeats,Opts greenLight
+
+    style Problem fill:#fafcfe,stroke:#c8dff0,stroke-width:2px
+    style Sweep fill:#fdfafe,stroke:#e0d0ea,stroke-width:2px
+    style Run fill:#fafefa,stroke:#cce6d2,stroke-width:2px
     style PS fill:#e8f4fc,stroke:#8ec0e4,stroke-width:2px,color:#2c5f7a
     style SW fill:#f4ecf8,stroke:#c4a4dc,stroke-width:2px,color:#5a3d6e
     style RN fill:#ecf6ee,stroke:#98d0a4,stroke-width:2px,color:#2e5e3a
@@ -144,30 +157,27 @@ while holding the others fixed:
 ```
 
 ```{mermaid}
-flowchart TB
-    subgraph stage1 ["① Problem Definition"]
-        Define(["Define — ParametrizedSweep"])
-    end
-    subgraph stage2 ["② Sweep Definition"]
-        Configure(["Configure — plot_sweep()"])
-    end
-    subgraph stage3 ["③ Run Definition"]
-        Debug(["Debug — bn.run( level=2 )"])
-        Refine(["Refine — bn.run( level=5, repeats=10 )"])
-    end
+flowchart TD
+    Define(["① Define — ParametrizedSweep"])
+    Configure(["② Configure — plot_sweep()"])
+    Debug(["③ Debug — bn.run( level=2 )"])
+    Check{"Works?"}
+    Refine(["④ Refine — bn.run( level=5, repeats=10 )"])
+    Done{"Add params?"}
 
-    Define --> Configure --> Debug
-    Debug -- "fix & rerun (cached)" --> Debug
-    Debug -- "ready" --> Refine
-    Refine -. "add params" .-> Define
+    Define --> Configure --> Debug --> Check
+    Check -- "No — fix & rerun (cached)" --> Debug
+    Check -- "Yes" --> Refine --> Done
+    Done -- "Yes" --> Define
+    Done -- "No" --> Stop([Done])
 
-    style stage1 fill:#fafcfe,stroke:#a8d4f0,stroke-width:2px
-    style stage2 fill:#fdfafe,stroke:#c4a4dc,stroke-width:2px
-    style stage3 fill:#fafefa,stroke:#98d0a4,stroke-width:2px
     style Define fill:#e8f4fc,stroke:#8ec0e4,color:#2c5f7a,stroke-width:2px
     style Configure fill:#f4ecf8,stroke:#c4a4dc,color:#5a3d6e,stroke-width:2px
     style Debug fill:#ecf6ee,stroke:#98d0a4,color:#2e5e3a,stroke-width:2px
     style Refine fill:#ecf6ee,stroke:#98d0a4,color:#2e5e3a,stroke-width:2px
+    style Check fill:#fff8e8,stroke:#e0c878,color:#6a5a20,stroke-width:2px
+    style Done fill:#fff8e8,stroke:#e0c878,color:#6a5a20,stroke-width:2px
+    style Stop fill:#f0f0f0,stroke:#c0c0c0,color:#505050,stroke-width:2px
 ```
 
 ```{raw} html
