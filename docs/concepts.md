@@ -145,18 +145,29 @@ while holding the others fixed:
 
 ```{mermaid}
 flowchart TB
-    Define["1. Define — write ParametrizedSweep"]
-    Configure["2. Configure — set up plot_sweep()"]
-    Debug["3. Debug — bn.run(level=2, repeats=1)"]
-    Refine["4. Refine — bn.run(level=5, repeats=10)"]
+    subgraph stage1 [" "]
+        Define(["Define — ParametrizedSweep"])
+    end
+    subgraph stage2 [" "]
+        Configure(["Configure — plot_sweep()"])
+    end
+    subgraph stage3 [" "]
+        Debug(["Debug — bn.run( level=2 )"])
+        Refine(["Refine — bn.run( level=5, repeats=10 )"])
+    end
 
     Define --> Configure --> Debug
     Debug -- "fix & rerun (cached)" --> Debug
     Debug -- "ready" --> Refine
-    Refine -- "add params" --> Define
+    Refine -. "add params" .-> Define
 
-    classDef step fill:#e8f4fc,stroke:#8ec0e4,color:#2c5f7a,stroke-width:2px
-    class Define,Configure,Debug,Refine step
+    style stage1 fill:#fafcfe,stroke:#a8d4f0,stroke-width:2px
+    style stage2 fill:#fdfafe,stroke:#c4a4dc,stroke-width:2px
+    style stage3 fill:#fafefa,stroke:#98d0a4,stroke-width:2px
+    style Define fill:#e8f4fc,stroke:#8ec0e4,color:#2c5f7a,stroke-width:2px
+    style Configure fill:#f4ecf8,stroke:#c4a4dc,color:#5a3d6e,stroke-width:2px
+    style Debug fill:#ecf6ee,stroke:#98d0a4,color:#2e5e3a,stroke-width:2px
+    style Refine fill:#ecf6ee,stroke:#98d0a4,color:#2e5e3a,stroke-width:2px
 ```
 
 ```{raw} html
