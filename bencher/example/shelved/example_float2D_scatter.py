@@ -17,8 +17,8 @@
 # class Example2DGaussianResult(bn.ParametrizedSweep):
 #     """A class to represent the properties of a volume sample."""
 
-#     gauss_x = bn.ResultVar("m", doc="x value of the 2D gaussian")
-#     gauss_y = bn.ResultVar("m", doc="y value of the 2D gaussian")
+#     gauss_x = bn.ResultFloat("m", doc="x value of the 2D gaussian")
+#     gauss_y = bn.ResultFloat("m", doc="y value of the 2D gaussian")
 
 #     point2D = bn.ResultVec(2, "m", doc="2D vector of the point")
 

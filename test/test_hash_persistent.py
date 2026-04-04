@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 import textwrap
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 import param
@@ -31,7 +32,7 @@ from bencher.variables.results import (
     ResultPath,
     ResultReference,
     ResultString,
-    ResultVar,
+    ResultFloat,
     ResultVec,
     ResultVideo,
     ResultVolume,
@@ -246,7 +247,7 @@ class TestBenchCfgHashStability:
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [
-                ResultVar(units="m/s", doc="speed"),
+                ResultFloat(units="m/s", doc="speed"),
                 ResultImage(doc="img"),
                 ResultString(doc="label"),
                 ResultContainer(doc="cont"),
@@ -312,7 +313,7 @@ _BATCH_HASH_SCRIPT = textwrap.dedent("""\
     import json
     import param
     import bencher.variables.results as results_module
-    from bencher.variables.results import ResultVec, ResultVar, ResultImage
+    from bencher.variables.results import ResultVec, ResultFloat, ResultImage
     from bencher.bench_cfg import BenchCfg
 
     hashes = {}
@@ -335,7 +336,7 @@ _BATCH_HASH_SCRIPT = textwrap.dedent("""\
     cfg.repeats = 1
     cfg.tag = ""
     cfg.input_vars = []
-    cfg.result_vars = [ResultVar(units="m/s", doc="speed"), ResultImage(doc="img")]
+    cfg.result_vars = [ResultFloat(units="m/s", doc="speed"), ResultImage(doc="img")]
     cfg.const_vars = []
     hashes["BenchCfg"] = cfg.hash_persistent(include_repeats=True)
 
@@ -363,8 +364,12 @@ def cross_process_hashes():
     Scoped to the class so the 2 subprocess invocations are shared across all
     parametrized test methods in TestCrossProcessDeterminism.
     """
-    hashes_a = _all_hashes_in_subprocess()
-    hashes_b = _all_hashes_in_subprocess()
+    # Thread-safe: each task spawns an independent subprocess with no shared state.
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_a = executor.submit(_all_hashes_in_subprocess)
+        future_b = executor.submit(_all_hashes_in_subprocess)
+        hashes_a = future_a.result()
+        hashes_b = future_b.result()
     return hashes_a, hashes_b
 
 

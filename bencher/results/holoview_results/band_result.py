@@ -7,7 +7,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import SCALAR_RESULT_TYPES
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -33,7 +33,7 @@ class BandResult(HoloviewResult):
             reduce=ReduceType.NONE,
             target_dimension=None,
             result_var=result_var,
-            result_types=(ResultVar, ResultBool),
+            result_types=SCALAR_RESULT_TYPES,
             override=override,
             agg_over_dims=None,
             band_agg_dims=band_agg_dims,
@@ -51,9 +51,11 @@ class BandResult(HoloviewResult):
             return self._band_over_time(
                 dataset, var, explicit_title, agg_over_dims, units=units, **kwargs
             )
+
+        # Without over_time: find a continuous x-axis from remaining dims
         return self._band_static(dataset, var, explicit_title, agg_over_dims, units=units, **kwargs)
 
-    def _band_over_time(self, dataset, var, title, agg_over_dims, units="", **kwargs):
+    def _band_over_time(self, dataset, var, title, agg_over_dims=None, units="", **kwargs):
         da = dataset[var]
         sample_dims = [d for d in da.dims if d != "over_time"]
         if agg_over_dims:
@@ -65,8 +67,11 @@ class BandResult(HoloviewResult):
         if not sample_dims:
             return None
 
-        stacked = da.stack(sample=sample_dims).transpose("over_time", "sample")
-        values = stacked.values
+        # Reshape to (n_time, n_samples) using numpy directly.
+        # Avoids xarray .stack() which fails on Arrow-backed string coords.
+        time_axis = list(da.dims).index("over_time")
+        raw = np.asarray(da.values, dtype=float)
+        values = np.moveaxis(raw, time_axis, 0).reshape(da.sizes["over_time"], -1)
         time_coords = da.coords["over_time"].values
 
         return self._build_band_fig(time_coords, values, var, title, "over_time", units, **kwargs)

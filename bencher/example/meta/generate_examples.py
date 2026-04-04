@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import bencher as bn
@@ -71,9 +72,9 @@ def _take_thumbnail(
 
     def _screenshot_with(pg) -> bytes:
         pg.set_viewport_size({"width": width, "height": height})
-        pg.goto(html_path.resolve().as_uri(), wait_until="load", timeout=15000)
-        # Brief pause for Bokeh/Panel JS to render plots after DOM load
-        pg.wait_for_timeout(2000)
+        pg.goto(html_path.resolve().as_uri(), wait_until="networkidle", timeout=15000)
+        # Brief pause for Bokeh/Panel JS to render plots after network settles
+        pg.wait_for_timeout(500)
         return pg.screenshot()
 
     if page is not None:
@@ -110,21 +111,28 @@ def generate_python_files():
     )
     from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
     from bencher.example.meta.generate_meta_result_types import example_meta_result_types
+    from bencher.example.meta.generate_meta_levels import example_meta_levels
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
+    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
     from bencher.example.meta.generate_meta_workflows import example_meta_workflows
 
     from bencher.example.meta.generate_meta_regression import example_meta_regression
     from bencher.example.meta.generate_meta_yaml import example_meta_yaml
     from bencher.example.meta.generate_meta_performance import example_meta_performance
     from bencher.example.meta.generate_meta_publish import example_meta_publish
-    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
+    from bencher.example.meta.generate_meta_aggregation import example_meta_aggregation
+    from bencher.example.meta.generate_meta_cartesian_animation import (
+        example_meta_cartesian_animation,
+    )
+    from bencher.example.meta.generate_meta_container_tabs import example_meta_container_tabs
 
     example_meta()
     example_meta_result_types()
     example_meta_image_video()
     example_meta_composable()
     example_meta_plot_types()
+    example_meta_levels()
     example_meta_sampling()
     example_meta_statistics()
     example_meta_const_vars()
@@ -139,6 +147,9 @@ def generate_python_files():
     example_meta_performance()
     example_meta_publish()
     example_meta_rerun()
+    example_meta_aggregation()
+    example_meta_cartesian_animation()
+    example_meta_container_tabs()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -192,13 +203,17 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
         run_cfg.use_optuna = run_kwargs["use_optuna"]
+    if run_kwargs.get("over_time"):
+        run_cfg.over_time = True
     optimise = run_kwargs.get("optimise", 0)
     print(f"Running {py_file}...")
+    t_exec_start = time.perf_counter()
     bench = example_fn(run_cfg)
 
     if optimise and bench.results:
         bench.optimize(n_trials=optimise, plot=False)
-        bench.report.append(bench.results[-1].to_optuna_plots())
+        for res in bench.results:
+            bench.report.append_to_result(res, res.to_optuna_plots())
 
     # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
     reports_output_dir = REPORTS_EXTRA_DIR / rel.parent
@@ -208,14 +223,18 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
         directory=str(report_dir),
         in_html_folder=False,
     )
-    print(f"  Saved report to {report_path}")
+    exec_elapsed = time.perf_counter() - t_exec_start
+    print(f"  Saved report to {report_path} ({exec_elapsed:.1f}s)")
 
     # Generate thumbnail screenshot
     thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
+    t_thumb_start = time.perf_counter()
     try:
         _take_thumbnail(Path(report_path), thumb_path, page=page)
-        print(f"  Saved thumbnail to {thumb_path}")
+        thumb_elapsed = time.perf_counter() - t_thumb_start
+        print(f"  Saved thumbnail to {thumb_path} ({thumb_elapsed:.1f}s)")
     except Exception as e:  # pylint: disable=broad-except
+        thumb_elapsed = time.perf_counter() - t_thumb_start
         print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
     # Generate RST that shows source + embeds HTML report
@@ -245,6 +264,8 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
         "section_rel": str(rel.parent),
         "rst_rel": str(rel.with_suffix("").as_posix()),
         "bench_name": bench.bench_name,
+        "exec_s": exec_elapsed,
+        "thumb_s": thumb_elapsed,
     }
 
 
@@ -413,12 +434,16 @@ SECTION_GROUPS = [
             ("Result Types", "result_types"),
             ("Plot Types", "plot_types"),
             ("Bool Plot Types", "bool_plot_types"),
+            ("Level System", "levels"),
             ("Sampling Strategies", "sampling"),
             ("Composable Containers", "composable_containers"),
+            ("Container Tab Layouts", "container_tabs"),
+            ("Aggregation", "aggregation"),
             ("Constant Variables", "const_vars"),
             ("Statistics", "statistics"),
             ("Workflows", "workflows"),
             ("YAML Sweeps", "yaml"),
+            ("Cartesian Animation", "cartesian_animation"),
             ("Advanced Patterns", "advanced"),
             ("Regression Detection", "regression"),
             ("Performance", "performance"),
@@ -506,8 +531,30 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
     print(f"  Generated gallery page: {gallery_path}")
 
 
+def _print_timing_summary(examples_metadata: list[dict]) -> None:
+    """Print a summary of example execution and thumbnail times, sorted by total duration."""
+    timed = [
+        (m.get("exec_s", 0) + m.get("thumb_s", 0), m) for m in examples_metadata if "exec_s" in m
+    ]
+    timed.sort(key=lambda x: x[0], reverse=True)
+    total_exec = sum(m["exec_s"] for m in examples_metadata if "exec_s" in m)
+    total_thumb = sum(m["thumb_s"] for m in examples_metadata if "thumb_s" in m)
+    print(f"\n{'=' * 70}")
+    print(f"Timing summary: {len(timed)} examples")
+    print(f"  Total execution+save: {total_exec:.1f}s")
+    print(f"  Total thumbnails:     {total_thumb:.1f}s")
+    print(f"  Combined:             {total_exec + total_thumb:.1f}s")
+    print("\nTop 15 slowest (exec+thumb):")
+    for total_s, m in timed[:15]:
+        print(
+            f"  {total_s:6.2f}s  (exec {m['exec_s']:.1f}s + thumb {m['thumb_s']:.1f}s)  {m['stem']}"
+        )
+    print(f"{'=' * 70}\n")
+
+
 def generate_all() -> list[Path]:
     """Generate Python examples, run them, save HTML reports, generate RST for docs."""
+    t_all_start = time.perf_counter()
     # Clean output directories
     if META_DOCS_DIR.exists():
         shutil.rmtree(META_DOCS_DIR)
@@ -663,6 +710,9 @@ def generate_all() -> list[Path]:
 {entries_str}
 """
     (META_DOCS_DIR / "index.rst").write_text(meta_index, encoding="utf-8")
+
+    _print_timing_summary(examples_metadata)
+    print(f"Total generate_all() time: {time.perf_counter() - t_all_start:.1f}s")
 
     return sorted(META_DOCS_DIR.rglob("*.rst"))
 

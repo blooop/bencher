@@ -9,8 +9,8 @@ class TestBenchRunner(unittest.TestCase):
     # Tests that bn.BenchRunner can be created with default configuration and the import statement in the bn.BenchRunner class is fixed
     def test_benchrunner_default_configuration_fixed(self):
         bench_runner = bn.BenchRunner("bench_runner_test")
-        self.assertEqual(bench_runner.run_cfg.cache_samples, True)
-        self.assertEqual(bench_runner.run_cfg.only_hash_tag, True)
+        self.assertEqual(bench_runner.run_cfg.cache_samples, False)
+        self.assertEqual(bench_runner.run_cfg.only_hash_tag, False)
         self.assertEqual(bench_runner.run_cfg.level, 2)
         self.assertEqual(bench_runner.publisher, None)
         self.assertEqual(bench_runner.bench_fns, [])
@@ -71,8 +71,8 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
         self.assertEqual(results[0].run_cfg.run_tag, run_tag)
 
-        # run with the same tag but set use cache to false, should not hit cache because even tho the tag is the same, cache_results=false
-        results = bench_runner.run(cache_results=False)
+        # run with the same tag but set use cache to false, should not hit cache because even tho the tag is the same, cache_samples=false
+        results = bench_runner.run(cache_samples=False)
         self.assertEqual(results[0].sample_cache.worker_wrapper_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_fn_call_count, 2)
         self.assertEqual(results[0].sample_cache.worker_cache_call_count, 0)
@@ -398,5 +398,97 @@ class TestBenchRunner(unittest.TestCase):
     #     results = bench_runner.run(run_cfg=bn.BenchRunCfg(run_tag="1"))
 
     #     self.assertEqual(results[0].bench_cfg.run_tag, "1")
+
+    def test_cache_samples_deprecation_warning(self):
+        """Passing the old cache_results kwarg emits a DeprecationWarning."""
+        import warnings
+
+        bench_runner = bn.BenchRunner("test_cache_deprecation")
+
+        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:  # pylint: disable=unused-argument
+            cfg = bn.BenchCfg()
+            cfg.run_cfg = run_cfg
+            return cfg
+
+        bench_runner.add(simple_test)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            bench_runner.run(cache_results=False)
+            self.assertTrue(
+                any(
+                    "cache_results parameter is deprecated" in str(warning.message) for warning in w
+                )
+            )
+
+    def test_progressive_run_auto_enables_cache(self):
+        """Progressive run auto-enables cache_samples even though default is False."""
+        executed_cfgs = []
+
+        def tracking_bench(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
+            executed_cfgs.append(run_cfg)
+            bench = bn.Bench("track", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("track")
+
+        br = bn.BenchRunner("test_auto_cache")
+        br.add(tracking_bench)
+        br.run(level=2, max_level=3)
+
+        # All executed configs should have cache_samples=True
+        for cfg in executed_cfgs:
+            self.assertTrue(cfg.cache_samples)
+            self.assertTrue(cfg.only_hash_tag)
+
+    def test_single_level_no_auto_cache(self):
+        """Single-level run (no max_level) leaves cache_samples=False."""
+        executed_cfgs = []
+
+        def tracking_bench(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
+            executed_cfgs.append(run_cfg)
+            bench = bn.Bench("track", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
+            return bench.plot_sweep("track")
+
+        br = bn.BenchRunner("test_no_auto_cache")
+        br.add(tracking_bench)
+        br.run(level=2)
+
+        self.assertEqual(len(executed_cfgs), 1)
+        self.assertFalse(executed_cfgs[0].cache_samples)
+
+    def test_bench_reuse_report_cleared(self):
+        """Progressive bn.run() with ParametrizedSweep produces only last level's report."""
+        # Progressive run from level=2 to max_level=3
+        progressive_results = bn.run(
+            SimpleBenchClassFloat, level=2, max_level=3, show=False, cache_samples=True
+        )
+        # Single-level run at the final level as a baseline for tab count
+        single_results = bn.run(SimpleBenchClassFloat, level=3, show=False, cache_samples=False)
+
+        prog_report = getattr(progressive_results[-1], "report", None)
+        single_report = getattr(single_results[-1], "report", None)
+        self.assertIsNotNone(prog_report)
+        self.assertIsNotNone(single_report)
+
+        prog_tabs = len(prog_report.pane)
+        single_tabs = len(single_report.pane)
+        self.assertGreater(prog_tabs, 0)
+        self.assertEqual(
+            single_tabs,
+            prog_tabs,
+            "Progressive run should not accumulate tabs across levels; "
+            "only the last level's report should be present.",
+        )
+
+    def test_bench_reuse_cache_hits(self):
+        """Progressive run where level N+1 gets cache hits from level N's samples."""
+        results = bn.run(
+            SimpleBenchClassFloat, level=2, max_level=3, show=False, cache_samples=True
+        )
+        last_result = results[-1]
+        self.assertIsNotNone(
+            getattr(last_result, "sample_cache", None),
+            "Expected sample_cache on progressive run result",
+        )
+        self.assertGreater(last_result.sample_cache.worker_cache_call_count, 0)
 
     # Tests that bn.BenchRunner can handle empty list of Benchable functions

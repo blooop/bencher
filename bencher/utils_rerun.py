@@ -1,58 +1,82 @@
-import logging
-from importlib.metadata import version as get_package_version, PackageNotFoundError
+"""Rerun SDK integration for bencher — capture live recordings.
+
+This module requires the ``rerun-sdk`` package.  For functions that work
+with pre-recorded ``.rrd`` files without the SDK, see ``utils_rrd.py``.
+
+Architecture
+------------
+Displaying rerun data inside a Panel/Bokeh report requires two pieces:
+
+1. **Data capture** — ``capture_rerun_rrd()`` drains the in-memory rerun
+   recording to a *complete* ``.rrd`` file on disk.  Using ``rr.save()``
+   (which streams to an open file) does NOT work because the file is still
+   being written when the viewer tries to fetch it.  Always call
+   ``rr.log(...)`` first, then ``capture_rerun_rrd()`` / ``capture_rerun_window()``.
+
+2. **Viewer** — ``rrd_file_to_pane()`` (in ``utils_rrd.py``) writes a
+   small HTML page that loads the ``@rerun-io/web-viewer`` from CDN and
+   points it at the ``.rrd`` file.  Both the viewer page and the data are
+   served by the Panel server at ``/rrd_static/``, keeping everything on
+   the same HTTP origin (no CORS, no extra ports).
+"""
 
 import rerun as rr
-import panel as pn
-from rerun_notebook import Viewer
-from .utils import publish_file, gen_rerun_data_path
+
+from .utils import gen_rerun_data_path
+from .utils_rrd import rrd_file_to_pane
 
 
-def _get_rerun_version() -> str:
-    """Get the installed rerun package version."""
-    try:
-        return get_package_version("rerun-sdk")
-    except PackageNotFoundError:
-        return "0.30.1"
+def _ensure_rerun_init():  # pragma: no cover
+    """Ensure a rerun recording exists, creating one if needed."""
+    if rr.get_global_data_recording() is None:
+        rr.init("bencher")
+
+
+def capture_rerun_rrd(recording: rr.RecordingStream | None = None) -> str:  # pragma: no cover
+    """Save the current rerun recording to an .rrd file and return the path.
+
+    Data must be logged BEFORE calling this function so that the in-memory
+    recording has content to drain.  Calls ``rr.init()`` automatically if no
+    recording exists yet.
+    """
+    _ensure_rerun_init()
+    rec = recording or rr.get_global_data_recording()
+    rrd_bytes = rec.memory_recording().drain_as_bytes()
+    file_path = gen_rerun_data_path()
+    with open(file_path, "wb") as f:
+        f.write(rrd_bytes)
+    return file_path
 
 
 def rerun_to_pane(
     width: int = 950, height: int = 712, recording: rr.RecordingStream | None = None
 ):  # pragma: no cover
-    """Render the current rerun recording as an inline Panel widget."""
-    if recording is None:
-        recording = rr.get_global_data_recording()
-    viewer = Viewer(width=width, height=height)
-    viewer.send_rrd(recording.memory_recording().drain_as_bytes())
-    return pn.pane.IPyWidget(viewer)
+    """Render the current rerun recording as an inline HTML pane."""
+    file_path = capture_rerun_rrd(recording=recording)
+    return rrd_file_to_pane(file_path, width=width, height=height)
 
 
-def rrd_to_pane(
-    url: str, width: int = 500, height: int = 600, version: str | None = None
-):  # pragma: no cover
-    """Display an .rrd file from a URL using the hosted rerun web viewer."""
-    if version is None:
-        version = _get_rerun_version()
-    return pn.pane.HTML(
-        f'<iframe src="https://app.rerun.io/version/{version}/?url={url}"'
-        f" width={width} height={height}></iframe>"
-    )
+def capture_rerun_window(
+    recording: rr.RecordingStream | None = None, **_kwargs
+) -> str:  # pragma: no cover
+    """Capture the current rerun recording and return the .rrd file path.
 
+    Data must be logged BEFORE calling this function so that the in-memory
+    recording has content to drain.  The returned path is stored by
+    ``ResultRerun``; rendering into an HTML viewer pane happens later via
+    ``ResultRerun.to_container()``.
 
-def publish_and_view_rrd(
-    file_path: str,
-    remote: str,
-    branch_name,
-    content_callback: callable,
-    version: str | None = None,
-):  # pragma: no cover
-    publish_file(file_path, remote=remote, branch_name="test_rrd")
-    publish_path = content_callback(remote, branch_name, file_path)
-    logging.info(publish_path)
-    return rrd_to_pane(publish_path, version=version)
+    Viewer dimensions (``width``/``height``) are now taken from the
+    ``ResultRerun`` descriptor.  Passing them here is deprecated and they
+    will be ignored.
+    """
+    if _kwargs:
+        import warnings
 
-
-def capture_rerun_window(width: int = 500, height: int = 500):
-    rrd_path = gen_rerun_data_path()
-    rr.save(rrd_path)
-    path = rrd_path.split("cachedir")[1]
-    return rrd_to_pane(f"http://127.0.0.1:8001/{path}", width=width, height=height)
+        warnings.warn(
+            "capture_rerun_window() no longer accepts width/height; "
+            "set them on ResultRerun instead. Extra kwargs will be removed in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return capture_rerun_rrd(recording=recording)

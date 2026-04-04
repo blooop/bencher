@@ -5,7 +5,7 @@ from param import Parameter
 import xarray as xr
 
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -49,7 +49,7 @@ class HeatmapResult(HoloviewResult):
             panel_range=VarRange(0, None),
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar,),
+            result_types=(ResultFloat,),
             override=override,
             **kwargs,
         )

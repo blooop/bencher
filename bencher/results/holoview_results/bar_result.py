@@ -8,7 +8,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import ResultFloat, ResultBool
 from bencher.results.holoview_results.holoview_result import HoloviewResult, PLOTLY_COLORS
 
 
@@ -35,7 +35,7 @@ class BarResult(HoloviewResult):
             {
                 "repeats_range": VarRange(1, 1),
                 "reduce": ReduceType.SQUEEZE,
-                "result_types": (ResultVar,),
+                "result_types": (ResultFloat,),
             },
             {
                 "repeats_range": VarRange(2, None),

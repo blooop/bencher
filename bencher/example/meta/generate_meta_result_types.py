@@ -4,8 +4,6 @@ Demonstrates each result type at different input dimensionalities.
 Each generated example is self-contained with an inline class definition.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -49,13 +47,11 @@ def _build_response_timer_code():
                 '    endpoint = bn.StringSweep(["api/users", "api/orders"], doc="API endpoint")',
                 '    concurrency = bn.FloatSweep(default=50, bounds=[1, 100], doc="Concurrent requests")',
                 "",
-                '    latency = bn.ResultVar(units="ms", doc="Response latency")',
+                '    latency = bn.ResultFloat(units="ms", doc="Response latency")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 '        base = {"api/users": 12.0, "api/orders": 25.0}[self.endpoint]',
                 "        self.latency = base + 0.5 * math.log1p(self.concurrency)",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -82,11 +78,9 @@ def _build_health_checker_code():
                 "",
                 '    healthy = bn.ResultBool(doc="Whether the service is healthy")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 "        score = math.sin(math.pi * self.threshold) * (1.0 - 0.5 * self.difficulty)",
                 "        self.healthy = score > 0.5",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -112,13 +106,11 @@ def _build_system_metrics_code():
                 "",
                 '    metrics = bn.ResultVec(3, "%", doc="CPU, memory, disk utilization")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 "        cpu = 20.0 + 70.0 * math.sin(math.pi * self.load / 2.0)",
                 "        mem = 30.0 + 50.0 * self.load * math.log1p(self.instances)",
                 "        disk = 10.0 + 40.0 * math.sqrt(self.load * self.instances / 10.0)",
                 "        self.metrics = [cpu, mem, disk]",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -144,8 +136,7 @@ def _build_log_formatter_code():
                 "",
                 '    report = bn.ResultString(doc="Formatted log report")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 "        detail = int(math.ceil(self.verbosity * 5))",
                 "        text = (",
                 '            f"Level: {self.level}\\n"',
@@ -153,7 +144,6 @@ def _build_log_formatter_code():
                 '            f"\\tDetail depth: {detail}"',
                 "        )",
                 "        self.report = bn.tabs_in_markdown(text)",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -178,15 +168,13 @@ def _build_report_exporter_code():
                 "",
                 '    file_result = bn.ResultPath(doc="Generated report file")',
                 "",
-                "    def __call__(self, **kwargs):",
-                "        self.update_params_from_kwargs(**kwargs)",
+                "    def benchmark(self):",
                 '        filename = bn.gen_path(self.format_type, suffix=".txt")',
                 '        line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]',
                 '        with open(filename, "w", encoding="utf-8") as f:',
                 "            for i in range(line_count):",
                 '                f.write(f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\\n")',
                 "        self.file_result = filename",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -212,16 +200,14 @@ def _build_timeseries_collector_code():
                 "",
                 '    result_ds = bn.ResultDataSet(doc="Collected timeseries dataset")',
                 "",
-                "    def __call__(self, **kwargs):",
+                "    def benchmark(self):",
                 "        import xarray as xr",
                 "",
-                "        self.update_params_from_kwargs(**kwargs)",
                 "        n_samples = max(1, int(self.duration * self.sample_rate))",
                 "        values = [math.sin(2 * math.pi * i / max(n_samples, 1)) * self.duration for i in range(n_samples)]",
                 '        data_array = xr.DataArray(values, dims=["time"], coords={"time": list(range(n_samples))})',
                 '        ds = xr.Dataset({"result_ds": data_array})',
                 "        self.result_ds = bn.ResultDataSet(ds.to_pandas())",
-                "        return super().__call__()",
             ]
         ),
     )
@@ -243,11 +229,9 @@ class MetaResultTypes(MetaGeneratorBase):
     result_type = bn.StringSweep(RESULT_TYPES, doc="Result type to demonstrate")
     input_dims = bn.IntSweep(default=0, bounds=(0, 2), doc="Number of input dimensions")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.input_dims not in VALID_COMBOS.get(self.result_type, []):
-            return super().__call__()
+            return
 
         imports, class_name, result_vars, input_vars_map, class_code = BENCHABLE_MAP[
             self.result_type
@@ -255,8 +239,8 @@ class MetaResultTypes(MetaGeneratorBase):
         input_vars_code = input_vars_map[self.input_dims]
 
         sub_dir = f"{OUTPUT_DIR}/{self.result_type}"
-        filename = f"{self.result_type}_{self.input_dims}d"
         function_name = f"example_{self.result_type}_{self.input_dims}d"
+        filename = function_name
         title = f"{self.result_type.replace('_', ' ').title()}: {self.input_dims}D input"
 
         desc_map = {
@@ -288,8 +272,6 @@ class MetaResultTypes(MetaGeneratorBase):
             run_kwargs={"level": level},
         )
 
-        return super().__call__()
-
 
 def example_meta_result_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaResultTypes().to_bench(run_cfg)
@@ -297,8 +279,8 @@ def example_meta_result_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
     bench.plot_sweep(
         title="Result Types",
         input_vars=[
-            bn.p("result_type", RESULT_TYPES),
-            bn.p("input_dims", [0, 1, 2]),
+            bn.sweep("result_type", RESULT_TYPES),
+            bn.sweep("input_dims", [0, 1, 2]),
         ],
     )
 

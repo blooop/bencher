@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from copy import deepcopy
 from itertools import product as iter_product
 
@@ -140,12 +141,12 @@ class OptunaResult(BenchResultBase):
 
         if include_meta:
             # Importance analysis: every raw data point becomes a trial with all vars
-            df = self.to_dataset(reduce=ReduceType.NONE).to_dataframe().reset_index()
+            df = self.to_dataset(reduce=ReduceType.NONE, deep=False).to_dataframe().reset_index()
             trial_vars = list(self.bench_cfg.all_vars)
         else:
             # Optimization mode: partition by optimize flag, aggregate non-optimized
             input_vars = self.bench_cfg.input_vars
-            df = self.to_dataset(reduce=ReduceType.AUTO).to_dataframe().reset_index()
+            df = self.to_dataset(reduce=ReduceType.AUTO, deep=False).to_dataframe().reset_index()
             opt_vars, non_opt_vars = self.bench_cfg.partition_input_vars(input_vars)
 
             if not opt_vars:
@@ -156,7 +157,14 @@ class OptunaResult(BenchResultBase):
             df = _aggregate_non_optimized(df, opt_vars, non_opt_vars, target_names)
             trial_vars = opt_vars
 
+        rows_before = len(df)
         df.dropna(inplace=True)
+        rows_after = len(df)
+        if rows_after == 0 and rows_before > 0:
+            logging.warning(
+                "All %d rows dropped due to NaN values — optuna study will have no trials",
+                rows_before,
+            )
 
         distributions = {}
         for i in trial_vars:
@@ -238,11 +246,19 @@ class OptunaResult(BenchResultBase):
             pn.pane.panel: A panel with optuna visualisations.
         """
 
-        self.studies = [self.bench_result_to_study(True)]
+        try:
+            self.studies = [self.bench_result_to_study(True)]
+        except Exception as e:  # pylint: disable=broad-except
+            logging.exception(e)
+            return pn.Column(pn.pane.Markdown(f"**Optuna study creation failed**: {e}"))
         tab_names = ["Analysis"]
         if self.bench_cfg.repeats > 1:
-            self.studies.append(self.bench_result_to_study(False))
-            tab_names = ["With Repeats", "Without Repeats"]
+            try:
+                self.studies.append(self.bench_result_to_study(False))
+                tab_names = ["With Repeats", "Without Repeats"]
+            except Exception as e:  # pylint: disable=broad-except
+                logging.exception(e)
+                tab_names = ["Analysis (without-repeats study failed)"]
 
         plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600
         target_names = self.bench_cfg.optuna_targets()
@@ -299,9 +315,9 @@ class OptunaResult(BenchResultBase):
                         target_names=target_names[:3],
                         include_dominated_trials=False,
                     )
-                    if pareto_width is not None:
+                    if pareto_width is not None and hasattr(study_pane[-1], "width"):
                         study_pane[-1].width = pareto_width
-                    if pareto_height is not None:
+                    if pareto_height is not None and hasattr(study_pane[-1], "height"):
                         study_pane[-1].height = pareto_height
 
                 param_str.append(
@@ -319,7 +335,14 @@ class OptunaResult(BenchResultBase):
                 )
 
                 if _study_has_multiple_params(study):
-                    study_pane.append(plot_param_importances(study, target_name=target_names[0]))
+                    try:
+                        study_pane.append(
+                            plot_param_importances(study, target_name=target_names[0])
+                        )
+                    except RuntimeError as e:
+                        study_pane.append(
+                            pn.pane.Markdown(f"**Parameter importance unavailable**: {e}")
+                        )
 
                 param_str.extend(summarise_trial(study.best_trial, self.bench_cfg))
 

@@ -19,11 +19,10 @@ class BenchPolygons(bn.ParametrizedSweep):
     color = bn.StringSweep(["red", "green", "blue"])
     start_angle = bn.FloatSweep(default=0, bounds=[0, 360])
     polygon = bn.ResultImage()
-    area = bn.ResultVar()
-    side_length = bn.ResultVar()
+    area = bn.ResultFloat()
+    side_length = bn.ResultFloat()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         points = polygon_points(self.radius, self.sides, self.start_angle)
         filepath = bn.gen_image_path("polygon")
         self.polygon = self.points_to_polygon_png(points, filepath)
@@ -32,7 +31,6 @@ class BenchPolygons(bn.ParametrizedSweep):
 
         self.side_length = 2 * self.radius * math.sin(math.pi / self.sides)
         self.area = (self.sides * self.side_length**2) / (4 * math.tan(math.pi / self.sides))
-        return super().__call__()
 
     def points_to_polygon_png(self, points: list[float], filename: str):
         """Draw a closed polygon and save to png using PIL"""

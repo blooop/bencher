@@ -5,8 +5,6 @@ three backends (Video, Panel, Dataset) and all four ComposeType strategies
 (right, down, sequence, overlay).
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -45,10 +43,9 @@ _BENCHABLE_IMAGE_CLASS = (
     '    color = bn.StringSweep(["red", "green", "blue"], doc="Line color")\n'
     "\n"
     '    polygon = bn.ResultImage(doc="Rendered polygon image")\n'
-    '    area = bn.ResultVar("u^2", doc="Polygon area")\n'
+    '    area = bn.ResultFloat("u^2", doc="Polygon area")\n'
     "\n"
-    "    def __call__(self, **kwargs):\n"
-    "        self.update_params_from_kwargs(**kwargs)\n"
+    "    def benchmark(self):\n"
     "        points = _polygon_points(self.radius, self.sides)\n"
     "        img = _draw_polygon_image(points, self.color, linewidth=3)\n"
     '        filepath = bn.gen_image_path("polygon")\n'
@@ -56,8 +53,7 @@ _BENCHABLE_IMAGE_CLASS = (
     "        self.polygon = str(filepath)\n"
     "        self.area = (\n"
     "            self.sides * (2 * self.radius * math.sin(math.pi / self.sides)) ** 2\n"
-    "        ) / (4 * math.tan(math.pi / self.sides))\n"
-    "        return super().__call__()"
+    "        ) / (4 * math.tan(math.pi / self.sides))"
 )
 
 
@@ -69,12 +65,10 @@ class MetaComposableVideo(MetaGeneratorBase):
         doc="Composition strategy",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         compose = self.compose
-        filename = f"composable_video_{compose}"
         function_name = f"example_composable_video_{compose}"
+        filename = function_name
         title = f"Composable Video: ComposeType.{compose}"
 
         imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
@@ -89,8 +83,7 @@ class MetaComposableVideo(MetaGeneratorBase):
             'doc="Number of frames")\n'
             "    composed_video = bn.ResultVideo(doc='Composed video output')\n"
             "\n"
-            "    def __call__(self, **kwargs):\n"
-            "        self.update_params_from_kwargs(**kwargs)\n"
+            "    def benchmark(self):\n"
             "        vid = bn.ComposableContainerVideo()\n"
             "        for i in range(self.num_frames):\n"
             "            angle = 360.0 * i / self.num_frames\n"
@@ -128,8 +121,6 @@ class MetaComposableVideo(MetaGeneratorBase):
             run_kwargs={"level": 2},
         )
 
-        return super().__call__()
-
 
 class MetaComposablePanel(MetaGeneratorBase):
     """Generate examples showing ComposableContainerPanel with each ComposeType."""
@@ -139,12 +130,10 @@ class MetaComposablePanel(MetaGeneratorBase):
         doc="Composition strategy",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         compose = self.compose
-        filename = f"composable_panel_{compose}"
         function_name = f"example_composable_panel_{compose}"
+        filename = function_name
         title = f"Composable Panel: ComposeType.{compose}"
 
         imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
@@ -157,8 +146,7 @@ class MetaComposablePanel(MetaGeneratorBase):
             "\n"
             "    result_image = bn.ResultImage(doc='Composed panel image')\n"
             "\n"
-            "    def __call__(self, **kwargs):\n"
-            "        self.update_params_from_kwargs(**kwargs)\n"
+            "    def benchmark(self):\n"
             "        points = _polygon_points(self.radius, self.sides)\n"
             "        img = _draw_polygon_image(points, self.color, linewidth=3)\n"
             '        filepath = bn.gen_image_path("panel_compose")\n'
@@ -187,8 +175,6 @@ class MetaComposablePanel(MetaGeneratorBase):
             run_kwargs={"level": 2},
         )
 
-        return super().__call__()
-
 
 class MetaComposableDataset(MetaGeneratorBase):
     """Generate examples showing ComposableContainerDataset with each ComposeType."""
@@ -198,12 +184,10 @@ class MetaComposableDataset(MetaGeneratorBase):
         doc="Composition strategy",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         compose = self.compose
-        filename = f"composable_dataset_{compose}"
         function_name = f"example_composable_dataset_{compose}"
+        filename = function_name
         title = f"Composable Dataset: ComposeType.{compose}"
 
         class_code = (
@@ -214,18 +198,16 @@ class MetaComposableDataset(MetaGeneratorBase):
             'default=5.0, bounds=[1.0, 10.0], doc="Collection duration")\n'
             '    result_ds = bn.ResultDataSet(doc="Collected time-series dataset")\n'
             "\n"
-            "    def __call__(self, **kwargs):\n"
+            "    def benchmark(self):\n"
             "        import xarray as xr\n"
             "        import numpy as np\n"
-            "        self.update_params_from_kwargs(**kwargs)\n"
             "        n = int(self.duration * 10)\n"
             "        t = np.linspace(0, self.duration, n)\n"
             "        values = np.sin(2 * np.pi * t / self.duration) * self.duration\n"
             '        data_array = xr.DataArray(values, dims=["time"], '
             'coords={"time": t})\n'
             "        self.result_ds = bn.ResultDataSet("
-            'xr.Dataset({"signal": data_array}).to_pandas())\n'
-            "        return super().__call__()"
+            'xr.Dataset({"signal": data_array}).to_pandas())'
         )
 
         self.generate_sweep_example(
@@ -241,15 +223,11 @@ class MetaComposableDataset(MetaGeneratorBase):
             run_kwargs={"level": 3},
         )
 
-        return super().__call__()
-
 
 class MetaComposableAllTypes(MetaGeneratorBase):
     """Generate an example that sweeps ComposeType across the Video backend."""
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         imports = f"{_POLYGON_IMPORTS}\n\n\n{_POLYGON_HELPERS}"
 
         class_code = (
@@ -265,8 +243,7 @@ class MetaComposableAllTypes(MetaGeneratorBase):
             "    )\n"
             "    composed_video = bn.ResultVideo(doc='Composed video output')\n"
             "\n"
-            "    def __call__(self, **kwargs):\n"
-            "        self.update_params_from_kwargs(**kwargs)\n"
+            "    def benchmark(self):\n"
             "        vid = bn.ComposableContainerVideo()\n"
             "        for i in range(5):\n"
             "            angle = 360.0 * i / 5\n"
@@ -289,7 +266,7 @@ class MetaComposableAllTypes(MetaGeneratorBase):
             "bench.plot_sweep(\n"
             '    title="Composable Container: All ComposeTypes",\n'
             "    input_vars=[\n"
-            "        bn.p(\n"
+            "        bn.sweep(\n"
             '            "compose_method",\n'
             "            [bn.ComposeType.right, bn.ComposeType.down,\n"
             "             bn.ComposeType.sequence, bn.ComposeType.overlay],\n"
@@ -302,15 +279,13 @@ class MetaComposableAllTypes(MetaGeneratorBase):
         self.generate_example(
             title="Composable Container: All ComposeTypes Compared",
             output_dir=OUTPUT_DIR,
-            filename="composable_all_compose_types",
+            filename="example_composable_all_compose_types",
             function_name="example_composable_all_compose_types",
             imports=imports,
             body=body,
             class_code=class_code,
             run_kwargs={"level": 2},
         )
-
-        return super().__call__()
 
 
 # --- Entry point -----------------------------------------------------------
@@ -322,21 +297,21 @@ def example_meta_composable(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaComposableVideo().to_bench(run_cfg)
     bench.plot_sweep(
         title="Composable Video Examples",
-        input_vars=[bn.p("compose", ["right", "down", "sequence", "overlay"])],
+        input_vars=[bn.sweep("compose", ["right", "down", "sequence", "overlay"])],
     )
 
     # Panel backend: one example per supported ComposeType
     bench2 = MetaComposablePanel().to_bench(run_cfg)
     bench2.plot_sweep(
         title="Composable Panel Examples",
-        input_vars=[bn.p("compose", ["right", "down", "sequence"])],
+        input_vars=[bn.sweep("compose", ["right", "down", "sequence"])],
     )
 
     # Dataset backend: one example per ComposeType
     bench3 = MetaComposableDataset().to_bench(run_cfg)
     bench3.plot_sweep(
         title="Composable Dataset Examples",
-        input_vars=[bn.p("compose", ["right", "down", "sequence", "overlay"])],
+        input_vars=[bn.sweep("compose", ["right", "down", "sequence", "overlay"])],
     )
 
     # Sweep all ComposeTypes in a single benchmark

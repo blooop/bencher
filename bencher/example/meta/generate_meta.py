@@ -1,5 +1,3 @@
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -13,7 +11,7 @@ INLINE_CLASSES = {
         "imports": "import bencher as bn",
         "params": {},
         "result_vars": {
-            "baseline": 'bn.ResultVar(units="ms", doc="Baseline latency")',
+            "baseline": 'bn.ResultFloat(units="ms", doc="Baseline latency")',
         },
         "call_body": ["self.baseline = 42.0"],
         "noise_body": [
@@ -29,7 +27,7 @@ INLINE_CLASSES = {
             "backend": 'bn.StringSweep(["redis", "memcached", "local"], doc="Cache backend")',
         },
         "result_vars": {
-            "latency": 'bn.ResultVar(units="ms", doc="Cache lookup latency")',
+            "latency": 'bn.ResultFloat(units="ms", doc="Cache lookup latency")',
         },
         "call_body": [
             'base = {{"redis": 1.2, "memcached": 1.5, "local": 0.3}}[self.backend]',
@@ -49,7 +47,7 @@ INLINE_CLASSES = {
             "region": 'bn.StringSweep(["us-east", "eu-west", "ap-south"], doc="Deployment region")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="req/s", doc="Request throughput")',
+            "throughput": 'bn.ResultFloat(units="req/s", doc="Request throughput")',
         },
         "call_body": [
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
@@ -72,7 +70,7 @@ INLINE_CLASSES = {
             "log_level": 'bn.StringSweep(["debug", "info", "warn"], doc="Logging level")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="req/s", doc="Request throughput")',
+            "throughput": 'bn.ResultFloat(units="req/s", doc="Request throughput")',
         },
         "call_body": [
             'proto_factor = {{"http": 1.0, "grpc": 1.8}}[self.protocol]',
@@ -95,7 +93,7 @@ INLINE_CLASSES = {
             "array_size": 'bn.FloatSweep(default=100, bounds=[10, 10000], doc="Array length")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             "self.time = self.array_size * math.log2(self.array_size + 1) * 0.001",
@@ -114,7 +112,7 @@ INLINE_CLASSES = {
             "algorithm": 'bn.StringSweep(["quicksort", "mergesort", "heapsort"], doc="Sort algorithm")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -136,7 +134,7 @@ INLINE_CLASSES = {
             "distribution": 'bn.StringSweep(["uniform", "sorted", "reversed"], doc="Data distribution")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -161,7 +159,7 @@ INLINE_CLASSES = {
             "stability": 'bn.StringSweep(["stable", "unstable"], doc="Sort stability")',
         },
         "result_vars": {
-            "time": 'bn.ResultVar(units="ms", doc="Sort duration")',
+            "time": 'bn.ResultFloat(units="ms", doc="Sort duration")',
         },
         "call_body": [
             'algo_factor = {{"quicksort": 1.0, "mergesort": 1.2, "heapsort": 1.5}}[self.algorithm]',
@@ -186,7 +184,7 @@ INLINE_CLASSES = {
             "entropy": 'bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Input data entropy")',
         },
         "result_vars": {
-            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultFloat(units="x", doc="Compression ratio")',
         },
         "call_body": [
             "self.ratio = (1.0 - 0.7 * self.entropy) * (1.0 + 0.3 * math.log2(self.block_size / 512))",
@@ -206,7 +204,7 @@ INLINE_CLASSES = {
             "codec": 'bn.StringSweep(["zlib", "lz4", "zstd"], doc="Compression codec")',
         },
         "result_vars": {
-            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultFloat(units="x", doc="Compression ratio")',
         },
         "call_body": [
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
@@ -229,7 +227,7 @@ INLINE_CLASSES = {
             "effort": 'bn.StringSweep(["fast", "balanced", "max"], doc="Compression effort")',
         },
         "result_vars": {
-            "ratio": 'bn.ResultVar(units="x", doc="Compression ratio")',
+            "ratio": 'bn.ResultFloat(units="x", doc="Compression ratio")',
         },
         "call_body": [
             'codec_eff = {{"zlib": 1.0, "lz4": 0.7, "zstd": 1.1}}[self.codec]',
@@ -253,7 +251,7 @@ INLINE_CLASSES = {
             "iterations": 'bn.FloatSweep(default=100, bounds=[10, 1000], doc="Hash iterations")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultFloat(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             "self.throughput = 500.0 / (1.0 + 0.5 * math.log2(self.key_size / 8)) / (1.0 + 0.3 * math.log2(self.payload_size / 64)) * (self.iterations / 100)",
@@ -274,7 +272,7 @@ INLINE_CLASSES = {
             "algorithm": 'bn.StringSweep(["sha256", "blake2", "md5"], doc="Hash algorithm")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultFloat(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
@@ -298,7 +296,7 @@ INLINE_CLASSES = {
             "mode": 'bn.StringSweep(["stream", "block"], doc="Processing mode")',
         },
         "result_vars": {
-            "throughput": 'bn.ResultVar(units="MB/s", doc="Hash throughput")',
+            "throughput": 'bn.ResultFloat(units="MB/s", doc="Hash throughput")',
         },
         "call_body": [
             'algo_speed = {{"sha256": 1.0, "blake2": 1.4, "md5": 1.8}}[self.algorithm]',
@@ -334,8 +332,7 @@ def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset
         cls_lines.append("    _time_offset = 0.0")
 
     cls_lines.append("")
-    cls_lines.append("    def __call__(self, **kwargs: Any) -> Any:")
-    cls_lines.append("        self.update_params_from_kwargs(**kwargs)")
+    cls_lines.append("    def benchmark(self):")
 
     if noise_val > 0 and "noise_body" in info:
         for line in info["noise_body"]:
@@ -348,7 +345,6 @@ def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset
         result_name = list(info["result_vars"].keys())[0]
         cls_lines.append(f"        self.{result_name} += self._time_offset * 10")
 
-    cls_lines.append("        return super().__call__()")
     return "\n".join(cls_lines)
 
 
@@ -462,12 +458,10 @@ class BenchMetaGen(bn.ParametrizedSweep):
 
     plots = bn.ResultReference(units="int")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         key = (self.float_vars_count, self.categorical_vars_count)
         if key not in INLINE_CLASSES:
-            return super().__call__()
+            return
 
         info = INLINE_CLASSES[key]
         input_var_names = _get_input_var_names(
@@ -489,8 +483,8 @@ class BenchMetaGen(bn.ParametrizedSweep):
             f"{self.float_vars_count} Float, {self.categorical_vars_count} Categorical"
             f" ({variant.replace('_', ' ')})"
         )
-        filename = f"sweep_{base_title}_{variant}"
         function_name = f"example_sweep_{base_title}_{variant}"
+        filename = function_name
 
         result_var_names = list(info["result_vars"].keys())
 
@@ -515,13 +509,16 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 time_offset=True,
             )
 
-            defaults_kw = ""
             if self.sample_with_repeats > 1:
-                defaults_kw = f", repeats={self.sample_with_repeats}"
+                cfg_line = (
+                    f"run_cfg = bn.BenchRunCfg.with_defaults"
+                    f"(run_cfg, repeats={self.sample_with_repeats})\n"
+                )
+            else:
+                cfg_line = "if run_cfg is None:\n    run_cfg = bn.BenchRunCfg()\n"
 
             body = (
-                f"run_cfg = bn.BenchRunCfg.with_defaults(run_cfg{defaults_kw})\n"
-                "run_cfg.over_time = True\n"
+                f"{cfg_line}"
                 f"benchable = {info['class_name']}()\n"
                 f"bench = benchable.to_bench(run_cfg)\n"
                 f"_base_time = datetime(2000, 1, 1)\n"
@@ -549,7 +546,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 imports=imports,
                 body=body,
                 class_code=class_code,
-                run_kwargs={"level": 4},
+                run_kwargs={"level": 4, "over_time": True},
             )
         else:
             noise_val = 0.15 if self.sample_with_repeats > 1 else 0.0
@@ -581,8 +578,6 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 run_kwargs=run_kwargs,
             )
 
-        return super().__call__()
-
 
 def example_meta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = BenchMetaGen().to_bench(run_cfg)
@@ -591,48 +586,48 @@ def example_meta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
         """Plot gallery showing all combinations of float and categorical input variables"""
     )
 
-    few_cats = bn.p("categorical_vars_count", [0, 1, 2])
+    few_cats = bn.sweep("categorical_vars_count", [0, 1, 2])
 
     bench.plot_sweep(
         title="Single Sample (0-1 float vars)",
         description=sweep_desc,
-        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=1, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Single Sample (2-3 float vars)",
         description=sweep_desc,
-        input_vars=[bn.p("float_vars_count", [2, 3]), few_cats],
+        input_vars=[bn.sweep("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=1, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Repeated Samples (10x)",
         description=sweep_desc,
-        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=10, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Repeated Samples (3x)",
         description=sweep_desc,
-        input_vars=[bn.p("float_vars_count", [2, 3]), few_cats],
+        input_vars=[bn.sweep("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=3, sample_over_time=False),
     )
     bench.plot_sweep(
         title="Over Time 0-1 float (3 Snapshots)",
         description=sweep_desc,
-        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
     )
     bench.plot_sweep(
         title="Over Time 2-3 float (3 Snapshots)",
         description=sweep_desc,
-        input_vars=[bn.p("float_vars_count", [2, 3]), few_cats],
+        input_vars=[bn.sweep("float_vars_count", [2, 3]), few_cats],
         const_vars=dict(sample_with_repeats=1, sample_over_time=True),
     )
     bench.plot_sweep(
         title="Over Time + Repeats 0-1 float (3 Snapshots, 3x repeats)",
         description=sweep_desc,
-        input_vars=[bn.p("float_vars_count", [0, 1]), "categorical_vars_count"],
+        input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
         const_vars=dict(sample_with_repeats=3, sample_over_time=True),
     )
 

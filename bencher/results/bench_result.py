@@ -5,6 +5,15 @@ import panel as pn
 from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType, _wrap_plotly_figure
+
+try:
+    from bencher.results.rerun_result import RerunResult
+except ModuleNotFoundError:
+
+    class RerunResult:  # pylint: disable=missing-class-docstring
+        pass
+
+
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.video_result import VideoResult
 from bencher.results.volume_result import VolumeResult
@@ -30,6 +39,7 @@ from bencher.utils import listify, resolve_aggregate
 
 
 class BenchResult(
+    RerunResult,
     VolumeResult,
     BoxWhiskerResult,
     ViolinResult,
@@ -197,9 +207,7 @@ class BenchResult(
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
-            row.append(
-                pn.pane.Markdown("No Plotters are able to represent these results", **kwargs)
-            )
+            row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
 
     def to_auto_plots(self, **kwargs) -> pn.panel:
@@ -213,16 +221,80 @@ class BenchResult(
         """
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
+
+        # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
+            all_input_names = {iv.name for iv in self.bench_cfg.input_vars}
+            agg_set = set(self.bench_cfg.agg_over_dims)
+            fully_aggregated = all_input_names <= agg_set
+            if fully_aggregated and not self.bench_cfg.over_time:
+                # All input dims collapsed, no over_time: scalar summary table.
+                plot_cols.append(
+                    pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**")
+                )
+                plot_cols.append(self._scalar_aggregate_summary())
+            else:
+                # Partial aggregation (or full with over_time): let to_auto pick
+                # the right plotter for the remaining dims.
+                plot_cols.append(
+                    pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**")
+                )
+                agg_kwargs = {
+                    k: v for k, v in kwargs.items() if k not in ("agg_over_dims", "agg_fn")
+                }
+                plot_cols.append(
+                    self.to_auto(
+                        agg_over_dims=self.bench_cfg.agg_over_dims,
+                        agg_fn=self.bench_cfg.agg_fn,
+                        **agg_kwargs,
+                    )
+                )
+
+        # --- Over-time band plot (orthogonal to dimension aggregation) ---
+        if (
+            self.bench_cfg.over_time
+            and "over_time" in self.ds.dims
+            and self.ds.sizes["over_time"] > 1
+            and self.bench_cfg.input_vars
+        ):
+            input_names = [iv.name for iv in self.bench_cfg.input_vars]
             plot_cols.append(
                 pn.pane.Markdown(
-                    f"### Aggregated View\nMean and percentile bands aggregated over: **{dims}**"
+                    "### Over Time\nPercentile bands across all input dimensions over time"
                 )
             )
             plot_cols.append(
                 _wrap_plotly_figure(self.to(BandResult, aggregate=self.bench_cfg.agg_over_dims))
             )
+
+        kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
+
+    def _scalar_aggregate_summary(self) -> pn.pane.Markdown:
+        """Render a Markdown table for a fully-aggregated (scalar) result."""
+        ds = self.to_dataset(
+            reduce=ReduceType.REDUCE,
+            agg_over_dims=self.bench_cfg.agg_over_dims,
+            agg_fn=self.bench_cfg.agg_fn,
+            deep=False,
+        )
+        rows = []
+        for rv in self.bench_cfg.result_vars:
+            name = rv.name
+            if name not in ds.data_vars:
+                continue
+            val = float(ds[name].values)
+            std_name = f"{name}_std"
+            units = getattr(rv, "units", "")
+            if std_name in ds.data_vars:
+                std = float(ds[std_name].values)
+                rows.append(f"| {name} | {val:.4g} ± {std:.4g} | {units} |")
+            else:
+                rows.append(f"| {name} | {val:.4g} | {units} |")
+        header = "| Result | Value | Units |\n|---|---|---|"
+        return pn.pane.Markdown(
+            f"{header}\n" + "\n".join(rows) if rows else "No result variables found."
+        )

@@ -10,12 +10,10 @@ import bencher as bn
 
 class SimpleFloat(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], units="rad", samples=30)
-    out_sin = bn.ResultVar(units="v", doc="sin of theta")
+    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out_sin = math.sin(self.theta)
-        return super().__call__(**kwargs)
 
 bench = SimpleFloat().to_bench()
 bench.plot_sweep()
@@ -48,7 +46,7 @@ Input types should be basic datatypes so that the data can be hashed, cached, an
 
 Declare what your benchmark function returns:
 
-- `ResultVar` — a numeric scalar with units and an optimization direction (minimize/maximize)
+- `ResultFloat` — a numeric scalar with units and an optimization direction (minimize/maximize)
 - `ResultBool` — a boolean result
 - `ResultVec` — a fixed-size numeric vector
 - `ResultImage`, `ResultVideo`, `ResultPath` — file outputs
@@ -67,7 +65,7 @@ As you add input parameters, Bencher automatically adapts the visualization:
 | 2 floats | [Heatmap](reference/meta/2_float/no_repeats/index) |
 | Categories only | [Bar chart](reference/meta/0_float/no_repeats/index) |
 
-No code changes to plotting logic are needed — the type signature of your parameters drives the selection. See [Automatic Plot Selection](concepts.md#automatic-plot-selection) for how this works.
+No code changes to plotting logic are needed — the type signature of your parameters drives the selection. See [Automatic Plot Selection](concepts.md#automatic-plot-selection) for how this works, and the [Cartesian Animation](reference/meta/cartesian_animation/index) gallery for an animated visualization of how each dimension builds on the last.
 
 ## Repeats and Statistics
 
@@ -89,7 +87,13 @@ Bencher assumes your function is a stochastic pure function — given the same i
 
 ## Tracking Over Time
 
-Track how results change across successive runs by calling `plot_sweep()` multiple times with different `time_src` values:
+Enable `over_time` to record time-series snapshots that can be scrubbed via a slider:
+
+```python
+bn.run(MyBench, level=3, repeats=3, over_time=True)
+```
+
+For multi-snapshot tracking (e.g. CI pipelines), call `plot_sweep()` in a loop with different `time_src` values:
 
 ```python
 run_cfg = bn.BenchRunCfg(over_time=True, repeats=3)
@@ -135,7 +139,7 @@ Mark a variable with `optimize=False` to sweep it without optimising — Optuna 
 class MyBench(bn.ParametrizedSweep):
     algorithm = bn.StringSweep(["adam", "sgd", "rmsprop"], optimize=False)
     learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0])
-    loss = bn.ResultVar("loss", bn.OptDir.minimize)
+    loss = bn.ResultFloat("loss", bn.OptDir.minimize)
 ```
 
 Optuna only suggests `learning_rate` and reports the mean loss across all algorithms. This finds settings that work best **across** categories rather than the best (category, setting) pair. See the [Aggregated](reference/meta/optimization_aggregated/index) examples.
@@ -159,7 +163,7 @@ Bencher includes a composable container system for combining visual outputs. See
 
 ## Sampling and Level System
 
-The `level` parameter controls sampling density across all dimensions with a single knob. Higher levels are strict supersets of lower ones, so cached results are reused automatically. See [The Level System](concepts.md#the-level-system) for details and the [Sampling Strategies](reference/meta/sampling/index) gallery.
+The `level` parameter controls sampling density across all dimensions with a single knob. Higher levels are strict supersets of lower ones, so cached results are reused automatically. See [The Level System](concepts.md#the-level-system) for the conceptual explanation, the [Level System](reference/meta/levels/index) gallery for an interactive demo, and the [Sampling Strategies](reference/meta/sampling/index) gallery for related sampling techniques.
 
 ## Running Examples
 

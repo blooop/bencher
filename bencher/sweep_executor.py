@@ -114,8 +114,10 @@ class SweepExecutor:
             param_var = worker_class_instance.param.objects(instance=False)[variable["name"]]
             if variable.get("values"):
                 param_var = param_var.with_sample_values(variable["values"])
-
-            if variable.get("samples"):
+            elif variable.get("bounds"):
+                b = variable["bounds"]
+                param_var = param_var.with_bounds(b[0], b[1], variable.get("samples"))
+            elif variable.get("samples"):
                 param_var = param_var.with_samples(variable["samples"])
             if variable.get("max_level"):
                 if run_cfg is not None:
@@ -169,7 +171,7 @@ class SweepExecutor:
             cache_name="sample_cache",
             tag_index=True,
             size_limit=self.cache_size,
-            cache_results=run_cfg.cache_samples,
+            cache_samples=run_cfg.cache_samples,
         )
         return self.sample_cache
 

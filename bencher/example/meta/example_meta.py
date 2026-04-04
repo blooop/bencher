@@ -1,4 +1,3 @@
-from typing import Any
 from datetime import datetime, timedelta
 
 import bencher as bn
@@ -38,8 +37,8 @@ class BenchableObject(bn.ParametrizedSweep):
 
     transform = bn.StringSweep(["normal", "inverted"])
 
-    distance = bn.ResultVar("m", doc="The distance from the sample point to the origin")
-    sample_noise = bn.ResultVar("m", doc="The amount of noise added to the distance sample")
+    distance = bn.ResultFloat("m", doc="The distance from the sample point to the origin")
+    sample_noise = bn.ResultFloat("m", doc="The amount of noise added to the distance sample")
 
     result_hmap = bn.ResultHmap()
 
@@ -48,9 +47,7 @@ class BenchableObject(bn.ParametrizedSweep):
     )
     _time_offset = 0.0  # offset added to output for over-time support
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         x, y, z = self.float1, self.float2, self.float3
 
         # Map categoricals to continuous parameters that shape the function.
@@ -82,8 +79,6 @@ class BenchableObject(bn.ParametrizedSweep):
             x=0, y=0, text=f"distance:{self.distance}\nnoise:{self.sample_noise}"
         )
 
-        return super().__call__()
-
 
 class BenchMeta(bn.ParametrizedSweep):
     """This class uses bencher to display the multidimensional types bencher can represent"""
@@ -102,9 +97,7 @@ class BenchMeta(bn.ParametrizedSweep):
 
     plots = bn.ResultReference(units="int")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         run_cfg = bn.BenchRunCfg()
         run_cfg.level = self.level
         run_cfg.repeats = self.sample_with_repeats
@@ -137,7 +130,7 @@ class BenchMeta(bn.ParametrizedSweep):
             time_offsets = [0.0, 0.3, 0.7, 1.0]
             base_time = datetime(2000, 1, 1)
             for i, offset in enumerate(time_offsets):
-                benchable._time_offset = offset
+                benchable._time_offset = offset  # pylint: disable=protected-access
                 run_cfg.clear_cache = True
                 run_cfg.clear_history = i == 0
                 res = bench.plot_sweep(
@@ -161,10 +154,14 @@ class BenchMeta(bn.ParametrizedSweep):
         self.plots = bn.ResultReference()
         self.plots.obj = res.to_auto()
 
-        return super().__call__()
 
+def example_meta(
+    run_cfg: bn.BenchRunCfg | None = None, sample_repeats_values: list[int] | None = None
+) -> bn.Bench:
+    if sample_repeats_values is None:
+        sample_repeats_values = [1, 10]
+    sample_repeats_values = tuple(sample_repeats_values)
 
-def example_meta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = BenchMeta().to_bench(run_cfg)
 
     bench.plot_sweep(
@@ -174,7 +171,7 @@ Each category combination produces a distinct scalar value from the unified func
 the default float point (0,0,0).""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", [1, 10]),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=0),
@@ -187,7 +184,7 @@ Categories shift the frequency and phase of the underlying function, producing v
 curves.""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", [1, 10]),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=1),
@@ -199,7 +196,7 @@ curves.""",
 The unified function creates interesting 2D patterns that vary with category selection.""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", [1, 10]),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=2),
@@ -211,7 +208,7 @@ The unified function creates interesting 2D patterns that vary with category sel
 The full 3D function with all cross-coupling terms active.""",
         input_vars=[
             "categorical_vars",
-            bn.p("sample_with_repeats", [1, 10]),
+            bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
         const_vars=dict(float_vars=3),

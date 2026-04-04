@@ -28,6 +28,7 @@ IMPORTANT — hash_persistent() contract:
 
 from __future__ import annotations
 
+import warnings
 from enum import auto
 from typing import Callable, Any
 from functools import partial
@@ -49,7 +50,7 @@ def _hash_slots(instance):
 
     Walks the MRO from the concrete class up to (but not including) param framework
     base classes, collecting __slots__ from each ancestor. This supports Result class
-    inheritance (e.g. ResultBool extends ResultVar). Attributes listed in _hash_exclude
+    inheritance (e.g. ResultBool extends ResultFloat). Attributes listed in _hash_exclude
     on any class in the hierarchy are skipped.
 
     The class name is always included in the hash to prevent collisions between different
@@ -89,17 +90,23 @@ class OptDir(StrEnum):
     none = auto()  # If none this var will not appear in pareto plots
 
 
-class ResultVar(Number):
-    """A class to represent result variables and the desired optimisation direction"""
+class ResultFloat(Number):
+    """A class to represent continuous float result variables and the desired optimisation direction.
 
-    __slots__ = ["units", "direction"]
+    For boolean (success/failure) outcomes, use ``ResultBool`` instead — it locks
+    bounds to [0, 1] and produces correct boolean-style plots.
+    """
 
-    def __init__(self, units="ul", direction: OptDir = OptDir.minimize, **params):
+    __slots__ = ["units", "direction", "share_axis"]
+    _hash_exclude = ("share_axis",)  # display-only, not part of benchmark data
+
+    def __init__(self, units="ul", direction: OptDir = OptDir.minimize, share_axis=True, **params):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
         self.default = 0  # json is terrible and does not support nan values
         self.direction = direction
+        self.share_axis = share_axis
 
     def as_dim(self) -> hv.Dimension:
         return hv.Dimension((self.name, self.name), unit=self.units)
@@ -109,8 +116,12 @@ class ResultVar(Number):
         return _hash_slots(self)
 
 
-class ResultBool(ResultVar):
-    """A ResultVar subclass for boolean (0/1) results with bounds locked to [0, 1]."""
+class ResultBool(ResultFloat):
+    """A result type for binary outcomes (success/failure, pass/fail, reachable/unreachable).
+
+    Bounds are locked to [0, 1] and plots use boolean-style rendering.
+    For continuous scalar metrics (time, distance, score), use ``ResultFloat`` instead.
+    """
 
     def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
@@ -250,6 +261,47 @@ class ResultContainer(param.Parameter):
         return _hash_slots(self)
 
 
+class ResultRerun(ResultContainer):
+    """Result type for rerun .rrd spatial visualizations.
+
+    Stores a path to an .rrd file (like ResultContainer) but carries viewer
+    sizing metadata and provides a dedicated ``to_container()`` that renders
+    the file with the rerun web viewer.
+
+    Usage in a ParametrizedSweep::
+
+        out_rerun = ResultRerun(width=600, height=600)
+
+        def benchmark(self):
+            rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta, 1]))
+            self.out_rerun = bn.capture_rerun_window(width=600, height=600)
+    """
+
+    __slots__ = ["width", "height"]
+
+    def __init__(self, default=None, units="rerun", width=600, height=600, **params):
+        super().__init__(default=default, units=units, **params)
+        self.width = width
+        self.height = height
+        # Eagerly create a rerun recording so that rr.log() calls in
+        # benchmark() have somewhere to write before capture_rerun_rrd()
+        # is called.  Without this, the very first benchmark iteration
+        # silently drops its data.
+        try:
+            from bencher.utils_rerun import _ensure_rerun_init
+
+            _ensure_rerun_init()
+        except ImportError:
+            pass
+
+    def to_container(self):
+        """Return a callable that renders an .rrd file path as a rerun viewer pane."""
+        from bencher.utils_rrd import rrd_file_to_pane
+
+        width, height = self.width, self.height
+        return partial(rrd_file_to_pane, width=width, height=height)
+
+
 class ResultReference(param.Parameter):
     """Use this class to save arbitrary objects that are not picklable or native to panel.  You can pass a container callback that takes the object and returns a panel pane to be displayed"""
 
@@ -313,24 +365,28 @@ PANEL_TYPES = (
     ResultImage,
     ResultVideo,
     ResultContainer,
+    ResultRerun,
     ResultString,
     ResultReference,
     ResultDataSet,
 )
 
 
+SCALAR_RESULT_TYPES = (ResultFloat, ResultBool)
+
 XARRAY_MULTIDIM_RESULT_TYPES = (
-    ResultVar,
+    ResultFloat,
     ResultBool,
     ResultVideo,
     ResultImage,
     ResultString,
     ResultContainer,
+    ResultRerun,
     ResultPath,
 )
 
 ALL_RESULT_TYPES = (
-    ResultVar,
+    ResultFloat,
     ResultBool,
     ResultVec,
     ResultHmap,
@@ -339,7 +395,20 @@ ALL_RESULT_TYPES = (
     ResultImage,
     ResultString,
     ResultContainer,
+    ResultRerun,
     ResultDataSet,
     ResultReference,
     ResultVolume,
 )
+
+
+class ResultVar(ResultFloat):
+    """Deprecated: use ResultFloat instead."""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "ResultVar is deprecated, use ResultFloat instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)

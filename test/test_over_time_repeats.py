@@ -1,11 +1,13 @@
 """Tests for over_time + repeats support in bar and distribution plots."""
 
+# pylint: disable=redefined-outer-name
+
 import random
 from datetime import datetime, timedelta
-from typing import Any
 
 import panel as pn
 import plotly.graph_objects as go
+import pytest
 
 import bencher as bn
 
@@ -14,15 +16,13 @@ class SimpleBench(bn.ParametrizedSweep):
     """Minimal benchmark for testing over_time + repeats."""
 
     backend = bn.StringSweep(["redis", "local"], doc="Backend")
-    latency = bn.ResultVar(units="ms", doc="Latency")
+    latency = bn.ResultFloat(units="ms", doc="Latency")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.2, "local": 0.3}[self.backend]
         self.latency = base + self.offset + random.gauss(0, 0.05)
-        return super().__call__()
 
 
 class FloatBench(bn.ParametrizedSweep):
@@ -30,15 +30,13 @@ class FloatBench(bn.ParametrizedSweep):
 
     size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
     backend = bn.StringSweep(["redis", "local"], doc="Backend")
-    time = bn.ResultVar(units="ms", doc="Duration")
+    time = bn.ResultFloat(units="ms", doc="Duration")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.0, "local": 0.5}[self.backend]
         self.time = base * self.size * 0.01 + self.offset + random.gauss(0, 0.02)
-        return super().__call__()
 
 
 def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, **cfg_kwargs):
@@ -98,18 +96,38 @@ def _find_plotly_time_dropdowns(obj):
 class ZeroDimBench(bn.ParametrizedSweep):
     """Benchmark with no input vars — 0D numeric result for over_time regression test."""
 
-    value = bn.ResultVar(units="m", doc="Value")
+    value = bn.ResultFloat(units="m", doc="Value")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.value = 2.844 + self.offset
-        return super().__call__()
+
+
+# Module-scoped fixtures for shared benchmark results to reduce test execution time
+@pytest.fixture(scope="module")
+def simple_bench_repeats3_snapshots3():
+    """SimpleBench result with repeats=3, snapshots=3 for multiple test classes."""
+    benchable = SimpleBench()
+    return _run_over_time(benchable, ["backend"], ["latency"], repeats=3, snapshots=3)
+
+
+@pytest.fixture(scope="module")
+def simple_bench_repeats1_snapshots3():
+    """SimpleBench result with repeats=1, snapshots=3 for multiple test classes."""
+    benchable = SimpleBench()
+    return _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
+
+
+@pytest.fixture(scope="module")
+def float_bench_repeats3_snapshots3():
+    """FloatBench result with repeats=3, snapshots=3 for multiple test classes."""
+    benchable = FloatBench()
+    return _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
 
 
 class TestNumericOverTimeNotRoutedToImageSlider:
-    """Regression tests: numeric ResultVar must not be routed to _pane_over_time_slider.
+    """Regression tests: numeric ResultFloat must not be routed to _pane_over_time_slider.
 
     Commit 9279dd32 unconditionally routed all result types through the image/video
     slider when over_time was active.  Numeric values (e.g. 2.844) were then treated
@@ -136,21 +154,17 @@ class TestNumericOverTimeNotRoutedToImageSlider:
 class TestBarResultOverTime:
     """Test BarResult with over_time slider."""
 
-    def test_bar_over_time_no_repeats(self):
+    def test_bar_over_time_no_repeats(self, simple_bench_repeats1_snapshots3):
         """0 float + 1 cat + over_time -> bar with slider."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=1, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats1_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         # With multiple time points, bar should be wrapped in a Column with slider
         assert any(isinstance(p, pn.Column) for p in plots)
 
-    def test_bar_over_time_with_repeats(self):
+    def test_bar_over_time_with_repeats(self, simple_bench_repeats3_snapshots3):
         """0 float + 1 cat + repeats + over_time -> bar with slider."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
 
@@ -158,11 +172,9 @@ class TestBarResultOverTime:
 class TestDistributionResultOverTime:
     """Test BoxWhisker/Violin with over_time slider."""
 
-    def test_boxwhisker_over_time(self):
+    def test_boxwhisker_over_time(self, simple_bench_repeats3_snapshots3):
         """0 float + 1 cat + repeats + over_time -> box whisker with slider."""
-        benchable = SimpleBench()
-        res = _run_over_time(benchable, ["backend"], ["latency"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = simple_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         # With repeats > 1 and over_time, distribution plots should produce slider columns
@@ -172,11 +184,9 @@ class TestDistributionResultOverTime:
 class TestCurveResultOverTime:
     """Test CurveResult with over_time slider."""
 
-    def test_curve_over_time_with_repeats(self):
+    def test_curve_over_time_with_repeats(self, float_bench_repeats3_snapshots3):
         """1 float + 1 cat + repeats + over_time -> curve with slider."""
-        benchable = FloatBench()
-        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = float_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         # Curve with over_time should produce a Column with slider
@@ -202,11 +212,9 @@ class TestHeatmapResultOverTime:
         assert plots is not None
         assert len(plots) > 0
 
-    def test_heatmap_over_time_with_repeats(self):
+    def test_heatmap_over_time_with_repeats(self, float_bench_repeats3_snapshots3):
         """1 float + 1 cat + repeats + over_time -> heatmap with slider."""
-        benchable = FloatBench()
-        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
-        plots = res.to_auto_plots()
+        plots = float_bench_repeats3_snapshots3.to_auto_plots()
         assert plots is not None
         assert len(plots) > 0
         assert any(isinstance(p, pn.Column) for p in plots)
@@ -215,11 +223,9 @@ class TestHeatmapResultOverTime:
 class TestOptunaResultOverTime:
     """Test OptunaResult with over_time (pandas Timestamp handling)."""
 
-    def test_optuna_plots_over_time(self):
+    def test_optuna_plots_over_time(self, float_bench_repeats3_snapshots3):
         """to_optuna_plots() must not crash when over_time=True (pandas Timestamps)."""
-        benchable = FloatBench()
-        res = _run_over_time(benchable, ["size", "backend"], ["time"], repeats=3, snapshots=3)
-        optuna_plots = res.to_optuna_plots()
+        optuna_plots = float_bench_repeats3_snapshots3.to_optuna_plots()
         assert optuna_plots is not None
 
 
@@ -331,14 +337,14 @@ class TestMaxSliderPoints:
             assert n_buttons == 5, f"Expected 5 dropdown entries, got {n_buttons}"
 
     def test_default_subsampling_caps_at_max(self):
-        """With default max_slider_points=10 and 30 snapshots, dropdown capped at 10."""
+        """With default max_slider_points=10 and 12 snapshots, dropdown capped at 10."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
             ["backend"],
             ["latency"],
             repeats=1,
-            snapshots=30,
+            snapshots=12,
         )
         plots = res.to_auto_plots()
         figs = _find_plotly_time_dropdowns(plots)

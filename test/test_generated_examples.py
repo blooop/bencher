@@ -43,6 +43,6 @@ def test_generated_example(example_path):
 
     run_cfg = bn.BenchRunCfg()
     run_cfg.level = 2
-    run_cfg.repeats = 1
+    run_cfg.repeats = 2
     result = example_fns[0](run_cfg)
     assert result is not None

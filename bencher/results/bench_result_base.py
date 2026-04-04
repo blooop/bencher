@@ -17,7 +17,7 @@ from bencher.variables.inputs import with_level
 
 from bencher.variables.results import OptDir
 from copy import deepcopy
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import ResultFloat, ResultBool
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
@@ -26,7 +26,11 @@ from bencher.variables.results import ResultReference, ResultDataSet, ResultVide
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
-from bencher.results.composable_container.composable_container_base import ComposeType
+from bencher.results.composable_container.composable_container_base import (
+    ComposeType,
+    ComposableContainerBase,
+    PaneLayout,
+)
 
 from collections import defaultdict
 
@@ -125,6 +129,7 @@ class BenchResultBase:
         self.dataset_list = []
         self.regression_report = None
         self.perf_report = None
+        self._to_dataset_cache: dict = {}
 
         # self.width=600/
         # self.height=600
@@ -188,6 +193,7 @@ class BenchResultBase:
         self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg)
         self.bench_cfg = self.wrap_long_time_labels(self.bench_cfg)
         self.ds = convert_dataset_bool_dims_to_str(self.ds)
+        self._to_dataset_cache.clear()
 
     def result_samples(self) -> int:
         """The number of samples in the results dataframe"""
@@ -196,7 +202,7 @@ class BenchResultBase:
     def to_hv_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
@@ -216,24 +222,60 @@ class BenchResultBase:
         )
         return DatasetWrapper(ds_out)
 
+    def _resolve_auto(self, reduce: ReduceType) -> ReduceType:
+        """Resolve AUTO to a concrete ReduceType based on repeat count."""
+        if reduce == ReduceType.AUTO:
+            return ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+        return reduce
+
+    def _to_dataset_cache_key(
+        self,
+        reduce: ReduceType,
+        result_var: ResultFloat | str | None,
+        level: int | None,
+        agg_over_dims: list[str] | None,
+        agg_fn: str | None,
+    ) -> tuple:
+        """Build a hashable cache key from normalized to_dataset() arguments."""
+        reduce = self._resolve_auto(reduce)
+        rv_key = result_var.name if isinstance(result_var, Parameter) else result_var
+        # Normalize dimension order so aggregation over the same set shares cache entries
+        dims_key = tuple(sorted(agg_over_dims)) if agg_over_dims else None
+        # fn is irrelevant when no agg dims — aggregation is skipped entirely
+        fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
+        return (reduce, rv_key, level, dims_key, fn_key)
+
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
-        result_var: ResultVar | str | None = None,
+        result_var: ResultFloat | str | None = None,
         level: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
+        deep: bool = True,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
 
         Args:
             reduce (ReduceType, optional): Optionally perform reduce options on the dataset.  By default the returned dataset will calculate the mean and standard deviation over the "repeat" dimension so that the dataset plays nicely with most of the holoviews plot types.  Reduce.Sqeeze is used if there is only 1 repeat and you want the "reduce" variable removed from the dataset. ReduceType.None returns an unaltered dataset. Defaults to ReduceType.AUTO.
+            deep (bool, optional): If True (default), return a deep copy that is safe
+                to mutate. Pass False to get the cached object directly for read-only
+                use (avoids the copy cost).
 
         Returns:
             xr.Dataset: results in the form of an xarray dataset
+
+        Note:
+            Results are computed once and cached per instance. By default (``deep=True``)
+            a deep copy is returned so callers can safely mutate the result. Internal
+            hot paths pass ``deep=False`` to reuse the cached object directly.
         """
-        if reduce == ReduceType.AUTO:
-            reduce = ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+        cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
+        if cache_key in self._to_dataset_cache:
+            cached = self._to_dataset_cache[cache_key]
+            return cached.copy(deep=True) if deep else cached
+
+        reduce = self._resolve_auto(reduce)
 
         # Avoid an upfront copy for REDUCE/MINMAX — those reductions (.mean(),
         # .std(), .min(), .max()) always allocate new arrays, so the copy is
@@ -348,8 +390,9 @@ class BenchResultBase:
             for c, v in ds_out.coords.items():
                 if c != "repeat":
                     coords_no_repeat[c] = with_level(v.to_numpy(), level)
-            return ds_out.sel(coords_no_repeat)
-        return ds_out
+            ds_out = ds_out.sel(coords_no_repeat)
+        self._to_dataset_cache[cache_key] = ds_out
+        return ds_out.copy(deep=True) if deep else ds_out
 
     def get_optimal_vec(
         self,
@@ -468,7 +511,7 @@ class BenchResultBase:
 
         return " vs ".join(tit)
 
-    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[ResultVar]:
+    def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[Parameter]:
         return self.bench_cfg.result_vars if result_var is None else listify(result_var)
 
     def map_plots(
@@ -528,11 +571,12 @@ class BenchResultBase:
         plot_callback: Callable,
         hv_dataset: DatasetWrapper | None = None,
         target_dimension: int = 2,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         zip_results=False,
         reduce: ReduceType | None = None,
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.Row | None:
         if hv_dataset is None:
@@ -543,22 +587,51 @@ class BenchResultBase:
 
         row = EmptyContainer(pane_collection)
 
-        # kwargs= self.set_plot_size(**kwargs)
-        for rv in self.get_results_var_list(result_var):
-            if result_types is None or isinstance(rv, result_types):
-                rv_dataset = hv_dataset
-                if isinstance(rv, ResultBool) and "repeat" in hv_dataset.data.dims:
-                    non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
-                    if non_repeat_dims:
-                        rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
-                row.append(
-                    self.to_panes_multi_panel(
-                        rv_dataset,
-                        rv,
-                        plot_callback=partial(plot_callback, **kwargs),
-                        target_dimension=target_dimension,
-                    )
+        # When any result variable has share_axis=False, enable axiswise so each
+        # plot scales its y-axis independently instead of sharing a common range.
+        active_rvs = [
+            rv
+            for rv in self.get_results_var_list(result_var)
+            if result_types is None or isinstance(rv, result_types)
+        ]
+        needs_axiswise = any(not getattr(rv, "share_axis", True) for rv in active_rvs)
+
+        base_cb = partial(plot_callback, **kwargs)
+        axiswise_cb = base_cb
+
+        if needs_axiswise:
+
+            def _make_axiswise_cb(inner):
+                def _axiswise_cb(**cb_kwargs):
+                    result = inner(**cb_kwargs)
+                    if result is not None:
+                        if hasattr(result, "opts"):
+                            return result.opts(axiswise=True)
+                        if hasattr(result, "object") and hasattr(result.object, "opts"):
+                            result.object = result.object.opts(axiswise=True)
+                    return result
+
+                return _axiswise_cb
+
+            axiswise_cb = _make_axiswise_cb(base_cb)
+
+        for rv in active_rvs:
+            rv_dataset = hv_dataset
+            if isinstance(rv, ResultBool) and "repeat" in hv_dataset.data.dims:
+                non_repeat_dims = [d for d in hv_dataset.data.dims if d != "repeat"]
+                if non_repeat_dims:
+                    rv_dataset = self.to_hv_dataset(reduce=ReduceType.REDUCE)
+
+            cb = axiswise_cb if needs_axiswise and not getattr(rv, "share_axis", True) else base_cb
+            row.append(
+                self.to_panes_multi_panel(
+                    rv_dataset,
+                    rv,
+                    plot_callback=cb,
+                    target_dimension=target_dimension,
+                    pane_layout=pane_layout,
                 )
+            )
 
         if zip_results:
             return self.zip_results1D2(row.get())
@@ -577,13 +650,14 @@ class BenchResultBase:
         input_range: VarRange | None = None,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
-        result_var: ResultVar | None = None,
+        result_var: ResultFloat | None = None,
         result_types=None,
         pane_collection: pn.pane = None,
         override=False,
         hv_dataset: DatasetWrapper | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel | None:
         # Initialize default filters if not provided to avoid shared mutable defaults
@@ -610,9 +684,28 @@ class BenchResultBase:
             repeats_range=repeats_range,
             input_range=input_range,
         )
-        matches_res = plot_filter.matches_result(
-            self.plt_cnt_cfg, callable_name(plot_callback), override
-        )
+        # When aggregating, adjust variable counts to reflect post-aggregation
+        # dimensions so plot type filters correctly reject impossible combos
+        # (e.g. curve with 0 kdims after collapsing all inputs).
+        check_cfg = self.plt_cnt_cfg
+        if agg_over_dims:
+            agg_set = set(agg_over_dims)
+            adj_float = [fv for fv in self.plt_cnt_cfg.float_vars if fv.name not in agg_set]
+            adj_cat = [cv for cv in self.plt_cnt_cfg.cat_vars if cv.name not in agg_set]
+            check_cfg = PltCntCfg(
+                float_vars=adj_float,
+                float_cnt=len(adj_float),
+                cat_vars=adj_cat,
+                cat_cnt=len(adj_cat),
+                vector_len=self.plt_cnt_cfg.vector_len,
+                result_vars=self.plt_cnt_cfg.result_vars,
+                panel_vars=list(self.plt_cnt_cfg.panel_vars),
+                panel_cnt=self.plt_cnt_cfg.panel_cnt,
+                repeats=self.plt_cnt_cfg.repeats,
+                inputs_cnt=len(adj_float) + len(adj_cat),
+                print_debug=self.plt_cnt_cfg.print_debug,
+            )
+        matches_res = plot_filter.matches_result(check_cfg, callable_name(plot_callback), override)
         if matches_res.overall:
             # Compute aggregated dataset once (if requested) so all plotters benefit
             if hv_dataset is None:
@@ -629,6 +722,7 @@ class BenchResultBase:
                 result_types=result_types,
                 pane_collection=pane_collection,
                 reduce=reduce,
+                pane_layout=pane_layout,
                 **kwargs,
             )
         return matches_res.to_panel()
@@ -636,9 +730,10 @@ class BenchResultBase:
     def to_panes_multi_panel(
         self,
         hv_dataset: DatasetWrapper,
-        result_var: ResultVar,
+        result_var: ResultFloat,
         plot_callback: Callable | None = None,
         target_dimension: int = 1,
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ):
         dims = len(hv_dataset.dimensions())
@@ -658,8 +753,33 @@ class BenchResultBase:
             target_dimension=target_dimension,
             horizontal=pane_dims <= target_dimension + 1,
             result_var=result_var,
+            pane_layout=pane_layout,
             **kwargs,
         )
+
+    @staticmethod
+    def _child_pane_layout(pane_layout: PaneLayout) -> PaneLayout:
+        """Return the layout to use for child dimensions during recursion."""
+        if pane_layout == PaneLayout.tabs_and_grid:
+            return PaneLayout.grid
+        return pane_layout
+
+    def _iter_pane_slices(
+        self, dataset, selected_dim, plot_callback, target_dimension, result_var, child_layout
+    ):
+        """Yield (label_val, panes) for each slice along selected_dim."""
+        for i in range(dataset.sizes[selected_dim]):
+            sliced = dataset.isel({selected_dim: i})
+            label_val = sliced.coords[selected_dim].values.item()
+            panes = self._to_panes_da(
+                sliced,
+                plot_callback=plot_callback,
+                target_dimension=target_dimension,
+                horizontal=len(sliced.sizes) <= target_dimension + 1,
+                result_var=result_var,
+                pane_layout=child_layout,
+            )
+            yield label_val, panes
 
     def _to_panes_da(
         self,
@@ -668,6 +788,7 @@ class BenchResultBase:
         target_dimension=1,
         horizontal=False,
         result_var=None,
+        pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel:
         dims = list(d for d in dataset.sizes)
@@ -681,38 +802,47 @@ class BenchResultBase:
 
         if num_pane_dims > target_dimension and num_pane_dims != 0:
             selected_dim = pane_dims[-1]
-            # print(f"selected dim {dim_sel}")
             dim_color = color_tuple_to_css(int_to_col(num_pane_dims - 2, 0.05, 1.0))
-
-            outer_container = ComposableContainerPanel(
-                name=" vs ".join(pane_dims),
-                background_col=dim_color,
-                compose_method=ComposeType.down if not horizontal else ComposeType.right,
+            use_tabs = pane_layout in (PaneLayout.tabs, PaneLayout.tabs_and_grid)
+            child_layout = self._child_pane_layout(pane_layout)
+            slices = self._iter_pane_slices(
+                dataset,
+                selected_dim,
+                plot_callback,
+                target_dimension,
+                result_var,
+                child_layout,
             )
-            max_len = 0
-            for i in range(dataset.sizes[selected_dim]):
-                sliced = dataset.isel({selected_dim: i})
-                label_val = sliced.coords[selected_dim].values.item()
-                inner_container = ComposableContainerPanel(
-                    name=outer_container.name,
-                    width=num_pane_dims - target_dimension,
-                    var_name=selected_dim,
-                    var_value=label_val,
-                    compose_method=ComposeType.down if horizontal else ComposeType.right,
-                )
 
-                panes = self._to_panes_da(
-                    sliced,
-                    plot_callback=plot_callback,
-                    target_dimension=target_dimension,
-                    horizontal=len(sliced.sizes) <= target_dimension + 1,
-                    result_var=result_var,
+            if use_tabs:
+                outer_container = ComposableContainerPanel(
+                    name=" vs ".join(pane_dims),
+                    background_col=dim_color,
+                    compose_method=ComposeType.sequence,
                 )
-                max_len = max(max_len, inner_container.label_len)
-                inner_container.append(_wrap_plotly_figure(panes))
-                outer_container.append(inner_container.container)
-            for c in outer_container.container:
-                c[0].width = max_len * 7
+                for label_val, panes in slices:
+                    label = ComposableContainerBase.label_formatter(selected_dim, label_val)
+                    outer_container.append((label, _wrap_plotly_figure(panes)))
+            else:
+                outer_container = ComposableContainerPanel(
+                    name=" vs ".join(pane_dims),
+                    background_col=dim_color,
+                    compose_method=ComposeType.down if not horizontal else ComposeType.right,
+                )
+                max_len = 0
+                for label_val, panes in slices:
+                    inner_container = ComposableContainerPanel(
+                        name=outer_container.name,
+                        width=num_pane_dims - target_dimension,
+                        var_name=selected_dim,
+                        var_value=label_val,
+                        compose_method=ComposeType.down if horizontal else ComposeType.right,
+                    )
+                    max_len = max(max_len, inner_container.label_len)
+                    inner_container.append(_wrap_plotly_figure(panes))
+                    outer_container.append(inner_container.container)
+                for c in outer_container.container:
+                    c[0].width = max_len * 7
         else:
             # When over_time is active with >1 time points, the dataset still
             # contains the over_time dimension (it was excluded from pane recursion
@@ -729,7 +859,7 @@ class BenchResultBase:
             result = plot_callback(dataset=dataset, result_var=result_var, **kwargs)
             return _wrap_plotly_figure(result)
 
-        return outer_container.container
+        return outer_container.render()
 
     def _pane_over_time_slider(
         self,

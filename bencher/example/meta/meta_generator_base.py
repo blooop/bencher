@@ -40,15 +40,7 @@ class MetaGeneratorBase(bn.ParametrizedSweep):
         indented_body = textwrap.indent(body, "    ")
         kwargs_str = "".join(f", {k}={v!r}" for k, v in run_kwargs.items())
 
-        # When class_code is provided, add type hints to __call__ and ensure Any import
-        if class_code:
-            if "def __call__(self, **kwargs):" in class_code:
-                class_code = class_code.replace(
-                    "def __call__(self, **kwargs):",
-                    "def __call__(self, **kwargs: Any) -> Any:",
-                )
-            if "Any" in class_code and "from typing import Any" not in imports:
-                imports = f"from typing import Any\n\n{imports}"
+        # No special handling needed for class_code — benchmark() has no type hint requirements
 
         class_block = f"\n\n{class_code}" if class_code else ""
         content = f'''"""Auto-generated example: {title}."""
@@ -90,6 +82,8 @@ if __name__ == "__main__":
         extra_imports=None,
         run_kwargs=None,
         module_docstring=None,
+        aggregate=None,
+        agg_fn=None,
     ):
         """Build imports + body and call generate_example() for a standard sweep.
 
@@ -149,7 +143,7 @@ if __name__ == "__main__":
 
         body_lines = []
         if run_cfg_lines:
-            body_lines.append("run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)")
+            body_lines.append("if run_cfg is None:\n    run_cfg = bn.BenchRunCfg()")
             body_lines.extend(run_cfg_lines)
 
         body_lines.append(f"bench = {benchable_class}().to_bench(run_cfg)")
@@ -163,6 +157,10 @@ if __name__ == "__main__":
             sweep_parts.append(f"description={description!r}")
         if post_description:
             sweep_parts.append(f"post_description={post_description!r}")
+        if aggregate is not None:
+            sweep_parts.append(f"aggregate={aggregate!r}")
+        if agg_fn is not None:
+            sweep_parts.append(f"agg_fn={agg_fn!r}")
         sweep_args = ", ".join(sweep_parts)
 
         use_res = post_sweep_line is not None
