@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import panel as pn
@@ -48,10 +47,10 @@ class RerunResult(BenchResultBase):
 
     def to_rerun(
         self,
-        result_var: Optional[Parameter] = None,
+        result_var: Parameter | None = None,
         width: int = 950,
         height: int = 712,
-    ) -> pn.pane.panel:  # pragma: no cover
+    ) -> pn.panel:  # pragma: no cover
         """Convert N-dimensional benchmark results to a rerun viewer.
 
         Saves the recording to an .rrd file and returns a Panel pane with
@@ -121,7 +120,6 @@ class RerunResult(BenchResultBase):
             float_dims=float_dims,
             cat_dims=cat_dims,
             time_dim=time_dim,
-            bench_cfg=self.bench_cfg,
         )
 
         # Build and send blueprint for controlled layout
@@ -142,7 +140,7 @@ class RerunResult(BenchResultBase):
             f.write(rrd_data)
         return rrd_file_to_pane(rrd_path, width=width, height=height)
 
-    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover
+    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover  # noqa: F811
         """Plot callback for the rerun backend — drop-in replacement for ``to_auto_plots``.
 
         Renders the sweep summary, the rerun viewer, and the post-description,
@@ -156,6 +154,24 @@ class RerunResult(BenchResultBase):
         return plot_cols
 
 
+def _rv_name_and_path(entity_path: str, rv) -> tuple[str, str]:
+    """Return (rv_name, entity_path/rv_name) for a result variable."""
+    rv_name = rv.name if hasattr(rv, "name") else str(rv)
+    path = f"{entity_path}/{rv_name}" if entity_path else rv_name
+    return rv_name, path
+
+
+def _extract_scalar(dataset: xr.Dataset, rv_name: str, sel: dict | None = None):
+    """Extract a scalar value from *dataset[rv_name]*, optionally slicing first."""
+    da = dataset[rv_name]
+    if sel:
+        da = da.sel(sel)
+    val = da.values
+    if hasattr(val, "item"):
+        val = val.item()
+    return val
+
+
 def _log_to_rerun(
     rr,
     recording,
@@ -165,7 +181,6 @@ def _log_to_rerun(
     float_dims: list[str],
     cat_dims: list[str],
     time_dim: str | None,
-    bench_cfg=None,
     inside_time_iteration: bool = False,
 ):
     """Recursively map N-dimensional data to rerun entity paths and timelines.
@@ -189,7 +204,6 @@ def _log_to_rerun(
                 float_dims=float_dims,
                 cat_dims=cat_dims,
                 time_dim=None,  # consumed
-                bench_cfg=bench_cfg,
                 inside_time_iteration=True,
             )
         return
@@ -210,7 +224,6 @@ def _log_to_rerun(
                 float_dims=float_dims,
                 cat_dims=remaining_cat,
                 time_dim=None,
-                bench_cfg=bench_cfg,
                 inside_time_iteration=inside_time_iteration,
             )
         return
@@ -230,7 +243,6 @@ def _log_to_rerun(
                 float_dims=float_dims,
                 cat_dims=remaining_cat,
                 time_dim=None,
-                bench_cfg=bench_cfg,
                 inside_time_iteration=inside_time_iteration,
             )
         return
@@ -255,7 +267,6 @@ def _log_to_rerun(
                 float_dims=remaining_float,
                 cat_dims=[],
                 time_dim=None,
-                bench_cfg=bench_cfg,
                 inside_time_iteration=inside_time_iteration,
             )
         return
@@ -289,15 +300,11 @@ def _log_to_rerun(
 
 def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, float_dim: str):
     """Log a 1D float sweep as a line graph by iterating the float dim as log_tick."""
-    rv_name = rv.name if hasattr(rv, "name") else str(rv)
-    path = f"{entity_path}/{rv_name}" if entity_path else rv_name
+    rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
         for i, coord_val in enumerate(dataset.coords[float_dim].values):
             recording.set_time("log_tick", sequence=i)
-            sliced = dataset.sel({float_dim: coord_val})
-            val = sliced[rv_name].values
-            if hasattr(val, "item"):
-                val = val.item()
+            val = _extract_scalar(dataset, rv_name, {float_dim: coord_val})
             if val is not None and not (isinstance(val, float) and np.isnan(val)):
                 recording.log(path, rr.Scalars(float(val)))
     except (KeyError, ValueError, TypeError) as e:
@@ -306,15 +313,11 @@ def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, fl
 
 def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat_dim: str):
     """Log a result variable as a BarChart over a categorical dimension."""
-    rv_name = rv.name if hasattr(rv, "name") else str(rv)
-    path = f"{entity_path}/{rv_name}" if entity_path else rv_name
+    rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
         values = []
         for coord_val in dataset.coords[cat_dim].values:
-            sliced = dataset.sel({cat_dim: coord_val})
-            val = sliced[rv_name].values
-            if hasattr(val, "item"):
-                val = val.item()
+            val = _extract_scalar(dataset, rv_name, {cat_dim: coord_val})
             values.append(float(val) if val is not None else 0.0)
         recording.log(path, rr.BarChart(values))
     except (KeyError, ValueError, TypeError) as e:
@@ -323,8 +326,7 @@ def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat
 
 def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: list[str]):
     """Log a result variable as an N-D Tensor (heatmap for 2D, volume for 3D)."""
-    rv_name = rv.name if hasattr(rv, "name") else str(rv)
-    path = f"{entity_path}/{rv_name}" if entity_path else rv_name
+    rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
         data_array = dataset[rv_name]
         # Transpose to requested dim order and extract numpy array
@@ -342,38 +344,29 @@ def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: 
 
 def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
     """Log a single result variable to rerun at the current entity path."""
-    rv_name = rv.name if hasattr(rv, "name") else str(rv)
-    path = f"{entity_path}/{rv_name}" if entity_path else rv_name
+    rv_name, path = _rv_name_and_path(entity_path, rv)
 
     try:
         if isinstance(rv, ResultImage):
-            val = dataset[rv_name].values
-            if hasattr(val, "item"):
-                val = val.item()
+            val = _extract_scalar(dataset, rv_name)
             if val is not None and val and Path(str(val)).exists():
                 recording.log(path, rr.EncodedImage(path=str(val)))
             return
 
         if isinstance(rv, ResultVideo):
-            val = dataset[rv_name].values
-            if hasattr(val, "item"):
-                val = val.item()
+            val = _extract_scalar(dataset, rv_name)
             if val is not None and val and Path(str(val)).exists():
                 recording.log(path, rr.AssetVideo(path=str(val)))
             return
 
         if isinstance(rv, ResultString):
-            val = dataset[rv_name].values
-            if hasattr(val, "item"):
-                val = val.item()
+            val = _extract_scalar(dataset, rv_name)
             if val is not None:
                 recording.log(path, rr.TextDocument(str(val)))
             return
 
         # Default: ResultVar, ResultBool, or any numeric result -> Scalars
-        val = dataset[rv_name].values
-        if hasattr(val, "item"):
-            val = val.item()
+        val = _extract_scalar(dataset, rv_name)
         if val is not None and not (isinstance(val, float) and np.isnan(val)):
             recording.log(path, rr.Scalars(float(val)))
 
@@ -396,6 +389,16 @@ def _build_blueprint(rrb, result_vars, float_dims, cat_dims, time_dim, dim_value
     return rrb.Blueprint(root, collapse_panels=True)
 
 
+def _peel_dim_as_grid(rrb, entity_path, dim, dim_values, build_child):
+    """Build a Grid by peeling *dim* and calling *build_child* for each value."""
+    children = []
+    for val in dim_values.get(dim, []):
+        children.append(build_child(f"{entity_path}/{dim}/{val}"))
+    if not children:
+        return rrb.Vertical()
+    return rrb.Grid(*children, grid_columns=len(children), name=dim)
+
+
 def _build_blueprint_contents(
     rrb,
     entity_path: str,
@@ -407,57 +410,36 @@ def _build_blueprint_contents(
     inside_time_iteration: bool = False,
 ):
     """Recursively build blueprint containers/views mirroring _log_to_rerun structure."""
+
+    def _recurse(ep, *, fd=float_dims, cd=cat_dims, td=None, it=inside_time_iteration):
+        return _build_blueprint_contents(rrb, ep, result_vars, fd, cd, td, dim_values, it)
+
     # --- Phase 0: over_time -> just mark inside_time_iteration ---
     if time_dim:
-        return _build_blueprint_contents(
-            rrb=rrb,
-            entity_path=entity_path,
-            result_vars=result_vars,
-            float_dims=float_dims,
-            cat_dims=cat_dims,
-            time_dim=None,
-            dim_values=dim_values,
-            inside_time_iteration=True,
-        )
+        return _recurse(entity_path, it=True)
 
     # --- Phase A: peel categorical dims ---
     if cat_dims and float_dims:
         dim = cat_dims[-1]
-        remaining_cat = cat_dims[:-1]
-        children = []
-        for val in dim_values.get(dim, []):
-            child = _build_blueprint_contents(
-                rrb=rrb,
-                entity_path=f"{entity_path}/{dim}/{val}",
-                result_vars=result_vars,
-                float_dims=float_dims,
-                cat_dims=remaining_cat,
-                time_dim=None,
-                dim_values=dim_values,
-                inside_time_iteration=inside_time_iteration,
-            )
-            children.append(child)
-        n_cols = len(children)
-        return rrb.Grid(*children, grid_columns=n_cols, name=dim)
+        rc = cat_dims[:-1]
+        return _peel_dim_as_grid(
+            rrb,
+            entity_path,
+            dim,
+            dim_values,
+            lambda ep: _recurse(ep, cd=rc),
+        )
 
     if cat_dims and not float_dims and len(cat_dims) > 1:
         dim = cat_dims[-1]
-        remaining_cat = cat_dims[:-1]
-        children = []
-        for val in dim_values.get(dim, []):
-            child = _build_blueprint_contents(
-                rrb=rrb,
-                entity_path=f"{entity_path}/{dim}/{val}",
-                result_vars=result_vars,
-                float_dims=float_dims,
-                cat_dims=remaining_cat,
-                time_dim=None,
-                dim_values=dim_values,
-                inside_time_iteration=inside_time_iteration,
-            )
-            children.append(child)
-        n_cols = len(children)
-        return rrb.Grid(*children, grid_columns=n_cols, name=dim)
+        rc = cat_dims[:-1]
+        return _peel_dim_as_grid(
+            rrb,
+            entity_path,
+            dim,
+            dim_values,
+            lambda ep: _recurse(ep, cd=rc),
+        )
 
     # --- Phase B: handle remaining dims ---
     all_dims = list(float_dims)
@@ -467,45 +449,36 @@ def _build_blueprint_contents(
     # Peel extra float dims until <= 3
     if len(all_dims) > 3:
         dim = float_dims[-1]
-        remaining_float = float_dims[:-1]
-        children = []
-        for val in dim_values.get(dim, []):
-            child = _build_blueprint_contents(
-                rrb=rrb,
-                entity_path=f"{entity_path}/{dim}/{val}",
-                result_vars=result_vars,
-                float_dims=remaining_float,
-                cat_dims=[],
-                time_dim=None,
-                dim_values=dim_values,
-                inside_time_iteration=inside_time_iteration,
-            )
-            children.append(child)
-        n_cols = len(children)
-        return rrb.Grid(*children, grid_columns=n_cols, name=dim)
+        rf = float_dims[:-1]
+        return _peel_dim_as_grid(
+            rrb,
+            entity_path,
+            dim,
+            dim_values,
+            lambda ep: _recurse(ep, fd=rf, cd=[]),
+        )
 
     # --- Leaf: build views for result variables ---
-    def _make_view(rv_name: str):
-        path = f"{entity_path}/{rv_name}" if entity_path else rv_name
-        if len(all_dims) == 0:
-            # 0D scalar -> TimeSeriesView
-            return rrb.TimeSeriesView(origin=path, name=rv_name)
-        if len(all_dims) == 1:
-            dim = all_dims[0]
-            if cat_dims and dim == cat_dims[0]:
-                return rrb.BarChartView(origin=path, name=rv_name)
-            if inside_time_iteration:
-                return rrb.TensorView(origin=path, name=rv_name)
-            # 1D float line graph
-            return rrb.TimeSeriesView(origin=path, name=rv_name)
-        # 2D / 3D -> TensorView
-        return rrb.TensorView(origin=path, name=rv_name)
-
-    views = []
-    for rv in result_vars:
-        rv_name = rv.name if hasattr(rv, "name") else str(rv)
-        views.append(_make_view(rv_name))
-
+    views = [
+        _make_leaf_view(rrb, entity_path, rv, all_dims, cat_dims, inside_time_iteration)
+        for rv in result_vars
+    ]
     if len(views) == 1:
         return views[0]
     return rrb.Vertical(*views)
+
+
+def _make_leaf_view(rrb, entity_path, rv, all_dims, cat_dims, inside_time_iteration):
+    """Build a single typed rerun view for a result variable."""
+    rv_name = rv.name if hasattr(rv, "name") else str(rv)
+    _, path = _rv_name_and_path(entity_path, rv_name)
+    if len(all_dims) == 0:
+        return rrb.TimeSeriesView(origin=path, name=rv_name)
+    if len(all_dims) == 1:
+        dim = all_dims[0]
+        if cat_dims and dim == cat_dims[0]:
+            return rrb.BarChartView(origin=path, name=rv_name)
+        if inside_time_iteration:
+            return rrb.TensorView(origin=path, name=rv_name)
+        return rrb.TimeSeriesView(origin=path, name=rv_name)
+    return rrb.TensorView(origin=path, name=rv_name)

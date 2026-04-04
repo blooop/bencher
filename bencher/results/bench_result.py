@@ -5,7 +5,15 @@ import panel as pn
 from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
-from bencher.results.rerun_result import RerunResult
+
+try:
+    from bencher.results.rerun_result import RerunResult
+except ModuleNotFoundError:
+
+    class RerunResult:  # pylint: disable=missing-class-docstring
+        pass
+
+
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.video_result import VideoResult
 from bencher.results.volume_result import VolumeResult

@@ -15,8 +15,8 @@ class ComposableContainerRerun(ComposableContainerBase):
 
     - ``right``    -> ``rrb.Horizontal`` (side by side)
     - ``down``     -> ``rrb.Vertical`` (stacked)
-    - ``sequence`` -> rerun **timeline** (items displayed one after another in time)
-    - ``overlay``  -> items logged to the **same entity path** (drawn on top of each other)
+    - ``sequence`` -> ``rrb.Vertical`` (stacked; timeline semantics not yet implemented)
+    - ``overlay``  -> ``rrb.Vertical`` (stacked; same-entity-path overlay not yet implemented)
     """
 
     container: list[Any] = field(default_factory=list)
