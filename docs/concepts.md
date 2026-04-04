@@ -145,13 +145,13 @@ while holding the others fixed:
 
 ```{mermaid}
 flowchart TB
-    subgraph stage1 [" "]
+    subgraph stage1 ["① Problem Definition"]
         Define(["Define — ParametrizedSweep"])
     end
-    subgraph stage2 [" "]
+    subgraph stage2 ["② Sweep Definition"]
         Configure(["Configure — plot_sweep()"])
     end
-    subgraph stage3 [" "]
+    subgraph stage3 ["③ Run Definition"]
         Debug(["Debug — bn.run( level=2 )"])
         Refine(["Refine — bn.run( level=5, repeats=10 )"])
     end
