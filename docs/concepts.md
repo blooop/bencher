@@ -141,6 +141,30 @@ if __name__ == "__main__":
 The three stages above support a natural iterative workflow — you change one stage at a time
 while holding the others fixed:
 
+```{raw} html
+<div style="max-width: 600px;">
+```
+
+```{mermaid}
+flowchart TB
+    Define["1. Define — write ParametrizedSweep"]
+    Configure["2. Configure — set up plot_sweep()"]
+    Debug["3. Debug — bn.run(level=2, repeats=1)"]
+    Refine["4. Refine — bn.run(level=5, repeats=10)"]
+
+    Define --> Configure --> Debug
+    Debug -- "fix & rerun (cached)" --> Debug
+    Debug -- "ready" --> Refine
+    Refine -- "add params" --> Define
+
+    classDef step fill:#e8f4fc,stroke:#8ec0e4,color:#2c5f7a,stroke-width:2px
+    class Define,Configure,Debug,Refine step
+```
+
+```{raw} html
+</div>
+```
+
 1. **Define** — Write a `ParametrizedSweep` subclass (Stage 1) with your inputs, outputs,
    and benchmark function.
 2. **Configure** — Set up `plot_sweep()` calls (Stage 2) to choose which parameters to vary
