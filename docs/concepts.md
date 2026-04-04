@@ -81,12 +81,12 @@ flowchart LR
 
     Problem == .to_bench() ==> Sweep == bn.run() ==> Run
 
-    classDef blue fill:#0288d1,color:#fff,stroke:#01579b,stroke-width:2px
-    classDef purple fill:#7b1fa2,color:#fff,stroke:#4a148c,stroke-width:2px
-    classDef green fill:#388e3c,color:#fff,stroke:#1b5e20,stroke-width:2px
-    classDef blueLight fill:#e1f5fe,stroke:#90caf9,color:#01579b
-    classDef purpleLight fill:#f3e5f5,stroke:#ce93d8,color:#4a148c
-    classDef greenLight fill:#e8f5e9,stroke:#a5d6a7,color:#1b5e20
+    classDef blue fill:#5c9dc5,color:#fff,stroke:#4a8ab5,stroke-width:2px
+    classDef purple fill:#9c82b0,color:#fff,stroke:#8a70a0,stroke-width:2px
+    classDef green fill:#6aaa7a,color:#fff,stroke:#5a9a6a,stroke-width:2px
+    classDef blueLight fill:#e8f0f6,stroke:#b8cfe0,color:#3a6a8a
+    classDef purpleLight fill:#f0eaf4,stroke:#cdbdd8,color:#5a4a6a
+    classDef greenLight fill:#e8f2ea,stroke:#b8d4be,color:#3a6a4a
 
     class PS blue
     class SW purple
@@ -95,9 +95,9 @@ flowchart LR
     class IV,RV,CV purpleLight
     class Level,Repeats,Opts greenLight
 
-    style Problem fill:#fff,stroke:#0288d1,stroke-width:2px
-    style Sweep fill:#fff,stroke:#7b1fa2,stroke-width:2px
-    style Run fill:#fff,stroke:#388e3c,stroke-width:2px
+    style Problem fill:#fff,stroke:#b8cfe0,stroke-width:2px
+    style Sweep fill:#fff,stroke:#cdbdd8,stroke-width:2px
+    style Run fill:#fff,stroke:#b8d4be,stroke-width:2px
 ```
 
 ```{raw} html
