@@ -23,6 +23,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "autoapi.extension",
     "sphinx_copybutton",
+    "sphinxcontrib.mermaid",
 ]
 
 templates_path = ["_templates"]
