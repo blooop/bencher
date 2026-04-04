@@ -10,8 +10,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import panel as pn
-
 import bencher as bn
 
 
@@ -214,23 +212,6 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
         bench.optimize(n_trials=optimise, plot=False)
         for res in bench.results:
             bench.report.append_to_result(res, res.to_optuna_plots())
-
-    # Insert rerun backend tabs before the panel tabs so that the panel view
-    # (appended last) is the default active tab when opening the report.
-    try:
-        rerun_tabs = []
-        for res in bench.results:
-            title = res.bench_cfg.title or "Rerun"
-            pane = res.to_rerun()
-            if pane is not None:
-                rerun_tabs.append(pn.Column(pane, name=f"Rerun: {title}"))
-        if rerun_tabs:
-            for i, tab in enumerate(rerun_tabs):
-                bench.report.pane.insert(i, tab)
-            # Keep the last panel tab active (not a rerun tab)
-            bench.report.pane.active = len(bench.report.pane) - 1
-    except Exception as e:  # pylint: disable=broad-except
-        print(f"  WARNING: Could not add rerun tab for {stem}: {e}")
 
     # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
     reports_output_dir = REPORTS_EXTRA_DIR / rel.parent
