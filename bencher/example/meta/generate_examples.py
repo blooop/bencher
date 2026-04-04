@@ -114,13 +114,13 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_levels import example_meta_levels
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
+    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
     from bencher.example.meta.generate_meta_workflows import example_meta_workflows
 
     from bencher.example.meta.generate_meta_regression import example_meta_regression
     from bencher.example.meta.generate_meta_yaml import example_meta_yaml
     from bencher.example.meta.generate_meta_performance import example_meta_performance
     from bencher.example.meta.generate_meta_publish import example_meta_publish
-    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
     from bencher.example.meta.generate_meta_aggregation import example_meta_aggregation
     from bencher.example.meta.generate_meta_cartesian_animation import (
         example_meta_cartesian_animation,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Callable, Protocol, runtime_checkable
 import logging
-import threading
 import warnings
 import inspect
 from datetime import datetime
@@ -296,6 +295,7 @@ class BenchRunner:
         grouped: bool = False,
         cache_samples: bool | None = None,
         over_time: bool | None = None,
+        backend: str | None = None,
         **kwargs,
     ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
@@ -325,6 +325,7 @@ class BenchRunner:
                 None (default) auto-enables for progressive runs. Pass False to disable even
                 for progressive runs.
             over_time (bool, optional): Enable time-series benchmarking. None preserves run_cfg value.
+            backend (str, optional): Visualization backend ('panel' or 'rerun'). None preserves run_cfg value.
 
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
@@ -378,6 +379,8 @@ class BenchRunner:
         run_cfg.only_hash_tag = cache_samples
         if over_time is not None:
             run_cfg.over_time = over_time
+        if backend is not None:
+            run_cfg.backend = backend
 
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_level, final_max_level + 1):
@@ -452,25 +455,6 @@ class BenchRunner:
                 report.publish(remote_callback=self.publisher, debug=debug)
         if show:
             self.servers.append(report.show(self.run_cfg))
-            if not save:
-                self._save_in_background(report)
-
-    @staticmethod
-    def _save_in_background(report: BenchReport) -> None:
-        """Save a static HTML copy in a daemon thread so it doesn't block the live server."""
-
-        def _save():
-            try:
-                report_path = report.save(
-                    directory="reports",
-                    filename=f"{report.bench_name}.html",
-                    in_html_folder=False,
-                )
-                logging.info("Static report: file://%s", report_path.absolute())
-            except Exception:  # pylint: disable=broad-except
-                logging.exception("Background report save failed")
-
-        threading.Thread(target=_save, daemon=True).start()
 
     def show(
         self,
