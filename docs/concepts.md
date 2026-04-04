@@ -40,6 +40,160 @@ ggplot2 replaces "pick a chart type" with "compose visualization components", Be
 `__call__` method defines the function to evaluate. Bencher handles the rest — computing the
 Cartesian product, caching results, selecting appropriate visualizations, and composing panels.
 
+## Architecture Overview
+
+Just as the grammar of graphics decomposes a chart into Data, Aesthetics, Geometry, and so on,
+Bencher decomposes a benchmark into three stages — each mapping directly onto the grammar
+primitives introduced below:
+
+```{raw} html
+<div style="max-width: 800px;">
+```
+
+```{mermaid}
+flowchart LR
+    subgraph Problem [" "]
+        direction TB
+        PT["① Problem Definition"]
+        subgraph PS ["ParametrizedSweep"]
+            direction TB
+            Inputs[FloatSweep · IntSweep · EnumSweep]
+            Results[ResultFloat · ResultBool · ResultImage]
+            Fn["def benchmark(self)"]
+            Inputs ~~~ Results ~~~ Fn
+        end
+        PT ~~~ PS
+    end
+
+    subgraph Sweep [" "]
+        direction TB
+        ST["② Sweep Definition"]
+        subgraph SW ["plot_sweep()"]
+            direction TB
+            IV[input_vars]
+            RV[result_vars]
+            CV[const_vars]
+            IV ~~~ RV ~~~ CV
+        end
+        ST ~~~ SW
+    end
+
+    subgraph Run [" "]
+        direction TB
+        RT["③ Run Definition"]
+        subgraph RN ["bn.run()"]
+            direction TB
+            Level[level]
+            Repeats[repeats]
+            Opts[save · optimise · over_time]
+            Level ~~~ Repeats ~~~ Opts
+        end
+        RT ~~~ RN
+    end
+
+    Problem == .to_bench() ==> Sweep == bn.run() ==> Run
+
+    classDef title fill:none,stroke:none,color:#2a2a2a,font-size:16px
+    classDef blueLight fill:#e8f4fc,stroke:#c8dff0,color:#3a6a8a
+    classDef purpleLight fill:#f4ecf8,stroke:#e0d0ea,color:#5a4068
+    classDef greenLight fill:#ecf6ee,stroke:#cce6d2,color:#3a5e40
+
+    class PT,ST,RT title
+    class Inputs,Results,Fn blueLight
+    class IV,RV,CV purpleLight
+    class Level,Repeats,Opts greenLight
+
+    style Problem fill:#fafcfe,stroke:#c8dff0,stroke-width:2px
+    style Sweep fill:#fdfafe,stroke:#e0d0ea,stroke-width:2px
+    style Run fill:#fafefa,stroke:#cce6d2,stroke-width:2px
+    style PS fill:#e8f4fc,stroke:#8ec0e4,stroke-width:2px,color:#2c5f7a
+    style SW fill:#f4ecf8,stroke:#c4a4dc,stroke-width:2px,color:#5a3d6e
+    style RN fill:#ecf6ee,stroke:#98d0a4,stroke-width:2px,color:#2e5e3a
+```
+
+```{raw} html
+</div>
+```
+
+Every auto-generated example follows this pattern:
+
+```python
+# 1. Problem Definition — declare the parameter space and benchmark logic
+class MyBench(bn.ParametrizedSweep):
+    x = bn.FloatSweep(default=0, bounds=[0, 10])
+    score = bn.ResultFloat(units="pts")
+    def benchmark(self):
+        self.score = f(self.x)
+
+# 2. Sweep Definition — choose what to sweep and what to measure
+def example_my_bench(run_cfg=None):
+    bench = MyBench().to_bench(run_cfg)
+    bench.plot_sweep(input_vars=["x"], result_vars=["score"])
+    return bench
+
+# 3. Run Definition — set sampling density, repeats, and output options
+if __name__ == "__main__":
+    bn.run(example_my_bench, level=4, repeats=5)
+```
+
+1. **Problem Definition** (`ParametrizedSweep`) — Declares the grammar's *Data* and
+   *Aesthetics*: typed input parameters (`FloatSweep`, `EnumSweep`, …) define the input space,
+   result variables (`ResultFloat`, `ResultImage`, …) define the output space, and a
+   `benchmark` method holds the evaluation logic.
+2. **Sweep Definition** (`plot_sweep`) — Declares *Scales* and *Statistics*: configures which
+   input parameters to vary (`input_vars`), which metrics to collect (`result_vars`), which
+   parameters to pin (`const_vars`), and adds descriptions for the report.
+3. **Run Definition** (`bn.run()` / `BenchRunCfg`) — Controls *Scales* and *Statistics*:
+   `level` sets sampling density, `repeats` determines statistical power, and flags like
+   `save`, `optimise`, `over_time`, and `publish` control output and execution behavior.
+
+### Iterative Workflow
+
+The three stages above support a natural iterative workflow — you change one stage at a time
+while holding the others fixed:
+
+```{raw} html
+<div style="max-width: 600px;">
+```
+
+```{mermaid}
+flowchart TD
+    Define(["① Define — ParametrizedSweep"])
+    Configure(["② Configure — plot_sweep()"])
+    Debug(["③ Debug — bn.run( level=2 )"])
+    Check{"Works?"}
+    Refine(["④ Refine — bn.run( level=5, repeats=10 )"])
+    Done{"Add params?"}
+
+    Define --> Configure --> Debug --> Check
+    Check -- "No — fix & rerun (cached)" --> Debug
+    Check -- "Yes" --> Refine --> Done
+    Done -- "Yes" --> Define
+    Done -- "No" --> Stop([Done])
+
+    style Define fill:#e8f4fc,stroke:#8ec0e4,color:#2c5f7a,stroke-width:2px
+    style Configure fill:#f4ecf8,stroke:#c4a4dc,color:#5a3d6e,stroke-width:2px
+    style Debug fill:#ecf6ee,stroke:#98d0a4,color:#2e5e3a,stroke-width:2px
+    style Refine fill:#ecf6ee,stroke:#98d0a4,color:#2e5e3a,stroke-width:2px
+    style Check fill:#fff8e8,stroke:#e0c878,color:#6a5a20,stroke-width:2px
+    style Done fill:#fff8e8,stroke:#e0c878,color:#6a5a20,stroke-width:2px
+    style Stop fill:#f0f0f0,stroke:#c0c0c0,color:#505050,stroke-width:2px
+```
+
+```{raw} html
+</div>
+```
+
+1. **Define** — Write a `ParametrizedSweep` subclass (Stage 1) with your inputs, outputs,
+   and benchmark function.
+2. **Configure** — Set up `plot_sweep()` calls (Stage 2) to choose which parameters to vary
+   and which results to collect.
+3. **Debug** — Run at a low level with few repeats (Stage 3: `level=2, repeats=1`) to verify
+   the pipeline works end-to-end. Because results are cached, fixing and re-running is cheap.
+4. **Refine** — Increase `level` and `repeats` (Stage 3 only) to get publication-quality
+   statistics. The level system's binary subdivision means higher levels reuse all previously
+   cached points — you only pay for the new midpoints.
+
 ## Bencher's Primitives
 
 Bencher's design maps onto six primitives, each paralleling a grammar of graphics concept:
@@ -65,7 +219,12 @@ Bencher provides typed sweep classes that declare the input space:
 
 Each sweep carries metadata: bounds, default value, units, and sampling density. Parameters are
 defined as class attributes on a `ParametrizedSweep` subclass using the `param` library,
-making them introspectable and hashable.
+making them introspectable and hashable. See the gallery to explore how the number of input
+parameters changes the visualization:
+[0 float](reference/meta/0_float/no_repeats/index),
+[1 float](reference/meta/1_float/no_repeats/index),
+[2 float](reference/meta/2_float/no_repeats/index),
+[3 float](reference/meta/3_float/no_repeats/index).
 
 ### Results (Output Space)
 
@@ -83,6 +242,7 @@ Result types declare what a benchmark function returns:
 
 Bencher distinguishes inputs from results by type: anything that is a subclass of a result type
 is an output; everything else is an input. This split drives the entire downstream pipeline.
+See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
 ### Design (Sampling Strategy)
 
@@ -94,14 +254,22 @@ function).
 
 See the [Cartesian Animation](reference/meta/cartesian_animation/index) gallery for an
 animated visualization of how each dimension builds on the last — from a single point to a
-line, grid, 3D stack, repeated measurements, and time-series film strip.
+line, grid, 3D stack, repeated measurements, and time-series film strip. The
+[Sampling Strategies gallery](reference/meta/sampling/index) shows how different sweep types
+(uniform, custom values, int vs float) produce different sample distributions.
 
 ### Execution
 
 Each parameter combination is hashed to produce a persistent cache key. Results are stored
 using `diskcache`, so re-running a benchmark with the same parameters skips already-computed
 points. The `repeats` meta-variable controls how many times each combination is evaluated,
-enabling statistical analysis of stochastic functions.
+enabling statistical analysis of stochastic functions. Compare the
+[no repeats](reference/meta/1_float/no_repeats/index) and
+[with repeats](reference/meta/1_float/with_repeats/index) galleries to see how repeats
+add confidence intervals to plots. The
+[Statistics gallery](reference/meta/statistics/index) shows distributions, error bands,
+and the effect of different repeat counts. For caching patterns, see the
+[Cache Patterns example](reference/meta/advanced/example_advanced_cache_patterns).
 
 ### Presentation (Automatic Plot Selection)
 
@@ -113,11 +281,17 @@ which signatures it can handle via a `PlotFilter` with `VarRange` bounds on each
 The general mapping:
 
 - **0 float + categories + 1 repeat** — Bar chart
+  ([gallery](reference/meta/0_float/no_repeats/index))
 - **1 float + categories + 1 repeat** — Line plot
+  ([gallery](reference/meta/1_float/no_repeats/index))
 - **1 float + categories + N repeats** — Curve with spread (mean +/- std)
+  ([gallery](reference/meta/1_float/with_repeats/index))
 - **2 float** — Heatmap
+  ([gallery](reference/meta/2_float/no_repeats/index))
 - **3+ float** — Surface / Volume
+  ([gallery](reference/meta/3_float/no_repeats/index))
 - **0 inputs + N repeats** — Histogram / Distribution
+  ([gallery](reference/meta/0_float/with_repeats/index))
 
 When there are more dimensions than a plot type can display, the extra dimensions become
 **facets** — nested panels arranged in rows and columns, automatically labeled. Users can
@@ -136,6 +310,8 @@ supports four composition methods:
 Different backends implement these operations: `ComposableContainerPanel` uses Panel's `Row`
 and `Column` widgets for interactive dashboards, `ComposableContainerVideo` uses `moviepy` for
 video compositing, and `ComposableContainerDataset` uses `xr.concat` for data merging.
+See the [Composable Containers gallery](reference/meta/composable_containers/index) for
+interactive examples of each backend and composition mode.
 
 ## Automatic Plot Selection
 
@@ -162,7 +338,9 @@ all of them, giving a multi-perspective view of the data.
 
 This mechanism means that adding a dimension to your sweep — say, adding a second float
 parameter — automatically changes the visualization from line plots to heatmaps without any
-code changes to the plotting logic.
+code changes to the plotting logic. See the [Plot Types gallery](reference/meta/plot_types/index)
+for every available plot type, and the
+[Bool Plot Types gallery](reference/meta/bool_plot_types/index) for boolean-specific variants.
 
 ## The Level System
 
