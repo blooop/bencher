@@ -47,46 +47,87 @@ Bencher decomposes a benchmark into three stages — each mapping directly onto 
 primitives introduced below:
 
 ```{mermaid}
-flowchart LR
-    subgraph How ["How to measure"]
-        A[ParametrizedSweep]
-    end
-    subgraph What ["What to measure"]
-        B[BenchCfg]
-    end
-    subgraph Fidelity ["Measurement fidelity"]
-        C[BenchRunCfg]
+flowchart TB
+    subgraph Stage1 ["1. Problem Definition"]
+        PS["ParametrizedSweep subclass"]
+        Inputs["FloatSweep, IntSweep, EnumSweep, ..."]
+        Results["ResultFloat, ResultBool, ResultImage, ..."]
+        Fn["def benchmark(self): ..."]
+        PS --- Inputs
+        PS --- Results
+        PS --- Fn
     end
 
-    A -- "inputs & results" --> B
-    B -- "sweep config" --> C
-    C -- "cached data" --> A
+    subgraph Stage2 ["2. Sweep Definition"]
+        PlotSweep["bench.plot_sweep(...)"]
+        IV["input_vars: which params to vary"]
+        RV["result_vars: which outputs to collect"]
+        CV["const_vars: pin other params"]
+        PlotSweep --- IV
+        PlotSweep --- RV
+        PlotSweep --- CV
+    end
+
+    subgraph Stage3 ["3. Run Definition"]
+        Run["bn.run(example_fn, ...)"]
+        Level["level: sampling density"]
+        Repeats["repeats: statistical power"]
+        Opts["save, optimise, over_time, ..."]
+        Run --- Level
+        Run --- Repeats
+        Run --- Opts
+    end
+
+    Stage1 -- ".to_bench(run_cfg)" --> Stage2
+    Stage2 -- "bn.run()" --> Stage3
 ```
 
-1. **How to measure** (`ParametrizedSweep`) — Declares the grammar's *Data* and *Aesthetics*:
-   typed input parameters (`FloatSweep`, `EnumSweep`, …) define the input space, result
-   variables (`ResultVar`, `ResultImage`, …) define the output space, and a `__call__` method
-   holds the benchmark logic.
-2. **What to measure** (`BenchCfg`) — Declares *Scales* and *Statistics*: configures which
-   sweep parameters to vary, which metrics and reports to produce, and how results are
-   reduced (mean, std, min, max).
-3. **Measurement fidelity** (`BenchRunCfg` / `bn.run()`) — Controls *Scales* and *Statistics*:
-   the level system sets sampling density, `repeats` determines statistical power, and caching
-   options control when to recompute.
+Every auto-generated example follows this pattern:
+
+```python
+# 1. Problem Definition — declare the parameter space and benchmark logic
+class MyBench(bn.ParametrizedSweep):
+    x = bn.FloatSweep(default=0, bounds=[0, 10])
+    score = bn.ResultFloat(units="pts")
+    def benchmark(self):
+        self.score = f(self.x)
+
+# 2. Sweep Definition — choose what to sweep and what to measure
+def example_my_bench(run_cfg=None):
+    bench = MyBench().to_bench(run_cfg)
+    bench.plot_sweep(input_vars=["x"], result_vars=["score"])
+    return bench
+
+# 3. Run Definition — set sampling density, repeats, and output options
+if __name__ == "__main__":
+    bn.run(example_my_bench, level=4, repeats=5)
+```
+
+1. **Problem Definition** (`ParametrizedSweep`) — Declares the grammar's *Data* and
+   *Aesthetics*: typed input parameters (`FloatSweep`, `EnumSweep`, …) define the input space,
+   result variables (`ResultFloat`, `ResultImage`, …) define the output space, and a
+   `benchmark` method holds the evaluation logic.
+2. **Sweep Definition** (`plot_sweep`) — Declares *Scales* and *Statistics*: configures which
+   input parameters to vary (`input_vars`), which metrics to collect (`result_vars`), which
+   parameters to pin (`const_vars`), and adds descriptions for the report.
+3. **Run Definition** (`bn.run()` / `BenchRunCfg`) — Controls *Scales* and *Statistics*:
+   `level` sets sampling density, `repeats` determines statistical power, and flags like
+   `save`, `optimise`, `over_time`, and `publish` control output and execution behavior.
 
 ### Iterative Workflow
 
-The architecture above supports a natural iterative workflow:
+The three stages above support a natural iterative workflow — you change one stage at a time
+while holding the others fixed:
 
-1. **Define** — Create a `ParametrizedSweep` subclass with your inputs, outputs, and
-   benchmark function.
-2. **Configure** — Set up a `BenchCfg` with the sweep parameters and the metrics or reports
-   you want.
-3. **Debug** — Run at a low level with few repeats to verify the pipeline works end-to-end.
-   Because results are cached, fixing and re-running is cheap.
-4. **Refine** — Increase the level and repeats to get publication-quality statistics. The
-   level system's binary subdivision means higher levels reuse all previously cached points —
-   you only pay for the new midpoints.
+1. **Define** — Write a `ParametrizedSweep` subclass (Stage 1) with your inputs, outputs,
+   and benchmark function.
+2. **Configure** — Set up `plot_sweep()` calls (Stage 2) to choose which parameters to vary
+   and which results to collect.
+3. **Debug** — Run at a low level with few repeats (Stage 3: `level=2, repeats=1`) to verify
+   the pipeline works end-to-end. Because results are cached, fixing and re-running is cheap.
+4. **Refine** — Increase `level` and `repeats` (Stage 3 only) to get publication-quality
+   statistics. The level system's binary subdivision means higher levels reuse all previously
+   cached points — you only pay for the new midpoints.
 
 ## Bencher's Primitives
 
