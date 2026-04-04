@@ -457,14 +457,27 @@ class TestBenchRunner(unittest.TestCase):
 
     def test_bench_reuse_report_cleared(self):
         """Progressive bn.run() with ParametrizedSweep produces only last level's report."""
-        results = bn.run(
+        # Progressive run from level=2 to max_level=3
+        progressive_results = bn.run(
             SimpleBenchClassFloat, level=2, max_level=3, show=False, cache_samples=True
         )
-        last_result = results[-1]
-        report = getattr(last_result, "report", None)
-        if report is not None:
-            tab_count = len(report.pane)
-            self.assertGreater(tab_count, 0)
+        # Single-level run at the final level as a baseline for tab count
+        single_results = bn.run(SimpleBenchClassFloat, level=3, show=False, cache_samples=False)
+
+        prog_report = getattr(progressive_results[-1], "report", None)
+        single_report = getattr(single_results[-1], "report", None)
+        self.assertIsNotNone(prog_report)
+        self.assertIsNotNone(single_report)
+
+        prog_tabs = len(prog_report.pane)
+        single_tabs = len(single_report.pane)
+        self.assertGreater(prog_tabs, 0)
+        self.assertEqual(
+            single_tabs,
+            prog_tabs,
+            "Progressive run should not accumulate tabs across levels; "
+            "only the last level's report should be present.",
+        )
 
     def test_bench_reuse_cache_hits(self):
         """Progressive run where level N+1 gets cache hits from level N's samples."""
@@ -472,7 +485,10 @@ class TestBenchRunner(unittest.TestCase):
             SimpleBenchClassFloat, level=2, max_level=3, show=False, cache_samples=True
         )
         last_result = results[-1]
-        if hasattr(last_result, "sample_cache") and last_result.sample_cache is not None:
-            self.assertGreater(last_result.sample_cache.worker_cache_call_count, 0)
+        self.assertIsNotNone(
+            getattr(last_result, "sample_cache", None),
+            "Expected sample_cache on progressive run result",
+        )
+        self.assertGreater(last_result.sample_cache.worker_cache_call_count, 0)
 
     # Tests that bn.BenchRunner can handle empty list of Benchable functions

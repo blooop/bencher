@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import logging
 import signal
 import sys
 import time
@@ -133,7 +134,6 @@ def run(
         _original_target = target
 
         def _with_optimise(run_cfg: BenchRunCfg | None = None) -> "Bench":
-            import logging as _log
             import panel as _pn
 
             bench = _original_target(run_cfg)
@@ -151,7 +151,7 @@ def run(
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
                     except Exception as e:  # pylint: disable=broad-except
-                        _log.exception(e)
+                        logging.exception(e)
                         bench.report.append(
                             _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
                         )
@@ -178,7 +178,10 @@ def run(
         )
     finally:
         if bench_to_close is not None:
-            bench_to_close.close()
+            try:
+                bench_to_close.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Error closing bench")
     if show and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.
         _active_runners.append(br)

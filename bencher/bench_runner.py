@@ -367,8 +367,8 @@ class BenchRunner:
                 logging.info(
                     "Automatically enabling cache_samples for progressive run "
                     "(max_level=%s, max_repeats=%s). Pass cache_samples=False to disable.",
-                    max_level,
-                    max_repeats,
+                    final_max_level,
+                    final_max_repeats,
                 )
                 cache_samples = True
             else:
