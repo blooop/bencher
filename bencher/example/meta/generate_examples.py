@@ -267,8 +267,7 @@ def run_example_and_save(
 
    <iframe class="bencher-report"
            src="_reports/{stem}/{bench.bench_name}.html"
-           scrolling="no"
-           style="width:100%; min-height:400px; border:none; overflow:hidden;">
+           style="width:100%; min-height:400px; border:none; overflow-x:auto; overflow-y:hidden;">
    </iframe>
 """
     rst_path.write_text(rst_content, encoding="utf-8")
@@ -587,23 +586,20 @@ def generate_all() -> list[Path]:
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
 
     # Create a shared playwright browser for thumbnail screenshots
-    # Skip on RTD to stay within build time limits
-    skip_thumbnails = os.environ.get("READTHEDOCS") == "True"
+    skip_thumbnails = False
     pw_context = None
     browser = None
     page = None
-    if skip_thumbnails:
-        print("Running on Read the Docs — skipping thumbnail screenshots")
-    else:
-        try:
-            from playwright.sync_api import sync_playwright  # pylint: disable=import-error
+    try:
+        from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
-            pw_context = sync_playwright().start()
-            browser = pw_context.chromium.launch(headless=True)
-            page = browser.new_page(viewport={"width": 1200, "height": 900})
-            print("Started headless Chromium for thumbnail screenshots")
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"WARNING: Could not start browser for thumbnails: {e}")
+        pw_context = sync_playwright().start()
+        browser = pw_context.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 900})
+        print("Started headless Chromium for thumbnail screenshots")
+    except Exception as e:  # pylint: disable=broad-except
+        skip_thumbnails = True
+        print(f"WARNING: Could not start browser for thumbnails: {e}")
 
     try:
         for py_file in py_files:

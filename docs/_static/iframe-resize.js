@@ -8,8 +8,10 @@
     try {
       var doc = iframe.contentDocument || iframe.contentWindow.document;
       if (!doc || !doc.body) return;
-      doc.documentElement.style.overflow = "hidden";
-      doc.body.style.overflow = "hidden";
+      doc.documentElement.style.overflowX = "auto";
+      doc.documentElement.style.overflowY = "hidden";
+      doc.body.style.overflowX = "auto";
+      doc.body.style.overflowY = "hidden";
 
       var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
       if (h > 0 && h !== (_heights.get(iframe) || 0)) {

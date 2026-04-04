@@ -232,8 +232,8 @@ body {{ margin:0; font-family:sans-serif; }}
 iframe {{ width:100%; border:none; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>
-<iframe id="content" src="{first_src}" scrolling="no"
-        style="overflow:hidden;"></iframe>
+<iframe id="content" src="{first_src}"
+        style="overflow-x:auto; overflow-y:hidden;"></iframe>
 <script>
 function switchTab(btn, src) {{
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -246,8 +246,10 @@ function resizeInner() {{
   try {{
     var doc = f.contentDocument || f.contentWindow.document;
     if (doc && doc.body) {{
-      doc.documentElement.style.overflow = 'hidden';
-      doc.body.style.overflow = 'hidden';
+      doc.documentElement.style.overflowX = 'auto';
+      doc.documentElement.style.overflowY = 'hidden';
+      doc.body.style.overflowX = 'auto';
+      doc.body.style.overflowY = 'hidden';
       var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
       if (h > 0 && h !== _lastH) {{ _lastH = h; f.style.height = h + 'px'; }}
     }}

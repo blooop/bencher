@@ -2,8 +2,6 @@
 .wy-nav-content {
     max-width: none !important;
     overflow-x: auto !important;
-    overflow-y: auto;
-    height: 99vh;
 }
 
 /* --- Gallery overview page --- */
@@ -70,7 +68,8 @@ iframe.bencher-report {
     min-height: 400px;
     width: 100%;
     border: none;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 /* --- Line wrapping for code blocks --- */
