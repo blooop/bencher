@@ -5,8 +5,7 @@ from typing import Any
 
 import xarray as xr
 from param import Parameter
-import panel as pn
-import plotly.graph_objs as go
+import plotly.graph_objects as go
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
@@ -14,48 +13,10 @@ from bencher.variables.results import ResultFloat
 
 
 class VolumeResult(BenchResultBase):
-    def to_plot(
-        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
-    ) -> pn.panel | None:
-        """Generates a 3d volume plot from benchmark data.
+    def to_plot(self, result_var=None, override=True, **kwargs: Any):
+        return self.to_volume(result_var=result_var, override=override, **kwargs)
 
-        Args:
-            result_var (Parameter | None): The result variable to plot. If None, uses the default.
-            override (bool): Whether to override filter restrictions. Defaults to True.
-            **kwargs (Any): Additional keyword arguments passed to the plot rendering.
-
-        Returns:
-            pn.panel | None: A panel containing the volume plot if data is appropriate,
-            otherwise returns filter match results.
-        """
-        return self.to_volume(
-            result_var=result_var,
-            override=override,
-            **kwargs,
-        )
-
-    def to_volume(
-        self,
-        result_var: Parameter | None = None,
-        override: bool = True,
-        target_dimension: int = 3,
-        **kwargs,
-    ):
-        """Generates a 3D volume plot from benchmark data.
-
-        This method applies filters to ensure the data is appropriate for a volume plot
-        and then passes the filtered data to to_volume_ds for rendering.
-
-        Args:
-            result_var (Parameter, optional): The result variable to plot. If None, uses the default.
-            override (bool, optional): Whether to override filter restrictions. Defaults to True.
-            target_dimension (int, optional): The target dimensionality for data filtering. Defaults to 3.
-            **kwargs: Additional keyword arguments passed to the plot rendering.
-
-        Returns:
-            pn.pane.Plotly | None: A panel containing the volume plot if data is appropriate,
-                                    otherwise returns filter match results.
-        """
+    def to_volume(self, result_var=None, override=True, target_dimension=3, **kwargs):
         if self.bench_cfg.over_time:
             logging.info("Volume plots are not supported with over_time; skipping")
             return None
@@ -71,13 +32,7 @@ class VolumeResult(BenchResultBase):
             **kwargs,
         )
 
-    def to_volume_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, width=600, height=600
-    ) -> pn.pane.Plotly | None:
-        """Given a benchCfg generate a 3D surface plot
-        Returns:
-            pn.pane.Plotly: A 3d volume plot as a holoview in a pane
-        """
+    def to_volume_ds(self, dataset: xr.Dataset, result_var: Parameter, width=600, height=600):
         x = self.bench_cfg.input_vars[0]
         y = self.bench_cfg.input_vars[1]
         z = self.bench_cfg.input_vars[2]
@@ -96,7 +51,8 @@ class VolumeResult(BenchResultBase):
             )
         ]
 
-        layout = go.Layout(
+        fig = go.Figure(data=data)
+        fig.update_layout(
             title=f"{result_var.name} vs ({x.name} vs {y.name} vs {z.name})",
             width=width,
             height=height,
@@ -107,7 +63,4 @@ class VolumeResult(BenchResultBase):
                 zaxis_title=f"{z.name} [{z.units}]",
             ),
         )
-
-        fig = dict(data=data, layout=layout)
-
-        return pn.pane.Plotly(fig, name="volume_plotly")
+        return fig

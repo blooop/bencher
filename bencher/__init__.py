@@ -127,7 +127,8 @@ from .caching import CachedParams
 from .results.bench_result import BenchResult
 from .results.optimize_result import OptimizeResult
 from .results.video_result import VideoResult
-from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
+from .results.bench_result_base import ReduceType
+from .results.holoview_results.holoview_result import HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg
 from .job import Executors
 from .sweep_timings import SweepTimings
