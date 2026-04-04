@@ -114,7 +114,6 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
     from bencher.example.meta.generate_meta_rerun import example_meta_rerun
-    from bencher.example.meta.generate_meta_rerun_backend import example_meta_rerun_backend
     from bencher.example.meta.generate_meta_workflows import example_meta_workflows
 
     from bencher.example.meta.generate_meta_regression import example_meta_regression
@@ -147,7 +146,6 @@ def generate_python_files():
     example_meta_performance()
     example_meta_publish()
     example_meta_rerun()
-    example_meta_rerun_backend()
     example_meta_aggregation()
     example_meta_cartesian_animation()
     example_meta_container_tabs()
@@ -451,7 +449,6 @@ SECTION_GROUPS = [
             ("Performance", "performance"),
             ("Publishing", "publishing"),
             ("Rerun Integration", "rerun"),
-            ("Rerun Backend", "rerun_backend"),
         ],
     ),
 ]
