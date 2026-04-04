@@ -58,9 +58,7 @@ flowchart LR
         Inputs[FloatSweep · IntSweep · EnumSweep]
         Results[ResultFloat · ResultBool · ResultImage]
         Fn["def benchmark(self)"]
-        PS --- Inputs
-        PS --- Results
-        PS --- Fn
+        PS ~~~ Inputs ~~~ Results ~~~ Fn
     end
 
     subgraph Sweep ["② Sweep Definition"]
@@ -69,9 +67,7 @@ flowchart LR
         IV[input_vars]
         RV[result_vars]
         CV[const_vars]
-        SW --- IV
-        SW --- RV
-        SW --- CV
+        SW ~~~ IV ~~~ RV ~~~ CV
     end
 
     subgraph Run ["③ Run Definition"]
@@ -80,19 +76,28 @@ flowchart LR
         Level[level]
         Repeats[repeats]
         Opts[save · optimise · over_time]
-        RN --- Level
-        RN --- Repeats
-        RN --- Opts
+        RN ~~~ Level ~~~ Repeats ~~~ Opts
     end
 
     Problem == .to_bench() ==> Sweep == bn.run() ==> Run
 
-    style Problem fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
-    style Sweep fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style Run fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
-    style PS fill:#0288d1,color:#fff,stroke:#01579b,stroke-width:2px
-    style SW fill:#7b1fa2,color:#fff,stroke:#4a148c,stroke-width:2px
-    style RN fill:#388e3c,color:#fff,stroke:#1b5e20,stroke-width:2px
+    classDef blue fill:#0288d1,color:#fff,stroke:#01579b,stroke-width:2px
+    classDef purple fill:#7b1fa2,color:#fff,stroke:#4a148c,stroke-width:2px
+    classDef green fill:#388e3c,color:#fff,stroke:#1b5e20,stroke-width:2px
+    classDef blueLight fill:#e1f5fe,stroke:#90caf9,color:#01579b
+    classDef purpleLight fill:#f3e5f5,stroke:#ce93d8,color:#4a148c
+    classDef greenLight fill:#e8f5e9,stroke:#a5d6a7,color:#1b5e20
+
+    class PS blue
+    class SW purple
+    class RN green
+    class Inputs,Results,Fn blueLight
+    class IV,RV,CV purpleLight
+    class Level,Repeats,Opts greenLight
+
+    style Problem fill:#fff,stroke:#0288d1,stroke-width:2px
+    style Sweep fill:#fff,stroke:#7b1fa2,stroke-width:2px
+    style Run fill:#fff,stroke:#388e3c,stroke-width:2px
 ```
 
 ```{raw} html
