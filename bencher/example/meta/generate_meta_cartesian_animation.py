@@ -113,7 +113,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "cache_samples": False},
+            run_kwargs={"level": 3, "cache_samples": False},
         )
 
 
