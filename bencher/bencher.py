@@ -876,7 +876,7 @@ class Bench(BenchPlotServer):
                     else:
                         self.store_results(job_future, bench_res, job, bench_run_cfg, rv_arrays)
                 for done in as_completed(pending):
-                    worker_job, job_future = pending[done]
+                    worker_job, job_future = pending.pop(done)
                     self.store_results(job_future, bench_res, worker_job, bench_run_cfg, rv_arrays)
         timings.job_execution_ms = elapsed()
 

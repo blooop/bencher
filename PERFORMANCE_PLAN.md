@@ -794,7 +794,7 @@ Every change in this plan must pass:
 | **P2** | 2.9 Hoist shared allocations out of per-job loop | Trivial | None | **Moderate** — saves ~7ms/500 jobs (hoists `partial()`, pre-computes title/tag) | **DONE** |
 | **P2** | 2.10 Pre-cache numpy arrays for `store_results()` | Trivial | None | **High** — saves ~41ms/500 jobs (bypasses 500× xarray `Dataset.__getitem__`) | **DONE** |
 | **P3** | 2.4 Deduplicate reversed product | Low | Low | Low — measured only 4.5ms overhead at 2000 jobs | |
-| **P3** | 2.8 Streaming parallel results | Medium | Medium | High for parallel | **DONE** — uses `as_completed()` to process results in completion order, overlapping storage with remaining computation. Cache hits stored immediately; pending futures processed as they finish. |
+| **P3** | 2.8 Streaming parallel results | Medium | Medium | High for parallel | **DONE** — uses `as_completed()` to process results in completion order, overlapping storage with remaining computation. Cache hits are stored immediately; pending futures are processed as they finish. |
 | **P3** | 3.2 FanoutCache for parallel | Low | Low | Moderate for parallel | **REJECTED** — benchmarked; FanoutCache provides no benefit because cache writes happen in the main process (not from workers). FanoutCache's sharding overhead actually adds ~2× cost at 50 jobs, converges to parity at 200 jobs. |
 | **P3** | 3.3 Batch cache lookups | High | Medium | High for large sweeps | **DONE** — replaced double-query (`key in cache` + `cache[key]`) with single `cache.get()`, added `prefetch()` batch phase before submission loop |
 | **P3** | 3.5 `__getstate__` for results | Medium | Medium | Low | |

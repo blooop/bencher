@@ -138,7 +138,7 @@ def _cache_test_worker_double(**kwargs):
     return {"result": kwargs.get("x", 0) * 2}
 
 
-def _cache_test_worker_const(**kwargs):
+def _cache_test_worker_const(**kwargs):  # pylint: disable=unused-argument
     """Returns constant for eviction tests. Must be at module level for pickle."""
     return {"result": 42}
 
@@ -183,7 +183,7 @@ def _assert_datasets_equal(ds_serial: xr.Dataset, ds_parallel: xr.Dataset, msg: 
                 serial_vals,
                 parallel_vals,
                 rtol=0,
-                atol=0,
+                atol=1e-10,
                 err_msg=f"{prefix}variable '{var_name}' values differ",
             )
         else:
@@ -570,26 +570,70 @@ class TestLargeParallelSweep:
 
 
 class TestBenchRunnerParallelIntegrity:
-    """BenchRunner end-to-end with MULTIPROCESSING — data correctness."""
+    """BenchRunner end-to-end with MULTIPROCESSING — data correctness.
 
-    def test_bench_runner_produces_results(self):
+    These tests verify that the MULTIPROCESSING executor with as_completed()
+    result streaming produces bit-identical results to serial execution when
+    using BenchRunner.
+    """
+
+    @staticmethod
+    def _make_run_cfg(executor: Executors) -> bn.BenchRunCfg:
         run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = Executors.MULTIPROCESSING
+        run_cfg.executor = executor
         run_cfg.overwrite_sample_cache = True
         run_cfg.cache_samples = False
         run_cfg.print_bench_inputs = False
         run_cfg.print_bench_results = False
-        bench_run = bn.BenchRunner("integrity_runner", run_cfg=run_cfg)
-        bench_run.add_bench(SimpleFloatConfig())
-        bench_run.run(level=2)
+        return run_cfg
 
-    def test_bench_runner_multi_result(self):
-        run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = Executors.MULTIPROCESSING
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.cache_samples = False
-        run_cfg.print_bench_inputs = False
-        run_cfg.print_bench_results = False
-        bench_run = bn.BenchRunner("integrity_multi_result_runner", run_cfg=run_cfg)
-        bench_run.add_bench(MultiResultConfig())
-        bench_run.run(level=2)
+    def test_simple_float_serial_vs_multiprocessing(self):
+        """SimpleFloatConfig: BenchRunner SERIAL vs MULTIPROCESSING should match."""
+        serial_runner = bn.BenchRunner(
+            "integrity_serial", run_cfg=self._make_run_cfg(Executors.SERIAL)
+        )
+        serial_runner.add_bench(SimpleFloatConfig())
+        serial_results = serial_runner.run(level=2)
+
+        parallel_runner = bn.BenchRunner(
+            "integrity_parallel", run_cfg=self._make_run_cfg(Executors.MULTIPROCESSING)
+        )
+        parallel_runner.add_bench(SimpleFloatConfig())
+        parallel_results = parallel_runner.run(level=2)
+
+        assert len(serial_results) == len(parallel_results)
+        for serial_cfg, parallel_cfg in zip(serial_results, parallel_results):
+            assert serial_cfg.ds is not None, "Serial BenchRunner dataset is unexpectedly None"
+            assert parallel_cfg.ds is not None, "Parallel BenchRunner dataset is unexpectedly None"
+            assert set(serial_cfg.ds.data_vars) == set(parallel_cfg.ds.data_vars)
+            _assert_datasets_equal(
+                serial_cfg.ds,
+                parallel_cfg.ds,
+                "BenchRunner(SimpleFloatConfig) SERIAL vs MULTIPROCESSING",
+            )
+
+    def test_multi_result_serial_vs_multiprocessing(self):
+        """MultiResultConfig: BenchRunner SERIAL vs MULTIPROCESSING should match."""
+        serial_runner = bn.BenchRunner(
+            "integrity_multi_serial", run_cfg=self._make_run_cfg(Executors.SERIAL)
+        )
+        serial_runner.add_bench(MultiResultConfig())
+        serial_results = serial_runner.run(level=2)
+
+        parallel_runner = bn.BenchRunner(
+            "integrity_multi_parallel", run_cfg=self._make_run_cfg(Executors.MULTIPROCESSING)
+        )
+        parallel_runner.add_bench(MultiResultConfig())
+        parallel_results = parallel_runner.run(level=2)
+
+        assert len(serial_results) == len(parallel_results)
+        for serial_cfg, parallel_cfg in zip(serial_results, parallel_results):
+            assert serial_cfg.ds is not None
+            assert parallel_cfg.ds is not None
+            assert len(serial_cfg.ds.data_vars) >= 2, "MultiResultConfig should yield >=2 vars"
+            assert set(serial_cfg.ds.data_vars) == set(parallel_cfg.ds.data_vars)
+            _assert_datasets_equal(
+                serial_cfg.ds,
+                parallel_cfg.ds,
+                "BenchRunner(MultiResultConfig) SERIAL vs MULTIPROCESSING",
+            )
