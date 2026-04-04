@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import random
+import socket
 from pathlib import Path
 from threading import Thread
 
@@ -106,6 +108,26 @@ class BenchPlotServer:
             "This benchmark name does not exist in the results cache. Was not able to load the results to plot!  Make sure to run the bencher to generate and save results to the cache"
         )
 
+    @staticmethod
+    def _find_free_port() -> int:
+        """Find a free port by testing random ports in the dynamic/private range.
+
+        Using ``port=0`` with Tornado/Bokeh can fail on some Linux kernels
+        (notably 6.x) because the kernel deterministically assigns the same
+        ephemeral port, causing ``EADDRINUSE`` when a previous server is
+        still running.  Picking a random port from the IANA dynamic range
+        (49152-65535) avoids this.
+        """
+        for _ in range(100):
+            port = random.randint(49152, 65535)
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(("0.0.0.0", port))
+                    return port
+            except OSError:
+                continue
+        raise RuntimeError("Could not find a free port after 100 attempts")
+
     def serve(
         self,
         bench_name: str,
@@ -128,6 +150,9 @@ class BenchPlotServer:
 
         extra = self._rrd_extra_patterns()
 
+        if port is None:
+            port = self._find_free_port()
+
         serve_kwargs = dict(
             title=bench_name,
             threaded=True,
@@ -135,7 +160,7 @@ class BenchPlotServer:
             address="0.0.0.0",
             websocket_origin=["*"],
             extra_patterns=extra,
-            port=port if port is not None else 0,
+            port=port,
         )
 
         return pn.serve(plots_instance, **serve_kwargs)
