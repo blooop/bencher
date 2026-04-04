@@ -3,8 +3,6 @@
 Shows uniform bounds, custom sample_values, and Int vs Float.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -20,12 +18,10 @@ class UniformSampler(bn.ParametrizedSweep):
 
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
-        return super().__call__()'''
+    def benchmark(self):
+        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)'''
 
 _CUSTOM_CLASS_CODE = '''\
 class CustomSampler(bn.ParametrizedSweep):
@@ -33,12 +29,10 @@ class CustomSampler(bn.ParametrizedSweep):
 
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Server load")
 
-    latency = bn.ResultVar(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)
-        return super().__call__()'''
+    def benchmark(self):
+        self.latency = 10 + 90 * self.load + 5 * math.sin(math.pi * self.load * 3)'''
 
 _INT_FLOAT_CLASS_CODE = '''\
 class IntFloatCompare(bn.ParametrizedSweep):
@@ -47,12 +41,10 @@ class IntFloatCompare(bn.ParametrizedSweep):
     int_input = bn.IntSweep(default=5, bounds=[0, 10], doc="Discrete integer input")
     float_input = bn.FloatSweep(default=5.0, bounds=[0.0, 10.0], doc="Continuous float input")
 
-    output = bn.ResultVar("ul", doc="Computed output")
+    output = bn.ResultFloat("ul", doc="Computed output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)
-        return super().__call__()'''
+    def benchmark(self):
+        self.output = math.sin(self.int_input * 0.3) + math.cos(self.float_input * 0.2)'''
 
 
 class MetaSampling(MetaGeneratorBase):
@@ -60,11 +52,9 @@ class MetaSampling(MetaGeneratorBase):
 
     strategy = bn.StringSweep(STRATEGIES, doc="Sampling strategy to demonstrate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
-        filename = f"sampling_{self.strategy}"
+    def benchmark(self):
         function_name = f"example_sampling_{self.strategy}"
+        filename = function_name
         title = f"Sampling: {self.strategy.replace('_', ' ').title()}"
 
         if self.strategy == "uniform":
@@ -148,8 +138,6 @@ class MetaSampling(MetaGeneratorBase):
                 ),
                 run_kwargs={"level": 3},
             )
-
-        return super().__call__()
 
 
 def example_meta_sampling(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

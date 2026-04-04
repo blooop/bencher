@@ -18,6 +18,16 @@ from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_cfg import BenchRunCfg
 
 
+def _inline_rrd(html_path: Path) -> None:
+    """Inline .rrd data in a saved HTML report (no-op if no rerun iframes)."""
+    try:
+        from bencher.utils_rrd import inline_rrd_iframes
+
+        inline_rrd_iframes(html_path)
+    except Exception:  # pylint: disable=broad-except
+        logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
+
+
 @dataclass
 class GithubPagesCfg:
     github_user: str
@@ -32,9 +42,17 @@ class BenchReport(BenchPlotServer):
         bench_name: str | None = None,
     ) -> None:
         self.bench_name = bench_name
-        self.pane = pn.Tabs(tabs_location="left", name=self.bench_name)
+        self.pane = pn.Tabs(tabs_location="above", name=self.bench_name)
         self.last_save_ms: float = 0.0
         self.bench_results: list[BenchResult] = []
+
+    def clear(self) -> None:
+        """Remove all tabs and results so the report can be reused between runs.
+
+        Not safe to call while the report is being served to a live Panel session.
+        """
+        self.pane.clear()
+        self.bench_results.clear()
 
     def append_title(self, title: str, new_tab: bool = True):
         if new_tab:
@@ -89,6 +107,14 @@ class BenchReport(BenchPlotServer):
         if label:
             title = f"{title} [{label}]"
         self.append_tab(bench_res.plot(), title)
+
+    def append_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
+        """Append *pane* to the tab that belongs to *bench_res*."""
+        try:
+            idx = self.bench_results.index(bench_res)
+            self.pane[idx].append(pane)
+        except (ValueError, IndexError):
+            self.append(pane)
 
     def append_tab(self, pane: pn.panel, name: str | None = None) -> None:
         if pane is not None:
@@ -147,6 +173,7 @@ class BenchReport(BenchPlotServer):
                 # Save inner content directly so the Tabs sidebar is not rendered
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
                 content.save(filename=index_path, progress=True, embed=True, **kwargs)
+                _inline_rrd(index_path)
                 return index_path
 
             # Save each tab to its own HTML so HoloMap sliders don't collide.
@@ -164,6 +191,7 @@ class BenchReport(BenchPlotServer):
                 tab_path = tab_dir / tab_file
                 logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
                 pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
+                _inline_rrd(tab_path)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 
             # Generate an index page with tab buttons and an iframe.
@@ -196,9 +224,11 @@ class BenchReport(BenchPlotServer):
 <html><head><meta charset="utf-8"><title>Report</title>
 <style>
 body {{ margin:0; font-family:sans-serif; }}
-.tab-bar {{ display:flex; gap:2px; background:#e0e0e0; padding:4px; }}
-.tab-btn {{ padding:8px 16px; border:none; cursor:pointer; background:#ccc; font-size:14px; }}
-.tab-btn.active {{ background:#fff; font-weight:bold; }}
+.tab-bar {{ display:flex; gap:4px; background:rgba(0,0,0,0.9); padding:10px; position:sticky; top:0; z-index:100; }}
+.tab-btn {{ padding:10px 16px; border:none; cursor:pointer; background:rgba(255,255,255,0.15); color:#fff; font-size:14px; border-radius:4px; transition:background 0.15s ease,color 0.15s ease; }}
+.tab-btn:hover {{ background:rgba(255,255,255,0.3); }}
+.tab-btn:focus-visible {{ background:rgba(255,255,255,0.3); outline:2px solid #fff; outline-offset:2px; }}
+.tab-btn.active {{ background:rgba(255,255,255,0.9); color:#000; font-weight:bold; }}
 iframe {{ width:100%; border:none; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>

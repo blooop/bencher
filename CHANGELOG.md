@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.75.2] - 2026-03-31
+
+### Fixed
+- `.rrd` iframe URLs no longer hardcode `localhost:8051` — CDN viewer uses relative URLs, local/hosted viewer resolves `window.location.origin` at render time via JavaScript, so reports work behind container port mappings and on any Panel server port (#866)
+- Panel server uses `port=0` (OS-assigned) when no explicit port is given, preventing `OSError: Address already in use` when other services occupy the default port (#866)
+- `_cdn_viewer_versions` cache collision between `_cdn_viewer_url` (filenames) and `_get_cdn_viewer_html` (HTML strings) — split into separate caches (#866)
+- Film strip labels now render at constant pixel size regardless of strip dimensions, with horizontal clipping and right-alignment for wide strips (#865)
+
+### Changed
+- `show=True` in `BenchRunner.run()` now auto-saves a static HTML report to `reports/` in a background thread (non-blocking), with the path logged for offline viewing. Explicit `save=True` still saves synchronously. (#866)
+- **Deprecated `__call__()` in favor of `benchmark()`**: `ParametrizedSweep` subclasses should now override `benchmark()` instead of `__call__()`. The new method removes the need for `self.update_params_from_kwargs(**kwargs)` and `return super().__call__()` boilerplate. The old `__call__()` pattern still works but emits a `DeprecationWarning`. (#864)
+
+### Removed
+- `PANEL_PORT` constant from `utils_rrd` — no longer needed since iframe URLs are resolved dynamically (#866)
+
+## [1.74.0] - 2026-03-28
+
+### Added
+- **Cartesian Product Animations**: New PIL-based animation system that visualizes how parameter sweep dimensions build upon each other (point → line → grid → stack → film strip) (#feature/manim_summary)
+- `BenchCfg.to_cartesian_animation()` method for rendering dimensional progression animations
+- Automatic animation embedding in sweep descriptions via `BenchCfg.describe_sweep()`
+- `CartesianProductCfg` and `CartesianProductScene` classes for animation configuration and rendering
+- `bencher.results.manim_cartesian` module with Shape, StrobeShape, and TimelineShape classes
+- **Complete Usage Guide**: New comprehensive `docs/how_to_use_bencher.md` documentation covering sweep types, result types, and best practices
+- Tab bar sweep example (`example_tab_bar_sweep.py`) demonstrating UI layout testing with PIL rendering
+- Meta example generation system for creating animation galleries
+- 10-color pastel palette for dimensional visualization with proper contrast on white backgrounds
+- Film strip metaphor for `over_time` dimension with sprocket holes and frame labels
+- Strobe/flash animation for `repeat` dimension with tally mark counters
+
+### Changed 
+- **Dark Theme Tab Bar**: Report tabs now use dark background with improved contrast and sticky positioning
+- Tab bar styling updated with rounded corners, better spacing, and proper hover states
+- Meta example generation now includes animation examples in advanced gallery
+- Animation rendering uses unique filenames to prevent file path collisions
+- Improved tally mark visuals with thicker strikethrough, larger fonts, and centered labels
+
+### Fixed
+- Animation filepath collisions resolved with unique filename generation based on animation parameters
+- ListProxy pickle serialization issues for multiprocessing compatibility
+- Animation size optimization for better performance and smaller file sizes
+
+## [1.73.1] - 2026-03-27
+
+### Fixed
+- Generate optimisation reports for all benchmarks, not just the last (#852)
+- Include time event in over_time panel labels and default to last (#849)
+- Wrap long description strings in generated examples to fit 100-char line limit (#851)
+- Override RTD theme CSS to wrap long lines in docs code blocks (#851)
+
 ## [1.73.0] - 2026-03-26
 
 ### Added

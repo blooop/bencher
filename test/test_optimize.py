@@ -20,12 +20,10 @@ class Sphere(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
     y = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
 
-    loss = bn.ResultVar("ul", bn.OptDir.minimize)
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.loss = float(self.x**2 + self.y**2)
-        return super().__call__(**kwargs)
 
 
 class MultiObjective(bn.ParametrizedSweep):
@@ -33,14 +31,12 @@ class MultiObjective(bn.ParametrizedSweep):
 
     x = bn.FloatSweep(default=0, bounds=[0, 5], samples=5)
 
-    obj1 = bn.ResultVar("ul", bn.OptDir.minimize)
-    obj2 = bn.ResultVar("ul", bn.OptDir.maximize)
+    obj1 = bn.ResultFloat("ul", bn.OptDir.minimize)
+    obj2 = bn.ResultFloat("ul", bn.OptDir.maximize)
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.obj1 = float(self.x**2)
         self.obj2 = float(-((self.x - 3) ** 2))
-        return super().__call__(**kwargs)
 
 
 class Color(bn.ClassEnum):
@@ -59,13 +55,11 @@ class CategoricalProblem(bn.ParametrizedSweep):
     flag = bn.BoolSweep(default=False)
     color = bn.EnumSweep(Color, default=Color.red)
 
-    score = bn.ResultVar("ul", bn.OptDir.minimize)
+    score = bn.ResultFloat("ul", bn.OptDir.minimize)
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         lookup = {Color.red: 1.0, Color.green: 0.5, Color.blue: 2.0}
         self.score = lookup[self.color] + (0.0 if self.flag else 0.3)
-        return super().__call__(**kwargs)
 
 
 def _run_cfg():

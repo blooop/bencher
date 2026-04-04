@@ -254,6 +254,7 @@ class BenchResult(
             )
             plot_cols.append(self.to(BandResult, aggregate=input_names))
 
+        kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
@@ -264,6 +265,7 @@ class BenchResult(
             reduce=ReduceType.REDUCE,
             agg_over_dims=self.bench_cfg.agg_over_dims,
             agg_fn=self.bench_cfg.agg_fn,
+            deep=False,
         )
         rows = []
         for rv in self.bench_cfg.result_vars:

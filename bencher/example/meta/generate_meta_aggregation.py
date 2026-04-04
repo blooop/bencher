@@ -18,17 +18,15 @@ class GradientDirection(bn.ParametrizedSweep):
     y = bn.FloatSweep(default=0, bounds=[0, 1], doc="Y position")
     direction = bn.StringSweep(["diagonal", "horizontal", "vertical"], doc="Gradient direction")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.direction == "diagonal":
             self.out = self.x + self.y
         elif self.direction == "horizontal":
             self.out = self.x
         else:
-            self.out = self.y
-        return super().__call__()'''
+            self.out = self.y'''
 
 _GRADIENT_1F_1C = '''\
 class GradientScale(bn.ParametrizedSweep):
@@ -37,17 +35,15 @@ class GradientScale(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[0, 1], doc="X position")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.scale == "linear":
             self.out = self.x
         elif self.scale == "quadratic":
             self.out = self.x**2
         else:
-            self.out = self.x**0.5
-        return super().__call__()'''
+            self.out = self.x**0.5'''
 
 _GRADIENT_1F_2C = '''\
 class GradientDirectionScale(bn.ParametrizedSweep):
@@ -57,10 +53,9 @@ class GradientDirectionScale(bn.ParametrizedSweep):
     direction = bn.StringSweep(["positive", "negative", "symmetric"], doc="Gradient direction")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.direction == "positive":
             base = self.x
         elif self.direction == "negative":
@@ -72,8 +67,7 @@ class GradientDirectionScale(bn.ParametrizedSweep):
         elif self.scale == "quadratic":
             self.out = base**2
         else:
-            self.out = base**0.5
-        return super().__call__()'''
+            self.out = base**0.5'''
 
 _GRADIENT_2F_2C = '''\
 class GradientSurface(bn.ParametrizedSweep):
@@ -84,10 +78,9 @@ class GradientSurface(bn.ParametrizedSweep):
     direction = bn.StringSweep(["diagonal", "horizontal", "vertical"], doc="Gradient direction")
     scale = bn.StringSweep(["linear", "quadratic", "sqrt"], doc="Gradient scale")
 
-    out = bn.ResultVar(units="v", doc="Surface value")
+    out = bn.ResultFloat(units="v", doc="Surface value")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         if self.direction == "diagonal":
             base = self.x + self.y
         elif self.direction == "horizontal":
@@ -99,8 +92,7 @@ class GradientSurface(bn.ParametrizedSweep):
         elif self.scale == "quadratic":
             self.out = base**2
         else:
-            self.out = base**0.5
-        return super().__call__()'''
+            self.out = base**0.5'''
 
 
 def example_meta_aggregation():
@@ -111,7 +103,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate by Name (list)",
         output_dir="aggregation",
-        filename="agg_list_1_cat",
+        filename="example_agg_list_1_cat",
         function_name="example_agg_list_1_cat",
         benchable_class="GradientDirection",
         benchable_module=None,
@@ -138,7 +130,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate to 1-D (True)",
         output_dir="aggregation",
-        filename="agg_all",
+        filename="example_agg_all",
         function_name="example_agg_all",
         benchable_class="GradientScale",
         benchable_module=None,
@@ -164,7 +156,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate Last N (int)",
         output_dir="aggregation",
-        filename="agg_int",
+        filename="example_agg_int",
         function_name="example_agg_int",
         benchable_class="GradientDirectionScale",
         benchable_module=None,
@@ -190,7 +182,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate 2 Categoricals (list)",
         output_dir="aggregation",
-        filename="agg_list_2_cat",
+        filename="example_agg_list_2_cat",
         function_name="example_agg_list_2_cat",
         benchable_class="GradientSurface",
         benchable_module=None,
@@ -219,7 +211,7 @@ def example_meta_aggregation():
     gen.generate_sweep_example(
         title="Aggregate with Max",
         output_dir="aggregation",
-        filename="agg_fn_max",
+        filename="example_agg_fn_max",
         function_name="example_agg_fn_max",
         benchable_class="GradientDirection",
         benchable_module=None,

@@ -7,6 +7,7 @@ configuration and validation in benchmark runs.
 from __future__ import annotations
 
 import logging
+import warnings
 from functools import partial
 from typing import Callable
 
@@ -91,6 +92,16 @@ class WorkerManager:
         if isinstance(worker, ParametrizedSweep):
             self.worker_class_instance = worker
             self.worker = self.worker_class_instance.__call__
+            if (
+                type(worker).__call__ is not ParametrizedSweep.__call__
+                and type(worker).benchmark is ParametrizedSweep.benchmark
+            ):
+                warnings.warn(
+                    f"{type(worker).__name__} overrides __call__() which is deprecated. "
+                    "Override benchmark() instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
             logger.info("setting worker from bench class.__call__")
         else:
             if isinstance(worker, type):

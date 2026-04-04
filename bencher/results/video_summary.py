@@ -69,7 +69,7 @@ class VideoSummaryResult(BenchResultBase):
             pane_collection = pn.Row()
 
         if matches_res.overall:
-            ds = self.to_dataset(ReduceType.SQUEEZE)
+            ds = self.to_dataset(ReduceType.SQUEEZE, deep=False)
             for rv in self.get_results_var_list(result_var):
                 if isinstance(rv, result_types):
                     pane_collection.append(

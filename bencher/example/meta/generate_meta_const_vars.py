@@ -3,8 +3,6 @@
 Shows how to use const_vars to fix parameters at specific values while sweeping others.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -24,11 +22,10 @@ class ServerBenchmark(bn.ParametrizedSweep):
     log_level = bn.StringSweep(["debug", "info", "warn"], doc="Logging verbosity")
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")
 
-    latency = bn.ResultVar(units="ms", doc="Request latency")
-    throughput = bn.ResultVar(units="req/s", doc="Request throughput")
+    latency = bn.ResultFloat(units="ms", doc="Request latency")
+    throughput = bn.ResultFloat(units="req/s", doc="Request throughput")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         cache_factor = 0.6 if self.cache_enabled else 1.0
         db_base = {"postgres": 1.0, "mysql": 1.1, "sqlite": 0.7}[self.backend]
         log_penalty = {"debug": 1.3, "info": 1.0, "warn": 1.0}[self.log_level]
@@ -43,8 +40,7 @@ class ServerBenchmark(bn.ParametrizedSweep):
             import random
 
             self.latency += random.gauss(0, self.noise_scale * self.latency * 0.1)
-            self.throughput = 1000 / max(self.latency, 1)
-        return super().__call__()'''
+            self.throughput = 1000 / max(self.latency, 1)'''
 
 
 class MetaConstVars(MetaGeneratorBase):
@@ -52,9 +48,7 @@ class MetaConstVars(MetaGeneratorBase):
 
     example = bn.StringSweep(EXAMPLES, doc="Which const_vars example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "slice":
             self._gen_slice()
         elif self.example == "compare":
@@ -64,14 +58,12 @@ class MetaConstVars(MetaGeneratorBase):
         elif self.example == "noise":
             self._gen_noise()
 
-        return super().__call__()
-
     def _gen_slice(self):
         """Fix disk_io=0.5 while sweeping cpu_load and memory_pct."""
         self.generate_sweep_example(
             title="Const Vars: Slicing a 3D Space",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_slice",
+            filename="example_const_vars_slice",
             function_name="example_const_vars_slice",
             benchable_class="ServerBenchmark",
             benchable_module=None,
@@ -98,7 +90,7 @@ class MetaConstVars(MetaGeneratorBase):
         self.generate_example(
             title="Const Vars: Comparing Slices",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_compare",
+            filename="example_const_vars_compare",
             function_name="example_const_vars_compare",
             imports=imports,
             body=body,
@@ -127,7 +119,7 @@ class MetaConstVars(MetaGeneratorBase):
         self.generate_example(
             title="Const Vars: Fixing Categorical Parameters",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_categorical",
+            filename="example_const_vars_categorical",
             function_name="example_const_vars_categorical",
             imports=imports,
             body=body,
@@ -140,7 +132,7 @@ class MetaConstVars(MetaGeneratorBase):
         self.generate_sweep_example(
             title="Const Vars: Setting Non-Default Configuration",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_noise",
+            filename="example_const_vars_noise",
             function_name="example_const_vars_noise",
             benchable_class="ServerBenchmark",
             benchable_module=None,

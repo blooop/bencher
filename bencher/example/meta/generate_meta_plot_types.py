@@ -4,8 +4,6 @@ Shows ``res.to_<plot_type>()`` for each plot type with appropriate data.
 Each generated example is fully self-contained with an inline class definition.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -25,13 +23,11 @@ class CacheCompare(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bn.ResultVar("m", doc="Response distance metric")
+    distance = bn.ResultFloat("m", doc="Response distance metric")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
-        self.distance = lookup[self.backend]
-        return super().__call__()"""
+        self.distance = lookup[self.backend]"""
 
 _LATENCY_PROFILE_CODE = """\
 import math
@@ -42,12 +38,10 @@ class LatencyProfile(bn.ParametrizedSweep):
 
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Latency distance metric")
+    distance = bn.ResultFloat("m", doc="Latency distance metric")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.distance = math.sin(math.pi * self.load) + 0.5
-        return super().__call__()"""
+    def benchmark(self):
+        self.distance = math.sin(math.pi * self.load) + 0.5"""
 
 _LATENCY_NOISY_PROFILE_CODE = """\
 import math
@@ -60,14 +54,12 @@ class LatencyNoisyProfile(bn.ParametrizedSweep):
     load = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Latency distance metric")
+    distance = bn.ResultFloat("m", doc="Latency distance metric")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.distance = math.sin(math.pi * self.load) + 0.5
         if self.noise_scale > 0:
-            self.distance += random.gauss(0, self.noise_scale)
-        return super().__call__()"""
+            self.distance += random.gauss(0, self.noise_scale)"""
 
 _THROUGHPUT_COMPARE_CODE = """\
 class ThroughputCompare(bn.ParametrizedSweep):
@@ -75,13 +67,11 @@ class ThroughputCompare(bn.ParametrizedSweep):
 
     backend = bn.StringSweep(["redis", "memcached", "local"])
 
-    distance = bn.ResultVar("m", doc="Throughput distance metric")
+    distance = bn.ResultFloat("m", doc="Throughput distance metric")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         lookup = {"redis": 5.4, "memcached": 4.1, "local": 8.7}
-        self.distance = lookup[self.backend]
-        return super().__call__()"""
+        self.distance = lookup[self.backend]"""
 
 _HEATMAP_DEMO_CODE = """\
 import math
@@ -93,12 +83,10 @@ class HeatmapDemo(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Surface height")
+    distance = bn.ResultFloat("m", doc="Surface height")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
-        return super().__call__()"""
+    def benchmark(self):
+        self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)"""
 
 _SURFACE_DEMO_CODE = """\
 import math
@@ -110,12 +98,10 @@ class SurfaceDemo(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
     y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Surface height")
+    distance = bn.ResultFloat("m", doc="Surface height")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
-        return super().__call__()"""
+    def benchmark(self):
+        self.distance = math.sin(math.pi * self.x) * math.cos(math.pi * self.y)"""
 
 _JITTER_DEMO_CODE = """\
 import random
@@ -127,15 +113,13 @@ class JitterDemo(bn.ParametrizedSweep):
     backend = bn.StringSweep(["redis", "memcached", "local"])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Jittered distance metric")
+    distance = bn.ResultFloat("m", doc="Jittered distance metric")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
         self.distance = lookup[self.backend]
         if self.noise_scale > 0:
-            self.distance += random.gauss(0, self.noise_scale)
-        return super().__call__()"""
+            self.distance += random.gauss(0, self.noise_scale)"""
 
 _SCATTER_JITTER_DEMO_CODE = """\
 import random
@@ -147,15 +131,13 @@ class ScatterJitterDemo(bn.ParametrizedSweep):
     backend = bn.StringSweep(["redis", "memcached", "local"])
     noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
 
-    distance = bn.ResultVar("m", doc="Jittered distance metric")
+    distance = bn.ResultFloat("m", doc="Jittered distance metric")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         lookup = {"redis": 1.2, "memcached": 0.9, "local": 0.3}
         self.distance = lookup[self.backend]
         if self.noise_scale > 0:
-            self.distance += random.gauss(0, self.noise_scale)
-        return super().__call__()"""
+            self.distance += random.gauss(0, self.noise_scale)"""
 
 # ---------------------------------------------------------------------------
 # Plot configuration table
@@ -279,12 +261,10 @@ class MetaPlotTypes(MetaGeneratorBase):
 
     plot_type = bn.StringSweep(PLOT_NAMES, doc="Plot type to demonstrate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         cfg = PLOT_CONFIGS[self.plot_type]
-        filename = f"plot_{self.plot_type}"
         function_name = f"example_plot_{self.plot_type}"
+        filename = function_name
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
         const_vars = "dict(noise_scale=0.15)" if cfg["repeats"] > 1 else None
@@ -314,8 +294,6 @@ class MetaPlotTypes(MetaGeneratorBase):
             run_kwargs=run_kwargs,
             class_code=cfg.get("class_code"),
         )
-
-        return super().__call__()
 
 
 def example_meta_plot_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

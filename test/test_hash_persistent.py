@@ -32,7 +32,7 @@ from bencher.variables.results import (
     ResultPath,
     ResultReference,
     ResultString,
-    ResultVar,
+    ResultFloat,
     ResultVec,
     ResultVideo,
     ResultVolume,
@@ -247,7 +247,7 @@ class TestBenchCfgHashStability:
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [
-                ResultVar(units="m/s", doc="speed"),
+                ResultFloat(units="m/s", doc="speed"),
                 ResultImage(doc="img"),
                 ResultString(doc="label"),
                 ResultContainer(doc="cont"),
@@ -313,7 +313,7 @@ _BATCH_HASH_SCRIPT = textwrap.dedent("""\
     import json
     import param
     import bencher.variables.results as results_module
-    from bencher.variables.results import ResultVec, ResultVar, ResultImage
+    from bencher.variables.results import ResultVec, ResultFloat, ResultImage
     from bencher.bench_cfg import BenchCfg
 
     hashes = {}
@@ -336,7 +336,7 @@ _BATCH_HASH_SCRIPT = textwrap.dedent("""\
     cfg.repeats = 1
     cfg.tag = ""
     cfg.input_vars = []
-    cfg.result_vars = [ResultVar(units="m/s", doc="speed"), ResultImage(doc="img")]
+    cfg.result_vars = [ResultFloat(units="m/s", doc="speed"), ResultImage(doc="img")]
     cfg.const_vars = []
     hashes["BenchCfg"] = cfg.hash_persistent(include_repeats=True)
 

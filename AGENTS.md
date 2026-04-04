@@ -24,6 +24,11 @@ To test a specific example: `pixi run python bencher/example/example_simple_floa
 ### Important
 - **ALWAYS use the pixi environment for every command.** Never run raw `python`, `pytest`, `ruff`, or any other tool directly — always prefix with `pixi run` (e.g. `pixi run python ...`, `pixi run pytest ...`). This ensures the correct dependencies and environment are used.
 
+### How to Use Bencher
+See **[docs/how_to_use_bencher.md](docs/how_to_use_bencher.md)** for the complete guide
+on using bencher — sweep types, result types, the `benchmark()` pattern, plot callbacks,
+and common mistakes. **Read this before writing any benchmark or example.**
+
 ### Updating Examples & Docs
 1. Add or modify the example implementation under `bencher/example/`.
 2. Register the example in `bencher/example/meta/generate_examples.py` so the documentation generator emits a notebook (pick an appropriate gallery subdirectory).
@@ -54,6 +59,7 @@ Bencher is a benchmarking framework built around these core concepts:
 - **ComposableContainer**: Framework for combining multiple result types
 - **Video/Image Results**: Support for multimedia outputs
 - Results automatically cached using diskcache based on parameter hashes
+- **Result type selection**: Use `ResultBool` for binary outcomes (success/failure), `ResultFloat` for continuous metrics, `ResultString` for text, `ResultImage`/`ResultVideo`/`ResultPath` for files
 
 ### Data Flow
 1. Define parameter sweep configuration class inheriting from ParametrizedSweep
@@ -88,36 +94,38 @@ be **globally unique** across the entire generated tree — no two files may sha
 even if they are in different subdirectories. This is required because the documentation
 build uses filenames as RST page stems and thumbnail identifiers.
 
-**Pattern:** `{section}_{descriptive_dimensions}.py`
+**Pattern:** `{section_prefix}{descriptive_dimensions}.py`
 
-Every filename starts with a short **section prefix** that identifies which generator
-produced it, followed by all varying dimensions encoded in the name. The section prefixes
-are:
+Every filename uses a **section prefix** from the table below (each already includes
+the `example_` prefix), followed by the varying dimensions encoded in the name:
 
 | Section Prefix | Output Directory | Varying Dimensions |
 |---|---|---|
-| `sweep_` | `{N}_float/{variant}/` | float count, cat count, variant |
-| `plot_` | `plot_types/` | plot type |
-| `bool_plot_` | `bool_plot_types/` | plot type |
-| `result_` | `result_types/result_{type}/` | result type, input dims |
-| `composable_` | `composable_containers/` | backend, compose type |
-| `sampling_` | `sampling/` | strategy |
-| `stats_` | `statistics/` | variant |
-| `const_vars_` | `const_vars/` | example |
-| `optim_` | `optimization*/` | objectives, dims, over_time |
-| `advanced_` | `advanced/` | example |
-| `workflow_` | `workflows/` | example |
-| `perf_` | `performance/` | variant |
-| `regression_` | `regression/` | variant |
-| `yaml_` | `yaml/` | format |
-| `publish_` | `publishing/` | example |
-| `rerun_` | `rerun/` | example |
-| `agg_` | `aggregation/` | aggregation form, agg_fn |
+| `example_sweep_` | `{N}_float/{variant}/` | float count, cat count, variant |
+| `example_plot_` | `plot_types/` | plot type |
+| `example_bool_plot_` | `bool_plot_types/` | plot type |
+| `example_result_` | `result_types/result_{type}/` | result type, input dims |
+| `example_composable_` | `composable_containers/` | backend, compose type |
+| `example_sampling_` | `sampling/` | strategy |
+| `example_stats_` | `statistics/` | variant |
+| `example_const_vars_` | `const_vars/` | example |
+| `example_optim_` | `optimization*/` | objectives, dims, over_time |
+| `example_advanced_` | `advanced/` | example |
+| `example_workflow_` | `workflows/` | example |
+| `example_perf_` | `performance/` | variant |
+| `example_regression_` | `regression/` | variant |
+| `example_yaml_` | `yaml/` | format |
+| `example_publish_` | `publishing/` | example |
+| `example_rerun_` | `rerun/` | example |
+| `example_agg_` | `aggregation/` | aggregation form, agg_fn |
+| `example_cartesian_` | `cartesian_animation/` | (single example) |
+| `example_container_tab_` | `container_tabs/` | layout mode |
+| `example_levels_` | `levels/` | variant |
 
 **Rules for adding new generators:**
-1. Pick a short, unique section prefix that does not collide with existing prefixes.
+1. Every filename must start with `example_` followed by a unique section prefix.
 2. Encode **every** varying dimension in the filename — never rely on the folder path alone.
-3. The Python function inside the generated file must start with `example_` (the test
+3. The Python function inside the generated file must also start with `example_` (the test
    harness and doc builder use this prefix for discovery).
 4. Register the generator in `generate_examples.py:generate_python_files()` and add
    corresponding entries to `SECTION_GROUPS` for gallery placement.

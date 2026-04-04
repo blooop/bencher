@@ -121,6 +121,10 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_publish import example_meta_publish
     from bencher.example.meta.generate_meta_rerun import example_meta_rerun
     from bencher.example.meta.generate_meta_aggregation import example_meta_aggregation
+    from bencher.example.meta.generate_meta_cartesian_animation import (
+        example_meta_cartesian_animation,
+    )
+    from bencher.example.meta.generate_meta_container_tabs import example_meta_container_tabs
 
     example_meta()
     example_meta_result_types()
@@ -143,6 +147,8 @@ def generate_python_files():
     example_meta_publish()
     example_meta_rerun()
     example_meta_aggregation()
+    example_meta_cartesian_animation()
+    example_meta_container_tabs()
 
     # Write __init__.py files so generated examples are importable
     for d in GENERATED_DIR.rglob("*"):
@@ -196,13 +202,16 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
         run_cfg.use_optuna = run_kwargs["use_optuna"]
+    if run_kwargs.get("over_time"):
+        run_cfg.over_time = True
     optimise = run_kwargs.get("optimise", 0)
     print(f"Running {py_file}...")
     bench = example_fn(run_cfg)
 
     if optimise and bench.results:
         bench.optimize(n_trials=optimise, plot=False)
-        bench.report.append(bench.results[-1].to_optuna_plots())
+        for res in bench.results:
+            bench.report.append_to_result(res, res.to_optuna_plots())
 
     # Save reports under _extra/ so html_extra_path copies them alongside built RST pages
     reports_output_dir = REPORTS_EXTRA_DIR / rel.parent
@@ -420,11 +429,13 @@ SECTION_GROUPS = [
             ("Level System", "levels"),
             ("Sampling Strategies", "sampling"),
             ("Composable Containers", "composable_containers"),
+            ("Container Tab Layouts", "container_tabs"),
             ("Aggregation", "aggregation"),
             ("Constant Variables", "const_vars"),
             ("Statistics", "statistics"),
             ("Workflows", "workflows"),
             ("YAML Sweeps", "yaml"),
+            ("Cartesian Animation", "cartesian_animation"),
             ("Advanced Patterns", "advanced"),
             ("Regression Detection", "regression"),
             ("Performance", "performance"),

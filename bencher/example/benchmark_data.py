@@ -8,7 +8,7 @@ import random
 from enum import auto
 from strenum import StrEnum
 from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
-from bencher.variables.results import ResultVar, OptDir
+from bencher.variables.results import ResultFloat, OptDir
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 
@@ -55,20 +55,17 @@ class ExampleBenchCfg(ParametrizedSweep):
         units="v",
     )
 
-    out_sin = ResultVar(units="v", direction=OptDir.minimize, doc="sin of theta with some noise")
-    out_cos = ResultVar(units="v", direction=OptDir.minimize, doc="cos of theta with some noise")
-    out_bool = ResultVar(units="%", doc="sin > 0.5")
+    out_sin = ResultFloat(units="v", direction=OptDir.minimize, doc="sin of theta with some noise")
+    out_cos = ResultFloat(units="v", direction=OptDir.minimize, doc="cos of theta with some noise")
+    out_bool = ResultFloat(units="%", doc="sin > 0.5")
 
-    def __call__(self, **kwwargs) -> dict:
-        self.update_params_from_kwargs(**kwwargs)
-
+    def benchmark(self):
         noise = self.calculate_noise()
         postprocess_fn = abs if self.postprocess_fn == PostprocessFn.absolute else negate_fn
 
         self.out_sin = postprocess_fn(self.offset + math.sin(self.theta) + noise)
         self.out_cos = postprocess_fn(self.offset + math.cos(self.theta) + noise)
         self.out_bool = self.out_sin > 0.5
-        return self.get_results_values_as_dict()
 
     def calculate_noise(self):
         noise = 0.0
@@ -98,31 +95,25 @@ class AllSweepVars(ParametrizedSweep):
     var_string = StringSweep(["string1", "string2"])
     var_enum = EnumSweep(PostprocessFn)
 
-    result = ResultVar()
+    result = ResultFloat()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var_float + self.var_int
-        return self.get_results_values_as_dict()
 
 
 class SimpleBenchClass(ParametrizedSweep):
     var1 = IntSweep(default=0, bounds=[0, 2])
 
-    result = ResultVar()
+    result = ResultFloat()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var1
-        return self.get_results_values_as_dict()
 
 
 class SimpleBenchClassFloat(ParametrizedSweep):
     var1 = FloatSweep(bounds=[0, 100])
 
-    result = ResultVar()
+    result = ResultFloat()
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var1
-        return self.get_results_values_as_dict()

@@ -13,6 +13,7 @@ from copy import deepcopy
 from bencher.variables.sweep_base import hash_sha1, describe_variable
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
+from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.job import Executors
 from bencher.results.laxtex_result import to_latex
 
@@ -82,6 +83,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         nightly (bool): Run a more extensive set of tests for a nightly benchmark
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
+        dry_run (bool): Preview sweep grid without executing the benchmark function
         level (int): Method of defining the number of samples to sweep over
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
@@ -112,6 +114,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     headless: bool = param.Boolean(False, doc="Run the benchmarks headlessly")
+
+    dry_run: bool = param.Boolean(
+        False,
+        doc="When True, plot_sweep() computes the sweep grid and logs a summary "
+        "(total combinations, parameter ranges, evaluation count) without "
+        "executing the benchmark function.",
+    )
 
     # ==================== CACHE PARAMETERS ====================
     # These parameters control caching behavior at both benchmark and sample level
@@ -217,6 +226,15 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     raise_duplicate_exception: bool = param.Boolean(False, doc=" Used to debug unique plot names.")
+
+    pane_layout = param.Selector(
+        default=PaneLayout.grid,
+        objects=list(PaneLayout),
+        doc="Controls how multi-dimensional data is laid out in panel displays. "
+        "'grid' uses rows/columns (default). "
+        "'tabs' uses tabs for all outer dimensions. "
+        "'tabs_and_grid' uses tabs for the outermost dimension and grid for inner ones.",
+    )
 
     # ==================== TIME & HISTORY PARAMETERS ====================
     # These parameters control time-based features and historical tracking
@@ -580,6 +598,30 @@ class BenchCfg(BenchRunCfg):
         """
         return to_latex(self)
 
+    def to_cartesian_animation(self) -> str | None:
+        """Render an animation of the Cartesian product data collection.
+
+        Delegates to :func:`bencher.results.manim_cartesian.render_animation`,
+        which currently uses a PIL-based renderer. Returns the filesystem path
+        to the generated animated PNG (or other format, depending on the
+        renderer), or ``None`` on failure so callers can degrade gracefully.
+
+        Returns:
+            str | None: Path to the rendered animation file, or None on failure.
+        """
+        try:
+            from bencher.results.manim_cartesian import from_bench_cfg, render_animation
+
+            cfg = from_bench_cfg(self)
+            return render_animation(cfg, width=350, height=250)
+        except (ImportError, AttributeError, ValueError, RuntimeError, OSError) as e:
+            # Log the exception so failures remain diagnosable while preserving
+            # the existing graceful fallback behavior.
+            logging.getLogger(__name__).exception(
+                "Failed to render Cartesian animation for bench config %r: %s", self, e
+            )
+            return None
+
     def describe_sweep(
         self, width: int = 800, accordion: bool = True
     ) -> pn.pane.Markdown | pn.Column:
@@ -599,9 +641,21 @@ class BenchCfg(BenchRunCfg):
             desc = pn.Accordion(("Expand Full Data Collection Parameters", desc))
 
         sentence = self.sweep_sentence()
+
+        parts = [sentence]
         if latex is not None:
-            return pn.Column(sentence, latex, desc)
-        return pn.Column(sentence, desc)
+            parts.append(latex)
+
+        # Render Cartesian product animation (gracefully skipped on error)
+        animation_path = self.to_cartesian_animation()
+        if animation_path is not None:
+            from pathlib import Path
+
+            abs_path = str(Path(animation_path).resolve())
+            parts.append(pn.pane.Image(abs_path, width=350))
+
+        parts.append(desc)
+        return pn.Column(*parts)
 
     def sweep_sentence(self) -> pn.pane.Markdown:
         """Generate a concise summary sentence of the sweep configuration.

@@ -10,7 +10,7 @@ import plotly.graph_objs as go
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 
 
 class VolumeResult(BenchResultBase):
@@ -66,7 +66,7 @@ class VolumeResult(BenchResultBase):
             reduce=ReduceType.REDUCE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar,),
+            result_types=(ResultFloat,),
             override=override,
             **kwargs,
         )
