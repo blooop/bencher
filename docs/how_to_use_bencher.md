@@ -36,6 +36,19 @@ if __name__ == "__main__":
 This produces an interactive HTML report with the appropriate plot type auto-selected
 based on the parameter and result types.
 
+Notice the three stages in the code above:
+
+1. **Problem Definition** — the `MyBenchmark` class declares inputs, results, and the
+   `benchmark()` method
+2. **Sweep Definition** — `plot_sweep()` selects which parameters to vary and which
+   results to collect
+3. **Run Definition** — `bn.run()` sets sampling density (`level`), `repeats`, and
+   output options
+
+Every bencher example follows this pattern. See
+[Architecture Overview](concepts.md#architecture-overview) for a diagram and deeper
+explanation.
+
 ## Core Concept: Dimensions Are Sweep Variables
 
 Every independent parameter that you want to vary must be its own sweep variable.
@@ -100,7 +113,8 @@ bn.run(example_benchmark, level=5)
 ```
 
 See [Concepts: The Level System](concepts.md#the-level-system) for the full formula
-and theory.
+and theory, and the [Level System gallery](reference/meta/levels/index) for an interactive
+demo.
 
 ## Result Types
 
@@ -118,6 +132,7 @@ and theory.
 **Choosing between ResultFloat and ResultBool:** If a result is binary (success/failure,
 reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds to [0, 1]
 and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
+See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.

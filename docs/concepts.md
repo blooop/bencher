@@ -154,7 +154,12 @@ Bencher provides typed sweep classes that declare the input space:
 
 Each sweep carries metadata: bounds, default value, units, and sampling density. Parameters are
 defined as class attributes on a `ParametrizedSweep` subclass using the `param` library,
-making them introspectable and hashable.
+making them introspectable and hashable. See the gallery to explore how the number of input
+parameters changes the visualization:
+[0 float](reference/meta/0_float/no_repeats/index),
+[1 float](reference/meta/1_float/no_repeats/index),
+[2 float](reference/meta/2_float/no_repeats/index),
+[3 float](reference/meta/3_float/no_repeats/index).
 
 ### Results (Output Space)
 
@@ -172,6 +177,7 @@ Result types declare what a benchmark function returns:
 
 Bencher distinguishes inputs from results by type: anything that is a subclass of a result type
 is an output; everything else is an input. This split drives the entire downstream pipeline.
+See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
 ### Design (Sampling Strategy)
 
@@ -190,7 +196,10 @@ line, grid, 3D stack, repeated measurements, and time-series film strip.
 Each parameter combination is hashed to produce a persistent cache key. Results are stored
 using `diskcache`, so re-running a benchmark with the same parameters skips already-computed
 points. The `repeats` meta-variable controls how many times each combination is evaluated,
-enabling statistical analysis of stochastic functions.
+enabling statistical analysis of stochastic functions. Compare the
+[no repeats](reference/meta/1_float/no_repeats/index) and
+[with repeats](reference/meta/1_float/with_repeats/index) galleries to see how repeats
+add confidence intervals to plots.
 
 ### Presentation (Automatic Plot Selection)
 
@@ -202,11 +211,17 @@ which signatures it can handle via a `PlotFilter` with `VarRange` bounds on each
 The general mapping:
 
 - **0 float + categories + 1 repeat** — Bar chart
+  ([gallery](reference/meta/0_float/no_repeats/index))
 - **1 float + categories + 1 repeat** — Line plot
+  ([gallery](reference/meta/1_float/no_repeats/index))
 - **1 float + categories + N repeats** — Curve with spread (mean +/- std)
+  ([gallery](reference/meta/1_float/with_repeats/index))
 - **2 float** — Heatmap
+  ([gallery](reference/meta/2_float/no_repeats/index))
 - **3+ float** — Surface / Volume
+  ([gallery](reference/meta/3_float/no_repeats/index))
 - **0 inputs + N repeats** — Histogram / Distribution
+  ([gallery](reference/meta/0_float/with_repeats/index))
 
 When there are more dimensions than a plot type can display, the extra dimensions become
 **facets** — nested panels arranged in rows and columns, automatically labeled. Users can
@@ -225,6 +240,8 @@ supports four composition methods:
 Different backends implement these operations: `ComposableContainerPanel` uses Panel's `Row`
 and `Column` widgets for interactive dashboards, `ComposableContainerVideo` uses `moviepy` for
 video compositing, and `ComposableContainerDataset` uses `xr.concat` for data merging.
+See the [Composable Containers gallery](reference/meta/composable_containers/index) for
+interactive examples of each backend and composition mode.
 
 ## Automatic Plot Selection
 
@@ -251,7 +268,9 @@ all of them, giving a multi-perspective view of the data.
 
 This mechanism means that adding a dimension to your sweep — say, adding a second float
 parameter — automatically changes the visualization from line plots to heatmaps without any
-code changes to the plotting logic.
+code changes to the plotting logic. See the [Plot Types gallery](reference/meta/plot_types/index)
+for every available plot type, and the
+[Bool Plot Types gallery](reference/meta/bool_plot_types/index) for boolean-specific variants.
 
 ## The Level System
 

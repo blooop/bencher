@@ -29,6 +29,11 @@ bn.run(SimpleFloat, level=3)
 
 Bencher computes the Cartesian product of all input parameters, evaluates your function at every combination, caches the results, and automatically selects appropriate visualizations based on parameter types.
 
+Every example follows three stages: **Problem Definition** (the class), **Sweep
+Definition** (`plot_sweep`), and **Run Definition** (`bn.run`). See
+[Architecture Overview](concepts.md#architecture-overview) for the full picture, or
+[How to Use Bencher](how_to_use_bencher.md) for a practical walkthrough.
+
 ## Input Types
 
 Define your search space with typed sweep classes:
