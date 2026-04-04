@@ -54,50 +54,48 @@ primitives introduced below:
 flowchart LR
     subgraph Problem ["① Problem Definition"]
         direction TB
-        PS([ParametrizedSweep])
-        Inputs[FloatSweep · IntSweep · EnumSweep]
-        Results[ResultFloat · ResultBool · ResultImage]
-        Fn["def benchmark(self)"]
-        PS ~~~ Inputs ~~~ Results ~~~ Fn
+        subgraph PS ["ParametrizedSweep"]
+            direction TB
+            Inputs[FloatSweep · IntSweep · EnumSweep]
+            Results[ResultFloat · ResultBool · ResultImage]
+            Fn["def benchmark(self)"]
+            Inputs ~~~ Results ~~~ Fn
+        end
     end
 
     subgraph Sweep ["② Sweep Definition"]
         direction TB
-        SW([plot_sweep])
-        IV[input_vars]
-        RV[result_vars]
-        CV[const_vars]
-        SW ~~~ IV ~~~ RV ~~~ CV
+        subgraph SW ["plot_sweep()"]
+            direction TB
+            IV[input_vars]
+            RV[result_vars]
+            CV[const_vars]
+            IV ~~~ RV ~~~ CV
+        end
     end
 
     subgraph Run ["③ Run Definition"]
         direction TB
-        RN([bn.run])
-        Level[level]
-        Repeats[repeats]
-        Opts[save · optimise · over_time]
-        RN ~~~ Level ~~~ Repeats ~~~ Opts
+        subgraph RN ["bn.run()"]
+            direction TB
+            Level[level]
+            Repeats[repeats]
+            Opts[save · optimise · over_time]
+            Level ~~~ Repeats ~~~ Opts
+        end
     end
 
     Problem == .to_bench() ==> Sweep == bn.run() ==> Run
 
-    classDef blue fill:#a8d4f0,color:#2c5f7a,stroke:#8ec0e4,stroke-width:2px
-    classDef purple fill:#d4b8e8,color:#5a3d6e,stroke:#c4a4dc,stroke-width:2px
-    classDef green fill:#b0ddb8,color:#2e5e3a,stroke:#98d0a4,stroke-width:2px
-    classDef blueLight fill:#e8f4fc,stroke:#c8dff0,color:#3a6a8a
-    classDef purpleLight fill:#f4ecf8,stroke:#e0d0ea,color:#5a4068
-    classDef greenLight fill:#ecf6ee,stroke:#cce6d2,color:#3a5e40
+    classDef light fill:#e8f4fc,stroke:#c8dff0,color:#3a6a8a
+    class Inputs,Results,Fn,IV,RV,CV,Level,Repeats,Opts light
 
-    class PS blue
-    class SW purple
-    class RN green
-    class Inputs,Results,Fn blueLight
-    class IV,RV,CV purpleLight
-    class Level,Repeats,Opts greenLight
-
-    style Problem fill:#fafcfe,stroke:#c8dff0,stroke-width:2px
-    style Sweep fill:#fdfafe,stroke:#e0d0ea,stroke-width:2px
-    style Run fill:#fafefa,stroke:#cce6d2,stroke-width:2px
+    style Problem fill:#fafcfe,stroke:#a8d4f0,stroke-width:2px
+    style Sweep fill:#fdfafe,stroke:#c4a4dc,stroke-width:2px
+    style Run fill:#fafefa,stroke:#98d0a4,stroke-width:2px
+    style PS fill:#e8f4fc,stroke:#8ec0e4,stroke-width:2px,color:#2c5f7a
+    style SW fill:#f4ecf8,stroke:#c4a4dc,stroke-width:2px,color:#5a3d6e
+    style RN fill:#ecf6ee,stroke:#98d0a4,stroke-width:2px,color:#2e5e3a
 ```
 
 ```{raw} html
