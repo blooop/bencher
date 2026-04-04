@@ -105,6 +105,16 @@ try:
 except ModuleNotFoundError:
     pass
 
+try:
+    from .results.rerun_result import RerunResult
+except ModuleNotFoundError:
+    pass
+
+try:
+    from .results.composable_container.composable_container_rerun import ComposableContainerRerun
+except ModuleNotFoundError:
+    pass
+
 
 from .regression import RegressionResult, RegressionReport, RegressionError
 from .perf_tracker import PerfTracker, PerfReport

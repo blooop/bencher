@@ -72,6 +72,7 @@ def run(
     grouped: bool = False,
     cache_samples: bool | None = None,
     over_time: bool | None = None,
+    backend: str | None = None,
     optimise: int | bool = 0,
     **kwargs,
 ) -> list[BenchCfg]:
@@ -98,6 +99,7 @@ def run(
         cache_samples: Use sample cache for previous results. None (default) auto-enables
             for progressive runs. Pass False to disable even for progressive runs.
         over_time: Enable time-series benchmarking. None preserves run_cfg value.
+        backend: Visualization backend ('panel' or 'rerun'). None preserves run_cfg value.
         optimise: When > 0, appends optuna analysis plots (parameter importance,
             with/without repeats comparison, best parameters) from the sweep results
             to the report. Defaults to 0 (no optimisation analysis).
@@ -175,6 +177,7 @@ def run(
             grouped=grouped,
             cache_samples=cache_samples,
             over_time=over_time,
+            backend=backend,
         )
     finally:
         if bench_to_close is not None:
