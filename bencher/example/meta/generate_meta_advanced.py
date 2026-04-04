@@ -93,7 +93,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Cache Patterns — run_tag and cache_samples",
             output_dir=OUTPUT_DIR,
-            filename="advanced_cache_patterns",
+            filename="example_advanced_cache_patterns",
             function_name="example_advanced_cache_patterns",
             imports=imports,
             body=body,
@@ -152,7 +152,7 @@ for i, event_name in enumerate(events):
         self.generate_example(
             title="Time Events — track metrics across discrete events",
             output_dir=OUTPUT_DIR,
-            filename="advanced_time_event",
+            filename="example_advanced_time_event",
             function_name="example_advanced_time_event",
             imports=imports,
             body=body,
@@ -199,7 +199,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Git Time Event — date + commit hash slider labels",
             output_dir=OUTPUT_DIR,
-            filename="advanced_git_time_event",
+            filename="example_advanced_git_time_event",
             function_name="example_advanced_git_time_event",
             imports=imports,
             body=body,
@@ -262,7 +262,7 @@ for i in range(5):
         self.generate_example(
             title="Max Time Events — cap over_time history",
             output_dir=OUTPUT_DIR,
-            filename="advanced_max_time_events",
+            filename="example_advanced_max_time_events",
             function_name="example_advanced_max_time_events",
             imports=imports,
             body=body,
@@ -303,7 +303,7 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
         self.generate_example(
             title="Report Customization — saving and appending content",
             output_dir=OUTPUT_DIR,
-            filename="advanced_report_save",
+            filename="example_advanced_report_save",
             function_name="example_advanced_report_save",
             imports=imports,
             body=body,
@@ -368,7 +368,7 @@ for i, offset in enumerate(time_offsets):
         self.generate_example(
             title="Aggregate Over Time — 2D sweep to scalar curve with error bounds",
             output_dir=OUTPUT_DIR,
-            filename="advanced_agg_over_time",
+            filename="example_advanced_agg_over_time",
             function_name="example_advanced_agg_over_time",
             imports=imports,
             body=body,
@@ -412,7 +412,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Share Axis — independent y-axis scaling per result variable",
             output_dir=OUTPUT_DIR,
-            filename="advanced_share_axis",
+            filename="example_advanced_share_axis",
             function_name="example_advanced_share_axis",
             imports=imports,
             body=body,
@@ -493,7 +493,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Cartesian Product Animations — Visual exploration of parameter spaces",
             output_dir=OUTPUT_DIR,
-            filename="advanced_cartesian_animation",
+            filename="example_advanced_cartesian_animation",
             function_name="example_advanced_cartesian_animation",
             imports=imports,
             body=body,

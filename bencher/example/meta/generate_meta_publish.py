@@ -64,7 +64,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Publish Report to GitHub Pages",
             output_dir=OUTPUT_DIR,
-            filename="publish_report_gh_pages",
+            filename="example_publish_report_gh_pages",
             function_name="example_publish_report_gh_pages",
             imports=imports,
             body=body,
@@ -117,7 +117,7 @@ bench.plot_sweep(
         self.generate_example(
             title="BenchRunner Publishing with GithubPagesCfg",
             output_dir=OUTPUT_DIR,
-            filename="publish_runner_gh_pages",
+            filename="example_publish_runner_gh_pages",
             function_name="example_publish_runner_gh_pages",
             imports=imports,
             body=body,

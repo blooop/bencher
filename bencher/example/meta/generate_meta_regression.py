@@ -83,7 +83,7 @@ if report is not None:
         self.generate_example(
             title="Regression detection — percentage threshold over time",
             output_dir=OUTPUT_DIR,
-            filename="regression_percentage",
+            filename="example_regression_percentage",
             function_name="example_regression_percentage",
             imports=imports,
             body=body,

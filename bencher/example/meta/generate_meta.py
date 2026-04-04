@@ -483,8 +483,8 @@ class BenchMetaGen(bn.ParametrizedSweep):
             f"{self.float_vars_count} Float, {self.categorical_vars_count} Categorical"
             f" ({variant.replace('_', ' ')})"
         )
-        filename = f"sweep_{base_title}_{variant}"
         function_name = f"example_sweep_{base_title}_{variant}"
+        filename = function_name
 
         result_var_names = list(info["result_vars"].keys())
 
