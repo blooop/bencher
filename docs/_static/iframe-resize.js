@@ -8,10 +8,17 @@
     try {
       var doc = iframe.contentDocument || iframe.contentWindow.document;
       if (!doc || !doc.body) return;
-      doc.documentElement.style.overflowX = "auto";
       doc.documentElement.style.overflowY = "hidden";
-      doc.body.style.overflowX = "auto";
       doc.body.style.overflowY = "hidden";
+
+      // Scale content down to fit available width (avoids buried horizontal scrollbar)
+      var availW = iframe.clientWidth;
+      var contentW = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
+      if (availW > 0 && contentW > availW) {
+        doc.body.style.zoom = (availW / contentW).toString();
+      } else {
+        doc.body.style.zoom = "1";
+      }
 
       var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
       if (h > 0 && h !== (_heights.get(iframe) || 0)) {

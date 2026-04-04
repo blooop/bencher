@@ -68,8 +68,7 @@ iframe.bencher-report {
     min-height: 400px;
     width: 100%;
     border: none;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
 }
 
 /* --- Line wrapping for code blocks --- */

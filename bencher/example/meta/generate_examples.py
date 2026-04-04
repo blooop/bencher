@@ -267,7 +267,7 @@ def run_example_and_save(
 
    <iframe class="bencher-report"
            src="_reports/{stem}/{bench.bench_name}.html"
-           style="width:100%; min-height:400px; border:none; overflow-x:auto; overflow-y:hidden;">
+           style="width:100%; min-height:400px; border:none; overflow:hidden;">
    </iframe>
 """
     rst_path.write_text(rst_content, encoding="utf-8")
