@@ -4,8 +4,6 @@ Shows ResultBool output with each plot type that supports it.
 Each generated example is fully self-contained with an inline class definition.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -23,11 +21,9 @@ class HealthCheckCat(bn.ParametrizedSweep):
 
     healthy = bn.ResultBool(doc="Whether the service is healthy")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
-        self.healthy = random.random() < rates[self.backend]
-        return super().__call__()"""
+        self.healthy = random.random() < rates[self.backend]"""
 
 _HEALTH_CHECK_FLOAT_CODE = """\
 class HealthCheckFloat(bn.ParametrizedSweep):
@@ -37,11 +33,9 @@ class HealthCheckFloat(bn.ParametrizedSweep):
 
     healthy = bn.ResultBool(doc="Whether the service is healthy")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         score = math.sin(math.pi * self.load)
-        self.healthy = score > 0.5
-        return super().__call__()"""
+        self.healthy = score > 0.5"""
 
 _HEALTH_CHECK_FLOAT_NOISY_CODE = """\
 class HealthCheckFloatNoisy(bn.ParametrizedSweep):
@@ -51,11 +45,9 @@ class HealthCheckFloatNoisy(bn.ParametrizedSweep):
 
     healthy = bn.ResultBool(doc="Whether the service is healthy")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         probability = math.sin(math.pi * self.load)
-        self.healthy = random.random() < probability
-        return super().__call__()"""
+        self.healthy = random.random() < probability"""
 
 _HEALTH_CHECK_2D_NOISY_CODE = """\
 class HealthCheck2DNoisy(bn.ParametrizedSweep):
@@ -66,11 +58,9 @@ class HealthCheck2DNoisy(bn.ParametrizedSweep):
 
     healthy = bn.ResultBool(doc="Whether the service is healthy")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         probability = 0.5 + 0.4 * math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
-        self.healthy = random.random() < probability
-        return super().__call__()"""
+        self.healthy = random.random() < probability"""
 
 _RELIABILITY_CAT_CODE = """\
 class ReliabilityCat(bn.ParametrizedSweep):
@@ -80,11 +70,9 @@ class ReliabilityCat(bn.ParametrizedSweep):
 
     healthy = bn.ResultBool(doc="Whether the service is healthy")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         rates = {"postgres": 0.95, "redis": 0.85, "memcached": 0.65, "sqlite": 0.40, "local": 0.15}
-        self.healthy = random.random() < rates[self.backend]
-        return super().__call__()"""
+        self.healthy = random.random() < rates[self.backend]"""
 
 _PASS_RATE_FLOAT_CODE = """\
 class PassRateFloat(bn.ParametrizedSweep):
@@ -94,11 +82,9 @@ class PassRateFloat(bn.ParametrizedSweep):
 
     passed = bn.ResultBool(doc="Whether the test passed")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         rate = 1.0 - 0.8 * self.complexity ** 1.5
-        self.passed = random.random() < rate
-        return super().__call__()"""
+        self.passed = random.random() < rate"""
 
 # ---------------------------------------------------------------------------
 # Plot configuration table
@@ -226,12 +212,10 @@ class MetaBoolPlotTypes(MetaGeneratorBase):
 
     plot_type = bn.StringSweep(BOOL_PLOT_NAMES, doc="Plot type to demonstrate with ResultBool")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         cfg = BOOL_PLOT_CONFIGS[self.plot_type]
-        filename = f"bool_plot_{self.plot_type}"
         function_name = f"example_bool_plot_{self.plot_type}"
+        filename = function_name
         title = f"Bool Plot: {self.plot_type.replace('_', ' ').title()}"
 
         extra_imports = cfg.get("extra_imports")
@@ -255,8 +239,6 @@ class MetaBoolPlotTypes(MetaGeneratorBase):
             run_kwargs=run_kwargs,
             class_code=cfg["class_code"],
         )
-
-        return super().__call__()
 
 
 def example_meta_bool_plot_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

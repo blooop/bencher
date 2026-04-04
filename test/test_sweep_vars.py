@@ -3,7 +3,7 @@ from hypothesis import given, strategies as st  # pylint: disable=unused-import
 import pytest
 from bencher.variables.inputs import IntSweep, EnumSweep, StringSweep, BoolSweep, FloatSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 from enum import auto
 from strenum import StrEnum
 
@@ -189,7 +189,7 @@ class TestVarSweeps(unittest.TestCase):
     def test_float_sweep_out_of_bounds(self):
         class Cfg(ParametrizedSweep):
             theta = FloatSweep(default=0.5, bounds=(0, 1), samples=3)
-            result = ResultVar()
+            result = ResultFloat()
 
         cfg = Cfg()
         cfg.update_params_from_kwargs(theta=1.5)
@@ -201,7 +201,7 @@ class TestVarSweeps(unittest.TestCase):
     def test_int_sweep_out_of_bounds(self):
         class Cfg(ParametrizedSweep):
             count = IntSweep(default=3, bounds=(0, 10))
-            result = ResultVar()
+            result = ResultFloat()
 
         cfg = Cfg()
         cfg.update_params_from_kwargs(count=15)

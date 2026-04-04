@@ -17,7 +17,7 @@ import xarray as xr
 
 class ExampleClass(bn.ParametrizedSweep):
     iv1 = bn.FloatSweep()
-    rv1 = bn.ResultVar()
+    rv1 = bn.ResultFloat()
 
 
 class TestBencherUtils(unittest.TestCase):

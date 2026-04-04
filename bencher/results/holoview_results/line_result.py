@@ -11,7 +11,7 @@ from bencher.utils import (
 )
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import SCALAR_RESULT_TYPES
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -121,7 +121,7 @@ class LineResult(HoloviewResult):
             reduce=ReduceType.SQUEEZE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar, ResultBool),
+            result_types=SCALAR_RESULT_TYPES,
             override=override,
             **kwargs,
         )
@@ -158,6 +158,10 @@ class LineResult(HoloviewResult):
                 **kwargs,
             )
             return self._apply_opts(plot, xrotation=30)
+
+        # No float vars and over_time was squeezed (single time point) — no x-axis
+        if not self.plt_cnt_cfg.float_vars:
+            return None
 
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None

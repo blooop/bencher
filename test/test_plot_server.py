@@ -53,3 +53,22 @@ class TestBenchPlotServer(unittest.TestCase):
         server_cfg.show = False
         srv = bps.plot_server("test_bench_server", server_cfg)
         srv.stop()
+
+    def test_serve_auto_port(self):
+        """When no port is specified, the server should bind to an OS-assigned port."""
+        import panel as pn
+
+        bps = bn.BenchPlotServer()
+        plots = pn.Column("# test")
+        srv = bps.serve("auto_port_test", plots, port=None, show=False)
+        srv.stop()
+
+    def test_serve_parallel_no_port_conflict(self):
+        """Two servers with port=None must not raise OSError: Address already in use."""
+        import panel as pn
+
+        bps = bn.BenchPlotServer()
+        srv1 = bps.serve("parallel_1", pn.Column("# a"), port=None, show=False)
+        srv2 = bps.serve("parallel_2", pn.Column("# b"), port=None, show=False)
+        srv2.stop()
+        srv1.stop()

@@ -4,8 +4,6 @@ Demonstrates BenchRunner, multiple sweeps per report, and the InputCfg/OutputCfg
 separation pattern — features that only existed in manual examples until now.
 """
 
-from typing import Any
-
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -24,9 +22,7 @@ class MetaWorkflows(MetaGeneratorBase):
 
     example = bn.StringSweep(WORKFLOW_EXAMPLES, doc="Which workflow example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "bench_runner":
             self._generate_bench_runner()
         elif self.example == "multi_sweep_report":
@@ -36,8 +32,6 @@ class MetaWorkflows(MetaGeneratorBase):
         elif self.example == "getting_started":
             self._generate_getting_started()
 
-        return super().__call__()
-
     def _generate_bench_runner(self):
         """B1: BenchRunner example showing multiple benchmarks combined."""
         imports = "import math\nimport bencher as bn"
@@ -46,12 +40,10 @@ class SineWave(bn.ParametrizedSweep):
     """A sine wave — one of two benchmarks combined by BenchRunner."""
 
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], doc="Input angle", units="rad")
-    out_sin = bn.ResultVar(units="V", doc="Sine output")
+    out_sin = bn.ResultFloat(units="V", doc="Sine output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-        self.out_sin = math.sin(self.theta)
-        return super().__call__()'''
+    def benchmark(self):
+        self.out_sin = math.sin(self.theta)'''
         body = """\
 # This example shows the building block that BenchRunner orchestrates.
 # To combine multiple independent benchmarks into one session, use:
@@ -76,7 +68,7 @@ bench.plot_sweep(
         self.generate_example(
             title="BenchRunner — run multiple benchmarks in one session",
             output_dir=OUTPUT_DIR,
-            filename="workflow_bench_runner",
+            filename="example_workflow_bench_runner",
             function_name="example_workflow_bench_runner",
             imports=imports,
             body=body,
@@ -95,15 +87,13 @@ class DataPipeline(bn.ParametrizedSweep):
     parallelism = bn.FloatSweep(default=4, bounds=[1, 16], doc="Worker threads")
     storage = bn.StringSweep(["ssd", "hdd", "network"], doc="Storage backend")
 
-    throughput = bn.ResultVar(units="rows/s", doc="Processing throughput")
-    latency = bn.ResultVar(units="ms", doc="Per-batch latency")
+    throughput = bn.ResultFloat(units="rows/s", doc="Processing throughput")
+    latency = bn.ResultFloat(units="ms", doc="Per-batch latency")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         storage_factor = {"ssd": 1.0, "hdd": 0.4, "network": 0.25}[self.storage]
         self.throughput = self.batch_size * math.sqrt(self.parallelism) * storage_factor * 0.5
-        self.latency = 1000 * self.batch_size / max(self.throughput, 1)
-        return super().__call__()'''
+        self.latency = 1000 * self.batch_size / max(self.throughput, 1)'''
         body = """\
 bench = DataPipeline().to_bench(run_cfg)
 
@@ -138,7 +128,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Multiple Sweeps — progressive report with tabs",
             output_dir=OUTPUT_DIR,
-            filename="workflow_multi_sweep",
+            filename="example_workflow_multi_sweep",
             function_name="example_workflow_multi_sweep",
             imports=imports,
             body=body,
@@ -153,10 +143,10 @@ bench.plot_sweep(
 class ServerMetrics(bn.ParametrizedSweep):
     """Output metrics from the server benchmark."""
 
-    throughput = bn.ResultVar(
+    throughput = bn.ResultFloat(
         units="req/s", direction=bn.OptDir.maximize, doc="Request throughput"
     )
-    latency = bn.ResultVar(
+    latency = bn.ResultFloat(
         units="ms", direction=bn.OptDir.minimize, doc="Response latency"
     )
 
@@ -186,7 +176,7 @@ class ServerConfig(bn.ParametrizedSweep):
         return output'''
         body = """\
 # The Bench constructor accepts the static function and the ServerConfig class.
-# This is an alternative to the ParametrizedSweep.__call__ pattern.
+# This is an alternative to the ParametrizedSweep.benchmark() pattern.
 bench = bn.Bench("input_output_example", ServerConfig.bench_function, ServerConfig, run_cfg)
 bench.plot_sweep(
     input_vars=[ServerConfig.param.worker_count],
@@ -205,7 +195,7 @@ bench.plot_sweep(
         self.generate_example(
             title="InputCfg/OutputCfg — separated input and output classes",
             output_dir=OUTPUT_DIR,
-            filename="workflow_input_output_cfg",
+            filename="example_workflow_input_output_cfg",
             function_name="example_workflow_input_output_cfg",
             imports=imports,
             body=body,
@@ -233,7 +223,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
     """A tutorial benchmark demonstrating core bencher features step by step.
 
     This class defines both inputs (sweep variables) and outputs (result
-    variables) in a single ParametrizedSweep. The __call__ method is the
+    variables) in a single ParametrizedSweep. The benchmark() method is the
     benchmark function -- it must be pure (no side effects) so that repeated
     calls produce statistically valid results.
 
@@ -251,14 +241,12 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
         doc="Continuous input that affects the output", units="ul", samples=10,
     )
 
-    accuracy = bn.ResultVar(
+    accuracy = bn.ResultFloat(
         units="%", direction=bn.OptDir.maximize,
         doc="Algorithm accuracy - the metric we want to optimise",
     )
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         self.accuracy = 50 + math.sin(self.intensity) * 5
 
         match self.algo_setting:
@@ -267,9 +255,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
             case AlgoSetting.optimum:
                 self.accuracy += 30
             case AlgoSetting.poor:
-                self.accuracy -= 20
-
-        return super().__call__(**kwargs)'''
+                self.accuracy -= 20'''
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=10)
 
@@ -325,7 +311,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Getting Started — progressive bencher tutorial",
             output_dir=OUTPUT_DIR,
-            filename="workflow_getting_started",
+            filename="example_workflow_getting_started",
             function_name="example_workflow_getting_started",
             imports=imports,
             body=body,

@@ -4,7 +4,6 @@
 
 import random
 from datetime import datetime, timedelta
-from typing import Any
 
 import holoviews as hv
 import panel as pn
@@ -17,15 +16,13 @@ class SimpleBench(bn.ParametrizedSweep):
     """Minimal benchmark for testing over_time + repeats."""
 
     backend = bn.StringSweep(["redis", "local"], doc="Backend")
-    latency = bn.ResultVar(units="ms", doc="Latency")
+    latency = bn.ResultFloat(units="ms", doc="Latency")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.2, "local": 0.3}[self.backend]
         self.latency = base + self.offset + random.gauss(0, 0.05)
-        return super().__call__()
 
 
 class FloatBench(bn.ParametrizedSweep):
@@ -33,15 +30,13 @@ class FloatBench(bn.ParametrizedSweep):
 
     size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
     backend = bn.StringSweep(["redis", "local"], doc="Backend")
-    time = bn.ResultVar(units="ms", doc="Duration")
+    time = bn.ResultFloat(units="ms", doc="Duration")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = {"redis": 1.0, "local": 0.5}[self.backend]
         self.time = base * self.size * 0.01 + self.offset + random.gauss(0, 0.02)
-        return super().__call__()
 
 
 def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, **cfg_kwargs):
@@ -118,14 +113,12 @@ def _find_all_over_time_widgets(obj, depth=0):
 class ZeroDimBench(bn.ParametrizedSweep):
     """Benchmark with no input vars — 0D numeric result for over_time regression test."""
 
-    value = bn.ResultVar(units="m", doc="Value")
+    value = bn.ResultFloat(units="m", doc="Value")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.value = 2.844 + self.offset
-        return super().__call__()
 
 
 # Module-scoped fixtures for shared benchmark results to reduce test execution time
@@ -151,7 +144,7 @@ def float_bench_repeats3_snapshots3():
 
 
 class TestNumericOverTimeNotRoutedToImageSlider:
-    """Regression tests: numeric ResultVar must not be routed to _pane_over_time_slider.
+    """Regression tests: numeric ResultFloat must not be routed to _pane_over_time_slider.
 
     Commit 9279dd32 unconditionally routed all result types through the image/video
     slider when over_time was active.  Numeric values (e.g. 2.844) were then treated

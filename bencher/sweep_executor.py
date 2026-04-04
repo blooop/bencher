@@ -171,7 +171,7 @@ class SweepExecutor:
             cache_name="sample_cache",
             tag_index=True,
             size_limit=self.cache_size,
-            cache_results=run_cfg.cache_samples,
+            cache_samples=run_cfg.cache_samples,
         )
         return self.sample_cache
 

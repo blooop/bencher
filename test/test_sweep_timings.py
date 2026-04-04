@@ -24,12 +24,10 @@ def test_sweep_timings_summary():
 
 class TrivialSweep(bn.ParametrizedSweep):
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
-    out = bn.ResultVar(units="v", doc="output")
+    out = bn.ResultFloat(units="v", doc="output")
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.out = math.sin(self.theta)
-        return super().__call__(**kwargs)
 
 
 def test_bench_result_has_timings():

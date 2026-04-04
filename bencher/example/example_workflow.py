@@ -25,17 +25,16 @@ class VolumeSweep(bn.ParametrizedSweep):
     surf_y = bn.FloatSweep(default=0, bounds=[-1.0, 1.0], doc="surface y coordinate", samples=11)
 
     # Results
-    p1_dis = bn.ResultVar("m", direction=bn.OptDir.minimize, doc="The distance to p1")
-    p2_dis = bn.ResultVar("m", direction=bn.OptDir.minimize, doc="The distance to p2")
-    total_dis = bn.ResultVar(
+    p1_dis = bn.ResultFloat("m", direction=bn.OptDir.minimize, doc="The distance to p1")
+    p2_dis = bn.ResultFloat("m", direction=bn.OptDir.minimize, doc="The distance to p2")
+    total_dis = bn.ResultFloat(
         "m", direction=bn.OptDir.minimize, doc="The total distance to all points"
     )
-    surf_value = bn.ResultVar(
+    surf_value = bn.ResultFloat(
         "ul", direction=bn.OptDir.maximize, doc="The scalar value of the 3D volume field"
     )
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         cur_point = np.array([self.x, self.y, self.z])
         self.p1_dis = np.linalg.norm(p1 - cur_point)
         self.p2_dis = np.linalg.norm(p2 - cur_point)
@@ -49,7 +48,6 @@ class VolumeSweep(bn.ParametrizedSweep):
                 ]
             )
         )
-        return super().__call__()
 
 
 p1 = np.array([0.4, 0.6, 0.0])

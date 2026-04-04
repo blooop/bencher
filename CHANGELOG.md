@@ -5,6 +5,88 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.75.2] - 2026-03-31
+
+### Fixed
+- `.rrd` iframe URLs no longer hardcode `localhost:8051` — CDN viewer uses relative URLs, local/hosted viewer resolves `window.location.origin` at render time via JavaScript, so reports work behind container port mappings and on any Panel server port (#866)
+- Panel server uses `port=0` (OS-assigned) when no explicit port is given, preventing `OSError: Address already in use` when other services occupy the default port (#866)
+- `_cdn_viewer_versions` cache collision between `_cdn_viewer_url` (filenames) and `_get_cdn_viewer_html` (HTML strings) — split into separate caches (#866)
+- Film strip labels now render at constant pixel size regardless of strip dimensions, with horizontal clipping and right-alignment for wide strips (#865)
+
+### Changed
+- `show=True` in `BenchRunner.run()` now auto-saves a static HTML report to `reports/` in a background thread (non-blocking), with the path logged for offline viewing. Explicit `save=True` still saves synchronously. (#866)
+- **Deprecated `__call__()` in favor of `benchmark()`**: `ParametrizedSweep` subclasses should now override `benchmark()` instead of `__call__()`. The new method removes the need for `self.update_params_from_kwargs(**kwargs)` and `return super().__call__()` boilerplate. The old `__call__()` pattern still works but emits a `DeprecationWarning`. (#864)
+
+### Removed
+- `PANEL_PORT` constant from `utils_rrd` — no longer needed since iframe URLs are resolved dynamically (#866)
+
+## [1.74.0] - 2026-03-28
+
+### Added
+- **Cartesian Product Animations**: New PIL-based animation system that visualizes how parameter sweep dimensions build upon each other (point → line → grid → stack → film strip) (#feature/manim_summary)
+- `BenchCfg.to_cartesian_animation()` method for rendering dimensional progression animations
+- Automatic animation embedding in sweep descriptions via `BenchCfg.describe_sweep()`
+- `CartesianProductCfg` and `CartesianProductScene` classes for animation configuration and rendering
+- `bencher.results.manim_cartesian` module with Shape, StrobeShape, and TimelineShape classes
+- **Complete Usage Guide**: New comprehensive `docs/how_to_use_bencher.md` documentation covering sweep types, result types, and best practices
+- Tab bar sweep example (`example_tab_bar_sweep.py`) demonstrating UI layout testing with PIL rendering
+- Meta example generation system for creating animation galleries
+- 10-color pastel palette for dimensional visualization with proper contrast on white backgrounds
+- Film strip metaphor for `over_time` dimension with sprocket holes and frame labels
+- Strobe/flash animation for `repeat` dimension with tally mark counters
+
+### Changed 
+- **Dark Theme Tab Bar**: Report tabs now use dark background with improved contrast and sticky positioning
+- Tab bar styling updated with rounded corners, better spacing, and proper hover states
+- Meta example generation now includes animation examples in advanced gallery
+- Animation rendering uses unique filenames to prevent file path collisions
+- Improved tally mark visuals with thicker strikethrough, larger fonts, and centered labels
+
+### Fixed
+- Animation filepath collisions resolved with unique filename generation based on animation parameters
+- ListProxy pickle serialization issues for multiprocessing compatibility
+- Animation size optimization for better performance and smaller file sizes
+
+## [1.73.1] - 2026-03-27
+
+### Fixed
+- Generate optimisation reports for all benchmarks, not just the last (#852)
+- Include time event in over_time panel labels and default to last (#849)
+- Wrap long description strings in generated examples to fit 100-char line limit (#851)
+- Override RTD theme CSS to wrap long lines in docs code blocks (#851)
+
+## [1.73.0] - 2026-03-26
+
+### Added
+- `bn.sweep()` API with `bounds=(low, high)` support as the unified replacement for `bn.p()` — `bn.p()` still works but emits a `DeprecationWarning` (#838)
+- `SweepBase.__call__()` for concise, type-safe sweep configuration: `Cfg.param.theta([0, 0.5, 1.0])` or `Cfg.param.theta(samples=5)` (#838)
+- `SweepBase.with_bounds()` for overriding sweep ranges immutably (#838)
+- Dict and inline-dict shorthand for `input_vars` in `plot_sweep`: `{"theta": [0, 0.5, 1.0]}`, `{"theta": 5}`, `{"theta": None}` (#842)
+- `atexit` handler to stop Panel servers on exit, preventing process hangs after `bn.run(show=True)` (#841)
+- Interactive prompt in terminal mode — press Enter to stop servers after viewing results (#841)
+- SIGTERM handler chaining — lazily installed only when servers are created, chains to previous handler instead of calling `sys.exit()` (#841)
+- `over_time` parameter on `bn.run()` and `BenchRunner.run()` — enables time-series benchmarking without manually creating a `BenchRunCfg` (#848)
+- 2-float 2-categorical aggregation example (`agg_list_2_cat`) demonstrating `aggregate=["direction", "scale"]` on a `GradientSurface` class (#845)
+
+### Changed
+- `FloatSweep`/`IntSweep` now store user-supplied bounds as param `softbounds` instead of hard bounds, so values outside the defined sweep range are no longer rejected by `update_params_from_kwargs` (#838)
+- `BenchRunCfg.with_defaults()` returns a deep copy and merges defaults into caller-provided configs instead of ignoring them (#840)
+- `BenchRunCfg.with_defaults()` raises `ValueError` for unknown parameter names to catch typos early (#840)
+- Rename `test/test_bn_p.py` to `test/test_sweep_helper.py` to match new `bn.sweep()` API
+- Generated over_time examples now pass `over_time=True` via `bn.run()` kwargs instead of setting `run_cfg.over_time` inside the function body (#848)
+
+### Fixed
+- `bn.p()` now raises `ValueError` when `max_level` is used with `SweepBase` objects, which require `run_cfg.level` at execution time (#838)
+- `bn.sweep()` / `__call__()` reject combining explicit `values` with `bounds`/`samples` to prevent ambiguous configurations (#838)
+- Server shutdown is exception-safe — a failing shutdown on one runner no longer prevents cleanup of remaining runners (#841)
+- Shutdown errors are logged to stderr instead of silently swallowed (#841)
+- Interactive prompt delayed to appear after async server startup logs (#841)
+- Optuna plot failures now show diagnostic `Markdown` panels instead of silently swallowing exceptions (#847)
+- `to_optuna_plots()` in `bn.run()` shows a diagnostic when `optimize()` returns `None` (#847)
+- `logging.warning` when `dropna` removes all rows from optuna trial data (#847)
+
 ## [1.72.3] - 2026-03-24
 
 ### Fixed

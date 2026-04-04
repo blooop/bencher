@@ -9,17 +9,13 @@ class OrderExample(bn.ParametrizedSweep):
     b = bn.IntSweep(default=0, bounds=[0, 1])  # 2 samples
 
     # RESULTS
-    call_index = bn.ResultVar()
+    call_index = bn.ResultFloat()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         # Maintain a per-instance counter to reflect traversal order
         idx = getattr(self, "_call_counter", 0)
         self.call_index = idx
         setattr(self, "_call_counter", idx + 1)
-
-        return super().__call__()
 
 
 class TestSampleOrder(unittest.TestCase):

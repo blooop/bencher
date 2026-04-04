@@ -44,7 +44,7 @@
 
 
 # class OutputVoltage(bn.ParametrizedSweep):
-#     voltage = bn.ResultVar(units="v", doc="Output voltage")
+#     voltage = bn.ResultFloat(units="v", doc="Output voltage")
 
 
 # if __name__ == "__main__":

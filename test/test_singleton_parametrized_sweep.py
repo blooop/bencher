@@ -9,17 +9,15 @@ class MySingletonSweep(ParametrizedSweepSingleton):
     """Simple singleton sweep used to validate BenchRunner reruns."""
 
     theta = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], samples=3, doc="angle")
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
     def __init__(self):
         if self.init_singleton():
             self.init_count = 1
         super().__init__()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = float(self.theta)
-        return super().__call__(**kwargs)
 
 
 def benchable_singleton_fn(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
@@ -107,11 +105,11 @@ def test_benchrunner_rerun_with_singleton():
     br.add(benchable_singleton_fn)
 
     # First run
-    results_first = br.run(level=1, repeats=1, cache_results=False)
+    results_first = br.run(level=1, repeats=1, cache_samples=False)
     assert len(results_first) == 1
 
     # Second run of the same BenchRunner with the same benchable function
-    results_second = br.run(level=1, repeats=1, cache_results=False)
+    results_second = br.run(level=1, repeats=1, cache_samples=False)
     assert len(results_second) == 2  # BenchRunner returns cumulative results
 
     # Ensure rerunning appends results and does not error
@@ -131,7 +129,7 @@ def test_singleton_report_save_and_pickling():
     br.add(benchable_singleton_fn)
 
     # Run and save report; also exercises diskcache pickling of results
-    br.run(level=1, repeats=1, cache_results=False, save=True)
+    br.run(level=1, repeats=1, cache_samples=False, save=True)
 
     expected_filename = f"MySingletonSweep_benchable_singleton_fn_{run_cfg.run_tag}.html"
     expected_path = Path("reports") / expected_filename
@@ -168,7 +166,7 @@ def test_single_argument_benchable_supported():
     br = bn.BenchRunner(name="singleton_runner_v2", run_cfg=run_cfg)
     br.add(benchable_singleton_fn_v2)
 
-    results = br.run(level=1, repeats=1, cache_results=False)
+    results = br.run(level=1, repeats=1, cache_samples=False)
     assert len(results) == 1
 
 

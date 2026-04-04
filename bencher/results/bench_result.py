@@ -5,6 +5,15 @@ import panel as pn
 from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
+
+try:
+    from bencher.results.rerun_result import RerunResult
+except ModuleNotFoundError:
+
+    class RerunResult:  # pylint: disable=missing-class-docstring
+        pass
+
+
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.video_result import VideoResult
 from bencher.results.volume_result import VolumeResult
@@ -30,6 +39,7 @@ from bencher.utils import listify, resolve_aggregate
 
 
 class BenchResult(
+    RerunResult,
     VolumeResult,
     BoxWhiskerResult,
     ViolinResult,
@@ -262,6 +272,7 @@ class BenchResult(
             )
             plot_cols.append(self.to(BandResult, aggregate=input_names))
 
+        kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
@@ -272,6 +283,7 @@ class BenchResult(
             reduce=ReduceType.REDUCE,
             agg_over_dims=self.bench_cfg.agg_over_dims,
             agg_fn=self.bench_cfg.agg_fn,
+            deep=False,
         )
         rows = []
         for rv in self.bench_cfg.result_vars:
