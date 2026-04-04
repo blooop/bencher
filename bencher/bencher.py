@@ -440,7 +440,11 @@ class Bench(BenchPlotServer):
             post_description = ""
 
         if plot_callbacks is None:
-            if self.plot_callbacks is not None and len(self.plot_callbacks) == 0:
+            if run_cfg.backend == "rerun":
+                from bencher.results.rerun_result import RerunResult
+
+                plot_callbacks = [RerunResult.to_rerun_plots]
+            elif self.plot_callbacks is not None and len(self.plot_callbacks) == 0:
                 plot_callbacks = [BenchResult.to_auto_plots]
             else:
                 plot_callbacks = self.plot_callbacks

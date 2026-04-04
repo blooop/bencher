@@ -296,6 +296,7 @@ class BenchRunner:
         grouped: bool = False,
         cache_samples: bool | None = None,
         over_time: bool | None = None,
+        backend: str | None = None,
         **kwargs,
     ) -> list[BenchCfg]:
         """Unified interface for running benchmarks.
@@ -325,6 +326,7 @@ class BenchRunner:
                 None (default) auto-enables for progressive runs. Pass False to disable even
                 for progressive runs.
             over_time (bool, optional): Enable time-series benchmarking. None preserves run_cfg value.
+            backend (str, optional): Visualization backend ('panel' or 'rerun'). None preserves run_cfg value.
 
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
@@ -378,6 +380,8 @@ class BenchRunner:
         run_cfg.only_hash_tag = cache_samples
         if over_time is not None:
             run_cfg.over_time = over_time
+        if backend is not None:
+            run_cfg.backend = backend
 
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_level, final_max_level + 1):

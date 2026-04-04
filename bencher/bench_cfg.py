@@ -236,6 +236,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "'tabs_and_grid' uses tabs for the outermost dimension and grid for inner ones.",
     )
 
+    backend = param.Selector(
+        default="panel",
+        objects=["panel", "rerun"],
+        doc="Visualization backend. 'panel' uses the default holoviews/panel plotting pipeline. "
+        "'rerun' renders N-dimensional benchmark data in the rerun viewer.",
+    )
+
     # ==================== TIME & HISTORY PARAMETERS ====================
     # These parameters control time-based features and historical tracking
 

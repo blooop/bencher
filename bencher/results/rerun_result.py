@@ -74,7 +74,7 @@ class RerunResult(BenchResultBase):
                 "**rerun** is not installed. Install it with `pip install rerun-sdk`."
             )
         from bencher.utils import gen_rerun_data_path
-        from bencher.utils_rrd import rrd_to_pane
+        from bencher.utils_rrd import rrd_file_to_pane
 
         bench_name = self.bench_cfg.bench_name or "bencher"
         recording = rr.RecordingStream(
@@ -135,14 +135,25 @@ class RerunResult(BenchResultBase):
         )
         recording.send_blueprint(blueprint, make_active=True, make_default=True)
 
-        # Write the recording to an .rrd file and serve via iframe.
+        # Write the recording to an .rrd file and serve via the Panel static route.
         rrd_path = gen_rerun_data_path(bench_name)
         rrd_data = recording.memory_recording().drain_as_bytes()
         with open(rrd_path, "wb") as f:
             f.write(rrd_data)
-        # Build a URL relative to the local Flask file server (port 8001)
-        url_path = rrd_path.split("cachedir")[1]
-        return rrd_to_pane(f"http://127.0.0.1:8001/{url_path}", width=width, height=height)
+        return rrd_file_to_pane(rrd_path, width=width, height=height)
+
+    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover
+        """Plot callback for the rerun backend — drop-in replacement for ``to_auto_plots``.
+
+        Renders the sweep summary, the rerun viewer, and the post-description,
+        mirroring the structure of ``BenchResult.to_auto_plots`` so that switching
+        ``backend="rerun"`` on ``BenchRunCfg`` produces a familiar report layout.
+        """
+        plot_cols = pn.Column()
+        plot_cols.append(self.bench_cfg.to_sweep_summary(name="Plots View"))
+        plot_cols.append(self.to_rerun(**kwargs))
+        plot_cols.append(self.bench_cfg.to_post_description())
+        return plot_cols
 
 
 def _log_to_rerun(
@@ -320,7 +331,11 @@ def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: 
         arr = data_array.transpose(*dims).values.astype(np.float32)
         # Replace NaN with 0 so the tensor renders cleanly
         arr = np.nan_to_num(arr, nan=0.0)
-        recording.log(path, rr.Tensor(arr, dim_names=dims))
+        # Pass value_range so the viewer maps the colormap to the actual data range
+        vmin, vmax = float(arr.min()), float(arr.max())
+        if vmin == vmax:
+            vmax = vmin + 1.0
+        recording.log(path, rr.Tensor(arr, dim_names=dims, value_range=[vmin, vmax]))
     except (KeyError, ValueError, TypeError) as e:
         logging.debug("Could not log tensor for %s: %s", rv_name, e)
 
