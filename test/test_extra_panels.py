@@ -24,7 +24,7 @@ class TestExtraPanels(unittest.TestCase):
         res = self._make_result()
         marker = pn.pane.Markdown("### Custom Panel")
 
-        def my_panel(bench_res):
+        def my_panel(_bench_res):
             return marker
 
         plots = res.to_auto_plots(extra_panels=[my_panel])
