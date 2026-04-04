@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
 from param import Parameter
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
@@ -7,7 +6,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar, ResultBool
+from bencher.variables.results import ResultFloat, ResultBool
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
@@ -22,7 +21,7 @@ class BarResult(HoloviewResult):
 
     def to_plot(
         self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         return self.to_bar(result_var, override, **kwargs)
 
     def to_bar(
@@ -31,7 +30,7 @@ class BarResult(HoloviewResult):
         override: bool = True,
         target_dimension: int = 2,
         **kwargs,
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Generates a bar chart from benchmark data.
 
         This method applies filters to ensure the data is appropriate for a bar chart
@@ -44,7 +43,7 @@ class BarResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the bar chart if data is appropriate,
+            pn.panel | None: A panel containing the bar chart if data is appropriate,
                               otherwise returns filter match results.
         """
         # When over_time is active, allow 0 inputs so 0D+0cat+over_time can produce
@@ -65,12 +64,7 @@ class BarResult(HoloviewResult):
             {
                 "repeats_range": VarRange(1, 1),
                 "reduce": ReduceType.SQUEEZE,
-                "result_types": (ResultVar,),
-            },
-            {
-                "repeats_range": VarRange(1, 1),
-                "reduce": ReduceType.SQUEEZE,
-                "result_types": (ResultBool,),
+                "result_types": (ResultFloat,),
             },
             {
                 "repeats_range": VarRange(2, None),
@@ -127,18 +121,20 @@ class BarResult(HoloviewResult):
         )
 
         if not non_time_dims and "over_time" in da.dims:
-            if use_holomap:
-                # 0D + 0cat + over_time (multiple time points): line chart with time on x-axis.
-                plot = da.hvplot.line(x="over_time", y=da.name, title=title, **kwargs)
-                if hasattr(plot, "opts"):
-                    plot = plot.opts(**opts_kwargs)
-                return plot
-            # 0D + single time point: nothing meaningful to bar-chart.
+            # 0D + over_time: LineResult handles the time-series line and
+            # HistogramResult handles per-time-point tabs.
             return None
 
-        # No over_time slider needed: either no over_time, single time point,
-        # or over_time is the only dim (used as x-axis directly).
-        plot = da.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
-        if hasattr(plot, "opts"):
-            plot = plot.opts(**opts_kwargs)
-        return plot
+        if use_holomap:
+
+            def make_bar(ds_t):
+                da_t = ds_t[da.name]
+                plot_t = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
+                return self._apply_opts(plot_t, **opts_kwargs)
+
+            return self._build_time_holomap(dataset, da.name, make_bar)
+
+        plot = da.hvplot.bar(
+            x=x_dim, y=da.name, by=by, title=title, widget_location="bottom", **kwargs
+        )
+        return self._apply_opts(plot, **opts_kwargs)

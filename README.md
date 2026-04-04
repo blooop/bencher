@@ -10,7 +10,7 @@
 [![PyPI](https://img.shields.io/pypi/v/holobench)](https://pypi.org/project/holobench/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/holobench)](https://pypistats.org/packages/holobench)
 [![License](https://img.shields.io/pypi/l/bencher)](https://opensource.org/license/mit/)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.13-blue)](https://www.python.org/downloads/)
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
 ## Install
@@ -67,19 +67,24 @@ https://blooop.github.io/bencher/
 
 ## Examples
 
-Most of the features that are supported are demonstrated in the examples folder.
+Most features are demonstrated in the auto-generated examples under `bencher/example/generated/`.
 
-Start with example_simple_float.py and explore other examples based on your data types:
-- example_float.py: More complex float operations
-- example_float2D.py: 2D float sweeps
-- example_float3D.py: 3D float sweeps 
-- example_categorical.py: Sweeping categorical values (enums)
-- example_strings.py: Sweeping categorical string values
-- example_float_cat.py: Mixing float and categorical values
-- example_image.py: Output images as part of the sweep
-- example_video.py: Output videos as part of the sweep
-- example_filepath.py: Output arbitrary files as part of the sweep
-- and many others
+Run `pixi run generate-docs` to regenerate the full example gallery. Key sections include:
+- `generated/N_float/` — Parameter sweeps with 0–3 float inputs, with/without repeats and over-time tracking
+- `generated/plot_types/` — All supported plot types (scatter, line, heatmap, surface, etc.)
+- `generated/result_types/` — Result types: images, videos, strings, booleans, paths, datasets
+- `generated/composable_containers/` — Combining results with different composition strategies
+- `generated/sampling/` — Custom values, levels, uniform, int vs float
+- `generated/optimization/` — Single and multi-objective optimization with Optuna
+- `generated/advanced/` — Time events, caching, aggregation over time
+- `generated/regression/` — Performance regression detection
+- `generated/statistics/` — Error bands, distributions, repeats comparison
+
+A few hand-written examples remain for unique functionality:
+- `example_simple_float.py` — Minimal getting-started example
+- `example_image.py` / `example_video.py` — Image and video result types
+- `example_self_benchmark.py` — Bencher self-introspection
+- `example_workflow.py` — Multi-stage optimization workflow
 
 
 ## Documentation

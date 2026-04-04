@@ -1,0 +1,32 @@
+"""Auto-generated example: Bool Plot: Surface."""
+
+import math
+import random
+
+import bencher as bn
+
+
+class HealthCheck2DNoisy(bn.ParametrizedSweep):
+    """2D health check with noise for repeated-run surface plots."""
+
+    x = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+    y = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0])
+
+    healthy = bn.ResultBool(doc="Whether the service is healthy")
+
+    def benchmark(self):
+        probability = 0.5 + 0.4 * math.sin(math.pi * self.x) * math.cos(math.pi * self.y)
+        self.healthy = random.random() < probability
+
+
+def example_bool_plot_surface(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    """Bool Plot: Surface."""
+    bench = HealthCheck2DNoisy().to_bench(run_cfg)
+    res = bench.plot_sweep(input_vars=["x", "y"], result_vars=["healthy"])
+    bench.report.append(res.to_surface())
+
+    return bench
+
+
+if __name__ == "__main__":
+    bn.run(example_bool_plot_surface, level=2, repeats=10)

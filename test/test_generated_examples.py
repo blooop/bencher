@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import bencher as bch
+import bencher as bn
 
 
 GENERATED_DIR = Path("bencher/example/generated")
@@ -41,8 +41,8 @@ def test_generated_example(example_path):
     example_fns = [v for k, v in vars(mod).items() if k.startswith("example_") and callable(v)]
     assert example_fns, f"No example_* function found in {example_path}"
 
-    run_cfg = bch.BenchRunCfg()
+    run_cfg = bn.BenchRunCfg()
     run_cfg.level = 2
-    run_cfg.repeats = 1
+    run_cfg.repeats = 2
     result = example_fns[0](run_cfg)
     assert result is not None

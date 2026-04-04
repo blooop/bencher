@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import panel as pn
 from panel.pane import LaTeX
-from typing import Optional, List, Any
+from typing import Any
 
 pn.extension("mathjax")
 
@@ -10,19 +12,27 @@ def latex_text(text: str) -> str:
     return r"\text{" + text.replace("_", " ") + r"} \\"
 
 
-def format_values_list(values: List[Any], max_display: int = 5) -> List[Any]:
+def format_values_list(values: list[Any], max_display: int = 5) -> list[Any]:
     """Format a list of values, showing ellipsis if too long."""
     if len(values) <= max_display:
         return values
     return [values[i] for i in [0, 1, 0, -2, -1]]
 
 
-def create_matrix_array(values: List[Any]) -> str:
+def latex_value(val: Any) -> str:
+    """Format a single value for LaTeX, wrapping strings that contain spaces in \\text{}."""
+    s = str(val)
+    if " " in s:
+        return r"\text{" + s.replace("_", " ") + "}"
+    return s
+
+
+def create_matrix_array(values: list[Any]) -> str:
     """Create a LaTeX matrix array from values."""
     displayed_vals = format_values_list(values)
     if len(values) > 5:
         displayed_vals[2] = "⋮"
-    return r"\\ ".join([str(val) for val in displayed_vals])
+    return r"\\ ".join([latex_value(val) for val in displayed_vals])
 
 
 def input_var_to_latex(input_var) -> str:
@@ -51,7 +61,7 @@ def result_var_to_latex(bench_cfg) -> str:
     return latex_str
 
 
-def to_latex(bench_cfg) -> Optional[pn.pane.LaTeX]:
+def to_latex(bench_cfg) -> pn.pane.LaTeX | None:
     """Convert benchmark configuration to LaTeX visualization.
 
     Returns None if there are no variables to display.

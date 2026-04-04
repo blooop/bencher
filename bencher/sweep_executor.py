@@ -4,9 +4,11 @@ This module provides the SweepExecutor class for managing parameter sweep execut
 job creation, and cache management in benchmark runs.
 """
 
+from __future__ import annotations
+
 import logging
 from copy import deepcopy
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable
 
 import param
 
@@ -17,14 +19,19 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 # Default cache size for benchmark results (100 GB)
 DEFAULT_CACHE_SIZE_BYTES = int(100e9)
 
+# Metadata keys that must never be forwarded to the worker function.
+_META_KEYS = frozenset({"over_time", "time_event"})
+
 logger = logging.getLogger(__name__)
 
 
 def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> dict:
     """Prepare keyword arguments and pass them to a worker function.
 
-    This wrapper helps filter out metadata parameters that should not be passed
-    to the worker function (like 'repeat', 'over_time', and 'time_event').
+    This wrapper filters out metadata parameters that should not be passed
+    to the worker function (like 'repeat', 'over_time', and 'time_event'),
+    then deep-copies the filtered dict for mutation safety before calling
+    the worker.
 
     Args:
         worker (Callable): The worker function to call
@@ -34,14 +41,12 @@ def worker_kwargs_wrapper(worker: Callable, bench_cfg: BenchCfg, **kwargs) -> di
     Returns:
         dict: The result from the worker function
     """
-    function_input_deep = deepcopy(kwargs)
-    if not bench_cfg.pass_repeat:
-        function_input_deep.pop("repeat")
-    if "over_time" in function_input_deep:
-        function_input_deep.pop("over_time")
-    if "time_event" in function_input_deep:
-        function_input_deep.pop("time_event")
-    return worker(**function_input_deep)
+    filtered = {
+        k: v
+        for k, v in kwargs.items()
+        if k not in _META_KEYS and (k != "repeat" or bench_cfg.pass_repeat)
+    }
+    return worker(**deepcopy(filtered))
 
 
 class SweepExecutor:
@@ -62,15 +67,15 @@ class SweepExecutor:
             cache_size (int): Maximum cache size in bytes. Defaults to 100 GB.
         """
         self.cache_size = cache_size
-        self.sample_cache: Optional[FutureCache] = None
+        self.sample_cache: FutureCache | None = None
 
     def convert_vars_to_params(
         self,
         variable: param.Parameter | str | dict | tuple,
         var_type: str,
-        run_cfg: Optional[BenchRunCfg],
-        worker_class_instance: Optional[ParametrizedSweep] = None,
-        worker_input_cfg: Optional[ParametrizedSweep] = None,
+        run_cfg: BenchRunCfg | None,
+        worker_class_instance: ParametrizedSweep | None = None,
+        worker_input_cfg: ParametrizedSweep | None = None,
     ) -> param.Parameter:
         """Convert various input formats to param.Parameter objects.
 
@@ -86,10 +91,10 @@ class SweepExecutor:
                 - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
                 - tuple: Tuple that can be converted to a parameter
             var_type (str): Type of variable ('input', 'result', or 'const') for error messages
-            run_cfg (Optional[BenchRunCfg]): Run configuration for level settings
-            worker_class_instance (Optional[ParametrizedSweep]): The worker class instance for
+            run_cfg (BenchRunCfg | None): Run configuration for level settings
+            worker_class_instance (ParametrizedSweep | None): The worker class instance for
                 looking up parameters by name
-            worker_input_cfg (Optional[ParametrizedSweep]): The worker input configuration class
+            worker_input_cfg (ParametrizedSweep | None): The worker input configuration class
 
         Returns:
             param.Parameter: The converted parameter object
@@ -109,8 +114,10 @@ class SweepExecutor:
             param_var = worker_class_instance.param.objects(instance=False)[variable["name"]]
             if variable.get("values"):
                 param_var = param_var.with_sample_values(variable["values"])
-
-            if variable.get("samples"):
+            elif variable.get("bounds"):
+                b = variable["bounds"]
+                param_var = param_var.with_bounds(b[0], b[1], variable.get("samples"))
+            elif variable.get("samples"):
                 param_var = param_var.with_samples(variable["samples"])
             if variable.get("max_level"):
                 if run_cfg is not None:
@@ -123,15 +130,15 @@ class SweepExecutor:
             )
         return variable
 
-    def define_const_inputs(self, const_vars: List[Tuple[param.Parameter, Any]]) -> Optional[dict]:
+    def define_const_inputs(self, const_vars: list[tuple[param.Parameter, Any]]) -> dict | None:
         """Convert constant variable tuples into a dictionary of name-value pairs.
 
         Args:
-            const_vars (List[Tuple[param.Parameter, Any]]): List of (parameter, value) tuples
+            const_vars (list[tuple[param.Parameter, Any]]): List of (parameter, value) tuples
                 representing constant parameters and their values
 
         Returns:
-            Optional[dict]: Dictionary mapping parameter names to their constant values,
+            dict | None: Dictionary mapping parameter names to their constant values,
                 or None if const_vars is None
         """
         constant_inputs = None
@@ -164,7 +171,7 @@ class SweepExecutor:
             cache_name="sample_cache",
             tag_index=True,
             size_limit=self.cache_size,
-            cache_results=run_cfg.cache_samples,
+            cache_samples=run_cfg.cache_samples,
         )
         return self.sample_cache
 

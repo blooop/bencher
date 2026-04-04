@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import pytest
 import unittest
 from hypothesis import given, settings, strategies as st
-import bencher as bch
+import bencher as bn
 from datetime import datetime
 
 from strenum import StrEnum
 from enum import auto
-from typing import List
 from param import Parameter
 from itertools import combinations
 
@@ -25,26 +26,26 @@ class Enum2(StrEnum):
     enum2_val2 = auto()
 
 
-class BenchCfgTest(bch.ParametrizedSweep):
+class BenchCfgTest(bn.ParametrizedSweep):
     """A class for representing all types of input"""
 
-    float1 = bch.FloatSweep(default=0, bounds=[0, 1], doc="generic float 1", samples=2)
-    float2 = bch.FloatSweep(default=0, bounds=[0, 1], doc="generic float 2", samples=2)
-    int1 = bch.IntSweep(default=0, bounds=[0, 2], doc="generic int 1")
-    int2 = bch.IntSweep(default=0, bounds=[0, 2], doc="generic int 2")
-    bool1 = bch.BoolSweep(doc="generic bool 1")
-    bool2 = bch.BoolSweep(doc="generic bool 2")
-    enum1 = bch.EnumSweep(Enum1)
-    enum2 = bch.EnumSweep(Enum2)
+    float1 = bn.FloatSweep(default=0, bounds=[0, 1], doc="generic float 1", samples=2)
+    float2 = bn.FloatSweep(default=0, bounds=[0, 1], doc="generic float 2", samples=2)
+    int1 = bn.IntSweep(default=0, bounds=[0, 2], doc="generic int 1")
+    int2 = bn.IntSweep(default=0, bounds=[0, 2], doc="generic int 2")
+    bool1 = bn.BoolSweep(doc="generic bool 1")
+    bool2 = bn.BoolSweep(doc="generic bool 2")
+    enum1 = bn.EnumSweep(Enum1)
+    enum2 = bn.EnumSweep(Enum2)
 
 
-class BenchCfgTestOut(bch.ParametrizedSweep):
+class BenchCfgTestOut(bn.ParametrizedSweep):
     """A class for representing all types of result"""
 
-    out1 = bch.ResultVar(doc="generic result variable 1")
-    out2 = bch.ResultVar(doc="generic result variable 2")
-    outvec2 = bch.ResultVec(2, doc="A generic 2D vector")
-    outvec3 = bch.ResultVec(3, doc="A generic 3D vector")
+    out1 = bn.ResultFloat(doc="generic result variable 1")
+    out2 = bn.ResultFloat(doc="generic result variable 2")
+    outvec2 = bn.ResultVec(2, doc="A generic 2D vector")
+    outvec3 = bn.ResultVec(3, doc="A generic 3D vector")
 
 
 def bench_func(cfg: BenchCfgTest) -> BenchCfgTestOut:
@@ -99,19 +100,19 @@ class TestAllCombinations(unittest.TestCase):
 
     def run_bencher_over_time(
         self,
-        input_vars: List[Parameter],
-        result_vars: List[bch.ResultVar],
+        input_vars: list[Parameter],
+        result_vars: list[bn.ResultFloat],
         repeats: int,
     ):
         """Base function used to run benchers with a set of inputs,results and repeats over time"""
-        bench = bch.Bench("test_bencher", bench_func, BenchCfgTest)
+        bench = bn.Bench("test_bencher", bench_func, BenchCfgTest)
 
         for i in range(2):
             bench.plot_sweep(
                 title="test_unique_filenames",
                 input_vars=input_vars,
                 result_vars=result_vars,
-                run_cfg=bch.BenchRunCfg(
+                run_cfg=bn.BenchRunCfg(
                     repeats=repeats,
                     over_time=True,
                     clear_history=i == 0,  # clear the history on the first iteration
@@ -129,15 +130,15 @@ class TestAllCombinations(unittest.TestCase):
     )
     def test_all_input_combinations_over_time_hyp(
         self,
-        input_vars: List[Parameter],
-        result_vars: List[bch.ResultVar],
+        input_vars: list[Parameter],
+        result_vars: list[bn.ResultFloat],
         repeats: int,
     ):
         """Use hypothesis to enumerate combinations of inputs to bencher
 
         Args:
-            input_vars (List[Parameter]): all possible sets of inputs
-            result_vars (List[bch.ResultVar]): all possible sets of results
+            input_vars (list[Parameter]): all possible sets of inputs
+            result_vars (list[bn.ResultFloat]): all possible sets of results
             repeats (int): 1 or 2 repeats (more than 2 repeats hits the same code as 2 repeats)
         """
         self.run_bencher_over_time(input_vars, result_vars, repeats)

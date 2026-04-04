@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import List
 
 from pandas import Timestamp
 from param import Selector
@@ -33,7 +34,7 @@ class TimeBase(SweepBase, Selector):
 
     __slots__ = shared_slots
 
-    def values(self) -> List[str]:
+    def values(self) -> list[str]:
         """return all the values for a parameter sweep.  If debug is true return a reduced list"""
         # print(self.sampling_str(debug))
         return self.objects
@@ -61,6 +62,7 @@ class TimeSnapshot(TimeBase):
                 **params,
             )
         self.units = units
+        self.optimize = False
         if samples is None:
             self.samples = len(self.objects)
         else:
@@ -86,6 +88,7 @@ class TimeEvent(TimeBase):
             **params,
         )
         self.units = units
+        self.optimize = False
         if samples is None:
             self.samples = len(self.objects)
         else:

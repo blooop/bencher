@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import panel as pn
 from param import Parameter
 
@@ -21,13 +20,13 @@ class ScatterResult(HoloviewResult):
     that can be grouped by categorical variables.
     """
 
-    def to_plot(self, **kwargs) -> Optional[pn.panel]:
+    def to_plot(self, **kwargs) -> pn.panel | None:
         """Creates a scatter plot. See ``to_scatter`` for parameters."""
         return self.to_scatter(**kwargs)
 
     def to_scatter(
         self, result_var: Parameter | None = None, override: bool = True, **kwargs
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Creates a standard scatter plot from benchmark data.
 
         Args:
@@ -36,7 +35,7 @@ class ScatterResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the scatter plot options.
 
         Returns:
-            Optional[pn.panel]: A panel containing the scatter plot, or filter match results.
+            pn.panel | None: A panel containing the scatter plot, or filter match results.
         """
         return self.filter(
             self._to_scatter_ds,
@@ -52,7 +51,7 @@ class ScatterResult(HoloviewResult):
 
     def _to_scatter_ds(  # pylint: disable=unused-argument
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> Optional[pn.panel]:
+    ) -> pn.panel | None:
         """Creates a scatter plot from the provided dataset.
 
         Args:
@@ -61,11 +60,16 @@ class ScatterResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the scatter plot.
 
         Returns:
-            Optional[pn.panel]: A scatter plot visualization.
+            pn.panel | None: A scatter plot visualization.
         """
         by = None
         if self.plt_cnt_cfg.cat_cnt > 1:
             by = [v.name for v in self.bench_cfg.input_vars[1:]]
-        return dataset.hvplot.scatter(by=by, subplots=False, **kwargs).opts(
-            title=self.to_plot_title()
+        plot = dataset.hvplot.scatter(
+            by=by,
+            subplots=False,
+            widget_location="bottom",
+            title=self.to_plot_title(),
+            **kwargs,
         )
+        return self._apply_opts(plot, xrotation=30)

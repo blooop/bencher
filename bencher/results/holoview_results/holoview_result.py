@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Callable, List, Optional
 import panel as pn
 import holoviews as hv
+import numpy as np
 from param import Parameter
 from functools import partial
+from itertools import product as iterproduct
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
@@ -17,12 +18,14 @@ from bencher.utils import (
 from bencher.results.video_result import VideoResult
 from bencher.results.bench_result_base import ReduceType
 
-from bencher.variables.results import ResultVar, ResultImage, ResultVideo
+from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
 hv.extension("bokeh", "plotly")
 
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
+
+_AGG_TITLE = "All Time Points (aggregated)"
 
 
 class HoloviewResult(VideoResult):
@@ -64,14 +67,14 @@ class HoloviewResult(VideoResult):
         """
         return self.to_hv_dataset(reduce).to(hv_type, **kwargs)
 
-    def overlay_plots(self, plot_callback: callable) -> Optional[hv.Overlay | pn.Row]:
+    def overlay_plots(self, plot_callback: callable) -> hv.Overlay | pn.Row | None:
         """Create an overlay of plots by applying a callback to each result variable.
 
         Args:
             plot_callback (callable): Function to apply to each result variable to create a plot.
 
         Returns:
-            Optional[hv.Overlay | pn.Row]: An overlay of plots or Row of plots, or None if no results.
+            hv.Overlay | pn.Row | None: An overlay of plots or Row of plots, or None if no results.
         """
         results = []
         markdown_results = pn.Row()
@@ -91,14 +94,14 @@ class HoloviewResult(VideoResult):
             return markdown_results
         return None
 
-    def layout_plots(self, plot_callback: callable) -> Optional[hv.Layout]:
+    def layout_plots(self, plot_callback: callable) -> hv.Layout | None:
         """Create a layout of plots by applying a callback to each result variable.
 
         Args:
             plot_callback (callable): Function to apply to each result variable to create a plot.
 
         Returns:
-            Optional[hv.Layout]: A layout of plots or None if no results.
+            hv.Layout | None: A layout of plots or None if no results.
         """
         if len(self.bench_cfg.result_vars) > 0:
             pt = hv.Layout()
@@ -134,62 +137,233 @@ class HoloviewResult(VideoResult):
         )
 
     @staticmethod
+    def _apply_opts(plot, **opts_kwargs):
+        """Apply .opts() to a plot, handling panel.pane.HoloViews wrappers.
+
+        When hvplot is called with widget_location, it returns a panel pane
+        whose underlying .object is the actual holoviews element.
+        """
+        if hasattr(plot, "opts"):
+            return plot.opts(**opts_kwargs)
+        if hasattr(plot, "object") and hasattr(plot.object, "opts"):
+            plot.object = plot.object.opts(**opts_kwargs)
+        return plot
+
+    @staticmethod
     def _over_time_kdims() -> list:
         """Return the kdim list for over_time HoloMaps."""
         return ["over_time"]
 
     @staticmethod
-    def _holomap_with_slider_bottom(holomap: hv.HoloMap) -> pn.Column:
-        """Wrap a HoloMap so the scrubber/slider appears below the plot.
+    def _holomap_with_slider_bottom(hvobj, widgets=None):
+        """Wrap a HoloViews object so any scrubber/slider appears below the plot.
 
         ``pn.pane.HoloViews(holomap, widget_location="bottom")`` does not
         embed correctly in static HTML (the widget is lost).  Instead we
-        let Panel auto-create the widget via ``pn.panel(holomap)`` (which
+        let Panel auto-create the widget via ``pn.panel(hvobj)`` (which
         produces a ``Row(plot, widget_box)``), then rearrange into a
         ``Column(plot, widget_box)`` so the slider sits underneath.
+
+        Force ``DiscreteSlider`` for the *over_time* dimension so that
+        string-based ``TimeEvent`` coordinates get a slider instead of
+        the default dropdown ``Select`` widget.
+
+        Safe to call on any HoloViews object; if no widgets are produced
+        the original object is returned unchanged.
+
+        The slider defaults to the most recent (last) time point by
+        setting the widget value in Python.  Panel's embed system computes
+        JSON patches relative to this default, so every other position
+        gets a valid patch and the last position is the initial state.
         """
-        row = pn.panel(holomap)
+        if widgets is None:
+            widgets = {"over_time": pn.widgets.DiscreteSlider}
+        row = pn.panel(hvobj, widgets=widgets)
+        if not isinstance(row, pn.Row) or len(row) < 2:
+            return hvobj
         widget_box = row[1]
         widget_box.align = ("start", "start")
+
+        # Set the over_time slider to the last (most recent) time point.
+        for w in widget_box:
+            if hasattr(w, "name") and w.name == "over_time" and hasattr(w, "options") and w.options:
+                opts = w.options.values() if isinstance(w.options, dict) else w.options
+                opts = list(opts)
+                if len(opts) > 1:
+                    w.value = opts[-1]
+                break
+
         return pn.Column(row[0], widget_box)
 
-    def _build_time_holomap(
-        self,
-        dataset: xr.Dataset,
-        result_var: Parameter,
-        plot_fn: Callable[[xr.DataArray], hv.Element],
-    ) -> Optional[pn.Column]:
-        """Build an hv.HoloMap with a time slider when over_time is active.
+    def _build_curve_overlay(
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+    ) -> hv.Overlay:
+        """Build a Curve (+ optional Spread) overlay for a single time slice or aggregated data.
 
-        Iterates over each time point, calls *plot_fn* with the per-time-point
-        DataArray, and collects the results into an ``hv.HoloMap``.  Returns
-        ``None`` when over_time is not applicable so callers can fall through
-        to their default rendering path.
+        When ``_std`` exists in the dataset the spread band is rendered
+        automatically.  This is used by both the curve renderer and the
+        line renderer (for aggregated data that gained ``_std`` from
+        ``_mean_over_time``).
 
-        Args:
-            dataset: The xarray Dataset containing benchmark results.
-            result_var: The result variable to slice.
-            plot_fn: A callable that receives a single-time-point DataArray and
-                returns an hv/hvplot element.
-
-        Returns:
-            A ``pn.Column`` with the plot and slider, or ``None`` when
-            over_time is not active.
+        Performance: avoids ``to_dataframe()`` when there are no categorical
+        groupby dimensions by constructing ``hv.Dataset`` directly from the
+        xarray Dataset.  The heavier DataFrame path is only used when manual
+        groupby is required.
         """
-        if not self._use_holomap_for_time(dataset):
+        var = result_var.name
+        std_var = f"{var}_std"
+        has_spread = std_var in dataset.data_vars
+        title = self.title_from_ds(dataset, result_var, **kwargs)
+
+        float_names = [fv.name for fv in self.plt_cnt_cfg.float_vars]
+        ds_dims = list(dataset.dims)
+        if not ds_dims:
             return None
-        da = dataset[result_var.name]
-        holomap = hv.HoloMap(kdims=self._over_time_kdims())
-        for t in da.coords["over_time"].values:
-            holomap[t] = plot_fn(da.sel(over_time=t))
-        return self._holomap_with_slider_bottom(holomap)
+        kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
+        groupby = [d for d in ds_dims if d not in kdims]
+
+        vdims = [var, std_var] if has_spread else [var]
+
+        if not groupby:
+            # Fast path: build hv.Dataset directly from xarray (no DataFrame conversion)
+            hvds = hv.Dataset(dataset, kdims=kdims, vdims=vdims)
+            pt = hv.Overlay()
+            pt *= hv.Curve(hvds, kdims=kdims, vdims=var, label=var).opts(
+                title=title, xrotation=30, **kwargs
+            )
+            if has_spread:
+                pt *= hv.Spread(hvds, kdims=kdims, vdims=[var, std_var])
+            return pt.opts(legend_position="right")
+
+        # Groupby path: use xarray .sel() to avoid expensive DataFrame conversion
+        group_coords = [dataset.coords[g].values for g in groupby]
+        pt = hv.Overlay()
+        for combo in iterproduct(*group_coords):
+            sel = dict(zip(groupby, combo))
+            group_ds = dataset.sel(**sel)
+            label = ", ".join(str(v) for v in combo) if len(combo) > 1 else str(combo[0])
+            group_hvds = hv.Dataset(group_ds, kdims=kdims, vdims=vdims)
+            pt *= hv.Curve(group_hvds, kdims=kdims, vdims=var, label=label).opts(
+                xrotation=30, **kwargs
+            )
+            if has_spread:
+                pt *= hv.Spread(group_hvds, kdims=kdims, vdims=[var, std_var])
+        return pt.opts(title=title, legend_position="right")
+
+    @staticmethod
+    def _mean_over_time(dataset, result_var_name):
+        """Average a dataset across all time points.
+
+        Always produces a ``_std`` variable so that downstream renderers
+        (e.g. curve spread, error bars) can visualise the aggregation
+        uncertainty.  When a per-time-point ``_std`` already exists the
+        pooled standard deviation is computed via the law of total
+        variance; otherwise the standard deviation of the means across
+        time points is used.
+        """
+        std_var = f"{result_var_name}_std"
+        new_ds = dataset.mean(dim="over_time")
+        var_of_means = dataset[result_var_name].var(dim="over_time")
+        if std_var in dataset.data_vars:
+            mean_of_vars = (dataset[std_var] ** 2).mean(dim="over_time")
+            new_ds[std_var] = (mean_of_vars + var_of_means) ** 0.5
+        else:
+            new_ds[std_var] = var_of_means**0.5
+        return new_ds
+
+    @staticmethod
+    def subsample_indices(n, max_points):
+        """Return evenly-spaced indices into a length-*n* array.
+
+        Always includes the first and last index.  When *max_points* is
+        ``None`` or >= *n*, returns ``range(n)`` (no subsampling).
+        """
+        if max_points is None or n <= max_points:
+            return range(n)
+        return np.unique(np.linspace(0, n - 1, max_points, dtype=int)).tolist()
+
+    def _build_time_holomap(self, dataset, result_var_name, make_plot_fn):
+        """Build per-time-point HoloMap + optional aggregated plot.
+
+        ``make_plot_fn`` receives a Dataset *without* the ``over_time``
+        dimension.  The aggregated dataset produced by ``_mean_over_time``
+        always contains a ``_std`` variable; callbacks that are
+        ``_std``-aware (e.g. delegating to ``_build_curve_overlay``) will
+        automatically render spread bands on the aggregated tab.
+
+        When ``bench_cfg.max_slider_points`` is set, only that many
+        evenly-spaced time points are rendered for the slider (first and
+        last always included).  The aggregated tab still uses all data.
+
+        When ``bench_cfg.show_aggregated_time_tab`` is ``False``, the
+        aggregation is skipped entirely for faster rendering.
+        """
+        times = dataset.coords["over_time"].values
+        n_time = len(times)
+
+        slider_indices = self.subsample_indices(n_time, self.bench_cfg.max_slider_points)
+
+        kdims = self._over_time_kdims()
+        holomap = hv.HoloMap(kdims=kdims)
+
+        for idx in slider_indices:
+            t = times[idx]
+            ds_t = dataset.sel(over_time=t)
+            holomap[t] = make_plot_fn(ds_t)
+
+        slider_pane = self._holomap_with_slider_bottom(holomap)
+
+        if n_time > 1 and self.bench_cfg.show_aggregated_time_tab:
+            ds_agg = self._mean_over_time(dataset, result_var_name)
+            agg_plot = make_plot_fn(ds_agg)
+            return pn.Tabs(
+                ("Per Time Point", slider_pane),
+                (_AGG_TITLE, pn.Column(agg_plot)),
+            )
+
+        return slider_pane
+
+    def _build_time_holomap_raw(self, da, make_plot_fn):
+        """Build per-time-point HoloMap + optional aggregated plot for distributions.
+
+        *make_plot_fn* receives a DataArray that **retains** the ``over_time``
+        dimension (a single-element slice for per-time-point entries, or the
+        full array for the aggregated tab).  Callers should flatten via
+        ``.to_dataframe().reset_index()`` or equivalent.
+
+        Respects ``bench_cfg.max_slider_points`` and
+        ``bench_cfg.show_aggregated_time_tab``.
+        """
+        times = da.coords["over_time"].values
+        n_time = len(times)
+
+        slider_indices = self.subsample_indices(n_time, self.bench_cfg.max_slider_points)
+
+        kdims = self._over_time_kdims()
+        holomap = hv.HoloMap(kdims=kdims)
+
+        for idx in slider_indices:
+            t = times[idx]
+            da_t = da.isel(over_time=slice(idx, idx + 1))
+            holomap[t] = make_plot_fn(da_t)
+
+        slider_pane = self._holomap_with_slider_bottom(holomap)
+
+        if n_time > 1 and self.bench_cfg.show_aggregated_time_tab:
+            agg_plot = make_plot_fn(da)
+            return pn.Tabs(
+                ("Per Time Point", slider_pane),
+                (_AGG_TITLE, pn.Column(agg_plot)),
+            )
+
+        return slider_pane
 
     def _build_tap_plot(
         self,
         plot: hv.Element,
         dataset: xr.Dataset,
-        result_var_plots: List[Parameter],
-        container: type | List[type] | None = None,
+        result_var_plots: list[Parameter],
+        container: type | list[type] | None = None,
         tap_container_direction: type | None = None,
     ) -> pn.Row:
         """Wrap a plot element with interactive PointerXY tap functionality.
@@ -289,9 +463,9 @@ class HoloviewResult(VideoResult):
         reduce_type: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
         result_var: Parameter | None = None,
-        result_types: tuple | None = (ResultVar,),
+        result_types: tuple | None = (ResultFloat,),
         **kwargs,
-    ) -> Optional[pn.pane.panel]:
+    ) -> pn.pane.panel | None:
         """Convert the data to a HoloViews container with specified dimensions and options.
 
         Args:
@@ -299,11 +473,11 @@ class HoloviewResult(VideoResult):
             reduce_type (ReduceType, optional): How to reduce the dataset dimensions. Defaults to ReduceType.AUTO.
             target_dimension (int, optional): Target dimension for the visualization. Defaults to 2.
             result_var (Parameter, optional): Specific result variable to visualize. Defaults to None.
-            result_types (tuple, optional): Types of result variables to include. Defaults to (ResultVar).
+            result_types (tuple, optional): Types of result variables to include. Defaults to (ResultFloat).
             **kwargs: Additional visualization options.
 
         Returns:
-            Optional[pn.pane.panel]: A panel containing the visualization, or None if no valid results.
+            pn.pane.panel | None: A panel containing the visualization, or None if no valid results.
         """
         return self.map_plot_panes(
             partial(self.hv_container_ds, container=container),
@@ -329,19 +503,19 @@ class HoloviewResult(VideoResult):
 
     def setup_results_and_containers(
         self,
-        result_var_plots: Parameter | List[Parameter],
-        container: type | List[type] | None = None,
+        result_var_plots: Parameter | list[Parameter],
+        container: type | list[type] | None = None,
         **kwargs,
-    ) -> tuple[List[Parameter], List[pn.pane.panel]]:
+    ) -> tuple[list[Parameter], list[pn.pane.panel]]:
         """Set up appropriate containers for result variables.
 
         Args:
-            result_var_plots (Parameter | List[Parameter]): Result variables to visualize.
-            container (type | List[type], optional): Container types to use. Defaults to None.
+            result_var_plots (Parameter | list[Parameter]): Result variables to visualize.
+            container (type | list[type], optional): Container types to use. Defaults to None.
             **kwargs: Additional options to pass to the container constructors.
 
         Returns:
-            tuple[List[Parameter], List[pn.pane.panel]]: Tuple containing:
+            tuple[list[Parameter], list[pn.pane.panel]]: Tuple containing:
                 - List of result variables
                 - List of initialized container instances
         """
@@ -407,11 +581,11 @@ class HoloviewResult(VideoResult):
         """
         return hv.HoloMap(self.to_nd_layout(name)).opts(shared_axes=False)
 
-    def to_holomap_list(self, hmap_names: List[str] | None = None) -> pn.Column:
+    def to_holomap_list(self, hmap_names: list[str] | None = None) -> pn.Column:
         """Create a column of HoloMaps from multiple named maps.
 
         Args:
-            hmap_names (List[str], optional): List of HoloMap names to include.
+            hmap_names (list[str], optional): list of HoloMap names to include.
                 If None, uses all result_hmaps. Defaults to None.
 
         Returns:
@@ -464,11 +638,11 @@ class HoloviewResult(VideoResult):
 
         return hv.DynamicMap(cb, kdims=kdims)
 
-    def to_grid(self, inputs: List[str] | None = None) -> hv.GridSpace:
+    def to_grid(self, inputs: list[str] | None = None) -> hv.GridSpace:
         """Create a grid visualization from a HoloMap.
 
         Args:
-            inputs (List[str], optional): Input variable names to use for the grid dimensions.
+            inputs (list[str], optional): Input variable names to use for the grid dimensions.
                 If None, uses bench_cfg.inputs_as_str(). Defaults to None.
 
         Returns:

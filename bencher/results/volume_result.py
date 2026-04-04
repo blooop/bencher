@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Optional, Any
+from typing import Any
 
 import xarray as xr
 from param import Parameter
@@ -8,22 +10,22 @@ import plotly.graph_objs as go
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 
 
 class VolumeResult(BenchResultBase):
     def to_plot(
-        self, result_var: Optional[Parameter] = None, override: bool = True, **kwargs: Any
-    ) -> Optional[pn.panel]:
+        self, result_var: Parameter | None = None, override: bool = True, **kwargs: Any
+    ) -> pn.panel | None:
         """Generates a 3d volume plot from benchmark data.
 
         Args:
-            result_var (Optional[Parameter]): The result variable to plot. If None, uses the default.
+            result_var (Parameter | None): The result variable to plot. If None, uses the default.
             override (bool): Whether to override filter restrictions. Defaults to True.
             **kwargs (Any): Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.panel]: A panel containing the volume plot if data is appropriate,
+            pn.panel | None: A panel containing the volume plot if data is appropriate,
             otherwise returns filter match results.
         """
         return self.to_volume(
@@ -51,7 +53,7 @@ class VolumeResult(BenchResultBase):
             **kwargs: Additional keyword arguments passed to the plot rendering.
 
         Returns:
-            Optional[pn.pane.Plotly]: A panel containing the volume plot if data is appropriate,
+            pn.pane.Plotly | None: A panel containing the volume plot if data is appropriate,
                                     otherwise returns filter match results.
         """
         if self.bench_cfg.over_time:
@@ -64,14 +66,14 @@ class VolumeResult(BenchResultBase):
             reduce=ReduceType.REDUCE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar),
+            result_types=(ResultFloat,),
             override=override,
             **kwargs,
         )
 
     def to_volume_ds(
         self, dataset: xr.Dataset, result_var: Parameter, width=600, height=600
-    ) -> Optional[pn.pane.Plotly]:
+    ) -> pn.pane.Plotly | None:
         """Given a benchCfg generate a 3D surface plot
         Returns:
             pn.pane.Plotly: A 3d volume plot as a holoview in a pane

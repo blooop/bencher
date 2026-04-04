@@ -1,3 +1,7 @@
+import warnings
+
+warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=UserWarning)
+
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
@@ -14,10 +18,12 @@ from .variables.inputs import (
 )
 from .variables.time import TimeSnapshot
 
-from .variables.inputs import box, p
+from .variables.inputs import box, p, sweep
 from .variables.results import (
+    ResultFloat,
     ResultVar,
     ResultBool,
+    SCALAR_RESULT_TYPES,
     ResultVec,
     ResultHmap,
     ResultPath,
@@ -25,6 +31,7 @@ from .variables.results import (
     ResultImage,
     ResultString,
     ResultContainer,
+    ResultRerun,
     ResultReference,
     ResultVolume,
     OptDir,
@@ -35,6 +42,7 @@ from .variables.results import (
 from .results.composable_container.composable_container_base import (
     ComposeType,
     ComposableContainerBase,
+    PaneLayout,
 )
 from .results.composable_container.composable_container_video import (
     ComposableContainerVideo,
@@ -57,6 +65,7 @@ from bencher.results.holoview_results.bar_result import BarResult
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.curve_result import CurveResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
+from bencher.results.holoview_results.band_result import BandResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.holoview_results.table_result import TableResult
@@ -80,23 +89,38 @@ from .utils import (
     github_content,
 )
 
+from .utils_rrd import (
+    publish_and_view_rrd,
+    rrd_to_pane,
+    rrd_file_to_pane,
+)
+from .file_server import run_file_server
+
 try:
-    from .utils_rerun import publish_and_view_rrd, rrd_to_pane, rerun_to_pane, capture_rerun_window
-    from .flask_server import run_flask_in_thread
-except ModuleNotFoundError as e:
+    from .utils_rerun import (
+        rerun_to_pane,
+        capture_rerun_window,
+        capture_rerun_rrd,
+    )
+except ModuleNotFoundError:
     pass
 
 
+from .regression import RegressionResult, RegressionReport, RegressionError
+from .perf_tracker import PerfTracker, PerfReport
+from .git_info import git_time_event
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 from .sample_order import SampleOrder
 from .caching import CachedParams
 from .results.bench_result import BenchResult
+from .results.optimize_result import OptimizeResult
 from .results.video_result import VideoResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg
 from .job import Executors
+from .sweep_timings import SweepTimings
 from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
 from .factories import create_bench, create_bench_runner

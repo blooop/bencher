@@ -1,0 +1,72 @@
+"""Tests for sweep timing instrumentation."""
+
+import math
+
+import bencher as bn
+from bencher.sweep_timings import SweepTimings, phase_timer
+
+
+def test_phase_timer():
+    """phase_timer context manager returns positive elapsed time."""
+    with phase_timer() as elapsed:
+        _ = sum(range(1000))
+    assert elapsed() > 0
+
+
+def test_sweep_timings_summary():
+    """SweepTimings.summary() returns all fields as a dict."""
+    t = SweepTimings(total_ms=42.0, cache_check_ms=1.5)
+    s = t.summary()
+    assert s["total_ms"] == 42.0
+    assert s["cache_check_ms"] == 1.5
+    assert "dataset_setup_ms" in s
+
+
+class TrivialSweep(bn.ParametrizedSweep):
+    theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
+    out = bn.ResultFloat(units="v", doc="output")
+
+    def benchmark(self):
+        self.out = math.sin(self.theta)
+
+
+def test_bench_result_has_timings():
+    """After plot_sweep(), the BenchResult should have populated timings."""
+    run_cfg = bn.BenchRunCfg()
+    run_cfg.auto_plot = False
+    bench = TrivialSweep().to_bench(run_cfg)
+    bench.plot_sweep()
+
+    res = bench.results[-1]
+    assert res.timings is not None
+    assert isinstance(res.timings, SweepTimings)
+    assert res.timings.total_ms > 0
+    assert res.timings.dataset_setup_ms >= 0
+    assert res.timings.job_submission_ms >= 0
+    assert res.timings.job_execution_ms >= 0
+
+    # total_ms should equal the sum of all phase timings
+    t = res.timings
+    summary = t.summary()
+    expected_total = sum(v for k, v in summary.items() if k != "total_ms")
+    assert t.total_ms == expected_total
+
+
+def test_timings_accessible_via_public_api():
+    """SweepTimings should be importable from the top-level bencher package."""
+    assert hasattr(bn, "SweepTimings")
+    assert bn.SweepTimings is SweepTimings
+
+
+def test_report_save_ms_in_summary():
+    """report_save_ms should appear in the summary dict."""
+    t = SweepTimings(report_save_ms=42.5)
+    s = t.summary()
+    assert "report_save_ms" in s
+    assert s["report_save_ms"] == 42.5
+
+
+def test_compute_total_includes_report_save():
+    """compute_total() should include report_save_ms."""
+    t = SweepTimings(render_ms=10.0, report_save_ms=5.0)
+    assert t.compute_total() == 15.0

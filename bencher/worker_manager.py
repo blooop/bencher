@@ -4,9 +4,12 @@ This module provides the WorkerManager class for handling worker function
 configuration and validation in benchmark runs.
 """
 
+from __future__ import annotations
+
 import logging
+import warnings
 from functools import partial
-from typing import Callable, List, Optional
+from typing import Callable
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
@@ -60,14 +63,14 @@ class WorkerManager:
 
     def __init__(self) -> None:
         """Initialize a new WorkerManager."""
-        self.worker: Optional[Callable] = None
-        self.worker_class_instance: Optional[ParametrizedSweep] = None
-        self.worker_input_cfg: Optional[ParametrizedSweep] = None
+        self.worker: Callable | None = None
+        self.worker_class_instance: ParametrizedSweep | None = None
+        self.worker_input_cfg: ParametrizedSweep | None = None
 
     def set_worker(
         self,
         worker: Callable | ParametrizedSweep,
-        worker_input_cfg: Optional[ParametrizedSweep] = None,
+        worker_input_cfg: ParametrizedSweep | None = None,
     ) -> None:
         """Set the benchmark worker function and its input configuration.
 
@@ -89,6 +92,16 @@ class WorkerManager:
         if isinstance(worker, ParametrizedSweep):
             self.worker_class_instance = worker
             self.worker = self.worker_class_instance.__call__
+            if (
+                type(worker).__call__ is not ParametrizedSweep.__call__
+                and type(worker).benchmark is ParametrizedSweep.benchmark
+            ):
+                warnings.warn(
+                    f"{type(worker).__name__} overrides __call__() which is deprecated. "
+                    "Override benchmark() instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
             logger.info("setting worker from bench class.__call__")
         else:
             if isinstance(worker, type):
@@ -100,7 +113,7 @@ class WorkerManager:
             logger.info(f"setting worker {worker}")
         self.worker_input_cfg = worker_input_cfg
 
-    def get_result_vars(self, as_str: bool = True) -> List[str | ParametrizedSweep]:
+    def get_result_vars(self, as_str: bool = True) -> list[str | ParametrizedSweep]:
         """Retrieve the result variables from the worker class instance.
 
         Args:
@@ -109,7 +122,7 @@ class WorkerManager:
                            Default is True.
 
         Returns:
-            List[str | ParametrizedSweep]: A list of result variables, either as strings
+            list[str | ParametrizedSweep]: A list of result variables, either as strings
                 or in their original form.
 
         Raises:
@@ -121,11 +134,11 @@ class WorkerManager:
             return self.worker_class_instance.get_results_only()
         raise RuntimeError("Worker class instance not set")
 
-    def get_inputs_only(self) -> List[ParametrizedSweep]:
+    def get_inputs_only(self) -> list[ParametrizedSweep]:
         """Retrieve the input variables from the worker class instance.
 
         Returns:
-            List[ParametrizedSweep]: A list of input variables.
+            list[ParametrizedSweep]: A list of input variables.
 
         Raises:
             RuntimeError: If the worker class instance is not set.
@@ -134,11 +147,11 @@ class WorkerManager:
             return self.worker_class_instance.get_inputs_only()
         raise RuntimeError("Worker class instance not set")
 
-    def get_input_defaults(self) -> List:
+    def get_input_defaults(self) -> list:
         """Retrieve the default input values from the worker class instance.
 
         Returns:
-            List: A list of default input values as (parameter, value) tuples.
+            list: A list of default input values as (parameter, value) tuples.
 
         Raises:
             RuntimeError: If the worker class instance is not set.

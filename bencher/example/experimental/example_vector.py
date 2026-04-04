@@ -4,20 +4,20 @@
 
 # import numpy as np
 
-# import bencher as bch
+# import bencher as bn
 
 
-# class OffsetCfg(bch.ParametrizedSweep):
+# class OffsetCfg(bn.ParametrizedSweep):
 #     """A class for describing which parameters to sweep"""
 
-#     dc_offset = bch.FloatSweep(
+#     dc_offset = bn.FloatSweep(
 #         default=0,
 #         bounds=[0.0, 2.0],
 #         samples=4,
 #         units="v",
 #         doc="DC offset to add to the result of the signal",
 #     )
-#     phase_offset = bch.FloatSweep(
+#     phase_offset = bn.FloatSweep(
 #         default=0,
 #         bounds=[0.0, 3.14],
 #         samples=4,
@@ -26,13 +26,13 @@
 #     )
 
 
-# class SweepResult(bch.ParametrizedSweep):
+# class SweepResult(bn.ParametrizedSweep):
 #     """A class to describe the vector outputs of the benchmark function"""
 
-#     sin_sweep = bch.ResultList(
+#     sin_sweep = bn.ResultList(
 #         index_name="time", index_units="s", units="v", doc="A list of values from a sin function"
 #     )
-#     cos_sweep = bch.ResultList(
+#     cos_sweep = bn.ResultList(
 #         index_name="time", index_units="s", units="v", doc="A list of values from a cos function"
 #     )
 
@@ -57,9 +57,9 @@
 #     return res
 
 
-# def example_vector() -> bch.Bench:
+# def example_vector() -> bn.Bench:
 #     """Example on how to sweep over function with vector outputs"""
-#     bencher = bch.Bench("vector output example", sin_sweep, OffsetCfg)
+#     bencher = bn.Bench("vector output example", sin_sweep, OffsetCfg)
 
 #     bencher.plot_sweep(
 #         title="Sweep DC offset",

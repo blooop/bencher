@@ -22,7 +22,7 @@ def get_hash_isolated_process() -> bytes:
         [
             "python3",
             "-c",
-            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bch;cfg1 = bch.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
+            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bn;cfg1 = bn.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
         ],
         stdout=subprocess.PIPE,
         check=False,
@@ -406,3 +406,64 @@ class TestBencher(unittest.TestCase):
                 result_vars=[ExampleBenchCfg.param.out_sin],
                 const_vars=[(ExampleBenchCfg.offset, 0.1)],  # forgot to use param here
             )
+
+    def test_cache_size_propagation(self) -> None:
+        """Check that cache_size from BenchRunCfg propagates to bench internals."""
+        bench = self.create_bench()
+        cache_size_mb = 500
+        expected_bytes = cache_size_mb * 1_000_000
+
+        bench.plot_sweep(
+            title="test_cache_size",
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=BenchRunCfg(cache_size=cache_size_mb, auto_plot=False),
+        )
+
+        self.assertEqual(bench.cache_size, expected_bytes)
+        self.assertEqual(bench._executor.cache_size, expected_bytes)  # pylint: disable=protected-access
+        self.assertEqual(bench._collector.cache_size, expected_bytes)  # pylint: disable=protected-access
+        self.assertEqual(
+            bench._executor.sample_cache.size_limit,  # pylint: disable=protected-access
+            expected_bytes,
+        )
+
+
+class TestBenchRunCfgWithDefaults(unittest.TestCase):
+    """Tests for BenchRunCfg.with_defaults merging behavior."""
+
+    def test_none_creates_fresh_instance(self):
+        cfg = BenchRunCfg.with_defaults(None, repeats=5, level=4)
+        self.assertEqual(cfg.repeats, 5)
+        self.assertEqual(cfg.level, 4)
+
+    def test_defaults_applied_to_param_default_fields(self):
+        cfg = BenchRunCfg()
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, level=4)
+        self.assertEqual(cfg.repeats, 5)
+        self.assertEqual(cfg.level, 4)
+
+    def test_caller_set_fields_not_overwritten(self):
+        cfg = BenchRunCfg(repeats=10)
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, level=4)
+        self.assertEqual(cfg.repeats, 10)  # caller's value preserved
+        self.assertEqual(cfg.level, 4)  # default still applied
+
+    def test_multiple_defaults_in_one_call(self):
+        cfg = BenchRunCfg(level=2)
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=3, level=7, headless=True)
+        self.assertEqual(cfg.repeats, 3)  # was at default, so applied
+        self.assertEqual(cfg.level, 2)  # caller set, so preserved
+        self.assertTrue(cfg.headless)  # was at default, so applied
+
+    def test_does_not_mutate_original(self):
+        original = BenchRunCfg()
+        original_repeats = original.repeats
+        result = BenchRunCfg.with_defaults(original, repeats=99)
+        self.assertEqual(result.repeats, 99)
+        self.assertEqual(original.repeats, original_repeats)  # unchanged
+        self.assertIsNot(result, original)
+
+    def test_unknown_key_raises(self):
+        with self.assertRaises(ValueError, msg="Unknown BenchRunCfg parameter"):
+            BenchRunCfg.with_defaults(None, not_a_real_param=42)
