@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from functools import partial
 from typing import Any
 from param import Parameter, Parameterized
@@ -7,9 +8,14 @@ import holoviews as hv
 import panel as pn
 from copy import deepcopy
 
-from bencher.utils import make_namedtuple, hash_sha1
+from collections import namedtuple
+
+from bencher.utils import hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
 from bencher.factories import create_bench, create_bench_runner
+
+_InputResult = namedtuple("inputresult", ["inputs", "results"])
+_input_result_cache: dict[tuple, _InputResult] = {}
 
 
 class ParametrizedSweep(Parameterized):
@@ -67,6 +73,11 @@ class ParametrizedSweep(Parameterized):
         Returns:
             tuple[dict, dict]: A tuple containing the inputs and result parameters as dictionaries
         """
+        key = (cls, include_name)
+        cached = _input_result_cache.get(key)
+        if cached is not None:
+            return _InputResult(inputs=dict(cached.inputs), results=dict(cached.results))
+
         inputs = {}
         results = {}
         for k, v in cls.param.objects().items():
@@ -80,7 +91,9 @@ class ParametrizedSweep(Parameterized):
 
         if not include_name:
             inputs.pop("name")
-        return make_namedtuple("inputresult", inputs=inputs, results=results)
+        result = _InputResult(inputs=inputs, results=results)
+        _input_result_cache[key] = result
+        return result
 
     def get_inputs_as_dict(self) -> dict:
         """Get the key:value pairs for all the input variables"""
@@ -211,6 +224,14 @@ class ParametrizedSweep(Parameterized):
             return self.get_results_values_as_dict()
         # Legacy path: subclass overrides __call__() and handles
         # update_params_from_kwargs + super().__call__() itself.
+        if type(self).__call__ is ParametrizedSweep.__call__:
+            warnings.warn(
+                f"{type(self).__name__} does not override benchmark(). "
+                "Results will contain only default values. "
+                "Define a benchmark() method on your class.",
+                UserWarning,
+                stacklevel=2,
+            )
         return self.get_results_values_as_dict()
 
     def benchmark(self):
