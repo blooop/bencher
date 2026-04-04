@@ -53,8 +53,8 @@ class MetaSampling(MetaGeneratorBase):
     strategy = bn.StringSweep(STRATEGIES, doc="Sampling strategy to demonstrate")
 
     def benchmark(self):
-        filename = f"sampling_{self.strategy}"
         function_name = f"example_sampling_{self.strategy}"
+        filename = function_name
         title = f"Sampling: {self.strategy.replace('_', ' ').title()}"
 
         if self.strategy == "uniform":

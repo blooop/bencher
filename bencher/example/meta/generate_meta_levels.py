@@ -48,7 +48,7 @@ class MetaLevels(MetaGeneratorBase):
         self.generate_example(
             title="Level System: Sample Density",
             output_dir=OUTPUT_DIR,
-            filename="levels_sample_density",
+            filename="example_levels_sample_density",
             function_name="example_levels_sample_density",
             imports=imports,
             body=body,

@@ -68,7 +68,7 @@ bench.plot_sweep(
         self.generate_example(
             title="BenchRunner — run multiple benchmarks in one session",
             output_dir=OUTPUT_DIR,
-            filename="workflow_bench_runner",
+            filename="example_workflow_bench_runner",
             function_name="example_workflow_bench_runner",
             imports=imports,
             body=body,
@@ -128,7 +128,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Multiple Sweeps — progressive report with tabs",
             output_dir=OUTPUT_DIR,
-            filename="workflow_multi_sweep",
+            filename="example_workflow_multi_sweep",
             function_name="example_workflow_multi_sweep",
             imports=imports,
             body=body,
@@ -195,7 +195,7 @@ bench.plot_sweep(
         self.generate_example(
             title="InputCfg/OutputCfg — separated input and output classes",
             output_dir=OUTPUT_DIR,
-            filename="workflow_input_output_cfg",
+            filename="example_workflow_input_output_cfg",
             function_name="example_workflow_input_output_cfg",
             imports=imports,
             body=body,
@@ -311,7 +311,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Getting Started — progressive bencher tutorial",
             output_dir=OUTPUT_DIR,
-            filename="workflow_getting_started",
+            filename="example_workflow_getting_started",
             function_name="example_workflow_getting_started",
             imports=imports,
             body=body,

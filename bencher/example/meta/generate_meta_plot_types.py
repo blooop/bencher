@@ -263,8 +263,8 @@ class MetaPlotTypes(MetaGeneratorBase):
 
     def benchmark(self):
         cfg = PLOT_CONFIGS[self.plot_type]
-        filename = f"plot_{self.plot_type}"
         function_name = f"example_plot_{self.plot_type}"
+        filename = function_name
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
         const_vars = "dict(noise_scale=0.15)" if cfg["repeats"] > 1 else None

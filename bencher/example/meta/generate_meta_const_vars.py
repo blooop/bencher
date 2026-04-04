@@ -63,7 +63,7 @@ class MetaConstVars(MetaGeneratorBase):
         self.generate_sweep_example(
             title="Const Vars: Slicing a 3D Space",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_slice",
+            filename="example_const_vars_slice",
             function_name="example_const_vars_slice",
             benchable_class="ServerBenchmark",
             benchable_module=None,
@@ -90,7 +90,7 @@ class MetaConstVars(MetaGeneratorBase):
         self.generate_example(
             title="Const Vars: Comparing Slices",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_compare",
+            filename="example_const_vars_compare",
             function_name="example_const_vars_compare",
             imports=imports,
             body=body,
@@ -119,7 +119,7 @@ class MetaConstVars(MetaGeneratorBase):
         self.generate_example(
             title="Const Vars: Fixing Categorical Parameters",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_categorical",
+            filename="example_const_vars_categorical",
             function_name="example_const_vars_categorical",
             imports=imports,
             body=body,
@@ -132,7 +132,7 @@ class MetaConstVars(MetaGeneratorBase):
         self.generate_sweep_example(
             title="Const Vars: Setting Non-Default Configuration",
             output_dir=OUTPUT_DIR,
-            filename="const_vars_noise",
+            filename="example_const_vars_noise",
             function_name="example_const_vars_noise",
             benchable_class="ServerBenchmark",
             benchable_module=None,
