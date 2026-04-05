@@ -233,6 +233,8 @@ not-iterable = "ignore"
 no-matching-overload = "ignore"
 # Ignore call-non-callable errors
 call-non-callable = "ignore"
+# Ignore call-top-callable errors (callable() guard + call on union types)
+call-top-callable = "ignore"
 # Ignore method override errors
 invalid-method-override = "ignore"
 # Ignore import/reference resolution errors

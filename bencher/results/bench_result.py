@@ -233,7 +233,10 @@ class BenchResult(
         if extra_panels:
             for ep in extra_panels:
                 try:
-                    plot_cols.append(ep(self) if callable(ep) else ep)
+                    if callable(ep):
+                        plot_cols.append(ep(self))
+                    else:
+                        plot_cols.append(ep)
                 except Exception:  # pylint: disable=broad-except
                     name = getattr(ep, "__name__", repr(ep))
                     logging.error("Extra panel %s failed", name, exc_info=True)
