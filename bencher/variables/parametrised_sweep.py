@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import warnings
 from functools import partial
 from typing import Any
@@ -231,7 +230,6 @@ class ParametrizedSweep(Parameterized):
                 "Results will contain only default values. "
                 "Define a benchmark() method on your class."
             )
-            logging.warning(msg)
             warnings.warn(msg, UserWarning, stacklevel=2)
         return self.get_results_values_as_dict()
 

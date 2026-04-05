@@ -74,7 +74,6 @@ def run(
     over_time: bool | None = None,
     backend: str | None = None,
     optimise: int | bool = 0,
-    optimize: int | bool | None = None,
     **kwargs,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
@@ -104,14 +103,9 @@ def run(
         optimise: When > 0, appends optuna analysis plots (parameter importance,
             with/without repeats comparison, best parameters) from the sweep results
             to the report. Defaults to 0 (no optimisation analysis).
-        optimize: American spelling alias for ``optimise``. If both are provided,
-            ``optimize`` takes precedence.
-
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
-    if optimize is not None:
-        optimise = optimize
     from bencher.bench_runner import BenchRunner, _resolve_cache_samples
 
     cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
