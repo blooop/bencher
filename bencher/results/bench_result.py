@@ -1,10 +1,20 @@
 from __future__ import annotations
 from typing import Any, Literal
+from collections.abc import Callable, Sequence
 import logging
 import panel as pn
 from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
+
+try:
+    from bencher.results.rerun_result import RerunResult
+except ModuleNotFoundError:
+
+    class RerunResult:  # pylint: disable=missing-class-docstring
+        pass
+
+
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.video_result import VideoResult
 from bencher.results.volume_result import VolumeResult
@@ -30,6 +40,7 @@ from bencher.utils import listify, resolve_aggregate
 
 
 class BenchResult(
+    RerunResult,
     VolumeResult,
     BoxWhiskerResult,
     ViolinResult,
@@ -198,10 +209,18 @@ class BenchResult(
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
 
-    def to_auto_plots(self, **kwargs) -> pn.panel:
+    def to_auto_plots(
+        self,
+        extra_panels: Sequence[Callable[[BenchResult], pn.viewable.Viewable] | pn.viewable.Viewable]
+        | None = None,
+        **kwargs,
+    ) -> pn.panel:
         """Given the dataset result of a benchmark run, automatically deduce how to plot the data based on the types of variables that were sampled.
 
         Args:
+            extra_panels: Extra panel callables or static panels to inject after the sweep
+                summary and before aggregate/auto plots. Each item is either a
+                callable(BenchResult) -> panel, or a static panel object.
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
@@ -209,17 +228,37 @@ class BenchResult(
         """
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
+
+        # --- Extra panels (user-injected) ---
+        if extra_panels:
+            for ep in extra_panels:
+                try:
+                    if callable(ep):
+                        plot_cols.append(ep(self))
+                    else:
+                        plot_cols.append(ep)
+                except Exception:  # pylint: disable=broad-except
+                    name = getattr(ep, "__name__", repr(ep))
+                    logging.error("Extra panel %s failed", name, exc_info=True)
+
+        # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
-            plot_cols.append(pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**"))
-            # Check whether ALL input dims are being aggregated (scalar result)
             all_input_names = {iv.name for iv in self.bench_cfg.input_vars}
             agg_set = set(self.bench_cfg.agg_over_dims)
-            if all_input_names <= agg_set:
-                # Fully-aggregated scalar: render a summary table instead of
-                # trying to_auto (no plotter handles 0-dimensional data).
+            fully_aggregated = all_input_names <= agg_set
+            if fully_aggregated and not self.bench_cfg.over_time:
+                # All input dims collapsed, no over_time: scalar summary table.
+                plot_cols.append(
+                    pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**")
+                )
                 plot_cols.append(self._scalar_aggregate_summary())
             else:
+                # Partial aggregation (or full with over_time): let to_auto pick
+                # the right plotter for the remaining dims.
+                plot_cols.append(
+                    pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**")
+                )
                 agg_kwargs = {
                     k: v for k, v in kwargs.items() if k not in ("agg_over_dims", "agg_fn")
                 }
@@ -230,6 +269,23 @@ class BenchResult(
                         **agg_kwargs,
                     )
                 )
+
+        # --- Over-time band plot (orthogonal to dimension aggregation) ---
+        if (
+            self.bench_cfg.over_time
+            and "over_time" in self.ds.dims
+            and self.ds.sizes["over_time"] > 1
+            and self.bench_cfg.input_vars
+        ):
+            input_names = [iv.name for iv in self.bench_cfg.input_vars]
+            plot_cols.append(
+                pn.pane.Markdown(
+                    "### Over Time\nPercentile bands across all input dimensions over time"
+                )
+            )
+            plot_cols.append(self.to(BandResult, aggregate=input_names))
+
+        kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
@@ -240,6 +296,7 @@ class BenchResult(
             reduce=ReduceType.REDUCE,
             agg_over_dims=self.bench_cfg.agg_over_dims,
             agg_fn=self.bench_cfg.agg_fn,
+            deep=False,
         )
         rows = []
         for rv in self.bench_cfg.result_vars:

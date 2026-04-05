@@ -28,7 +28,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 import bokeh
 import holoviews as hv
@@ -119,18 +118,16 @@ class SimpleBench(bn.ParametrizedSweep):
     """Simple fixture: 1 float input, 3 result vars."""
 
     x = bn.FloatSweep(default=1.0, bounds=[0, 2], samples=5, doc="x")
-    r1 = bn.ResultVar(units="s", doc="result 1")
-    r2 = bn.ResultVar(units="s", doc="result 2")
-    r3 = bn.ResultVar(units="s", doc="result 3")
+    r1 = bn.ResultFloat(units="s", doc="result 1")
+    r2 = bn.ResultFloat(units="s", doc="result 2")
+    r3 = bn.ResultFloat(units="s", doc="result 3")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.r1 = self.x + self.offset
         self.r2 = self.x * 2 + self.offset
         self.r3 = self.x * 3 + self.offset
-        return super().__call__()
 
 
 class ComplexBench(bn.ParametrizedSweep):
@@ -138,23 +135,21 @@ class ComplexBench(bn.ParametrizedSweep):
 
     x = bn.FloatSweep(default=1.0, bounds=[0, 2], samples=5, doc="x")
     cat = bn.StringSweep(["alpha", "beta", "gamma"], doc="category")
-    r1 = bn.ResultVar(units="s", doc="result 1")
-    r2 = bn.ResultVar(units="s", doc="result 2")
-    r3 = bn.ResultVar(units="s", doc="result 3")
-    r4 = bn.ResultVar(units="s", doc="result 4")
-    r5 = bn.ResultVar(units="s", doc="result 5")
+    r1 = bn.ResultFloat(units="s", doc="result 1")
+    r2 = bn.ResultFloat(units="s", doc="result 2")
+    r3 = bn.ResultFloat(units="s", doc="result 3")
+    r4 = bn.ResultFloat(units="s", doc="result 4")
+    r5 = bn.ResultFloat(units="s", doc="result 5")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         base = self.x + self.offset
         self.r1 = base
         self.r2 = base * 1.5
         self.r3 = base * 2
         self.r4 = base * 0.5
         self.r5 = base * 3
-        return super().__call__()
 
 
 # ---------------------------------------------------------------------------

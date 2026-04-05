@@ -189,7 +189,7 @@ class TestSweepExecutor(unittest.TestCase):
         self.assertIn("thetaa", msg)
         self.assertIn("not found", msg)
         self.assertIn("Available parameters", msg)
-        self.assertIn("theta", msg)  # "Did you mean" suggestion
+        self.assertIn("theta", msg)  # listed in available parameters
 
     def test_convert_vars_to_params_bad_dict_name_gives_helpful_error(self):
         """Test that a typo in a dict variable name gives a helpful KeyError."""
@@ -203,7 +203,7 @@ class TestSweepExecutor(unittest.TestCase):
             )
         msg = str(ctx.exception)
         self.assertIn("thetaa", msg)
-        self.assertIn("Did you mean", msg)
+        self.assertIn("not found", msg)
 
     def test_clear_tag_from_sample_cache_lazy_init(self):
         """Test clear_tag_from_sample_cache initializes cache if None."""

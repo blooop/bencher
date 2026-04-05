@@ -17,17 +17,15 @@ class Rastrigin(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
     y = bn.FloatSweep(default=0, bounds=[-5.12, 5.12], samples=10)
 
-    loss = bn.ResultVar("ul", bn.OptDir.minimize)
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
 
-    def __call__(self, **kwargs) -> dict:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         A = 10
         self.loss = float(
             A * 2
             + (self.x**2 - A * np.cos(2 * np.pi * self.x))
             + (self.y**2 - A * np.cos(2 * np.pi * self.y))
         )
-        return super().__call__(**kwargs)
 
 
 def example_optimize(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:

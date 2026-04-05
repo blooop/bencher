@@ -2,16 +2,51 @@
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
+import random
+import socket
+from pathlib import Path
 from threading import Thread
 
 import panel as pn
 from diskcache import Cache
+from tornado.web import StaticFileHandler
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
 
 logging.basicConfig(level=logging.INFO)
+
+# IANA dynamic/private port range used by _find_free_port()
+_PORT_RANGE_MIN = 49152
+_PORT_RANGE_MAX = 65535
+_PORT_PROBE_ATTEMPTS = 100
+
+
+class _CorsStaticHandler(StaticFileHandler):
+    """A Tornado static file handler that adds CORS headers.
+
+    Required for rerun integration: the rerun web viewer fetches .rrd files
+    from the Panel server.  Without Access-Control-Allow-Origin and OPTIONS
+    preflight handling the browser silently blocks the cross-origin fetch
+    and the viewer shows 0 B.
+
+    Note: ``Allow-Origin: *`` is appropriate here because this server is
+    intended for local development only, not public-facing deployments.
+    """
+
+    def data_received(self, chunk):  # pragma: no cover — abstract in RequestHandler
+        pass
+
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "*")
+
+    def options(self, *_args):
+        self.set_status(204)
+        self.finish()
 
 
 class BenchPlotServer:
@@ -79,6 +114,33 @@ class BenchPlotServer:
             "This benchmark name does not exist in the results cache. Was not able to load the results to plot!  Make sure to run the bencher to generate and save results to the cache"
         )
 
+    @staticmethod
+    def _find_free_port() -> int:
+        """Find a free port by testing random ports in the dynamic/private range.
+
+        Using ``port=0`` with Tornado/Bokeh can fail on some Linux kernels
+        (notably 6.x) because the kernel deterministically assigns the same
+        ephemeral port, causing ``EADDRINUSE`` when a previous server is
+        still running.  Picking a random port from the IANA dynamic range
+        avoids this.
+
+        Note: there is an inherent TOCTOU race between probing the port here
+        and the actual ``bind()`` inside Panel/Bokeh.  In practice the window
+        is very small and the random selection makes collisions unlikely, but
+        callers should be prepared for a rare ``OSError`` on server start.
+        """
+        for _ in range(_PORT_PROBE_ATTEMPTS):
+            port = random.randint(_PORT_RANGE_MIN, _PORT_RANGE_MAX)
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(("0.0.0.0", port))
+                    return port
+            except OSError as exc:
+                if exc.errno == errno.EADDRINUSE:
+                    continue
+                raise
+        raise RuntimeError(f"Could not find a free port after {_PORT_PROBE_ATTEMPTS} attempts")
+
     def serve(
         self,
         bench_name: str,
@@ -99,14 +161,38 @@ class BenchPlotServer:
         for logger in ["tornado", "bokeh"]:
             logging.getLogger(logger).setLevel(logging.WARNING)
 
+        extra = self._rrd_extra_patterns()
+
+        if port is None:
+            port = self._find_free_port()
+
         serve_kwargs = dict(
             title=bench_name,
             threaded=True,
             show=show,
             address="0.0.0.0",
             websocket_origin=["*"],
+            extra_patterns=extra,
+            port=port,
         )
-        if port is not None:
-            serve_kwargs["port"] = port
 
         return pn.serve(plots_instance, **serve_kwargs)
+
+    @staticmethod
+    def _rrd_extra_patterns() -> list:
+        """Return Tornado route patterns for serving .rrd files with CORS headers.
+
+        Mounts ``cachedir/rrd/`` at ``/rrd_static/`` so that the local rerun
+        viewer can fetch ``.rrd`` files from the Panel server.  See the module
+        docstring in ``utils_rerun.py`` for the full architecture explanation.
+        """
+        rrd_dir = Path("cachedir/rrd").resolve()
+        if rrd_dir.is_dir():
+            return [
+                (
+                    r"/rrd_static/(.*)",
+                    _CorsStaticHandler,
+                    {"path": str(rrd_dir)},
+                )
+            ]
+        return []

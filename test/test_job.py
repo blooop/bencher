@@ -10,12 +10,10 @@ class CachedParamExample(bn.CachedParams):
     var1 = bn.FloatSweep(default=0, bounds=[0, 10])
     var2 = bn.IntSweep(default=10, bounds=[0, 10])
 
-    result = bn.ResultVar()
+    result = bn.ResultFloat()
 
-    def __call__(self, **kwargs):
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.result = self.var1 + self.var2 + random.uniform(0, 1)
-        return self.get_results_values_as_dict()
 
 
 class TestJob(unittest.TestCase):

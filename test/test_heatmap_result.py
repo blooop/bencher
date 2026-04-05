@@ -65,15 +65,3 @@ class TestHeatmapResult(unittest.TestCase):
         # Pass list tap_var with use_tap=False to exercise list-handling (lines 99-112)
         result = self.res_2d.to_heatmap(tap_var=[rv], use_tap=False)
         self.assertIsNotNone(result)
-
-    def test_to_heatmap_single(self):
-        rv = self.res_2d.bench_cfg.result_vars[0]
-        result = self.res_2d.to_heatmap_single(rv)
-        self.assertIsNotNone(result)
-
-    def test_to_heatmap_1d_single_filter_fail(self):
-        rv = self.res_1d.bench_cfg.result_vars[0]
-        # With 1 float var, the filter (float_range=VarRange(2, None)) should not match
-        result = self.res_1d.to_heatmap_single(rv, override=False)
-        # Should return the filter match panel (not a heatmap)
-        self.assertIsNotNone(result)

@@ -6,7 +6,6 @@ job creation, and cache management in benchmark runs.
 
 from __future__ import annotations
 
-import difflib
 import logging
 from copy import deepcopy
 from typing import Any, Callable
@@ -19,6 +18,24 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 # Default cache size for benchmark results (100 GB)
 DEFAULT_CACHE_SIZE_BYTES = int(100e9)
+
+
+def _resolve_param(
+    name: str,
+    worker: ParametrizedSweep,
+    var_type: str,
+) -> param.Parameter:
+    """Look up a param.Parameter by *name* on *worker*, raising a helpful KeyError if missing."""
+    all_params = worker.param.objects(instance=False)
+    if name not in all_params:
+        available = sorted(k for k in all_params if k != "name")
+        raise KeyError(
+            f"{var_type.capitalize()} variable '{name}' not found on "
+            f"{type(worker).__name__}. "
+            f"Available parameters: {available}"
+        ) from None
+    return all_params[name]
+
 
 # Metadata keys that must never be forwarded to the worker function.
 _META_KEYS = frozenset({"over_time", "time_event"})
@@ -70,40 +87,6 @@ class SweepExecutor:
         self.cache_size = cache_size
         self.sample_cache: FutureCache | None = None
 
-    @staticmethod
-    def _lookup_param_by_name(
-        worker_class_instance: ParametrizedSweep,
-        name: str,
-        var_type: str,
-    ) -> param.Parameter:
-        """Look up a parameter by name with a helpful error on typos.
-
-        Args:
-            worker_class_instance: The worker class to look up parameters on.
-            name: The parameter name to find.
-            var_type: 'input', 'result', or 'const' — used in the error message.
-
-        Returns:
-            The matching ``param.Parameter``.
-
-        Raises:
-            KeyError: If *name* is not found, listing available names and
-                suggesting close matches via ``difflib.get_close_matches``.
-        """
-        params = worker_class_instance.param.objects(instance=False)
-        if name in params:
-            return params[name]
-        available = sorted(k for k in params if k != "name")
-        close = difflib.get_close_matches(name, available, n=3, cutoff=0.5)
-        msg = (
-            f"{var_type}_vars: parameter '{name}' not found on "
-            f"{type(worker_class_instance).__name__}.\n"
-            f"  Available parameters: {available}"
-        )
-        if close:
-            msg += f"\n  Did you mean: {close}?"
-        raise KeyError(msg)
-
     def convert_vars_to_params(
         self,
         variable: param.Parameter | str | dict | tuple,
@@ -144,15 +127,16 @@ class SweepExecutor:
                     f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
                 )
         if isinstance(variable, str):
-            variable = self._lookup_param_by_name(worker_class_instance, variable, var_type)
+            variable = _resolve_param(variable, worker_class_instance, var_type)
         if isinstance(variable, dict):
-            param_var = self._lookup_param_by_name(
-                worker_class_instance, variable["name"], var_type
-            )
+            var_name = variable["name"]
+            param_var = _resolve_param(var_name, worker_class_instance, var_type)
             if variable.get("values"):
                 param_var = param_var.with_sample_values(variable["values"])
-
-            if variable.get("samples"):
+            elif variable.get("bounds"):
+                b = variable["bounds"]
+                param_var = param_var.with_bounds(b[0], b[1], variable.get("samples"))
+            elif variable.get("samples"):
                 param_var = param_var.with_samples(variable["samples"])
             if variable.get("max_level"):
                 if run_cfg is not None:
@@ -206,7 +190,7 @@ class SweepExecutor:
             cache_name="sample_cache",
             tag_index=True,
             size_limit=self.cache_size,
-            cache_results=run_cfg.cache_samples,
+            cache_samples=run_cfg.cache_samples,
         )
         return self.sample_cache
 

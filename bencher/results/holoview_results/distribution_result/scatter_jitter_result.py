@@ -11,7 +11,7 @@ from bencher.results.holoview_results.distribution_result.distribution_result im
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultVar
+from bencher.variables.results import ResultFloat
 
 
 class ScatterJitterResult(DistributionResult):
@@ -64,7 +64,7 @@ class ScatterJitterResult(DistributionResult):
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
             result_var=result_var,
-            result_types=(ResultVar,),
+            result_types=(ResultFloat,),
             override=override,
             jitter=jitter,
             **kwargs,

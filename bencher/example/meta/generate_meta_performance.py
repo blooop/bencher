@@ -5,8 +5,6 @@ performance tracking across commits via the documentation gallery.
 """
 
 import inspect
-from typing import Any
-
 import bencher as bn
 from bencher.example.example_self_benchmark import BencherSelfBenchmark, TrivialWorkload
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
@@ -24,15 +22,11 @@ class MetaPerformance(MetaGeneratorBase):
 
     example = bn.StringSweep(PERFORMANCE_EXAMPLES, doc="Which performance example to generate")
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
-
+    def benchmark(self):
         if self.example == "perf_self_benchmark":
             self._generate_self_benchmark()
         elif self.example == "perf_self_benchmark_over_time":
             self._generate_self_benchmark_over_time()
-
-        return super().__call__()
 
     def _generate_self_benchmark(self):
         """Generate the self-benchmark example."""
@@ -60,7 +54,7 @@ bench.plot_sweep(
         self.generate_example(
             title="Bencher self-introspection: overhead vs problem size",
             output_dir=OUTPUT_DIR,
-            filename="perf_self_benchmark",
+            filename="example_perf_self_benchmark",
             function_name="example_perf_self_benchmark",
             imports=imports,
             body=body,
@@ -72,8 +66,8 @@ bench.plot_sweep(
         imports = "import bencher as bn"
 
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-run_cfg.over_time = True
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
 run_cfg.auto_plot = False
 time_src = bn.git_time_event()
 bench = BencherSelfBenchmark().to_bench(run_cfg)
@@ -94,11 +88,12 @@ bench.plot_sweep(
         self.generate_example(
             title="Bencher self-introspection: overhead tracked over time",
             output_dir=OUTPUT_DIR,
-            filename="perf_self_benchmark_over_time",
+            filename="example_perf_self_benchmark_over_time",
             function_name="example_perf_self_benchmark_over_time",
             imports=imports,
             body=body,
             class_code=_get_shared_class_code(),
+            run_kwargs={"over_time": True},
         )
 
 

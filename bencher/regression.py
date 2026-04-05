@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import xarray as xr
 
-from bencher.variables.results import OptDir, ResultVar, ResultBool
+from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
 
 # Default thresholds per method — used when the user hasn't explicitly set a threshold.
 _METHOD_DEFAULTS = {
@@ -269,7 +269,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         threshold = _METHOD_DEFAULTS.get(method, 5.0)
 
     for rv in bench_cfg.result_vars:
-        if not isinstance(rv, (ResultVar, ResultBool)):
+        if not isinstance(rv, SCALAR_RESULT_TYPES):
             continue
 
         var_name = rv.name

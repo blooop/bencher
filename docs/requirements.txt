@@ -3,5 +3,7 @@ sphinxcontrib-napoleon
 sphinx-rtd-theme
 sphinx-autoapi
 sphinx_copybutton
+sphinxcontrib-mermaid
 playwright
 Pillow
+rerun-sdk>=0.31.1,<0.32

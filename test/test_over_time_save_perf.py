@@ -3,7 +3,6 @@
 import tempfile
 import time
 from datetime import datetime, timedelta
-from typing import Any
 
 import bencher as bn
 
@@ -12,18 +11,16 @@ class MultiResultBench(bn.ParametrizedSweep):
     """Benchmark with multiple result vars to amplify save cost."""
 
     x = bn.FloatSweep(default=1.0, bounds=[0, 2], samples=3, doc="x")
-    r1 = bn.ResultVar(units="s", doc="r1")
-    r2 = bn.ResultVar(units="s", doc="r2")
-    r3 = bn.ResultVar(units="s", doc="r3")
+    r1 = bn.ResultFloat(units="s", doc="r1")
+    r2 = bn.ResultFloat(units="s", doc="r2")
+    r3 = bn.ResultFloat(units="s", doc="r3")
 
     offset = 0.0
 
-    def __call__(self, **kwargs: Any) -> Any:
-        self.update_params_from_kwargs(**kwargs)
+    def benchmark(self):
         self.r1 = self.x + self.offset
         self.r2 = self.x * 2 + self.offset
         self.r3 = self.x * 3 + self.offset
-        return super().__call__()
 
 
 def _run_and_save(show_agg: bool) -> float:

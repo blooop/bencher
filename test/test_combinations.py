@@ -42,8 +42,8 @@ class BenchCfgTest(bn.ParametrizedSweep):
 class BenchCfgTestOut(bn.ParametrizedSweep):
     """A class for representing all types of result"""
 
-    out1 = bn.ResultVar(doc="generic result variable 1")
-    out2 = bn.ResultVar(doc="generic result variable 2")
+    out1 = bn.ResultFloat(doc="generic result variable 1")
+    out2 = bn.ResultFloat(doc="generic result variable 2")
     outvec2 = bn.ResultVec(2, doc="A generic 2D vector")
     outvec3 = bn.ResultVec(3, doc="A generic 3D vector")
 
@@ -101,7 +101,7 @@ class TestAllCombinations(unittest.TestCase):
     def run_bencher_over_time(
         self,
         input_vars: list[Parameter],
-        result_vars: list[bn.ResultVar],
+        result_vars: list[bn.ResultFloat],
         repeats: int,
     ):
         """Base function used to run benchers with a set of inputs,results and repeats over time"""
@@ -131,14 +131,14 @@ class TestAllCombinations(unittest.TestCase):
     def test_all_input_combinations_over_time_hyp(
         self,
         input_vars: list[Parameter],
-        result_vars: list[bn.ResultVar],
+        result_vars: list[bn.ResultFloat],
         repeats: int,
     ):
         """Use hypothesis to enumerate combinations of inputs to bencher
 
         Args:
             input_vars (list[Parameter]): all possible sets of inputs
-            result_vars (list[bn.ResultVar]): all possible sets of results
+            result_vars (list[bn.ResultFloat]): all possible sets of results
             repeats (int): 1 or 2 repeats (more than 2 repeats hits the same code as 2 repeats)
         """
         self.run_bencher_over_time(input_vars, result_vars, repeats)

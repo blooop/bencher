@@ -1,9 +1,22 @@
 """Tests for the bn.run() convenience function."""
+# pylint: disable=protected-access
 
+import signal
+import sys
 import unittest
+from unittest.mock import MagicMock
 import warnings
 import bencher as bn
 from bencher.example.example_simple_float import SimpleFloat, example_simple_float
+from bencher.run import (
+    _active_runners,
+    _shutdown_all_servers,
+    _sigterm_handler,
+    _install_sigterm_handler,
+)
+
+# bencher.__init__ shadows the module with `from .run import run`, so use sys.modules.
+_run_mod = sys.modules["bencher.run"]
 
 
 class TestRun(unittest.TestCase):
@@ -148,6 +161,86 @@ class TestAddRunDeprecation(unittest.TestCase):
         bench_fn = lambda run_cfg: None  # noqa: E731
         result = bench_runner.add(bench_fn)
         self.assertIs(result, bench_runner)
+
+
+class TestServerShutdown(unittest.TestCase):
+    """Tests for atexit/signal cleanup helpers."""
+
+    def tearDown(self):
+        _active_runners.clear()
+
+    def test_shutdown_all_servers_calls_shutdown(self):
+        """_shutdown_all_servers drains _active_runners via .shutdown()."""
+        mock_runner = MagicMock()
+        _active_runners.append(mock_runner)
+
+        _shutdown_all_servers()
+
+        mock_runner.shutdown.assert_called_once()
+        self.assertEqual(len(_active_runners), 0)
+
+    def test_shutdown_all_servers_noop_when_empty(self):
+        """_shutdown_all_servers is a no-op when there are no active runners."""
+        _shutdown_all_servers()  # should not raise
+        self.assertEqual(len(_active_runners), 0)
+
+    def test_shutdown_all_servers_handles_multiple_runners(self):
+        """_shutdown_all_servers shuts down all runners in LIFO order."""
+        runners = [MagicMock() for _ in range(3)]
+        _active_runners.extend(runners)
+
+        _shutdown_all_servers()
+
+        for r in runners:
+            r.shutdown.assert_called_once()
+        self.assertEqual(len(_active_runners), 0)
+
+    def test_shutdown_continues_on_error(self):
+        """_shutdown_all_servers keeps going if one runner's shutdown() raises."""
+        bad = MagicMock()
+        bad.shutdown.side_effect = RuntimeError("boom")
+        good = MagicMock()
+        _active_runners.extend([good, bad])
+
+        _shutdown_all_servers()
+
+        bad.shutdown.assert_called_once()
+        good.shutdown.assert_called_once()
+        self.assertEqual(len(_active_runners), 0)
+
+    def test_sigterm_handler_calls_shutdown(self):
+        """_sigterm_handler shuts down servers then exits."""
+        mock_runner = MagicMock()
+        _active_runners.append(mock_runner)
+
+        with self.assertRaises(SystemExit) as ctx:
+            _sigterm_handler(signal.SIGTERM, None)
+
+        mock_runner.shutdown.assert_called_once()
+        self.assertEqual(ctx.exception.code, 128 + signal.SIGTERM)
+
+    def test_sigterm_handler_chains_previous(self):
+        """_sigterm_handler calls the previous handler when it is callable."""
+        prev_called = []
+        original_prev = _run_mod._prev_sigterm_handler
+        _run_mod._prev_sigterm_handler = lambda signum, frame: prev_called.append(signum)
+        try:
+            _sigterm_handler(signal.SIGTERM, None)
+            self.assertEqual(prev_called, [signal.SIGTERM])
+        finally:
+            _run_mod._prev_sigterm_handler = original_prev
+
+    def test_install_sigterm_handler_is_idempotent(self):
+        """_install_sigterm_handler installs once then is a no-op."""
+        current = signal.getsignal(signal.SIGTERM)
+        _run_mod._sigterm_installed = False
+        self.addCleanup(signal.signal, signal.SIGTERM, current)
+        self.addCleanup(setattr, _run_mod, "_sigterm_installed", False)
+        _install_sigterm_handler()
+        self.assertTrue(_run_mod._sigterm_installed)
+        # Calling again should be a no-op
+        _install_sigterm_handler()
+        self.assertTrue(_run_mod._sigterm_installed)
 
 
 if __name__ == "__main__":
