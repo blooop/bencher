@@ -63,9 +63,13 @@ class TestExtraPanels(unittest.TestCase):
             raise RuntimeError("boom")
 
         # Should not raise; the error is logged and skipped.
-        plots = res.to_auto_plots(extra_panels=[bad_panel])
+        with self.assertLogs(level="ERROR") as cm:
+            plots = res.to_auto_plots(extra_panels=[bad_panel])
+
         # The broken panel is omitted, but the rest of the output is still produced.
         self.assertGreater(len(plots), 0)
+        # Verify the error was actually logged.
+        self.assertTrue(any("bad_panel" in msg for msg in cm.output))
 
     def test_extra_panels_in_plot_callback(self):
         """extra_panels works when used inside a named plot_callbacks function."""

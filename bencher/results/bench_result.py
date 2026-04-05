@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, Literal
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 import logging
 import panel as pn
 from param import Parameter
@@ -209,7 +209,12 @@ class BenchResult(
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
 
-    def to_auto_plots(self, extra_panels: list[Callable | Any] | None = None, **kwargs) -> pn.panel:
+    def to_auto_plots(
+        self,
+        extra_panels: Sequence[Callable[[BenchResult], pn.viewable.Viewable] | pn.viewable.Viewable]
+        | None = None,
+        **kwargs,
+    ) -> pn.panel:
         """Given the dataset result of a benchmark run, automatically deduce how to plot the data based on the types of variables that were sampled.
 
         Args:
