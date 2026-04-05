@@ -8,7 +8,8 @@ import xarray as xr
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import SCALAR_RESULT_TYPES
-from bencher.results.holoview_results.holoview_result import HoloviewResult, use_tap
+from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
 
 
 class LineResult(HoloviewResult):
@@ -31,7 +32,7 @@ class LineResult(HoloviewResult):
         tap_container: pn.pane.panel = None,
         target_dimension=2,
         override: bool = True,
-        use_tap: bool = use_tap,
+        use_tap: bool = _USE_TAP,
         **kwargs,
     ) -> pn.panel | None:
         """Generates a line plot from benchmark data.
