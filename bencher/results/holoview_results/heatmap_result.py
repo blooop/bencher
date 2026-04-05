@@ -9,7 +9,7 @@ import xarray as xr
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import ResultFloat
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import HoloviewResult, use_tap
 
 
 class HeatmapResult(HoloviewResult):
@@ -33,7 +33,7 @@ class HeatmapResult(HoloviewResult):
         tap_container_direction: pn.Column | pn.Row | None = None,
         target_dimension=2,
         override: bool = True,
-        use_tap: bool | None = None,
+        use_tap: bool = use_tap,
         **kwargs,
     ) -> pn.panel | None:
         """Generates a heatmap visualization from benchmark data.
@@ -146,7 +146,14 @@ class HeatmapResult(HoloviewResult):
         Returns:
             pn.Row: A panel row containing the interactive heatmap and tap info.
         """
-        plot = self.to_heatmap_ds(dataset, result_var).opts(tools=["hover"], xrotation=30, **kwargs)
+        x = self.bench_cfg.input_vars[0].name
+        y = self.bench_cfg.input_vars[1].name
+        C = result_var.name
+        title = f"Heatmap of {result_var.name}"
+        df = dataset[C].to_dataframe().reset_index()
+        plot = hv.HeatMap(df, kdims=[x, y], vdims=[C]).opts(
+            cmap="plasma", title=title, tools=["hover"], xrotation=30, **kwargs
+        )
         return self._build_tap_plot(
             plot, dataset, result_var_plots, container, tap_container_direction
         )

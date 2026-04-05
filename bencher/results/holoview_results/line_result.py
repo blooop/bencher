@@ -8,7 +8,7 @@ import xarray as xr
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import SCALAR_RESULT_TYPES
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import HoloviewResult, use_tap
 
 
 class LineResult(HoloviewResult):
@@ -31,7 +31,7 @@ class LineResult(HoloviewResult):
         tap_container: pn.pane.panel = None,
         target_dimension=2,
         override: bool = True,
-        use_tap: bool | None = None,
+        use_tap: bool = use_tap,
         **kwargs,
     ) -> pn.panel | None:
         """Generates a line plot from benchmark data.
@@ -164,5 +164,13 @@ class LineResult(HoloviewResult):
         Returns:
             pn.Row: A panel row containing the interactive line plot and tap info.
         """
-        plot = self.to_line_ds(dataset, result_var).opts(tools=["hover"], **kwargs)
+        da_plot = dataset[result_var.name]
+        x = self.plt_cnt_cfg.float_vars[0].name
+        by = None
+        if self.plt_cnt_cfg.cat_cnt >= 1:
+            by = self.plt_cnt_cfg.cat_vars[0].name
+        title = self.title_from_ds(da_plot, result_var, **kwargs)
+        plot = da_plot.hvplot.line(x=x, by=by, title=title, **kwargs).opts(
+            tools=["hover"], xrotation=30
+        )
         return self._build_tap_plot(plot, dataset, result_var_plots, container)

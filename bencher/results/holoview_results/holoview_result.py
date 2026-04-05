@@ -434,8 +434,8 @@ class HoloviewResult(VideoResult):
 
         if tap_container_direction is None:
             tap_container_direction = pn.Column
-        bound_plot = tap_container_direction(title, *cont_instances)
-        return pn.Row(plot, bound_plot)
+        bound_plot = tap_container_direction(*cont_instances)
+        return pn.Row(plot, pn.Column(title, bound_plot))
 
     def hv_container_ds(
         self,
