@@ -65,4 +65,3 @@ class TestHeatmapResult(unittest.TestCase):
         # Pass list tap_var with use_tap=False to exercise list-handling (lines 99-112)
         result = self.res_2d.to_heatmap(tap_var=[rv], use_tap=False)
         self.assertIsNotNone(result)
-
