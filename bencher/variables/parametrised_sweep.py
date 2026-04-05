@@ -225,13 +225,12 @@ class ParametrizedSweep(Parameterized):
         # Legacy path: subclass overrides __call__() and handles
         # update_params_from_kwargs + super().__call__() itself.
         if type(self).__call__ is ParametrizedSweep.__call__:
-            warnings.warn(
+            msg = (
                 f"{type(self).__name__} does not override benchmark(). "
                 "Results will contain only default values. "
-                "Define a benchmark() method on your class.",
-                UserWarning,
-                stacklevel=2,
+                "Define a benchmark() method on your class."
             )
+            warnings.warn(msg, UserWarning, stacklevel=2)
         return self.get_results_values_as_dict()
 
     def benchmark(self):

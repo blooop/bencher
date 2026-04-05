@@ -50,25 +50,20 @@ class BenchPolygons(bn.ParametrizedSweep):
 
 
 def example_image(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    run_cfg.cache_results = False
-    bench = bn.Bench("polygons", BenchPolygons(), run_cfg=run_cfg)
-
-    bench.result_vars = ["polygon", "area"]
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, cache_results=False)
+    bench = BenchPolygons().to_bench(run_cfg)
 
     bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
-    # bench.add_plot_callback(bn.BenchResult.to_auto, level=2)
     bench.add_plot_callback(bn.BenchResult.to_panes, level=3)
-    # bench.add_plot_callback(bn.BenchResult.to_panes)
 
     sweep_vars = ["sides", "radius", "linewidth", "color"]
-
-    # sweep_vars = ["sides", "radius" ]
 
     for i in range(1, len(sweep_vars)):
         s = sweep_vars[:i]
         bench.plot_sweep(
             f"Polygons Sweeping {len(s)} Parameters",
             input_vars=s,
+            result_vars=["polygon", "area"],
         )
         bench.report.append(bench.get_result().to_panes())
 

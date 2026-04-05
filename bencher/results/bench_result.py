@@ -208,10 +208,13 @@ class BenchResult(
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
 
-    def to_auto_plots(self, **kwargs) -> pn.panel:
+    def to_auto_plots(self, extra_panels=None, **kwargs) -> pn.panel:
         """Given the dataset result of a benchmark run, automatically deduce how to plot the data based on the types of variables that were sampled.
 
         Args:
+            extra_panels: Extra panel callables or static panels to inject after the sweep
+                summary and before aggregate/auto plots. Each item is either a
+                callable(BenchResult) -> panel, or a static panel object.
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
@@ -219,6 +222,11 @@ class BenchResult(
         """
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
+
+        # --- Extra panels (user-injected) ---
+        if extra_panels:
+            for panel in extra_panels:
+                plot_cols.append(panel(self) if callable(panel) else panel)
 
         # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:

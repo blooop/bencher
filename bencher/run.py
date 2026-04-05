@@ -103,7 +103,6 @@ def run(
         optimise: When > 0, appends optuna analysis plots (parameter importance,
             with/without repeats comparison, best parameters) from the sweep results
             to the report. Defaults to 0 (no optimisation analysis).
-
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """

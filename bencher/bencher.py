@@ -276,13 +276,20 @@ class Bench(BenchPlotServer):
         This is the main function for performing benchmark sweeps. It handles all the setup,
         execution, and visualization of benchmarks based on the input parameters.
 
+        When ``input_vars``, ``result_vars``, and ``const_vars`` are all ``None`` (the default),
+        bencher **auto-discovers** all sweep inputs and result variables from the
+        ``ParametrizedSweep`` class definition. This means a bare ``bench.plot_sweep()`` call
+        with no arguments will sweep every input and collect every result.
+
         Args:
             title (str, optional): The title of the benchmark. If None, a title will be
                 generated based on the input variables. Defaults to None.
             input_vars (list[ParametrizedSweep], optional): Variables to sweep through in the benchmark.
-                If None and worker_class_instance exists, uses input variables from it. Defaults to None.
+                If None and worker_class_instance exists, auto-discovers all input sweep
+                variables from the class. Defaults to None.
             result_vars (list[ParametrizedSweep], optional): Variables to collect results for.
-                If None and worker_class_instance exists, uses result variables from it. Defaults to None.
+                If None and worker_class_instance exists, auto-discovers all result
+                variables from the class. Defaults to None.
             const_vars (list[ParametrizedSweep], optional): Variables to keep constant with specified values.
                 If None and worker_class_instance exists, uses default input values. Defaults to None.
             time_src (datetime, optional): The timestamp for the benchmark. Used for time-series benchmarks.

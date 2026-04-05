@@ -1,9 +1,8 @@
-# How to Use Bencher
+# Getting Started
 
-Bencher is a Python framework for running parameter sweeps and visualizing results.
-You define dimensions (input parameters), a benchmark function, and result variables.
-Bencher computes the Cartesian product of all dimensions, executes each combination,
-and produces interactive reports with auto-detected plot types.
+A practical quick-start reference — install bencher, write your first benchmark, and
+learn the core patterns. For a tour of all features (repeats, over-time tracking,
+optimization), see the [Feature Guide](intro.md).
 
 Install: `pip install holobench`
 
@@ -35,6 +34,19 @@ if __name__ == "__main__":
 
 This produces an interactive HTML report with the appropriate plot type auto-selected
 based on the parameter and result types.
+
+Notice the three stages in the code above:
+
+1. **Problem Definition** — the `MyBenchmark` class declares inputs, results, and the
+   `benchmark()` method
+2. **Sweep Definition** — `plot_sweep()` selects which parameters to vary and which
+   results to collect
+3. **Run Definition** — `bn.run()` sets sampling density (`level`), `repeats`, and
+   output options
+
+Every bencher example follows this pattern. See
+[Architecture Overview](concepts.md#architecture-overview) for a diagram and deeper
+explanation.
 
 ## Core Concept: Dimensions Are Sweep Variables
 
@@ -76,7 +88,9 @@ backend = bn.StringSweep(["cpu", "gpu"])
 ```
 
 Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magnitude
-(e.g., number of retries, repeat count, number of threads).
+(e.g., number of retries, repeat count, number of threads). See the
+[Sampling Strategies gallery](reference/meta/sampling/index) for examples of how different
+sweep types produce different sample distributions.
 
 ## The Level System
 
@@ -100,7 +114,8 @@ bn.run(example_benchmark, level=5)
 ```
 
 See [Concepts: The Level System](concepts.md#the-level-system) for the full formula
-and theory.
+and theory, and the [Level System gallery](reference/meta/levels/index) for an interactive
+demo.
 
 ## Result Types
 
@@ -118,9 +133,12 @@ and theory.
 **Choosing between ResultFloat and ResultBool:** If a result is binary (success/failure,
 reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds to [0, 1]
 and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
+See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
+See the [ResultImage gallery](reference/meta/result_types/result_image/index) and
+[ResultVideo gallery](reference/meta/result_types/result_video/index) for working examples.
 
 ## Running a Sweep
 
@@ -170,6 +188,9 @@ bench.plot_sweep(
     const_vars=dict(backend="cpu"),
 )
 ```
+
+See the [Constant Variables gallery](reference/meta/const_vars/index) for examples of
+slicing, comparing, and pinning parameters.
 
 ## Run Configuration
 
@@ -245,6 +266,9 @@ class ImageBench(bn.ParametrizedSweep):
 - Return the `bn.Bench` instance
 - Use `bn.run(example_func)` in `__main__`
 
+See the [Workflows gallery](reference/meta/workflows/index) for complete examples showing
+this convention in action, including multi-sweep and BenchRunner patterns.
+
 ## Aggregating Dimensions
 
 When sweeping many dimensions, the visualizations can become unwieldy. Use the
@@ -267,6 +291,8 @@ bench.plot_sweep(
   aggregated statistic
 - `aggregate=N` (int) — collapse the last N dimensions
 - `aggregate=["var1", "var2"]` — collapse only the named dimensions
+
+See the [Aggregation gallery](reference/meta/aggregation/index) for examples of each mode.
 
 ## Common Mistakes
 

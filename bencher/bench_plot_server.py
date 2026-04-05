@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
+import random
+import socket
 from pathlib import Path
 from threading import Thread
 
@@ -14,6 +17,11 @@ from tornado.web import StaticFileHandler
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
 
 logging.basicConfig(level=logging.INFO)
+
+# IANA dynamic/private port range used by _find_free_port()
+_PORT_RANGE_MIN = 49152
+_PORT_RANGE_MAX = 65535
+_PORT_PROBE_ATTEMPTS = 100
 
 
 class _CorsStaticHandler(StaticFileHandler):
@@ -106,6 +114,33 @@ class BenchPlotServer:
             "This benchmark name does not exist in the results cache. Was not able to load the results to plot!  Make sure to run the bencher to generate and save results to the cache"
         )
 
+    @staticmethod
+    def _find_free_port() -> int:
+        """Find a free port by testing random ports in the dynamic/private range.
+
+        Using ``port=0`` with Tornado/Bokeh can fail on some Linux kernels
+        (notably 6.x) because the kernel deterministically assigns the same
+        ephemeral port, causing ``EADDRINUSE`` when a previous server is
+        still running.  Picking a random port from the IANA dynamic range
+        avoids this.
+
+        Note: there is an inherent TOCTOU race between probing the port here
+        and the actual ``bind()`` inside Panel/Bokeh.  In practice the window
+        is very small and the random selection makes collisions unlikely, but
+        callers should be prepared for a rare ``OSError`` on server start.
+        """
+        for _ in range(_PORT_PROBE_ATTEMPTS):
+            port = random.randint(_PORT_RANGE_MIN, _PORT_RANGE_MAX)
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(("0.0.0.0", port))
+                    return port
+            except OSError as exc:
+                if exc.errno == errno.EADDRINUSE:
+                    continue
+                raise
+        raise RuntimeError(f"Could not find a free port after {_PORT_PROBE_ATTEMPTS} attempts")
+
     def serve(
         self,
         bench_name: str,
@@ -128,6 +163,9 @@ class BenchPlotServer:
 
         extra = self._rrd_extra_patterns()
 
+        if port is None:
+            port = self._find_free_port()
+
         serve_kwargs = dict(
             title=bench_name,
             threaded=True,
@@ -135,7 +173,7 @@ class BenchPlotServer:
             address="0.0.0.0",
             websocket_origin=["*"],
             extra_patterns=extra,
-            port=port if port is not None else 0,
+            port=port,
         )
 
         return pn.serve(plots_instance, **serve_kwargs)
