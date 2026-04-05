@@ -419,13 +419,26 @@ class Bench(BenchPlotServer):
                     [getattr(i, "name", str(i)) for i in result_vars_in]
                 )
 
-        if run_cfg.level > 0:
+        if run_cfg.samples_per_var is not None:
+            if len(input_vars_in) > 0:
+                input_vars_in = [i.with_samples(run_cfg.samples_per_var) for i in input_vars_in]
+                logging.info(
+                    "samples_per_var=%d applied to %d input variable(s)",
+                    run_cfg.samples_per_var,
+                    len(input_vars_in),
+                )
+        elif run_cfg.level > 0:
             inputs = []
             logging.debug("Input vars prior to level adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
                     inputs.append(i.with_level(run_cfg.level))
                 input_vars_in = inputs
+                logging.info(
+                    "level=%d → %d samples per variable",
+                    run_cfg.level,
+                    BenchRunCfg.level_to_samples(run_cfg.level),
+                )
 
         # if any of the inputs have been include as constants, remove those variables from the list of constants
         with suppress(ValueError, AttributeError):

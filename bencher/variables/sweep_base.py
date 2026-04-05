@@ -13,6 +13,14 @@ from bencher.utils import hash_sha1
 # param and slots don't work easily with multiple inheritance so define here
 shared_slots = ["units", "samples", "optimize"]
 
+# Mapping from level index to number of samples per variable.
+# Level 0 means "use the variable's own samples setting".
+# Levels 1-13 produce geometrically increasing sample counts:
+#   level 1 →  1,  level 2 →  2,  level 3 →  3,  level 4 →  5,
+#   level 5 →  9,  level 6 → 17,  level 7 → 33,  level 8 → 65,
+#   level 9 → 129, level 10 → 257, level 11 → 513, level 12 → 1025, level 13 → 2049
+LEVEL_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+
 
 def describe_variable(
     v: Parameterized, include_samples: bool, value: Any | None = None
@@ -248,8 +256,7 @@ class SweepBase(param.Parameter):
     def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
         assert level >= 1
         # TODO work out if the order can be returned in level order always
-        samples = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
-        sampled = self.with_samples(samples[min(max_level, level)])
+        sampled = self.with_samples(LEVEL_SAMPLES[min(max_level, level)])
         # list() is required because SweepSelector.values() may return a param
         # ListProxy that holds a circular reference back to the original parameter
         # via ListProxy._parameter, which breaks pickle (and therefore multiprocessing).

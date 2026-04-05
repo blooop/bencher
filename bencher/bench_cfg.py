@@ -10,7 +10,7 @@ import panel as pn
 from datetime import datetime
 from copy import deepcopy
 
-from bencher.variables.sweep_base import hash_sha1, describe_variable
+from bencher.variables.sweep_base import hash_sha1, describe_variable, LEVEL_SAMPLES
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
 from bencher.results.composable_container.composable_container_base import PaneLayout
@@ -49,6 +49,29 @@ class BenchRunCfg(BenchPlotSrvCfg):
     It defines numerous parameters that control how benchmark runs are performed, cached,
     and displayed to the user.
 
+    Quick-start examples::
+
+        # Use defaults — each variable uses its own ``samples`` setting:
+        run_cfg = BenchRunCfg()
+
+        # Set a sampling level (geometrically increasing sample counts):
+        run_cfg = BenchRunCfg(level=5)        # 9 samples per variable
+        run_cfg = BenchRunCfg(level=8)        # 65 samples per variable
+
+        # Or set an exact sample count directly:
+        run_cfg = BenchRunCfg(samples_per_var=20)
+
+    Level-to-samples mapping
+    ~~~~~~~~~~~~~~~~~~~~~~~~
+    ====== ======= ====== ======= ====== =======
+    Level  Samples Level  Samples Level  Samples
+    ====== ======= ====== ======= ====== =======
+    1      1       5      9       9      129
+    2      2       6      17      10     257
+    3      3       7      33      11     513
+    4      5       8      65      12     1025
+    ====== ======= ====== ======= ====== =======
+
     Attributes:
         repeats (int): The number of times to sample the inputs
         over_time (bool): If true each time the function is called it will plot a
@@ -62,8 +85,10 @@ class BenchRunCfg(BenchPlotSrvCfg):
                                    every time it is called
         clear_history (bool): Clear historical results
         max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
-        max_slider_points (int): Maximum time points in the over_time slider. Defaults to 10, None means all.
-        show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots. Defaults to False.
+        max_slider_points (int): Maximum time points in the over_time slider. Defaults to 10,
+                                None means all.
+        show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots.
+                                        Defaults to False.
         show_aggregate_plots (bool): Show aggregated BandResult plots when aggregate is set.
         print_pandas (bool): Print a pandas summary of the results to the console
         print_xarray (bool): Print an xarray summary of the results to the console
@@ -85,6 +110,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         headless (bool): Run the benchmarks headlessly
         dry_run (bool): Preview sweep grid without executing the benchmark function
         level (int): Method of defining the number of samples to sweep over
+        samples_per_var (int | None): Explicit sample count per variable (overrides level)
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
         executor (Executors): Executor for running the benchmark
@@ -101,7 +127,21 @@ class BenchRunCfg(BenchPlotSrvCfg):
     level: int = param.Integer(
         default=0,
         bounds=[0, 12],
-        doc="The level parameter is a method of defining the number samples to sweep over in a variable agnostic way, i.e you don't need to specify the number of samples for each variable as they are calculated dynamically from the sampling level.  See example_level.py for more information.",
+        doc="Controls sample count for every sweep variable at once. "
+        "Level 0 (default) uses each variable's own `samples` setting. "
+        "Levels 1-12 override with geometrically increasing counts: "
+        "1→1, 2→2, 3→3, 4→5, 5→9, 6→17, 7→33, 8→65, 9→129, 10→257, 11→513, 12→1025. "
+        "Use `BenchRunCfg.level_to_samples(level)` to query programmatically, "
+        "or set `samples_per_var` for a direct sample count.",
+    )
+
+    samples_per_var: int | None = param.Integer(
+        default=None,
+        allow_None=True,
+        bounds=(1, None),
+        doc="Explicit number of samples per sweep variable. "
+        "When set, takes precedence over `level`. "
+        "Example: samples_per_var=20 gives exactly 20 samples for every input variable.",
     )
 
     executor = param.Selector(
@@ -388,6 +428,29 @@ class BenchRunCfg(BenchPlotSrvCfg):
         )
 
         return BenchRunCfg(**vars(parser.parse_args()))
+
+    @staticmethod
+    def level_to_samples(level: int, max_level: int = 12) -> int:
+        """Return the number of samples-per-variable for a given *level*.
+
+        Args:
+            level: Sampling level (1-12).
+            max_level: Cap applied before lookup. Defaults to 12.
+
+        Returns:
+            The sample count for this level.
+
+        Raises:
+            ValueError: If *level* is out of range.
+
+        Example::
+
+            >>> BenchRunCfg.level_to_samples(5)
+            9
+        """
+        if level < 1 or level >= len(LEVEL_SAMPLES):
+            raise ValueError(f"level must be between 1 and {len(LEVEL_SAMPLES) - 1}, got {level}")
+        return LEVEL_SAMPLES[min(max_level, level)]
 
     def deep(self):
         return deepcopy(self)

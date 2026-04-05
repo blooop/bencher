@@ -5,7 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.79.0] - 2026-04-05
+
+### Added
+- **Rerun visualization backend** with seamless backend switching between holoviews and rerun (#755)
+- `ResultRerun` type for dedicated `.rrd` result handling (#882)
+- `extra_panels` parameter in `to_auto_plots()` for composability (#846)
+- `LEVEL_SAMPLES` constant and `BenchRunCfg.level_to_samples()` for transparent level-to-sample lookups (#834)
+- `samples_per_var` parameter on `BenchRunCfg` — explicit sample count that overrides `level` (#834)
+- Improved `BenchRunCfg` docstring with quick-start examples and level-to-samples table (#834)
+- Mermaid architecture diagram in concepts docs (#852)
+
+### Changed
+- `cache_samples` is now opt-in, with auto-enable for progressive runs (#889)
+- Refactored holoviews backend: unified tap logic, time HoloMaps, and filter usage (#754)
+- All generated example filenames now prefixed with `example_` (#890)
+- Improved error messages, result validation, and example modernization (#895)
+- Improved validation, error messages, and onboarding docs (#887)
+
+### Fixed
+- Type hints and error handling for `extra_panels` (#896)
+- Use random port instead of `port=0` to avoid `EADDRINUSE` on Linux 6.x (#894)
+- Save report synchronously before serving to prevent Bokeh race condition (#893)
+- Coerce sweep bounds/values to declared type (#888)
+- Use CDN viewer for rerun and eagerly init recording (#884)
+
+### Performance
+- `as_completed()` for parallel result streaming (#891)
+- Hoist shared allocations and pre-cache numpy arrays (#886)
+- Bypass xarray indexing and cache `get_input_and_results` (#885)
+- Batch cache lookups to reduce SQLite round-trips (#883)
+- Memoize `to_dataset()` results (#877)
+- Speed up RTD docs build (#892)
+
+## [1.78.0] - 2026-04-02
+
+### Added
+- `share_axis` parameter on `ResultFloat` for independent y-axis scaling (#881)
+- Automatic axiswise scaling when result variables have different units
+
+### Fixed
+- pylint E0606: initialize `axiswise_cb` before conditional
+
+## [1.77.0] - 2026-04-02
+
+### Changed
+- **Renamed `ResultVar` to `ResultFloat`** with deprecation shim (#880)
+- Extract `SCALAR_RESULT_TYPES` constant to DRY up repeated type tuples
+
+### Docs
+- Improve `ResultBool` discoverability in docs and docstrings (#879)
+
+## [1.76.0] - 2026-04-01
+
+### Added
+- `PaneLayout` option for tab-based multi-dimensional container display (#878)
+- Auto-generated examples for container tab layouts
+- Bump rerun-sdk and rerun-notebook to 0.31.x (#867)
+
+### Performance
+- Eliminate redundant deepcopy in `BenchRunner.run()` (#876)
 
 ## [1.75.2] - 2026-03-31
 
