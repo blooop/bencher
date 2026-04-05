@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any, Literal
+from collections.abc import Callable
 import logging
 import panel as pn
 from param import Parameter
@@ -208,7 +209,7 @@ class BenchResult(
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
 
-    def to_auto_plots(self, extra_panels=None, **kwargs) -> pn.panel:
+    def to_auto_plots(self, extra_panels: list[Callable | Any] | None = None, **kwargs) -> pn.panel:
         """Given the dataset result of a benchmark run, automatically deduce how to plot the data based on the types of variables that were sampled.
 
         Args:
@@ -225,8 +226,12 @@ class BenchResult(
 
         # --- Extra panels (user-injected) ---
         if extra_panels:
-            for panel in extra_panels:
-                plot_cols.append(panel(self) if callable(panel) else panel)
+            for ep in extra_panels:
+                try:
+                    plot_cols.append(ep(self) if callable(ep) else ep)
+                except Exception:  # pylint: disable=broad-except
+                    name = getattr(ep, "__name__", repr(ep))
+                    logging.error("Extra panel %s failed", name, exc_info=True)
 
         # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
