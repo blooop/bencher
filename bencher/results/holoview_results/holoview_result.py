@@ -10,6 +10,7 @@ import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
 
 from bencher.utils import (
+    get_nearest_coords1D,
     hmap_canonical_input,
     get_nearest_coords,
     listify,
@@ -109,7 +110,7 @@ class HoloviewResult(VideoResult):
                 res = plot_callback(rv)
                 if res is not None:
                     got_results = True
-                    pt += plot_callback(rv)
+                    pt += res
             return pt if got_results else None
         return plot_callback(self.bench_cfg.result_vars[0])
 
@@ -356,6 +357,85 @@ class HoloviewResult(VideoResult):
             )
 
         return slider_pane
+
+    def _build_tap_plot(
+        self,
+        plot: hv.Element,
+        dataset: xr.Dataset,
+        result_var_plots: list[Parameter],
+        container: type | list[type] | None = None,
+        tap_container_direction: type | None = None,
+    ) -> pn.Row:
+        """Wrap a plot element with interactive PointerXY tap functionality.
+
+        Sets up ``hv.streams.PointerXY`` and ``hv.streams.MouseLeave`` on the
+        given *plot*, updating the supplied containers with the nearest data
+        point values as the user hovers.
+
+        Args:
+            plot: The base HoloViews element to attach tap streams to.
+            dataset: The full xarray Dataset for value look-ups.
+            result_var_plots: Result variables whose values are shown on tap.
+            container: Panel container type(s) for displaying tapped values.
+            tap_container_direction: Layout class (``pn.Row`` or ``pn.Column``)
+                for the tap containers.  Defaults to ``pn.Column``.
+
+        Returns:
+            A ``pn.Row`` containing the interactive plot and tap info panel.
+        """
+        result_var_plots, cont_instances = self.setup_results_and_containers(
+            result_var_plots, container
+        )
+        title = pn.pane.Markdown("Selected: None")
+
+        input_vars = self.bench_cfg.input_vars
+        num_inputs = self.plt_cnt_cfg.inputs_cnt
+        state = dict(x=None, y=None, update=False)
+
+        def _on_pointer(x, y):  # pragma: no cover
+            x_nearest = get_nearest_coords1D(x, dataset.coords[input_vars[0].name].data)
+            if x_nearest != state["x"]:
+                state["x"] = x_nearest
+                state["update"] = True
+
+            if num_inputs > 1:
+                y_nearest = get_nearest_coords1D(y, dataset.coords[input_vars[1].name].data)
+                if y_nearest != state["y"]:
+                    state["y"] = y_nearest
+                    state["update"] = True
+
+            if state["update"]:
+                kdims = {input_vars[0].name: state["x"]}
+                if num_inputs > 1:
+                    kdims[input_vars[1].name] = state["y"]
+
+                if hasattr(plot, "current_key"):
+                    for d, k in zip(plot.kdims, plot.current_key):
+                        kdims[d.name] = k
+                for rv, cont in zip(result_var_plots, cont_instances):
+                    val = dataset[rv.name].sel(**kdims)
+                    item = self.zero_dim_da_to_val(val)
+                    title.object = "Selected: " + ", ".join(f"{k}:{v}" for k, v in kdims.items())
+                    cont.object = item
+                    if hasattr(cont, "autoplay"):
+                        cont.paused = False
+                        cont.time = 0
+                        cont.loop = True
+                        cont.autoplay = True
+                state["update"] = False
+
+        def _on_exit(x, y):  # pragma: no cover  # pylint: disable=unused-argument
+            state["update"] = True
+
+        posxy = hv.streams.PointerXY(source=plot)
+        posxy.add_subscriber(_on_pointer)
+        leave = hv.streams.MouseLeave(source=plot)
+        leave.add_subscriber(_on_exit)
+
+        if tap_container_direction is None:
+            tap_container_direction = pn.Column
+        bound_plot = tap_container_direction(*cont_instances)
+        return pn.Row(plot, pn.Column(title, bound_plot))
 
     def hv_container_ds(
         self,
