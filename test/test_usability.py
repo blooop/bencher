@@ -1,4 +1,4 @@
-"""Tests for usability improvements: level_to_samples, samples_per_var, factories."""
+"""Tests for usability improvements: level_to_samples, samples_per_var."""
 
 import math
 import unittest
@@ -71,34 +71,6 @@ class TestSamplesPerVar(unittest.TestCase):
         ds = result.ds
         # level 3 → 3 samples
         self.assertEqual(len(ds.coords["theta"]), 3)
-
-
-# ---------- Factory classmethods ----------
-
-
-class TestFactories(unittest.TestCase):
-    def test_for_time_series(self):
-        cfg = BenchRunCfg.for_time_series(time_event="v1.0")
-        self.assertTrue(cfg.over_time)
-        self.assertTrue(cfg.cache_samples)
-        self.assertEqual(cfg.time_event, "v1.0")
-
-    def test_for_time_series_allows_overrides(self):
-        cfg = BenchRunCfg.for_time_series(time_event="v2.0", repeats=3)
-        self.assertEqual(cfg.repeats, 3)
-        self.assertTrue(cfg.over_time)
-
-    def test_for_ci(self):
-        cfg = BenchRunCfg.for_ci()
-        self.assertTrue(cfg.headless)
-        self.assertTrue(cfg.cache_samples)
-        self.assertFalse(cfg.show)
-        self.assertFalse(cfg.over_time)
-
-    def test_for_ci_with_time_event(self):
-        cfg = BenchRunCfg.for_ci(time_event="PR-42")
-        self.assertTrue(cfg.over_time)
-        self.assertEqual(cfg.time_event, "PR-42")
 
 
 if __name__ == "__main__":

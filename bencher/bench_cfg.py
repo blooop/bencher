@@ -42,7 +42,12 @@ class BenchPlotSrvCfg(param.Parameterized):
 
 
 class BenchRunCfg(BenchPlotSrvCfg):
-    """Configuration for a benchmark run.
+    """Configuration class for benchmark execution parameters.
+
+    This class extends BenchPlotSrvCfg to provide comprehensive control over benchmark execution,
+    including caching behavior, reporting options, visualization settings, and execution strategy.
+    It defines numerous parameters that control how benchmark runs are performed, cached,
+    and displayed to the user.
 
     Quick-start examples::
 
@@ -56,35 +61,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
         # Or set an exact sample count directly:
         run_cfg = BenchRunCfg(samples_per_var=20)
 
-        # Time-series tracking:
-        run_cfg = BenchRunCfg.for_time_series(time_event="v1.2.3")
-
-        # CI-friendly (headless, no browser, sample caching):
-        run_cfg = BenchRunCfg.for_ci(time_event="PR-42")
-
-    Parameter groups
-    ~~~~~~~~~~~~~~~~
-    **Execution** — ``repeats``, ``level``, ``samples_per_var``, ``executor``,
-    ``nightly``, ``headless``
-
-    **Caching** — ``cache_results``, ``cache_samples``, ``clear_cache``,
-    ``clear_sample_cache``, ``overwrite_sample_cache``, ``only_hash_tag``,
-    ``only_plot``, ``cache_size``
-
-    **Display** — ``print_bench_inputs``, ``print_bench_results``,
-    ``summarise_constant_inputs``, ``print_pandas``, ``print_xarray``,
-    ``serve_pandas``, ``serve_pandas_flat``, ``serve_xarray``
-
-    **Visualization** — ``auto_plot``, ``use_holoview``, ``use_optuna``,
-    ``plot_size``, ``plot_width``, ``plot_height``, ``raise_duplicate_exception``
-
-    **Time & History** — ``over_time``, ``clear_history``, ``max_time_events``,
-    ``max_slider_points``, ``show_aggregated_time_tab``, ``show_aggregate_plots``,
-    ``time_event``, ``run_tag``, ``run_date``
-
-    **Regression Detection** — ``regression_detection``, ``regression_method``,
-    ``regression_threshold``, ``regression_fail``
-
     Level-to-samples mapping
     ~~~~~~~~~~~~~~~~~~~~~~~~
     ====== ======= ====== ======= ====== =======
@@ -95,6 +71,52 @@ class BenchRunCfg(BenchPlotSrvCfg):
     3      3       7      33      11     513
     4      5       8      65      12     1025
     ====== ======= ====== ======= ====== =======
+
+    Attributes:
+        repeats (int): The number of times to sample the inputs
+        over_time (bool): If true each time the function is called it will plot a
+                         timeseries of historical and the latest result
+        use_optuna (bool): Show optuna plots
+        summarise_constant_inputs (bool): Print the inputs that are kept constant
+                                         when describing the sweep parameters
+        print_bench_inputs (bool): Print the inputs to the benchmark function
+                                  every time it is called
+        print_bench_results (bool): Print the results of the benchmark function
+                                   every time it is called
+        clear_history (bool): Clear historical results
+        max_time_events (int): Maximum number of over_time events to retain. None means unlimited.
+        max_slider_points (int): Maximum time points in the over_time slider. Defaults to 10,
+                                None means all.
+        show_aggregated_time_tab (bool): Show the aggregated tab for over_time plots.
+                                        Defaults to False.
+        show_aggregate_plots (bool): Show aggregated BandResult plots when aggregate is set.
+        print_pandas (bool): Print a pandas summary of the results to the console
+        print_xarray (bool): Print an xarray summary of the results to the console
+        serve_pandas (bool): Serve a pandas summary on the results webpage
+        serve_pandas_flat (bool): Serve a flattened pandas summary on the results webpage
+        serve_xarray (bool): Serve an xarray summary on the results webpage
+        auto_plot (bool): Automatically deduce the best type of plot for the results
+        raise_duplicate_exception (bool): Used to debug unique plot names
+        cache_results (bool): Benchmark level cache for completed benchmark results
+        clear_cache (bool): Clear the cache of saved input->output mappings
+        cache_samples (bool): Enable per-sample caching
+        only_hash_tag (bool): Use only the tag hash for cache identification
+        clear_sample_cache (bool): Clear the per-sample cache
+        overwrite_sample_cache (bool): Recalculate and overwrite cached sample values
+        only_plot (bool): Do not calculate benchmarks if no results are found in cache
+        use_holoview (bool): Use holoview for plotting
+        nightly (bool): Run a more extensive set of tests for a nightly benchmark
+        time_event (str): String representation of a sequence over time
+        headless (bool): Run the benchmarks headlessly
+        dry_run (bool): Preview sweep grid without executing the benchmark function
+        level (int): Method of defining the number of samples to sweep over
+        samples_per_var (int | None): Explicit sample count per variable (overrides level)
+        run_tag (str): Tag for isolating cached results
+        run_date (datetime): Date the benchmark run was performed
+        executor (Executors): Executor for running the benchmark
+        plot_size (int): Sets both width and height of the plot
+        plot_width (int): Sets width of the plots
+        plot_height (int): Sets height of the plot
     """
 
     # ==================== EXECUTION PARAMETERS ====================
@@ -432,45 +454,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     def deep(self):
         return deepcopy(self)
-
-    @classmethod
-    def for_time_series(cls, time_event: str, **kwargs) -> BenchRunCfg:
-        """Create a config pre-set for time-series benchmarking.
-
-        Sets ``over_time=True`` and ``cache_samples=True`` so successive
-        invocations accumulate historical data points.
-
-        Args:
-            time_event: Label for this point in time (e.g. git SHA, version, date).
-            **kwargs: Additional overrides forwarded to the constructor.
-
-        Returns:
-            A new ``BenchRunCfg``.
-        """
-        kwargs.setdefault("over_time", True)
-        kwargs.setdefault("cache_samples", True)
-        return cls(time_event=time_event, **kwargs)
-
-    @classmethod
-    def for_ci(cls, time_event: str | None = None, **kwargs) -> BenchRunCfg:
-        """Create a config suitable for CI pipelines.
-
-        Enables headless mode, sample caching, and disables browser launch.
-
-        Args:
-            time_event: Optional label (e.g. PR number, commit SHA).
-            **kwargs: Additional overrides forwarded to the constructor.
-
-        Returns:
-            A new ``BenchRunCfg``.
-        """
-        kwargs.setdefault("headless", True)
-        kwargs.setdefault("cache_samples", True)
-        kwargs.setdefault("show", False)
-        if time_event is not None:
-            kwargs.setdefault("over_time", True)
-            return cls(time_event=time_event, **kwargs)
-        return cls(**kwargs)
 
     @classmethod
     def with_defaults(cls, run_cfg=None, **defaults):
