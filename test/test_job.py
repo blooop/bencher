@@ -6,7 +6,7 @@ from bencher.job import JobFunctionCache
 from hypothesis import given, strategies as st, settings
 
 
-class CachedParamExample(bn.CachedParams):
+class CachedParamExample(bn.ParametrizedSweep):
     var1 = bn.FloatSweep(default=0, bounds=[0, 10])
     var2 = bn.IntSweep(default=10, bounds=[0, 10])
 

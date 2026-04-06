@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import namedtuple
+from contextvars import ContextVar
 import xarray as xr
 import hashlib
 import re
@@ -231,11 +232,20 @@ def color_tuple_to_255(color: tuple[float, float, float]) -> tuple[int, int, int
     )
 
 
-def gen_path(filename: str, folder: str = "generic", suffix: str = ".dat") -> str:
-    """Generate a unique path for a file in the cache directory.
+# Context variable set by the job executor so that gen_path() can place
+# media files into a per-job-key directory.  When set, media files are
+# stored under ``cachedir/{folder}/{filename}/{job_key}/`` and cleanup
+# is a simple ``rmtree`` of that directory.  When unset (standalone usage),
+# falls back to UUID-based naming for backwards compatibility.
+_current_job_key: ContextVar[str | None] = ContextVar("_current_job_key", default=None)
 
-    Creates a directory structure in the 'cachedir' folder and returns a path
-    with a UUID to ensure uniqueness.
+
+def gen_path(filename: str, folder: str = "generic", suffix: str = ".dat") -> str:
+    """Generate a path for a file in the cache directory.
+
+    When called inside a benchmark sweep, files are placed in a per-job-key
+    subdirectory so that cache overwrites can cleanly delete old media.
+    Outside a sweep, falls back to UUID-based naming.
 
     Args:
         filename (str): Base name for the file
@@ -243,8 +253,14 @@ def gen_path(filename: str, folder: str = "generic", suffix: str = ".dat") -> st
         suffix (str, optional): File extension. Defaults to ".dat".
 
     Returns:
-        str: Absolute path to a unique file location
+        str: Absolute path to a file location
     """
+    job_key = _current_job_key.get()
+    if job_key is not None:
+        path = Path(f"cachedir/{folder}/{filename}/{job_key}/")
+        path.mkdir(parents=True, exist_ok=True)
+        return f"{path.absolute().as_posix()}/{filename}{suffix}"
+    # Standalone / legacy fallback: UUID-based
     path = Path(f"cachedir/{folder}/{filename}/")
     path.mkdir(parents=True, exist_ok=True)
     return f"{path.absolute().as_posix()}/{filename}_{uuid4()}{suffix}"

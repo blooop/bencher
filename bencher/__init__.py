@@ -123,7 +123,18 @@ from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 from .sample_order import SampleOrder
-from .caching import CachedParams
+from .cache_management import (
+    DEFAULT_CACHE_SIZE_BYTES,
+    CacheDirStats,
+    CacheStats,
+    cache_stats,
+    print_cache_stats,
+    clear_all,
+    clear_media,
+    clean_orphaned_media,
+    cleanup_job_media,
+    ensure_cache_version,
+)
 from .results.bench_result import BenchResult
 from .results.optimize_result import OptimizeResult
 from .results.video_result import VideoResult

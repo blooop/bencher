@@ -113,6 +113,9 @@ class JobFuture:
         if self.future is not None:
             self.res = self.future.result()
         if self.cache is not None and self.res is not None:
+            from bencher.cache_management import cleanup_job_media
+
+            cleanup_job_media(self.job.job_key)
             self.cache.set(self.job.job_key, self.res, tag=self.job.tag)
         return self.res
 
@@ -120,7 +123,9 @@ class JobFuture:
 def run_job(job: Job) -> dict:
     """Execute a job by calling its function with the provided arguments.
 
-    This is a helper function used primarily by executors to run jobs.
+    Sets the ``_current_job_key`` context variable so that ``gen_path()``
+    places media files into a per-job-key directory for clean lifecycle
+    management.
 
     Args:
         job (Job): The job to execute
@@ -128,7 +133,13 @@ def run_job(job: Job) -> dict:
     Returns:
         dict: The result of the job execution
     """
-    result = job.function(**job.job_args)
+    from bencher.utils import _current_job_key
+
+    token = _current_job_key.set(job.job_key)
+    try:
+        result = job.function(**job.job_args)
+    finally:
+        _current_job_key.reset(token)
     return result
 
 
@@ -194,7 +205,7 @@ class FutureCache:
         overwrite: bool = True,
         cache_name: str = "fcache",
         tag_index: bool = True,
-        size_limit: int = int(20e9),  # 20 GB
+        size_limit: int = int(20e9),  # 20 GB standalone default; overridden by SweepExecutor
         cache_samples: bool = True,  # internal default; public APIs default to False/None
     ):
         """Initialize a FutureCache with optional caching and execution settings.
@@ -309,6 +320,10 @@ class FutureCache:
 
     def clear_tag(self, tag: str) -> None:
         """Remove all cache entries with the specified tag.
+
+        Note: diskcache.evict() does not return the evicted values, so media
+        files referenced by evicted entries may become orphans.  Use
+        ``clean_orphaned_media()`` periodically to reclaim them.
 
         Args:
             tag (str): The tag identifying entries to remove from the cache

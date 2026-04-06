@@ -36,8 +36,7 @@ from bencher.variables.results import (
 from bencher.worker_job import WorkerJob
 from bencher.job import JobFuture
 
-# Default cache size for benchmark results (100 GB)
-DEFAULT_CACHE_SIZE_BYTES = int(100e9)
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 

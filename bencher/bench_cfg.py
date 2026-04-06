@@ -294,10 +294,11 @@ class BenchRunCfg(BenchPlotSrvCfg):
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
     max_time_events: int | None = param.Integer(
-        None,
+        100,
         bounds=[1, None],
         allow_None=True,
-        doc="Maximum number of over_time events to retain. Oldest events are trimmed. None means unlimited.",
+        doc="Maximum number of over_time events to retain. "
+        "Oldest events are trimmed. Set to None for unlimited.",
     )
 
     max_slider_points: int | None = param.Integer(
