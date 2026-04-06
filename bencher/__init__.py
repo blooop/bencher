@@ -128,7 +128,7 @@ from .results.bench_result import BenchResult
 from .results.optimize_result import OptimizeResult
 from .results.video_result import VideoResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
-from .bench_report import BenchReport, GithubPagesCfg
+from .bench_report import BenchReport, GithubPagesCfg, Publisher
 from .job import Executors
 from .sweep_timings import SweepTimings
 from .video_writer import VideoWriter, add_image

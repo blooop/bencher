@@ -69,6 +69,7 @@ def run(
     show: bool = True,
     save: bool = False,
     publish: bool = False,
+    publisher: object | None = None,
     grouped: bool = False,
     cache_samples: bool | None = None,
     over_time: bool | None = None,
@@ -95,6 +96,9 @@ def run(
         show: Show results in browser. Defaults to True.
         save: Save results to disk. Defaults to False.
         publish: Publish results. Defaults to False.
+        publisher: An object conforming to the :class:`Publisher` protocol (i.e. has a
+            ``publish(report)`` method).  Passed to :class:`BenchRunner` and called
+            after each progressive iteration when *publish* is ``True``.
         grouped: Produce a single HTML page with all benchmarks. Defaults to False.
         cache_samples: Use sample cache for previous results. None (default) auto-enables
             for progressive runs. Pass False to disable even for progressive runs.
@@ -162,7 +166,7 @@ def run(
         target = _with_optimise
 
     # Case 1: Callable — wrap in BenchRunner
-    br = BenchRunner(target)
+    br = BenchRunner(target, publisher=publisher)
     try:
         results = br.run(
             level=level,
