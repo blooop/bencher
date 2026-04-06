@@ -378,41 +378,40 @@ class ResultCollector:
             logger.info("clearing history")
         else:
             logger.info(f"checking historical key: {bench_cfg_hash}")
-            if bench_cfg_hash in c:
-                logger.info("loading historical data from cache")
-                try:
-                    ds_old = c[bench_cfg_hash]
-                except (
-                    AttributeError,
-                    TypeError,
-                    ModuleNotFoundError,
-                    ImportError,
-                ) as exc:
-                    logger.warning(
-                        "Failed to deserialize cached history (%s: %s). "
-                        "Discarding stale cache entry and continuing with fresh data.",
-                        type(exc).__name__,
-                        exc,
-                    )
-                    try:
-                        del c[bench_cfg_hash]
-                    except Exception:
-                        pass
-                else:
-                    if (
-                        "over_time" in ds_old.dims
-                        and "over_time" in dataset.dims
-                        and ds_old["over_time"].dtype != dataset["over_time"].dtype
-                    ):
-                        logger.warning(
-                            "Discarding incompatible historical data "
-                            "(over_time dtype changed: "
-                            f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
-                        )
-                    else:
-                        dataset = xr.concat([ds_old, dataset], "over_time")
-            else:
+            try:
+                ds_old = c[bench_cfg_hash]
+            except KeyError:
                 logger.info("did not detect any historical data")
+            except (
+                AttributeError,
+                TypeError,
+                ModuleNotFoundError,
+                ImportError,
+            ) as exc:
+                logger.warning(
+                    "Failed to deserialize cached history (%s: %s). "
+                    "Discarding stale cache entry and continuing with fresh data.",
+                    type(exc).__name__,
+                    exc,
+                )
+                try:
+                    del c[bench_cfg_hash]
+                except (OSError, KeyError) as del_exc:
+                    logger.debug("Could not remove stale cache entry: %s", del_exc)
+            else:
+                logger.info("loading historical data from cache")
+                if (
+                    "over_time" in ds_old.dims
+                    and "over_time" in dataset.dims
+                    and ds_old["over_time"].dtype != dataset["over_time"].dtype
+                ):
+                    logger.warning(
+                        "Discarding incompatible historical data "
+                        "(over_time dtype changed: "
+                        f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
+                    )
+                else:
+                    dataset = xr.concat([ds_old, dataset], "over_time")
 
         if max_time_events is not None and "over_time" in dataset.dims:
             if dataset.sizes["over_time"] > max_time_events:

@@ -550,10 +550,14 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c[unique_hash] = dataset
 
         with mock.patch.object(
-            type(c), "__getitem__", side_effect=AttributeError("'List' object has no attribute 'class_'")
+            type(c),
+            "__getitem__",
+            side_effect=AttributeError("'List' object has no attribute 'class_'"),
         ):
             with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-                result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
+                result = self.collector.load_history_cache(
+                    dataset, unique_hash, clear_history=False
+                )
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
@@ -570,10 +574,14 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c[unique_hash] = dataset
 
         with mock.patch.object(
-            type(c), "__getitem__", side_effect=ModuleNotFoundError("No module named 'old_dep'")
+            type(c),
+            "__getitem__",
+            side_effect=ModuleNotFoundError("No module named 'old_dep'"),
         ):
             with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-                result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
+                result = self.collector.load_history_cache(
+                    dataset, unique_hash, clear_history=False
+                )
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
