@@ -113,9 +113,10 @@ class JobFuture:
         if self.future is not None:
             self.res = self.future.result()
         if self.cache is not None and self.res is not None:
-            from bencher.cache_management import cleanup_job_media
+            if self.job.job_key in self.cache:
+                from bencher.cache_management import cleanup_job_media
 
-            cleanup_job_media(self.job.job_key)
+                cleanup_job_media(self.job.job_key)
             self.cache.set(self.job.job_key, self.res, tag=self.job.tag)
         return self.res
 

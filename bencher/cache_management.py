@@ -99,7 +99,8 @@ class CacheDirStats:
     size_bytes: int
     size_limit_bytes: int | None = None
 
-    def _fmt_size(self, n: int) -> str:
+    @staticmethod
+    def _fmt_size(n: int) -> str:
         if n >= 1_000_000_000:
             return f"{n / 1_000_000_000:.1f} GB"
         if n >= 1_000_000:
@@ -132,9 +133,8 @@ class CacheStats:
             lines.append("Media directories:")
             for s in self.media:
                 lines.append(s.summary_line())
-        total = CacheDirStats("", 0, self.total_bytes)
         lines.append("-" * 60)
-        lines.append(f"  Total: {total._fmt_size(self.total_bytes)}")
+        lines.append(f"  Total: {CacheDirStats._fmt_size(self.total_bytes)}")
         return "\n".join(lines)
 
 
@@ -250,6 +250,8 @@ def clear_media(cachedir: str = "cachedir") -> tuple[int, int]:
                 freed += f.stat().st_size
                 f.unlink()
                 deleted += 1
+        # Remove the now-empty directory tree
+        shutil.rmtree(media_path)
     logger.info("Deleted %d media files, freed %d bytes", deleted, freed)
     return deleted, freed
 

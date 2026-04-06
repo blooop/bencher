@@ -251,32 +251,43 @@ class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
         self.assertEqual(len(orphans), 0)
 
 
-class TestGenPathWithJobKey(unittest.TestCase):
+class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
     """Test that gen_path uses per-job-key directories when context is set."""
 
     def test_with_job_key_context(self):
+        from unittest.mock import patch
+
         from bencher.utils import gen_path, _current_job_key
 
         token = _current_job_key.set("test_key_123")
         try:
-            path = gen_path("myfile", "testfolder", ".txt")
+            with patch("bencher.utils.Path") as MockPath:
+                # Redirect cachedir into our tmpdir
+                real_path = Path
+                MockPath.side_effect = lambda p: real_path(
+                    p.replace("cachedir/", f"{self.cachedir}/", 1)
+                )
+                path = gen_path("myfile", "testfolder", ".txt")
             self.assertIn("test_key_123", path)
             self.assertTrue(path.endswith("myfile.txt"))
-            self.assertNotIn("_", Path(path).stem.split("myfile")[-1])
+            self.assertNotIn("_", real_path(path).stem.split("myfile")[-1])
         finally:
             _current_job_key.reset(token)
-            # Cleanup
-            shutil.rmtree("cachedir/testfolder", ignore_errors=True)
 
     def test_without_job_key_context(self):
+        from unittest.mock import patch
+
         from bencher.utils import gen_path
 
-        path = gen_path("myfile", "testfolder2", ".txt")
+        with patch("bencher.utils.Path") as MockPath:
+            real_path = Path
+            MockPath.side_effect = lambda p: real_path(
+                p.replace("cachedir/", f"{self.cachedir}/", 1)
+            )
+            path = gen_path("myfile", "testfolder2", ".txt")
         # Should have UUID in it (legacy fallback)
-        stem = Path(path).stem
+        stem = real_path(path).stem
         self.assertIn("myfile_", stem)
-        # Cleanup
-        shutil.rmtree("cachedir/testfolder2", ignore_errors=True)
 
 
 if __name__ == "__main__":
