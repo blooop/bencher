@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
-| Total tests | 1220 |
-| Total time | 107.25s |
-| Mean | 0.0879s |
+| Total tests | 1222 |
+| Total time | 110.62s |
+| Mean | 0.0905s |
 | Median | 0.0020s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 21.423 |
-| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.126 |
-| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 3.911 |
-| `test.test_generated_examples::test_generated_example[cartesian_animation/example_cartesian_animation.py]` | 3.063 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 3.030 |
-| `test.test_generated_examples::test_generated_example[result_types/result_image/example_result_image_to_video.py]` | 2.843 |
-| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.459 |
-| `test.test_time_event_curve.TestTimeEventCurvePlot::test_curve_with_string_time_src_and_cat` | 1.093 |
-| `test.test_optuna_result.TestOptunaReportRouting::test_optuna_plots_per_sweep_tab` | 1.088 |
-| `test.test_optuna_result.TestOptunaResult::test_collect_optuna_plots_with_repeats` | 1.056 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 22.054 |
+| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.362 |
+| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 4.092 |
+| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 3.194 |
+| `test.test_generated_examples::test_generated_example[cartesian_animation/example_cartesian_animation.py]` | 3.081 |
+| `test.test_generated_examples::test_generated_example[result_types/result_image/example_result_image_to_video.py]` | 3.002 |
+| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.466 |
+| `test.test_bench_runner.TestBenchRunner::test_benchrunner_unified_interface` | 1.436 |
+| `test.test_over_time_repeats.TestHeatmapResultOverTime::test_heatmap_over_time_no_repeats` | 1.147 |
+| `test.test_optuna_result.TestOptunaResult::test_collect_optuna_plots_with_repeats` | 1.062 |
 
 </details>
