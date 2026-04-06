@@ -232,20 +232,56 @@ body {{ margin:0; font-family:sans-serif; }}
 iframe {{ width:100%; border:none; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>
-<iframe id="content" src="{first_src}"></iframe>
+<iframe id="content" src="{first_src}"
+        style="overflow:hidden;"></iframe>
 <script>
 function switchTab(btn, src) {{
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('content').src = src;
 }}
-function resizeIframe() {{
+var _lastH = 0;
+function resizeInner() {{
   var f = document.getElementById('content');
-  f.style.height = (window.innerHeight - f.getBoundingClientRect().top) + 'px';
+  try {{
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {{
+      doc.documentElement.style.overflowY = 'hidden';
+      doc.body.style.overflowY = 'hidden';
+      var availW = f.clientWidth;
+      var contentW = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
+      var MIN_ZOOM = 0.5;
+      if (availW > 0 && contentW > availW) {{
+        doc.body.style.zoom = Math.max(MIN_ZOOM, availW / contentW).toString();
+      }} else {{
+        doc.body.style.zoom = '1';
+      }}
+      var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+      if (h > 0 && h !== _lastH) {{ _lastH = h; f.style.height = h + 'px'; }}
+    }}
+  }} catch(e) {{}}
 }}
-window.addEventListener('resize', resizeIframe);
-document.getElementById('content').addEventListener('load', resizeIframe);
-resizeIframe();
+var _resizeTimer = null;
+function debouncedResize() {{
+  if (_resizeTimer) return;
+  _resizeTimer = setTimeout(function() {{ _resizeTimer = null; resizeInner(); }}, 100);
+}}
+function setupObserver() {{
+  var f = document.getElementById('content');
+  try {{
+    var doc = f.contentDocument || f.contentWindow.document;
+    if (doc && doc.body) {{
+      new ResizeObserver(debouncedResize).observe(doc.body);
+    }}
+  }} catch(e) {{}}
+}}
+window.addEventListener('resize', resizeInner);
+document.getElementById('content').addEventListener('load', function() {{
+  resizeInner(); setupObserver();
+  setTimeout(resizeInner, 500);
+  setTimeout(resizeInner, 1500);
+}});
+resizeInner();
 </script></body></html>"""
         with open(index_path, "w", encoding="utf-8") as f:
             f.write(page)

@@ -181,7 +181,9 @@ def _find_example_function(mod):
     return None
 
 
-def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, page=None):
+def run_example_and_save(
+    py_file: Path, docs_dir: Path, generated_dir: Path, page=None, skip_thumbnails=False
+):
     """Run a Python example, save HTML report, write RST doc page.
 
     Returns a metadata dict for gallery generation, or None on failure.
@@ -226,16 +228,20 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     exec_elapsed = time.perf_counter() - t_exec_start
     print(f"  Saved report to {report_path} ({exec_elapsed:.1f}s)")
 
-    # Generate thumbnail screenshot
+    # Generate thumbnail screenshot (skipped on RTD to save build time)
     thumb_path = THUMBS_EXTRA_DIR / rel.parent / f"{stem}.png"
-    t_thumb_start = time.perf_counter()
-    try:
-        _take_thumbnail(Path(report_path), thumb_path, page=page)
-        thumb_elapsed = time.perf_counter() - t_thumb_start
-        print(f"  Saved thumbnail to {thumb_path} ({thumb_elapsed:.1f}s)")
-    except Exception as e:  # pylint: disable=broad-except
-        thumb_elapsed = time.perf_counter() - t_thumb_start
-        print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
+    thumb_elapsed = 0.0
+    if skip_thumbnails:
+        print(f"  Skipping thumbnail for {stem}")
+    else:
+        t_thumb_start = time.perf_counter()
+        try:
+            _take_thumbnail(Path(report_path), thumb_path, page=page)
+            thumb_elapsed = time.perf_counter() - t_thumb_start
+            print(f"  Saved thumbnail to {thumb_path} ({thumb_elapsed:.1f}s)")
+        except Exception as e:  # pylint: disable=broad-except
+            thumb_elapsed = time.perf_counter() - t_thumb_start
+            print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
     # Generate RST that shows source + embeds HTML report
     title_text = stem.replace("_", " ").title()
@@ -247,13 +253,21 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
     rst_content = f"""{title_text}
 {underline}
 
+.. raw:: html
+
+   <details class="bencher-source" open>
+   <summary>Source Code</summary>
+
 .. literalinclude:: {py_rel}
    :language: python
 
 .. raw:: html
 
-   <iframe src="_reports/{stem}/{bench.bench_name}.html"
-           style="width:100%; height:800px; border:1px solid #ccc;">
+   </details>
+
+   <iframe class="bencher-report"
+           src="_reports/{stem}/{bench.bench_name}.html"
+           style="width:100%; min-height:400px; border:none; overflow:hidden;">
    </iframe>
 """
     rst_path.write_text(rst_content, encoding="utf-8")
@@ -572,6 +586,7 @@ def generate_all() -> list[Path]:
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
 
     # Create a shared playwright browser for thumbnail screenshots
+    skip_thumbnails = False
     pw_context = None
     browser = None
     page = None
@@ -583,13 +598,20 @@ def generate_all() -> list[Path]:
         page = browser.new_page(viewport={"width": 1200, "height": 900})
         print("Started headless Chromium for thumbnail screenshots")
     except Exception as e:  # pylint: disable=broad-except
+        skip_thumbnails = True
         print(f"WARNING: Could not start browser for thumbnails: {e}")
 
     try:
         for py_file in py_files:
             if py_file.name == "__init__.py":
                 continue
-            meta = run_example_and_save(py_file, META_DOCS_DIR, GENERATED_DIR, page=page)
+            meta = run_example_and_save(
+                py_file,
+                META_DOCS_DIR,
+                GENERATED_DIR,
+                page=page,
+                skip_thumbnails=skip_thumbnails,
+            )
             if meta:
                 examples_metadata.append(meta)
     finally:
