@@ -453,7 +453,9 @@ class BenchRunner:
                 report.publish_gh_pages(p.github_user, p.repo_name, p.folder_name, p.branch_name)
             elif isinstance(self.publisher, Publisher):
                 try:
-                    self.publisher.publish(report)
+                    url = self.publisher.publish(report)
+                    if url:
+                        logging.info("Benchmark report published at %s", url)
                 except Exception:  # pylint: disable=broad-except
                     logging.exception("Publisher.publish() failed — continuing benchmark")
             else:

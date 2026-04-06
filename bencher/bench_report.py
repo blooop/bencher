@@ -39,7 +39,7 @@ class Publisher(Protocol):
 
     def publish(self, report: "BenchReport") -> str | None:
         """Publish a report. Returns the published URL, or None."""
-        ...
+        ...  # pylint: disable=unnecessary-ellipsis
 
 
 @dataclass

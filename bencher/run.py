@@ -14,6 +14,7 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 if TYPE_CHECKING:
     from bencher.bencher import Bench
+    from bencher.bench_report import GithubPagesCfg, Publisher
 
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
@@ -69,7 +70,7 @@ def run(
     show: bool = True,
     save: bool = False,
     publish: bool = False,
-    publisher: object | None = None,
+    publisher: Publisher | GithubPagesCfg | Callable | None = None,
     grouped: bool = False,
     cache_samples: bool | None = None,
     over_time: bool | None = None,
