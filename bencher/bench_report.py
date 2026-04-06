@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import logging
 import time
-from typing import Callable
+from typing import Callable, Protocol, runtime_checkable
 import os
 from pathlib import Path
 import tempfile
@@ -26,6 +26,20 @@ def _inline_rrd(html_path: Path) -> None:
         inline_rrd_iframes(html_path)
     except Exception:  # pylint: disable=broad-except
         logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
+
+
+@runtime_checkable
+class Publisher(Protocol):
+    """Generic publisher protocol for benchmark reports.
+
+    Any object with a ``publish(report)`` method satisfies this protocol.
+    Downstream projects implement their own publishers (GCS, S3, etc.)
+    without modifying bencher.
+    """
+
+    def publish(self, report: "BenchReport") -> str | None:
+        """Publish a report. Returns the published URL, or None."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
 
 @dataclass

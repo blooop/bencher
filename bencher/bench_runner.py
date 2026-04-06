@@ -8,7 +8,7 @@ from datetime import datetime
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
-from bencher.bench_report import BenchReport, GithubPagesCfg
+from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
 from copy import deepcopy
 
 
@@ -451,6 +451,13 @@ class BenchRunner:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
                 report.publish_gh_pages(p.github_user, p.repo_name, p.folder_name, p.branch_name)
+            elif isinstance(self.publisher, Publisher):
+                try:
+                    url = self.publisher.publish(report)
+                    if url:
+                        logging.info("Benchmark report published at %s", url)
+                except Exception:  # pylint: disable=broad-except
+                    logging.exception("Publisher.publish() failed — continuing benchmark")
             else:
                 report.publish(remote_callback=self.publisher, debug=debug)
         if show:
