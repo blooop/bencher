@@ -173,7 +173,8 @@ docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs"
 cache-stats = "python -c 'from bencher.cache_management import print_cache_stats; print_cache_stats()'"
 cache-clear = "python -c 'from bencher.cache_management import clear_all; clear_all()'"
 cache-clear-media = "python -c 'from bencher.cache_management import clear_media; clear_media()'"
-cache-clean-orphans = "python -c 'from bencher.cache_management import clean_orphaned_media; clean_orphaned_media(dry_run=False)'"
+cache-clean-orphans = "python -c 'from bencher.cache_management import clean_orphaned_media; o,b=clean_orphaned_media(dry_run=True); print(f\"{len(o)} orphans ({b} bytes). Run cache-clean-orphans-force to delete.\")'"
+cache-clean-orphans-force = "python -c 'from bencher.cache_management import clean_orphaned_media; clean_orphaned_media(dry_run=False)'"
 
 #demos
 benchmark-save = "python scripts/benchmark_save.py"

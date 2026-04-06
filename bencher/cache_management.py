@@ -44,6 +44,26 @@ _MANAGED_CACHES = ("sample_cache", "benchmark_inputs", "history")
 # Top-level media folders that contain per-job-key subdirectories.
 _MEDIA_FOLDERS = ("img", "vid", "rrd", "generic")
 
+# File extensions recognized as media when cleaning up legacy (pre-v2) files.
+_MEDIA_EXTENSIONS = frozenset(
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".svg",
+        ".webp",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".webm",
+        ".mkv",
+        ".rrd",
+        ".dat",
+    }
+)
+
 
 # ---------------------------------------------------------------------------
 # Cache versioning
@@ -90,6 +110,17 @@ def ensure_cache_version(cachedir: str = "cachedir") -> None:
 # ---------------------------------------------------------------------------
 
 
+def _fmt_size(n: int) -> str:
+    """Format a byte count as a human-readable string."""
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f} GB"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f} MB"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f} KB"
+    return f"{n} B"
+
+
 @dataclasses.dataclass
 class CacheDirStats:
     """Statistics for a single cache or media directory."""
@@ -99,19 +130,9 @@ class CacheDirStats:
     size_bytes: int
     size_limit_bytes: int | None = None
 
-    @staticmethod
-    def _fmt_size(n: int) -> str:
-        if n >= 1_000_000_000:
-            return f"{n / 1_000_000_000:.1f} GB"
-        if n >= 1_000_000:
-            return f"{n / 1_000_000:.1f} MB"
-        if n >= 1_000:
-            return f"{n / 1_000:.1f} KB"
-        return f"{n} B"
-
     def summary_line(self) -> str:
-        size = self._fmt_size(self.size_bytes)
-        limit = f" / {self._fmt_size(self.size_limit_bytes)}" if self.size_limit_bytes else ""
+        size = _fmt_size(self.size_bytes)
+        limit = f" / {_fmt_size(self.size_limit_bytes)}" if self.size_limit_bytes else ""
         return f"  {self.path:<30} {self.entries:>6} entries  {size:>10}{limit}"
 
 
@@ -134,7 +155,7 @@ class CacheStats:
             for s in self.media:
                 lines.append(s.summary_line())
         lines.append("-" * 60)
-        lines.append(f"  Total: {CacheDirStats._fmt_size(self.total_bytes)}")
+        lines.append(f"  Total: {_fmt_size(self.total_bytes)}")
         return "\n".join(lines)
 
 
@@ -163,11 +184,11 @@ def cache_stats(cachedir: str = "cachedir") -> CacheStats:
                 c = Cache(str(cache_path))
                 vol = c.volume()
                 entries = len(c)
-                limit = c.size_limit
+                limit = getattr(c, "size_limit", None)
                 c.close()
                 managed.append(CacheDirStats(name, entries, vol, size_limit_bytes=limit))
                 total += vol
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 logger.warning("Could not open cache %s: %s", cache_path, exc)
         else:
             managed.append(CacheDirStats(name, 0, 0, size_limit_bytes=None))
@@ -271,7 +292,7 @@ def _collect_sample_cache_keys(cachedir: str) -> set[str]:
         keys = set(c.iterkeys())
         c.close()
         return keys
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         logger.warning("Could not open sample cache: %s", exc)
         return set()
 
@@ -305,8 +326,9 @@ def clean_orphaned_media(cachedir: str = "cachedir", dry_run: bool = True) -> tu
                 continue
             for job_dir in subfolder.iterdir():
                 if not job_dir.is_dir():
-                    # Legacy UUID-named file — always an orphan in v2
-                    if job_dir.is_file():
+                    # Legacy UUID-named file — orphan in v2, but only
+                    # touch files with recognized media extensions.
+                    if job_dir.is_file() and job_dir.suffix.lower() in _MEDIA_EXTENSIONS:
                         size = job_dir.stat().st_size
                         orphans.append(str(job_dir))
                         orphan_bytes += size

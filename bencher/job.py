@@ -113,10 +113,6 @@ class JobFuture:
         if self.future is not None:
             self.res = self.future.result()
         if self.cache is not None and self.res is not None:
-            if self.job.job_key in self.cache:
-                from bencher.cache_management import cleanup_job_media
-
-                cleanup_job_media(self.job.job_key)
             self.cache.set(self.job.job_key, self.res, tag=self.job.tag)
         return self.res
 
@@ -134,12 +130,14 @@ def run_job(job: Job) -> dict:
     Returns:
         dict: The result of the job execution
     """
-    from bencher.utils import _current_job_key
+    from bencher.utils import _current_job_key, _gen_path_counter
 
     token = _current_job_key.set(job.job_key)
+    counter_token = _gen_path_counter.set({})
     try:
         result = job.function(**job.job_args)
     finally:
+        _gen_path_counter.reset(counter_token)
         _current_job_key.reset(token)
     return result
 
@@ -280,6 +278,13 @@ class FutureCache:
                 return JobFuture(job=job, res=cached)
 
         self.worker_fn_call_count += 1
+
+        # Clean up stale media from the previous run *before* executing,
+        # so the new run can write fresh files into the same job-key dir.
+        if self.cache is not None and job.job_key in self.cache:
+            from bencher.cache_management import cleanup_job_media
+
+            cleanup_job_media(job.job_key)
 
         if self.executor_type is not Executors.SERIAL:
             if self.executor is None:

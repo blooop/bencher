@@ -239,6 +239,10 @@ def color_tuple_to_255(color: tuple[float, float, float]) -> tuple[int, int, int
 # falls back to UUID-based naming for backwards compatibility.
 _current_job_key: ContextVar[str | None] = ContextVar("_current_job_key", default=None)
 
+# Counter to disambiguate multiple gen_path() calls with the same arguments
+# within a single job execution.
+_gen_path_counter: ContextVar[dict] = ContextVar("_gen_path_counter", default=None)
+
 
 def gen_path(filename: str, folder: str = "generic", suffix: str = ".dat") -> str:
     """Generate a path for a file in the cache directory.
@@ -259,7 +263,16 @@ def gen_path(filename: str, folder: str = "generic", suffix: str = ".dat") -> st
     if job_key is not None:
         path = Path(f"cachedir/{folder}/{filename}/{job_key}/")
         path.mkdir(parents=True, exist_ok=True)
-        return f"{path.absolute().as_posix()}/{filename}{suffix}"
+        # Disambiguate multiple calls with the same arguments in one job.
+        counters = _gen_path_counter.get()
+        if counters is None:
+            counters = {}
+            _gen_path_counter.set(counters)
+        base = f"{folder}/{filename}"
+        n = counters.get(base, 0)
+        counters[base] = n + 1
+        stem = filename if n == 0 else f"{filename}_{n}"
+        return f"{path.absolute().as_posix()}/{stem}{suffix}"
     # Standalone / legacy fallback: UUID-based
     path = Path(f"cachedir/{folder}/{filename}/")
     path.mkdir(parents=True, exist_ok=True)

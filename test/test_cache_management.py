@@ -223,7 +223,7 @@ class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
         # Job key NOT in cache — orphan
         self._make_job_media("rrd", "rrd", "dead_key")
 
-        orphans, orphan_bytes = clean_orphaned_media(self.cachedir, dry_run=True)
+        orphans, _ = clean_orphaned_media(self.cachedir, dry_run=True)
         self.assertEqual(len(orphans), 1)
         self.assertIn("dead_key", orphans[0])
         # Still exists (dry run)
@@ -237,11 +237,23 @@ class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):
         self.assertFalse(Path(self.cachedir, "vid/vid/orphan_key").exists())
 
     def test_cleans_legacy_files(self):
-        """Legacy UUID-named files (pre-v2) are always treated as orphans."""
+        """Legacy UUID-named files (pre-v2) with media extensions are treated as orphans."""
         self._make_legacy_media("img", "img")
 
         orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
         self.assertEqual(len(orphans), 1)
+
+    def test_ignores_non_media_files(self):
+        """Non-media files like .gitkeep should not be treated as orphans."""
+        full_dir = os.path.join(self.cachedir, "img", "polygon")
+        os.makedirs(full_dir, exist_ok=True)
+        gitkeep = os.path.join(full_dir, ".gitkeep")
+        with open(gitkeep, "w", encoding="utf-8") as f:
+            f.write("")
+
+        orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
+        self.assertEqual(len(orphans), 0)
+        self.assertTrue(os.path.exists(gitkeep))
 
     def test_no_orphans(self):
         self._make_managed_cache("sample_cache", {"my_key": "val"})
@@ -257,9 +269,10 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
     def test_with_job_key_context(self):
         from unittest.mock import patch
 
-        from bencher.utils import gen_path, _current_job_key
+        from bencher.utils import gen_path, _current_job_key, _gen_path_counter
 
         token = _current_job_key.set("test_key_123")
+        counter_token = _gen_path_counter.set({})
         try:
             with patch("bencher.utils.Path") as MockPath:
                 # Redirect cachedir into our tmpdir
@@ -272,6 +285,30 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
             self.assertTrue(path.endswith("myfile.txt"))
             self.assertNotIn("_", real_path(path).stem.split("myfile")[-1])
         finally:
+            _gen_path_counter.reset(counter_token)
+            _current_job_key.reset(token)
+
+    def test_multiple_calls_same_args_get_unique_paths(self):
+        """Multiple gen_path calls with the same args should not collide."""
+        from unittest.mock import patch
+
+        from bencher.utils import gen_path, _current_job_key, _gen_path_counter
+
+        token = _current_job_key.set("dup_key")
+        counter_token = _gen_path_counter.set({})
+        try:
+            with patch("bencher.utils.Path") as MockPath:
+                real_path = Path
+                MockPath.side_effect = lambda p: real_path(
+                    p.replace("cachedir/", f"{self.cachedir}/", 1)
+                )
+                path1 = gen_path("img", "img", ".png")
+                path2 = gen_path("img", "img", ".png")
+            self.assertNotEqual(path1, path2)
+            self.assertTrue(path1.endswith("img.png"))
+            self.assertTrue(path2.endswith("img_1.png"))
+        finally:
+            _gen_path_counter.reset(counter_token)
             _current_job_key.reset(token)
 
     def test_without_job_key_context(self):

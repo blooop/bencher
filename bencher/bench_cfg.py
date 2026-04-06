@@ -294,7 +294,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
     max_time_events: int | None = param.Integer(
-        100,
+        None,
         bounds=[1, None],
         allow_None=True,
         doc="Maximum number of over_time events to retain. "
