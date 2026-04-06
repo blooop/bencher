@@ -530,6 +530,65 @@ class TestDTypeIncompatibleHistory(unittest.TestCase):
         self.assertTrue(result.equals(ds_datetime))
 
 
+class TestStaleCacheRecovery(unittest.TestCase):
+    """Test that load_history_cache recovers from stale/corrupt cache entries."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def test_attribute_error_on_deserialize_discards_entry(self):
+        """A stale cache entry that raises AttributeError should be discarded gracefully."""
+        unique_hash = f"stale-cache-{uuid.uuid4()}"
+        dataset = xr.Dataset(
+            {"var": (["x", "over_time"], [[1.0]])},
+            coords={"over_time": ["v1"]},
+        )
+
+        # Seed the cache with a value, then make __getitem__ raise AttributeError
+        # to simulate a pickle deserialization failure from an upgraded dependency.
+        c = self.collector.get_history_cache()
+        c[unique_hash] = dataset
+
+        with mock.patch.object(
+            type(c),
+            "__getitem__",
+            side_effect=AttributeError("'List' object has no attribute 'class_'"),
+        ):
+            with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
+                result = self.collector.load_history_cache(
+                    dataset, unique_hash, clear_history=False
+                )
+
+        self.assertTrue(
+            any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
+        )
+        # Should return the fresh dataset without crashing
+        self.assertTrue(result.equals(dataset))
+
+    def test_module_not_found_error_on_deserialize_discards_entry(self):
+        """A cache entry referencing a removed module should be discarded gracefully."""
+        unique_hash = f"stale-module-{uuid.uuid4()}"
+        dataset = xr.Dataset({"var": (["x"], [1, 2, 3])})
+
+        c = self.collector.get_history_cache()
+        c[unique_hash] = dataset
+
+        with mock.patch.object(
+            type(c),
+            "__getitem__",
+            side_effect=ModuleNotFoundError("No module named 'old_dep'"),
+        ):
+            with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
+                result = self.collector.load_history_cache(
+                    dataset, unique_hash, clear_history=False
+                )
+
+        self.assertTrue(
+            any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
+        )
+        self.assertTrue(result.equals(dataset))
+
+
 class TestLazyCartesianProduct(unittest.TestCase):
     """Tests for lazy Cartesian product in setup_dataset (plan item 1.3)."""
 
