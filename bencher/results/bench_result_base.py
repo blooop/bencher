@@ -22,7 +22,13 @@ from bencher.variables.results import ResultFloat, ResultBool
 from bencher.plotting.plot_filter import VarRange, PlotFilter
 from bencher.utils import listify
 
-from bencher.variables.results import ResultReference, ResultDataSet, ResultVideo, ResultImage
+from bencher.variables.results import (
+    ResultReference,
+    ResultDataSet,
+    ResultVideo,
+    ResultImage,
+    ResultRerun,
+)
 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
@@ -841,7 +847,7 @@ class BenchResultBase:
                 self.bench_cfg.over_time
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
-                and isinstance(result_var, (ResultVideo, ResultImage))
+                and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
             ):
                 return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
@@ -856,10 +862,10 @@ class BenchResultBase:
         """Create a Panel slider widget for over_time with pane-type results.
 
         Numeric plot callbacks (line, heatmap) handle over_time internally via
-        hv.HoloMap.  Pane-type callbacks (images, videos) cannot use HoloMap
-        because they produce Panel objects, not HoloViews elements.  This method
-        builds per-time-point content and swaps it via a Bokeh JS callback to
-        avoid Panel's ImportedStyleSheet document-ownership errors.
+        hv.HoloMap.  Pane-type callbacks (images, videos, rerun) cannot use
+        HoloMap because they produce Panel objects, not HoloViews elements.
+        This method builds per-time-point content and swaps it via a Bokeh JS
+        callback to avoid Panel's ImportedStyleSheet document-ownership errors.
         """
         import base64
         from bokeh.models import CustomJS, Div
@@ -870,23 +876,31 @@ class BenchResultBase:
         is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
         labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
 
-        # Pre-read file contents as base64 data-URIs for each time point.
-        # Bokeh HTML-escapes the JSON blob in the HTML page, but un-escapes
-        # it at runtime via .textContent, so full HTML tags work correctly.
+        is_rerun = isinstance(result_var, ResultRerun)
         is_video = isinstance(result_var, ResultVideo)
-        mime = "video/mp4" if is_video else "image/png"
+
+        if is_rerun:
+            from bencher.utils_rrd import rrd_file_to_pane
+
         html_list = []
         for t in time_vals:
             ds_t = dataset.sel(over_time=t)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            with open(filepath, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode()
-            if is_video:
-                html_list.append(
-                    f'<video controls src="data:{mime};base64,{b64}" style="background:white"/>'
-                )
+            if is_rerun:
+                pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
+                html_list.append(pane.object)
             else:
-                html_list.append(f'<img src="data:{mime};base64,{b64}" style="background:white"/>')
+                mime = "video/mp4" if is_video else "image/png"
+                with open(filepath, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                if is_video:
+                    html_list.append(
+                        f'<video controls src="data:{mime};base64,{b64}" style="background:white"/>'
+                    )
+                else:
+                    html_list.append(
+                        f'<img src="data:{mime};base64,{b64}" style="background:white"/>'
+                    )
 
         # Pure Bokeh Div + Slider with a JS callback — no Panel pane updates,
         # so no ImportedStyleSheet sharing across documents.
