@@ -241,7 +241,7 @@ _current_job_key: ContextVar[str | None] = ContextVar("_current_job_key", defaul
 
 # Counter to disambiguate multiple gen_path() calls with the same arguments
 # within a single job execution.
-_gen_path_counter: ContextVar[dict] = ContextVar("_gen_path_counter", default=None)
+_gen_path_counter: ContextVar[dict | None] = ContextVar("_gen_path_counter", default=None)
 
 
 def gen_path(filename: str, folder: str = "generic", suffix: str = ".dat") -> str:

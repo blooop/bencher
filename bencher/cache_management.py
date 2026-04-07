@@ -234,8 +234,12 @@ def cleanup_job_media(job_key: str, cachedir: str = "cachedir") -> int:
                 continue
             job_dir = subfolder / job_key
             if job_dir.is_dir():
-                shutil.rmtree(job_dir)
-                removed += 1
+                try:
+                    shutil.rmtree(job_dir)
+                except OSError as exc:
+                    logger.warning("Failed to remove job media directory %s: %s", job_dir, exc)
+                else:
+                    removed += 1
     return removed
 
 
@@ -266,12 +270,9 @@ def clear_media(cachedir: str = "cachedir") -> tuple[int, int]:
         media_path = root / folder
         if not media_path.is_dir():
             continue
-        for f in media_path.rglob("*"):
-            if f.is_file():
-                freed += f.stat().st_size
-                f.unlink()
-                deleted += 1
-        # Remove the now-empty directory tree
+        count, size = _dir_stats(media_path)
+        deleted += count
+        freed += size
         shutil.rmtree(media_path)
     logger.info("Deleted %d media files, freed %d bytes", deleted, freed)
     return deleted, freed

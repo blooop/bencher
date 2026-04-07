@@ -132,6 +132,8 @@ def run_job(job: Job) -> dict:
     """
     from bencher.utils import _current_job_key, _gen_path_counter
 
+    # Set context *inside* run_job (not in the caller) so it works with
+    # ProcessPoolExecutor — child processes start with a fresh ContextVar.
     token = _current_job_key.set(job.job_key)
     counter_token = _gen_path_counter.set({})
     try:
@@ -284,7 +286,10 @@ class FutureCache:
         if self.cache is not None and job.job_key in self.cache:
             from bencher.cache_management import cleanup_job_media
 
-            cleanup_job_media(job.job_key)
+            try:
+                cleanup_job_media(job.job_key)
+            except OSError as exc:
+                logging.warning("Failed to clean up media for job %s: %s", job.job_key, exc)
 
         if self.executor_type is not Executors.SERIAL:
             if self.executor is None:
