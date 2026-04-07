@@ -879,13 +879,14 @@ class BenchResultBase:
         is_rerun = isinstance(result_var, ResultRerun)
         is_video = isinstance(result_var, ResultVideo)
 
+        if is_rerun:
+            from bencher.utils_rrd import rrd_file_to_pane
+
         html_list = []
         for t in time_vals:
             ds_t = dataset.sel(over_time=t)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
             if is_rerun:
-                from bencher.utils_rrd import rrd_file_to_pane
-
                 pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
                 html_list.append(pane.object)
             else:

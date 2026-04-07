@@ -7,18 +7,24 @@ from datetime import datetime, timedelta
 
 
 class SweepRerunOverTime(bn.ParametrizedSweep):
-    """Sweep that logs 2D geometry to rerun, tracked over time."""
+    """Sweep that logs 2D geometry to rerun, tracked over time.
+
+    Set ``time_offset`` before each :meth:`plot_sweep` call to vary the
+    benchmark output across time snapshots.  It is a plain float (not a
+    sweep parameter) so it is not included in the Cartesian product — the
+    over_time axis is controlled externally via ``time_src``.
+    """
 
     theta = bn.FloatSweep(default=1, bounds=[1, 4], doc="Box half-size", units="rad", samples=5)
 
     out_sin = bn.ResultFloat(units="v", doc="sin of theta")
     out_rerun = bn.ResultRerun(width=400, height=400)
 
-    _time_offset = 0.0
+    time_offset = 0.0
 
     def benchmark(self):
-        self.out_sin = math.sin(self.theta) + self._time_offset
-        rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta + self._time_offset, 1]))
+        self.out_sin = math.sin(self.theta) + self.time_offset
+        rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta + self.time_offset, 1]))
         self.out_rerun = bn.capture_rerun_window()
 
 
@@ -32,7 +38,7 @@ def example_rerun_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     _base_time = datetime(2000, 1, 1)
 
     for i, offset in enumerate([0.0, 0.5, 1.0]):
-        benchable._time_offset = offset
+        benchable.time_offset = offset
         run_cfg.clear_cache = True
         run_cfg.clear_history = i == 0
         bench.plot_sweep(
