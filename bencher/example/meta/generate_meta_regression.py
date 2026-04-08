@@ -69,16 +69,6 @@ for i, offset in enumerate(releases):
         time_src=base_time + timedelta(seconds=i),
         aggregate=True,
     )
-
-# Regression report
-res = bench.results[-1]
-report = res.regression_report
-if report is not None:
-    print("\\n" + report.summary())
-    regressed = [r.variable for r in report.regressed_variables]
-    if regressed:
-        lines = [report.summary(), "", f"Regressed variables: {regressed}"]
-        bench.report.append_markdown("\\n".join(lines), name="Regression Report")
 """
         self.generate_example(
             title="Regression detection — percentage threshold over time",

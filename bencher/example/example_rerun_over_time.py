@@ -32,7 +32,7 @@ class ControlSystemSweep(bn.ParametrizedSweep):
     out_settling_time = bn.ResultFloat(
         units="s", doc="2% settling time", direction=bn.OptDir.minimize
     )
-    out_rerun = bn.ResultRerun(width=400, height=400, max_time_events=1)
+    out_rerun = bn.ResultRerun(width=400, height=400, max_time_events=2)
 
     _degradation = 0.0  # set externally per over-time snapshot
 
@@ -53,7 +53,7 @@ class ControlSystemSweep(bn.ParametrizedSweep):
             dy += ddy * dt
             y += dy * dt
 
-            rr.set_time("step", sequence=step)
+            rr.set_time("time_s", duration=step * dt)
             rr.log("response/output", rr.Scalars(y))
             rr.log("response/setpoint", rr.Scalars(setpoint))
             rr.log("response/error", rr.Scalars(abs(y - setpoint)))

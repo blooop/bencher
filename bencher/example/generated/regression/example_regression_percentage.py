@@ -51,16 +51,6 @@ def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
             aggregate=True,
         )
 
-    # Regression report
-    res = bench.results[-1]
-    report = res.regression_report
-    if report is not None:
-        print("\n" + report.summary())
-        regressed = [r.variable for r in report.regressed_variables]
-        if regressed:
-            lines = [report.summary(), "", f"Regressed variables: {regressed}"]
-            bench.report.append_markdown("\n".join(lines), name="Regression Report")
-
     return bench
 
 

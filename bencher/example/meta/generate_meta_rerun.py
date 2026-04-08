@@ -104,23 +104,10 @@ for i, deg in enumerate(degradations):
     bench.plot_sweep(
         "controller_monitoring",
         input_vars=[],
-        result_vars=["out_overshoot", "out_settling_time"],
+        result_vars=["out_overshoot", "out_settling_time", "out_rerun"],
         run_cfg=run_cfg,
         time_src=base_time + timedelta(days=i),
     )
-
-# Show rerun captures as a grid (slider does not work for rerun iframes)
-bench.plot_sweep(
-    "rerun_captures",
-    input_vars=[],
-    result_vars=["out_rerun"],
-)
-
-res = bench.results[-2]
-report = res.regression_report
-if report is not None:
-    print("\\n" + report.summary())
-    report.append_to_report(bench.report)
 """
         self.generate_example(
             title="Rerun Regression — detect controller degradation over time",

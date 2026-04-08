@@ -850,6 +850,8 @@ class BenchResultBase:
                 and dataset.sizes["over_time"] > 1
                 and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
             ):
+                if isinstance(result_var, ResultRerun):
+                    return self._pane_over_time_grid(dataset, result_var)
                 return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
@@ -931,6 +933,36 @@ class BenchResultBase:
         bokeh_slider.js_on_change("value", callback)
 
         return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
+
+    def _pane_over_time_grid(
+        self,
+        dataset: xr.Dataset,
+        result_var,
+    ) -> pn.GridBox:
+        """Render over_time pane results as a grid of labelled panels.
+
+        Used for ResultRerun because rerun iframes do not work inside a
+        Bokeh JS slider swap (the viewer fails to re-initialise).
+        """
+        from bencher.utils_rrd import rrd_file_to_pane
+
+        time_vals = list(dataset.coords["over_time"].values)
+        over_time_dtype = dataset.coords["over_time"].dtype
+        is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
+        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+
+        items = []
+        for t, label in zip(time_vals, labels):
+            ds_t = dataset.sel(over_time=t)
+            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
+            if filepath == "NAN" or not os.path.isfile(filepath):
+                continue
+            pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+
+        if not items:
+            return pn.pane.Markdown("*No rerun data available*")
+        return pn.Row(*items)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve

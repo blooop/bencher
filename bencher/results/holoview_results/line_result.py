@@ -54,7 +54,12 @@ class LineResult(HoloviewResult):
         elif not isinstance(tap_var, list):
             tap_var = [tap_var]
 
-        if len(tap_var) == 0 or self.plt_cnt_cfg.inputs_cnt > 1 or not use_tap:
+        if (
+            len(tap_var) == 0
+            or self.plt_cnt_cfg.inputs_cnt > 1
+            or not use_tap
+            or not self.plt_cnt_cfg.float_vars
+        ):
             line_cb = self.to_line_ds
         else:
             line_cb = partial(
