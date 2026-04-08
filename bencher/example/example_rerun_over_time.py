@@ -1,64 +1,69 @@
-"""Example: Rerun window captures with over_time tracking.
+"""Support module: second-order control system step response for rerun examples.
 
-Demonstrates per-variable ``max_time_events``: the ``out_rerun`` result
-keeps only the 2 most recent time snapshots (because .rrd files are large),
-while ``out_sin`` retains the full history.
+Simulates a damped oscillator responding to a unit step input.  Each
+``benchmark()`` call logs the response trajectory, setpoint, and tracking
+error into a rerun recording over 200 time steps, then extracts two scalar
+metrics — peak overshoot and 2 % settling time.
+
+Used by the generated rerun examples (regression monitoring and parameter
+sweep) via ``from bencher.example.example_rerun_over_time import ControlSystemSweep``.
 """
 
-import math
 import rerun as rr
+
 import bencher as bn
-from datetime import datetime, timedelta
 
 
-class SweepRerunOverTime(bn.ParametrizedSweep):
-    """Sweep that logs 2D geometry to rerun, tracked over time.
+class ControlSystemSweep(bn.ParametrizedSweep):
+    """Second-order control system step response.
 
-    Set ``time_offset`` before each :meth:`plot_sweep` call to vary the
-    benchmark output across time snapshots.  It is a plain float (not a
-    sweep parameter) so it is not included in the Cartesian product — the
-    over_time axis is controlled externally via ``time_src``.
-
-    ``out_rerun`` uses ``max_time_events=2`` so only the 2 most recent
-    .rrd snapshots are kept, while ``out_sin`` retains the full history.
+    ``damping_ratio`` controls the oscillatory behaviour.  A value of 1.0 is
+    critically damped; below 1.0 the system overshoots, above 1.0 it is
+    sluggish.  ``_degradation`` is set externally between over-time snapshots
+    to simulate controller tuning drift — it reduces the effective damping,
+    making the response progressively worse.
     """
 
-    theta = bn.FloatSweep(default=1, bounds=[1, 4], doc="Box half-size", units="rad", samples=5)
+    damping_ratio = bn.FloatSweep(
+        default=0.7, bounds=[0.1, 2.0], doc="Damping ratio (zeta)", samples=5
+    )
 
-    out_sin = bn.ResultFloat(units="v", doc="sin of theta")
-    out_rerun = bn.ResultRerun(width=400, height=400, max_time_events=2)
+    out_overshoot = bn.ResultFloat(units="%", doc="peak overshoot", direction=bn.OptDir.minimize)
+    out_settling_time = bn.ResultFloat(
+        units="s", doc="2% settling time", direction=bn.OptDir.minimize
+    )
+    out_rerun = bn.ResultRerun(width=400, height=400, max_time_events=1)
 
-    time_offset = 0.0
+    _degradation = 0.0  # set externally per over-time snapshot
 
     def benchmark(self):
-        self.out_sin = math.sin(self.theta) + self.time_offset
-        rr.log("boxes", rr.Boxes2D(half_sizes=[self.theta + self.time_offset, 1]))
+        n_steps = 200
+        dt = 0.02
+        setpoint = 1.0
+        omega_n = 5.0  # natural frequency  rad/s
+        zeta = max(0.05, self.damping_ratio - self._degradation)
+
+        y, dy = 0.0, 0.0
+        peak_overshoot = 0.0
+        last_unsettled = 0
+
+        for step in range(n_steps):
+            # Simple Euler integration of  y'' + 2*zeta*wn*y' + wn^2*y = wn^2*setpoint
+            ddy = omega_n**2 * (setpoint - y) - 2 * zeta * omega_n * dy
+            dy += ddy * dt
+            y += dy * dt
+
+            rr.set_time("step", sequence=step)
+            rr.log("response/output", rr.Scalars(y))
+            rr.log("response/setpoint", rr.Scalars(setpoint))
+            rr.log("response/error", rr.Scalars(abs(y - setpoint)))
+
+            overshoot = (y - setpoint) / setpoint * 100
+            peak_overshoot = max(peak_overshoot, overshoot)
+
+            if abs(y - setpoint) > 0.02 * setpoint:
+                last_unsettled = step
+
+        self.out_overshoot = max(0.0, peak_overshoot)
+        self.out_settling_time = last_unsettled * dt
         self.out_rerun = bn.capture_rerun_window()
-
-
-def example_rerun_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Rerun window captures tracked over multiple time snapshots."""
-    if run_cfg is None:
-        run_cfg = bn.BenchRunCfg()
-
-    benchable = SweepRerunOverTime()
-    bench = benchable.to_bench(run_cfg)
-    _base_time = datetime(2000, 1, 1)
-
-    for i, offset in enumerate([0.0, 0.5, 1.0, 1.5, 2.0]):
-        benchable.time_offset = offset
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
-        bench.plot_sweep(
-            "over_time",
-            input_vars=["theta"],
-            result_vars=["out_sin", "out_rerun"],
-            run_cfg=run_cfg,
-            time_src=_base_time + timedelta(seconds=i),
-        )
-
-    return bench
-
-
-if __name__ == "__main__":
-    bn.run(example_rerun_over_time, level=3, over_time=True)
