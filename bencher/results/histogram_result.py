@@ -30,15 +30,19 @@ class HistogramResult(HoloviewResult):
             pn.pane.Pane | None: A panel containing the histogram if data is appropriate,
                                   otherwise returns filter match results.
         """
-        # With multiple over_time entries, the line plot shows the time series;
-        # histograms are only useful for the initial snapshot.
+        # With multiple over_time entries, show histogram only for the latest snapshot;
+        # the line plot already covers the full time series.
+        ds = self.ds
         if (
             self.bench_cfg.over_time
-            and "over_time" in self.ds.dims
-            and self.ds.sizes["over_time"] > 1
+            and "over_time" in ds.dims
+            and ds.sizes["over_time"] > 1
         ):
-            return None
-        return self.filter(
+            ds = ds.isel(over_time=-1)
+        self_snapshot = self.__class__.__new__(self.__class__)
+        self_snapshot.__dict__.update(self.__dict__)
+        self_snapshot.ds = ds
+        return self_snapshot.filter(
             self.to_histogram_ds,
             float_range=VarRange(0, 0),
             cat_range=VarRange(0, None),

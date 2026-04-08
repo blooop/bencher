@@ -938,7 +938,7 @@ class BenchResultBase:
         self,
         dataset: xr.Dataset,
         result_var,
-    ) -> pn.GridBox:
+    ) -> pn.Row | pn.pane.Markdown:
         """Render over_time pane results as a grid of labelled panels.
 
         Used for ResultRerun because rerun iframes do not work inside a

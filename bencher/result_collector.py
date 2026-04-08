@@ -51,7 +51,9 @@ def _sentinel_for_result_var(rv):
         return np.nan
     if isinstance(rv, (ResultReference, ResultDataSet)):
         return -1
-    if isinstance(rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer)):
+    if isinstance(
+        rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer, ResultRerun)
+    ):
         return "NAN"
     if isinstance(rv, ResultVec):
         return np.nan
@@ -61,16 +63,19 @@ def _sentinel_for_result_var(rv):
 def _null_old_entries(dataset, rv, var_limit):
     """Null out over_time entries older than *var_limit* for a single result variable.
 
-    For media types (images, videos, .rrd files), the referenced files are deleted
-    from disk before the entry is set to sentinel.
+    For media types (images, videos, .rrd files), the referenced files are
+    collected for deferred deletion.  Returns a list of file paths to delete;
+    the caller is responsible for removing them *after* the dataset is cached
+    so that a cache-write failure does not leave orphaned sentinel values.
     """
     n_time = dataset.sizes["over_time"]
     if var_limit is None or var_limit >= n_time:
-        return
+        return []
 
     null_count = n_time - var_limit
     sentinel = _sentinel_for_result_var(rv)
     is_media = isinstance(rv, _MEDIA_RESULT_TYPES)
+    files_to_delete = []
 
     if isinstance(rv, ResultVec):
         var_names = rv.index_names()
@@ -87,12 +92,10 @@ def _null_old_entries(dataset, rv, var_limit):
                 old_slice = da.isel(over_time=t_idx).values
                 for val in np.asarray(old_slice).flat:
                     if val != sentinel and isinstance(val, str) and os.path.isfile(val):
-                        try:
-                            os.remove(val)
-                            logger.debug("Deleted nulled media file: %s", val)
-                        except OSError as exc:
-                            logger.warning("Failed to delete media file %s: %s", val, exc)
+                        files_to_delete.append(val)
             da.values[..., t_idx] = sentinel
+
+    return files_to_delete
 
 
 def set_xarray_multidim(
@@ -476,14 +479,24 @@ class ResultCollector:
 
         # Per-variable max_time_events: null out older entries for variables
         # with a per-variable limit smaller than the dataset's over_time size.
+        # File deletion is deferred until after the cache write succeeds.
+        pending_deletes = []
         if result_vars and "over_time" in dataset.dims:
             for rv in result_vars:
                 var_limit = getattr(rv, "max_time_events", None)
                 if var_limit is not None:
-                    _null_old_entries(dataset, rv, var_limit)
+                    pending_deletes.extend(_null_old_entries(dataset, rv, var_limit))
 
         logger.info("saving data to history cache")
         c[bench_cfg_hash] = dataset
+
+        for fpath in pending_deletes:
+            try:
+                os.remove(fpath)
+                logger.debug("Deleted nulled media file: %s", fpath)
+            except OSError as exc:
+                logger.warning("Failed to delete media file %s: %s", fpath, exc)
+
         return dataset
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: Any) -> None:

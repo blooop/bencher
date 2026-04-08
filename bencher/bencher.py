@@ -685,8 +685,8 @@ class Bench(BenchPlotServer):
                 bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
                 if bench_res.regression_report.has_regressions:
                     logging.warning(bench_res.regression_report.summary())
-                if bench_res.regression_report.has_regressions and run_cfg.regression_fail:
-                    raise RegressionError(bench_res.regression_report.summary())
+                    if run_cfg.regression_fail:
+                        raise RegressionError(bench_res.regression_report.summary())
 
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)
