@@ -665,7 +665,7 @@ class BenchResultBase:
         if result_vars is None:
             result_vars = VarRange(1, 1)
         if panel_range is None:
-            panel_range = VarRange(0, 0)
+            panel_range = VarRange(0, None)
         if repeats_range is None:
             repeats_range = VarRange(1, None)
         if input_range is None:
