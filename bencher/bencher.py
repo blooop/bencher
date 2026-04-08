@@ -411,14 +411,11 @@ class Bench(BenchPlotServer):
         if title is None:
             if len(input_vars_in) > 0:
                 title = "Sweeping " + " vs ".join([i.name for i in input_vars_in])
-            elif len(const_vars_in) > 0:
-                title = "Constant Value"
-                if len(const_vars_in) > 1:
-                    title += "s"
-                title += ": " + ", ".join([f"{c[0].name}={c[1]}" for c in const_vars_in])
             else:
-                title = "Recording: " + ", ".join(
-                    [getattr(i, "name", str(i)) for i in result_vars_in]
+                title = (
+                    self.bench_name
+                    + ": "
+                    + ", ".join([getattr(i, "name", str(i)) for i in result_vars_in])
                 )
 
         if run_cfg.samples_per_var is not None:
