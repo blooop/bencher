@@ -13,6 +13,7 @@ OUTPUT_DIR = "rerun"
 
 RERUN_EXAMPLES = [
     "capture_window",
+    "over_time",
 ]
 
 
@@ -24,6 +25,8 @@ class MetaRerun(MetaGeneratorBase):
     def benchmark(self):
         if self.example == "capture_window":
             self._generate_capture_window()
+        elif self.example == "over_time":
+            self._generate_over_time()
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
@@ -69,6 +72,48 @@ bench.plot_sweep(
             body=body,
             class_code=class_code,
             run_kwargs={"level": 3},
+        )
+
+    def _generate_over_time(self):
+        """Rerun window captures tracked over multiple time snapshots."""
+        imports = (
+            "from datetime import datetime, timedelta\n\n"
+            "import bencher as bn\n"
+            "from bencher.example.example_rerun_over_time import SweepRerunOverTime"
+        )
+        body = """\
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
+benchable = SweepRerunOverTime()
+bench = benchable.to_bench(run_cfg)
+_base_time = datetime(2000, 1, 1)
+for i, offset in enumerate([0.0, 0.5, 1.0]):
+    benchable.time_offset = offset
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    bench.plot_sweep(
+        "over_time",
+        input_vars=["theta"],
+        result_vars=["out_sin", "out_rerun"],
+        description="Rerun window captures tracked over multiple time snapshots. "
+        "Each call to plot_sweep with a new time_src appends a snapshot. "
+        "The rerun viewer for each sweep point is shown in a slider "
+        "that lets you scrub through the time history.",
+        post_description="The ``ResultRerun`` type stores ``.rrd`` file paths. "
+        "When combined with ``over_time=True``, a Bokeh slider swaps "
+        "between the rerun viewer iframes for each time point.",
+        run_cfg=run_cfg,
+        time_src=_base_time + timedelta(seconds=i),
+    )
+"""
+        self.generate_example(
+            title="Rerun Over Time — track spatial visualizations across time snapshots",
+            output_dir=OUTPUT_DIR,
+            filename="example_rerun_over_time",
+            function_name="example_rerun_over_time",
+            imports=imports,
+            body=body,
+            run_kwargs={"level": 3, "over_time": True},
         )
 
 
