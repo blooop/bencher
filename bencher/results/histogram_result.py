@@ -33,11 +33,7 @@ class HistogramResult(HoloviewResult):
         # With multiple over_time entries, show histogram only for the latest snapshot;
         # the line plot already covers the full time series.
         ds = self.ds
-        if (
-            self.bench_cfg.over_time
-            and "over_time" in ds.dims
-            and ds.sizes["over_time"] > 1
-        ):
+        if self.bench_cfg.over_time and "over_time" in ds.dims and ds.sizes["over_time"] > 1:
             ds = ds.isel(over_time=-1)
         self_snapshot = self.__class__.__new__(self.__class__)
         self_snapshot.__dict__.update(self.__dict__)
