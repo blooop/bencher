@@ -106,9 +106,12 @@ class LineResult(HoloviewResult):
         da_plot = dataset[result_var.name]
 
         # 0D + over_time: time-series line with time on the x-axis.
-        # This is a standalone chart (not a HoloMap) since it inherently
-        # shows all time points at once.
-        if not self.plt_cnt_cfg.float_vars and "over_time" in da_plot.dims:
+        # Requires 2+ time points — a single point renders as blank axes.
+        if (
+            not self.plt_cnt_cfg.float_vars
+            and "over_time" in da_plot.dims
+            and da_plot.sizes["over_time"] > 1
+        ):
             title = self.title_from_ds(da_plot, result_var, **kwargs)
             plot = da_plot.hvplot.line(
                 x="over_time",

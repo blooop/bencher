@@ -34,6 +34,7 @@ class HistogramResult(HoloviewResult):
             self.to_histogram_ds,
             float_range=VarRange(0, 0),
             cat_range=VarRange(0, None),
+            panel_range=VarRange(0, None),
             input_range=VarRange(0, 0),
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
