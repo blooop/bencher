@@ -42,8 +42,7 @@ from bencher.worker_manager import WorkerManager
 from bencher.result_collector import ResultCollector
 from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
 
-# Default cache size for benchmark results (100 GB)
-DEFAULT_CACHE_SIZE_BYTES = int(100e9)
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -90,6 +89,9 @@ class Bench(BenchPlotServer):
         if not isinstance(bench_name, str):
             raise TypeError(f"bench_name must be a string, got {type(bench_name).__name__}")
         self.bench_name = bench_name
+
+        # Ensure the cache layout matches the current version.
+        ensure_cache_version()
 
         # Initialize helper classes
         self.cache_size = DEFAULT_CACHE_SIZE_BYTES

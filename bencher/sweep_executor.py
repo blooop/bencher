@@ -16,8 +16,7 @@ from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.job import FutureCache
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
-# Default cache size for benchmark results (100 GB)
-DEFAULT_CACHE_SIZE_BYTES = int(100e9)
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 
 
 def _resolve_param(

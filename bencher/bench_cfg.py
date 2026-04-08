@@ -297,7 +297,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
         None,
         bounds=[1, None],
         allow_None=True,
-        doc="Maximum number of over_time events to retain. Oldest events are trimmed. None means unlimited.",
+        doc="Maximum number of over_time events to retain. "
+        "Oldest events are trimmed. Set to None for unlimited.",
     )
 
     max_slider_points: int | None = param.Integer(
