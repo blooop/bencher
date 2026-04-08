@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.81.0] - 2026-04-08
+
+### Added
+- Per-variable `max_time_events` support for fine-grained control over rerun time-series density (#899)
+- Regression markdown output for result reporting
+
+### Changed
+- Pinned rerun-sdk to 0.31.1 for stability
+- Rewritten rerun examples with improved over_time handling and result rendering
+
+### Fixed
+- Histogram rendering fixes
+- Rerun over_time slider crash (#900)
+- Cache management: cleanup timing, gen_path collisions, error handling, and type annotations (#899)
+- Accidental generated file deletion during cache cleanup
+
 ## [1.80.1] - 2026-04-06
 
 ### Fixed
