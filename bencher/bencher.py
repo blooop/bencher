@@ -669,6 +669,7 @@ class Bench(BenchPlotServer):
                         bench_cfg_hash,
                         run_cfg.clear_history,
                         run_cfg.max_time_events,
+                        bench_cfg.result_vars,
                     )
                     # sync the over_time meta variable with the actual accumulated values
                     if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
@@ -754,10 +755,11 @@ class Bench(BenchPlotServer):
         bench_cfg_hash: str,
         clear_history: bool,
         max_time_events: int | None = None,
+        result_vars: list | None = None,
     ) -> xr.Dataset:
         """Load and concatenate historical benchmark data from cache."""
         return self._collector.load_history_cache(
-            dataset, bench_cfg_hash, clear_history, max_time_events
+            dataset, bench_cfg_hash, clear_history, max_time_events, result_vars
         )
 
     def setup_dataset(

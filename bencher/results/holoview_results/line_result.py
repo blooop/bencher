@@ -54,7 +54,12 @@ class LineResult(HoloviewResult):
         elif not isinstance(tap_var, list):
             tap_var = [tap_var]
 
-        if len(tap_var) == 0 or self.plt_cnt_cfg.inputs_cnt > 1 or not use_tap:
+        if (
+            len(tap_var) == 0
+            or self.plt_cnt_cfg.inputs_cnt > 1
+            or not use_tap
+            or not self.plt_cnt_cfg.float_vars
+        ):
             line_cb = self.to_line_ds
         else:
             line_cb = partial(
@@ -101,9 +106,12 @@ class LineResult(HoloviewResult):
         da_plot = dataset[result_var.name]
 
         # 0D + over_time: time-series line with time on the x-axis.
-        # This is a standalone chart (not a HoloMap) since it inherently
-        # shows all time points at once.
-        if not self.plt_cnt_cfg.float_vars and "over_time" in da_plot.dims:
+        # Requires 2+ time points — a single point renders as blank axes.
+        if (
+            not self.plt_cnt_cfg.float_vars
+            and "over_time" in da_plot.dims
+            and da_plot.sizes["over_time"] > 1
+        ):
             title = self.title_from_ds(da_plot, result_var, **kwargs)
             plot = da_plot.hvplot.line(
                 x="over_time",

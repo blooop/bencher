@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.80.2"
+version = "1.81.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -77,7 +77,7 @@ test = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.31.1,<0.32", "rerun-notebook>=0.31.1,<0.32"]
+rerun = ["rerun-sdk>=0.31.1,<=0.31.1", "rerun-notebook>=0.31.1,<=0.31.1"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
@@ -173,8 +173,7 @@ docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs"
 cache-stats = "python -c 'from bencher.cache_management import print_cache_stats; print_cache_stats()'"
 cache-clear = "python -c 'from bencher.cache_management import clear_all; clear_all()'"
 cache-clear-media = "python -c 'from bencher.cache_management import clear_media; clear_media()'"
-cache-clean-orphans = "python -c 'from bencher.cache_management import clean_orphaned_media; o,b=clean_orphaned_media(dry_run=True); print(f\"{len(o)} orphans ({b} bytes). Run cache-clean-orphans-force to delete.\")'"
-cache-clean-orphans-force = "python -c 'from bencher.cache_management import clean_orphaned_media; clean_orphaned_media(dry_run=False)'"
+cache-clean-orphans = "python -c 'from bencher.cache_management import clean_orphaned_media; clean_orphaned_media(dry_run=False)'"
 
 #demos
 benchmark-save = "python scripts/benchmark_save.py"

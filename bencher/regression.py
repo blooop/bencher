@@ -71,6 +71,45 @@ class RegressionReport:
                 )
         return "\n".join(lines)
 
+    def to_markdown(self) -> str:
+        """Return a nicely formatted Markdown summary of all regression results."""
+        regressed = self.regressed_variables
+        passed = [r for r in self.results if not r.regressed]
+
+        lines: list[str] = []
+        if regressed:
+            lines.append(f"**{len(regressed)} regression(s) detected**\n")
+            lines.append("| Variable | Change | Baseline | Current | Method | Threshold |")
+            lines.append("|----------|-------:|----------:|--------:|--------|----------:|")
+            for r in regressed:
+                lines.append(
+                    f"| {r.variable} | {r.change_percent:+.1f}% "
+                    f"| {r.baseline_value:.4g} | {r.current_value:.4g} "
+                    f"| {r.method} | {r.threshold} |"
+                )
+        else:
+            lines.append("**No regressions detected**\n")
+
+        if passed:
+            lines.append("")
+            lines.append(
+                f"*{len(passed)} variable(s) within threshold: "
+                f"{', '.join(r.variable for r in passed)}*"
+            )
+
+        return "\n".join(lines)
+
+    def append_to_report(self, report) -> None:
+        """Append a formatted regression summary to a :class:`BenchReport`."""
+        report.append_markdown(self.to_markdown(), name="Regression Report")
+
+    def prepend_to_result(self, report, bench_res) -> None:
+        """Insert a formatted regression summary at the top of *bench_res*'s tab."""
+        import panel as pn
+
+        md = pn.pane.Markdown(self.to_markdown(), name="Regression Report", width=800)
+        report.prepend_to_result(bench_res, md)
+
 
 def _clean_1d(a: np.ndarray) -> np.ndarray:
     """Flatten to 1-D float and remove NaNs."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Literal, Callable
 from enum import Enum, auto
 import numpy as np
@@ -664,7 +665,7 @@ class BenchResultBase:
         if result_vars is None:
             result_vars = VarRange(1, 1)
         if panel_range is None:
-            panel_range = VarRange(0, 0)
+            panel_range = VarRange(0, None)
         if repeats_range is None:
             repeats_range = VarRange(1, None)
         if input_range is None:
@@ -849,6 +850,8 @@ class BenchResultBase:
                 and dataset.sizes["over_time"] > 1
                 and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
             ):
+                if isinstance(result_var, ResultRerun):
+                    return self._pane_over_time_grid(dataset, result_var)
                 return self._pane_over_time_slider(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
@@ -882,10 +885,17 @@ class BenchResultBase:
         if is_rerun:
             from bencher.utils_rrd import rrd_file_to_pane
 
+        _NO_DATA_HTML = (
+            '<div style="background:#eee;padding:20px;text-align:center;color:#999">'
+            "No data for this time point</div>"
+        )
         html_list = []
         for t in time_vals:
             ds_t = dataset.sel(over_time=t)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
+            if filepath == "NAN" or not os.path.isfile(filepath):
+                html_list.append(_NO_DATA_HTML)
+                continue
             if is_rerun:
                 pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
                 html_list.append(pane.object)
@@ -923,6 +933,37 @@ class BenchResultBase:
         bokeh_slider.js_on_change("value", callback)
 
         return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
+
+    def _pane_over_time_grid(
+        self,
+        dataset: xr.Dataset,
+        result_var,
+    ) -> pn.Row | pn.pane.Markdown:
+        """Render over_time pane results as a grid of labelled panels.
+
+        Used for ResultRerun because rerun iframes do not work inside a
+        Bokeh JS slider swap (the viewer fails to re-initialise).
+        """
+        from bencher.utils_rrd import rrd_file_to_pane
+
+        time_vals = list(dataset.coords["over_time"].values)
+        over_time_dtype = dataset.coords["over_time"].dtype
+        is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
+        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+
+        items = []
+        for t, label in zip(time_vals, labels):
+            ds_t = dataset.sel(over_time=t)
+            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
+            if filepath == "NAN" or not os.path.isfile(filepath):
+                items.append(pn.Column(pn.pane.Markdown(f"**{label}**\n\n*No data (trimmed)*")))
+                continue
+            pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+
+        if not items:
+            return pn.pane.Markdown("*No rerun data available*")
+        return pn.Row(*items)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve

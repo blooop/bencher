@@ -97,16 +97,24 @@ class ResultFloat(Number):
     bounds to [0, 1] and produces correct boolean-style plots.
     """
 
-    __slots__ = ["units", "direction", "share_axis"]
-    _hash_exclude = ("share_axis",)  # display-only, not part of benchmark data
+    __slots__ = ["units", "direction", "share_axis", "max_time_events"]
+    _hash_exclude = ("share_axis", "max_time_events")  # display/retention-only
 
-    def __init__(self, units="ul", direction: OptDir = OptDir.minimize, share_axis=True, **params):
+    def __init__(
+        self,
+        units="ul",
+        direction: OptDir = OptDir.minimize,
+        share_axis=True,
+        max_time_events=None,
+        **params,
+    ):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
         self.default = 0  # json is terrible and does not support nan values
         self.direction = direction
         self.share_axis = share_axis
+        self.max_time_events = max_time_events
 
     def as_dim(self) -> hv.Dimension:
         return hv.Dimension((self.name, self.name), unit=self.units)
@@ -132,14 +140,18 @@ class ResultBool(ResultFloat):
 class ResultVec(param.List):
     """A class to represent fixed size vector result variable"""
 
-    __slots__ = ["units", "direction", "size"]
+    __slots__ = ["units", "direction", "size", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, size, units="ul", direction: OptDir = OptDir.minimize, **params):
+    def __init__(
+        self, size, units="ul", direction: OptDir = OptDir.minimize, max_time_events=None, **params
+    ):
         param.List.__init__(self, **params)
         self.units = units
         self.default = 0  # json is terrible and does not support nan values
         self.direction = direction
         self.size = size
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -198,11 +210,13 @@ def curve(
 
 
 class ResultPath(param.Filename):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", **params):
+    def __init__(self, default=None, units="path", max_time_events=None, **params):
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -214,11 +228,13 @@ class ResultPath(param.Filename):
 
 
 class ResultVideo(param.Filename):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", **params):
+    def __init__(self, default=None, units="path", max_time_events=None, **params):
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -226,11 +242,13 @@ class ResultVideo(param.Filename):
 
 
 class ResultImage(param.Filename):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", **params):
+    def __init__(self, default=None, units="path", max_time_events=None, **params):
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -238,11 +256,13 @@ class ResultImage(param.Filename):
 
 
 class ResultString(param.String):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="str", **params):
+    def __init__(self, default=None, units="str", max_time_events=None, **params):
         super().__init__(default=default, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -250,11 +270,13 @@ class ResultString(param.String):
 
 
 class ResultContainer(param.Parameter):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="container", **params):
+    def __init__(self, default=None, units="container", max_time_events=None, **params):
         super().__init__(default=default, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -279,8 +301,10 @@ class ResultRerun(ResultContainer):
 
     __slots__ = ["width", "height"]
 
-    def __init__(self, default=None, units="rerun", width=600, height=600, **params):
-        super().__init__(default=default, units=units, **params)
+    def __init__(
+        self, default=None, units="rerun", width=600, height=600, max_time_events=None, **params
+    ):
+        super().__init__(default=default, units=units, max_time_events=max_time_events, **params)
         self.width = width
         self.height = height
         # Eagerly create a rerun recording so that rr.log() calls in
@@ -305,8 +329,8 @@ class ResultRerun(ResultContainer):
 class ResultReference(param.Parameter):
     """Use this class to save arbitrary objects that are not picklable or native to panel.  You can pass a container callback that takes the object and returns a panel pane to be displayed"""
 
-    __slots__ = ["units", "obj", "container"]
-    _hash_exclude = ("obj", "container")  # runtime state, not deterministic config
+    __slots__ = ["units", "obj", "container", "max_time_events"]
+    _hash_exclude = ("obj", "container", "max_time_events")
 
     def __init__(
         self,
@@ -314,12 +338,14 @@ class ResultReference(param.Parameter):
         container: Callable[Any, pn.pane.panel] | None = None,
         default: Any | None = None,
         units: str = "container",
+        max_time_events=None,
         **params,
     ):
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
         self.container = container
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -327,19 +353,21 @@ class ResultReference(param.Parameter):
 
 
 class ResultDataSet(param.Parameter):
-    __slots__ = ["units", "obj"]
-    _hash_exclude = ("obj",)  # runtime state, not deterministic config
+    __slots__ = ["units", "obj", "max_time_events"]
+    _hash_exclude = ("obj", "max_time_events")
 
     def __init__(
         self,
         obj: Any | None = None,
         default: Any | None = None,
         units: str = "dataset",
+        max_time_events=None,
         **params,
     ):
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -347,13 +375,14 @@ class ResultDataSet(param.Parameter):
 
 
 class ResultVolume(param.Parameter):
-    __slots__ = ["units", "obj"]
-    _hash_exclude = ("obj",)  # runtime state, not deterministic config
+    __slots__ = ["units", "obj", "max_time_events"]
+    _hash_exclude = ("obj", "max_time_events")
 
-    def __init__(self, obj=None, default=None, units="container", **params):
+    def __init__(self, obj=None, default=None, units="container", max_time_events=None, **params):
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
