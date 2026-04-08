@@ -271,9 +271,13 @@ def clear_media(cachedir: str = "cachedir") -> tuple[int, int]:
         if not media_path.is_dir():
             continue
         count, size = _dir_stats(media_path)
+        try:
+            shutil.rmtree(media_path)
+        except OSError as exc:
+            logger.warning("Failed to remove media directory %s: %s", media_path, exc)
+            continue
         deleted += count
         freed += size
-        shutil.rmtree(media_path)
     logger.info("Deleted %d media files, freed %d bytes", deleted, freed)
     return deleted, freed
 
@@ -334,7 +338,10 @@ def clean_orphaned_media(cachedir: str = "cachedir", dry_run: bool = True) -> tu
                         orphans.append(str(job_dir))
                         orphan_bytes += size
                         if not dry_run:
-                            job_dir.unlink()
+                            try:
+                                job_dir.unlink()
+                            except OSError as exc:
+                                logger.warning("Failed to remove orphan %s: %s", job_dir, exc)
                     continue
                 job_key = job_dir.name
                 if job_key not in live_keys:
@@ -342,7 +349,10 @@ def clean_orphaned_media(cachedir: str = "cachedir", dry_run: bool = True) -> tu
                     orphans.append(str(job_dir))
                     orphan_bytes += size
                     if not dry_run:
-                        shutil.rmtree(job_dir)
+                        try:
+                            shutil.rmtree(job_dir)
+                        except OSError as exc:
+                            logger.warning("Failed to remove orphan dir %s: %s", job_dir, exc)
 
     action = "Dry run: found" if dry_run else "Deleted"
     logger.info(
