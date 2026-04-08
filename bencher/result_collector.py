@@ -46,7 +46,11 @@ _MEDIA_RESULT_TYPES = (ResultPath, ResultVideo, ResultImage, ResultContainer, Re
 
 
 def _sentinel_for_result_var(rv):
-    """Return the sentinel value used for 'missing' entries of this result type."""
+    """Return the sentinel value used for 'missing' entries of this result type.
+
+    ResultVolume falls through to the default np.nan — it is numeric, not
+    file-backed, so no media cleanup is needed even when max_time_events is set.
+    """
     if isinstance(rv, SCALAR_RESULT_TYPES):
         return np.nan
     if isinstance(rv, (ResultReference, ResultDataSet)):
@@ -57,11 +61,15 @@ def _sentinel_for_result_var(rv):
         return "NAN"
     if isinstance(rv, ResultVec):
         return np.nan
+    # ResultVolume and any future numeric types default to NaN.
     return np.nan
 
 
 def _null_old_entries(dataset, rv, var_limit):
     """Null out over_time entries older than *var_limit* for a single result variable.
+
+    **Mutates *dataset* in-place** by writing sentinel values directly into
+    the backing numpy arrays of the affected data variables.
 
     For media types (images, videos, .rrd files), the referenced files are
     collected for deferred deletion.  Returns a list of file paths to delete;

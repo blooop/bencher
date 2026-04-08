@@ -608,6 +608,43 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
 
         self.assertEqual(list(result["val"].values[0]), [0.0, 1.0, 2.0, 3.0, 4.0])
 
+    def test_per_variable_result_vec(self):
+        """ResultVec with max_time_events should null all component columns."""
+        from bencher.variables.results import ResultVec
+
+        n_slices = 5
+        slices = []
+        for i in range(n_slices):
+            ds = xr.Dataset(
+                {
+                    "pos_x": (["x", "over_time"], [[float(i)]]),
+                    "pos_y": (["x", "over_time"], [[float(i * 10)]]),
+                }
+            )
+            slices.append(ds)
+        dataset = xr.concat(slices, "over_time")
+
+        rv = ResultVec(size=2, max_time_events=2, doc="pos")
+        rv.name = "pos"
+
+        unique_hash = f"pervar-vec-{uuid.uuid4()}"
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, result_vars=[rv]
+        )
+
+        self.assertEqual(result.sizes["over_time"], 5)
+        # Oldest 3 entries should be NaN, last 2 kept
+        x_vals = list(result["pos_x"].values[0])
+        y_vals = list(result["pos_y"].values[0])
+        for v in x_vals[:3]:
+            self.assertTrue(np.isnan(v))
+        self.assertEqual(x_vals[3], 3.0)
+        self.assertEqual(x_vals[4], 4.0)
+        for v in y_vals[:3]:
+            self.assertTrue(np.isnan(v))
+        self.assertEqual(y_vals[3], 30.0)
+        self.assertEqual(y_vals[4], 40.0)
+
     def test_per_variable_skips_already_nulled(self):
         """Re-nulling sentinel entries should not crash (idempotent)."""
         from bencher.variables.results import ResultImage
