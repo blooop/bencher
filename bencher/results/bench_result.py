@@ -229,6 +229,15 @@ class BenchResult(
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
 
+        # --- Regression report (auto-inserted when regression detection is enabled) ---
+        has_multiple_times = (
+            "over_time" in self.ds.dims and self.ds.sizes["over_time"] > 1
+        )
+        if self.regression_report is not None and has_multiple_times:
+            plot_cols.append(
+                pn.pane.Markdown(self.regression_report.to_markdown(), width=800)
+            )
+
         # --- Extra panels (user-injected) ---
         if extra_panels:
             for ep in extra_panels:

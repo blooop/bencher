@@ -103,6 +103,13 @@ class RegressionReport:
         """Append a formatted regression summary to a :class:`BenchReport`."""
         report.append_markdown(self.to_markdown(), name="Regression Report")
 
+    def prepend_to_result(self, report, bench_res) -> None:
+        """Insert a formatted regression summary at the top of *bench_res*'s tab."""
+        import panel as pn
+
+        md = pn.pane.Markdown(self.to_markdown(), name="Regression Report", width=800)
+        report.prepend_to_result(bench_res, md)
+
 
 def _clean_1d(a: np.ndarray) -> np.ndarray:
     """Flatten to 1-D float and remove NaNs."""

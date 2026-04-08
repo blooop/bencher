@@ -130,6 +130,14 @@ class BenchReport(BenchPlotServer):
         except (ValueError, IndexError):
             self.append(pane)
 
+    def prepend_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
+        """Insert *pane* at the beginning of the tab that belongs to *bench_res*."""
+        try:
+            idx = self.bench_results.index(bench_res)
+            self.pane[idx].insert(0, pane)
+        except (ValueError, IndexError):
+            self.append(pane)
+
     def append_tab(self, pane: pn.panel, name: str | None = None) -> None:
         if pane is not None:
             if name is None:
