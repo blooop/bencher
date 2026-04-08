@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Literal, Callable
 from enum import Enum, auto
 import numpy as np
@@ -882,10 +883,17 @@ class BenchResultBase:
         if is_rerun:
             from bencher.utils_rrd import rrd_file_to_pane
 
+        _NO_DATA_HTML = (
+            '<div style="background:#eee;padding:20px;text-align:center;color:#999">'
+            "No data for this time point</div>"
+        )
         html_list = []
         for t in time_vals:
             ds_t = dataset.sel(over_time=t)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
+            if filepath == "NAN" or not os.path.isfile(filepath):
+                html_list.append(_NO_DATA_HTML)
+                continue
             if is_rerun:
                 pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
                 html_list.append(pane.object)

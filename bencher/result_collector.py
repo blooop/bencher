@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from datetime import datetime
 from itertools import product
 from typing import Any
@@ -32,6 +33,7 @@ from bencher.variables.results import (
     ResultContainer,
     ResultReference,
     ResultDataSet,
+    ResultRerun,
 )
 from bencher.worker_job import WorkerJob
 from bencher.job import JobFuture
@@ -39,6 +41,58 @@ from bencher.job import JobFuture
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
+
+_MEDIA_RESULT_TYPES = (ResultPath, ResultVideo, ResultImage, ResultContainer, ResultRerun)
+
+
+def _sentinel_for_result_var(rv):
+    """Return the sentinel value used for 'missing' entries of this result type."""
+    if isinstance(rv, SCALAR_RESULT_TYPES):
+        return np.nan
+    if isinstance(rv, (ResultReference, ResultDataSet)):
+        return -1
+    if isinstance(rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer)):
+        return "NAN"
+    if isinstance(rv, ResultVec):
+        return np.nan
+    return np.nan
+
+
+def _null_old_entries(dataset, rv, var_limit):
+    """Null out over_time entries older than *var_limit* for a single result variable.
+
+    For media types (images, videos, .rrd files), the referenced files are deleted
+    from disk before the entry is set to sentinel.
+    """
+    n_time = dataset.sizes["over_time"]
+    if var_limit is None or var_limit >= n_time:
+        return
+
+    null_count = n_time - var_limit
+    sentinel = _sentinel_for_result_var(rv)
+    is_media = isinstance(rv, _MEDIA_RESULT_TYPES)
+
+    if isinstance(rv, ResultVec):
+        var_names = rv.index_names()
+    else:
+        var_names = [rv.name]
+
+    for vname in var_names:
+        if vname not in dataset:
+            continue
+        da = dataset[vname]
+        # over_time is always the last axis (dims = input_vars + [repeat, over_time])
+        for t_idx in range(null_count):
+            if is_media:
+                old_slice = da.isel(over_time=t_idx).values
+                for val in np.asarray(old_slice).flat:
+                    if val != sentinel and isinstance(val, str) and os.path.isfile(val):
+                        try:
+                            os.remove(val)
+                            logger.debug("Deleted nulled media file: %s", val)
+                        except OSError as exc:
+                            logger.warning("Failed to delete media file %s: %s", val, exc)
+            da.values[..., t_idx] = sentinel
 
 
 def set_xarray_multidim(
@@ -354,6 +408,7 @@ class ResultCollector:
         bench_cfg_hash: str,
         clear_history: bool,
         max_time_events: int | None = None,
+        result_vars: list | None = None,
     ) -> xr.Dataset:
         """Load historical data from a cache if over_time is enabled.
 
@@ -367,6 +422,9 @@ class ResultCollector:
             clear_history (bool): If True, clears historical data instead of loading it
             max_time_events (int | None): Maximum number of over_time events to retain.
                 Oldest events are trimmed. None means unlimited.
+            result_vars (list | None): Result variable instances. When a variable has a
+                per-variable ``max_time_events`` smaller than the dataset's over_time
+                size, older entries are set to sentinel and media files are deleted.
 
         Returns:
             xr.Dataset: Combined dataset with both historical and current benchmark data,
@@ -415,6 +473,14 @@ class ResultCollector:
         if max_time_events is not None and "over_time" in dataset.dims:
             if dataset.sizes["over_time"] > max_time_events:
                 dataset = dataset.isel(over_time=slice(-max_time_events, None))
+
+        # Per-variable max_time_events: null out older entries for variables
+        # with a per-variable limit smaller than the dataset's over_time size.
+        if result_vars and "over_time" in dataset.dims:
+            for rv in result_vars:
+                var_limit = getattr(rv, "max_time_events", None)
+                if var_limit is not None:
+                    _null_old_entries(dataset, rv, var_limit)
 
         logger.info("saving data to history cache")
         c[bench_cfg_hash] = dataset

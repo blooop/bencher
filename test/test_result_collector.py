@@ -471,6 +471,165 @@ class TestMaxTimeEvents(unittest.TestCase):
         self.assertTrue(result.equals(dataset))
 
 
+class TestPerVariableMaxTimeEvents(unittest.TestCase):
+    """Tests for per-variable max_time_events nulling in load_history_cache."""
+
+    def setUp(self):
+        self.collector = ResultCollector()
+
+    def _make_mixed_dataset(self, n_slices):
+        """Create a dataset with a float var and an object (path) var."""
+        slices = []
+        for i in range(n_slices):
+            ds = xr.Dataset(
+                {
+                    "metric": (["x", "over_time"], [[float(i)]]),
+                    "media": (["x", "over_time"], np.array([[f"/tmp/file_{i}.rrd"]], dtype=object)),
+                }
+            )
+            slices.append(ds)
+        return xr.concat(slices, "over_time")
+
+    def test_per_variable_nulls_older_entries(self):
+        """A result var with max_time_events=2 should null older entries to sentinel."""
+        from bencher.variables.results import ResultFloat, ResultImage
+
+        dataset = self._make_mixed_dataset(5)
+        unique_hash = f"pervar-null-{uuid.uuid4()}"
+
+        rv_metric = ResultFloat(doc="metric")
+        rv_metric.name = "metric"
+        rv_media = ResultImage(max_time_events=2, doc="media")
+        rv_media.name = "media"
+
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, result_vars=[rv_metric, rv_media]
+        )
+
+        # Full over_time dimension preserved (5 slices)
+        self.assertEqual(result.sizes["over_time"], 5)
+
+        # metric (no per-variable limit) should be untouched
+        self.assertEqual(list(result["metric"].values[0]), [0.0, 1.0, 2.0, 3.0, 4.0])
+
+        # media: oldest 3 entries should be sentinel "NAN", last 2 kept
+        media_vals = list(result["media"].values[0])
+        self.assertEqual(media_vals[:3], ["NAN", "NAN", "NAN"])
+        self.assertEqual(media_vals[3], "/tmp/file_3.rrd")
+        self.assertEqual(media_vals[4], "/tmp/file_4.rrd")
+
+    def test_per_variable_deletes_media_files(self):
+        """Nulling a media entry should delete the referenced file from disk."""
+        import os
+        from bencher.variables.results import ResultImage
+
+        # Create real temp files
+        tmpdir = tempfile.mkdtemp()
+        try:
+            paths = []
+            for i in range(4):
+                p = os.path.join(tmpdir, f"img_{i}.png")
+                with open(p, "wb") as f:
+                    f.write(b"data")
+                paths.append(p)
+
+            slices = []
+            for i in range(4):
+                ds = xr.Dataset(
+                    {"shot": (["x", "over_time"], np.array([[paths[i]]], dtype=object))}
+                )
+                slices.append(ds)
+            dataset = xr.concat(slices, "over_time")
+
+            rv = ResultImage(max_time_events=2, doc="shot")
+            rv.name = "shot"
+
+            unique_hash = f"pervar-delete-{uuid.uuid4()}"
+            self.collector.load_history_cache(
+                dataset, unique_hash, clear_history=False, result_vars=[rv]
+            )
+
+            # Oldest 2 files should be deleted, newest 2 should still exist
+            self.assertFalse(os.path.exists(paths[0]))
+            self.assertFalse(os.path.exists(paths[1]))
+            self.assertTrue(os.path.exists(paths[2]))
+            self.assertTrue(os.path.exists(paths[3]))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_per_variable_with_global_trim(self):
+        """Global max_time_events trims first, then per-variable nulling applies."""
+        from bencher.variables.results import ResultFloat, ResultImage
+
+        dataset = self._make_mixed_dataset(10)
+        unique_hash = f"pervar-global-{uuid.uuid4()}"
+
+        rv_metric = ResultFloat(doc="metric")
+        rv_metric.name = "metric"
+        rv_media = ResultImage(max_time_events=2, doc="media")
+        rv_media.name = "media"
+
+        result = self.collector.load_history_cache(
+            dataset,
+            unique_hash,
+            clear_history=False,
+            max_time_events=5,
+            result_vars=[rv_metric, rv_media],
+        )
+
+        # Global trim to 5 slices first (keeps indices 5-9)
+        self.assertEqual(result.sizes["over_time"], 5)
+        self.assertEqual(list(result["metric"].values[0]), [5.0, 6.0, 7.0, 8.0, 9.0])
+
+        # Per-variable: media keeps only last 2 of those 5
+        media_vals = list(result["media"].values[0])
+        self.assertEqual(media_vals[:3], ["NAN", "NAN", "NAN"])
+        self.assertEqual(media_vals[3], "/tmp/file_8.rrd")
+        self.assertEqual(media_vals[4], "/tmp/file_9.rrd")
+
+    def test_per_variable_no_limit_unaffected(self):
+        """Variables without max_time_events should not be touched."""
+        from bencher.variables.results import ResultFloat
+
+        slices = []
+        for i in range(5):
+            ds = xr.Dataset({"val": (["x", "over_time"], [[float(i)]])})
+            slices.append(ds)
+        dataset = xr.concat(slices, "over_time")
+
+        rv = ResultFloat(doc="val")
+        rv.name = "val"
+        # rv.max_time_events is None by default
+
+        unique_hash = f"pervar-nolimit-{uuid.uuid4()}"
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=False, result_vars=[rv]
+        )
+
+        self.assertEqual(list(result["val"].values[0]), [0.0, 1.0, 2.0, 3.0, 4.0])
+
+    def test_per_variable_skips_already_nulled(self):
+        """Re-nulling sentinel entries should not crash (idempotent)."""
+        from bencher.variables.results import ResultImage
+
+        dataset = self._make_mixed_dataset(5)
+        unique_hash = f"pervar-idem-{uuid.uuid4()}"
+
+        rv = ResultImage(max_time_events=2, doc="media")
+        rv.name = "media"
+
+        # First pass: nulls oldest 3
+        result = self.collector.load_history_cache(
+            dataset, unique_hash, clear_history=True, result_vars=[rv]
+        )
+        # Second pass: should not crash on "NAN" sentinel values
+        result = self.collector.load_history_cache(
+            result, unique_hash, clear_history=True, result_vars=[rv]
+        )
+        media_vals = list(result["media"].values[0])
+        self.assertEqual(media_vals[:3], ["NAN", "NAN", "NAN"])
+
+
 class TestDTypeIncompatibleHistory(unittest.TestCase):
     """Test that load_history_cache handles dtype changes in over_time coords."""
 
