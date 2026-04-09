@@ -956,7 +956,6 @@ class BenchResultBase:
             ds_t = dataset.sel(over_time=t)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
             if filepath == "NAN" or not os.path.isfile(filepath):
-                items.append(pn.Column(pn.pane.Markdown(f"**{label}**\n\n*No data (trimmed)*")))
                 continue
             pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
             items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
