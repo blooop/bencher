@@ -6,7 +6,10 @@ Generates three rerun examples:
 - sweep: 1 input var (damping_ratio), single sweep, no over_time
 """
 
+import inspect
+
 import bencher as bn
+from bencher.example.generated.rerun.example_rerun_sweep import ControlSystemSweep
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "rerun"
@@ -16,6 +19,19 @@ RERUN_EXAMPLES = [
     "regression",
     "sweep",
 ]
+
+
+def _get_control_system_class_code():
+    """Extract ControlSystemSweep source to inline in generated examples."""
+    try:
+        return "\n" + inspect.getsource(ControlSystemSweep).rstrip()
+    except OSError:
+        import importlib.resources
+
+        src = importlib.resources.files("bencher.example.generated.rerun").joinpath(
+            "example_rerun_sweep.py"
+        )
+        return src.read_text(encoding="utf-8").rstrip()
 
 
 class MetaRerun(MetaGeneratorBase):
@@ -80,9 +96,7 @@ bench.plot_sweep(
     def _generate_regression(self):
         """0 input vars, 3 over-time snapshots, regression on the 3rd."""
         imports = (
-            "from datetime import datetime, timedelta\n\n"
-            "import bencher as bn\n"
-            "from bencher.example.example_rerun_over_time import ControlSystemSweep"
+            "from datetime import datetime, timedelta\n\nimport rerun as rr\nimport bencher as bn"
         )
         body = """\
 if run_cfg is None:
@@ -116,15 +130,13 @@ for i, deg in enumerate(degradations):
             function_name="example_rerun_regression",
             imports=imports,
             body=body,
+            class_code=_get_control_system_class_code(),
             run_kwargs={"over_time": True},
         )
 
     def _generate_sweep(self):
         """1 input var (damping_ratio), single sweep, no over_time."""
-        imports = (
-            "import bencher as bn\n"
-            "from bencher.example.example_rerun_over_time import ControlSystemSweep"
-        )
+        imports = "import rerun as rr\nimport bencher as bn"
         body = """\
 bench = ControlSystemSweep().to_bench(run_cfg)
 bench.plot_sweep(
@@ -142,6 +154,7 @@ bench.plot_sweep(
             function_name="example_rerun_sweep",
             imports=imports,
             body=body,
+            class_code=_get_control_system_class_code(),
             run_kwargs={"level": 3},
         )
 

@@ -100,7 +100,6 @@ Convert `__call__` → `benchmark()` in each file (remove `update_params_from_kw
 - `bencher/example/example_workflow.py`
 - `bencher/example/example_image.py`
 - `bencher/example/example_video.py`
-- `bencher/example/example_rerun.py`
 - `bencher/example/example_cartesian_animation.py`
 - `bencher/example/example_self_benchmark.py`
 - `bencher/example/example_tab_bar_sweep.py`
