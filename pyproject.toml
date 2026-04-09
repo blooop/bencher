@@ -178,7 +178,7 @@ cache-clean-orphans = "python -c 'from bencher.cache_management import clean_orp
 #demos
 benchmark-save = "python scripts/benchmark_save.py"
 demo = "python3 bencher/example/example_image.py"
-demo_rerun = "python3 bencher/example/example_rerun.py"
+demo_rerun = "python3 bencher/example/generated/rerun/example_rerun_capture_window.py"
 
 #performance tracking
 test-timing-xml = "pytest --junit-xml=test-results.xml"
