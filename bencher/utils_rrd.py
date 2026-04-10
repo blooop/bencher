@@ -196,12 +196,12 @@ def _write_rrd_sidecar(rrd_path: Path, version: str, dest_dir: Path) -> tuple[st
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use parent directory name as prefix to avoid collisions when multiple
-    # .rrd files share the same filename (e.g. different sweep points all
-    # produce "rerun.rrd" in unique job-key subdirectories).
-    unique_name = f"{rrd_path.parent.name}_{rrd_path.name}"
-    rrd_dest = dest_dir / unique_name
-    shutil.copy2(rrd_path, rrd_dest)
+    # Preserve the per-job-key subdirectory structure used by gen_path()
+    # to avoid collisions when multiple .rrd files share the same basename.
+    job_key = rrd_path.parent.name
+    rrd_subdir = dest_dir / job_key
+    rrd_subdir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(rrd_path, rrd_subdir / rrd_path.name)
 
     viewer_html = _get_cdn_viewer_html(version)
     viewer_name = f"viewer_{version}.html"
@@ -209,7 +209,7 @@ def _write_rrd_sidecar(rrd_path: Path, version: str, dest_dir: Path) -> tuple[st
     if not viewer_path.exists() or viewer_path.read_text() != viewer_html:
         viewer_path.write_text(viewer_html, encoding="utf-8")
 
-    return viewer_name, unique_name
+    return viewer_name, f"{job_key}/{rrd_path.name}"
 
 
 def _portable_rrd_pane(
