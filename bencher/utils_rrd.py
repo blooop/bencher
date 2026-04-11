@@ -96,6 +96,9 @@ def rrd_file_to_pane(  # pragma: no cover
         portable — it works when served from any HTTP origin without a
         live Panel server.
     """
+    if not file_path:
+        return pn.pane.Markdown("*No recording*", width=width, height=height)
+
     rrd_path = Path(file_path).resolve()
 
     # Resolve viewer version: explicit > installed SDK > fallback.
@@ -196,8 +199,12 @@ def _write_rrd_sidecar(rrd_path: Path, version: str, dest_dir: Path) -> tuple[st
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    rrd_dest = dest_dir / rrd_path.name
-    shutil.copy2(rrd_path, rrd_dest)
+    # Preserve the per-job-key subdirectory structure used by gen_path()
+    # to avoid collisions when multiple .rrd files share the same basename.
+    job_key = rrd_path.parent.name
+    rrd_subdir = dest_dir / job_key
+    rrd_subdir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(rrd_path, rrd_subdir / rrd_path.name)
 
     viewer_html = _get_cdn_viewer_html(version)
     viewer_name = f"viewer_{version}.html"
@@ -205,7 +212,7 @@ def _write_rrd_sidecar(rrd_path: Path, version: str, dest_dir: Path) -> tuple[st
     if not viewer_path.exists() or viewer_path.read_text() != viewer_html:
         viewer_path.write_text(viewer_html, encoding="utf-8")
 
-    return viewer_name, rrd_path.name
+    return viewer_name, f"{job_key}/{rrd_path.name}"
 
 
 def _portable_rrd_pane(
