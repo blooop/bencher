@@ -96,6 +96,9 @@ def rrd_file_to_pane(  # pragma: no cover
         portable — it works when served from any HTTP origin without a
         live Panel server.
     """
+    if not file_path:
+        return pn.pane.Markdown("*No recording*", width=width, height=height)
+
     rrd_path = Path(file_path).resolve()
 
     # Resolve viewer version: explicit > installed SDK > fallback.
