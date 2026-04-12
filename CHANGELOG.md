@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.83.0] - 2026-04-12
+
+### Fixed
+- `.rrd` filename collision in saved reports by using subdirectory structure for rrd sidecar files (#909)
+- Guard `rrd_file_to_pane` against None/empty file paths
+- Start over_time film-strip labels from t=1 instead of t=0 (#907)
+- Skip rerun over-time entries with no data instead of showing placeholder (#905, #906)
+
+### Changed
+- Track all generated examples and remove duplicate cartesian animation
+- Gitignore `bencher/example/generated/` to stop dirty working tree
+
 ## [1.81.0] - 2026-04-08
 
 ### Added
