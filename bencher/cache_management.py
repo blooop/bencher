@@ -29,7 +29,7 @@ from diskcache import Cache
 logger = logging.getLogger(__name__)
 
 # Bump this when the cache layout changes in an incompatible way.
-CACHE_VERSION = "2"
+CACHE_VERSION = "3"
 
 # Default cache size for benchmark results (100 GB).
 # Used by ResultCollector, SweepExecutor, and Bench.

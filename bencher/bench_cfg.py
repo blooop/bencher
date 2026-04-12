@@ -635,10 +635,13 @@ class BenchCfg(BenchRunCfg):
         else:
             repeats_hash = 0
 
+        # NOTE: title is intentionally excluded from the hash so that renaming
+        # a benchmark's display title does not invalidate cached results or
+        # lose over_time history.  The benchmark is uniquely identified by
+        # bench_name + input/result/const vars + tag + over_time + repeats.
         hash_val = hash_sha1(
             (
                 hash_sha1(str(self.bench_name)),
-                hash_sha1(str(self.title)),
                 hash_sha1(self.over_time),
                 repeats_hash,
                 hash_sha1(self.tag),

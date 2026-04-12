@@ -295,6 +295,34 @@ class TestBenchCfgHashStability:
             include_repeats=True
         ), "BenchCfg hash should not change when only excluded obj fields differ"
 
+    def test_title_change_does_not_affect_hash(self):
+        """Changing the display title must not invalidate cached results."""
+
+        def make_cfg(title):
+            cfg = BenchCfg()
+            cfg.bench_name = "stable_bench"
+            cfg.title = title
+            cfg.over_time = False
+            cfg.repeats = 1
+            cfg.tag = ""
+            cfg.input_vars = []
+            cfg.result_vars = [ResultFloat(units="m/s", doc="speed")]
+            cfg.const_vars = []
+            return cfg
+
+        cfg_a = make_cfg("Original Title")
+        cfg_b = make_cfg("Renamed Title")
+        cfg_c = make_cfg(None)
+        assert cfg_a.hash_persistent(include_repeats=True) == cfg_b.hash_persistent(
+            include_repeats=True
+        ), "Renaming the title should not change the hash"
+        assert cfg_a.hash_persistent(include_repeats=True) == cfg_c.hash_persistent(
+            include_repeats=True
+        ), "Setting title to None should not change the hash"
+        assert cfg_a.hash_persistent(include_repeats=False) == cfg_b.hash_persistent(
+            include_repeats=False
+        ), "Renaming the title should not change the sample hash either"
+
 
 # ---------------------------------------------------------------------------
 # Cross-process hash tests — batched for performance
