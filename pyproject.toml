@@ -76,6 +76,17 @@ test = [
     "ty>=0.0.13,<=0.0.27",
 ]
 
+docs = [
+    "sphinx>=7.0,<=9.1.0",
+    "myst-parser",
+    "sphinxcontrib-napoleon",
+    "sphinx-rtd-theme",
+    "sphinx-autoapi",
+    "sphinx-copybutton",
+    "playwright",
+    "Pillow",
+]
+
 #adds support for embedding rerun windows (alpha)
 rerun = ["rerun-sdk>=0.31.1,<=0.31.1", "rerun-notebook>=0.31.1,<=0.31.1"]
 
@@ -92,6 +103,7 @@ include = ["bencher", "CHANGELOG.md"]
 # Environments
 [tool.pixi.environments]
 default = { features = ["test", "rerun"], solve-group = "default" }
+docs = { features = ["test", "rerun", "docs"], solve-group = "default" }
 py310 = ["py310", "test", "rerun"]
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
@@ -167,6 +179,11 @@ generate-docs = "python bencher/example/meta/generate_examples.py"
 docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = [
     "generate-docs",
 ] }
+# Quick docs rebuild (skip example generation) + local server for debugging
+docs-quick = "rm -rf docs/builtdocs && python -m sphinx -b html docs docs/builtdocs"
+docs-serve = { cmd = "python -m http.server 8000 -d docs/builtdocs", depends-on = ["docs-quick"] }
+# NOTE: docs, docs-quick, and docs-serve require the 'docs' environment:
+#   pixi run -e docs docs-serve
 
 
 #cache management
