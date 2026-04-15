@@ -60,6 +60,29 @@ class SweepSelector(Selector, SweepBase):
         """
         return self.indices_to_samples(self.samples, self.objects)
 
+    def _sweep_identity(self) -> tuple:
+        """Include ``objects`` so changing the option set busts the cache.
+
+        Elements with ``__bencher_hash__`` (e.g. :class:`YamlSelection`) are
+        fingerprinted via that hook so changing a YAML value under the same
+        key still invalidates the benchmark-level cache.
+        """
+
+        def _obj_fingerprint(o):
+            hook = getattr(o, "__bencher_hash__", None)
+            if callable(hook):
+                return hook()
+            return str(o)
+
+        objects = self.objects
+        if isinstance(objects, dict):
+            obj_tuple = tuple((str(k), _obj_fingerprint(v)) for k, v in objects.items())
+        elif objects is not None:
+            obj_tuple = tuple(_obj_fingerprint(o) for o in objects)
+        else:
+            obj_tuple = ()
+        return super()._sweep_identity() + (obj_tuple,)
+
     # ------------------------------------------------------------------
     # Dynamic update helpers
     # ------------------------------------------------------------------
@@ -358,6 +381,10 @@ class YamlSweep(SweepSelector):
     """
 
     __slots__ = shared_slots + ["yaml_path", "_entries", "default_key"]
+    # ``objects`` already carries the fingerprint of every YAML entry (via
+    # :meth:`YamlSelection.__bencher_hash__`), so these internal fields are
+    # redundant for cache identity.
+    _sweep_hash_exclude = ("yaml_path", "_entries", "default_key")
 
     def __init__(
         self,
@@ -491,6 +518,11 @@ class IntSweep(Integer, SweepBase):
     def _coerce_bound(self, value):
         return int(value)
 
+    def _sweep_identity(self) -> tuple:
+        """Include bounds and sample_values so a reshaped sweep busts the cache."""
+        sample_values = tuple(self.sample_values) if self.sample_values else None
+        return super()._sweep_identity() + (self.sweep_bounds, sample_values)
+
     def values(self) -> list[int]:
         """Return all the values for the parameter sweep.
 
@@ -575,6 +607,11 @@ class FloatSweep(Number, SweepBase):
 
     def _coerce_bound(self, value):
         return float(value)
+
+    def _sweep_identity(self) -> tuple:
+        """Include bounds, sample_values, and step so a reshaped sweep busts the cache."""
+        sample_values = tuple(self.sample_values) if self.sample_values else None
+        return super()._sweep_identity() + (self.sweep_bounds, sample_values, self.step)
 
     def values(self) -> list[float]:
         """Return all the values for the parameter sweep.

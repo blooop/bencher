@@ -28,8 +28,14 @@ from diskcache import Cache
 
 logger = logging.getLogger(__name__)
 
-# Bump this when the cache layout changes in an incompatible way.
-CACHE_VERSION = "2"
+# Bump this when the cache layout changes in an incompatible way OR when
+# anything that contributes to ``BenchCfg.hash_persistent()`` changes in a
+# way that would otherwise silently collide with existing on-disk entries.
+# The version is also folded directly into the hash (see
+# ``BenchCfg.hash_persistent``) so bumping here atomically invalidates every
+# benchmark-level and over_time history key in addition to wiping the on-disk
+# tree via ``ensure_cache_version()``.
+CACHE_VERSION = "3"
 
 # Default cache size for benchmark results (100 GB).
 # Used by ResultCollector, SweepExecutor, and Bench.
