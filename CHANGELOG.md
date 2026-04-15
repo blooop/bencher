@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.84.0] - 2026-04-12
+
+### Changed
+- Decouple benchmark title from cache hash so renaming a title no longer invalidates cached results or loses over_time history
+
 ## [1.83.0] - 2026-04-12
 
 ### Fixed
