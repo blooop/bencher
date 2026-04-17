@@ -23,9 +23,8 @@ class NoisyServerBenchmark(bn.ParametrizedSweep):
         import random as _rnd
 
         base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
-        # Deterministic-but-varied noise per call within a release.
         rng = _rnd.Random(self._release_seed * 1_000_003 + self._call_counter)
-        NoisyServerBenchmark._call_counter += 1
+        type(self)._call_counter += 1
         noise = rng.gauss(0.0, self._time_noise) if self._time_noise > 0 else 0.0
         self.response_time = base_rt + self._time_offset + noise
 

@@ -296,6 +296,36 @@ class TestDetectAdaptive:
         result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
         assert not result.regressed
 
+    def test_nan_current_is_guarded(self):
+        """All-NaN current must not trigger warnings or false regression."""
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 1.0, 20)
+        curr = np.array([np.nan, np.nan])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_sparse_fallback_uses_full_samples(self):
+        """Fallback must honour `historical_samples` so it sees all raw values.
+
+        With 3 time points but many samples per point, ttest has enough data
+        to be statistically meaningful — whereas passing only per-time means
+        would leave ttest with just 3 points.
+        """
+        rng = self._rng()
+        hist_time_means = np.array([100.0, 100.0, 100.0])
+        hist_samples = 100.0 + rng.normal(0, 1.0, 60)  # 3 points x 20 repeats
+        curr = 110.0 + rng.normal(0, 1.0, 20)
+        result = detect_adaptive(
+            "x",
+            hist_time_means,
+            curr,
+            direction=OptDir.minimize,
+            historical_samples=hist_samples,
+        )
+        # Must fall back to ttest since we have plenty of samples.
+        assert result.method == "ttest"
+        assert result.regressed
+
 
 # ── RegressionReport ───────────────────────────────────────────────────────
 

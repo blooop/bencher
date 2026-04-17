@@ -321,6 +321,7 @@ def detect_adaptive(
     drift_threshold: float | None = None,
     mk_alpha: float = 0.1,
     direction: OptDir = OptDir.minimize,
+    historical_samples: np.ndarray | None = None,
 ) -> RegressionResult:
     """Robust regression detection combining step and drift tests.
 
@@ -347,27 +348,37 @@ def detect_adaptive(
             only one knob.
         mk_alpha: Significance level for the Mann–Kendall trend guard.
         direction: Optimization direction from the result variable.
+        historical_samples: Optional flat array of all historical samples
+            (not per-time means). Used for the sparse-history fallback so the
+            delegated ``ttest``/``percentage`` methods see the same input they
+            would have received from ``detect_regressions`` directly. Falls
+            back to ``historical_time_means`` when not provided.
     """
     if drift_threshold is None:
         drift_threshold = _DRIFT_FRAC * z_threshold
 
     hist_clean = _clean_1d(historical_time_means)
     curr_clean = _clean_1d(current)
-    curr_mean = float(np.nanmean(current)) if len(curr_clean) else float("nan")
+    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
 
     # Not enough history for a robust scale — fall back to less strict checks.
+    # Use the full per-sample history when available so the fallback behaves
+    # like a direct call to detect_ttest/detect_percentage.
     if len(hist_clean) < 4:
-        if len(hist_clean) >= 2 and len(curr_clean) >= 2:
+        fallback_hist = (
+            _clean_1d(historical_samples) if historical_samples is not None else hist_clean
+        )
+        if len(fallback_hist) >= 2 and len(curr_clean) >= 2:
             return detect_ttest(
                 variable,
-                hist_clean,
+                fallback_hist,
                 curr_clean,
                 alpha=_METHOD_DEFAULTS["ttest"],
                 direction=direction,
             )
         return detect_percentage(
             variable,
-            hist_clean,
+            fallback_hist,
             curr_clean,
             threshold_percent=_METHOD_DEFAULTS["percentage"],
             direction=direction,
@@ -516,6 +527,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                 current_clean,
                 z_threshold=threshold,
                 direction=direction,
+                historical_samples=historical_clean,
             )
         else:
             logging.warning(f"Unknown regression method '{method}', falling back to percentage")

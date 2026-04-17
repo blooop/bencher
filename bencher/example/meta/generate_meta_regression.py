@@ -4,26 +4,19 @@ Demonstrates how to use regression detection to catch performance
 regressions in over-time benchmarks.
 """
 
+import inspect
+import math
+from dataclasses import dataclass
+
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "regression"
 
-REGRESSION_EXAMPLES = [
-    "regression_percentage",
-    "regression_adaptive_stable_noisy",
-    "regression_adaptive_gradual_drift",
-    "regression_adaptive_sudden_drop",
-    "regression_adaptive_outlier_immune",
-    "regression_adaptive_oscillating",
-]
 
-
-# Shared benchmark class used by every adaptive example. The benchmark reads
-# ``_time_offset`` (per-release mean) and ``_time_noise`` (per-release sigma),
-# seeded per release for reproducibility while still producing independent
-# samples across repeats.
-_ADAPTIVE_CLASS_CODE = '''\
+# Real class that backs every adaptive example. Defined at module level so
+# ``inspect.getsource`` can capture its definition verbatim as the ``class_code``
+# embedded in each generated example. The class is never instantiated here.
 class NoisyServerBenchmark(bn.ParametrizedSweep):
     """Server response time with tunable per-release mean and noise sigma."""
 
@@ -33,20 +26,22 @@ class NoisyServerBenchmark(bn.ParametrizedSweep):
     response_time = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
 
     # Per-release knobs set externally before each plot_sweep call.
-    _time_offset = 0.0   # shift applied to the mean response time
-    _time_noise = 0.0    # sigma of gaussian noise added to each sample
-    _release_seed = 0    # per-release RNG seed
-    _call_counter = 0    # incremented per sample so repeats differ
+    _time_offset = 0.0  # shift applied to the mean response time
+    _time_noise = 0.0  # sigma of gaussian noise added to each sample
+    _release_seed = 0  # per-release RNG seed
+    _call_counter = 0  # incremented per sample so repeats differ
 
     def benchmark(self):
         import random as _rnd
 
         base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
-        # Deterministic-but-varied noise per call within a release.
         rng = _rnd.Random(self._release_seed * 1_000_003 + self._call_counter)
-        NoisyServerBenchmark._call_counter += 1
+        type(self)._call_counter += 1
         noise = rng.gauss(0.0, self._time_noise) if self._time_noise > 0 else 0.0
-        self.response_time = base_rt + self._time_offset + noise'''
+        self.response_time = base_rt + self._time_offset + noise
+
+
+_ADAPTIVE_CLASS_CODE = inspect.getsource(NoisyServerBenchmark)
 
 
 _ADAPTIVE_BODY_TEMPLATE = """\
@@ -81,57 +76,43 @@ for i, (offset, sigma) in enumerate(schedule):
 """
 
 
-def _adaptive_schedule_stable_noisy():
-    """20 releases, flat mean, high noise — user's pain point."""
-    return [(0.0, 15.0) for _ in range(20)]
+@dataclass(frozen=True)
+class AdaptiveExample:
+    """Title + schedule for an adaptive-method example file.
+
+    ``schedule`` is a list of ``(mean_offset, noise_sigma)`` tuples, one entry
+    per historical release.
+    """
+
+    title: str
+    schedule: list[tuple[float, float]]
 
 
-def _adaptive_schedule_gradual_drift():
-    """20 releases, mean drifts +1ms per release, moderate noise."""
-    return [(1.5 * i, 5.0) for i in range(20)]
-
-
-def _adaptive_schedule_sudden_drop():
-    """10 stable releases then a sudden +40ms step on the latest."""
-    return [(0.0, 4.0) for _ in range(10)] + [(40.0, 4.0)]
-
-
-def _adaptive_schedule_outlier_immune():
-    """Stable baseline with one historical glitch at release 5."""
-    schedule = [(0.0, 2.0) for _ in range(15)]
-    schedule[5] = (150.0, 2.0)  # isolated bad release, later reverted
-    return schedule
-
-
-def _adaptive_schedule_oscillating():
-    """Periodic diurnal-style pattern around a stable baseline."""
-    import math
-
-    return [(10.0 * math.sin(i * math.pi / 3.0), 2.0) for i in range(18)]
-
-
-_ADAPTIVE_SCHEDULES = {
-    "regression_adaptive_stable_noisy": (
-        "Adaptive detection — noisy-but-stable signal (no false positive)",
-        _adaptive_schedule_stable_noisy(),
+_ADAPTIVE_EXAMPLES: dict[str, AdaptiveExample] = {
+    "regression_adaptive_stable_noisy": AdaptiveExample(
+        title="Adaptive detection — noisy-but-stable signal (no false positive)",
+        schedule=[(0.0, 15.0)] * 20,
     ),
-    "regression_adaptive_gradual_drift": (
-        "Adaptive detection — gradual long-term drift (drift test fires)",
-        _adaptive_schedule_gradual_drift(),
+    "regression_adaptive_gradual_drift": AdaptiveExample(
+        title="Adaptive detection — gradual long-term drift (drift test fires)",
+        schedule=[(1.5 * i, 5.0) for i in range(20)],
     ),
-    "regression_adaptive_sudden_drop": (
-        "Adaptive detection — sudden short-term drop (step test fires)",
-        _adaptive_schedule_sudden_drop(),
+    "regression_adaptive_sudden_drop": AdaptiveExample(
+        title="Adaptive detection — sudden short-term drop (step test fires)",
+        schedule=[(0.0, 4.0) for _ in range(10)] + [(40.0, 4.0)],
     ),
-    "regression_adaptive_outlier_immune": (
-        "Adaptive detection — isolated historical outlier ignored",
-        _adaptive_schedule_outlier_immune(),
+    "regression_adaptive_outlier_immune": AdaptiveExample(
+        title="Adaptive detection — isolated historical outlier ignored",
+        schedule=[(150.0, 2.0) if i == 5 else (0.0, 2.0) for i in range(15)],
     ),
-    "regression_adaptive_oscillating": (
-        "Adaptive detection — oscillating periodic signal (no false positive)",
-        _adaptive_schedule_oscillating(),
+    "regression_adaptive_oscillating": AdaptiveExample(
+        title="Adaptive detection — oscillating periodic signal (no false positive)",
+        schedule=[(10.0 * math.sin(i * math.pi / 3.0), 2.0) for i in range(18)],
     ),
 }
+
+
+REGRESSION_EXAMPLES = ["regression_percentage", *_ADAPTIVE_EXAMPLES.keys()]
 
 
 class MetaRegression(MetaGeneratorBase):
@@ -142,8 +123,11 @@ class MetaRegression(MetaGeneratorBase):
     def benchmark(self):
         if self.example == "regression_percentage":
             self._generate_percentage()
-        elif self.example in _ADAPTIVE_SCHEDULES:
-            self._generate_adaptive(self.example)
+            return
+
+        adaptive = _ADAPTIVE_EXAMPLES.get(self.example)
+        if adaptive is not None:
+            self._generate_adaptive(self.example, adaptive)
 
     def _generate_percentage(self):
         """Percentage-based regression detection over time."""
@@ -203,13 +187,12 @@ for i, offset in enumerate(releases):
             run_kwargs={"over_time": True},
         )
 
-    def _generate_adaptive(self, name: str) -> None:
+    def _generate_adaptive(self, name: str, adaptive: AdaptiveExample) -> None:
         """Emit a single adaptive-method example file."""
-        title, schedule = _ADAPTIVE_SCHEDULES[name]
         imports = "from datetime import datetime, timedelta\n\nimport bencher as bn"
-        body = _ADAPTIVE_BODY_TEMPLATE.format(schedule=schedule)
+        body = _ADAPTIVE_BODY_TEMPLATE.format(schedule=adaptive.schedule)
         self.generate_example(
-            title=title,
+            title=adaptive.title,
             output_dir=OUTPUT_DIR,
             filename=f"example_{name}",
             function_name=f"example_{name}",
