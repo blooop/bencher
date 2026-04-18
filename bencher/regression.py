@@ -50,6 +50,8 @@ class RegressionResult:
     threshold: float
     direction: str
     details: str
+    band_lower: float | None = None
+    band_upper: float | None = None
 
 
 @dataclass
@@ -173,6 +175,7 @@ def detect_percentage(
     exceeds = _exceeds_directional_threshold(change, threshold_percent, direction)
     regressed = exceeds and _is_regression(change, direction)
 
+    frac = threshold_percent / 100.0
     return RegressionResult(
         variable=variable,
         method="percentage",
@@ -183,6 +186,8 @@ def detect_percentage(
         threshold=threshold_percent,
         direction=direction.value,
         details=f"Change {change:+.2f}% vs threshold {threshold_percent}%",
+        band_lower=hist_mean * (1.0 - frac),
+        band_upper=hist_mean * (1.0 + frac),
     )
 
 
@@ -238,6 +243,8 @@ def detect_iqr(
         threshold=iqr_scale,
         direction=direction.value,
         details=f"IQR bounds [{lower:.4g}, {upper:.4g}], current={curr_mean:.4g}",
+        band_lower=lower,
+        band_upper=upper,
     )
 
 
@@ -448,6 +455,8 @@ def detect_adaptive(
         threshold=z_threshold,
         direction=direction.value,
         details=details,
+        band_lower=baseline - z_threshold * noise_floor,
+        band_upper=baseline + z_threshold * noise_floor,
     )
 
 

@@ -77,6 +77,7 @@ class BenchResult(
         new_instance.ds = original.ds
         new_instance.bench_cfg = original.bench_cfg
         new_instance.plt_cnt_cfg = original.plt_cnt_cfg
+        new_instance.regression_report = original.regression_report
         return new_instance
 
     def to(
@@ -102,6 +103,7 @@ class BenchResult(
         result_instance.ds = self.ds
         result_instance.plt_cnt_cfg = self.plt_cnt_cfg
         result_instance.dataset_list = self.dataset_list
+        result_instance.regression_report = self.regression_report
         # Build kwargs for the plot call, only include reduce if explicitly set
         plot_kwargs = dict(
             result_var=result_var,
