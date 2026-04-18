@@ -20,6 +20,7 @@ import sys
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from enum import Enum
 
 import param
 import pytest
@@ -502,8 +503,6 @@ class TestSweepHashShapeFields:
         assert a.hash_persistent() != b.hash_persistent()
 
     def test_enum_sweep_objects_change_hash(self):
-        from enum import Enum
-
         from bencher.variables.inputs import EnumSweep
 
         class E1(Enum):
@@ -580,40 +579,36 @@ def _discover_sweep_classes():
     return classes
 
 
-def _make_sweep_instance(cls):
-    """Instantiate a sweep class with sensible defaults for slot-coverage tests."""
-    from enum import Enum
+class _SweepFixtureEnum(Enum):
+    A = 1
+    B = 2
 
+
+def _make_sweep_instance(cls):
+    """Instantiate a sweep class with sensible defaults for slot-coverage tests.
+
+    YamlSweep returns None (needs a filesystem path; covered indirectly via
+    SweepSelector).  Unknown subclasses also return None so the caller skips them.
+    """
     from bencher.variables.inputs import (
         BoolSweep,
         EnumSweep,
         FloatSweep,
         IntSweep,
         StringSweep,
-        YamlSweep,
         SweepSelector,
     )
 
-    if cls is FloatSweep:
-        return FloatSweep(bounds=(0.0, 1.0), samples=5, units="m/s")
-    if cls is IntSweep:
-        return IntSweep(bounds=(0, 10), samples=5, units="ul")
-    if cls is StringSweep:
-        return StringSweep(["a", "b", "c"], units="ul")
-    if cls is BoolSweep:
-        return BoolSweep(units="ul")
-    if cls is EnumSweep:
-
-        class _E(Enum):
-            A = 1
-            B = 2
-
-        return EnumSweep(_E, units="ul")
-    if cls is YamlSweep:
-        return None  # needs a filesystem path; covered indirectly via SweepSelector
-    if cls is SweepSelector:
-        return SweepSelector(objects=["a", "b"], units="ul")
-    return None
+    factories = {
+        FloatSweep: lambda: FloatSweep(bounds=(0.0, 1.0), samples=5, units="m/s"),
+        IntSweep: lambda: IntSweep(bounds=(0, 10), samples=5, units="ul"),
+        StringSweep: lambda: StringSweep(["a", "b", "c"], units="ul"),
+        BoolSweep: lambda: BoolSweep(units="ul"),
+        EnumSweep: lambda: EnumSweep(_SweepFixtureEnum, units="ul"),
+        SweepSelector: lambda: SweepSelector(objects=["a", "b"], units="ul"),
+    }
+    factory = factories.get(cls)
+    return factory() if factory is not None else None
 
 
 def _collect_sweep_mro_slots(cls):
@@ -747,7 +742,6 @@ GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "6093b4560b17af4dab2f14f5609b7b945499d
 
 def _build_golden_bench_cfg():
     from bencher.variables.inputs import FloatSweep, IntSweep, StringSweep
-    from bencher.variables.results import ResultFloat
 
     cfg = BenchCfg()
     cfg.bench_name = "golden_bench"
@@ -828,7 +822,7 @@ class TestGoldenBenchCfgHash:
 
     def test_result_direction_does_not_change_bench_hash(self):
         """Flipping minimize<->maximize must not invalidate history."""
-        from bencher.variables.results import OptDir, ResultFloat
+        from bencher.variables.results import OptDir
 
         cfg_a = _build_golden_bench_cfg()
         cfg_b = _build_golden_bench_cfg()

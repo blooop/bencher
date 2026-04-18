@@ -86,7 +86,13 @@ class SweepSelector(Selector, SweepBase):
 
         objects = self.objects
         if isinstance(objects, dict):
-            obj_tuple = tuple((str(k), _obj_fingerprint(v)) for k, v in objects.items())
+            # Sort by key-string so semantically equal dicts with different
+            # insertion orders produce the same fingerprint.
+            items = sorted(
+                ((str(k), _obj_fingerprint(v)) for k, v in objects.items()),
+                key=lambda kv: kv[0],
+            )
+            obj_tuple = tuple(items)
         elif objects is not None:
             obj_tuple = tuple(_obj_fingerprint(o) for o in objects)
         else:
@@ -530,7 +536,7 @@ class IntSweep(Integer, SweepBase):
 
     def _sweep_identity(self) -> tuple:
         """Include bounds and sample_values so a reshaped sweep busts the cache."""
-        sample_values = tuple(self.sample_values) if self.sample_values else None
+        sample_values = tuple(self.sample_values) if self.sample_values is not None else None
         return super()._sweep_identity() + (self.sweep_bounds, sample_values)
 
     def values(self) -> list[int]:
@@ -620,7 +626,7 @@ class FloatSweep(Number, SweepBase):
 
     def _sweep_identity(self) -> tuple:
         """Include bounds, sample_values, and step so a reshaped sweep busts the cache."""
-        sample_values = tuple(self.sample_values) if self.sample_values else None
+        sample_values = tuple(self.sample_values) if self.sample_values is not None else None
         return super()._sweep_identity() + (self.sweep_bounds, sample_values, self.step)
 
     def values(self) -> list[float]:
