@@ -137,9 +137,7 @@ class BandResult(HoloviewResult):
             for r in self.regression_report.results:
                 if r.variable == var and r.band_lower is not None:
                     overlay = (
-                        hv.HSpan(r.band_lower, r.band_upper).opts(
-                            color="green", alpha=0.08
-                        )
+                        hv.HSpan(r.band_lower, r.band_upper).opts(color="green", alpha=0.08)
                         * hv.HLine(r.baseline_value).opts(
                             color="green", line_dash="dashed", line_width=1
                         )

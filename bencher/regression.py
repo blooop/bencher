@@ -394,7 +394,7 @@ def detect_adaptive(
     baseline, mad_sigma = _robust_scale(hist_clean)
     noise_floor = max(mad_sigma, 1e-6 * abs(baseline), 1e-12)
 
-    # Step test — current mean vs robust baseline in (total) noise units.
+    # Step test — current mean vs robust baseline in MAD-sigma units.
     z_step = (curr_mean - baseline) / noise_floor
     step_regressed = _is_regression(z_step, direction) and abs(z_step) > z_threshold
 
@@ -409,25 +409,17 @@ def detect_adaptive(
     resid_sigma = _residual_sigma(filtered)
     drift_noise = max(resid_sigma, 1e-6 * abs(baseline), 1e-12)
 
-    drift_regressed = False
-    z_drift = 0.0
-    mk_p = 1.0
-    try:
-        from scipy.stats import kendalltau, theilslopes
+    from scipy.stats import kendalltau, theilslopes
 
-        slope = float(theilslopes(filtered, indices)[0])
-        drift_total = slope * len(filtered)
-        z_drift = drift_total / drift_noise
-        _, mk_p = kendalltau(indices, filtered)
-        mk_p = float(mk_p) if not np.isnan(mk_p) else 1.0
-        drift_regressed = (
-            _is_regression(z_drift, direction)
-            and abs(z_drift) > drift_threshold
-            and mk_p < mk_alpha
-        )
-    except ImportError:
-        # scipy is a hard dep for ttest; if it's ever missing, skip drift.
-        pass
+    slope = float(theilslopes(filtered, indices)[0])
+    # Slope is per index-step; total drift across n points spans (n-1) steps.
+    drift_total = slope * (len(filtered) - 1)
+    z_drift = drift_total / drift_noise
+    _, mk_p = kendalltau(indices, filtered)
+    mk_p = float(mk_p) if not np.isnan(mk_p) else 1.0
+    drift_regressed = (
+        _is_regression(z_drift, direction) and abs(z_drift) > drift_threshold and mk_p < mk_alpha
+    )
 
     regressed = step_regressed or drift_regressed
 
@@ -439,8 +431,8 @@ def detect_adaptive(
         fired.append("drift")
     fired_str = "+".join(fired) if fired else "none"
     details = (
-        f"fired={fired_str}, z_step={z_step:+.2f} (|>|{z_threshold}), "
-        f"z_drift={z_drift:+.2f} (|>|{drift_threshold:.2f}), "
+        f"fired={fired_str}, z_step={z_step:+.2f} (|z|>{z_threshold}), "
+        f"z_drift={z_drift:+.2f} (|z|>{drift_threshold:.2f}), "
         f"mk_p={mk_p:.3g} (<{mk_alpha}), "
         f"baseline={baseline:.4g}, noise={noise_floor:.4g}"
     )

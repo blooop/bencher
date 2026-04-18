@@ -5,7 +5,7 @@ regressions in over-time benchmarks, and 2-D tuning grids that show
 where the adaptive detector fires or stays quiet.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
