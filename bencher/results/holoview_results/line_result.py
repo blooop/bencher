@@ -120,7 +120,23 @@ class LineResult(HoloviewResult):
                 widget_location="bottom",
                 **kwargs,
             )
-            return self._apply_opts(plot, xrotation=30)
+            plot = self._apply_opts(plot, xrotation=30)
+
+            # Overlay regression acceptance band if available.
+            if self.regression_report is not None:
+                import holoviews as hv
+
+                for r in self.regression_report.results:
+                    if r.variable == result_var.name and r.band_lower is not None:
+                        plot = (
+                            hv.HSpan(r.band_lower, r.band_upper).opts(color="green", alpha=0.08)
+                            * hv.HLine(r.baseline_value).opts(
+                                color="green", line_dash="dashed", line_width=1
+                            )
+                            * plot
+                        )
+
+            return plot
 
         # No float vars and over_time was squeezed (single time point) — no x-axis
         if not self.plt_cnt_cfg.float_vars:

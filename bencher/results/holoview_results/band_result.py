@@ -116,7 +116,7 @@ class BandResult(HoloviewResult):
 
         scatter_x, scatter_y = self._build_scatter_data(time_coords, values, **kwargs)
 
-        return self._build_band_overlay(
+        overlay = self._build_band_overlay(
             time_coords,
             p10,
             p25,
@@ -131,6 +131,20 @@ class BandResult(HoloviewResult):
             units=units,
             **kwargs,
         )
+
+        # Overlay regression acceptance band if available.
+        if overlay is not None and self.regression_report is not None:
+            for r in self.regression_report.results:
+                if r.variable == var and r.band_lower is not None:
+                    overlay = (
+                        hv.HSpan(r.band_lower, r.band_upper).opts(color="green", alpha=0.08)
+                        * hv.HLine(r.baseline_value).opts(
+                            color="green", line_dash="dashed", line_width=1
+                        )
+                        * overlay
+                    )
+
+        return overlay
 
     def _band_static(
         self,

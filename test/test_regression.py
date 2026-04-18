@@ -9,6 +9,7 @@ from bencher.regression import (
     RegressionError,
     RegressionReport,
     RegressionResult,
+    detect_adaptive,
     detect_iqr,
     detect_percentage,
     detect_regressions,
@@ -174,6 +175,155 @@ class TestDetectTtest:
         hist = rng.normal(100, 1, 30)
         curr = rng.normal(110, 1, 30)
         result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.none)
+        assert result.regressed
+
+
+# ── detect_adaptive ────────────────────────────────────────────────────────
+
+
+class TestDetectAdaptive:
+    """Noise-aware tests covering false-positive suppression and true-positive detection.
+
+    The adaptive method estimates inherent noise via MAD and tests both sudden
+    steps and long-term drift. These scenarios verify the detector stays quiet
+    on stable-but-noisy signals while firing on real regressions.
+    """
+
+    def _rng(self):
+        return np.random.default_rng(0)
+
+    # ---- false-positive suppression ----
+
+    def test_stable_low_noise_no_regression(self):
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 0.5, 20)
+        curr = np.array([100.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_stable_high_noise_no_regression(self):
+        """User's case: noisy but stable signal must not trip a regression."""
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 15.0, 20)
+        curr = 100.0 + rng.normal(0, 15.0, 10)
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed, f"false positive on noisy-stable signal: {result.details}"
+
+    def test_isolated_historical_outlier_no_regression(self):
+        """A single glitch in history must not move the baseline."""
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 1.0, 20)
+        hist[5] = 500.0  # one-off spike
+        curr = np.array([101.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_heavy_tailed_noise_no_regression(self):
+        """Student-t (df=2) has occasional huge draws but no drift."""
+        rng = self._rng()
+        hist = 100.0 + rng.standard_t(2, size=30)
+        curr = np.array([100.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_oscillating_stable_no_regression(self):
+        """Periodic signal centered at baseline — MK p-value should be high."""
+        i = np.arange(20, dtype=float)
+        hist = 100.0 + 10.0 * np.sin(i)
+        curr = np.array([101.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    # ---- true-positive detection ----
+
+    def test_sudden_regression_on_noisy_signal(self):
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 15.0, 20)
+        curr = 150.0 + rng.normal(0, 15.0, 10)
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert result.regressed
+        assert "step" in result.details
+
+    def test_gradual_drift_on_noisy_signal(self):
+        rng = self._rng()
+        i = np.arange(20, dtype=float)
+        hist = 100.0 + 1.5 * i + rng.normal(0, 5.0, 20)
+        curr = np.array([float(100.0 + 1.5 * 20)])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert result.regressed
+        assert "drift" in result.details
+
+    def test_improvement_not_regression_minimize(self):
+        """For minimize, a step *down* is an improvement, not a regression."""
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 1.0, 20)
+        curr = np.array([50.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_improvement_not_regression_maximize(self):
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 1.0, 20)
+        curr = np.array([150.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.maximize)
+        assert not result.regressed
+
+    def test_direction_none_fires_either_way(self):
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 1.0, 20)
+        curr = np.array([150.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.none)
+        assert result.regressed
+
+    # ---- fallback for sparse data ----
+
+    def test_sparse_history_falls_back(self):
+        hist = np.array([100.0, 101.0, 99.0])
+        curr = np.array([100.0, 102.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert result.method in ("ttest", "percentage")
+
+    def test_sparse_history_single_current_falls_back(self):
+        hist = np.array([100.0, 200.0])
+        curr = np.array([200.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert result.method == "percentage"
+
+    def test_constant_history_with_identical_current(self):
+        """Zero-variance history with matching current must not fire."""
+        hist = np.full(20, 100.0)
+        curr = np.array([100.0])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_nan_current_is_guarded(self):
+        """All-NaN current must not trigger warnings or false regression."""
+        rng = self._rng()
+        hist = 100.0 + rng.normal(0, 1.0, 20)
+        curr = np.array([np.nan, np.nan])
+        result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_sparse_fallback_uses_full_samples(self):
+        """Fallback must honour `historical_samples` so it sees all raw values.
+
+        With 3 time points but many samples per point, ttest has enough data
+        to be statistically meaningful — whereas passing only per-time means
+        would leave ttest with just 3 points.
+        """
+        rng = self._rng()
+        hist_time_means = np.array([100.0, 100.0, 100.0])
+        hist_samples = 100.0 + rng.normal(0, 1.0, 60)  # 3 points x 20 repeats
+        curr = 110.0 + rng.normal(0, 1.0, 20)
+        result = detect_adaptive(
+            "x",
+            hist_time_means,
+            curr,
+            direction=OptDir.minimize,
+            historical_samples=hist_samples,
+        )
+        # Must fall back to ttest since we have plenty of samples.
+        assert result.method == "ttest"
         assert result.regressed
 
 
@@ -347,6 +497,52 @@ class TestDetectRegressions:
         bench_cfg, run_cfg = self._make_cfg([rv], method="ttest", threshold=0.05)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
+
+    def test_adaptive_method_no_false_positive_on_noisy_stable(self):
+        """Adaptive must not trip on a noisy-but-stable signal (user's pain point)."""
+        rng = np.random.default_rng(0)
+        values = 100.0 + rng.normal(0, 15.0, size=(20, 4))
+        ds = self._make_dataset(n_times=20, n_repeats=4, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert not report.has_regressions, report.summary()
+
+    def test_adaptive_method_detects_sudden_step(self):
+        """Adaptive fires on a sudden jump that is large relative to noise."""
+        rng = np.random.default_rng(0)
+        stable = 100.0 + rng.normal(0, 2.0, size=(20, 4))
+        jump = 150.0 + rng.normal(0, 2.0, size=(1, 4))
+        values = np.vstack([stable, jump])
+        ds = self._make_dataset(n_times=21, n_repeats=4, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.has_regressions
+        assert "step" in report.results[0].details
+
+    def test_adaptive_method_detects_gradual_drift(self):
+        """Adaptive fires on slow drift where no single step exceeds percentage."""
+        rng = np.random.default_rng(0)
+        n_times = 20
+        n_repeats = 4
+        base = np.arange(n_times, dtype=float)[:, None] * 1.5 + 100.0
+        values = base + rng.normal(0, 3.0, size=(n_times, n_repeats))
+        ds = self._make_dataset(n_times=n_times, n_repeats=n_repeats, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.has_regressions
+        assert "drift" in report.results[0].details
 
     def test_all_nan(self):
         values = np.full((3, 2), np.nan)
