@@ -1,8 +1,8 @@
 """Meta-generator: Regression detection examples.
 
 Demonstrates how to use regression detection to catch performance
-regressions in over-time benchmarks, and how to tune each method's
-threshold against the amount of regression that needs detecting.
+regressions in over-time benchmarks, including scenario examples that
+visualise the time-series data the detector operates on.
 """
 
 from dataclasses import dataclass
@@ -14,181 +14,91 @@ OUTPUT_DIR = "regression"
 
 
 @dataclass(frozen=True)
-class TuningSpec:
-    """Per-method config for a 2-D ``regression_magnitude × threshold`` sweep.
+class ScenarioSpec:
+    """Per-scenario config for an over-time regression detection example.
 
-    Each method has its own threshold parameter with its own units and typical
-    range. Kept in one place so the template below can render a self-contained
-    example file per method.
+    Each scenario generates a ParametrizedSweep class with a single
+    ``ResultFloat`` that follows a characteristic time-series pattern,
+    making the data fed to the adaptive detector directly visible.
     """
 
     classname: str
-    threshold_attr: str
-    threshold_default: float
-    threshold_lo: float
-    threshold_hi: float
-    threshold_doc: str
-    detector_import: str
-    detector_call: str
+    doc: str
+    benchmark_body: str  # body of benchmark(); continuation lines pre-indented 8 spaces
+    n_steps: int = 20
+    extra_imports: str = "import random"
 
 
-_TUNING_METHODS: dict[str, TuningSpec] = {
-    "percentage": TuningSpec(
-        classname="PercentageTuning",
-        threshold_attr="percentage_threshold",
-        threshold_default=5.0,
-        threshold_lo=1.0,
-        threshold_hi=20.0,
-        threshold_doc="percent change vs baseline mean",
-        detector_import="from bencher.regression import detect_percentage",
-        detector_call=(
-            'result = detect_percentage("metric", hist_samples, current, '
-            "threshold_percent=self.percentage_threshold, "
-            "direction=bn.OptDir.minimize)"
+_SCENARIOS: dict[str, ScenarioSpec] = {
+    "stable_noisy": ScenarioSpec(
+        classname="StableNoisyMetric",
+        doc="Stable metric with Gaussian noise — no regression expected.",
+        benchmark_body="self.metric_value = 100.0 + random.gauss(0, 5.0)",
+    ),
+    "sudden_drop": ScenarioSpec(
+        classname="SuddenDropMetric",
+        doc="Metric jumps at step 15 — step regression expected.",
+        benchmark_body=(
+            "base = 100.0 if self._step < 15 else 130.0\n"
+            "        self.metric_value = base + random.gauss(0, 5.0)"
         ),
     ),
-    "iqr": TuningSpec(
-        classname="IqrTuning",
-        threshold_attr="iqr_scale",
-        threshold_default=1.5,
-        threshold_lo=0.5,
-        threshold_hi=3.5,
-        threshold_doc="IQR multiplier for outlier bounds",
-        detector_import="from bencher.regression import detect_iqr",
-        detector_call=(
-            'result = detect_iqr("metric", hist_time_means, current, '
-            "iqr_scale=self.iqr_scale, direction=bn.OptDir.minimize)"
-        ),
-    ),
-    "ttest": TuningSpec(
-        classname="TtestTuning",
-        threshold_attr="alpha",
-        threshold_default=0.05,
-        threshold_lo=0.01,
-        threshold_hi=0.20,
-        threshold_doc="significance level for Welch's t-test",
-        detector_import="from bencher.regression import detect_ttest",
-        detector_call=(
-            'result = detect_ttest("metric", hist_samples, current, '
-            "alpha=self.alpha, direction=bn.OptDir.minimize)"
-        ),
-    ),
-    "adaptive": TuningSpec(
-        classname="AdaptiveTuning",
-        threshold_attr="z_threshold",
-        threshold_default=3.5,
-        threshold_lo=1.0,
-        threshold_hi=6.0,
-        threshold_doc="robust z-score threshold in MAD-sigma units",
-        detector_import="from bencher.regression import detect_adaptive",
-        detector_call=(
-            'result = detect_adaptive("metric", hist_time_means, current, '
-            "z_threshold=self.z_threshold, direction=bn.OptDir.minimize, "
-            "historical_samples=hist_samples)"
-        ),
+    "gradual_drift": ScenarioSpec(
+        classname="GradualDriftMetric",
+        doc="Metric drifts upward over time — drift regression expected.",
+        benchmark_body="self.metric_value = 100.0 + 1.5 * self._step + random.gauss(0, 5.0)",
     ),
 }
 
 
-_TUNING_CLASS_TEMPLATE = '''\
+_SCENARIO_CLASS_TEMPLATE = '''\
 class {classname}(bn.ParametrizedSweep):
-    """Sweep ``regression_magnitude`` × ``{threshold_attr}`` for ``{method}``.
+    """{doc}"""
 
-    The ``regression_magnitude=0`` column shows the false-positive rate at
-    each threshold. Non-zero columns show detection power as the regression
-    grows. Noise level is held fixed so the heatmap stays 2-D.
-    """
+    metric_value = bn.ResultFloat(units="units", direction=bn.OptDir.minimize)
 
-    regression_magnitude = bn.FloatSweep(
-        default=0.0,
-        bounds=[0.0, 40.0],
-        samples=6,
-        doc="Step added to the current run in units of baseline mean "
-        "(0 = no regression, ~40% = large regression).",
-    )
-    {threshold_attr} = bn.FloatSweep(
-        default={threshold_default},
-        bounds=[{threshold_lo}, {threshold_hi}],
-        samples=6,
-        doc="Detector threshold — {threshold_doc}.",
-    )
-
-    detection_rate = bn.ResultFloat(
-        units="probability",
-        direction=bn.OptDir.none,
-        doc="Fraction of trials where the detector flagged a regression.",
-    )
-
-    # Fixed signal parameters — kept off the sweep so the result is 2-D.
-    _baseline = 100.0
-    _noise_sigma = 5.0            # per-sample noise (~5% of baseline)
-    _n_history = 15               # historical releases
-    _n_repeats_hist = 3           # samples per release
-    _n_current = 3                # samples in the current run
-    _n_trials = 40                # independent trials for rate estimation
+    _step = 0  # set externally per time point
 
     def benchmark(self):
-        import numpy as np
-
-        {detector_import}
-
-        hits = 0
-        for trial in range(self._n_trials):
-            seed = (
-                trial * 1_000_003
-                + int(self.regression_magnitude * 997)
-                + int(self.{threshold_attr} * 101)
-            )
-            rng = np.random.default_rng(seed & 0xFFFFFFFF)
-            hist_samples = self._baseline + rng.normal(
-                0.0,
-                self._noise_sigma,
-                self._n_history * self._n_repeats_hist,
-            )
-            hist_time_means = hist_samples.reshape(
-                self._n_history, self._n_repeats_hist
-            ).mean(axis=1)
-            current = (
-                self._baseline
-                + self.regression_magnitude
-                + rng.normal(0.0, self._noise_sigma, self._n_current)
-            )
-            {detector_call}
-            if result.regressed:
-                hits += 1
-        self.detection_rate = hits / self._n_trials
-'''
+        {benchmark_body}'''
 
 
-_TUNING_BODY_TEMPLATE = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
-bench = {classname}().to_bench(run_cfg)
-bench.plot_sweep(
-    "Regression detection tuning — {method}",
-    input_vars=["regression_magnitude", "{threshold_attr}"],
-    result_vars=["detection_rate"],
-    run_cfg=run_cfg,
-)
+_SCENARIO_BODY_TEMPLATE = """\
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)
+run_cfg.regression_detection = True
+run_cfg.regression_method = "adaptive"
+run_cfg.regression_fail = False
+
+benchable = {classname}()
+bench = benchable.to_bench(run_cfg)
+
+base_time = datetime(2024, 1, 1)
+for i in range({n_steps}):
+    benchable._step = i
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    run_cfg.auto_plot = i == {n_steps} - 1
+    bench.plot_sweep(
+        "{scenario}",
+        input_vars=[],
+        result_vars=["metric_value"],
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(seconds=i),
+    )
 """
 
 
 REGRESSION_EXAMPLES = [
     "regression_percentage",
-    *[f"regression_tuning_{method}" for method in _TUNING_METHODS],
+    *[f"regression_{scenario}" for scenario in _SCENARIOS],
 ]
 
 
-def _render_tuning_class(method: str, spec: TuningSpec) -> str:
-    return _TUNING_CLASS_TEMPLATE.format(
+def _render_scenario_class(spec: ScenarioSpec) -> str:
+    return _SCENARIO_CLASS_TEMPLATE.format(
         classname=spec.classname,
-        threshold_attr=spec.threshold_attr,
-        threshold_default=spec.threshold_default,
-        threshold_lo=spec.threshold_lo,
-        threshold_hi=spec.threshold_hi,
-        threshold_doc=spec.threshold_doc,
-        detector_import=spec.detector_import,
-        detector_call=spec.detector_call,
-        method=method,
+        doc=spec.doc,
+        benchmark_body=spec.benchmark_body,
     ).rstrip("\n")
 
 
@@ -202,9 +112,9 @@ class MetaRegression(MetaGeneratorBase):
             self._generate_percentage_over_time()
             return
 
-        for method, spec in _TUNING_METHODS.items():
-            if self.example == f"regression_tuning_{method}":
-                self._generate_tuning(method, spec)
+        for scenario, spec in _SCENARIOS.items():
+            if self.example == f"regression_{scenario}":
+                self._generate_scenario(scenario, spec)
                 return
 
     def _generate_percentage_over_time(self):
@@ -265,20 +175,22 @@ for i, offset in enumerate(releases):
             run_kwargs={"over_time": True},
         )
 
-    def _generate_tuning(self, method: str, spec: TuningSpec) -> None:
-        """Emit a 2-D tuning sweep example for a single detection method."""
-        title = (
-            f"Regression detection tuning — '{method}' method "
-            f"(regression_magnitude × {spec.threshold_attr})"
-        )
-        imports = "import bencher as bn"
-        class_code = _render_tuning_class(method, spec)
-        body = _TUNING_BODY_TEMPLATE.format(
+    def _generate_scenario(self, scenario: str, spec: ScenarioSpec) -> None:
+        """Emit an over-time scenario example showing the detector's input data."""
+        title = f"Regression scenario — {scenario.replace('_', ' ')}"
+
+        stdlib_imports = ["from datetime import datetime, timedelta"]
+        if spec.extra_imports:
+            stdlib_imports.extend(spec.extra_imports.split("\n"))
+        imports = "\n".join(stdlib_imports) + "\n\nimport bencher as bn"
+
+        class_code = _render_scenario_class(spec)
+        body = _SCENARIO_BODY_TEMPLATE.format(
             classname=spec.classname,
-            method=method,
-            threshold_attr=spec.threshold_attr,
+            n_steps=spec.n_steps,
+            scenario=scenario,
         )
-        filename = f"example_regression_tuning_{method}"
+        filename = f"example_regression_{scenario}"
         self.generate_example(
             title=title,
             output_dir=OUTPUT_DIR,
@@ -287,6 +199,7 @@ for i, offset in enumerate(releases):
             imports=imports,
             body=body,
             class_code=class_code,
+            run_kwargs={"over_time": True},
         )
 
 
