@@ -1,11 +1,10 @@
 """Meta-generator: Regression detection examples.
 
 Demonstrates how to use regression detection to catch performance
-regressions in over-time benchmarks.
+regressions in over-time benchmarks, and how to tune each method's
+threshold against the amount of regression that needs detecting.
 """
 
-import inspect
-import math
 from dataclasses import dataclass
 
 import bencher as bn
@@ -14,105 +13,183 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 OUTPUT_DIR = "regression"
 
 
-# Real class that backs every adaptive example. Defined at module level so
-# ``inspect.getsource`` can capture its definition verbatim as the ``class_code``
-# embedded in each generated example. The class is never instantiated here.
-class NoisyServerBenchmark(bn.ParametrizedSweep):
-    """Server response time with tunable per-release mean and noise sigma."""
-
-    connections = bn.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
-    payload_kb = bn.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
-
-    response_time = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
-
-    # Per-release knobs set externally before each plot_sweep call.
-    _time_offset = 0.0  # shift applied to the mean response time
-    _time_noise = 0.0  # sigma of gaussian noise added to each sample
-    _release_seed = 0  # per-release RNG seed
-    _call_counter = 0  # incremented per sample so repeats differ
-
-    def benchmark(self):
-        import random as _rnd
-
-        base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
-        rng = _rnd.Random(self._release_seed * 1_000_003 + self._call_counter)
-        type(self)._call_counter += 1
-        noise = rng.gauss(0.0, self._time_noise) if self._time_noise > 0 else 0.0
-        self.response_time = base_rt + self._time_offset + noise
-
-
-_ADAPTIVE_CLASS_CODE = inspect.getsource(NoisyServerBenchmark)
-
-
-_ADAPTIVE_BODY_TEMPLATE = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=4)
-run_cfg.regression_detection = True
-run_cfg.regression_method = "adaptive"
-run_cfg.regression_fail = False
-
-benchable = NoisyServerBenchmark()
-bench = benchable.to_bench(run_cfg)
-
-# Per-release schedule: (mean_offset, noise_sigma) for each historical release.
-schedule = {schedule!r}
-
-base_time = datetime(2024, 1, 1)
-for i, (offset, sigma) in enumerate(schedule):
-    benchable._time_offset = offset
-    benchable._time_noise = sigma
-    benchable._release_seed = i + 1
-    type(benchable)._call_counter = 0
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = i == len(schedule) - 1
-    bench.plot_sweep(
-        "regression_detection",
-        input_vars=["connections", "payload_kb"],
-        result_vars=["response_time"],
-        run_cfg=run_cfg,
-        time_src=base_time + timedelta(seconds=i),
-        aggregate=True,
-    )
-"""
-
-
 @dataclass(frozen=True)
-class AdaptiveExample:
-    """Title + schedule for an adaptive-method example file.
+class TuningSpec:
+    """Per-method config for a 2-D ``regression_magnitude × threshold`` sweep.
 
-    ``schedule`` is a list of ``(mean_offset, noise_sigma)`` tuples, one entry
-    per historical release.
+    Each method has its own threshold parameter with its own units and typical
+    range. Kept in one place so the template below can render a self-contained
+    example file per method.
     """
 
-    title: str
-    schedule: list[tuple[float, float]]
+    classname: str
+    threshold_attr: str
+    threshold_default: float
+    threshold_lo: float
+    threshold_hi: float
+    threshold_doc: str
+    detector_import: str
+    detector_call: str
 
 
-_ADAPTIVE_EXAMPLES: dict[str, AdaptiveExample] = {
-    "regression_adaptive_stable_noisy": AdaptiveExample(
-        title="Adaptive detection — noisy-but-stable signal (no false positive)",
-        schedule=[(0.0, 15.0)] * 20,
+_TUNING_METHODS: dict[str, TuningSpec] = {
+    "percentage": TuningSpec(
+        classname="PercentageTuning",
+        threshold_attr="percentage_threshold",
+        threshold_default=5.0,
+        threshold_lo=1.0,
+        threshold_hi=20.0,
+        threshold_doc="percent change vs baseline mean",
+        detector_import="from bencher.regression import detect_percentage",
+        detector_call=(
+            'result = detect_percentage("metric", hist_samples, current, '
+            "threshold_percent=self.percentage_threshold, "
+            "direction=bn.OptDir.minimize)"
+        ),
     ),
-    "regression_adaptive_gradual_drift": AdaptiveExample(
-        title="Adaptive detection — gradual long-term drift (drift test fires)",
-        schedule=[(1.5 * i, 5.0) for i in range(20)],
+    "iqr": TuningSpec(
+        classname="IqrTuning",
+        threshold_attr="iqr_scale",
+        threshold_default=1.5,
+        threshold_lo=0.5,
+        threshold_hi=3.5,
+        threshold_doc="IQR multiplier for outlier bounds",
+        detector_import="from bencher.regression import detect_iqr",
+        detector_call=(
+            'result = detect_iqr("metric", hist_time_means, current, '
+            "iqr_scale=self.iqr_scale, direction=bn.OptDir.minimize)"
+        ),
     ),
-    "regression_adaptive_sudden_drop": AdaptiveExample(
-        title="Adaptive detection — sudden short-term drop (step test fires)",
-        schedule=[(0.0, 4.0) for _ in range(10)] + [(40.0, 4.0)],
+    "ttest": TuningSpec(
+        classname="TtestTuning",
+        threshold_attr="alpha",
+        threshold_default=0.05,
+        threshold_lo=0.01,
+        threshold_hi=0.20,
+        threshold_doc="significance level for Welch's t-test",
+        detector_import="from bencher.regression import detect_ttest",
+        detector_call=(
+            'result = detect_ttest("metric", hist_samples, current, '
+            "alpha=self.alpha, direction=bn.OptDir.minimize)"
+        ),
     ),
-    "regression_adaptive_outlier_immune": AdaptiveExample(
-        title="Adaptive detection — isolated historical outlier ignored",
-        schedule=[(150.0, 2.0) if i == 5 else (0.0, 2.0) for i in range(15)],
-    ),
-    "regression_adaptive_oscillating": AdaptiveExample(
-        title="Adaptive detection — oscillating periodic signal (no false positive)",
-        schedule=[(10.0 * math.sin(i * math.pi / 3.0), 2.0) for i in range(18)],
+    "adaptive": TuningSpec(
+        classname="AdaptiveTuning",
+        threshold_attr="z_threshold",
+        threshold_default=3.5,
+        threshold_lo=1.0,
+        threshold_hi=6.0,
+        threshold_doc="robust z-score threshold in MAD-sigma units",
+        detector_import="from bencher.regression import detect_adaptive",
+        detector_call=(
+            'result = detect_adaptive("metric", hist_time_means, current, '
+            "z_threshold=self.z_threshold, direction=bn.OptDir.minimize, "
+            "historical_samples=hist_samples)"
+        ),
     ),
 }
 
 
-REGRESSION_EXAMPLES = ["regression_percentage", *_ADAPTIVE_EXAMPLES.keys()]
+_TUNING_CLASS_TEMPLATE = '''\
+class {classname}(bn.ParametrizedSweep):
+    """Sweep ``regression_magnitude`` × ``{threshold_attr}`` for ``{method}``.
+
+    The ``regression_magnitude=0`` column shows the false-positive rate at
+    each threshold. Non-zero columns show detection power as the regression
+    grows. Noise level is held fixed so the heatmap stays 2-D.
+    """
+
+    regression_magnitude = bn.FloatSweep(
+        default=0.0,
+        bounds=[0.0, 40.0],
+        samples=6,
+        doc="Step added to the current run in units of baseline mean "
+        "(0 = no regression, ~40% = large regression).",
+    )
+    {threshold_attr} = bn.FloatSweep(
+        default={threshold_default},
+        bounds=[{threshold_lo}, {threshold_hi}],
+        samples=6,
+        doc="Detector threshold — {threshold_doc}.",
+    )
+
+    detection_rate = bn.ResultFloat(
+        units="probability",
+        direction=bn.OptDir.none,
+        doc="Fraction of trials where the detector flagged a regression.",
+    )
+
+    # Fixed signal parameters — kept off the sweep so the result is 2-D.
+    _baseline = 100.0
+    _noise_sigma = 5.0            # per-sample noise (~5% of baseline)
+    _n_history = 15               # historical releases
+    _n_repeats_hist = 3           # samples per release
+    _n_current = 3                # samples in the current run
+    _n_trials = 40                # independent trials for rate estimation
+
+    def benchmark(self):
+        import numpy as np
+
+        {detector_import}
+
+        hits = 0
+        for trial in range(self._n_trials):
+            seed = (
+                trial * 1_000_003
+                + int(self.regression_magnitude * 997)
+                + int(self.{threshold_attr} * 101)
+            )
+            rng = np.random.default_rng(seed & 0xFFFFFFFF)
+            hist_samples = self._baseline + rng.normal(
+                0.0,
+                self._noise_sigma,
+                self._n_history * self._n_repeats_hist,
+            )
+            hist_time_means = hist_samples.reshape(
+                self._n_history, self._n_repeats_hist
+            ).mean(axis=1)
+            current = (
+                self._baseline
+                + self.regression_magnitude
+                + rng.normal(0.0, self._noise_sigma, self._n_current)
+            )
+            {detector_call}
+            if result.regressed:
+                hits += 1
+        self.detection_rate = hits / self._n_trials
+'''
+
+
+_TUNING_BODY_TEMPLATE = """\
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg)
+bench = {classname}().to_bench(run_cfg)
+bench.plot_sweep(
+    "Regression detection tuning — {method}",
+    input_vars=["regression_magnitude", "{threshold_attr}"],
+    result_vars=["detection_rate"],
+    run_cfg=run_cfg,
+)
+"""
+
+
+REGRESSION_EXAMPLES = [
+    "regression_percentage",
+    *[f"regression_tuning_{method}" for method in _TUNING_METHODS],
+]
+
+
+def _render_tuning_class(method: str, spec: TuningSpec) -> str:
+    return _TUNING_CLASS_TEMPLATE.format(
+        classname=spec.classname,
+        threshold_attr=spec.threshold_attr,
+        threshold_default=spec.threshold_default,
+        threshold_lo=spec.threshold_lo,
+        threshold_hi=spec.threshold_hi,
+        threshold_doc=spec.threshold_doc,
+        detector_import=spec.detector_import,
+        detector_call=spec.detector_call,
+        method=method,
+    ).rstrip("\n")
 
 
 class MetaRegression(MetaGeneratorBase):
@@ -122,15 +199,16 @@ class MetaRegression(MetaGeneratorBase):
 
     def benchmark(self):
         if self.example == "regression_percentage":
-            self._generate_percentage()
+            self._generate_percentage_over_time()
             return
 
-        adaptive = _ADAPTIVE_EXAMPLES.get(self.example)
-        if adaptive is not None:
-            self._generate_adaptive(self.example, adaptive)
+        for method, spec in _TUNING_METHODS.items():
+            if self.example == f"regression_tuning_{method}":
+                self._generate_tuning(method, spec)
+                return
 
-    def _generate_percentage(self):
-        """Percentage-based regression detection over time."""
+    def _generate_percentage_over_time(self):
+        """End-to-end over_time example that trips the percentage detector."""
         imports = "from datetime import datetime, timedelta\n\nimport bencher as bn"
         class_code = '''\
 class ServerBenchmark(bn.ParametrizedSweep):
@@ -187,19 +265,28 @@ for i, offset in enumerate(releases):
             run_kwargs={"over_time": True},
         )
 
-    def _generate_adaptive(self, name: str, adaptive: AdaptiveExample) -> None:
-        """Emit a single adaptive-method example file."""
-        imports = "from datetime import datetime, timedelta\n\nimport bencher as bn"
-        body = _ADAPTIVE_BODY_TEMPLATE.format(schedule=adaptive.schedule)
+    def _generate_tuning(self, method: str, spec: TuningSpec) -> None:
+        """Emit a 2-D tuning sweep example for a single detection method."""
+        title = (
+            f"Regression detection tuning — '{method}' method "
+            f"(regression_magnitude × {spec.threshold_attr})"
+        )
+        imports = "import bencher as bn"
+        class_code = _render_tuning_class(method, spec)
+        body = _TUNING_BODY_TEMPLATE.format(
+            classname=spec.classname,
+            method=method,
+            threshold_attr=spec.threshold_attr,
+        )
+        filename = f"example_regression_tuning_{method}"
         self.generate_example(
-            title=adaptive.title,
+            title=title,
             output_dir=OUTPUT_DIR,
-            filename=f"example_{name}",
-            function_name=f"example_{name}",
+            filename=filename,
+            function_name=filename,
             imports=imports,
             body=body,
-            class_code=_ADAPTIVE_CLASS_CODE,
-            run_kwargs={"over_time": True},
+            class_code=class_code,
         )
 
 
