@@ -98,7 +98,11 @@ class ResultFloat(Number):
     """
 
     __slots__ = ["units", "direction", "share_axis", "max_time_events"]
-    _hash_exclude = ("share_axis", "max_time_events")  # display/retention-only
+    # ``direction`` is excluded because flipping minimize<->maximize does not
+    # change the recorded numeric values, only their interpretation for
+    # Pareto/optimizer plots.  Keeping it in the hash would needlessly wipe
+    # over_time history when the user merely retargets the optimizer.
+    _hash_exclude = ("direction", "share_axis", "max_time_events")
 
     def __init__(
         self,
@@ -300,6 +304,9 @@ class ResultRerun(ResultContainer):
     """
 
     __slots__ = ["width", "height"]
+    # width/height are viewer-pane sizing hints; they do not change the content
+    # of the recorded .rrd file, so they must not invalidate the cache.
+    _hash_exclude = ("width", "height")
 
     def __init__(
         self, default=None, units="rerun", width=600, height=600, max_time_events=None, **params

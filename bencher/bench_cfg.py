@@ -15,6 +15,7 @@ from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
 from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.job import Executors
+from bencher.cache_management import CACHE_VERSION
 from bencher.results.laxtex_result import to_latex
 
 T = TypeVar("T")  # Generic type variable
@@ -641,8 +642,13 @@ class BenchCfg(BenchRunCfg):
         # a benchmark's display title does not invalidate cached results or
         # lose over_time history.  The benchmark is uniquely identified by
         # bench_name + input/result/const vars + tag + over_time + repeats.
+        #
+        # CACHE_VERSION is folded in so that bumping it atomically invalidates
+        # every benchmark-level and over_time history key without relying
+        # solely on the on-disk version-file check in ``ensure_cache_version``.
         hash_val = hash_sha1(
             (
+                CACHE_VERSION,
                 hash_sha1(str(self.bench_name)),
                 hash_sha1(self.over_time),
                 repeats_hash,

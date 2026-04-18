@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.85.0] - 2026-04-18
+
+### Fixed
+- **Benchmark-level cache identity for reshaped sweeps**: `SweepBase.hash_persistent` previously hashed only `(units, samples)`, so reshaping a `FloatSweep`/`IntSweep`/`SweepSelector` (changing bounds, step, `sample_values`, or `objects`) silently left the benchmark-level cache and `over_time` history keyed by the old shape, returning stale coordinates. Fixed by introducing an explicit `_sweep_identity` whitelist (bounds, sample_values, step, objects) with a slot-coverage test that catches future "added a slot, forgot the hash" regressions.
+- `CACHE_VERSION` bumped to `"3"` and folded directly into `BenchCfg.hash_persistent` so version bumps atomically invalidate every benchmark-level and over_time key.
+
+### Changed
+- `ResultFloat.direction` and `ResultRerun.width`/`height` moved to `_hash_exclude`: these are interpretive/cosmetic fields that should not invalidate history when changed.
+- New `TestGoldenBenchCfgHash` regression pins byte-exact values for a canonical `BenchCfg`; any future change to what contributes to the hash fails CI loudly and forces a deliberate `CACHE_VERSION` bump.
+
 ## [1.84.0] - 2026-04-12
 
 ### Changed

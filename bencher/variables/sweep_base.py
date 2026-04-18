@@ -88,9 +88,43 @@ class SweepBase(param.Parameter):
         """
         raise NotImplementedError
 
+    # Slots deliberately omitted from the identity tuple.  Subclasses may
+    # extend this via their own ``_sweep_hash_exclude`` attribute; the
+    # slot-coverage test walks the MRO and unions them all.  A slot is
+    # considered properly declared if it either appears in
+    # :meth:`_sweep_identity` (changing it changes the hash) OR is listed
+    # in ``_sweep_hash_exclude`` on some ancestor.
+    _sweep_hash_exclude: tuple[str, ...] = ("optimize",)
+
+    def _sweep_identity(self) -> tuple:
+        """Return the tuple of values that uniquely identifies this sweep for
+        the benchmark-level and over_time history caches.
+
+        Subclasses MUST override and call ``super()._sweep_identity() + (...)``
+        to append any shape-affecting fields: bounds, sample_values, step,
+        ``objects``, etc.  Any field that changes the set of sampled values
+        or the coordinate labels of the resulting xarray must contribute
+        here, otherwise the benchmark-level cache and over_time history
+        will silently serve stale data for a reshaped sweep.
+
+        The class name is included so that different Sweep subclasses with
+        the same identity tuple do not collide.
+
+        Note: the sample cache is keyed solely by concrete input values
+        (see :class:`bencher.worker_job.WorkerJob`) and is unaffected by
+        this hash, so widening a sweep range still reuses per-sample cache
+        entries for overlapping inputs.
+        """
+        return (type(self).__name__, self.units, self.samples)  # pylint: disable=no-member
+
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1((self.units, self.samples))  # pylint: disable=no-member
+        """Deterministic hash based on :meth:`_sweep_identity`.
+
+        Avoids Python's per-process hash randomisation so two Bench runs
+        (or two processes) compute identical cache keys for equivalent
+        sweeps.
+        """
+        return hash_sha1(self._sweep_identity())
 
     def sampling_str(self) -> str:
         """Generate a string representation of the of the sampling procedure"""

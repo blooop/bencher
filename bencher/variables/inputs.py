@@ -60,6 +60,45 @@ class SweepSelector(Selector, SweepBase):
         """
         return self.indices_to_samples(self.samples, self.objects)
 
+    def _sweep_identity(self) -> tuple:
+        """Include ``objects`` so changing the option set busts the cache.
+
+        Each element is fingerprinted in one of two ways:
+
+        * If it exposes ``__bencher_hash__`` (e.g. :class:`YamlSelection`),
+          that hook is called — returning something cross-process stable.
+          This is the required contract for arbitrary / user-defined types.
+        * Otherwise we fall back to ``str(o)``.  This is safe for primitive
+          option types (``str``, ``bool``, ``Enum``, numeric) whose ``__str__``
+          is deterministic, but an object inheriting the default
+          ``object.__str__`` will render as ``<Foo at 0x7f...>`` — a memory
+          address that changes every process and would silently produce
+          different cache keys on every run.  If you put custom instances in
+          a :class:`SweepSelector`, either implement ``__bencher_hash__`` or
+          a deterministic ``__str__``/``__repr__``.
+        """
+
+        def _obj_fingerprint(o):
+            hook = getattr(o, "__bencher_hash__", None)
+            if callable(hook):
+                return hook()
+            return str(o)
+
+        objects = self.objects
+        if isinstance(objects, dict):
+            # Sort by key-string so semantically equal dicts with different
+            # insertion orders produce the same fingerprint.
+            items = sorted(
+                ((str(k), _obj_fingerprint(v)) for k, v in objects.items()),
+                key=lambda kv: kv[0],
+            )
+            obj_tuple = tuple(items)
+        elif objects is not None:
+            obj_tuple = tuple(_obj_fingerprint(o) for o in objects)
+        else:
+            obj_tuple = ()
+        return super()._sweep_identity() + (obj_tuple,)
+
     # ------------------------------------------------------------------
     # Dynamic update helpers
     # ------------------------------------------------------------------
@@ -358,6 +397,10 @@ class YamlSweep(SweepSelector):
     """
 
     __slots__ = shared_slots + ["yaml_path", "_entries", "default_key"]
+    # ``objects`` already carries the fingerprint of every YAML entry (via
+    # :meth:`YamlSelection.__bencher_hash__`), so these internal fields are
+    # redundant for cache identity.
+    _sweep_hash_exclude = ("yaml_path", "_entries", "default_key")
 
     def __init__(
         self,
@@ -491,6 +534,11 @@ class IntSweep(Integer, SweepBase):
     def _coerce_bound(self, value):
         return int(value)
 
+    def _sweep_identity(self) -> tuple:
+        """Include bounds and sample_values so a reshaped sweep busts the cache."""
+        sample_values = tuple(self.sample_values) if self.sample_values is not None else None
+        return super()._sweep_identity() + (self.sweep_bounds, sample_values)
+
     def values(self) -> list[int]:
         """Return all the values for the parameter sweep.
 
@@ -575,6 +623,11 @@ class FloatSweep(Number, SweepBase):
 
     def _coerce_bound(self, value):
         return float(value)
+
+    def _sweep_identity(self) -> tuple:
+        """Include bounds, sample_values, and step so a reshaped sweep busts the cache."""
+        sample_values = tuple(self.sample_values) if self.sample_values is not None else None
+        return super()._sweep_identity() + (self.sweep_bounds, sample_values, self.step)
 
     def values(self) -> list[float]:
         """Return all the values for the parameter sweep.
