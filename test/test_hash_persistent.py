@@ -535,6 +535,33 @@ class TestSweepHashShapeFields:
             == StringSweep(["a", "b"], units="ul").hash_persistent()
         )
 
+    def test_sweep_selector_uses_bencher_hash_hook(self):
+        """Custom objects exposing ``__bencher_hash__`` must route through the hook.
+
+        This is the contract users rely on to get cross-process deterministic
+        cache keys when the selector's options are not primitive types.
+        """
+        from bencher.variables.inputs import SweepSelector
+
+        class Opt:
+            def __init__(self, val):
+                self.val = val
+
+            def __bencher_hash__(self):
+                return ("Opt", self.val)
+
+        a = SweepSelector(objects=[Opt(1), Opt(2)], units="ul")
+        b = SweepSelector(objects=[Opt(1), Opt(2)], units="ul")
+        assert a.hash_persistent() == b.hash_persistent(), (
+            "SweepSelector should treat objects with equal __bencher_hash__ as equal, "
+            "even if the instances themselves differ."
+        )
+
+        c = SweepSelector(objects=[Opt(10), Opt(20)], units="ul")
+        assert a.hash_persistent() != c.hash_persistent(), (
+            "Different __bencher_hash__ payloads must produce different sweep hashes."
+        )
+
 
 def _discover_sweep_classes():
     """Auto-discover concrete SweepBase subclasses that can be instantiated for tests."""

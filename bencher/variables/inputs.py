@@ -63,9 +63,19 @@ class SweepSelector(Selector, SweepBase):
     def _sweep_identity(self) -> tuple:
         """Include ``objects`` so changing the option set busts the cache.
 
-        Elements with ``__bencher_hash__`` (e.g. :class:`YamlSelection`) are
-        fingerprinted via that hook so changing a YAML value under the same
-        key still invalidates the benchmark-level cache.
+        Each element is fingerprinted in one of two ways:
+
+        * If it exposes ``__bencher_hash__`` (e.g. :class:`YamlSelection`),
+          that hook is called — returning something cross-process stable.
+          This is the required contract for arbitrary / user-defined types.
+        * Otherwise we fall back to ``str(o)``.  This is safe for primitive
+          option types (``str``, ``bool``, ``Enum``, numeric) whose ``__str__``
+          is deterministic, but an object inheriting the default
+          ``object.__str__`` will render as ``<Foo at 0x7f...>`` — a memory
+          address that changes every process and would silently produce
+          different cache keys on every run.  If you put custom instances in
+          a :class:`SweepSelector`, either implement ``__bencher_hash__`` or
+          a deterministic ``__str__``/``__repr__``.
         """
 
         def _obj_fingerprint(o):
