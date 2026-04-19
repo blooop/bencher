@@ -306,9 +306,22 @@ class HoloviewResult(VideoResult):
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
+        # Use isel (positional) rather than sel (label-based) so a single time
+        # slice is always returned, even when over_time has duplicate coord
+        # values. With sel, duplicates yield a multi-row slice and hvplot
+        # returns a DynamicMap, while unique values drop the dim and return
+        # plain elements — mixed types break the HoloMap assertion.
+        seen: set = set()
         for idx in slider_indices:
             t = times[idx]
-            ds_t = dataset.sel(over_time=t)
+            try:
+                key = t.item() if hasattr(t, "item") else t
+            except ValueError:
+                key = idx
+            if key in seen:
+                continue
+            seen.add(key)
+            ds_t = dataset.isel(over_time=idx)
             holomap[t] = make_plot_fn(ds_t)
 
         slider_pane = self._holomap_with_slider_bottom(holomap)

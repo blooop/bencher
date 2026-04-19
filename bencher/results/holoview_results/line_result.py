@@ -112,6 +112,16 @@ class LineResult(HoloviewResult):
             and "over_time" in da_plot.dims
             and da_plot.sizes["over_time"] > 1
         ):
+            # Suppress the bare over_time line when the regression overlay for
+            # this variable is already being rendered — the overlay shows the
+            # same history with extra diagnostic context. Match the overlay
+            # creation guard in BenchResult.to_auto_plots so we don't hide the
+            # base plot when no overlay will actually be drawn.
+            if self.regression_report is not None and any(
+                r.variable == result_var.name and r.historical is not None and len(r.historical) > 0
+                for r in self.regression_report.results
+            ):
+                return None
             title = self.title_from_ds(da_plot, result_var, **kwargs)
             plot = da_plot.hvplot.line(
                 x="over_time",
@@ -121,29 +131,6 @@ class LineResult(HoloviewResult):
                 **kwargs,
             )
             plot = self._apply_opts(plot, xrotation=30)
-
-            # Overlay regression acceptance band if available.  ``plot`` is a
-            # ``panel.pane.HoloViews`` wrapper here (hvplot.line with
-            # widget_location), so we must compose onto the underlying
-            # ``.object`` rather than the pane itself.  ``detect_regressions``
-            # appends at most one result per variable, so we stop after the
-            # first match.
-            if self.regression_report is not None:
-                import holoviews as hv
-
-                for r in self.regression_report.results:
-                    if r.variable == result_var.name and r.band_lower is not None:
-                        band = hv.HSpan(r.band_lower, r.band_upper).opts(
-                            color="green", alpha=0.08
-                        ) * hv.HLine(r.baseline_value).opts(
-                            color="green", line_dash="dashed", line_width=1
-                        )
-                        if isinstance(plot, pn.pane.HoloViews):
-                            plot.object = band * plot.object
-                        else:
-                            plot = band * plot
-                        break
-
             return plot
 
         # No float vars and over_time was squeezed (single time point) — no x-axis

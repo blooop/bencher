@@ -1,5 +1,7 @@
 """Tests for bencher.regression module."""
 
+import os
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -9,11 +11,13 @@ from bencher.regression import (
     RegressionError,
     RegressionReport,
     RegressionResult,
+    build_regression_overlay,
     detect_adaptive,
     detect_iqr,
     detect_percentage,
     detect_regressions,
     detect_ttest,
+    render_regression_png,
 )
 from bencher.variables.results import OptDir
 
@@ -747,3 +751,192 @@ class TestEndToEnd:
 
         with pytest.raises(bn.RegressionError):
             bench.plot_sweep(plot_callbacks=False)
+
+
+# ── Renderers ───────────────────────────────────────────────────────────────
+
+
+def _make_result(historical_x=None, current_x=None):
+    hist = np.array([100.0, 102.0, 99.0, 101.0, 100.5, 98.5, 101.2])
+    curr = np.array([130.0])
+    r = detect_percentage("metric", hist, curr, threshold_percent=5.0)
+    r.historical = hist
+    r.current_samples = curr
+    if historical_x is not None:
+        r.historical_x = np.asarray(historical_x)
+    if current_x is not None:
+        r.current_x = current_x
+    return r
+
+
+class TestRenderRegressionPng:
+    """render_regression_png should handle every x-axis dtype we emit."""
+
+    def test_png_index_axis(self, tmp_path):
+        r = _make_result()
+        out = tmp_path / "idx.png"
+        path = render_regression_png(r, path=str(out))
+        assert path == str(out)
+        assert os.path.getsize(path) > 1000
+
+    def test_png_datetime_axis(self, tmp_path):
+        dates = np.array([np.datetime64("2024-01-01") + np.timedelta64(i, "D") for i in range(7)])
+        r = _make_result(historical_x=dates, current_x=np.datetime64("2024-01-08"))
+        out = tmp_path / "dt.png"
+        path = render_regression_png(r, path=str(out))
+        assert os.path.getsize(path) > 1000
+
+    def test_png_string_axis_git_time_event(self, tmp_path):
+        """git_time_event() returns strings like '2024-06-15 abc1234d'."""
+        labels = [f"2024-06-{15 + i:02d} abc{i}234d" for i in range(7)]
+        r = _make_result(historical_x=labels, current_x="2024-06-22 xyz7890")
+        out = tmp_path / "git.png"
+        path = render_regression_png(r, path=str(out))
+        assert os.path.getsize(path) > 1000
+
+    def test_png_method_alias(self, tmp_path):
+        """RegressionResult.render_png delegates to the module function."""
+        r = _make_result()
+        out = tmp_path / "alias.png"
+        r.render_png(path=str(out))
+        assert out.exists()
+
+
+class TestBuildRegressionOverlay:
+    """build_regression_overlay should render through bokeh on every x dtype.
+
+    The regression was: HSpan/HLine combined with a categorical x-axis threw
+    UFuncNoLoopError inside holoviews' get_extents. The fix uses explicit-coord
+    Area/Curve primitives, so driving it through Panel's get_root is the
+    end-to-end proof that the crash is gone.
+    """
+
+    @staticmethod
+    def _render_through_panel(overlay, tmp_path, name):
+        import panel as pn
+
+        col = pn.Column(pn.pane.HoloViews(overlay))
+        out = tmp_path / f"{name}.html"
+        col.save(str(out))
+        assert out.stat().st_size > 0
+
+    def test_overlay_index_axis(self, tmp_path):
+        r = _make_result()
+        self._render_through_panel(build_regression_overlay(r), tmp_path, "idx")
+
+    def test_overlay_datetime_axis(self, tmp_path):
+        dates = np.array([np.datetime64("2024-01-01") + np.timedelta64(i, "D") for i in range(7)])
+        r = _make_result(historical_x=dates, current_x=np.datetime64("2024-01-08"))
+        self._render_through_panel(build_regression_overlay(r), tmp_path, "dt")
+
+    def test_overlay_string_axis_git_time_event(self, tmp_path):
+        """Regression test: git_time_event strings previously crashed bokeh render."""
+        labels = [f"2024-06-{15 + i:02d} abc{i}234d" for i in range(7)]
+        r = _make_result(historical_x=labels, current_x="2024-06-22 xyz7890")
+        self._render_through_panel(build_regression_overlay(r), tmp_path, "git")
+
+    def test_overlay_band_present(self):
+        """The acceptance band should be in the overlay (regression: bokeh
+        silently dropped HSpan when combined with categorical x)."""
+        import holoviews as hv
+
+        labels = [f"2024-06-{15 + i:02d} abc{i}234d" for i in range(7)]
+        r = _make_result(historical_x=labels, current_x="2024-06-22 xyz7890")
+        overlay = build_regression_overlay(r)
+        # The band is rendered as an Area element; assert one is present.
+        has_area = any(isinstance(el, hv.Area) for el in overlay)
+        assert has_area, f"expected an Area layer for the band, got: {list(overlay)}"
+
+
+# ── End-to-end over_time plotting with string TimeEvent coords ─────────────
+
+_ctr = [0]
+
+
+class _StringTimeBench(bn.ParametrizedSweep):
+    """Benchmark with a categorical input var — forces the bar plot path."""
+
+    endpoint = bn.StringSweep(["a", "b", "c"], doc="endpoint")
+    latency = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
+    _base = {"a": 10.0, "b": 20.0, "c": 30.0}
+
+    def benchmark(self):
+        import random
+
+        self.latency = self._base[self.endpoint] + random.gauss(0, 1.0)
+
+
+def _unique_fake_time_src() -> str:
+    """git_time_event()-style string, guaranteed distinct each call."""
+    _ctr[0] += 1
+    return f"2026-{_ctr[0]:02d}-01 fake{_ctr[0]:04x}"
+
+
+def _duplicate_fake_time_src() -> str:
+    """git_time_event()-style string that repeats — simulates a user running
+    multiple times within the same git commit (pre-fix crash condition)."""
+    return "2026-01-01 samecommit"
+
+
+class TestOverTimeStringCoords:
+    """End-to-end tests against bencher's plot pipeline with git_time_event-
+    style string over_time coords. Previously crashed in two places:
+
+    - regression overlay: nanmax on Unicode dtype (fixed by categorical fallback)
+    - bar plot: duplicate over_time coords → sel returns mixed element types
+      → `HoloMap must only contain one type of object`.
+    """
+
+    def _build_bench(self, time_srcs):
+        run_cfg = bn.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.regression_detection = True
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+        bench = bn.Bench("string_time", _StringTimeBench(), run_cfg=run_cfg)
+        for i, ts in enumerate(time_srcs):
+            run_cfg.clear_history = i == 0
+            run_cfg.clear_cache = True
+            bench.plot_sweep(
+                input_vars=["endpoint"],
+                result_vars=["latency"],
+                run_cfg=run_cfg,
+                time_src=ts,
+            )
+        return bench
+
+    def test_to_auto_plots_unique_string_times(self):
+        """With unique string time coords, to_auto_plots should not crash."""
+        _ctr[0] = 0
+        bench = self._build_bench([_unique_fake_time_src() for _ in range(3)])
+        res = bench.results[-1]
+        panel = res.to_auto_plots()
+        assert panel is not None
+
+    def test_to_auto_plots_duplicate_string_times(self):
+        """Duplicate over_time coord values previously crashed the bar holomap
+        with `HoloMap must only contain one type of object`. After the fix,
+        duplicates are deduped inside _build_time_holomap via isel + seen set.
+        """
+        bench = self._build_bench([_duplicate_fake_time_src() for _ in range(3)])
+        res = bench.results[-1]
+        # Must not raise even though the dataset has duplicate over_time coords.
+        panel = res.to_auto_plots()
+        assert panel is not None
+
+    def test_regression_report_populated_with_string_times(self):
+        """regression_report should capture string historical_x for use by the
+        PNG/overlay renderers (without crashing on dtype)."""
+        _ctr[0] = 0
+        bench = self._build_bench([_unique_fake_time_src() for _ in range(4)])
+        res = bench.results[-1]
+        assert res.regression_report is not None
+        assert res.regression_report.results, "expected at least one result"
+        r = res.regression_report.results[0]
+        assert r.historical_x is not None
+        assert r.historical_x.dtype.kind == "U"  # unicode
+        # Renderers must both succeed on this result.
+        import panel as pn
+
+        overlay = r.render_overlay()
+        pn.Column(pn.pane.HoloViews(overlay))  # triggers panel init render path

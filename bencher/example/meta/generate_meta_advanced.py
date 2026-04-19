@@ -162,7 +162,7 @@ for i, event_name in enumerate(events):
 
     def _generate_git_time_event(self):
         """Git commit time event example."""
-        imports = "import bencher as bn"
+        imports = "import random\n\nimport bencher as bn"
         class_code = '''\
 class ServerLatency(bn.ParametrizedSweep):
     """Simulates server latency measurements across endpoints.
@@ -177,11 +177,19 @@ class ServerLatency(bn.ParametrizedSweep):
         ["/api/users", "/api/orders", "/api/health"], doc="API endpoint"
     )
 
-    latency = bn.ResultFloat(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency", direction=bn.OptDir.minimize)
+
+    _BASE = {"/api/users": 48.0, "/api/orders": 125.0, "/api/health": 8.0}
 
     def benchmark(self):
-        self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]'''
+        base = self._BASE[self.endpoint]
+        # Gaussian per-run noise so the regression band has a visible width.
+        self.latency = base + random.gauss(0, 0.08 * base)'''
         body = """\
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
+run_cfg.regression_detection = True
+
 bench = ServerLatency().to_bench(run_cfg)
 
 # git_time_event() returns a string like "2024-06-15 abc1234d".

@@ -23,6 +23,7 @@ dependencies = [
     "strenum>=0.4.0,<=0.4.15",
     "scikit-learn>=1.2,<=1.7.2",
     "moviepy>=2.1.2,<=2.2.1",
+    "matplotlib>=3.7,<=3.10.8",
 ]
 
 [project.urls]

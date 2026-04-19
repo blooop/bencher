@@ -234,7 +234,15 @@ class BenchResult(
         # --- Regression report (auto-inserted when regression detection is enabled) ---
         has_multiple_times = "over_time" in self.ds.dims and self.ds.sizes["over_time"] > 1
         if self.regression_report is not None and has_multiple_times:
-            plot_cols.append(pn.pane.Markdown(self.regression_report.to_markdown(), width=800))
+            for r in self.regression_report.results:
+                if r.historical is None or len(r.historical) == 0:
+                    continue
+                try:
+                    plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
+                except Exception:  # pylint: disable=broad-except
+                    logging.error(
+                        "Failed to render regression overlay for %s", r.variable, exc_info=True
+                    )
 
         # --- Extra panels (user-injected) ---
         if extra_panels:
