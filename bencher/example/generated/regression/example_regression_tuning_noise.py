@@ -1,4 +1,4 @@
-"""Auto-generated example: Adaptive detector — tuning noise."""
+"""Auto-generated example: Regression detector — tuning noise."""
 
 import random
 
@@ -56,7 +56,7 @@ class NoiseRobustness(bn.ParametrizedSweep):
 
 
 def example_regression_tuning_noise(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Adaptive detector — tuning noise."""
+    """Regression detector — tuning noise."""
     bench = NoiseRobustness().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["noise_sigma", "z_threshold"],

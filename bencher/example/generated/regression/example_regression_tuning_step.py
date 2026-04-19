@@ -1,4 +1,4 @@
-"""Auto-generated example: Adaptive detector — tuning step."""
+"""Auto-generated example: Regression detector — tuning step."""
 
 import random
 
@@ -55,7 +55,7 @@ class StepDetection(bn.ParametrizedSweep):
 
 
 def example_regression_tuning_step(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Adaptive detector — tuning step."""
+    """Regression detector — tuning step."""
     bench = StepDetection().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["regression_magnitude", "z_threshold"],

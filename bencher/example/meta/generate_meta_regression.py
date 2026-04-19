@@ -269,7 +269,7 @@ for i, offset in enumerate(releases):
 
     def _generate_tuning(self, tuning: str, spec: TuningSpec) -> None:
         """Emit a 2D tuning example with holoviews ResultReference output."""
-        title = f"Adaptive detector — {tuning.replace('_', ' ')}"
+        title = f"Regression detector — {tuning.replace('_', ' ')}"
 
         imports = (
             "import random\n\n"

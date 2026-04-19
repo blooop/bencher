@@ -622,15 +622,14 @@ def detect_regression(
     noise_floor, noise_source = _estimate_noise(hist_clean, baseline)
 
     change = _safe_change_percent(curr_mean, baseline)
-    percent_ok = (
-        True
-        if min_change_percent is None or not np.isfinite(change)
-        else abs(change) >= min_change_percent
-    )
-    if min_change_percent is not None and not np.isfinite(change):
+    if min_change_percent is None:
+        percent_ok = True
+    elif not np.isfinite(change):
         # Baseline is zero and current isn't — can't compute a percent change,
         # so the guard can't be satisfied and the result is never flagged.
         percent_ok = False
+    else:
+        percent_ok = abs(change) >= min_change_percent
 
     # Step test
     if np.isfinite(curr_mean) and np.isfinite(baseline):

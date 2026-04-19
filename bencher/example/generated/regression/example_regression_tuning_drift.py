@@ -1,4 +1,4 @@
-"""Auto-generated example: Adaptive detector — tuning drift."""
+"""Auto-generated example: Regression detector — tuning drift."""
 
 import random
 
@@ -65,7 +65,7 @@ class DriftDetection(bn.ParametrizedSweep):
 
 
 def example_regression_tuning_drift(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Adaptive detector — tuning drift."""
+    """Regression detector — tuning drift."""
     bench = DriftDetection().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["drift_rate", "z_threshold"],
