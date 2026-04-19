@@ -54,7 +54,7 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
     )
     z_threshold = bn.FloatSweep(
         default=3.5,
-        bounds=[1.5, 6.0],
+        bounds=[1.5, 5.5],
         doc="Adaptive z-threshold",
     )
 
