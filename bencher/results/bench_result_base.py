@@ -890,8 +890,8 @@ class BenchResultBase:
             "No data for this time point</div>"
         )
         html_list = []
-        for t in time_vals:
-            ds_t = dataset.sel(over_time=t)
+        for idx, _t in enumerate(time_vals):
+            ds_t = dataset.isel(over_time=idx)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
             if filepath == "NAN" or not os.path.isfile(filepath):
                 html_list.append(_NO_DATA_HTML)
@@ -952,8 +952,8 @@ class BenchResultBase:
         labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
 
         items = []
-        for t, label in zip(time_vals, labels):
-            ds_t = dataset.sel(over_time=t)
+        for idx, label in enumerate(labels):
+            ds_t = dataset.isel(over_time=idx)
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
             if filepath == "NAN" or not os.path.isfile(filepath):
                 continue

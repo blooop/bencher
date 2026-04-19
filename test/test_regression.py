@@ -846,3 +846,97 @@ class TestBuildRegressionOverlay:
         # The band is rendered as an Area element; assert one is present.
         has_area = any(isinstance(el, hv.Area) for el in overlay)
         assert has_area, f"expected an Area layer for the band, got: {list(overlay)}"
+
+
+# ── End-to-end over_time plotting with string TimeEvent coords ─────────────
+
+_ctr = [0]
+
+
+class _StringTimeBench(bn.ParametrizedSweep):
+    """Benchmark with a categorical input var — forces the bar plot path."""
+
+    endpoint = bn.StringSweep(["a", "b", "c"], doc="endpoint")
+    latency = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
+    _base = {"a": 10.0, "b": 20.0, "c": 30.0}
+
+    def benchmark(self):
+        import random
+
+        self.latency = self._base[self.endpoint] + random.gauss(0, 1.0)
+
+
+def _unique_fake_time_src() -> str:
+    """git_time_event()-style string, guaranteed distinct each call."""
+    _ctr[0] += 1
+    return f"2026-{_ctr[0]:02d}-01 fake{_ctr[0]:04x}"
+
+
+def _duplicate_fake_time_src() -> str:
+    """git_time_event()-style string that repeats — simulates a user running
+    multiple times within the same git commit (pre-fix crash condition)."""
+    return "2026-01-01 samecommit"
+
+
+class TestOverTimeStringCoords:
+    """End-to-end tests against bencher's plot pipeline with git_time_event-
+    style string over_time coords. Previously crashed in two places:
+
+    - regression overlay: nanmax on Unicode dtype (fixed by categorical fallback)
+    - bar plot: duplicate over_time coords → sel returns mixed element types
+      → `HoloMap must only contain one type of object`.
+    """
+
+    def _build_bench(self, time_srcs):
+        run_cfg = bn.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.regression_detection = True
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+        bench = bn.Bench("string_time", _StringTimeBench(), run_cfg=run_cfg)
+        for i, ts in enumerate(time_srcs):
+            run_cfg.clear_history = i == 0
+            run_cfg.clear_cache = True
+            bench.plot_sweep(
+                input_vars=["endpoint"],
+                result_vars=["latency"],
+                run_cfg=run_cfg,
+                time_src=ts,
+            )
+        return bench
+
+    def test_to_auto_plots_unique_string_times(self):
+        """With unique string time coords, to_auto_plots should not crash."""
+        _ctr[0] = 0
+        bench = self._build_bench([_unique_fake_time_src() for _ in range(3)])
+        res = bench.results[-1]
+        panel = res.to_auto_plots()
+        assert panel is not None
+
+    def test_to_auto_plots_duplicate_string_times(self):
+        """Duplicate over_time coord values previously crashed the bar holomap
+        with `HoloMap must only contain one type of object`. After the fix,
+        duplicates are deduped inside _build_time_holomap via isel + seen set.
+        """
+        bench = self._build_bench([_duplicate_fake_time_src() for _ in range(3)])
+        res = bench.results[-1]
+        # Must not raise even though the dataset has duplicate over_time coords.
+        panel = res.to_auto_plots()
+        assert panel is not None
+
+    def test_regression_report_populated_with_string_times(self):
+        """regression_report should capture string historical_x for use by the
+        PNG/overlay renderers (without crashing on dtype)."""
+        _ctr[0] = 0
+        bench = self._build_bench([_unique_fake_time_src() for _ in range(4)])
+        res = bench.results[-1]
+        assert res.regression_report is not None
+        assert res.regression_report.results, "expected at least one result"
+        r = res.regression_report.results[0]
+        assert r.historical_x is not None
+        assert r.historical_x.dtype.kind == "U"  # unicode
+        # Renderers must both succeed on this result.
+        import panel as pn
+
+        overlay = r.render_overlay()
+        pn.Column(pn.pane.HoloViews(overlay))  # triggers panel init render path
