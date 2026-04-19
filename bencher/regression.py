@@ -59,7 +59,7 @@ class RegressionResult:
     # x-axis coordinates for the historical and current points (typically the
     # ``over_time`` datetimes). Optional: falls back to integer indices.
     historical_x: np.ndarray | None = None
-    current_x: object | None = None
+    current_x: np.ndarray | None = None
 
     def render_png(
         self,
@@ -198,22 +198,35 @@ def _regression_plot_spec(
         hist_x = np.arange(len(hist))
         xlabel = "run index"
 
-    if result.current_x is not None and (
-        np.issubdtype(np.asarray(result.current_x).dtype, np.number)
-        or np.issubdtype(np.asarray(result.current_x).dtype, np.datetime64)
-    ):
-        x_current = np.asarray(result.current_x)
-    elif result.current_x is not None and xticks is not None:
+    # Pick x_current so its dtype matches hist_x. Mixing e.g. datetime64 and
+    # int64 on the same axis raises in holoviews' range computation.
+    current_x_arr = np.asarray(result.current_x) if result.current_x is not None else None
+    if current_x_arr is not None:
+        hist_is_dt = np.issubdtype(hist_x.dtype, np.datetime64)
+        cur_is_dt = np.issubdtype(current_x_arr.dtype, np.datetime64)
+        hist_is_num = np.issubdtype(hist_x.dtype, np.number)
+        cur_is_num = np.issubdtype(current_x_arr.dtype, np.number)
+        current_x_matches_hist = (hist_is_dt and cur_is_dt) or (hist_is_num and cur_is_num)
+    else:
+        current_x_matches_hist = False
+    if current_x_matches_hist:
+        x_current = current_x_arr
+    elif current_x_arr is not None and xticks is not None:
         # String current_x — place it one step past the last history tick and
         # append it to the tick overrides.
         x_current = len(hist_x)
         xticks.append((x_current, str(result.current_x)))
     elif len(hist_x) > 0:
         # Extrapolate one step beyond the last history point.
-        if np.issubdtype(hist_x.dtype, np.datetime64) and len(hist_x) >= 2:
-            x_current = hist_x[-1] + (hist_x[-1] - hist_x[-2])
+        if np.issubdtype(hist_x.dtype, np.datetime64):
+            if len(hist_x) >= 2:
+                x_current = hist_x[-1] + (hist_x[-1] - hist_x[-2])
+            else:
+                # Single datetime point — nudge forward by a small timedelta so
+                # the current marker doesn't overlap the history point exactly.
+                x_current = hist_x[-1] + np.timedelta64(1, "s")
         else:
-            x_current = hist_x[-1] + (1 if not np.issubdtype(hist_x.dtype, np.datetime64) else 0)
+            x_current = hist_x[-1] + 1
     else:
         x_current = 0
 
@@ -303,6 +316,15 @@ def build_regression_overlay(
             hv.Curve(list(zip(hist_x, hist)), spec["xlabel"], spec["ylabel"]).opts(
                 color="#1f77b4", line_width=1.5
             )
+        )
+        # Dotted connector from the last history point to the current marker
+        # so the jump that triggered the regression is visually obvious.
+        layers.append(
+            hv.Curve(
+                [(hist_x[-1], hist[-1]), (x_current, spec["curr_mean"])],
+                spec["xlabel"],
+                spec["ylabel"],
+            ).opts(color=verdict_color, line_dash="dotted", line_width=1.5)
         )
     if len(spec["curr_samples"]) > 1:
         layers.append(
@@ -410,6 +432,16 @@ def render_regression_png(
             linewidth=1.2,
             label="history",
         )
+        # Dotted connector from the last history point to the current marker
+        # so the jump that triggered the regression is visually obvious.
+        ax.plot(
+            [hist_x[-1], x_current],
+            [hist[-1], spec["curr_mean"]],
+            linestyle=":",
+            color=verdict_color,
+            linewidth=1.2,
+            alpha=0.8,
+        )
 
     if len(curr_samples) > 1:
         ax.scatter(
@@ -429,6 +461,9 @@ def render_regression_png(
         linewidth=0.7,
         label=f"current={spec['curr_mean']:.3g}",
     )
+
+    # Extra margin on the right so the current marker isn't clipped by the frame.
+    ax.margins(x=0.08)
 
     ax.set_xlabel(spec["xlabel"])
     ax.set_ylabel(spec["ylabel"])
@@ -859,19 +894,22 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
 
         # Retain the arrays used for plotting so downstream consumers (reports,
         # bot comments) can rebuild the diagnostic without re-running detection.
+        time_coord = dataset["over_time"].values
         if time_means_arr is not None:
             result.historical = time_means_arr
             # Per-time means are aligned with over_time, one value per time point.
-            result.historical_x = dataset["over_time"].isel(over_time=slice(None, -1)).values
+            result.historical_x = time_coord[:-1]
+            result.current_x = time_coord[-1]
         else:
             result.historical = historical_clean
             # percentage/ttest pass the flat history (repeat * over_time); we
-            # still record the over_time coord (minus the last) so the plotter
-            # can show dates if history is per-time only.
-            if dataset["over_time"].size - 1 == len(historical_clean):
-                result.historical_x = dataset["over_time"].isel(over_time=slice(None, -1)).values
+            # only record over_time coords when they line up with the flat
+            # history length — otherwise pair current_x with the integer
+            # indices used by the plot and leave both unset.
+            if len(time_coord) - 1 == len(historical_clean):
+                result.historical_x = time_coord[:-1]
+                result.current_x = time_coord[-1]
         result.current_samples = current_clean
-        result.current_x = dataset["over_time"].isel(over_time=-1).values
 
         report.results.append(result)
 

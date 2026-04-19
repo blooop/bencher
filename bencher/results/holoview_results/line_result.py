@@ -114,9 +114,11 @@ class LineResult(HoloviewResult):
         ):
             # Suppress the bare over_time line when the regression overlay for
             # this variable is already being rendered — the overlay shows the
-            # same history with extra diagnostic context.
+            # same history with extra diagnostic context. Match the overlay
+            # creation guard in BenchResult.to_auto_plots so we don't hide the
+            # base plot when no overlay will actually be drawn.
             if self.regression_report is not None and any(
-                r.variable == result_var.name and r.historical is not None
+                r.variable == result_var.name and r.historical is not None and len(r.historical) > 0
                 for r in self.regression_report.results
             ):
                 return None

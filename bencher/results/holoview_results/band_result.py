@@ -62,8 +62,11 @@ class BandResult(HoloviewResult):
 
         # Suppress the over_time band when the regression overlay for this
         # variable is already being rendered — both show the same history.
+        # Match the overlay creation guard in BenchResult.to_auto_plots so we
+        # don't hide the base plot when no overlay will actually be drawn.
         if self.regression_report is not None and any(
-            r.variable == var and r.historical is not None for r in self.regression_report.results
+            r.variable == var and r.historical is not None and len(r.historical) > 0
+            for r in self.regression_report.results
         ):
             return None
 
