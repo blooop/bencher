@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
-| Total tests | 1297 |
-| Total time | 104.26s |
-| Mean | 0.0804s |
+| Total tests | 1308 |
+| Total time | 109.09s |
+| Mean | 0.0834s |
 | Median | 0.0020s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 20.338 |
-| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 4.996 |
-| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 3.774 |
-| `test.test_generated_examples::test_generated_example[cartesian_animation/example_cartesian_animation.py]` | 3.036 |
-| `test.test_generated_examples::test_generated_example[result_types/result_image/example_result_image_to_video.py]` | 2.752 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.554 |
-| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.410 |
-| `test.test_optuna_result.TestOptunaResult::test_collect_optuna_plots_with_repeats` | 1.266 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_no_subsampling_when_below_default_max` | 1.226 |
-| `test.test_bencher.TestBencher::test_combinations` | 0.900 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 20.472 |
+| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 5.100 |
+| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 4.161 |
+| `test.test_generated_examples::test_generated_example[cartesian_animation/example_cartesian_animation.py]` | 3.031 |
+| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.945 |
+| `test.test_generated_examples::test_generated_example[result_types/result_image/example_result_image_to_video.py]` | 2.750 |
+| `test.test_bencher.TestBencher::test_combinations_over_time` | 1.434 |
+| `test.test_bench_runner.TestBenchRunner::test_benchrunner_unified_interface` | 1.269 |
+| `test.test_optuna_result.TestOptunaResult::test_collect_optuna_plots_with_repeats` | 1.015 |
+| `test.test_over_time_repeats.TestCurveResultOverTime::test_curve_over_time_with_repeats` | 0.982 |
 
 </details>
