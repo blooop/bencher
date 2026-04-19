@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.86.0] - 2026-04-19
+
+### Changed
+- `BenchRunCfg.regression_method` default changed from `"percentage"` to `"adaptive"`. The adaptive method (robust MAD-based step + drift test) is more resilient to noisy metrics and is a better default for most benchmarks. Users can still opt into `"percentage"`, `"iqr"`, or `"ttest"` explicitly.
+
 ## [1.85.1] - 2026-04-19
 
 ### Fixed

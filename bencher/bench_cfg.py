@@ -351,7 +351,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
     )
 
     regression_method: str = param.Selector(
-        default="percentage",
+        default="adaptive",
         objects=["percentage", "iqr", "ttest", "adaptive"],
         doc="Detection method: 'percentage' (mean comparison), "
         "'iqr' (IQR outlier detection), 'ttest' (Welch's t-test), "
