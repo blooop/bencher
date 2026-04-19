@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.87.0] - 2026-04-19
+
+### Added
+- PNG/bokeh regression diagnostic plot via `render_regression_png` (matplotlib) and `build_regression_overlay` (holoviews/bokeh) sharing a single plot spec, so the same diagnostic can be posted as a PR-comment PNG or embedded in the HTML report. `RegressionResult` now stores history/current samples and their `over_time` coordinates so plots use real datetimes when available.
+- HTML report auto-inserts the regression overlay per regressed variable; bare over_time line/band plots are suppressed for any variable with a regression overlay to avoid duplicate graphs.
+- Categorical x-axis support in regression plots (e.g. `git_time_event` string labels like `"2024-06-15 abc1234d"`), surfaced via xticks overrides.
+- Dotted connector from the last history point to the current marker in regression overlays so the jump that triggered a regression is visually obvious.
+- `matplotlib` added as a dependency for PNG rendering.
+
+### Fixed
+- `over_time` bar plot crash on duplicate coord values (e.g. two runs at the same `git_time_event` string) that caused `HoloMap must only contain one type of object, not both Bars and DynamicMap`. Switched `_build_time_holomap` and `_pane_over_time_{slider,grid}` to positional `isel(over_time=idx)` and deduped identical coord values.
+- Holoviews `UFuncNoLoopError` with `git_time_event` string x-axes by replacing `HSpan`/`HLine` with `Area`/`Curve` primitives that carry explicit x coords, so the regression band and baseline always render regardless of x dtype.
+- Regression plot dtype mismatch between `hist_x` and `current_x` (e.g. datetime64 vs int64) that raised in holoviews' range computation; `current_x` now only replaces the extrapolated tick when its dtype matches the history.
+- Single-datetime-point regression overlays now nudge the current marker forward by a small timedelta so it doesn't overlap the sole history point.
+
 ## [1.86.0] - 2026-04-19
 
 ### Changed
