@@ -88,7 +88,6 @@ bench.plot_sweep(
 if run_cfg is None:
     run_cfg = bn.BenchRunCfg()
 run_cfg.regression_detection = True
-run_cfg.regression_method = "percentage"
 run_cfg.regression_fail = False
 
 benchable = ControlSystemSweep()

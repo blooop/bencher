@@ -1,13 +1,14 @@
 """Benchmark regression detection for over-time benchmarks.
 
-Provides statistical methods to detect if benchmark values have changed
-significantly between runs. Supports percentage threshold, IQR-based outlier
-detection, and Welch's t-test.
+Provides a single statistical detector that flags significant changes between
+a current run and historical runs. Noise is estimated in MAD-sigma units with
+layered fallbacks (MAD → residual-MAD → discretization → relative floor), so
+one function handles everything from noisy Gaussian history down to a single
+prior sample.
 """
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,22 +17,24 @@ import xarray as xr
 
 from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
 
-# Default thresholds per method — used when the user hasn't explicitly set a threshold.
-_METHOD_DEFAULTS = {
-    "percentage": 5.0,  # percent change
-    "iqr": 1.5,  # IQR multiplier
-    "ttest": 0.05,  # significance level alpha
-    "adaptive": 3.5,  # robust z-score threshold in MAD units
-}
+# Default step-test threshold in MAD-sigma units.
+_DEFAULT_Z_THRESHOLD = 3.5
 
 # Consistency factor so MAD estimates the standard deviation of a Gaussian.
 _MAD_TO_SIGMA = 1.4826
 
-# Drift threshold defaults to this fraction of z_threshold when not set by caller.
+# Drift threshold defaults to this fraction of z_threshold.
 _DRIFT_FRAC = 0.85
 
 # Hampel filter cutoff (in MAD units) used to drop outliers from the slope fit.
 _HAMPEL_K = 5.0
+
+# Mann–Kendall significance gate for the drift test.
+_MK_ALPHA = 0.1
+
+# Fallback floors when noise estimates collapse to zero.
+_RELATIVE_FLOOR = 1e-6
+_ABSOLUTE_FLOOR = 1e-12
 
 
 class RegressionError(Exception):
@@ -366,15 +369,11 @@ def render_regression_png(
     The plot contains everything needed to diagnose the *style* of regression
     at a glance — history time-series (to reveal drift and noise), the baseline
     line, the acceptance band (to reveal step size), and the current-run marker
-    coloured by the pass/fail verdict. The details string from
-    :class:`RegressionResult` (method-specific statistics such as z-score,
-    p-value, or percent change) is shown as a footer so the PNG is
-    self-contained — suitable for posting directly as a GitHub PR comment.
+    coloured by the pass/fail verdict.
 
     Args:
-        result: The :class:`RegressionResult` produced by a ``detect_*`` call.
-        historical: 1-D array of the historical per-time-point means (the same
-            sequence fed into ``detect_adaptive`` / ``detect_iqr``). Pass an
+        result: The :class:`RegressionResult` produced by :func:`detect_regression`.
+        historical: 1-D array of the historical per-time-point means. Pass an
             empty array if no history is available — only the current marker,
             baseline, and band are drawn in that case.
         current: Current-run sample(s). If ``None``, ``result.current_value``
@@ -432,8 +431,6 @@ def render_regression_png(
             linewidth=1.2,
             label="history",
         )
-        # Dotted connector from the last history point to the current marker
-        # so the jump that triggered the regression is visually obvious.
         ax.plot(
             [hist_x[-1], x_current],
             [hist[-1], spec["curr_mean"]],
@@ -462,7 +459,6 @@ def render_regression_png(
         label=f"current={spec['curr_mean']:.3g}",
     )
 
-    # Extra margin on the right so the current marker isn't clipped by the frame.
     ax.margins(x=0.08)
 
     ax.set_xlabel(spec["xlabel"])
@@ -491,6 +487,8 @@ def _clean_1d(a: np.ndarray) -> np.ndarray:
 
 def _safe_change_percent(current: float, baseline: float) -> float:
     """Calculate percentage change, handling zero baseline gracefully."""
+    if not np.isfinite(current) or not np.isfinite(baseline):
+        return float("nan")
     if baseline == 0:
         if current == 0:
             return 0.0
@@ -498,168 +496,21 @@ def _safe_change_percent(current: float, baseline: float) -> float:
     return ((current - baseline) / abs(baseline)) * 100.0
 
 
-def _is_regression(change_percent: float, direction: OptDir) -> bool:
-    """Determine if a change constitutes a regression given the optimization direction."""
+def _is_regression(delta: float, direction: OptDir) -> bool:
+    """Return True if *delta* is a regression given the optimization direction.
+
+    Accepts either a signed percent change or a signed z-score — both share the
+    same sign convention.
+    """
     if direction == OptDir.minimize:
-        return change_percent > 0  # higher is worse
+        return delta > 0  # higher is worse
     if direction == OptDir.maximize:
-        return change_percent < 0  # lower is worse
+        return delta < 0  # lower is worse
     return True  # OptDir.none — any significant change is a regression
 
 
-def _exceeds_directional_threshold(
-    change_percent: float,
-    threshold_percent: float,
-    direction: OptDir,
-) -> bool:
-    """Check if change exceeds threshold in the direction-appropriate sense."""
-    if direction == OptDir.minimize:
-        return change_percent > threshold_percent
-    if direction == OptDir.maximize:
-        return change_percent < -threshold_percent
-    return abs(change_percent) > threshold_percent
-
-
-def detect_percentage(
-    variable: str,
-    historical: np.ndarray,
-    current: np.ndarray,
-    threshold_percent: float = 5.0,
-    direction: OptDir = OptDir.minimize,
-) -> RegressionResult:
-    """Compare current mean vs historical mean by percentage threshold."""
-    hist_mean = float(np.nanmean(historical))
-    curr_mean = float(np.nanmean(current))
-    change = _safe_change_percent(curr_mean, hist_mean)
-
-    exceeds = _exceeds_directional_threshold(change, threshold_percent, direction)
-    regressed = exceeds and _is_regression(change, direction)
-
-    frac = threshold_percent / 100.0
-    return RegressionResult(
-        variable=variable,
-        method="percentage",
-        regressed=regressed,
-        current_value=curr_mean,
-        baseline_value=hist_mean,
-        change_percent=change,
-        threshold=threshold_percent,
-        direction=direction.value,
-        details=f"Change {change:+.2f}% vs threshold {threshold_percent}%",
-        band_lower=hist_mean * (1.0 - frac),
-        band_upper=hist_mean * (1.0 + frac),
-    )
-
-
-def detect_iqr(
-    variable: str,
-    historical_time_means: np.ndarray,
-    current: np.ndarray,
-    iqr_scale: float = 1.5,
-    direction: OptDir = OptDir.minimize,
-) -> RegressionResult:
-    """IQR outlier detection using per-time-point means from history.
-
-    Args:
-        variable: Name of the result variable being checked.
-        historical_time_means: Array of per-time-point mean values from history.
-        current: Current run values (will be averaged).
-        iqr_scale: Multiplier for IQR to define outlier bounds (default 1.5).
-        direction: Optimization direction from the result variable.
-    """
-    clean = _clean_1d(historical_time_means)
-    curr_mean = float(np.nanmean(current))
-
-    if len(clean) < 4:
-        # Not enough time points for robust IQR; fall back to percentage using
-        # the default percentage threshold so the comparison stays meaningful.
-        return detect_percentage(
-            variable,
-            clean,
-            current,
-            threshold_percent=_METHOD_DEFAULTS["percentage"],
-            direction=direction,
-        )
-
-    q1 = float(np.percentile(clean, 25))
-    q3 = float(np.percentile(clean, 75))
-    iqr = q3 - q1
-    lower = q1 - iqr_scale * iqr
-    upper = q3 + iqr_scale * iqr
-
-    hist_mean = float(np.nanmean(clean))
-    change = _safe_change_percent(curr_mean, hist_mean)
-
-    outside_bounds = curr_mean > upper or curr_mean < lower
-    regressed = outside_bounds and _is_regression(change, direction)
-
-    return RegressionResult(
-        variable=variable,
-        method="iqr",
-        regressed=regressed,
-        current_value=curr_mean,
-        baseline_value=hist_mean,
-        change_percent=change,
-        threshold=iqr_scale,
-        direction=direction.value,
-        details=f"IQR bounds [{lower:.4g}, {upper:.4g}], current={curr_mean:.4g}",
-        band_lower=lower,
-        band_upper=upper,
-    )
-
-
-def detect_ttest(
-    variable: str,
-    historical: np.ndarray,
-    current: np.ndarray,
-    alpha: float = 0.05,
-    direction: OptDir = OptDir.minimize,
-) -> RegressionResult:
-    """Welch's t-test between historical and current samples."""
-    hist_clean = _clean_1d(historical)
-    curr_clean = _clean_1d(current)
-
-    if len(hist_clean) < 2 or len(curr_clean) < 2:
-        # Fall back to percentage with alpha-based threshold
-        return detect_percentage(
-            variable, hist_clean, curr_clean, threshold_percent=alpha * 100, direction=direction
-        )
-
-    from scipy.stats import ttest_ind
-
-    if direction == OptDir.minimize:
-        alt = "greater"  # regression = current > historical
-    elif direction == OptDir.maximize:
-        alt = "less"  # regression = current < historical
-    else:
-        alt = "two-sided"
-
-    stat, pvalue = ttest_ind(curr_clean, hist_clean, equal_var=False, alternative=alt)
-
-    hist_mean = float(np.nanmean(hist_clean))
-    curr_mean = float(np.nanmean(curr_clean))
-    change = _safe_change_percent(curr_mean, hist_mean)
-    regressed = pvalue < alpha
-
-    return RegressionResult(
-        variable=variable,
-        method="ttest",
-        regressed=regressed,
-        current_value=curr_mean,
-        baseline_value=hist_mean,
-        change_percent=change,
-        threshold=alpha,
-        direction=direction.value,
-        details=f"t-stat={stat:.4g}, p-value={pvalue:.4g}, alpha={alpha}",
-    )
-
-
 def _robust_scale(values: np.ndarray) -> tuple[float, float]:
-    """Return (median, MAD-based sigma) for a 1-D numeric array.
-
-    The MAD is scaled by 1.4826 so it matches the standard deviation for
-    Gaussian data.
-    """
+    """Return (median, MAD-based sigma) for a 1-D numeric array."""
     median = float(np.median(values))
     mad = float(np.median(np.abs(values - median)))
     return median, _MAD_TO_SIGMA * mad
@@ -670,8 +521,7 @@ def _residual_sigma(values: np.ndarray) -> float:
 
     For data ``y[i] = trend[i] + eps[i]`` the diff ``y[i+1] - y[i]`` has variance
     ``2 * sigma^2``, so ``MAD(diff) * 1.4826 / sqrt(2)`` recovers sigma even
-    when ``trend`` is non-stationary. This prevents a gradual drift from
-    inflating its own noise estimate and masking itself.
+    when ``trend`` is non-stationary.
     """
     if len(values) < 2:
         return 0.0
@@ -680,126 +530,175 @@ def _residual_sigma(values: np.ndarray) -> float:
     return _MAD_TO_SIGMA * mad / np.sqrt(2.0)
 
 
-def detect_adaptive(
+def _discretization_floor(values: np.ndarray) -> float:
+    """Smallest non-zero absolute step between successive history values.
+
+    For integer-valued metrics this is at least 1, providing a meaningful
+    noise floor when both MAD and residual-MAD collapse to zero (constant
+    history). Returns 0 when no non-zero steps exist.
+    """
+    if len(values) < 2:
+        return 0.0
+    diffs = np.abs(np.diff(values))
+    non_zero = diffs[diffs > 0]
+    return float(np.min(non_zero)) if len(non_zero) else 0.0
+
+
+def _estimate_noise(values: np.ndarray, baseline: float) -> tuple[float, str]:
+    """Estimate noise in a 1-D history with layered fallbacks.
+
+    Returns ``(noise, source)`` where *source* names the layer that produced
+    the estimate: ``"mad"`` → ``"residual"`` → ``"discretization"`` → ``"floor"``.
+    The final result is always clamped to at least ``_RELATIVE_FLOOR * |baseline|``
+    (and an absolute floor of ``_ABSOLUTE_FLOOR``) so divisions never explode.
+    """
+    rel_floor = max(_RELATIVE_FLOOR * abs(baseline), _ABSOLUTE_FLOOR)
+
+    if len(values) >= 2:
+        _, mad_sigma = _robust_scale(values)
+        if mad_sigma > 0:
+            return max(mad_sigma, rel_floor), "mad"
+        resid = _residual_sigma(values)
+        if resid > 0:
+            return max(resid, rel_floor), "residual"
+        disc = _discretization_floor(values)
+        if disc > 0:
+            return max(disc, rel_floor), "discretization"
+    return rel_floor, "floor"
+
+
+def detect_regression(
     variable: str,
-    historical_time_means: np.ndarray,
+    historical: np.ndarray,
     current: np.ndarray,
-    z_threshold: float = 3.5,
-    drift_threshold: float | None = None,
-    mk_alpha: float = 0.1,
+    *,
+    z_threshold: float = _DEFAULT_Z_THRESHOLD,
+    min_change_percent: float | None = None,
     direction: OptDir = OptDir.minimize,
-    historical_samples: np.ndarray | None = None,
+    historical_time_means: np.ndarray | None = None,
+    drift_threshold: float | None = None,
 ) -> RegressionResult:
-    """Robust regression detection combining step and drift tests.
+    """Detect a regression in a metric using robust step and drift tests.
 
-    The method estimates the metric's inherent noise from history using a
-    median + MAD (median absolute deviation) scale and expresses the current
-    run's deviation in those noise units. Two orthogonal tests run in parallel:
-
-    * **Short-term step** — flags if ``(current_mean - baseline) / noise_floor``
-      exceeds ``z_threshold`` in the regression direction.
-    * **Long-term drift** — fits a Theil–Sen slope on the historical time-point
-      means (after a Hampel filter removes isolated outliers) and flags if the
-      total projected drift, scaled by ``noise_floor``, exceeds
-      ``drift_threshold`` and a Mann–Kendall test confirms monotonic trend
-      with ``p < mk_alpha``.
+    Noise is estimated in MAD-sigma units with layered fallbacks so the same
+    function handles everything from long noisy history down to a single prior
+    sample. The step test always runs. The drift test runs whenever
+    *historical_time_means* is provided and has at least 4 entries.
 
     Args:
-        variable: Name of the result variable being checked.
-        historical_time_means: 1-D array of per-time-point mean values from
-            history (one entry per prior run).
-        current: Current run values (will be averaged).
+        variable: Name of the result variable.
+        historical: Flat 1-D array of all historical samples.
+        current: Current-run samples (will be averaged).
         z_threshold: Step-test threshold in MAD-sigma units.
-        drift_threshold: Drift-test threshold in MAD-sigma units. If ``None``,
-            defaults to ``_DRIFT_FRAC * z_threshold`` so users need to tune
-            only one knob.
-        mk_alpha: Significance level for the Mann–Kendall trend guard.
+        min_change_percent: Optional AND-guard — even if ``|z| > z_threshold``,
+            require ``|percent change| >= min_change_percent`` before flagging.
+            Useful for stable metrics where the noise floor collapses to the
+            relative floor and a single-unit change yields a huge z-score.
+            Set to ``None`` (default) to disable.
         direction: Optimization direction from the result variable.
-        historical_samples: Optional flat array of all historical samples
-            (not per-time means). Used for the sparse-history fallback so the
-            delegated ``ttest``/``percentage`` methods see the same input they
-            would have received from ``detect_regressions`` directly. Falls
-            back to ``historical_time_means`` when not provided.
+        historical_time_means: Optional 1-D array of per-time-point means
+            (one entry per prior time step). When provided with ≥4 entries a
+            drift test runs alongside the step test.
+        drift_threshold: Drift-test threshold in MAD-sigma units. If ``None``,
+            defaults to ``0.85 * z_threshold`` so users tune only one knob.
     """
-    if drift_threshold is None:
-        drift_threshold = _DRIFT_FRAC * z_threshold
-
-    hist_clean = _clean_1d(historical_time_means)
+    hist_clean = _clean_1d(historical)
     curr_clean = _clean_1d(current)
-    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
 
-    # Not enough history for a robust scale — fall back to less strict checks.
-    # Use the full per-sample history when available so the fallback behaves
-    # like a direct call to detect_ttest/detect_percentage.
-    if len(hist_clean) < 4:
-        fallback_hist = (
-            _clean_1d(historical_samples) if historical_samples is not None else hist_clean
-        )
-        if len(fallback_hist) >= 2 and len(curr_clean) >= 2:
-            return detect_ttest(
-                variable,
-                fallback_hist,
-                curr_clean,
-                alpha=_METHOD_DEFAULTS["ttest"],
-                direction=direction,
-            )
-        return detect_percentage(
-            variable,
-            fallback_hist,
-            curr_clean,
-            threshold_percent=_METHOD_DEFAULTS["percentage"],
-            direction=direction,
-        )
+    if len(curr_clean) == 0:
+        curr_mean = float("nan")
+    elif len(curr_clean) == 1:
+        curr_mean = float(curr_clean[0])
+    else:
+        curr_mean = float(np.mean(curr_clean))
 
-    baseline, mad_sigma = _robust_scale(hist_clean)
-    noise_floor = max(mad_sigma, 1e-6 * abs(baseline), 1e-12)
+    if len(hist_clean) >= 2:
+        baseline, _ = _robust_scale(hist_clean)
+    elif len(hist_clean) == 1:
+        baseline = float(hist_clean[0])
+    else:
+        baseline = float("nan")
 
-    # Step test — current mean vs robust baseline in MAD-sigma units.
-    z_step = (curr_mean - baseline) / noise_floor
-    step_regressed = _is_regression(z_step, direction) and abs(z_step) > z_threshold
-
-    # Drift test — Theil–Sen slope on Hampel-filtered history, MK significance.
-    # Use residual (detrended) noise as the denominator so a real drift can't
-    # inflate its own noise estimate and mask itself.
-    deviations = np.abs(hist_clean - baseline)
-    keep = deviations <= _HAMPEL_K * max(mad_sigma, 1e-12)
-    filtered = hist_clean[keep] if keep.sum() >= 4 else hist_clean
-    indices = np.arange(len(filtered), dtype=float)
-
-    resid_sigma = _residual_sigma(filtered)
-    drift_noise = max(resid_sigma, 1e-6 * abs(baseline), 1e-12)
-
-    from scipy.stats import kendalltau, theilslopes
-
-    slope = float(theilslopes(filtered, indices)[0])
-    # Slope is per index-step; total drift across n points spans (n-1) steps.
-    drift_total = slope * (len(filtered) - 1)
-    z_drift = drift_total / drift_noise
-    _, mk_p = kendalltau(indices, filtered)
-    mk_p = float(mk_p) if not np.isnan(mk_p) else 1.0
-    drift_regressed = (
-        _is_regression(z_drift, direction) and abs(z_drift) > drift_threshold and mk_p < mk_alpha
-    )
-
-    regressed = step_regressed or drift_regressed
+    noise_floor, noise_source = _estimate_noise(hist_clean, baseline)
 
     change = _safe_change_percent(curr_mean, baseline)
+    percent_ok = (
+        True
+        if min_change_percent is None or not np.isfinite(change)
+        else abs(change) >= min_change_percent
+    )
+    if min_change_percent is not None and not np.isfinite(change):
+        # Baseline is zero and current isn't — can't compute a percent change,
+        # so the guard can't be satisfied and the result is never flagged.
+        percent_ok = False
+
+    # Step test
+    if np.isfinite(curr_mean) and np.isfinite(baseline):
+        z_step = (curr_mean - baseline) / noise_floor
+    else:
+        z_step = 0.0
+    step_regressed = _is_regression(z_step, direction) and abs(z_step) > z_threshold and percent_ok
+
+    # Drift test (optional)
+    drift_thresh = _DRIFT_FRAC * z_threshold if drift_threshold is None else drift_threshold
+    z_drift = 0.0
+    mk_p = 1.0
+    drift_regressed = False
+
+    if historical_time_means is not None:
+        tm = _clean_1d(historical_time_means)
+        if len(tm) >= 4:
+            tm_baseline, tm_mad = _robust_scale(tm)
+            deviations = np.abs(tm - tm_baseline)
+            keep = deviations <= _HAMPEL_K * max(tm_mad, 1e-12)
+            filtered = tm[keep] if keep.sum() >= 4 else tm
+            indices = np.arange(len(filtered), dtype=float)
+            resid = _residual_sigma(filtered)
+            drift_noise = max(resid, _RELATIVE_FLOOR * abs(tm_baseline), _ABSOLUTE_FLOOR)
+
+            from scipy.stats import kendalltau, theilslopes
+
+            slope = float(theilslopes(filtered, indices)[0])
+            drift_total = slope * (len(filtered) - 1)
+            z_drift = drift_total / drift_noise
+            _, mk_p = kendalltau(indices, filtered)
+            mk_p = float(mk_p) if not np.isnan(mk_p) else 1.0
+            drift_regressed = (
+                _is_regression(z_drift, direction)
+                and abs(z_drift) > drift_thresh
+                and mk_p < _MK_ALPHA
+                and percent_ok
+            )
+
+    # Cast to plain Python bool — xarray comparisons return np.bool_ which
+    # fails strict `is True`/`is False` identity checks.
+    regressed = bool(step_regressed or drift_regressed)
+
     fired = []
     if step_regressed:
         fired.append("step")
     if drift_regressed:
         fired.append("drift")
     fired_str = "+".join(fired) if fired else "none"
+    guard_str = f", min%={min_change_percent}" if min_change_percent is not None else ""
     details = (
         f"fired={fired_str}, z_step={z_step:+.2f} (|z|>{z_threshold}), "
-        f"z_drift={z_drift:+.2f} (|z|>{drift_threshold:.2f}), "
-        f"mk_p={mk_p:.3g} (<{mk_alpha}), "
-        f"baseline={baseline:.4g}, noise={noise_floor:.4g}"
+        f"z_drift={z_drift:+.2f} (|z|>{drift_thresh:.2f}), "
+        f"mk_p={mk_p:.3g} (<{_MK_ALPHA}), "
+        f"baseline={baseline:.4g}, noise={noise_floor:.4g} ({noise_source})"
+        f"{guard_str}"
     )
+
+    if np.isfinite(baseline):
+        band_lower = baseline - z_threshold * noise_floor
+        band_upper = baseline + z_threshold * noise_floor
+    else:
+        band_lower = None
+        band_upper = None
 
     return RegressionResult(
         variable=variable,
-        method="adaptive",
+        method="regression",
         regressed=regressed,
         current_value=curr_mean,
         baseline_value=baseline,
@@ -807,21 +706,22 @@ def detect_adaptive(
         threshold=z_threshold,
         direction=direction.value,
         details=details,
-        band_lower=baseline - z_threshold * noise_floor,
-        band_upper=baseline + z_threshold * noise_floor,
+        band_lower=band_lower,
+        band_upper=band_upper,
     )
 
 
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
-    """Run regression detection on a dataset with over_time dimension.
+    """Run regression detection on a dataset with ``over_time`` dimension.
 
-    For each numeric result variable, splits the dataset at the last over_time index,
-    runs the configured detection method, and collects results into a report.
+    For each numeric result variable, splits the dataset at the last over_time
+    index, runs :func:`detect_regression`, and collects results into a report.
 
     Args:
         dataset: xarray Dataset with over_time dimension.
         bench_cfg: BenchCfg with result_vars list.
-        run_cfg: BenchRunCfg with regression_method, regression_threshold.
+        run_cfg: BenchRunCfg with ``regression_threshold`` (z-score) and
+            ``regression_min_change_percent``.
 
     Returns:
         RegressionReport with results for each variable.
@@ -835,12 +735,10 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     if n_times < 2:
         return report
 
-    method = run_cfg.regression_method
     threshold = run_cfg.regression_threshold
-
-    # Use per-method default when no explicit threshold is provided.
     if threshold is None:
-        threshold = _METHOD_DEFAULTS.get(method, 5.0)
+        threshold = _DEFAULT_Z_THRESHOLD
+    min_change_percent = getattr(run_cfg, "regression_min_change_percent", None)
 
     for rv in bench_cfg.result_vars:
         if not isinstance(rv, SCALAR_RESULT_TYPES):
@@ -853,62 +751,33 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         da = dataset[var_name]
         direction = rv.direction if hasattr(rv, "direction") else OptDir.none
 
-        # Split: historical = all but last, current = last
         current_clean = _clean_1d(da.isel(over_time=-1).values)
         historical_clean = _clean_1d(da.isel(over_time=slice(None, -1)).values)
 
         if len(current_clean) == 0 or len(historical_clean) == 0:
             continue
 
-        time_means_arr: np.ndarray | None = None
-        if method in ("iqr", "adaptive"):
-            reduce_dims = [d for d in da.dims if d != "over_time"]
-            time_means_arr = (
-                da.isel(over_time=slice(None, -1))
-                .mean(dim=reduce_dims, skipna=True)
-                .values.astype(float)
-            )
+        reduce_dims = [d for d in da.dims if d != "over_time"]
+        time_means_arr = (
+            da.isel(over_time=slice(None, -1))
+            .mean(dim=reduce_dims, skipna=True)
+            .values.astype(float)
+        )
 
-        if method == "percentage":
-            result = detect_percentage(
-                var_name, historical_clean, current_clean, threshold, direction
-            )
-        elif method == "iqr":
-            result = detect_iqr(var_name, time_means_arr, current_clean, threshold, direction)
-        elif method == "ttest":
-            result = detect_ttest(var_name, historical_clean, current_clean, threshold, direction)
-        elif method == "adaptive":
-            result = detect_adaptive(
-                var_name,
-                time_means_arr,
-                current_clean,
-                z_threshold=threshold,
-                direction=direction,
-                historical_samples=historical_clean,
-            )
-        else:
-            logging.warning(f"Unknown regression method '{method}', falling back to percentage")
-            result = detect_percentage(
-                var_name, historical_clean, current_clean, threshold, direction
-            )
+        result = detect_regression(
+            var_name,
+            historical_clean,
+            current_clean,
+            z_threshold=threshold,
+            min_change_percent=min_change_percent,
+            direction=direction,
+            historical_time_means=time_means_arr,
+        )
 
-        # Retain the arrays used for plotting so downstream consumers (reports,
-        # bot comments) can rebuild the diagnostic without re-running detection.
         time_coord = dataset["over_time"].values
-        if time_means_arr is not None:
-            result.historical = time_means_arr
-            # Per-time means are aligned with over_time, one value per time point.
-            result.historical_x = time_coord[:-1]
-            result.current_x = time_coord[-1]
-        else:
-            result.historical = historical_clean
-            # percentage/ttest pass the flat history (repeat * over_time); we
-            # only record over_time coords when they line up with the flat
-            # history length — otherwise pair current_x with the integer
-            # indices used by the plot and leave both unset.
-            if len(time_coord) - 1 == len(historical_clean):
-                result.historical_x = time_coord[:-1]
-                result.current_x = time_coord[-1]
+        result.historical = time_means_arr
+        result.historical_x = time_coord[:-1]
+        result.current_x = time_coord[-1]
         result.current_samples = current_clean
 
         report.results.append(result)

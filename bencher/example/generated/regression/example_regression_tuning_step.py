@@ -5,11 +5,11 @@ import random
 import numpy as np
 
 import bencher as bn
-from bencher.regression import detect_adaptive, render_regression_png
+from bencher.regression import detect_regression, render_regression_png
 
 
 def _render_detection_png(hist, current, result):
-    """Render the adaptive-detector outcome as a PNG and return its path."""
+    """Render the detector outcome as a PNG and return its path."""
     return render_regression_png(
         result,
         hist,
@@ -20,7 +20,7 @@ def _render_detection_png(hist, current, result):
     )
 
 
-class AdaptiveStepDetection(bn.ParametrizedSweep):
+class StepDetection(bn.ParametrizedSweep):
     """Step regression — parametrised by magnitude and z-threshold."""
 
     regression_magnitude = bn.FloatSweep(
@@ -31,7 +31,7 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
     z_threshold = bn.FloatSweep(
         default=3.5,
         bounds=[1.5, 5.5],
-        doc="Adaptive z-threshold",
+        doc="Detector z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
@@ -44,7 +44,7 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
         current = np.array(
             [baseline + self.regression_magnitude + random.gauss(0, self._NOISE) for _ in range(5)]
         )
-        result = detect_adaptive(
+        result = detect_regression(
             "metric",
             hist,
             current,
@@ -56,7 +56,7 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
 
 def example_regression_tuning_step(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Adaptive detector — tuning step."""
-    bench = AdaptiveStepDetection().to_bench(run_cfg)
+    bench = StepDetection().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["regression_magnitude", "z_threshold"],
         result_vars=["detection_plot"],

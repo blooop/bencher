@@ -2,7 +2,7 @@
 
 Demonstrates how to use regression detection to catch performance
 regressions in over-time benchmarks, and 2-D tuning grids that show
-where the adaptive detector fires or stays quiet.
+where the unified detector fires or stays quiet.
 """
 
 from dataclasses import dataclass
@@ -38,7 +38,7 @@ class TuningSpec:
 # suitable for a GitHub PR comment.
 _TUNING_RENDER_FN = '''\
 def _render_detection_png(hist, current, result):
-    """Render the adaptive-detector outcome as a PNG and return its path."""
+    """Render the detector outcome as a PNG and return its path."""
     return render_regression_png(
         result, hist, current,
         path=bn.gen_image_path(f"regression_{result.method}"),
@@ -49,7 +49,7 @@ def _render_detection_png(hist, current, result):
 _TUNING: dict[str, TuningSpec] = {
     # ---- 1. Step regression parametrised by magnitude ----------------------
     "tuning_step": TuningSpec(
-        classname="AdaptiveStepDetection",
+        classname="StepDetection",
         input_vars=("regression_magnitude", "z_threshold"),
         description=(
             "A step regression of variable magnitude is injected (fixed noise σ=10). "
@@ -60,14 +60,14 @@ _TUNING: dict[str, TuningSpec] = {
             "detectable effect for each threshold setting."
         ),
         class_code="""\
-class AdaptiveStepDetection(bn.ParametrizedSweep):
+class StepDetection(bn.ParametrizedSweep):
     \"\"\"Step regression — parametrised by magnitude and z-threshold.\"\"\"
 
     regression_magnitude = bn.FloatSweep(
         default=25.0, bounds=[0.0, 60.0], doc="Regression step size",
     )
     z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
+        default=3.5, bounds=[1.5, 5.5], doc="Detector z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
@@ -83,7 +83,7 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
             [baseline + self.regression_magnitude + random.gauss(0, self._NOISE)
              for _ in range(5)]
         )
-        result = detect_adaptive(
+        result = detect_regression(
             "metric", hist, current,
             z_threshold=self.z_threshold,
             direction=bn.OptDir.minimize,
@@ -92,26 +92,26 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
     ),
     # ---- 2. Gradual drift parametrised by drift rate -----------------------
     "tuning_drift": TuningSpec(
-        classname="AdaptiveDriftDetection",
+        classname="DriftDetection",
         input_vars=("drift_rate", "z_threshold"),
         description=(
             "A linear drift is added to the history (fixed noise σ=5). "
             "With 20 time points, the total drift equals drift_rate × 20 "
-            "and the current run continues the trend.  The adaptive drift "
-            "test (Theil–Sen slope + Mann–Kendall trend guard) fires when "
+            "and the current run continues the trend.  The drift test "
+            "(Theil–Sen slope + Mann–Kendall trend guard) fires when "
             "the accumulated drift outweighs the detrended noise.  Low "
             "drift rates or high z_thresholds allow the trend to pass "
             "unnoticed."
         ),
         class_code="""\
-class AdaptiveDriftDetection(bn.ParametrizedSweep):
+class DriftDetection(bn.ParametrizedSweep):
     \"\"\"Gradual drift — parametrised by drift rate and z-threshold.\"\"\"
 
     drift_rate = bn.FloatSweep(
         default=1.0, bounds=[0.0, 4.0], doc="Drift per time step",
     )
     z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
+        default=3.5, bounds=[1.5, 5.5], doc="Detector z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
@@ -130,16 +130,17 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
              + random.gauss(0, self._NOISE)
              for _ in range(5)]
         )
-        result = detect_adaptive(
+        result = detect_regression(
             "metric", hist, current,
             z_threshold=self.z_threshold,
             direction=bn.OptDir.minimize,
+            historical_time_means=hist,
         )
         self.detection_plot = _render_detection_png(hist, current, result)""",
     ),
     # ---- 3. Noise robustness (fixed regression, varying noise) -------------
     "tuning_noise": TuningSpec(
-        classname="AdaptiveNoiseRobustness",
+        classname="NoiseRobustness",
         input_vars=("noise_sigma", "z_threshold"),
         description=(
             "A fixed +25 step regression is present, but the noise level varies. "
@@ -153,14 +154,14 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
 _REGRESSION_STEP = 25.0
 
 
-class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
+class NoiseRobustness(bn.ParametrizedSweep):
     \"\"\"Fixed 25-unit regression with varying noise — tests noise robustness.\"\"\"
 
     noise_sigma = bn.FloatSweep(
-        default=10.0, bounds=[2.0, 40.0], doc="Noise standard deviation",
+        default=10.0, bounds=[0.0, 40.0], doc="Noise standard deviation",
     )
     z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
+        default=3.5, bounds=[1.5, 5.5], doc="Detector z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
@@ -174,7 +175,7 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
             [baseline + _REGRESSION_STEP + random.gauss(0, self.noise_sigma)
              for _ in range(5)]
         )
-        result = detect_adaptive(
+        result = detect_regression(
             "metric", hist, current,
             z_threshold=self.z_threshold,
             direction=bn.OptDir.minimize,
@@ -189,7 +190,7 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
 # ---------------------------------------------------------------------------
 
 REGRESSION_EXAMPLES = [
-    "regression_percentage",
+    "regression_over_time",
     *[f"regression_{tuning}" for tuning in _TUNING],
 ]
 
@@ -200,8 +201,8 @@ class MetaRegression(MetaGeneratorBase):
     example = bn.StringSweep(REGRESSION_EXAMPLES, doc="Which regression example to generate")
 
     def benchmark(self):
-        if self.example == "regression_percentage":
-            self._generate_percentage_over_time()
+        if self.example == "regression_over_time":
+            self._generate_over_time()
             return
 
         for tuning, spec in _TUNING.items():
@@ -209,8 +210,8 @@ class MetaRegression(MetaGeneratorBase):
                 self._generate_tuning(tuning, spec)
                 return
 
-    def _generate_percentage_over_time(self):
-        """End-to-end over_time example that trips the percentage detector."""
+    def _generate_over_time(self):
+        """End-to-end over_time example that trips the detector."""
         imports = "from datetime import datetime, timedelta\n\nimport bencher as bn"
         class_code = '''\
 class ServerBenchmark(bn.ParametrizedSweep):
@@ -232,7 +233,6 @@ class ServerBenchmark(bn.ParametrizedSweep):
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
 run_cfg.regression_detection = True
-run_cfg.regression_method = "percentage"
 run_cfg.regression_fail = False
 
 benchable = ServerBenchmark()
@@ -257,10 +257,10 @@ for i, offset in enumerate(releases):
     )
 """
         self.generate_example(
-            title="Regression detection — percentage threshold over time",
+            title="Regression detection — over time",
             output_dir=OUTPUT_DIR,
-            filename="example_regression_percentage",
-            function_name="example_regression_percentage",
+            filename="example_regression_over_time",
+            function_name="example_regression_over_time",
             imports=imports,
             body=body,
             class_code=class_code,
@@ -275,7 +275,7 @@ for i, offset in enumerate(releases):
             "import random\n\n"
             "import numpy as np\n\n"
             "import bencher as bn\n"
-            "from bencher.regression import detect_adaptive, render_regression_png"
+            "from bencher.regression import detect_regression, render_regression_png"
         )
 
         class_code = _TUNING_RENDER_FN + "\n\n\n" + spec.class_code

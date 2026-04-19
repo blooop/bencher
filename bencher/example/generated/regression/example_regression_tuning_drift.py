@@ -5,11 +5,11 @@ import random
 import numpy as np
 
 import bencher as bn
-from bencher.regression import detect_adaptive, render_regression_png
+from bencher.regression import detect_regression, render_regression_png
 
 
 def _render_detection_png(hist, current, result):
-    """Render the adaptive-detector outcome as a PNG and return its path."""
+    """Render the detector outcome as a PNG and return its path."""
     return render_regression_png(
         result,
         hist,
@@ -20,7 +20,7 @@ def _render_detection_png(hist, current, result):
     )
 
 
-class AdaptiveDriftDetection(bn.ParametrizedSweep):
+class DriftDetection(bn.ParametrizedSweep):
     """Gradual drift — parametrised by drift rate and z-threshold."""
 
     drift_rate = bn.FloatSweep(
@@ -31,7 +31,7 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
     z_threshold = bn.FloatSweep(
         default=3.5,
         bounds=[1.5, 5.5],
-        doc="Adaptive z-threshold",
+        doc="Detector z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
@@ -53,23 +53,24 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
                 for _ in range(5)
             ]
         )
-        result = detect_adaptive(
+        result = detect_regression(
             "metric",
             hist,
             current,
             z_threshold=self.z_threshold,
             direction=bn.OptDir.minimize,
+            historical_time_means=hist,
         )
         self.detection_plot = _render_detection_png(hist, current, result)
 
 
 def example_regression_tuning_drift(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Adaptive detector — tuning drift."""
-    bench = AdaptiveDriftDetection().to_bench(run_cfg)
+    bench = DriftDetection().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["drift_rate", "z_threshold"],
         result_vars=["detection_plot"],
-        description="A linear drift is added to the history (fixed noise σ=5). With 20 time points, the total drift equals drift_rate × 20 and the current run continues the trend.  The adaptive drift test (Theil–Sen slope + Mann–Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high z_thresholds allow the trend to pass unnoticed.",
+        description="A linear drift is added to the history (fixed noise σ=5). With 20 time points, the total drift equals drift_rate × 20 and the current run continues the trend.  The drift test (Theil–Sen slope + Mann–Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high z_thresholds allow the trend to pass unnoticed.",
     )
 
     return bench

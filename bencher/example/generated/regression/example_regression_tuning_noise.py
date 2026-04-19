@@ -5,11 +5,11 @@ import random
 import numpy as np
 
 import bencher as bn
-from bencher.regression import detect_adaptive, render_regression_png
+from bencher.regression import detect_regression, render_regression_png
 
 
 def _render_detection_png(hist, current, result):
-    """Render the adaptive-detector outcome as a PNG and return its path."""
+    """Render the detector outcome as a PNG and return its path."""
     return render_regression_png(
         result,
         hist,
@@ -23,18 +23,18 @@ def _render_detection_png(hist, current, result):
 _REGRESSION_STEP = 25.0
 
 
-class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
+class NoiseRobustness(bn.ParametrizedSweep):
     """Fixed 25-unit regression with varying noise — tests noise robustness."""
 
     noise_sigma = bn.FloatSweep(
         default=10.0,
-        bounds=[2.0, 40.0],
+        bounds=[0.0, 40.0],
         doc="Noise standard deviation",
     )
     z_threshold = bn.FloatSweep(
         default=3.5,
         bounds=[1.5, 5.5],
-        doc="Adaptive z-threshold",
+        doc="Detector z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
@@ -45,7 +45,7 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
         current = np.array(
             [baseline + _REGRESSION_STEP + random.gauss(0, self.noise_sigma) for _ in range(5)]
         )
-        result = detect_adaptive(
+        result = detect_regression(
             "metric",
             hist,
             current,
@@ -57,7 +57,7 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
 
 def example_regression_tuning_noise(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Adaptive detector — tuning noise."""
-    bench = AdaptiveNoiseRobustness().to_bench(run_cfg)
+    bench = NoiseRobustness().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["noise_sigma", "z_threshold"],
         result_vars=["detection_plot"],

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.88.0] - 2026-04-19
+
+### Changed
+- **Unified regression detection API (breaking).** The four `detect_percentage`, `detect_iqr`, `detect_ttest`, and `detect_adaptive` functions — plus the method-switching cascade that silently swapped between them based on data size — are replaced by a single `detect_regression` that always reports in MAD-sigma units. Noise is estimated with layered fallbacks inside the function (MAD → residual-MAD → discretization → relative floor), so the same call handles long noisy history, sparse history, and constant-valued integer metrics without changing method.
+- `BenchRunCfg.regression_method` removed. `regression_threshold` now always means "step-test threshold in MAD-sigma units" (default 3.5).
+- New `BenchRunCfg.regression_min_change_percent` optional AND-guard: even if the z-score exceeds `regression_threshold`, require `|percent change| ≥ min_change_percent` before flagging. Use this for stable integer metrics where the noise floor collapses and a single-unit change would otherwise produce a huge z-score.
+- `RegressionResult.method` is now always `"regression"` (the layer that produced the noise estimate is reported in `details`).
+- `example_regression_percentage` renamed to `example_regression_over_time`.
+
 ## [1.87.0] - 2026-04-19
 
 ### Added
