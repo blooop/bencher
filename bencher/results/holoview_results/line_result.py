@@ -125,7 +125,9 @@ class LineResult(HoloviewResult):
             # Overlay regression acceptance band if available.  ``plot`` is a
             # ``panel.pane.HoloViews`` wrapper here (hvplot.line with
             # widget_location), so we must compose onto the underlying
-            # ``.object`` rather than the pane itself.
+            # ``.object`` rather than the pane itself.  ``detect_regressions``
+            # appends at most one result per variable, so we stop after the
+            # first match.
             if self.regression_report is not None:
                 import holoviews as hv
 
@@ -136,10 +138,11 @@ class LineResult(HoloviewResult):
                         ) * hv.HLine(r.baseline_value).opts(
                             color="green", line_dash="dashed", line_width=1
                         )
-                        if hasattr(plot, "object"):
+                        if isinstance(plot, pn.pane.HoloViews):
                             plot.object = band * plot.object
                         else:
                             plot = band * plot
+                        break
 
             return plot
 
