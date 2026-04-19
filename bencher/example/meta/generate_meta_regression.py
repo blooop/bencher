@@ -87,7 +87,7 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
         default=25.0, bounds=[0.0, 60.0], doc="Regression step size",
     )
     z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 6.0], doc="Adaptive z-threshold",
+        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
     )
 
     detection_plot = bn.ResultReference(units="plot")
@@ -134,7 +134,7 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
         default=1.0, bounds=[0.0, 4.0], doc="Drift per time step",
     )
     z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 6.0], doc="Adaptive z-threshold",
+        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
     )
 
     detection_plot = bn.ResultReference(units="plot")
@@ -186,7 +186,7 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
         default=10.0, bounds=[2.0, 40.0], doc="Noise standard deviation",
     )
     z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 6.0], doc="Adaptive z-threshold",
+        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
     )
 
     detection_plot = bn.ResultReference(units="plot")
