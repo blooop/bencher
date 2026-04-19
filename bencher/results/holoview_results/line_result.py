@@ -122,19 +122,24 @@ class LineResult(HoloviewResult):
             )
             plot = self._apply_opts(plot, xrotation=30)
 
-            # Overlay regression acceptance band if available.
+            # Overlay regression acceptance band if available.  ``plot`` is a
+            # ``panel.pane.HoloViews`` wrapper here (hvplot.line with
+            # widget_location), so we must compose onto the underlying
+            # ``.object`` rather than the pane itself.
             if self.regression_report is not None:
                 import holoviews as hv
 
                 for r in self.regression_report.results:
                     if r.variable == result_var.name and r.band_lower is not None:
-                        plot = (
-                            hv.HSpan(r.band_lower, r.band_upper).opts(color="green", alpha=0.08)
-                            * hv.HLine(r.baseline_value).opts(
-                                color="green", line_dash="dashed", line_width=1
-                            )
-                            * plot
+                        band = hv.HSpan(r.band_lower, r.band_upper).opts(
+                            color="green", alpha=0.08
+                        ) * hv.HLine(r.baseline_value).opts(
+                            color="green", line_dash="dashed", line_width=1
                         )
+                        if hasattr(plot, "object"):
+                            plot.object = band * plot.object
+                        else:
+                            plot = band * plot
 
             return plot
 
