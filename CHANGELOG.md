@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BenchRunCfg.regression_method` removed. `regression_threshold` now always means "step-test threshold in MAD-sigma units" (default 3.5).
 - New `BenchRunCfg.regression_min_change_percent` optional AND-guard: even if the z-score exceeds `regression_threshold`, require `|percent change| ≥ min_change_percent` before flagging. Use this for stable integer metrics where the noise floor collapses and a single-unit change would otherwise produce a huge z-score.
 - `RegressionResult.method` is now always `"regression"` (the layer that produced the noise estimate is reported in `details`).
+- Drift detection (Theil-Sen slope + Mann-Kendall guard) now runs automatically whenever there are at least 4 historical time points. Previously it only ran when `regression_method="adaptive"`.
 - `example_regression_percentage` renamed to `example_regression_over_time`.
 
 ## [1.87.0] - 2026-04-19

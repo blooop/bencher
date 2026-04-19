@@ -497,11 +497,7 @@ def _safe_change_percent(current: float, baseline: float) -> float:
 
 
 def _is_regression(delta: float, direction: OptDir) -> bool:
-    """Return True if *delta* is a regression given the optimization direction.
-
-    Accepts either a signed percent change or a signed z-score — both share the
-    same sign convention.
-    """
+    """Return True if *delta* (a signed z-score) worsens the metric."""
     if direction == OptDir.minimize:
         return delta > 0  # higher is worse
     if direction == OptDir.maximize:
@@ -625,8 +621,8 @@ def detect_regression(
     if min_change_percent is None:
         percent_ok = True
     elif not np.isfinite(change):
-        # Baseline is zero and current isn't — can't compute a percent change,
-        # so the guard can't be satisfied and the result is never flagged.
+        # change is inf (zero baseline, nonzero current) or nan — the guard
+        # can't meaningfully compare a percent change, so treat as unsatisfied.
         percent_ok = False
     else:
         percent_ok = abs(change) >= min_change_percent
