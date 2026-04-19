@@ -375,6 +375,18 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "Useful for failing CI pipelines on benchmark regressions.",
     )
 
+    regression_percent_floor: float = param.Number(
+        default=None,
+        allow_None=True,
+        doc="Optional minimum percent change required to flag a regression, applied as a "
+        "second acceptance band on top of the adaptive method's MAD band. A regression "
+        "only fires when BOTH the MAD-based test AND the percent change exceed their "
+        "thresholds. Useful for suppressing noise-floor false positives on metrics with "
+        "few repeats: set e.g. 40.0 to require at least a 40%% change regardless of how "
+        "many MAD-sigma it is. If None (default), only the MAD band gates. "
+        "Only affects 'adaptive' method.",
+    )
+
     def __init__(self, **params: Any) -> None:
         """Initialize BenchRunCfg with current datetime if not provided."""
         if "run_date" not in params:
