@@ -60,6 +60,14 @@ class BandResult(HoloviewResult):
         """
         var = result_var.name
 
+        # Suppress the over_time band when the regression overlay for this
+        # variable is already being rendered — both show the same history.
+        if self.regression_report is not None and any(
+            r.variable == var and r.historical is not None
+            for r in self.regression_report.results
+        ):
+            return None
+
         # band_agg_dims is passed through from to_band to avoid filter pre-aggregation
         agg_over_dims = kwargs.pop("band_agg_dims", None)
 
@@ -131,18 +139,6 @@ class BandResult(HoloviewResult):
             units=units,
             **kwargs,
         )
-
-        # Overlay regression acceptance band if available.
-        if overlay is not None and self.regression_report is not None:
-            for r in self.regression_report.results:
-                if r.variable == var and r.band_lower is not None:
-                    overlay = (
-                        hv.HSpan(r.band_lower, r.band_upper).opts(color="green", alpha=0.08)
-                        * hv.HLine(r.baseline_value).opts(
-                            color="green", line_dash="dashed", line_width=1
-                        )
-                        * overlay
-                    )
 
         return overlay
 

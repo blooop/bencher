@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import xarray as xr
@@ -52,6 +53,34 @@ class RegressionResult:
     details: str
     band_lower: float | None = None
     band_upper: float | None = None
+    # Arrays retained so the result can be replotted without re-running detection.
+    historical: np.ndarray | None = None
+    current_samples: np.ndarray | None = None
+    # x-axis coordinates for the historical and current points (typically the
+    # ``over_time`` datetimes). Optional: falls back to integer indices.
+    historical_x: np.ndarray | None = None
+    current_x: object | None = None
+
+    def render_png(
+        self,
+        historical: np.ndarray | None = None,
+        current: np.ndarray | float | None = None,
+        path: str | Path | None = None,
+        figsize: tuple[float, float] = (8.0, 5.0),
+        dpi: int = 100,
+    ) -> str:
+        """Render this result as a diagnostic PNG (see :func:`render_regression_png`)."""
+        return render_regression_png(
+            self, historical=historical, current=current, path=path, figsize=figsize, dpi=dpi
+        )
+
+    def render_overlay(
+        self,
+        historical: np.ndarray | None = None,
+        current: np.ndarray | float | None = None,
+    ):
+        """Build a :class:`holoviews.Overlay` of this result (see :func:`build_regression_overlay`)."""
+        return build_regression_overlay(self, historical=historical, current=current)
 
 
 @dataclass
@@ -121,6 +150,260 @@ class RegressionReport:
 
         md = pn.pane.Markdown(self.to_markdown(), name="Regression Report", width=800)
         report.prepend_to_result(bench_res, md)
+
+
+def _regression_plot_spec(
+    result: RegressionResult,
+    historical: np.ndarray | None,
+    current: np.ndarray | float | None,
+) -> dict:
+    """Prepare the data + styling used by both the matplotlib and holoviews renderers.
+
+    Resolves the history and current arrays from the arguments first, falling
+    back to anything stored on *result*. Returns a dict of primitives the
+    backend-specific renderers consume. Keeping this shared guarantees the PNG
+    and in-report plots stay in sync as the diagnostic evolves.
+    """
+    if historical is None:
+        historical = result.historical if result.historical is not None else np.array([])
+    hist = _clean_1d(np.asarray(historical, dtype=float))
+
+    if current is None:
+        current = result.current_samples
+    if current is None:
+        curr_samples = np.array([result.current_value], dtype=float)
+    else:
+        curr_samples = _clean_1d(np.asarray(current, dtype=float).ravel())
+        if len(curr_samples) == 0:
+            curr_samples = np.array([result.current_value], dtype=float)
+    curr_mean = float(np.mean(curr_samples))
+
+    # Use the recorded over_time coordinates when they line up with history,
+    # so the x-axis shows real timestamps rather than integer indices.
+    hist_x: np.ndarray
+    if result.historical_x is not None and len(result.historical_x) == len(hist):
+        hist_x = np.asarray(result.historical_x)
+        xlabel = "time"
+    else:
+        hist_x = np.arange(len(hist))
+        xlabel = "run index"
+
+    if result.current_x is not None:
+        x_current = np.asarray(result.current_x)
+    elif len(hist_x) > 0:
+        # Extrapolate one step beyond the last history point.
+        if np.issubdtype(hist_x.dtype, np.datetime64) and len(hist_x) >= 2:
+            x_current = hist_x[-1] + (hist_x[-1] - hist_x[-2])
+        else:
+            x_current = hist_x[-1] + (1 if not np.issubdtype(hist_x.dtype, np.datetime64) else 0)
+    else:
+        x_current = 0
+
+    verdict_color = "#d62728" if result.regressed else "#2ca02c"
+    verdict_label = "REGRESSED" if result.regressed else "OK"
+
+    change_str = (
+        f"{result.change_percent:+.1f}%"
+        if np.isfinite(result.change_percent)
+        else f"{result.change_percent}"
+    )
+    title = f"{result.variable} — {result.method} — {verdict_label}  (Δ {change_str})"
+
+    return {
+        "hist": hist,
+        "hist_x": hist_x,
+        "curr_samples": curr_samples,
+        "curr_mean": curr_mean,
+        "x_current": x_current,
+        "band": (
+            (result.band_lower, result.band_upper)
+            if result.band_lower is not None and result.band_upper is not None
+            else None
+        ),
+        "baseline": result.baseline_value,
+        "verdict_color": verdict_color,
+        "title": title,
+        "xlabel": xlabel,
+        "ylabel": result.variable,
+    }
+
+
+def build_regression_overlay(
+    result: RegressionResult,
+    historical: np.ndarray | None = None,
+    current: np.ndarray | float | None = None,
+    width: int = 700,
+    height: int = 350,
+):
+    """Build a :class:`holoviews.Overlay` diagnostic of a regression result.
+
+    Uses the same logic as :func:`render_regression_png` but returns a
+    backend-agnostic holoviews object, so the same plot can be embedded in an
+    HTML report (bokeh backend) or saved as a PNG (matplotlib backend).
+
+    Args:
+        result: The :class:`RegressionResult` to visualise.
+        historical: Optional 1-D array of historical per-time-point means.
+            Falls back to ``result.historical`` if omitted.
+        current: Optional current-run sample array (or scalar). Falls back to
+            ``result.current_samples`` / ``result.current_value``.
+        width, height: Pixel dimensions passed to the overlay's ``opts``.
+    """
+    import holoviews as hv
+
+    spec = _regression_plot_spec(result, historical, current)
+    hist = spec["hist"]
+    hist_x = spec["hist_x"]
+    verdict_color = spec["verdict_color"]
+    x_current = spec["x_current"]
+
+    layers = []
+    if spec["band"] is not None:
+        lo, hi = spec["band"]
+        layers.append(hv.HSpan(lo, hi).opts(color=verdict_color, alpha=0.10))
+    layers.append(
+        hv.HLine(spec["baseline"]).opts(color="#555555", line_dash="dashed", line_width=1)
+    )
+    if len(hist) > 0:
+        layers.append(
+            hv.Curve(list(zip(hist_x, hist)), spec["xlabel"], spec["ylabel"]).opts(
+                color="#1f77b4", line_width=1.5
+            )
+        )
+    if len(spec["curr_samples"]) > 1:
+        layers.append(
+            hv.Scatter(
+                [(x_current, v) for v in spec["curr_samples"]],
+                spec["xlabel"],
+                spec["ylabel"],
+            ).opts(color=verdict_color, alpha=0.35, size=5)
+        )
+    layers.append(
+        hv.Scatter(
+            [(x_current, spec["curr_mean"])],
+            spec["xlabel"],
+            spec["ylabel"],
+        ).opts(color=verdict_color, size=10, line_color="black", line_width=1)
+    )
+
+    overlay = layers[0]
+    for layer in layers[1:]:
+        overlay = overlay * layer
+
+    return overlay.opts(title=spec["title"], width=width, height=height, show_grid=True)
+
+
+def render_regression_png(
+    result: RegressionResult,
+    historical: np.ndarray | None = None,
+    current: np.ndarray | float | None = None,
+    path: str | Path | None = None,
+    figsize: tuple[float, float] = (8.0, 5.0),
+    dpi: int = 100,
+) -> str:
+    """Render a diagnostic PNG of a regression result using matplotlib.
+
+    The plot contains everything needed to diagnose the *style* of regression
+    at a glance — history time-series (to reveal drift and noise), the baseline
+    line, the acceptance band (to reveal step size), and the current-run marker
+    coloured by the pass/fail verdict. The details string from
+    :class:`RegressionResult` (method-specific statistics such as z-score,
+    p-value, or percent change) is shown as a footer so the PNG is
+    self-contained — suitable for posting directly as a GitHub PR comment.
+
+    Args:
+        result: The :class:`RegressionResult` produced by a ``detect_*`` call.
+        historical: 1-D array of the historical per-time-point means (the same
+            sequence fed into ``detect_adaptive`` / ``detect_iqr``). Pass an
+            empty array if no history is available — only the current marker,
+            baseline, and band are drawn in that case.
+        current: Current-run sample(s). If ``None``, ``result.current_value``
+            is used. If given an array, the per-sample spread is shown as a
+            vertical strip alongside the mean marker.
+        path: Output PNG path. If ``None``, a path is generated via
+            :func:`bencher.utils.gen_image_path` so the file lives under the
+            bencher cache directory.
+        figsize: Matplotlib figure size in inches.
+        dpi: Output DPI (800x500 at ``dpi=100`` works well for GitHub comments).
+
+    Returns:
+        Absolute path to the saved PNG as a string.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg", force=False)
+    import matplotlib.pyplot as plt
+
+    if path is None:
+        from bencher.utils import gen_image_path
+
+        path = gen_image_path(f"regression_{result.variable}")
+    path_str = str(path)
+
+    spec = _regression_plot_spec(result, historical, current)
+    hist = spec["hist"]
+    hist_x = spec["hist_x"]
+    curr_samples = spec["curr_samples"]
+    x_current = spec["x_current"]
+    verdict_color = spec["verdict_color"]
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.2)
+
+    if spec["band"] is not None:
+        lo, hi = spec["band"]
+        ax.axhspan(lo, hi, color=verdict_color, alpha=0.10, label="acceptance band")
+
+    ax.axhline(
+        spec["baseline"],
+        color="#555555",
+        linestyle="--",
+        linewidth=1.0,
+        label=f"baseline={spec['baseline']:.3g}",
+    )
+
+    if len(hist) > 0:
+        ax.plot(
+            hist_x,
+            hist,
+            "-o",
+            color="#1f77b4",
+            markersize=3.5,
+            linewidth=1.2,
+            label="history",
+        )
+
+    if len(curr_samples) > 1:
+        ax.scatter(
+            [x_current] * len(curr_samples),
+            curr_samples,
+            color=verdict_color,
+            alpha=0.35,
+            s=18,
+        )
+    ax.scatter(
+        [x_current],
+        [spec["curr_mean"]],
+        color=verdict_color,
+        s=70,
+        zorder=5,
+        edgecolor="black",
+        linewidth=0.7,
+        label=f"current={spec['curr_mean']:.3g}",
+    )
+
+    ax.set_xlabel(spec["xlabel"])
+    ax.set_ylabel(spec["ylabel"])
+    ax.grid(True, linestyle=":", alpha=0.5)
+    ax.set_title(spec["title"], color=verdict_color, fontsize=10, fontweight="bold")
+    ax.legend(loc="upper left", fontsize=7, framealpha=0.85, ncol=2)
+
+    if len(hist_x) > 0 and np.issubdtype(np.asarray(hist_x).dtype, np.datetime64):
+        fig.autofmt_xdate(rotation=30)
+
+    fig.savefig(path_str, dpi=dpi)
+    plt.close(fig)
+    return path_str
 
 
 def _clean_1d(a: np.ndarray) -> np.ndarray:
@@ -500,28 +783,24 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         if len(current_clean) == 0 or len(historical_clean) == 0:
             continue
 
+        time_means_arr: np.ndarray | None = None
+        if method in ("iqr", "adaptive"):
+            reduce_dims = [d for d in da.dims if d != "over_time"]
+            time_means_arr = (
+                da.isel(over_time=slice(None, -1))
+                .mean(dim=reduce_dims, skipna=True)
+                .values.astype(float)
+            )
+
         if method == "percentage":
             result = detect_percentage(
                 var_name, historical_clean, current_clean, threshold, direction
             )
         elif method == "iqr":
-            # Reduce all dims except over_time to get per-time-point means
-            reduce_dims = [d for d in da.dims if d != "over_time"]
-            time_means_arr = (
-                da.isel(over_time=slice(None, -1))
-                .mean(dim=reduce_dims, skipna=True)
-                .values.astype(float)
-            )
             result = detect_iqr(var_name, time_means_arr, current_clean, threshold, direction)
         elif method == "ttest":
             result = detect_ttest(var_name, historical_clean, current_clean, threshold, direction)
         elif method == "adaptive":
-            reduce_dims = [d for d in da.dims if d != "over_time"]
-            time_means_arr = (
-                da.isel(over_time=slice(None, -1))
-                .mean(dim=reduce_dims, skipna=True)
-                .values.astype(float)
-            )
             result = detect_adaptive(
                 var_name,
                 time_means_arr,
@@ -535,6 +814,22 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             result = detect_percentage(
                 var_name, historical_clean, current_clean, threshold, direction
             )
+
+        # Retain the arrays used for plotting so downstream consumers (reports,
+        # bot comments) can rebuild the diagnostic without re-running detection.
+        if time_means_arr is not None:
+            result.historical = time_means_arr
+            # Per-time means are aligned with over_time, one value per time point.
+            result.historical_x = dataset["over_time"].isel(over_time=slice(None, -1)).values
+        else:
+            result.historical = historical_clean
+            # percentage/ttest pass the flat history (repeat * over_time); we
+            # still record the over_time coord (minus the last) so the plotter
+            # can show dates if history is per-time only.
+            if dataset["over_time"].size - 1 == len(historical_clean):
+                result.historical_x = dataset["over_time"].isel(over_time=slice(None, -1)).values
+        result.current_samples = current_clean
+        result.current_x = dataset["over_time"].isel(over_time=-1).values
 
         report.results.append(result)
 
