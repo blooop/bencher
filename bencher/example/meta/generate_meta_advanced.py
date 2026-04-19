@@ -183,6 +183,7 @@ class ServerLatency(bn.ParametrizedSweep):
         self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]'''
         body = """\
 bench = ServerLatency().to_bench(run_cfg)
+bench.run_cfg.regression_detection = True
 
 # git_time_event() returns a string like "2024-06-15 abc1234d".
 # Pass it as time_src so each commit gets its own slider tick.

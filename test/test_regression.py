@@ -1,5 +1,7 @@
 """Tests for bencher.regression module."""
 
+import os
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -9,11 +11,13 @@ from bencher.regression import (
     RegressionError,
     RegressionReport,
     RegressionResult,
+    build_regression_overlay,
     detect_adaptive,
     detect_iqr,
     detect_percentage,
     detect_regressions,
     detect_ttest,
+    render_regression_png,
 )
 from bencher.variables.results import OptDir
 
@@ -747,3 +751,98 @@ class TestEndToEnd:
 
         with pytest.raises(bn.RegressionError):
             bench.plot_sweep(plot_callbacks=False)
+
+
+# ── Renderers ───────────────────────────────────────────────────────────────
+
+
+def _make_result(historical_x=None, current_x=None):
+    hist = np.array([100.0, 102.0, 99.0, 101.0, 100.5, 98.5, 101.2])
+    curr = np.array([130.0])
+    r = detect_percentage("metric", hist, curr, threshold_percent=5.0)
+    r.historical = hist
+    r.current_samples = curr
+    if historical_x is not None:
+        r.historical_x = np.asarray(historical_x)
+    if current_x is not None:
+        r.current_x = current_x
+    return r
+
+
+class TestRenderRegressionPng:
+    """render_regression_png should handle every x-axis dtype we emit."""
+
+    def test_png_index_axis(self, tmp_path):
+        r = _make_result()
+        out = tmp_path / "idx.png"
+        path = render_regression_png(r, path=str(out))
+        assert path == str(out)
+        assert os.path.getsize(path) > 1000
+
+    def test_png_datetime_axis(self, tmp_path):
+        dates = np.array([np.datetime64("2024-01-01") + np.timedelta64(i, "D") for i in range(7)])
+        r = _make_result(historical_x=dates, current_x=np.datetime64("2024-01-08"))
+        out = tmp_path / "dt.png"
+        path = render_regression_png(r, path=str(out))
+        assert os.path.getsize(path) > 1000
+
+    def test_png_string_axis_git_time_event(self, tmp_path):
+        """git_time_event() returns strings like '2024-06-15 abc1234d'."""
+        labels = [f"2024-06-{15 + i:02d} abc{i}234d" for i in range(7)]
+        r = _make_result(historical_x=labels, current_x="2024-06-22 xyz7890")
+        out = tmp_path / "git.png"
+        path = render_regression_png(r, path=str(out))
+        assert os.path.getsize(path) > 1000
+
+    def test_png_method_alias(self, tmp_path):
+        """RegressionResult.render_png delegates to the module function."""
+        r = _make_result()
+        out = tmp_path / "alias.png"
+        r.render_png(path=str(out))
+        assert out.exists()
+
+
+class TestBuildRegressionOverlay:
+    """build_regression_overlay should render through bokeh on every x dtype.
+
+    The regression was: HSpan/HLine combined with a categorical x-axis threw
+    UFuncNoLoopError inside holoviews' get_extents. The fix uses explicit-coord
+    Area/Curve primitives, so driving it through Panel's get_root is the
+    end-to-end proof that the crash is gone.
+    """
+
+    @staticmethod
+    def _render_through_panel(overlay, tmp_path, name):
+        import panel as pn
+
+        col = pn.Column(pn.pane.HoloViews(overlay))
+        out = tmp_path / f"{name}.html"
+        col.save(str(out))
+        assert out.stat().st_size > 0
+
+    def test_overlay_index_axis(self, tmp_path):
+        r = _make_result()
+        self._render_through_panel(build_regression_overlay(r), tmp_path, "idx")
+
+    def test_overlay_datetime_axis(self, tmp_path):
+        dates = np.array([np.datetime64("2024-01-01") + np.timedelta64(i, "D") for i in range(7)])
+        r = _make_result(historical_x=dates, current_x=np.datetime64("2024-01-08"))
+        self._render_through_panel(build_regression_overlay(r), tmp_path, "dt")
+
+    def test_overlay_string_axis_git_time_event(self, tmp_path):
+        """Regression test: git_time_event strings previously crashed bokeh render."""
+        labels = [f"2024-06-{15 + i:02d} abc{i}234d" for i in range(7)]
+        r = _make_result(historical_x=labels, current_x="2024-06-22 xyz7890")
+        self._render_through_panel(build_regression_overlay(r), tmp_path, "git")
+
+    def test_overlay_band_present(self):
+        """The acceptance band should be in the overlay (regression: bokeh
+        silently dropped HSpan when combined with categorical x)."""
+        import holoviews as hv
+
+        labels = [f"2024-06-{15 + i:02d} abc{i}234d" for i in range(7)]
+        r = _make_result(historical_x=labels, current_x="2024-06-22 xyz7890")
+        overlay = build_regression_overlay(r)
+        # The band is rendered as an Area element; assert one is present.
+        has_area = any(isinstance(el, hv.Area) for el in overlay)
+        assert has_area, f"expected an Area layer for the band, got: {list(overlay)}"

@@ -63,8 +63,7 @@ class BandResult(HoloviewResult):
         # Suppress the over_time band when the regression overlay for this
         # variable is already being rendered — both show the same history.
         if self.regression_report is not None and any(
-            r.variable == var and r.historical is not None
-            for r in self.regression_report.results
+            r.variable == var and r.historical is not None for r in self.regression_report.results
         ):
             return None
 

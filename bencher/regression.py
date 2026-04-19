@@ -178,18 +178,36 @@ def _regression_plot_spec(
             curr_samples = np.array([result.current_value], dtype=float)
     curr_mean = float(np.mean(curr_samples))
 
-    # Use the recorded over_time coordinates when they line up with history,
-    # so the x-axis shows real timestamps rather than integer indices.
+    # Use the recorded over_time coordinates when they line up with history
+    # so the x-axis shows real timestamps. Non-numeric / non-datetime labels
+    # (e.g. git_time_event strings) can't be combined with HSpan/HLine in
+    # holoviews, so they fall back to integer indices with the labels
+    # surfaced as tick overrides instead.
     hist_x: np.ndarray
+    xticks: list[tuple[int, str]] | None = None
     if result.historical_x is not None and len(result.historical_x) == len(hist):
-        hist_x = np.asarray(result.historical_x)
-        xlabel = "time"
+        raw_x = np.asarray(result.historical_x)
+        if np.issubdtype(raw_x.dtype, np.number) or np.issubdtype(raw_x.dtype, np.datetime64):
+            hist_x = raw_x
+            xlabel = "time"
+        else:
+            hist_x = np.arange(len(hist))
+            xticks = [(i, str(v)) for i, v in enumerate(raw_x)]
+            xlabel = "time"
     else:
         hist_x = np.arange(len(hist))
         xlabel = "run index"
 
-    if result.current_x is not None:
+    if result.current_x is not None and (
+        np.issubdtype(np.asarray(result.current_x).dtype, np.number)
+        or np.issubdtype(np.asarray(result.current_x).dtype, np.datetime64)
+    ):
         x_current = np.asarray(result.current_x)
+    elif result.current_x is not None and xticks is not None:
+        # String current_x — place it one step past the last history tick and
+        # append it to the tick overrides.
+        x_current = len(hist_x)
+        xticks.append((x_current, str(result.current_x)))
     elif len(hist_x) > 0:
         # Extrapolate one step beyond the last history point.
         if np.issubdtype(hist_x.dtype, np.datetime64) and len(hist_x) >= 2:
@@ -212,6 +230,7 @@ def _regression_plot_spec(
     return {
         "hist": hist,
         "hist_x": hist_x,
+        "xticks": xticks,
         "curr_samples": curr_samples,
         "curr_mean": curr_mean,
         "x_current": x_current,
@@ -257,12 +276,27 @@ def build_regression_overlay(
     verdict_color = spec["verdict_color"]
     x_current = spec["x_current"]
 
+    # Build an explicit x range so band/baseline render correctly regardless
+    # of whether the x-axis is numeric, datetime, or categorical (xticks).
+    x_start = hist_x[0] if len(hist_x) > 0 else x_current
+    x_end = x_current
+
     layers = []
     if spec["band"] is not None:
         lo, hi = spec["band"]
-        layers.append(hv.HSpan(lo, hi).opts(color=verdict_color, alpha=0.10))
+        layers.append(
+            hv.Area(
+                ([x_start, x_end], [lo, lo], [hi, hi]),
+                kdims=[spec["xlabel"]],
+                vdims=[spec["ylabel"], "band_upper"],
+            ).opts(color=verdict_color, alpha=0.10, line_alpha=0)
+        )
     layers.append(
-        hv.HLine(spec["baseline"]).opts(color="#555555", line_dash="dashed", line_width=1)
+        hv.Curve(
+            [(x_start, spec["baseline"]), (x_end, spec["baseline"])],
+            spec["xlabel"],
+            spec["ylabel"],
+        ).opts(color="#555555", line_dash="dashed", line_width=1)
     )
     if len(hist) > 0:
         layers.append(
@@ -290,7 +324,11 @@ def build_regression_overlay(
     for layer in layers[1:]:
         overlay = overlay * layer
 
-    return overlay.opts(title=spec["title"], width=width, height=height, show_grid=True)
+    opts_kwargs = dict(title=spec["title"], width=width, height=height, show_grid=True)
+    if spec["xticks"] is not None:
+        opts_kwargs["xticks"] = spec["xticks"]
+        opts_kwargs["xrotation"] = 30
+    return overlay.opts(**opts_kwargs)
 
 
 def render_regression_png(
@@ -398,7 +436,11 @@ def render_regression_png(
     ax.set_title(spec["title"], color=verdict_color, fontsize=10, fontweight="bold")
     ax.legend(loc="upper left", fontsize=7, framealpha=0.85, ncol=2)
 
-    if len(hist_x) > 0 and np.issubdtype(np.asarray(hist_x).dtype, np.datetime64):
+    if spec["xticks"] is not None:
+        ticks, labels = zip(*spec["xticks"])
+        ax.set_xticks(list(ticks))
+        ax.set_xticklabels(list(labels), rotation=30, ha="right")
+    elif len(hist_x) > 0 and np.issubdtype(np.asarray(hist_x).dtype, np.datetime64):
         fig.autofmt_xdate(rotation=30)
 
     fig.savefig(path_str, dpi=dpi)
