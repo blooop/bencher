@@ -1,9 +1,9 @@
 """Benchmark regression detection for over-time benchmarks.
 
 Provides statistical methods to detect if benchmark values have changed
-significantly between runs. Supports percentage threshold, IQR-based outlier
-detection, and an adaptive MAD-based detector with an optional percent
-floor for dual-band suppression.
+significantly between runs. Supports a percentage threshold and an
+adaptive MAD-based detector with an optional percent floor for dual-band
+suppression.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
 # Default thresholds per method — used when the user hasn't explicitly set a threshold.
 _METHOD_DEFAULTS = {
     "percentage": 5.0,  # percent change
-    "iqr": 1.5,  # IQR multiplier
     "adaptive": 3.5,  # robust z-score threshold in MAD units
 }
 
@@ -244,6 +243,37 @@ def _regression_plot_spec(
     )
     title = f"{result.variable} — {result.method} — {verdict_label}  (Δ {change_str})"
 
+    mad_band = (
+        (result.band_lower, result.band_upper)
+        if result.band_lower is not None and result.band_upper is not None
+        else None
+    )
+    pct_band = (
+        (result.percent_band_lower, result.percent_band_upper)
+        if result.percent_band_lower is not None and result.percent_band_upper is not None
+        else None
+    )
+
+    # Shared declarative band layers — both matplotlib and holoviews iterate
+    # this list so the two backends render the same thing by construction.
+    # Each entry is (lo, hi, color, alpha, label).
+    band_layers: list[tuple[float, float, str, float, str]] = []
+    if mad_band is not None and pct_band is not None:
+        band_layers.append(
+            (mad_band[0], mad_band[1], verdict_color, 0.15, "MAD band")
+        )
+        band_layers.append(
+            (pct_band[0], pct_band[1], "#9467bd", 0.15, "percentage band")
+        )
+    elif mad_band is not None:
+        band_layers.append(
+            (mad_band[0], mad_band[1], verdict_color, 0.15, "acceptance band")
+        )
+    elif pct_band is not None:
+        band_layers.append(
+            (pct_band[0], pct_band[1], verdict_color, 0.15, "acceptance band")
+        )
+
     return {
         "hist": hist,
         "hist_x": hist_x,
@@ -251,16 +281,7 @@ def _regression_plot_spec(
         "curr_samples": curr_samples,
         "curr_mean": curr_mean,
         "x_current": x_current,
-        "band": (
-            (result.band_lower, result.band_upper)
-            if result.band_lower is not None and result.band_upper is not None
-            else None
-        ),
-        "percent_band": (
-            (result.percent_band_lower, result.percent_band_upper)
-            if result.percent_band_lower is not None and result.percent_band_upper is not None
-            else None
-        ),
+        "band_layers": band_layers,
         "baseline": result.baseline_value,
         "verdict_color": verdict_color,
         "title": title,
@@ -304,49 +325,13 @@ def build_regression_overlay(
     x_end = x_current
 
     layers = []
-    mad_band = spec["band"]
-    pct_band = spec["percent_band"]
-    if mad_band is not None and pct_band is not None:
-        # Combined acceptance band (AND gate -> accept if inside either band
-        # => the union is the effective acceptance region).
-        lo = min(mad_band[0], pct_band[0])
-        hi = max(mad_band[1], pct_band[1])
+    for lo, hi, color, alpha, _label in spec["band_layers"]:
         layers.append(
             hv.Area(
                 ([x_start, x_end], [lo, lo], [hi, hi]),
                 kdims=[spec["xlabel"]],
                 vdims=[spec["ylabel"], "band_upper"],
-            ).opts(color=verdict_color, alpha=0.10, line_alpha=0)
-        )
-        for edge in (mad_band[0], mad_band[1]):
-            layers.append(
-                hv.Curve(
-                    [(x_start, edge), (x_end, edge)], spec["xlabel"], spec["ylabel"]
-                ).opts(color="#888888", line_dash="dotted", line_width=0.8)
-            )
-        for edge in (pct_band[0], pct_band[1]):
-            layers.append(
-                hv.Curve(
-                    [(x_start, edge), (x_end, edge)], spec["xlabel"], spec["ylabel"]
-                ).opts(color="#9467bd", line_dash="dashed", line_width=0.8)
-            )
-    elif mad_band is not None:
-        lo, hi = mad_band
-        layers.append(
-            hv.Area(
-                ([x_start, x_end], [lo, lo], [hi, hi]),
-                kdims=[spec["xlabel"]],
-                vdims=[spec["ylabel"], "band_upper"],
-            ).opts(color=verdict_color, alpha=0.10, line_alpha=0)
-        )
-    elif pct_band is not None:
-        plo, phi = pct_band
-        layers.append(
-            hv.Area(
-                ([x_start, x_end], [plo, plo], [phi, phi]),
-                kdims=[spec["xlabel"]],
-                vdims=[spec["ylabel"], "band_upper"],
-            ).opts(color=verdict_color, alpha=0.10, line_alpha=0)
+            ).opts(color=color, alpha=alpha, line_alpha=0)
         )
     layers.append(
         hv.Curve(
@@ -418,7 +403,7 @@ def render_regression_png(
     Args:
         result: The :class:`RegressionResult` produced by a ``detect_*`` call.
         historical: 1-D array of the historical per-time-point means (the same
-            sequence fed into ``detect_adaptive`` / ``detect_iqr``). Pass an
+            sequence fed into ``detect_adaptive``). Pass an
             empty array if no history is available — only the current marker,
             baseline, and band are drawn in that case.
         current: Current-run sample(s). If ``None``, ``result.current_value``
@@ -454,28 +439,8 @@ def render_regression_png(
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.2)
 
-    mad_band = spec["band"]
-    pct_band = spec["percent_band"]
-    if mad_band is not None and pct_band is not None:
-        # AND gate means a point is accepted if it sits inside EITHER band,
-        # so the effective acceptance region is the union of the two.
-        lo = min(mad_band[0], pct_band[0])
-        hi = max(mad_band[1], pct_band[1])
-        ax.axhspan(lo, hi, color=verdict_color, alpha=0.10, label="acceptance band (MAD ∪ %)")
-        ax.axhline(
-            mad_band[0], color="#888888", linestyle=":", linewidth=0.8, label="MAD edge"
-        )
-        ax.axhline(mad_band[1], color="#888888", linestyle=":", linewidth=0.8)
-        ax.axhline(
-            pct_band[0], color="#9467bd", linestyle="--", linewidth=0.8, label="percent edge"
-        )
-        ax.axhline(pct_band[1], color="#9467bd", linestyle="--", linewidth=0.8)
-    elif mad_band is not None:
-        lo, hi = mad_band
-        ax.axhspan(lo, hi, color=verdict_color, alpha=0.10, label="acceptance band")
-    elif pct_band is not None:
-        plo, phi = pct_band
-        ax.axhspan(plo, phi, color=verdict_color, alpha=0.10, label="acceptance band")
+    for lo, hi, color, alpha, label in spec["band_layers"]:
+        ax.axhspan(lo, hi, color=color, alpha=alpha, label=label)
 
     ax.axhline(
         spec["baseline"],
@@ -614,63 +579,6 @@ def detect_percentage(
     )
 
 
-def detect_iqr(
-    variable: str,
-    historical_time_means: np.ndarray,
-    current: np.ndarray,
-    iqr_scale: float = 1.5,
-    direction: OptDir = OptDir.minimize,
-) -> RegressionResult:
-    """IQR outlier detection using per-time-point means from history.
-
-    Args:
-        variable: Name of the result variable being checked.
-        historical_time_means: Array of per-time-point mean values from history.
-        current: Current run values (will be averaged).
-        iqr_scale: Multiplier for IQR to define outlier bounds (default 1.5).
-        direction: Optimization direction from the result variable.
-    """
-    clean = _clean_1d(historical_time_means)
-    curr_mean = float(np.nanmean(current))
-
-    if len(clean) < 4:
-        # Not enough time points for robust IQR; fall back to percentage using
-        # the default percentage threshold so the comparison stays meaningful.
-        return detect_percentage(
-            variable,
-            clean,
-            current,
-            threshold_percent=_METHOD_DEFAULTS["percentage"],
-            direction=direction,
-        )
-
-    q1 = float(np.percentile(clean, 25))
-    q3 = float(np.percentile(clean, 75))
-    iqr = q3 - q1
-    lower = q1 - iqr_scale * iqr
-    upper = q3 + iqr_scale * iqr
-
-    hist_mean = float(np.nanmean(clean))
-    change = _safe_change_percent(curr_mean, hist_mean)
-
-    outside_bounds = curr_mean > upper or curr_mean < lower
-    regressed = outside_bounds and _is_regression(change, direction)
-
-    return RegressionResult(
-        variable=variable,
-        method="iqr",
-        regressed=regressed,
-        current_value=curr_mean,
-        baseline_value=hist_mean,
-        change_percent=change,
-        threshold=iqr_scale,
-        direction=direction.value,
-        details=f"IQR bounds [{lower:.4g}, {upper:.4g}], current={curr_mean:.4g}",
-        band_lower=lower,
-        band_upper=upper,
-    )
-
-
 def _robust_scale(values: np.ndarray) -> tuple[float, float]:
     """Return (median, MAD-based sigma) for a 1-D numeric array.
 
@@ -706,7 +614,7 @@ def detect_adaptive(
     mk_alpha: float = 0.1,
     direction: OptDir = OptDir.minimize,
     historical_samples: np.ndarray | None = None,
-    percent_floor: float | None = None,
+    regression_percentage: float | None = None,
 ) -> RegressionResult:
     """Robust regression detection combining step and drift tests.
 
@@ -738,8 +646,9 @@ def detect_adaptive(
             delegated ``percentage`` detector sees the same input it would
             have received from ``detect_regressions`` directly. Falls back to
             ``historical_time_means`` when not provided.
-        percent_floor: Optional minimum percent change required to flag a
-            regression. When set, acts as a second acceptance band: a
+        regression_percentage: Optional minimum percent change required to
+            flag a regression (directional, i.e. interpreted against
+            ``direction``). When set, acts as a second acceptance band: a
             regression fires only when BOTH the MAD test and the percent
             change exceed their thresholds. Suppresses noise-floor false
             positives on metrics with few repeats or very tight history.
@@ -758,10 +667,14 @@ def detect_adaptive(
         fallback_hist = (
             _clean_1d(historical_samples) if historical_samples is not None else hist_clean
         )
-        # Sparse history -> percentage check. When ``percent_floor`` is set it
-        # doubles as the percentage threshold so the sparse regime honours the
-        # same floor the user configured for dual-band suppression.
-        effective_pct = percent_floor if percent_floor is not None else _METHOD_DEFAULTS["percentage"]
+        # Sparse history -> percentage check. When ``regression_percentage`` is
+        # set it doubles as the percentage threshold so the sparse regime honours
+        # the same knob the user configured for dual-band suppression.
+        effective_pct = (
+            regression_percentage
+            if regression_percentage is not None
+            else _METHOD_DEFAULTS["percentage"]
+        )
         result = detect_percentage(
             variable,
             fallback_hist,
@@ -769,10 +682,10 @@ def detect_adaptive(
             threshold_percent=effective_pct,
             direction=direction,
         )
-        if percent_floor is not None:
+        if regression_percentage is not None:
             baseline = result.baseline_value
-            result.percent_band_lower = baseline * (1.0 - percent_floor / 100.0)
-            result.percent_band_upper = baseline * (1.0 + percent_floor / 100.0)
+            result.percent_band_lower = baseline * (1.0 - regression_percentage / 100.0)
+            result.percent_band_upper = baseline * (1.0 + regression_percentage / 100.0)
         return result
 
     baseline, mad_sigma = _robust_scale(hist_clean)
@@ -807,17 +720,19 @@ def detect_adaptive(
 
     change = _safe_change_percent(curr_mean, baseline)
 
-    # Dual-band gate: when percent_floor is set, each test must also be
-    # confirmed by a percent-change gate. The step gate uses the observed
+    # Dual-band gate: when regression_percentage is set, each test must also
+    # be confirmed by a percent-change gate. The step gate uses the observed
     # current-vs-baseline change; the drift gate uses the projected end-of-
     # history drift so a trend that doesn't cumulatively move more than the
-    # floor is treated as inside the band.
-    if percent_floor is not None:
-        step_pct_ok = _exceeds_directional_threshold(change, percent_floor, direction)
+    # threshold is treated as inside the band.
+    if regression_percentage is not None:
+        step_pct_ok = _exceeds_directional_threshold(change, regression_percentage, direction)
         drift_change = _safe_change_percent(baseline + drift_total, baseline)
-        drift_pct_ok = _exceeds_directional_threshold(drift_change, percent_floor, direction)
-        percent_band_lower = baseline * (1.0 - percent_floor / 100.0)
-        percent_band_upper = baseline * (1.0 + percent_floor / 100.0)
+        drift_pct_ok = _exceeds_directional_threshold(
+            drift_change, regression_percentage, direction
+        )
+        percent_band_lower = baseline * (1.0 - regression_percentage / 100.0)
+        percent_band_upper = baseline * (1.0 + regression_percentage / 100.0)
     else:
         step_pct_ok = True
         drift_pct_ok = True
@@ -840,8 +755,8 @@ def detect_adaptive(
         f"mk_p={mk_p:.3g} (<{mk_alpha}), "
         f"baseline={baseline:.4g}, noise={noise_floor:.4g}"
     )
-    if percent_floor is not None:
-        details += f", pct_floor={percent_floor}% (change={change:+.2f}%)"
+    if regression_percentage is not None:
+        details += f", pct={regression_percentage}% (change={change:+.2f}%)"
 
     return RegressionResult(
         variable=variable,
@@ -890,7 +805,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     if threshold is None:
         threshold = _METHOD_DEFAULTS.get(method, 5.0)
 
-    percent_floor = getattr(run_cfg, "regression_percent_floor", None)
+    regression_percentage = getattr(run_cfg, "regression_percentage", None)
 
     for rv in bench_cfg.result_vars:
         if not isinstance(rv, SCALAR_RESULT_TYPES):
@@ -911,7 +826,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             continue
 
         time_means_arr: np.ndarray | None = None
-        if method in ("iqr", "adaptive"):
+        if method == "adaptive":
             reduce_dims = [d for d in da.dims if d != "over_time"]
             time_means_arr = (
                 da.isel(over_time=slice(None, -1))
@@ -923,8 +838,6 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             result = detect_percentage(
                 var_name, historical_clean, current_clean, threshold, direction
             )
-        elif method == "iqr":
-            result = detect_iqr(var_name, time_means_arr, current_clean, threshold, direction)
         elif method == "adaptive":
             result = detect_adaptive(
                 var_name,
@@ -933,7 +846,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                 z_threshold=threshold,
                 direction=direction,
                 historical_samples=historical_clean,
-                percent_floor=percent_floor,
+                regression_percentage=regression_percentage,
             )
         else:
             logging.warning(f"Unknown regression method '{method}', falling back to percentage")

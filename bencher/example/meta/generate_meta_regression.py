@@ -140,30 +140,38 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
     # ---- 3. Noise robustness (fixed regression, varying noise) -------------
     "tuning_noise": TuningSpec(
         classname="AdaptiveNoiseRobustness",
-        input_vars=("noise_sigma", "z_threshold"),
+        input_vars=("noise_sigma", "regression_percentage"),
         description=(
             "A fixed +25 step regression is present, but the noise level varies. "
-            "At low noise the regression is obvious and every threshold catches it; "
-            "at high noise the signal is buried.  The detection boundary follows "
-            "noise_sigma ≈ 25 / z_threshold — above the curve the regression is "
-            "masked.  This helps users understand how metric variance affects the "
-            "minimum z_threshold needed to catch a real regression."
+            "At low noise the regression is obvious and the MAD acceptance band "
+            "is tight; at high noise the signal is buried and the MAD band is "
+            "wide. The noise_sigma=0 row is the pathological case: MAD collapses "
+            "to zero, the MAD band is a hairline, and only the percentage band "
+            "is visible — that row shows the percentage acceptance band on its "
+            "own. Increase regression_percentage in any row to see the "
+            "percentage band expand and AND-gate the verdict."
         ),
         class_code="""\
 _REGRESSION_STEP = 25.0
 
 
 class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
-    \"\"\"Fixed 25-unit regression with varying noise — tests noise robustness.\"\"\"
+    \"\"\"Fixed 25-unit regression with varying noise and regression_percentage.\"\"\"
 
     noise_sigma = bn.FloatSweep(
-        default=10.0, bounds=[2.0, 40.0], doc="Noise standard deviation",
+        default=10.0, bounds=[0.0, 40.0],
+        doc="Noise standard deviation (0.0 collapses MAD and leaves only the "
+        "percentage band).",
     )
-    z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
+    regression_percentage = bn.FloatSweep(
+        default=10.0, bounds=[0.0, 40.0],
+        doc="Minimum percent change required to flag a regression (dual-band "
+        "AND gate). 0.0 disables the percentage gate.",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
+
+    _Z_THRESHOLD = 3.5
 
     def benchmark(self):
         baseline = 100.0
@@ -174,10 +182,12 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
             [baseline + _REGRESSION_STEP + random.gauss(0, self.noise_sigma)
              for _ in range(5)]
         )
+        pct = self.regression_percentage if self.regression_percentage > 0.0 else None
         result = detect_adaptive(
             "metric", hist, current,
-            z_threshold=self.z_threshold,
+            z_threshold=self._Z_THRESHOLD,
             direction=bn.OptDir.minimize,
+            regression_percentage=pct,
         )
         self.detection_plot = _render_detection_png(hist, current, result)""",
     ),
