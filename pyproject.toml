@@ -18,7 +18,7 @@ dependencies = [
     "diskcache>=5.6,<=5.6.3",
     "optuna>=3.2,<=4.8.0",
     "xarray>=2023.7,<=2025.6.1",
-    "plotly>=5.15,<=6.6.0",
+    "plotly>=5.15,<=6.7.0",
     "pandas>=2.0,<=3.0.0",
     "strenum>=0.4.0,<=0.4.15",
     "scikit-learn>=1.2,<=1.7.2",
@@ -71,14 +71,14 @@ test = [
     "pytest>=7.4,<=9.0.3",
     "hypothesis>=6.104.2,<=6.152.1",
     "ruff>=0.5.0,<=0.15.11",
-    "sphinxcontrib-mermaid>=1.0,<2.0",
+    "sphinxcontrib-mermaid>=1.0,<3.0",
     "coverage>=7.5.4,<=7.13.5",
     "prek>=0.2.28,<0.4.0",
     "ty>=0.0.13,<=0.0.31",
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.31.1,<=0.31.1", "rerun-notebook>=0.31.1,<=0.31.1"]
+rerun = ["rerun-sdk>=0.31.1,<=0.31.3", "rerun-notebook>=0.31.1,<=0.31.3"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
