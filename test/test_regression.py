@@ -13,10 +13,8 @@ from bencher.regression import (
     RegressionResult,
     build_regression_overlay,
     detect_adaptive,
-    detect_iqr,
     detect_percentage,
     detect_regressions,
-    detect_ttest,
     render_regression_png,
 )
 from bencher.variables.results import OptDir
@@ -101,85 +99,6 @@ class TestDetectPercentage:
             "x", hist, curr, threshold_percent=5.0, direction=OptDir.minimize
         )
         assert not result.regressed
-
-
-# ── detect_iqr ─────────────────────────────────────────────────────────────
-
-
-class TestDetectIqr:
-    def test_within_bounds(self):
-        time_means = np.array([100.0, 101.0, 99.0, 100.5, 98.5])
-        curr = np.array([101.0])
-        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
-        assert not result.regressed
-
-    def test_outlier_above_minimize(self):
-        time_means = np.array([10.0, 10.1, 10.2, 10.0, 9.9])
-        curr = np.array([20.0])
-        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
-        assert result.regressed
-
-    def test_outlier_below_maximize(self):
-        time_means = np.array([10.0, 10.1, 10.2, 10.0, 9.9])
-        curr = np.array([1.0])
-        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.maximize)
-        assert result.regressed
-
-    def test_improvement_not_regression_minimize(self):
-        """For minimize, an outlier below bounds is an improvement, not a regression."""
-        time_means = np.array([10.0, 10.1, 10.2, 10.0, 9.9])
-        curr = np.array([1.0])  # well below — improvement for minimize
-        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
-        assert not result.regressed
-
-    def test_fallback_with_few_points(self):
-        """With <4 historical time points, should fall back to percentage."""
-        time_means = np.array([100.0, 101.0])
-        curr = np.array([200.0])
-        result = detect_iqr("x", time_means, curr, iqr_scale=1.5, direction=OptDir.minimize)
-        assert result.method == "percentage"  # fell back
-        assert result.regressed
-
-
-# ── detect_ttest ───────────────────────────────────────────────────────────
-
-
-class TestDetectTtest:
-    def test_no_significant_difference(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(100, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
-        assert not result.regressed
-
-    def test_significant_increase_minimize(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(110, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
-        assert result.regressed
-
-    def test_significant_decrease_maximize(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(90, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.maximize)
-        assert result.regressed
-
-    def test_fallback_single_sample(self):
-        hist = np.array([100.0])
-        curr = np.array([200.0])
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
-        assert result.method == "percentage"  # fell back to percentage-based check
-        assert result.regressed  # still correctly detected as regression
-        assert result.change_percent > 0.0  # percentage change indicates degradation for minimize
-
-    def test_direction_none_two_sided(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(110, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.none)
-        assert result.regressed
 
 
 # ── detect_adaptive ────────────────────────────────────────────────────────
@@ -285,7 +204,7 @@ class TestDetectAdaptive:
         hist = np.array([100.0, 101.0, 99.0])
         curr = np.array([100.0, 102.0])
         result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
-        assert result.method in ("ttest", "percentage")
+        assert result.method == "percentage"
 
     def test_sparse_history_single_current_falls_back(self):
         hist = np.array([100.0, 200.0])
@@ -308,12 +227,61 @@ class TestDetectAdaptive:
         result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
         assert not result.regressed
 
+    # ---- dual-band (regression_percentage) ----
+
+    def test_regression_percentage_suppresses_mad_only_fire(self):
+        """Tight MAD-derived noise flagged a small change; percentage gate blocks it."""
+        hist = np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0])
+        # 20% change at 10 sigma — MAD would normally fire.
+        curr = np.array([12.0])
+        without_pct = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert without_pct.regressed
+        with_pct = detect_adaptive(
+            "x", hist, curr, direction=OptDir.minimize, regression_percentage=30.0
+        )
+        assert not with_pct.regressed
+        assert with_pct.percent_band_lower is not None
+        assert with_pct.percent_band_upper is not None
+
+    def test_regression_percentage_allows_real_regression(self):
+        """When both MAD and percent thresholds are exceeded, still fires."""
+        hist = 100.0 + np.random.default_rng(0).normal(0, 1.0, 20)
+        curr = np.array([200.0])  # 100% change and huge z
+        result = detect_adaptive(
+            "x", hist, curr, direction=OptDir.minimize, regression_percentage=10.0
+        )
+        assert result.regressed
+
+    def test_regression_percentage_none_preserves_behavior(self):
+        """Passing None is identical to leaving it unset (current behavior)."""
+        rng = np.random.default_rng(0)
+        hist = 100.0 + rng.normal(0, 15.0, 20)
+        curr = 150.0 + rng.normal(0, 15.0, 10)
+        with_none = detect_adaptive(
+            "x", hist, curr, direction=OptDir.minimize, regression_percentage=None
+        )
+        baseline = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
+        assert with_none.regressed == baseline.regressed
+        assert with_none.percent_band_lower is None
+
+    def test_regression_percentage_direction_aware_improvement(self):
+        """Percent gate respects optimization direction."""
+        hist = np.array([10.0] * 20)
+        # 20% decrease — for minimize this is improvement (never regression),
+        # and the gate shouldn't change that.
+        curr = np.array([8.0])
+        result = detect_adaptive(
+            "x", hist, curr, direction=OptDir.minimize, regression_percentage=10.0
+        )
+        assert not result.regressed
+
     def test_sparse_fallback_uses_full_samples(self):
         """Fallback must honour `historical_samples` so it sees all raw values.
 
-        With 3 time points but many samples per point, ttest has enough data
-        to be statistically meaningful — whereas passing only per-time means
-        would leave ttest with just 3 points.
+        With 3 time points but many samples per point, the sparse-history
+        fallback should still detect a clear regression via the percentage
+        check — passing only per-time means would leave it blind to the
+        per-sample variance.
         """
         rng = self._rng()
         hist_time_means = np.array([100.0, 100.0, 100.0])
@@ -326,8 +294,7 @@ class TestDetectAdaptive:
             direction=OptDir.minimize,
             historical_samples=hist_samples,
         )
-        # Must fall back to ttest since we have plenty of samples.
-        assert result.method == "ttest"
+        assert result.method == "percentage"
         assert result.regressed
 
 
@@ -392,7 +359,12 @@ class TestDetectRegressions:
         return ds
 
     @staticmethod
-    def _make_cfg(result_vars, method="percentage", threshold=None):
+    def _make_cfg(
+        result_vars,
+        method="percentage",
+        regression_mad=None,
+        regression_percentage=None,
+    ):
         """Create minimal bench_cfg and run_cfg mocks."""
 
         class FakeBenchCfg:
@@ -400,11 +372,12 @@ class TestDetectRegressions:
                 self.result_vars = result_vars
 
         class FakeRunCfg:
-            def __init__(self, method, threshold):
+            def __init__(self, method, regression_mad, regression_percentage):
                 self.regression_method = method
-                self.regression_threshold = threshold
+                self.regression_mad = regression_mad
+                self.regression_percentage = regression_percentage
 
-        return FakeBenchCfg(result_vars), FakeRunCfg(method, threshold)
+        return FakeBenchCfg(result_vars), FakeRunCfg(method, regression_mad, regression_percentage)
 
     def test_no_over_time_dim(self):
         ds = xr.Dataset({"x": (["repeat"], [1.0, 2.0])})
@@ -444,7 +417,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert report.results[0].variable == "metric"
@@ -464,43 +437,9 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions
-
-    def test_iqr_method(self):
-        values = np.array(
-            [
-                [10.0, 10.0],
-                [10.0, 10.0],
-                [10.0, 10.0],
-                [10.0, 10.0],
-                [10.0, 10.0],
-                [50.0, 50.0],
-            ]
-        )
-        ds = self._make_dataset(n_times=6, n_repeats=2, values=values)
-        from bencher.variables.results import ResultFloat
-
-        rv = ResultFloat(units="s", direction=OptDir.minimize)
-        rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="iqr", threshold=1.5)
-        report = detect_regressions(ds, bench_cfg, run_cfg)
-        assert report.has_regressions
-
-    def test_ttest_method(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, (5, 10))
-        curr = rng.normal(200, 1, (1, 10))
-        values = np.vstack([hist, curr])
-        ds = self._make_dataset(n_times=6, n_repeats=10, values=values)
-        from bencher.variables.results import ResultFloat
-
-        rv = ResultFloat(units="s", direction=OptDir.minimize)
-        rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="ttest", threshold=0.05)
-        report = detect_regressions(ds, bench_cfg, run_cfg)
-        assert report.has_regressions
 
     def test_adaptive_method_no_false_positive_on_noisy_stable(self):
         """Adaptive must not trip on a noisy-but-stable signal (user's pain point)."""
@@ -511,7 +450,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions, report.summary()
 
@@ -526,10 +465,32 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert "step" in report.results[0].details
+
+    def test_adaptive_regression_percentage_suppresses_single_repeat_fire(self):
+        """Single-repeat variable with stable history + modest drop is suppressed
+        when a regression percentage is set, but would otherwise fire on MAD alone."""
+        # Tight history at 10 with one earlier dip; current=7 (-30%).
+        values = np.array([[10.0], [10.0], [6.0], [10.0], [10.0], [7.0]])
+        ds = self._make_dataset(n_times=6, n_repeats=1, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.maximize)
+        rv.name = "metric"
+
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
+        without_pct = detect_regressions(ds, bench_cfg, run_cfg)
+        assert without_pct.has_regressions
+
+        bench_cfg, run_cfg = self._make_cfg(
+            [rv], method="adaptive", regression_mad=3.5, regression_percentage=40.0
+        )
+        with_pct = detect_regressions(ds, bench_cfg, run_cfg)
+        assert not with_pct.has_regressions
+        assert with_pct.results[0].percent_band_lower is not None
 
     def test_adaptive_method_detects_gradual_drift(self):
         """Adaptive fires on slow drift where no single step exceeds percentage."""
@@ -543,7 +504,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert "drift" in report.results[0].details
@@ -576,7 +537,9 @@ class TestDetectRegressions:
         rv_a.name = "metric_a"
         rv_b = ResultFloat(units="s", direction=OptDir.minimize)
         rv_b.name = "metric_b"
-        bench_cfg, run_cfg = self._make_cfg([rv_a, rv_b], method="percentage", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg(
+            [rv_a, rv_b], method="percentage", regression_percentage=5.0
+        )
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 2
         assert report.has_regressions
@@ -592,7 +555,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="bogus", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="bogus", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert report.results[0].method == "percentage"
@@ -631,11 +594,15 @@ class TestDetectRegressions:
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
 
-        bench_cfg_strict, run_cfg_strict = self._make_cfg([rv], method="percentage", threshold=5.0)
+        bench_cfg_strict, run_cfg_strict = self._make_cfg(
+            [rv], method="percentage", regression_percentage=5.0
+        )
         report_strict = detect_regressions(ds, bench_cfg_strict, run_cfg_strict)
         assert report_strict.has_regressions
 
-        bench_cfg_loose, run_cfg_loose = self._make_cfg([rv], method="percentage", threshold=15.0)
+        bench_cfg_loose, run_cfg_loose = self._make_cfg(
+            [rv], method="percentage", regression_percentage=15.0
+        )
         report_loose = detect_regressions(ds, bench_cfg_loose, run_cfg_loose)
         assert not report_loose.has_regressions
 

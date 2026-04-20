@@ -14,7 +14,7 @@ OUTPUT_DIR = "regression"
 
 
 # ---------------------------------------------------------------------------
-# Tuning examples — 2-D sweeps (effect × z_threshold) with ResultReference
+# Tuning examples — 2-D sweeps (effect × regression_mad) with ResultReference
 # ---------------------------------------------------------------------------
 
 
@@ -29,7 +29,7 @@ class TuningSpec:
 
     classname: str
     class_code: str  # full class definition (+ optional module-level constants)
-    input_vars: tuple[str, ...] = ("noise_sigma", "z_threshold")
+    input_vars: tuple[str, ...] = ("noise_sigma", "regression_mad")
     description: str = ""
 
 
@@ -42,7 +42,7 @@ def _render_detection_png(hist, current, result):
     return render_regression_png(
         result, hist, current,
         path=bn.gen_image_path(f"regression_{result.method}"),
-        figsize=(5.0, 3.2), dpi=100,
+        figsize=(4.5, 3.2), dpi=100,
     )'''
 
 
@@ -50,12 +50,12 @@ _TUNING: dict[str, TuningSpec] = {
     # ---- 1. Step regression parametrised by magnitude ----------------------
     "tuning_step": TuningSpec(
         classname="AdaptiveStepDetection",
-        input_vars=("regression_magnitude", "z_threshold"),
+        input_vars=("regression_magnitude", "regression_mad"),
         description=(
             "A step regression of variable magnitude is injected (fixed noise σ=10). "
             "Each cell shows the synthesised 20-point history and the current run. "
             "When the regression magnitude is large relative to noise and the "
-            "z_threshold is low the detector fires; when the magnitude shrinks or "
+            "regression_mad is low the detector fires; when the magnitude shrinks or "
             "the threshold rises it stays quiet.  The boundary reveals the minimum "
             "detectable effect for each threshold setting."
         ),
@@ -66,41 +66,55 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
     regression_magnitude = bn.FloatSweep(
         default=25.0, bounds=[0.0, 60.0], doc="Regression step size",
     )
-    z_threshold = bn.FloatSweep(
+    regression_mad = bn.FloatSweep(
         default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
 
     _NOISE = 10.0
+    _N_HIST = 20
+    _N_REPEATS = 5
 
     def benchmark(self):
         baseline = 100.0
-        hist = np.array(
-            [baseline + random.gauss(0, self._NOISE) for _ in range(20)]
-        )
+        hist_2d = np.array([
+            [baseline + random.gauss(0, self._NOISE) for _ in range(self._N_REPEATS)]
+            for _ in range(self._N_HIST)
+        ])
+        hist_means = hist_2d.mean(axis=1)
         current = np.array(
             [baseline + self.regression_magnitude + random.gauss(0, self._NOISE)
              for _ in range(5)]
         )
         result = detect_adaptive(
-            "metric", hist, current,
-            z_threshold=self.z_threshold,
+            "metric", hist_means, current,
+            regression_mad=self.regression_mad,
             direction=bn.OptDir.minimize,
+            historical_samples=hist_2d.ravel(),
         )
-        self.detection_plot = _render_detection_png(hist, current, result)""",
+        # git_time_event-style string labels for the x-axis; historical_all_x
+        # stays numeric (integer positions aligned with the tick labels) so
+        # the per-sample scatter still renders on the categorical axis.
+        result.historical_x = np.array(
+            [f"2024-01-{i + 1:02d} v{i:02d}" for i in range(self._N_HIST)]
+        )
+        result.current_x = f"2024-01-{self._N_HIST + 1:02d} v{self._N_HIST:02d}"
+        result.historical_all = hist_2d.ravel()
+        result.historical_all_x = np.repeat(np.arange(self._N_HIST), self._N_REPEATS)
+        self.detection_plot = _render_detection_png(hist_means, current, result)""",
     ),
     # ---- 2. Gradual drift parametrised by drift rate -----------------------
     "tuning_drift": TuningSpec(
         classname="AdaptiveDriftDetection",
-        input_vars=("drift_rate", "z_threshold"),
+        input_vars=("drift_rate", "regression_mad"),
         description=(
             "A linear drift is added to the history (fixed noise σ=5). "
             "With 20 time points, the total drift equals drift_rate × 20 "
             "and the current run continues the trend.  The adaptive drift "
             "test (Theil–Sen slope + Mann–Kendall trend guard) fires when "
             "the accumulated drift outweighs the detrended noise.  Low "
-            "drift rates or high z_thresholds allow the trend to pass "
+            "drift rates or high regression_mads allow the trend to pass "
             "unnoticed."
         ),
         class_code="""\
@@ -110,7 +124,7 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
     drift_rate = bn.FloatSweep(
         default=1.0, bounds=[0.0, 4.0], doc="Drift per time step",
     )
-    z_threshold = bn.FloatSweep(
+    regression_mad = bn.FloatSweep(
         default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
     )
 
@@ -118,68 +132,105 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
 
     _NOISE = 5.0
     _N_HIST = 20
+    _N_REPEATS = 5
 
     def benchmark(self):
         baseline = 100.0
-        hist = np.array(
+        hist_2d = np.array([
             [baseline + self.drift_rate * i + random.gauss(0, self._NOISE)
-             for i in range(self._N_HIST)]
-        )
+             for _ in range(self._N_REPEATS)]
+            for i in range(self._N_HIST)
+        ])
+        hist_means = hist_2d.mean(axis=1)
         current = np.array(
             [baseline + self.drift_rate * self._N_HIST
              + random.gauss(0, self._NOISE)
              for _ in range(5)]
         )
         result = detect_adaptive(
-            "metric", hist, current,
-            z_threshold=self.z_threshold,
+            "metric", hist_means, current,
+            regression_mad=self.regression_mad,
             direction=bn.OptDir.minimize,
+            historical_samples=hist_2d.ravel(),
         )
-        self.detection_plot = _render_detection_png(hist, current, result)""",
+        # git_time_event-style string labels for the x-axis; historical_all_x
+        # stays numeric (integer positions aligned with the tick labels) so
+        # the per-sample scatter still renders on the categorical axis.
+        result.historical_x = np.array(
+            [f"2024-01-{i + 1:02d} v{i:02d}" for i in range(self._N_HIST)]
+        )
+        result.current_x = f"2024-01-{self._N_HIST + 1:02d} v{self._N_HIST:02d}"
+        result.historical_all = hist_2d.ravel()
+        result.historical_all_x = np.repeat(np.arange(self._N_HIST), self._N_REPEATS)
+        self.detection_plot = _render_detection_png(hist_means, current, result)""",
     ),
     # ---- 3. Noise robustness (fixed regression, varying noise) -------------
     "tuning_noise": TuningSpec(
         classname="AdaptiveNoiseRobustness",
-        input_vars=("noise_sigma", "z_threshold"),
+        input_vars=("noise_sigma", "regression_percentage"),
         description=(
             "A fixed +25 step regression is present, but the noise level varies. "
-            "At low noise the regression is obvious and every threshold catches it; "
-            "at high noise the signal is buried.  The detection boundary follows "
-            "noise_sigma ≈ 25 / z_threshold — above the curve the regression is "
-            "masked.  This helps users understand how metric variance affects the "
-            "minimum z_threshold needed to catch a real regression."
+            "At low noise the regression is obvious and the MAD acceptance band "
+            "is tight; at high noise the signal is buried and the MAD band is "
+            "wide. The noise_sigma=0 row is the pathological case: MAD collapses "
+            "to zero, the MAD band is a hairline, and only the percentage band "
+            "is visible — that row shows the percentage acceptance band on its "
+            "own. Increase regression_percentage in any row to see the "
+            "percentage band expand and AND-gate the verdict."
         ),
         class_code="""\
 _REGRESSION_STEP = 25.0
 
 
 class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
-    \"\"\"Fixed 25-unit regression with varying noise — tests noise robustness.\"\"\"
+    \"\"\"Fixed 25-unit regression with varying noise and regression_percentage.\"\"\"
 
     noise_sigma = bn.FloatSweep(
-        default=10.0, bounds=[2.0, 40.0], doc="Noise standard deviation",
+        default=10.0, bounds=[0.0, 40.0],
+        doc="Noise standard deviation (0.0 collapses MAD and leaves only the "
+        "percentage band).",
     )
-    z_threshold = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
+    regression_percentage = bn.FloatSweep(
+        default=10.0, bounds=[0.0, 40.0],
+        doc="Minimum percent change required to flag a regression (dual-band "
+        "AND gate). 0.0 disables the percentage gate.",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
 
+    _Z_THRESHOLD = 3.5
+    _N_HIST = 20
+    _N_REPEATS = 5
+
     def benchmark(self):
         baseline = 100.0
-        hist = np.array(
-            [baseline + random.gauss(0, self.noise_sigma) for _ in range(20)]
-        )
+        hist_2d = np.array([
+            [baseline + random.gauss(0, self.noise_sigma) for _ in range(self._N_REPEATS)]
+            for _ in range(self._N_HIST)
+        ])
+        hist_means = hist_2d.mean(axis=1)
         current = np.array(
             [baseline + _REGRESSION_STEP + random.gauss(0, self.noise_sigma)
              for _ in range(5)]
         )
+        pct = self.regression_percentage if self.regression_percentage > 0.0 else None
         result = detect_adaptive(
-            "metric", hist, current,
-            z_threshold=self.z_threshold,
+            "metric", hist_means, current,
+            regression_mad=self._Z_THRESHOLD,
             direction=bn.OptDir.minimize,
+            regression_percentage=pct,
+            historical_samples=hist_2d.ravel(),
         )
-        self.detection_plot = _render_detection_png(hist, current, result)""",
+        # git_time_event-style string labels for the x-axis; historical_all_x
+        # stays numeric (integer positions aligned with the tick labels) so
+        # the per-sample scatter still renders on the categorical axis.
+        result.historical_x = np.array(
+            [f"2024-01-{i + 1:02d} v{i:02d}" for i in range(self._N_HIST)]
+        )
+        result.current_x = f"2024-01-{self._N_HIST + 1:02d} v{self._N_HIST:02d}"
+        result.historical_all = hist_2d.ravel()
+        result.historical_all_x = np.repeat(np.arange(self._N_HIST), self._N_REPEATS)
+        self.detection_plot = _render_detection_png(hist_means, current, result)""",
     ),
 }
 
@@ -232,7 +283,6 @@ class ServerBenchmark(bn.ParametrizedSweep):
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
 run_cfg.regression_detection = True
-run_cfg.regression_method = "percentage"
 run_cfg.regression_fail = False
 
 benchable = ServerBenchmark()
@@ -257,7 +307,7 @@ for i, offset in enumerate(releases):
     )
 """
         self.generate_example(
-            title="Regression detection — percentage threshold over time",
+            title="Regression detection — default method over time",
             output_dir=OUTPUT_DIR,
             filename="example_regression_percentage",
             function_name="example_regression_percentage",

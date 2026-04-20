@@ -1,4 +1,4 @@
-"""Auto-generated example: Regression detection — percentage threshold over time."""
+"""Auto-generated example: Regression detection — default method over time."""
 
 from datetime import datetime, timedelta
 
@@ -24,10 +24,9 @@ class ServerBenchmark(bn.ParametrizedSweep):
 
 
 def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Regression detection — percentage threshold over time."""
+    """Regression detection — default method over time."""
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
     run_cfg.regression_detection = True
-    run_cfg.regression_method = "percentage"
     run_cfg.regression_fail = False
 
     benchable = ServerBenchmark()
