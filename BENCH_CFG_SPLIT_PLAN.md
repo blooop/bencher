@@ -11,7 +11,10 @@ discovery", "natural param integration", "no isolation benefit") that only hold
 *if* you keep both access patterns alive. Drop the flat layer entirely and
 the design becomes much cleaner.
 
-The goal is long-term simplicity and correctness, not migration ease.
+The goal is long-term simplicity and correctness, not migration ease. Treat
+this as a clean-slate rewrite: no backward-compat shims for the Python API,
+and no attempt to preserve on-disk cache compatibility (the cache hash was
+broken anyway -- reset it).
 
 ---
 
@@ -203,9 +206,12 @@ deep-copy cleanly (param does this by default; add a test anyway).
 ### `hash_persistent`
 Uses `bench_name`, `over_time`, `repeats`, `tag`, input/result/const vars.
 Update attribute access (`self.over_time` -> `self.time.over_time`,
-`self.repeats` -> `self.execution.repeats`). **Semantics are identical**, so
-existing caches remain valid across the upgrade -- important, since
-invalidating user caches silently would be a real regression.
+`self.repeats` -> `self.execution.repeats`). Hash stability across the
+upgrade is **not** a goal -- treat the on-disk cache format as broken and
+reset it. Bump `CACHE_VERSION` as part of this PR so existing caches are
+discarded cleanly on first run rather than producing confusing stale hits.
+Free from that constraint, simplify the hash: hash whatever is cheapest and
+most correct to hash, not what the old flat structure happened to.
 
 ### `describe_benchmark`
 Same: update field accesses to go through the sub-config groups. Output
@@ -248,18 +254,16 @@ Recommended sequence inside the PR:
 5. Migrate `test/**` and `scripts/**`.
 6. Migrate docs (`docs/how_to_use_bencher.md`, any gallery text).
 7. Delete the old `bencher/bench_cfg.py`.
-8. Add focused unit tests in `test/test_bench_cfg.py`:
+8. Bump `CACHE_VERSION` in `bencher/cache_management.py` so on-disk caches
+   written by prior versions are discarded automatically.
+9. Add focused unit tests in `test/test_bench_cfg.py`:
     - sub-config defaults,
     - `BenchRunCfg` composition (fresh sub-configs per instance, not shared),
     - `with_defaults` recursion,
     - `deep` copies sub-configs independently,
-    - hash stability: a `BenchCfg` constructed through the new API produces
-      the same `hash_persistent` as one constructed before the split (lock
-      this down with a known-good hash string).
-9. Run `pixi run ci`; iterate until green.
-
-The hash-stability test is the key safety net -- it verifies users' on-disk
-caches survive the upgrade.
+    - `hash_persistent` is deterministic within a session (same inputs ->
+      same hash) -- no cross-version stability required.
+10. Run `pixi run ci`; iterate until green.
 
 ---
 
@@ -297,6 +301,7 @@ caches survive the upgrade.
 
 - `pixi run ci` passes with no backward-compat shims in the source tree.
 - `rg -n "run_cfg\.(cache_results|cache_samples|clear_cache|over_time|regression_|time_event|max_time_events)"` returns nothing outside `CHANGELOG.md`.
-- A `BenchCfg.hash_persistent` snapshot test proves existing caches stay valid.
-- `CHANGELOG.md` has a **Breaking changes** entry with the full rename table.
+- `CACHE_VERSION` is bumped so stale caches from prior versions are discarded.
+- `CHANGELOG.md` has a **Breaking changes** entry with the full rename table
+  and a note that the cache format is reset.
 - Public API exports the seven sub-config classes from `bencher/__init__.py`.
