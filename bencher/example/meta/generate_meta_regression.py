@@ -283,7 +283,6 @@ class ServerBenchmark(bn.ParametrizedSweep):
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
 run_cfg.regression_detection = True
-run_cfg.regression_method = "percentage"
 run_cfg.regression_fail = False
 
 benchable = ServerBenchmark()
@@ -308,7 +307,7 @@ for i, offset in enumerate(releases):
     )
 """
         self.generate_example(
-            title="Regression detection — percentage threshold over time",
+            title="Regression detection — default method over time",
             output_dir=OUTPUT_DIR,
             filename="example_regression_percentage",
             function_name="example_regression_percentage",

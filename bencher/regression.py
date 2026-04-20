@@ -996,24 +996,35 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         if len(current_clean) == 0 or len(historical_clean) == 0:
             continue
 
-        time_means_arr: np.ndarray | None = None
-        if method == "adaptive":
-            reduce_dims = [d for d in da.dims if d != "over_time"]
-            time_means_arr = (
-                da.isel(over_time=slice(None, -1))
-                .mean(dim=reduce_dims, skipna=True)
-                .values.astype(float)
-            )
+        # Aggregate every non-time dim (parameter grid, repeats) into a single
+        # scalar per time point before handing the series to any detector.
+        # Without this, a 2-D param sweep over time threads both detection and
+        # the history plot through parameter-grid structure — the line zigzags
+        # through cells instead of showing time drift, and the baseline/band
+        # end up wildly out of scale relative to individual cells.
+        reduce_dims = [d for d in da.dims if d != "over_time"]
+        time_means_arr = (
+            da.isel(over_time=slice(None, -1))
+            .mean(dim=reduce_dims, skipna=True)
+            .values.astype(float)
+        )
+        current_mean_scalar = np.array(
+            [float(da.isel(over_time=-1).mean(skipna=True).values)]
+        )
 
         if method == "percentage":
             result = detect_percentage(
-                var_name, historical_clean, current_clean, regression_percentage, direction
+                var_name,
+                time_means_arr,
+                current_mean_scalar,
+                regression_percentage,
+                direction,
             )
         elif method == "adaptive":
             result = detect_adaptive(
                 var_name,
                 time_means_arr,
-                current_clean,
+                current_mean_scalar,
                 regression_mad=regression_mad,
                 direction=direction,
                 historical_samples=historical_clean,
@@ -1022,26 +1033,20 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         else:
             logging.warning(f"Unknown regression method '{method}', falling back to percentage")
             result = detect_percentage(
-                var_name, historical_clean, current_clean, regression_percentage, direction
+                var_name,
+                time_means_arr,
+                current_mean_scalar,
+                regression_percentage,
+                direction,
             )
 
         # Retain the arrays used for plotting so downstream consumers (reports,
         # bot comments) can rebuild the diagnostic without re-running detection.
         time_coord = dataset["over_time"].values
-        if time_means_arr is not None:
-            result.historical = time_means_arr
-            # Per-time means are aligned with over_time, one value per time point.
-            result.historical_x = time_coord[:-1]
-            result.current_x = time_coord[-1]
-        else:
-            result.historical = historical_clean
-            # percentage passes the flat history (repeat * over_time); only
-            # record over_time coords when they line up with the flat history
-            # length — otherwise pair current_x with the integer indices used
-            # by the plot and leave both unset.
-            if len(time_coord) - 1 == len(historical_clean):
-                result.historical_x = time_coord[:-1]
-                result.current_x = time_coord[-1]
+        result.historical = time_means_arr
+        # Per-time means are aligned with over_time, one value per time point.
+        result.historical_x = time_coord[:-1]
+        result.current_x = time_coord[-1]
         result.current_samples = current_clean
 
         # Per-sample historical scatter: flatten the 2D slice (all repeats at
