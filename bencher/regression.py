@@ -348,9 +348,12 @@ def _ensure_matplotlib_backend_loaded() -> None:
     render_regression_png needs matplotlib to export a PNG, but the report path
     uses bokeh — calling hv.extension('matplotlib') naively would flip the
     global default mid-run. This loads the renderer if missing, then restores
-    the prior default. Forces the non-interactive Agg backend first so
-    holoviews doesn't pick up Tk/Qt (which leaks ``main thread is not in main
-    loop`` tracebacks at interpreter shutdown).
+    the prior default. Selects the non-interactive Agg backend when no
+    matplotlib backend has been configured yet (``force=False``), so holoviews
+    doesn't pick up Tk/Qt on a fresh process (which leaks ``main thread is not
+    in main loop`` tracebacks at interpreter shutdown). If the caller has
+    already configured a backend (e.g., Jupyter's inline backend), that choice
+    is left alone.
     """
     import matplotlib
 
@@ -608,6 +611,8 @@ def build_regression_overlay(
         )
     )
 
+    legend_handles = tuple(legend_entries)
+
     def _fill_fig_hook(
         plot,
         _element,
@@ -615,7 +620,7 @@ def build_regression_overlay(
         _title_color=verdict_color,
         _title_fs=fontsize["title"],
         _legend_fs=fontsize["legend"],
-        _legend=legend_entries,
+        _legend=legend_handles,
     ):
         ax = plot.handles["axis"]
         ax.set_aspect("auto")
