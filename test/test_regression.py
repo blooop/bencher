@@ -537,7 +537,9 @@ class TestDetectRegressions:
         rv_a.name = "metric_a"
         rv_b = ResultFloat(units="s", direction=OptDir.minimize)
         rv_b.name = "metric_b"
-        bench_cfg, run_cfg = self._make_cfg([rv_a, rv_b], method="percentage", regression_percentage=5.0)
+        bench_cfg, run_cfg = self._make_cfg(
+            [rv_a, rv_b], method="percentage", regression_percentage=5.0
+        )
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 2
         assert report.has_regressions
@@ -592,11 +594,15 @@ class TestDetectRegressions:
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
 
-        bench_cfg_strict, run_cfg_strict = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
+        bench_cfg_strict, run_cfg_strict = self._make_cfg(
+            [rv], method="percentage", regression_percentage=5.0
+        )
         report_strict = detect_regressions(ds, bench_cfg_strict, run_cfg_strict)
         assert report_strict.has_regressions
 
-        bench_cfg_loose, run_cfg_loose = self._make_cfg([rv], method="percentage", regression_percentage=15.0)
+        bench_cfg_loose, run_cfg_loose = self._make_cfg(
+            [rv], method="percentage", regression_percentage=15.0
+        )
         report_loose = detect_regressions(ds, bench_cfg_loose, run_cfg_loose)
         assert not report_loose.has_regressions
 

@@ -285,20 +285,12 @@ def _regression_plot_spec(
     valid_color = "#2ca02c"
     band_layers: list[tuple[float, float, str, float, str]] = []
     if mad_band is not None and pct_band is not None:
-        band_layers.append(
-            (mad_band[0], mad_band[1], valid_color, 0.15, "MAD band")
-        )
-        band_layers.append(
-            (pct_band[0], pct_band[1], "#9467bd", 0.15, "percentage band")
-        )
+        band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "MAD band"))
+        band_layers.append((pct_band[0], pct_band[1], "#9467bd", 0.15, "percentage band"))
     elif mad_band is not None:
-        band_layers.append(
-            (mad_band[0], mad_band[1], valid_color, 0.15, "acceptance band")
-        )
+        band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "acceptance band"))
     elif pct_band is not None:
-        band_layers.append(
-            (pct_band[0], pct_band[1], valid_color, 0.15, "acceptance band")
-        )
+        band_layers.append((pct_band[0], pct_band[1], valid_color, 0.15, "acceptance band"))
 
     # Per-sample historical scatter: mirrors the current-run alpha scatter so
     # history and current use the same visual language. Prefer per-repeat data
@@ -458,17 +450,28 @@ def build_regression_overlay(
                 spec["ylabel"],
             ).opts(
                 hv.opts.Scatter(
-                    backend="bokeh", color="#1f77b4", alpha=0.35, size=3, show_legend=False,
+                    backend="bokeh",
+                    color="#1f77b4",
+                    alpha=0.35,
+                    size=3,
+                    show_legend=False,
                 ),
                 hv.opts.Scatter(
-                    backend="matplotlib", color="#1f77b4", alpha=0.35, s=8, show_legend=False,
+                    backend="matplotlib",
+                    color="#1f77b4",
+                    alpha=0.35,
+                    s=8,
+                    show_legend=False,
                 ),
             )
         )
     if len(hist) > 0:
         layers.append(
             hv.Curve(
-                list(zip(hist_x, hist)), spec["xlabel"], spec["ylabel"], label="history",
+                list(zip(hist_x, hist)),
+                spec["xlabel"],
+                spec["ylabel"],
+                label="history",
             ).opts(
                 hv.opts.Curve(backend="bokeh", color="#1f77b4", alpha=0.7, line_width=1.5),
                 hv.opts.Curve(backend="matplotlib", color="#1f77b4", alpha=0.7, linewidth=1.2),
@@ -508,10 +511,18 @@ def build_regression_overlay(
                 spec["ylabel"],
             ).opts(
                 hv.opts.Scatter(
-                    backend="bokeh", color=verdict_color, alpha=0.35, size=5, show_legend=False,
+                    backend="bokeh",
+                    color=verdict_color,
+                    alpha=0.35,
+                    size=5,
+                    show_legend=False,
                 ),
                 hv.opts.Scatter(
-                    backend="matplotlib", color=verdict_color, alpha=0.35, s=18, show_legend=False,
+                    backend="matplotlib",
+                    color=verdict_color,
+                    alpha=0.35,
+                    s=18,
+                    show_legend=False,
                 ),
             )
         )
@@ -562,25 +573,31 @@ def build_regression_overlay(
     for lo, hi, color, alpha, band_label in spec["band_layers"]:
         legend_entries.append(Patch(facecolor=color, alpha=alpha, label=band_label))
     legend_entries.append(
-        Line2D([], [], color="#555555", alpha=0.7, linestyle="--",
-               label=f"baseline={baseline:.3g}")
+        Line2D([], [], color="#555555", alpha=0.7, linestyle="--", label=f"baseline={baseline:.3g}")
     )
     if hist_len > 0:
-        legend_entries.append(
-            Line2D([], [], color="#1f77b4", alpha=0.7, label="history")
-        )
+        legend_entries.append(Line2D([], [], color="#1f77b4", alpha=0.7, label="history"))
     legend_entries.append(
         Line2D(
-            [], [], marker="o", linestyle="", color=verdict_color,
-            markersize=7, markeredgecolor="black", markeredgewidth=0.7,
+            [],
+            [],
+            marker="o",
+            linestyle="",
+            color=verdict_color,
+            markersize=7,
+            markeredgecolor="black",
+            markeredgewidth=0.7,
             label=f"current={spec['curr_mean']:.3g}",
         )
     )
 
     def _fill_fig_hook(
-        plot, _element,
-        _title=title, _title_color=verdict_color,
-        _title_fs=fontsize["title"], _legend_fs=fontsize["legend"],
+        plot,
+        _element,
+        _title=title,
+        _title_color=verdict_color,
+        _title_fs=fontsize["title"],
+        _legend_fs=fontsize["legend"],
         _legend=legend_entries,
     ):
         ax = plot.handles["axis"]
@@ -590,15 +607,19 @@ def build_regression_overlay(
         ax.set_position([0.15, 0.22, 0.82, 0.64])
         ax.set_title(_title, color=_title_color, fontsize=_title_fs, fontweight="bold")
         ax.legend(
-            handles=_legend, loc="upper left", fontsize=_legend_fs,
-            framealpha=0.85, ncol=2, handlelength=1.2, borderpad=0.3, labelspacing=0.3,
+            handles=_legend,
+            loc="upper left",
+            fontsize=_legend_fs,
+            framealpha=0.85,
+            ncol=2,
+            handlelength=1.2,
+            borderpad=0.3,
+            labelspacing=0.3,
         )
 
     mpl_hooks = [_fill_fig_hook]
     overlay_opts = [
-        hv.opts.Overlay(
-            title=spec["title"], show_grid=True, show_legend=True, fontsize=fontsize
-        ),
+        hv.opts.Overlay(title=spec["title"], show_grid=True, show_legend=True, fontsize=fontsize),
         hv.opts.Overlay(
             backend="bokeh",
             width=width,
@@ -621,9 +642,7 @@ def build_regression_overlay(
             ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=_fs)
 
         mpl_hooks.append(_mpl_xticks_hook)
-        overlay_opts.append(
-            hv.opts.Overlay(backend="bokeh", xticks=xticks_pairs, xrotation=30)
-        )
+        overlay_opts.append(hv.opts.Overlay(backend="bokeh", xticks=xticks_pairs, xrotation=30))
     overlay_opts.append(
         hv.opts.Overlay(backend="matplotlib", fig_inches=fig_inches, hooks=mpl_hooks)
     )
@@ -1008,9 +1027,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             .mean(dim=reduce_dims, skipna=True)
             .values.astype(float)
         )
-        current_mean_scalar = np.array(
-            [float(da.isel(over_time=-1).mean(skipna=True).values)]
-        )
+        current_mean_scalar = np.array([float(da.isel(over_time=-1).mean(skipna=True).values)])
 
         if method == "percentage":
             result = detect_percentage(

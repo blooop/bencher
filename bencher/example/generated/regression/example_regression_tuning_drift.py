@@ -7,12 +7,16 @@ import numpy as np
 import bencher as bn
 from bencher.regression import detect_adaptive, render_regression_png
 
+
 def _render_detection_png(hist, current, result):
     """Render the adaptive-detector outcome as a PNG and return its path."""
     return render_regression_png(
-        result, hist, current,
+        result,
+        hist,
+        current,
         path=bn.gen_image_path(f"regression_{result.method}"),
-        figsize=(4.5, 3.2), dpi=100,
+        figsize=(4.5, 3.2),
+        dpi=100,
     )
 
 
@@ -20,10 +24,14 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
     """Gradual drift — parametrised by drift rate and z-threshold."""
 
     drift_rate = bn.FloatSweep(
-        default=1.0, bounds=[0.0, 4.0], doc="Drift per time step",
+        default=1.0,
+        bounds=[0.0, 4.0],
+        doc="Drift per time step",
     )
     regression_mad = bn.FloatSweep(
-        default=3.5, bounds=[1.5, 5.5], doc="Adaptive z-threshold",
+        default=3.5,
+        bounds=[1.5, 5.5],
+        doc="Adaptive z-threshold",
     )
 
     detection_plot = bn.ResultImage(doc="Regression diagnostic PNG")
@@ -34,19 +42,26 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
 
     def benchmark(self):
         baseline = 100.0
-        hist_2d = np.array([
-            [baseline + self.drift_rate * i + random.gauss(0, self._NOISE)
-             for _ in range(self._N_REPEATS)]
-            for i in range(self._N_HIST)
-        ])
+        hist_2d = np.array(
+            [
+                [
+                    baseline + self.drift_rate * i + random.gauss(0, self._NOISE)
+                    for _ in range(self._N_REPEATS)
+                ]
+                for i in range(self._N_HIST)
+            ]
+        )
         hist_means = hist_2d.mean(axis=1)
         current = np.array(
-            [baseline + self.drift_rate * self._N_HIST
-             + random.gauss(0, self._NOISE)
-             for _ in range(5)]
+            [
+                baseline + self.drift_rate * self._N_HIST + random.gauss(0, self._NOISE)
+                for _ in range(5)
+            ]
         )
         result = detect_adaptive(
-            "metric", hist_means, current,
+            "metric",
+            hist_means,
+            current,
             regression_mad=self.regression_mad,
             direction=bn.OptDir.minimize,
             historical_samples=hist_2d.ravel(),
@@ -67,9 +82,9 @@ def example_regression_tuning_drift(run_cfg: bn.BenchRunCfg | None = None) -> bn
     """Adaptive detector — tuning drift."""
     bench = AdaptiveDriftDetection().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=['drift_rate', 'regression_mad'],
+        input_vars=["drift_rate", "regression_mad"],
         result_vars=["detection_plot"],
-        description='A linear drift is added to the history (fixed noise σ=5). With 20 time points, the total drift equals drift_rate × 20 and the current run continues the trend.  The adaptive drift test (Theil–Sen slope + Mann–Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high regression_mads allow the trend to pass unnoticed.',
+        description="A linear drift is added to the history (fixed noise σ=5). With 20 time points, the total drift equals drift_rate × 20 and the current run continues the trend.  The adaptive drift test (Theil–Sen slope + Mann–Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high regression_mads allow the trend to pass unnoticed.",
     )
 
     return bench
