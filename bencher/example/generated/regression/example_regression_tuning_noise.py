@@ -53,7 +53,7 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
             "metric",
             hist,
             current,
-            z_threshold=self._Z_THRESHOLD,
+            regression_mad=self._Z_THRESHOLD,
             direction=bn.OptDir.minimize,
             regression_percentage=pct,
         )

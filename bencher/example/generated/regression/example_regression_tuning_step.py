@@ -28,7 +28,7 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
         bounds=[0.0, 60.0],
         doc="Regression step size",
     )
-    z_threshold = bn.FloatSweep(
+    regression_mad = bn.FloatSweep(
         default=3.5,
         bounds=[1.5, 5.5],
         doc="Adaptive z-threshold",
@@ -48,7 +48,7 @@ class AdaptiveStepDetection(bn.ParametrizedSweep):
             "metric",
             hist,
             current,
-            z_threshold=self.z_threshold,
+            regression_mad=self.regression_mad,
             direction=bn.OptDir.minimize,
         )
         self.detection_plot = _render_detection_png(hist, current, result)
@@ -58,9 +58,9 @@ def example_regression_tuning_step(run_cfg: bn.BenchRunCfg | None = None) -> bn.
     """Adaptive detector — tuning step."""
     bench = AdaptiveStepDetection().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=["regression_magnitude", "z_threshold"],
+        input_vars=["regression_magnitude", "regression_mad"],
         result_vars=["detection_plot"],
-        description="A step regression of variable magnitude is injected (fixed noise σ=10). Each cell shows the synthesised 20-point history and the current run. When the regression magnitude is large relative to noise and the z_threshold is low the detector fires; when the magnitude shrinks or the threshold rises it stays quiet.  The boundary reveals the minimum detectable effect for each threshold setting.",
+        description="A step regression of variable magnitude is injected (fixed noise σ=10). Each cell shows the synthesised 20-point history and the current run. When the regression magnitude is large relative to noise and the regression_mad is low the detector fires; when the magnitude shrinks or the threshold rises it stays quiet.  The boundary reveals the minimum detectable effect for each threshold setting.",
     )
 
     return bench

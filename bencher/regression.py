@@ -19,14 +19,14 @@ from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
 
 # Default thresholds per method — used when the user hasn't explicitly set a threshold.
 _METHOD_DEFAULTS = {
-    "percentage": 5.0,  # percent change
+    "percentage": 10.0,  # percent change
     "adaptive": 3.5,  # robust z-score threshold in MAD units
 }
 
 # Consistency factor so MAD estimates the standard deviation of a Gaussian.
 _MAD_TO_SIGMA = 1.4826
 
-# Drift threshold defaults to this fraction of z_threshold when not set by caller.
+# Drift threshold defaults to this fraction of regression_mad when not set by caller.
 _DRIFT_FRAC = 0.85
 
 # Hampel filter cutoff (in MAD units) used to drop outliers from the slope fit.
@@ -59,6 +59,11 @@ class RegressionResult:
     # Arrays retained so the result can be replotted without re-running detection.
     historical: np.ndarray | None = None
     current_samples: np.ndarray | None = None
+    # Optional per-sample historical data (flat: all repeats from all historical
+    # time points) with paired x-coords — used to render a scatter overlay
+    # showing the full spread at each time point, not just the per-time mean.
+    historical_all: np.ndarray | None = None
+    historical_all_x: np.ndarray | None = None
     # x-axis coordinates for the historical and current points (typically the
     # ``over_time`` datetimes). Optional: falls back to integer indices.
     historical_x: np.ndarray | None = None
@@ -243,13 +248,31 @@ def _regression_plot_spec(
     )
     title = f"{result.variable} — {result.method} — {verdict_label}  (Δ {change_str})"
 
+    baseline = result.baseline_value
+
+    def _clip(band: tuple[float, float] | None) -> tuple[float, float] | None:
+        """Clip the band to the side(s) that actually gate regressions.
+
+        Stored bands are symmetric around the baseline, but for directional
+        metrics only one side flags a regression. Minimize only trips on
+        values above baseline; maximize only trips on values below. None
+        flags either side, so the full symmetric band stays."""
+        if band is None:
+            return None
+        lo, hi = band
+        if result.direction == OptDir.minimize.value:
+            return (baseline, hi)
+        if result.direction == OptDir.maximize.value:
+            return (lo, baseline)
+        return (lo, hi)
+
     mad_band = (
-        (result.band_lower, result.band_upper)
+        _clip((result.band_lower, result.band_upper))
         if result.band_lower is not None and result.band_upper is not None
         else None
     )
     pct_band = (
-        (result.percent_band_lower, result.percent_band_upper)
+        _clip((result.percent_band_lower, result.percent_band_upper))
         if result.percent_band_lower is not None and result.percent_band_upper is not None
         else None
     )
@@ -274,9 +297,32 @@ def _regression_plot_spec(
             (pct_band[0], pct_band[1], verdict_color, 0.15, "acceptance band")
         )
 
+    # Per-sample historical scatter: only plot if the x-coords align with the
+    # primary hist_x dtype (so strings/categorical fallbacks don't break the
+    # axis). Falls back to None when there is no alignment.
+    hist_scatter_x: np.ndarray | None = None
+    hist_scatter_y: np.ndarray | None = None
+    if (
+        result.historical_all is not None
+        and result.historical_all_x is not None
+        and len(result.historical_all) == len(result.historical_all_x)
+        and len(result.historical_all) > 0
+        and xticks is None
+    ):
+        raw = np.asarray(result.historical_all_x)
+        hist_is_dt = np.issubdtype(hist_x.dtype, np.datetime64)
+        raw_is_dt = np.issubdtype(raw.dtype, np.datetime64)
+        hist_is_num = np.issubdtype(hist_x.dtype, np.number)
+        raw_is_num = np.issubdtype(raw.dtype, np.number)
+        if (hist_is_dt and raw_is_dt) or (hist_is_num and raw_is_num):
+            hist_scatter_x = raw
+            hist_scatter_y = np.asarray(result.historical_all, dtype=float)
+
     return {
         "hist": hist,
         "hist_x": hist_x,
+        "hist_scatter_x": hist_scatter_x,
+        "hist_scatter_y": hist_scatter_y,
         "xticks": xticks,
         "curr_samples": curr_samples,
         "curr_mean": curr_mean,
@@ -340,6 +386,14 @@ def build_regression_overlay(
             spec["ylabel"],
         ).opts(color="#555555", line_dash="dashed", line_width=1)
     )
+    if spec["hist_scatter_x"] is not None and spec["hist_scatter_y"] is not None:
+        layers.append(
+            hv.Scatter(
+                list(zip(spec["hist_scatter_x"], spec["hist_scatter_y"])),
+                spec["xlabel"],
+                spec["ylabel"],
+            ).opts(color="#1f77b4", alpha=0.35, size=5)
+        )
     if len(hist) > 0:
         layers.append(
             hv.Curve(list(zip(hist_x, hist)), spec["xlabel"], spec["ylabel"]).opts(
@@ -450,6 +504,15 @@ def render_regression_png(
         label=f"baseline={spec['baseline']:.3g}",
     )
 
+    if spec["hist_scatter_x"] is not None and spec["hist_scatter_y"] is not None:
+        ax.scatter(
+            spec["hist_scatter_x"],
+            spec["hist_scatter_y"],
+            color="#1f77b4",
+            alpha=0.35,
+            s=18,
+            label="history samples",
+        )
     if len(hist) > 0:
         ax.plot(
             hist_x,
@@ -609,7 +672,7 @@ def detect_adaptive(
     variable: str,
     historical_time_means: np.ndarray,
     current: np.ndarray,
-    z_threshold: float = 3.5,
+    regression_mad: float = 3.5,
     drift_threshold: float | None = None,
     mk_alpha: float = 0.1,
     direction: OptDir = OptDir.minimize,
@@ -623,7 +686,7 @@ def detect_adaptive(
     run's deviation in those noise units. Two orthogonal tests run in parallel:
 
     * **Short-term step** — flags if ``(current_mean - baseline) / noise_floor``
-      exceeds ``z_threshold`` in the regression direction.
+      exceeds ``regression_mad`` in the regression direction.
     * **Long-term drift** — fits a Theil–Sen slope on the historical time-point
       means (after a Hampel filter removes isolated outliers) and flags if the
       total projected drift, scaled by ``noise_floor``, exceeds
@@ -635,9 +698,9 @@ def detect_adaptive(
         historical_time_means: 1-D array of per-time-point mean values from
             history (one entry per prior run).
         current: Current run values (will be averaged).
-        z_threshold: Step-test threshold in MAD-sigma units.
+        regression_mad: Step-test threshold in MAD-sigma units.
         drift_threshold: Drift-test threshold in MAD-sigma units. If ``None``,
-            defaults to ``_DRIFT_FRAC * z_threshold`` so users need to tune
+            defaults to ``_DRIFT_FRAC * regression_mad`` so users need to tune
             only one knob.
         mk_alpha: Significance level for the Mann–Kendall trend guard.
         direction: Optimization direction from the result variable.
@@ -654,7 +717,7 @@ def detect_adaptive(
             positives on metrics with few repeats or very tight history.
     """
     if drift_threshold is None:
-        drift_threshold = _DRIFT_FRAC * z_threshold
+        drift_threshold = _DRIFT_FRAC * regression_mad
 
     hist_clean = _clean_1d(historical_time_means)
     curr_clean = _clean_1d(current)
@@ -693,7 +756,7 @@ def detect_adaptive(
 
     # Step test — current mean vs robust baseline in MAD-sigma units.
     z_step = (curr_mean - baseline) / noise_floor
-    step_mad = _is_regression(z_step, direction) and abs(z_step) > z_threshold
+    step_mad = _is_regression(z_step, direction) and abs(z_step) > regression_mad
 
     # Drift test — Theil–Sen slope on Hampel-filtered history, MK significance.
     # Use residual (detrended) noise as the denominator so a real drift can't
@@ -750,7 +813,7 @@ def detect_adaptive(
         fired.append("drift")
     fired_str = "+".join(fired) if fired else "none"
     details = (
-        f"fired={fired_str}, z_step={z_step:+.2f} (|z|>{z_threshold}), "
+        f"fired={fired_str}, z_step={z_step:+.2f} (|z|>{regression_mad}), "
         f"z_drift={z_drift:+.2f} (|z|>{drift_threshold:.2f}), "
         f"mk_p={mk_p:.3g} (<{mk_alpha}), "
         f"baseline={baseline:.4g}, noise={noise_floor:.4g}"
@@ -765,11 +828,11 @@ def detect_adaptive(
         current_value=curr_mean,
         baseline_value=baseline,
         change_percent=change,
-        threshold=z_threshold,
+        threshold=regression_mad,
         direction=direction.value,
         details=details,
-        band_lower=baseline - z_threshold * noise_floor,
-        band_upper=baseline + z_threshold * noise_floor,
+        band_lower=baseline - regression_mad * noise_floor,
+        band_upper=baseline + regression_mad * noise_floor,
         percent_band_lower=percent_band_lower,
         percent_band_upper=percent_band_upper,
     )
@@ -799,13 +862,12 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         return report
 
     method = run_cfg.regression_method
-    threshold = run_cfg.regression_threshold
-
-    # Use per-method default when no explicit threshold is provided.
-    if threshold is None:
-        threshold = _METHOD_DEFAULTS.get(method, 5.0)
-
+    regression_mad = getattr(run_cfg, "regression_mad", None)
+    if regression_mad is None:
+        regression_mad = _METHOD_DEFAULTS["adaptive"]
     regression_percentage = getattr(run_cfg, "regression_percentage", None)
+    if regression_percentage is None:
+        regression_percentage = _METHOD_DEFAULTS["percentage"]
 
     for rv in bench_cfg.result_vars:
         if not isinstance(rv, SCALAR_RESULT_TYPES):
@@ -836,14 +898,14 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
 
         if method == "percentage":
             result = detect_percentage(
-                var_name, historical_clean, current_clean, threshold, direction
+                var_name, historical_clean, current_clean, regression_percentage, direction
             )
         elif method == "adaptive":
             result = detect_adaptive(
                 var_name,
                 time_means_arr,
                 current_clean,
-                z_threshold=threshold,
+                regression_mad=regression_mad,
                 direction=direction,
                 historical_samples=historical_clean,
                 regression_percentage=regression_percentage,
@@ -851,7 +913,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         else:
             logging.warning(f"Unknown regression method '{method}', falling back to percentage")
             result = detect_percentage(
-                var_name, historical_clean, current_clean, threshold, direction
+                var_name, historical_clean, current_clean, regression_percentage, direction
             )
 
         # Retain the arrays used for plotting so downstream consumers (reports,
@@ -872,6 +934,22 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                 result.historical_x = time_coord[:-1]
                 result.current_x = time_coord[-1]
         result.current_samples = current_clean
+
+        # Per-sample historical scatter: flatten the 2D slice (all repeats at
+        # every historical time point) and broadcast the time coords so the
+        # renderers can show every sample as a dot at its real x position.
+        hist_slice = da.isel(over_time=slice(None, -1))
+        if hist_slice.size > 0:
+            hist_2d = np.moveaxis(
+                np.asarray(hist_slice.values, dtype=float),
+                list(hist_slice.dims).index("over_time"),
+                0,
+            ).reshape(hist_slice.sizes["over_time"], -1)
+            hist_samples_flat = hist_2d.ravel()
+            hist_x_flat = np.repeat(time_coord[:-1], hist_2d.shape[1])
+            mask = ~np.isnan(hist_samples_flat)
+            result.historical_all = hist_samples_flat[mask]
+            result.historical_all_x = hist_x_flat[mask]
 
         report.results.append(result)
 

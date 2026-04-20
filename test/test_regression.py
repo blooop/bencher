@@ -359,7 +359,12 @@ class TestDetectRegressions:
         return ds
 
     @staticmethod
-    def _make_cfg(result_vars, method="percentage", threshold=None, regression_percentage=None):
+    def _make_cfg(
+        result_vars,
+        method="percentage",
+        regression_mad=None,
+        regression_percentage=None,
+    ):
         """Create minimal bench_cfg and run_cfg mocks."""
 
         class FakeBenchCfg:
@@ -367,12 +372,12 @@ class TestDetectRegressions:
                 self.result_vars = result_vars
 
         class FakeRunCfg:
-            def __init__(self, method, threshold, regression_percentage):
+            def __init__(self, method, regression_mad, regression_percentage):
                 self.regression_method = method
-                self.regression_threshold = threshold
+                self.regression_mad = regression_mad
                 self.regression_percentage = regression_percentage
 
-        return FakeBenchCfg(result_vars), FakeRunCfg(method, threshold, regression_percentage)
+        return FakeBenchCfg(result_vars), FakeRunCfg(method, regression_mad, regression_percentage)
 
     def test_no_over_time_dim(self):
         ds = xr.Dataset({"x": (["repeat"], [1.0, 2.0])})
@@ -412,7 +417,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert report.results[0].variable == "metric"
@@ -432,7 +437,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions
 
@@ -445,7 +450,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions, report.summary()
 
@@ -460,7 +465,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert "step" in report.results[0].details
@@ -476,12 +481,12 @@ class TestDetectRegressions:
         rv = ResultFloat(units="s", direction=OptDir.maximize)
         rv.name = "metric"
 
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
         without_pct = detect_regressions(ds, bench_cfg, run_cfg)
         assert without_pct.has_regressions
 
         bench_cfg, run_cfg = self._make_cfg(
-            [rv], method="adaptive", threshold=3.5, regression_percentage=40.0
+            [rv], method="adaptive", regression_mad=3.5, regression_percentage=40.0
         )
         with_pct = detect_regressions(ds, bench_cfg, run_cfg)
         assert not with_pct.has_regressions
@@ -499,7 +504,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", threshold=3.5)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert "drift" in report.results[0].details
@@ -532,7 +537,7 @@ class TestDetectRegressions:
         rv_a.name = "metric_a"
         rv_b = ResultFloat(units="s", direction=OptDir.minimize)
         rv_b.name = "metric_b"
-        bench_cfg, run_cfg = self._make_cfg([rv_a, rv_b], method="percentage", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv_a, rv_b], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 2
         assert report.has_regressions
@@ -548,7 +553,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="bogus", threshold=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="bogus", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert report.results[0].method == "percentage"
@@ -587,11 +592,11 @@ class TestDetectRegressions:
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
 
-        bench_cfg_strict, run_cfg_strict = self._make_cfg([rv], method="percentage", threshold=5.0)
+        bench_cfg_strict, run_cfg_strict = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
         report_strict = detect_regressions(ds, bench_cfg_strict, run_cfg_strict)
         assert report_strict.has_regressions
 
-        bench_cfg_loose, run_cfg_loose = self._make_cfg([rv], method="percentage", threshold=15.0)
+        bench_cfg_loose, run_cfg_loose = self._make_cfg([rv], method="percentage", regression_percentage=15.0)
         report_loose = detect_regressions(ds, bench_cfg_loose, run_cfg_loose)
         assert not report_loose.has_regressions
 

@@ -357,33 +357,28 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "'adaptive' (robust MAD-based step + drift test for noisy metrics).",
     )
 
-    regression_threshold: float = param.Number(
-        default=None,
-        allow_None=True,
-        doc="Threshold for regression detection. Interpretation depends on method: "
-        "'percentage' = percent change (default 5.0), "
-        "'adaptive' = robust z-score threshold in MAD units (default 3.5). "
-        "If None, the per-method default is used automatically.",
+    regression_mad: float = param.Number(
+        default=3.5,
+        doc="Step-test threshold for the 'adaptive' method, in robust MAD-sigma "
+        "units. A current value more than this many MAD-sigma from the historical "
+        "median (in the regression direction) is flagged. Higher = less sensitive.",
+    )
+
+    regression_percentage: float = param.Number(
+        default=10.0,
+        doc="Minimum directional percent change required to flag a regression. "
+        "For 'percentage' method this is the primary threshold. For 'adaptive' "
+        "method it acts as a dual-band AND gate alongside regression_mad: a "
+        "regression only fires when BOTH the MAD-based test AND the percent "
+        "change exceed their thresholds. Suppresses noise-floor false positives "
+        "on low-repeat or integer-valued metrics where the MAD noise floor can "
+        "collapse to zero.",
     )
 
     regression_fail: bool = param.Boolean(
         False,
         doc="If True, raise RegressionError when a regression is detected. "
         "Useful for failing CI pipelines on benchmark regressions.",
-    )
-
-    regression_percentage: float = param.Number(
-        default=None,
-        allow_None=True,
-        doc="Optional minimum percent change (directional — interpreted in the sense "
-        "of each result var's optimization direction) required to flag a regression. "
-        "Applied as a second acceptance band on top of the adaptive method's MAD "
-        "band: a regression only fires when BOTH the MAD-based test AND the percent "
-        "change exceed their thresholds. Useful for suppressing noise-floor false "
-        "positives on low-repeat or integer-valued metrics where the MAD noise floor "
-        "collapses to zero — set e.g. 40.0 to require at least a 40%% change "
-        "regardless of how many MAD-sigma it is. If None (default), only the MAD "
-        "band gates. Only affects the 'adaptive' method.",
     )
 
     def __init__(self, **params: Any) -> None:

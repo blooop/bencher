@@ -28,7 +28,7 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
         bounds=[0.0, 4.0],
         doc="Drift per time step",
     )
-    z_threshold = bn.FloatSweep(
+    regression_mad = bn.FloatSweep(
         default=3.5,
         bounds=[1.5, 5.5],
         doc="Adaptive z-threshold",
@@ -57,7 +57,7 @@ class AdaptiveDriftDetection(bn.ParametrizedSweep):
             "metric",
             hist,
             current,
-            z_threshold=self.z_threshold,
+            regression_mad=self.regression_mad,
             direction=bn.OptDir.minimize,
         )
         self.detection_plot = _render_detection_png(hist, current, result)
@@ -67,9 +67,9 @@ def example_regression_tuning_drift(run_cfg: bn.BenchRunCfg | None = None) -> bn
     """Adaptive detector — tuning drift."""
     bench = AdaptiveDriftDetection().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=["drift_rate", "z_threshold"],
+        input_vars=["drift_rate", "regression_mad"],
         result_vars=["detection_plot"],
-        description="A linear drift is added to the history (fixed noise σ=5). With 20 time points, the total drift equals drift_rate × 20 and the current run continues the trend.  The adaptive drift test (Theil–Sen slope + Mann–Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high z_thresholds allow the trend to pass unnoticed.",
+        description="A linear drift is added to the history (fixed noise σ=5). With 20 time points, the total drift equals drift_rate × 20 and the current run continues the trend.  The adaptive drift test (Theil–Sen slope + Mann–Kendall trend guard) fires when the accumulated drift outweighs the detrended noise.  Low drift rates or high regression_mads allow the trend to pass unnoticed.",
     )
 
     return bench
