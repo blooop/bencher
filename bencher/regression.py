@@ -283,10 +283,17 @@ def _regression_plot_spec(
     # shades green: it represents the *valid* region, not the pass/fail
     # verdict (verdict colouring lives on the current marker + connector).
     valid_color = "#2ca02c"
+    # Light blue for the secondary (percentage) band — clearly distinct from
+    # the green MAD band after alpha blending, and distinct from the darker
+    # blue (#1f77b4) used for the history line so it doesn't read as part of
+    # the data series.
+    valid_color_light = "#6baed6"
     band_layers: list[tuple[float, float, str, float, str]] = []
     if mad_band is not None and pct_band is not None:
         band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "MAD band"))
-        band_layers.append((pct_band[0], pct_band[1], "#9467bd", 0.15, "percentage band"))
+        band_layers.append(
+            (pct_band[0], pct_band[1], valid_color_light, 0.15, "percentage band")
+        )
     elif mad_band is not None:
         band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "acceptance band"))
     elif pct_band is not None:
@@ -408,6 +415,18 @@ def build_regression_overlay(
     # connector) are label-less so the legend stays compact.
     layers = []
     for lo, hi, color, alpha, label in spec["band_layers"]:
+        # Holoviews' matplotlib backend silently drops ``color`` opts on
+        # hv.Area (Curve/Scatter honour it, Area does not), which made every
+        # band render in whatever matplotlib colour-cycled next — so a
+        # non-regressed acceptance band rendered pink. Setting facecolor on
+        # the PolyCollection via a hook is the only path that actually sticks.
+        def _area_color_hook(plot, _element, _fc=color, _alpha=alpha):
+            artist = plot.handles.get("artist")
+            if artist is not None:
+                artist.set_facecolor(_fc)
+                artist.set_edgecolor("none")
+                artist.set_alpha(_alpha)
+
         layers.append(
             hv.Area(
                 ([x_start, x_end], [lo, lo], [hi, hi]),
@@ -416,7 +435,7 @@ def build_regression_overlay(
                 label=label,
             ).opts(
                 hv.opts.Area(backend="bokeh", color=color, alpha=alpha, line_alpha=0),
-                hv.opts.Area(backend="matplotlib", color=color, alpha=alpha, linewidth=0),
+                hv.opts.Area(backend="matplotlib", hooks=[_area_color_hook]),
             )
         )
     layers.append(
