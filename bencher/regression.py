@@ -2,7 +2,8 @@
 
 Provides statistical methods to detect if benchmark values have changed
 significantly between runs. Supports percentage threshold, IQR-based outlier
-detection, and Welch's t-test.
+detection, and an adaptive MAD-based detector with an optional percent
+floor for dual-band suppression.
 """
 
 from __future__ import annotations
@@ -20,7 +21,6 @@ from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
 _METHOD_DEFAULTS = {
     "percentage": 5.0,  # percent change
     "iqr": 1.5,  # IQR multiplier
-    "ttest": 0.05,  # significance level alpha
     "adaptive": 3.5,  # robust z-score threshold in MAD units
 }
 
@@ -304,8 +304,13 @@ def build_regression_overlay(
     x_end = x_current
 
     layers = []
-    if spec["band"] is not None:
-        lo, hi = spec["band"]
+    mad_band = spec["band"]
+    pct_band = spec["percent_band"]
+    if mad_band is not None and pct_band is not None:
+        # Combined acceptance band (AND gate -> accept if inside either band
+        # => the union is the effective acceptance region).
+        lo = min(mad_band[0], pct_band[0])
+        hi = max(mad_band[1], pct_band[1])
         layers.append(
             hv.Area(
                 ([x_start, x_end], [lo, lo], [hi, hi]),
@@ -313,14 +318,35 @@ def build_regression_overlay(
                 vdims=[spec["ylabel"], "band_upper"],
             ).opts(color=verdict_color, alpha=0.10, line_alpha=0)
         )
-    if spec["percent_band"] is not None:
-        plo, phi = spec["percent_band"]
+        for edge in (mad_band[0], mad_band[1]):
+            layers.append(
+                hv.Curve(
+                    [(x_start, edge), (x_end, edge)], spec["xlabel"], spec["ylabel"]
+                ).opts(color="#888888", line_dash="dotted", line_width=0.8)
+            )
+        for edge in (pct_band[0], pct_band[1]):
+            layers.append(
+                hv.Curve(
+                    [(x_start, edge), (x_end, edge)], spec["xlabel"], spec["ylabel"]
+                ).opts(color="#9467bd", line_dash="dashed", line_width=0.8)
+            )
+    elif mad_band is not None:
+        lo, hi = mad_band
+        layers.append(
+            hv.Area(
+                ([x_start, x_end], [lo, lo], [hi, hi]),
+                kdims=[spec["xlabel"]],
+                vdims=[spec["ylabel"], "band_upper"],
+            ).opts(color=verdict_color, alpha=0.10, line_alpha=0)
+        )
+    elif pct_band is not None:
+        plo, phi = pct_band
         layers.append(
             hv.Area(
                 ([x_start, x_end], [plo, plo], [phi, phi]),
                 kdims=[spec["xlabel"]],
-                vdims=[spec["ylabel"], "pct_band_upper"],
-            ).opts(color="#9467bd", alpha=0.08, line_alpha=0)
+                vdims=[spec["ylabel"], "band_upper"],
+            ).opts(color=verdict_color, alpha=0.10, line_alpha=0)
         )
     layers.append(
         hv.Curve(
@@ -428,13 +454,28 @@ def render_regression_png(
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.2)
 
-    if spec["band"] is not None:
-        lo, hi = spec["band"]
-        mad_label = "MAD band" if spec["percent_band"] is not None else "acceptance band"
-        ax.axhspan(lo, hi, color=verdict_color, alpha=0.10, label=mad_label)
-    if spec["percent_band"] is not None:
-        plo, phi = spec["percent_band"]
-        ax.axhspan(plo, phi, color="#9467bd", alpha=0.08, label="percent band")
+    mad_band = spec["band"]
+    pct_band = spec["percent_band"]
+    if mad_band is not None and pct_band is not None:
+        # AND gate means a point is accepted if it sits inside EITHER band,
+        # so the effective acceptance region is the union of the two.
+        lo = min(mad_band[0], pct_band[0])
+        hi = max(mad_band[1], pct_band[1])
+        ax.axhspan(lo, hi, color=verdict_color, alpha=0.10, label="acceptance band (MAD ∪ %)")
+        ax.axhline(
+            mad_band[0], color="#888888", linestyle=":", linewidth=0.8, label="MAD edge"
+        )
+        ax.axhline(mad_band[1], color="#888888", linestyle=":", linewidth=0.8)
+        ax.axhline(
+            pct_band[0], color="#9467bd", linestyle="--", linewidth=0.8, label="percent edge"
+        )
+        ax.axhline(pct_band[1], color="#9467bd", linestyle="--", linewidth=0.8)
+    elif mad_band is not None:
+        lo, hi = mad_band
+        ax.axhspan(lo, hi, color=verdict_color, alpha=0.10, label="acceptance band")
+    elif pct_band is not None:
+        plo, phi = pct_band
+        ax.axhspan(plo, phi, color=verdict_color, alpha=0.10, label="acceptance band")
 
     ax.axhline(
         spec["baseline"],
@@ -630,52 +671,6 @@ def detect_iqr(
     )
 
 
-def detect_ttest(
-    variable: str,
-    historical: np.ndarray,
-    current: np.ndarray,
-    alpha: float = 0.05,
-    direction: OptDir = OptDir.minimize,
-) -> RegressionResult:
-    """Welch's t-test between historical and current samples."""
-    hist_clean = _clean_1d(historical)
-    curr_clean = _clean_1d(current)
-
-    if len(hist_clean) < 2 or len(curr_clean) < 2:
-        # Fall back to percentage with alpha-based threshold
-        return detect_percentage(
-            variable, hist_clean, curr_clean, threshold_percent=alpha * 100, direction=direction
-        )
-
-    from scipy.stats import ttest_ind
-
-    if direction == OptDir.minimize:
-        alt = "greater"  # regression = current > historical
-    elif direction == OptDir.maximize:
-        alt = "less"  # regression = current < historical
-    else:
-        alt = "two-sided"
-
-    stat, pvalue = ttest_ind(curr_clean, hist_clean, equal_var=False, alternative=alt)
-
-    hist_mean = float(np.nanmean(hist_clean))
-    curr_mean = float(np.nanmean(curr_clean))
-    change = _safe_change_percent(curr_mean, hist_mean)
-    regressed = pvalue < alpha
-
-    return RegressionResult(
-        variable=variable,
-        method="ttest",
-        regressed=regressed,
-        current_value=curr_mean,
-        baseline_value=hist_mean,
-        change_percent=change,
-        threshold=alpha,
-        direction=direction.value,
-        details=f"t-stat={stat:.4g}, p-value={pvalue:.4g}, alpha={alpha}",
-    )
-
-
 def _robust_scale(values: np.ndarray) -> tuple[float, float]:
     """Return (median, MAD-based sigma) for a 1-D numeric array.
 
@@ -740,9 +735,9 @@ def detect_adaptive(
         direction: Optimization direction from the result variable.
         historical_samples: Optional flat array of all historical samples
             (not per-time means). Used for the sparse-history fallback so the
-            delegated ``ttest``/``percentage`` methods see the same input they
-            would have received from ``detect_regressions`` directly. Falls
-            back to ``historical_time_means`` when not provided.
+            delegated ``percentage`` detector sees the same input it would
+            have received from ``detect_regressions`` directly. Falls back to
+            ``historical_time_means`` when not provided.
         percent_floor: Optional minimum percent change required to flag a
             regression. When set, acts as a second acceptance band: a
             regression fires only when BOTH the MAD test and the percent
@@ -756,28 +751,29 @@ def detect_adaptive(
     curr_clean = _clean_1d(current)
     curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
 
-    # Not enough history for a robust scale — fall back to less strict checks.
-    # Use the full per-sample history when available so the fallback behaves
-    # like a direct call to detect_ttest/detect_percentage.
+    # Not enough history for a robust scale — fall back to a percentage
+    # check. Use the full per-sample history when available so the fallback
+    # behaves like a direct call to detect_percentage.
     if len(hist_clean) < 4:
         fallback_hist = (
             _clean_1d(historical_samples) if historical_samples is not None else hist_clean
         )
-        if len(fallback_hist) >= 2 and len(curr_clean) >= 2:
-            return detect_ttest(
-                variable,
-                fallback_hist,
-                curr_clean,
-                alpha=_METHOD_DEFAULTS["ttest"],
-                direction=direction,
-            )
-        return detect_percentage(
+        # Sparse history -> percentage check. When ``percent_floor`` is set it
+        # doubles as the percentage threshold so the sparse regime honours the
+        # same floor the user configured for dual-band suppression.
+        effective_pct = percent_floor if percent_floor is not None else _METHOD_DEFAULTS["percentage"]
+        result = detect_percentage(
             variable,
             fallback_hist,
             curr_clean,
-            threshold_percent=_METHOD_DEFAULTS["percentage"],
+            threshold_percent=effective_pct,
             direction=direction,
         )
+        if percent_floor is not None:
+            baseline = result.baseline_value
+            result.percent_band_lower = baseline * (1.0 - percent_floor / 100.0)
+            result.percent_band_upper = baseline * (1.0 + percent_floor / 100.0)
+        return result
 
     baseline, mad_sigma = _robust_scale(hist_clean)
     noise_floor = max(mad_sigma, 1e-6 * abs(baseline), 1e-12)
@@ -929,8 +925,6 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             )
         elif method == "iqr":
             result = detect_iqr(var_name, time_means_arr, current_clean, threshold, direction)
-        elif method == "ttest":
-            result = detect_ttest(var_name, historical_clean, current_clean, threshold, direction)
         elif method == "adaptive":
             result = detect_adaptive(
                 var_name,
@@ -957,10 +951,10 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             result.current_x = time_coord[-1]
         else:
             result.historical = historical_clean
-            # percentage/ttest pass the flat history (repeat * over_time); we
-            # only record over_time coords when they line up with the flat
-            # history length — otherwise pair current_x with the integer
-            # indices used by the plot and leave both unset.
+            # percentage passes the flat history (repeat * over_time); only
+            # record over_time coords when they line up with the flat history
+            # length — otherwise pair current_x with the integer indices used
+            # by the plot and leave both unset.
             if len(time_coord) - 1 == len(historical_clean):
                 result.historical_x = time_coord[:-1]
                 result.current_x = time_coord[-1]

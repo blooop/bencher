@@ -352,9 +352,9 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     regression_method: str = param.Selector(
         default="adaptive",
-        objects=["percentage", "iqr", "ttest", "adaptive"],
+        objects=["percentage", "iqr", "adaptive"],
         doc="Detection method: 'percentage' (mean comparison), "
-        "'iqr' (IQR outlier detection), 'ttest' (Welch's t-test), "
+        "'iqr' (IQR outlier detection), "
         "'adaptive' (robust MAD-based step + drift test for noisy metrics).",
     )
 
@@ -364,7 +364,6 @@ class BenchRunCfg(BenchPlotSrvCfg):
         doc="Threshold for regression detection. Interpretation depends on method: "
         "'percentage' = percent change (default 5.0), "
         "'iqr' = IQR multiplier (default 1.5), "
-        "'ttest' = significance level alpha (default 0.05), "
         "'adaptive' = robust z-score threshold in MAD units (default 3.5). "
         "If None, the per-method default is used automatically.",
     )

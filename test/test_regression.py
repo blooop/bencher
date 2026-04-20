@@ -16,7 +16,6 @@ from bencher.regression import (
     detect_iqr,
     detect_percentage,
     detect_regressions,
-    detect_ttest,
     render_regression_png,
 )
 from bencher.variables.results import OptDir
@@ -141,47 +140,6 @@ class TestDetectIqr:
         assert result.regressed
 
 
-# ── detect_ttest ───────────────────────────────────────────────────────────
-
-
-class TestDetectTtest:
-    def test_no_significant_difference(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(100, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
-        assert not result.regressed
-
-    def test_significant_increase_minimize(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(110, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
-        assert result.regressed
-
-    def test_significant_decrease_maximize(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(90, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.maximize)
-        assert result.regressed
-
-    def test_fallback_single_sample(self):
-        hist = np.array([100.0])
-        curr = np.array([200.0])
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.minimize)
-        assert result.method == "percentage"  # fell back to percentage-based check
-        assert result.regressed  # still correctly detected as regression
-        assert result.change_percent > 0.0  # percentage change indicates degradation for minimize
-
-    def test_direction_none_two_sided(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, 30)
-        curr = rng.normal(110, 1, 30)
-        result = detect_ttest("x", hist, curr, alpha=0.05, direction=OptDir.none)
-        assert result.regressed
-
-
 # ── detect_adaptive ────────────────────────────────────────────────────────
 
 
@@ -285,7 +243,7 @@ class TestDetectAdaptive:
         hist = np.array([100.0, 101.0, 99.0])
         curr = np.array([100.0, 102.0])
         result = detect_adaptive("x", hist, curr, direction=OptDir.minimize)
-        assert result.method in ("ttest", "percentage")
+        assert result.method == "percentage"
 
     def test_sparse_history_single_current_falls_back(self):
         hist = np.array([100.0, 200.0])
@@ -351,9 +309,10 @@ class TestDetectAdaptive:
     def test_sparse_fallback_uses_full_samples(self):
         """Fallback must honour `historical_samples` so it sees all raw values.
 
-        With 3 time points but many samples per point, ttest has enough data
-        to be statistically meaningful — whereas passing only per-time means
-        would leave ttest with just 3 points.
+        With 3 time points but many samples per point, the sparse-history
+        fallback should still detect a clear regression via the percentage
+        check — passing only per-time means would leave it blind to the
+        per-sample variance.
         """
         rng = self._rng()
         hist_time_means = np.array([100.0, 100.0, 100.0])
@@ -366,8 +325,7 @@ class TestDetectAdaptive:
             direction=OptDir.minimize,
             historical_samples=hist_samples,
         )
-        # Must fall back to ttest since we have plenty of samples.
-        assert result.method == "ttest"
+        assert result.method == "percentage"
         assert result.regressed
 
 
@@ -526,20 +484,6 @@ class TestDetectRegressions:
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
         bench_cfg, run_cfg = self._make_cfg([rv], method="iqr", threshold=1.5)
-        report = detect_regressions(ds, bench_cfg, run_cfg)
-        assert report.has_regressions
-
-    def test_ttest_method(self):
-        rng = np.random.RandomState(42)
-        hist = rng.normal(100, 1, (5, 10))
-        curr = rng.normal(200, 1, (1, 10))
-        values = np.vstack([hist, curr])
-        ds = self._make_dataset(n_times=6, n_repeats=10, values=values)
-        from bencher.variables.results import ResultFloat
-
-        rv = ResultFloat(units="s", direction=OptDir.minimize)
-        rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="ttest", threshold=0.05)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
 
