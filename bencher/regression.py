@@ -279,27 +279,34 @@ def _regression_plot_spec(
 
     # Shared declarative band layers — both matplotlib and holoviews iterate
     # this list so the two backends render the same thing by construction.
-    # Each entry is (lo, hi, color, alpha, label).
+    # Each entry is (lo, hi, color, alpha, label). The acceptance band always
+    # shades green: it represents the *valid* region, not the pass/fail
+    # verdict (verdict colouring lives on the current marker + connector).
+    valid_color = "#2ca02c"
     band_layers: list[tuple[float, float, str, float, str]] = []
     if mad_band is not None and pct_band is not None:
         band_layers.append(
-            (mad_band[0], mad_band[1], verdict_color, 0.15, "MAD band")
+            (mad_band[0], mad_band[1], valid_color, 0.15, "MAD band")
         )
         band_layers.append(
             (pct_band[0], pct_band[1], "#9467bd", 0.15, "percentage band")
         )
     elif mad_band is not None:
         band_layers.append(
-            (mad_band[0], mad_band[1], verdict_color, 0.15, "acceptance band")
+            (mad_band[0], mad_band[1], valid_color, 0.15, "acceptance band")
         )
     elif pct_band is not None:
         band_layers.append(
-            (pct_band[0], pct_band[1], verdict_color, 0.15, "acceptance band")
+            (pct_band[0], pct_band[1], valid_color, 0.15, "acceptance band")
         )
 
-    # Per-sample historical scatter: only plot if the x-coords align with the
-    # primary hist_x dtype (so strings/categorical fallbacks don't break the
-    # axis). Falls back to None when there is no alignment.
+    # Per-sample historical scatter: mirrors the current-run alpha scatter so
+    # history and current use the same visual language. Prefer per-repeat data
+    # when available (populated by detect_regressions); otherwise fall back to
+    # the per-time mean array itself so direct detect_* calls still get dots.
+    # Works even on categorical x-axes (string labels → integer xticks) as
+    # long as historical_all_x is numeric and aligned with the integer hist_x
+    # positions that back the tick labels.
     hist_scatter_x: np.ndarray | None = None
     hist_scatter_y: np.ndarray | None = None
     if (
@@ -307,7 +314,6 @@ def _regression_plot_spec(
         and result.historical_all_x is not None
         and len(result.historical_all) == len(result.historical_all_x)
         and len(result.historical_all) > 0
-        and xticks is None
     ):
         raw = np.asarray(result.historical_all_x)
         hist_is_dt = np.issubdtype(hist_x.dtype, np.datetime64)
@@ -317,6 +323,9 @@ def _regression_plot_spec(
         if (hist_is_dt and raw_is_dt) or (hist_is_num and raw_is_num):
             hist_scatter_x = raw
             hist_scatter_y = np.asarray(result.historical_all, dtype=float)
+    if hist_scatter_x is None and len(hist) > 0 and xticks is None:
+        hist_scatter_x = hist_x
+        hist_scatter_y = hist
 
     return {
         "hist": hist,
@@ -336,18 +345,45 @@ def _regression_plot_spec(
     }
 
 
+def _ensure_matplotlib_backend_loaded() -> None:
+    """Register the holoviews matplotlib backend without changing the default.
+
+    render_regression_png needs matplotlib to export a PNG, but the report path
+    uses bokeh — calling hv.extension('matplotlib') naively would flip the
+    global default mid-run. This loads the renderer if missing, then restores
+    the prior default. Forces the non-interactive Agg backend first so
+    holoviews doesn't pick up Tk/Qt (which leaks ``main thread is not in main
+    loop`` tracebacks at interpreter shutdown).
+    """
+    import matplotlib
+
+    matplotlib.use("Agg", force=False)
+
+    import holoviews as hv
+
+    if "matplotlib" in hv.Store.renderers:
+        return
+    prev_backend = hv.Store.current_backend
+    hv.extension("matplotlib", logo=False)
+    if prev_backend and hv.Store.current_backend != prev_backend:
+        hv.Store.set_current_backend(prev_backend)
+
+
 def build_regression_overlay(
     result: RegressionResult,
     historical: np.ndarray | None = None,
     current: np.ndarray | float | None = None,
     width: int = 700,
     height: int = 350,
+    fig_inches: tuple[float, float] = (7.0, 3.5),
 ):
     """Build a :class:`holoviews.Overlay` diagnostic of a regression result.
 
-    Uses the same logic as :func:`render_regression_png` but returns a
-    backend-agnostic holoviews object, so the same plot can be embedded in an
-    HTML report (bokeh backend) or saved as a PNG (matplotlib backend).
+    Opts are applied per-backend so the same overlay renders correctly under
+    both bokeh (for embedded HTML reports) and matplotlib (for PNG export via
+    :func:`render_regression_png`). History always shows as mean line + raw
+    alpha scatter; regression-specific layers (acceptance band, baseline,
+    verdict-coloured current marker) are conditional on the data in *result*.
 
     Args:
         result: The :class:`RegressionResult` to visualise.
@@ -355,7 +391,8 @@ def build_regression_overlay(
             Falls back to ``result.historical`` if omitted.
         current: Optional current-run sample array (or scalar). Falls back to
             ``result.current_samples`` / ``result.current_value``.
-        width, height: Pixel dimensions passed to the overlay's ``opts``.
+        width, height: Pixel dimensions for the bokeh backend.
+        fig_inches: Figure size in inches for the matplotlib backend.
     """
     import holoviews as hv
 
@@ -370,21 +407,48 @@ def build_regression_overlay(
     x_start = hist_x[0] if len(hist_x) > 0 else x_current
     x_end = x_current
 
+    # Each element duplicates its style opts across both backends so they
+    # apply regardless of which renderer is active — holoviews does NOT
+    # carry no-backend opts across backend boundaries, so omitting the
+    # backend kwarg silently drops styles like alpha when rendering as PNG.
+    # Elements whose identity matters for the legend carry a ``label`` kwarg;
+    # decorative layers (hist-sample scatter, current-sample scatter, dotted
+    # connector) are label-less so the legend stays compact.
     layers = []
-    for lo, hi, color, alpha, _label in spec["band_layers"]:
+    for lo, hi, color, alpha, label in spec["band_layers"]:
         layers.append(
             hv.Area(
                 ([x_start, x_end], [lo, lo], [hi, hi]),
                 kdims=[spec["xlabel"]],
                 vdims=[spec["ylabel"], "band_upper"],
-            ).opts(color=color, alpha=alpha, line_alpha=0)
+                label=label,
+            ).opts(
+                hv.opts.Area(backend="bokeh", color=color, alpha=alpha, line_alpha=0),
+                hv.opts.Area(backend="matplotlib", color=color, alpha=alpha, linewidth=0),
+            )
         )
     layers.append(
         hv.Curve(
             [(x_start, spec["baseline"]), (x_end, spec["baseline"])],
             spec["xlabel"],
             spec["ylabel"],
-        ).opts(color="#555555", line_dash="dashed", line_width=1)
+            label=f"baseline={spec['baseline']:.3g}",
+        ).opts(
+            hv.opts.Curve(
+                backend="bokeh",
+                color="#555555",
+                alpha=0.7,
+                line_dash="dashed",
+                line_width=1,
+            ),
+            hv.opts.Curve(
+                backend="matplotlib",
+                color="#555555",
+                alpha=0.7,
+                linestyle="--",
+                linewidth=1,
+            ),
+        )
     )
     if spec["hist_scatter_x"] is not None and spec["hist_scatter_y"] is not None:
         layers.append(
@@ -392,12 +456,22 @@ def build_regression_overlay(
                 list(zip(spec["hist_scatter_x"], spec["hist_scatter_y"])),
                 spec["xlabel"],
                 spec["ylabel"],
-            ).opts(color="#1f77b4", alpha=0.35, size=5)
+            ).opts(
+                hv.opts.Scatter(
+                    backend="bokeh", color="#1f77b4", alpha=0.35, size=3, show_legend=False,
+                ),
+                hv.opts.Scatter(
+                    backend="matplotlib", color="#1f77b4", alpha=0.35, s=8, show_legend=False,
+                ),
+            )
         )
     if len(hist) > 0:
         layers.append(
-            hv.Curve(list(zip(hist_x, hist)), spec["xlabel"], spec["ylabel"]).opts(
-                color="#1f77b4", line_width=1.5
+            hv.Curve(
+                list(zip(hist_x, hist)), spec["xlabel"], spec["ylabel"], label="history",
+            ).opts(
+                hv.opts.Curve(backend="bokeh", color="#1f77b4", alpha=0.7, line_width=1.5),
+                hv.opts.Curve(backend="matplotlib", color="#1f77b4", alpha=0.7, linewidth=1.2),
             )
         )
         # Dotted connector from the last history point to the current marker
@@ -407,7 +481,24 @@ def build_regression_overlay(
                 [(hist_x[-1], hist[-1]), (x_current, spec["curr_mean"])],
                 spec["xlabel"],
                 spec["ylabel"],
-            ).opts(color=verdict_color, line_dash="dotted", line_width=1.5)
+            ).opts(
+                hv.opts.Curve(
+                    backend="bokeh",
+                    color=verdict_color,
+                    alpha=0.8,
+                    line_dash="dotted",
+                    line_width=1.5,
+                    show_legend=False,
+                ),
+                hv.opts.Curve(
+                    backend="matplotlib",
+                    color=verdict_color,
+                    alpha=0.8,
+                    linestyle=":",
+                    linewidth=1.2,
+                    show_legend=False,
+                ),
+            )
         )
     if len(spec["curr_samples"]) > 1:
         layers.append(
@@ -415,25 +506,128 @@ def build_regression_overlay(
                 [(x_current, v) for v in spec["curr_samples"]],
                 spec["xlabel"],
                 spec["ylabel"],
-            ).opts(color=verdict_color, alpha=0.35, size=5)
+            ).opts(
+                hv.opts.Scatter(
+                    backend="bokeh", color=verdict_color, alpha=0.35, size=5, show_legend=False,
+                ),
+                hv.opts.Scatter(
+                    backend="matplotlib", color=verdict_color, alpha=0.35, s=18, show_legend=False,
+                ),
+            )
         )
     layers.append(
         hv.Scatter(
             [(x_current, spec["curr_mean"])],
             spec["xlabel"],
             spec["ylabel"],
-        ).opts(color=verdict_color, size=10, line_color="black", line_width=1)
+            label=f"current={spec['curr_mean']:.3g}",
+        ).opts(
+            hv.opts.Scatter(
+                backend="bokeh",
+                color=verdict_color,
+                size=10,
+                line_color="black",
+                line_width=1,
+            ),
+            hv.opts.Scatter(
+                backend="matplotlib",
+                color=verdict_color,
+                s=70,
+                edgecolors="black",
+                linewidth=0.7,
+            ),
+        )
     )
 
     overlay = layers[0]
     for layer in layers[1:]:
         overlay = overlay * layer
 
-    opts_kwargs = dict(title=spec["title"], width=width, height=height, show_grid=True)
+    # Compact font sizing — the PNGs render at ~4–9 inches wide so the default
+    # matplotlib font sizes overflow the figure. Bokeh accepts the same dict.
+    fontsize = {"title": 9, "labels": 8, "xticks": 6, "yticks": 7, "legend": 6}
+
+    # holoviews' matplotlib backend defaults to a square data aspect, centers a
+    # small axes inside the figure, and drops Element ``label=`` on Area/Curve
+    # overlays so its own legend only shows a subset of layers. The hooks below
+    # stretch the axes, set the title manually, and build a proxy legend from
+    # the spec so every rendered layer can appear in the legend.
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    title = spec["title"]
+    baseline = spec["baseline"]
+    hist_len = len(hist)
+    legend_entries: list = []
+    for lo, hi, color, alpha, band_label in spec["band_layers"]:
+        legend_entries.append(Patch(facecolor=color, alpha=alpha, label=band_label))
+    legend_entries.append(
+        Line2D([], [], color="#555555", alpha=0.7, linestyle="--",
+               label=f"baseline={baseline:.3g}")
+    )
+    if hist_len > 0:
+        legend_entries.append(
+            Line2D([], [], color="#1f77b4", alpha=0.7, label="history")
+        )
+    legend_entries.append(
+        Line2D(
+            [], [], marker="o", linestyle="", color=verdict_color,
+            markersize=7, markeredgecolor="black", markeredgewidth=0.7,
+            label=f"current={spec['curr_mean']:.3g}",
+        )
+    )
+
+    def _fill_fig_hook(
+        plot, _element,
+        _title=title, _title_color=verdict_color,
+        _title_fs=fontsize["title"], _legend_fs=fontsize["legend"],
+        _legend=legend_entries,
+    ):
+        ax = plot.handles["axis"]
+        ax.set_aspect("auto")
+        # left 0.15 leaves room for y-label + ticks, top 0.86 leaves room for
+        # the title, bottom 0.22 leaves room for rotated xtick labels.
+        ax.set_position([0.15, 0.22, 0.82, 0.64])
+        ax.set_title(_title, color=_title_color, fontsize=_title_fs, fontweight="bold")
+        ax.legend(
+            handles=_legend, loc="upper left", fontsize=_legend_fs,
+            framealpha=0.85, ncol=2, handlelength=1.2, borderpad=0.3, labelspacing=0.3,
+        )
+
+    mpl_hooks = [_fill_fig_hook]
+    overlay_opts = [
+        hv.opts.Overlay(
+            title=spec["title"], show_grid=True, show_legend=True, fontsize=fontsize
+        ),
+        hv.opts.Overlay(
+            backend="bokeh",
+            width=width,
+            height=height,
+            legend_position="top_left",
+        ),
+    ]
     if spec["xticks"] is not None:
-        opts_kwargs["xticks"] = spec["xticks"]
-        opts_kwargs["xrotation"] = 30
-    return overlay.opts(**opts_kwargs)
+        # bokeh accepts [(pos, label), ...] directly; matplotlib silently
+        # ignores the label half and falls back to integer tick text, so
+        # labels have to be pushed in via a plot hook on that backend.
+        xticks_pairs = spec["xticks"]
+        xtick_fontsize = fontsize["xticks"]
+
+        def _mpl_xticks_hook(plot, _element, _pairs=xticks_pairs, _fs=xtick_fontsize):
+            ax = plot.handles["axis"]
+            positions = [p for p, _ in _pairs]
+            labels = [lbl for _, lbl in _pairs]
+            ax.set_xticks(positions)
+            ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=_fs)
+
+        mpl_hooks.append(_mpl_xticks_hook)
+        overlay_opts.append(
+            hv.opts.Overlay(backend="bokeh", xticks=xticks_pairs, xrotation=30)
+        )
+    overlay_opts.append(
+        hv.opts.Overlay(backend="matplotlib", fig_inches=fig_inches, hooks=mpl_hooks)
+    )
+    return overlay.opts(*overlay_opts)
 
 
 def render_regression_png(
@@ -444,38 +638,29 @@ def render_regression_png(
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 100,
 ) -> str:
-    """Render a diagnostic PNG of a regression result using matplotlib.
+    """Render a diagnostic PNG by saving the shared holoviews overlay via matplotlib.
 
-    The plot contains everything needed to diagnose the *style* of regression
-    at a glance — history time-series (to reveal drift and noise), the baseline
-    line, the acceptance band (to reveal step size), and the current-run marker
-    coloured by the pass/fail verdict. The details string from
-    :class:`RegressionResult` (method-specific statistics such as z-score,
-    p-value, or percent change) is shown as a footer so the PNG is
-    self-contained — suitable for posting directly as a GitHub PR comment.
+    Produces the same plot as the in-report bokeh overlay — it calls
+    :func:`build_regression_overlay` and hands the result to holoviews'
+    matplotlib renderer, so there's a single source of truth for the
+    diagnostic visual.
 
     Args:
         result: The :class:`RegressionResult` produced by a ``detect_*`` call.
-        historical: 1-D array of the historical per-time-point means (the same
-            sequence fed into ``detect_adaptive``). Pass an
-            empty array if no history is available — only the current marker,
-            baseline, and band are drawn in that case.
-        current: Current-run sample(s). If ``None``, ``result.current_value``
-            is used. If given an array, the per-sample spread is shown as a
-            vertical strip alongside the mean marker.
+        historical: 1-D array of historical per-time-point means. Falls back
+            to ``result.historical``.
+        current: Current-run sample(s). Falls back to ``result.current_samples``
+            / ``result.current_value``.
         path: Output PNG path. If ``None``, a path is generated via
             :func:`bencher.utils.gen_image_path` so the file lives under the
             bencher cache directory.
-        figsize: Matplotlib figure size in inches.
-        dpi: Output DPI (800x500 at ``dpi=100`` works well for GitHub comments).
+        figsize: Figure size in inches (matplotlib ``fig_inches``).
+        dpi: Output DPI (500x320 at ``dpi=100`` works well for GitHub comments).
 
     Returns:
         Absolute path to the saved PNG as a string.
     """
-    import matplotlib
-
-    matplotlib.use("Agg", force=False)
-    import matplotlib.pyplot as plt
+    import holoviews as hv
 
     if path is None:
         from bencher.utils import gen_image_path
@@ -483,92 +668,16 @@ def render_regression_png(
         path = gen_image_path(f"regression_{result.variable}")
     path_str = str(path)
 
-    spec = _regression_plot_spec(result, historical, current)
-    hist = spec["hist"]
-    hist_x = spec["hist_x"]
-    curr_samples = spec["curr_samples"]
-    x_current = spec["x_current"]
-    verdict_color = spec["verdict_color"]
-
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.2)
-
-    for lo, hi, color, alpha, label in spec["band_layers"]:
-        ax.axhspan(lo, hi, color=color, alpha=alpha, label=label)
-
-    ax.axhline(
-        spec["baseline"],
-        color="#555555",
-        linestyle="--",
-        linewidth=1.0,
-        label=f"baseline={spec['baseline']:.3g}",
+    _ensure_matplotlib_backend_loaded()
+    overlay = build_regression_overlay(
+        result, historical=historical, current=current, fig_inches=figsize
     )
+    # hv.renderer(...).save re-tightens the bbox and collapses the figure to
+    # roughly square regardless of fig_inches. Rendering to a Figure and
+    # using matplotlib's own savefig preserves the requested inches.
+    import matplotlib.pyplot as plt
 
-    if spec["hist_scatter_x"] is not None and spec["hist_scatter_y"] is not None:
-        ax.scatter(
-            spec["hist_scatter_x"],
-            spec["hist_scatter_y"],
-            color="#1f77b4",
-            alpha=0.35,
-            s=18,
-            label="history samples",
-        )
-    if len(hist) > 0:
-        ax.plot(
-            hist_x,
-            hist,
-            "-o",
-            color="#1f77b4",
-            markersize=3.5,
-            linewidth=1.2,
-            label="history",
-        )
-        # Dotted connector from the last history point to the current marker
-        # so the jump that triggered the regression is visually obvious.
-        ax.plot(
-            [hist_x[-1], x_current],
-            [hist[-1], spec["curr_mean"]],
-            linestyle=":",
-            color=verdict_color,
-            linewidth=1.2,
-            alpha=0.8,
-        )
-
-    if len(curr_samples) > 1:
-        ax.scatter(
-            [x_current] * len(curr_samples),
-            curr_samples,
-            color=verdict_color,
-            alpha=0.35,
-            s=18,
-        )
-    ax.scatter(
-        [x_current],
-        [spec["curr_mean"]],
-        color=verdict_color,
-        s=70,
-        zorder=5,
-        edgecolor="black",
-        linewidth=0.7,
-        label=f"current={spec['curr_mean']:.3g}",
-    )
-
-    # Extra margin on the right so the current marker isn't clipped by the frame.
-    ax.margins(x=0.08)
-
-    ax.set_xlabel(spec["xlabel"])
-    ax.set_ylabel(spec["ylabel"])
-    ax.grid(True, linestyle=":", alpha=0.5)
-    ax.set_title(spec["title"], color=verdict_color, fontsize=10, fontweight="bold")
-    ax.legend(loc="upper left", fontsize=7, framealpha=0.85, ncol=2)
-
-    if spec["xticks"] is not None:
-        ticks, labels = zip(*spec["xticks"])
-        ax.set_xticks(list(ticks))
-        ax.set_xticklabels(list(labels), rotation=30, ha="right")
-    elif len(hist_x) > 0 and np.issubdtype(np.asarray(hist_x).dtype, np.datetime64):
-        fig.autofmt_xdate(rotation=30)
-
+    fig = hv.render(overlay, backend="matplotlib")
     fig.savefig(path_str, dpi=dpi)
     plt.close(fig)
     return path_str

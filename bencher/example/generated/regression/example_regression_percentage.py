@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 
 import bencher as bn
 
-
 class ServerBenchmark(bn.ParametrizedSweep):
     """A server benchmark whose response time degrades over successive releases."""
 
