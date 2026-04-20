@@ -291,9 +291,7 @@ def _regression_plot_spec(
     band_layers: list[tuple[float, float, str, float, str]] = []
     if mad_band is not None and pct_band is not None:
         band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "MAD band"))
-        band_layers.append(
-            (pct_band[0], pct_band[1], valid_color_light, 0.15, "percentage band")
-        )
+        band_layers.append((pct_band[0], pct_band[1], valid_color_light, 0.15, "percentage band"))
     elif mad_band is not None:
         band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "acceptance band"))
     elif pct_band is not None:
