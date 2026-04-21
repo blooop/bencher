@@ -1067,6 +1067,60 @@ def detect_absolute(
     )
 
 
+def _compute_history_arrays(
+    da: xr.DataArray,
+) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+    """Aggregate history into per-time means + per-sample scatter arrays.
+
+    Returns ``(time_means, hist_samples_flat, hist_x_flat)`` or all-``None``
+    when there is no history to summarise. Per-time means collapse every
+    non-time dim into one scalar per run so detection and plotting both see
+    a 1-D series; the scatter arrays preserve per-repeat spread broadcast
+    against the historical over_time coords.
+    """
+    if da.sizes.get("over_time", 0) < 2:
+        return None, None, None
+
+    reduce_dims = [d for d in da.dims if d != "over_time"]
+    time_means = (
+        da.isel(over_time=slice(None, -1)).mean(dim=reduce_dims, skipna=True).values.astype(float)
+    )
+
+    hist_slice = da.isel(over_time=slice(None, -1))
+    if hist_slice.size == 0:
+        return time_means, None, None
+
+    hist_2d = np.moveaxis(
+        np.asarray(hist_slice.values, dtype=float),
+        list(hist_slice.dims).index("over_time"),
+        0,
+    ).reshape(hist_slice.sizes["over_time"], -1)
+    hist_samples_flat = hist_2d.ravel()
+    hist_x_flat = np.repeat(da["over_time"].values[:-1], hist_2d.shape[1])
+    return time_means, hist_samples_flat, hist_x_flat
+
+
+def _attach_plot_metadata(
+    result: RegressionResult,
+    *,
+    time_coord: np.ndarray,
+    current_samples: np.ndarray,
+    time_means: np.ndarray | None,
+    hist_samples_flat: np.ndarray | None,
+    hist_x_flat: np.ndarray | None,
+) -> None:
+    """Attach the history/current arrays a RegressionResult needs for replay plotting."""
+    result.current_x = time_coord[-1]
+    result.current_samples = current_samples
+    if time_means is not None:
+        result.historical = time_means
+        result.historical_x = time_coord[:-1]
+    if hist_samples_flat is not None and hist_x_flat is not None:
+        mask = ~np.isnan(hist_samples_flat)
+        result.historical_all = hist_samples_flat[mask]
+        result.historical_all_x = hist_x_flat[mask]
+
+
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
@@ -1121,28 +1175,12 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
 
         if len(current_clean) == 0:
             continue
-        history_available = len(historical_clean) > 0
 
         current_mean_scalar = np.array([float(da.isel(over_time=-1).mean(skipna=True).values)])
-
-        time_means_arr: np.ndarray | None = None
-        hist_samples_flat: np.ndarray | None = None
-        hist_x_flat: np.ndarray | None = None
+        time_means_arr, hist_samples_flat, hist_x_flat = _compute_history_arrays(da)
+        history_available = time_means_arr is not None and len(historical_clean) > 0
 
         if history_available:
-            # Aggregate every non-time dim (parameter grid, repeats) into a single
-            # scalar per time point before handing the series to any detector.
-            # Without this, a 2-D param sweep over time threads both detection and
-            # the history plot through parameter-grid structure — the line zigzags
-            # through cells instead of showing time drift, and the baseline/band
-            # end up wildly out of scale relative to individual cells.
-            reduce_dims = [d for d in da.dims if d != "over_time"]
-            time_means_arr = (
-                da.isel(over_time=slice(None, -1))
-                .mean(dim=reduce_dims, skipna=True)
-                .values.astype(float)
-            )
-
             if method == "percentage":
                 result = detect_percentage(
                     var_name,
@@ -1170,32 +1208,14 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                     regression_percentage,
                     direction,
                 )
-
-            # Retain the arrays used for plotting so downstream consumers
-            # (reports, bot comments) can rebuild the diagnostic without
-            # re-running detection.
-            result.historical = time_means_arr
-            result.historical_x = time_coord[:-1]
-            result.current_x = time_coord[-1]
-            result.current_samples = current_clean
-
-            # Per-sample historical scatter: flatten the 2D slice (all repeats
-            # at every historical time point) and broadcast the time coords so
-            # the renderers can show every sample as a dot at its real x
-            # position.
-            hist_slice = da.isel(over_time=slice(None, -1))
-            if hist_slice.size > 0:
-                hist_2d = np.moveaxis(
-                    np.asarray(hist_slice.values, dtype=float),
-                    list(hist_slice.dims).index("over_time"),
-                    0,
-                ).reshape(hist_slice.sizes["over_time"], -1)
-                hist_samples_flat = hist_2d.ravel()
-                hist_x_flat = np.repeat(time_coord[:-1], hist_2d.shape[1])
-                mask = ~np.isnan(hist_samples_flat)
-                result.historical_all = hist_samples_flat[mask]
-                result.historical_all_x = hist_x_flat[mask]
-
+            _attach_plot_metadata(
+                result,
+                time_coord=time_coord,
+                current_samples=current_clean,
+                time_means=time_means_arr,
+                hist_samples_flat=hist_samples_flat,
+                hist_x_flat=hist_x_flat,
+            )
             report.results.append(result)
 
         # Additive guards — run independently of the statistical method.
@@ -1207,14 +1227,14 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                 max_delta=regression_delta,
                 direction=direction,
             )
-            delta_result.historical = time_means_arr
-            delta_result.historical_x = time_coord[:-1]
-            delta_result.current_x = time_coord[-1]
-            delta_result.current_samples = current_clean
-            if hist_samples_flat is not None and hist_x_flat is not None:
-                mask = ~np.isnan(hist_samples_flat)
-                delta_result.historical_all = hist_samples_flat[mask]
-                delta_result.historical_all_x = hist_x_flat[mask]
+            _attach_plot_metadata(
+                delta_result,
+                time_coord=time_coord,
+                current_samples=current_clean,
+                time_means=time_means_arr,
+                hist_samples_flat=hist_samples_flat,
+                hist_x_flat=hist_x_flat,
+            )
             report.results.append(delta_result)
 
         if regression_absolute is not None:
@@ -1229,12 +1249,14 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                     limit=regression_absolute,
                     direction=direction,
                 )
-                if history_available:
-                    abs_result.historical_x = time_coord[:-1]
-                    abs_result.current_x = time_coord[-1]
-                else:
-                    abs_result.current_x = time_coord[-1]
-                abs_result.current_samples = current_clean
+                _attach_plot_metadata(
+                    abs_result,
+                    time_coord=time_coord,
+                    current_samples=current_clean,
+                    time_means=None,
+                    hist_samples_flat=None,
+                    hist_x_flat=None,
+                )
                 report.results.append(abs_result)
 
     return report

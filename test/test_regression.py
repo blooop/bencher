@@ -1,5 +1,6 @@
 """Tests for bencher.regression module."""
 
+import math
 import os
 
 import numpy as np
@@ -361,6 +362,23 @@ class TestDetectDelta:
         result = detect_delta("x", hist, curr, max_delta=5.0, direction=OptDir.minimize)
         assert not result.regressed  # strict '>'
 
+    def test_empty_hist_is_not_regression(self):
+        """Empty history → no baseline to compare against, guard disables itself."""
+        result = detect_delta(
+            "x", np.array([]), np.array([105.0]), max_delta=10.0, direction=OptDir.minimize
+        )
+        assert not result.regressed
+
+    def test_all_nan_hist_is_not_regression(self):
+        result = detect_delta(
+            "x",
+            np.array([np.nan, np.nan]),
+            np.array([105.0]),
+            max_delta=10.0,
+            direction=OptDir.minimize,
+        )
+        assert not result.regressed
+
 
 # ── detect_absolute ────────────────────────────────────────────────────────
 
@@ -393,6 +411,8 @@ class TestDetectAbsolute:
         result = detect_absolute("x", np.array([np.nan]), limit=50.0, direction=OptDir.minimize)
         # nan > 50 is False; guard should not flag.
         assert not result.regressed
+        assert math.isnan(result.current_value)
+        assert result.baseline_value == 50.0
 
 
 # ── RegressionReport ───────────────────────────────────────────────────────
@@ -843,6 +863,36 @@ class TestDetectRegressions:
         # Delta needs history; only absolute runs with n_times=1.
         assert "delta" not in methods
         assert "absolute" in methods
+
+    def test_guards_run_with_adaptive_method(self):
+        """Delta + absolute guards produce their own results alongside the adaptive detector."""
+        rng = np.random.default_rng(0)
+        stable = 100.0 + rng.normal(0, 2.0, size=(20, 4))
+        jump = 150.0 + rng.normal(0, 2.0, size=(1, 4))
+        values = np.vstack([stable, jump])
+        ds = self._make_dataset(n_times=21, n_repeats=4, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg(
+            [rv],
+            method="adaptive",
+            regression_mad=3.5,
+            regression_delta=5.0,  # +50 jump easily trips
+            regression_absolute=120.0,  # current mean ~150 > ceiling
+        )
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        methods = {r.method: r for r in report.results}
+        assert "adaptive" in methods
+        assert "delta" in methods
+        assert "absolute" in methods
+        assert methods["adaptive"].regressed is True
+        assert methods["delta"].regressed is True
+        assert methods["absolute"].regressed is True
+        # Adaptive still carries history metadata for replay plots even when guards are layered.
+        assert methods["adaptive"].historical is not None
+        assert methods["delta"].historical is not None
 
 
 # ── RegressionError ────────────────────────────────────────────────────────
