@@ -995,11 +995,15 @@ def detect_delta(
     max_delta: float,
     direction: OptDir = OptDir.minimize,
 ) -> RegressionResult:
-    """Fail when |curr - hist_mean| exceeds ``max_delta`` in the direction of OptDir.
+    """Fail when the current mean's delta from history exceeds ``max_delta``.
 
-    Baseline is the mean of all historical per-time means, so this compares the
-    current scalar against a flat historical average in absolute units (not
-    percent). Intended as an additive guard alongside the statistical methods.
+    The comparison respects ``direction``: ``minimize`` fails when
+    ``curr - hist_mean > max_delta``; ``maximize`` fails when
+    ``hist_mean - curr > max_delta``; ``none`` uses the absolute delta and fails
+    on either side. Baseline is the mean of all historical per-time means, so
+    this compares the current scalar against a flat historical average in
+    absolute units (not percent). Intended as an additive guard alongside the
+    statistical methods.
     """
     hist_clean = _clean_1d(historical_time_means)
     hist_mean = float(np.nanmean(hist_clean)) if len(hist_clean) else float("nan")
@@ -1124,16 +1128,21 @@ def _attach_plot_metadata(
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
-    For each numeric result variable, splits the dataset at the last over_time index,
-    runs the configured detection method, and collects results into a report.
+    For each numeric result variable, splits the dataset at the last over_time
+    index, runs the configured statistical method (percentage/adaptive), and
+    layers the optional additive guards (regression_delta, regression_absolute)
+    on top. regression_absolute runs even with a single over_time point since
+    it needs no baseline.
 
     Args:
-        dataset: xarray Dataset with over_time dimension.
-        bench_cfg: BenchCfg with result_vars list.
-        run_cfg: BenchRunCfg with regression_method, regression_threshold.
+        dataset: xarray Dataset with an over_time dimension.
+        bench_cfg: BenchCfg with ``result_vars`` list.
+        run_cfg: BenchRunCfg. Reads ``regression_method``, ``regression_mad``,
+            ``regression_percentage``, ``regression_delta`` and
+            ``regression_absolute``.
 
     Returns:
-        RegressionReport with results for each variable.
+        RegressionReport with one result per variable per fired detector/guard.
     """
     report = RegressionReport()
 
