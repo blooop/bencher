@@ -768,74 +768,64 @@ class TestDetectRegressions:
         assert result.regressed is True
         assert result.method is not None
 
-    def test_delta_guard_runs_alongside_method(self):
-        """Delta guard produces its own result entry in addition to the statistical method."""
+    def test_method_delta_dispatches_only_delta(self):
+        """regression_method='delta' runs the delta detector alone, no percentage result."""
         values = np.array([[100.0], [100.0], [108.0]])  # +8 from baseline
         ds = self._make_dataset(n_times=3, n_repeats=1, values=values)
         from bencher.variables.results import ResultFloat
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg(
-            [rv],
-            method="percentage",
-            regression_percentage=20.0,  # +8% is under 20%, so percentage passes
-            regression_delta=5.0,  # +8 > 5, so delta fires
-        )
+        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
-        methods = {r.method: r for r in report.results}
-        assert "percentage" in methods
-        assert "delta" in methods
-        assert methods["percentage"].regressed is False
-        assert methods["delta"].regressed is True
+        assert len(report.results) == 1
+        assert report.results[0].method == "delta"
+        assert report.results[0].regressed is True
 
-    def test_absolute_guard_runs_alongside_method(self):
+    def test_method_absolute_dispatches_only_absolute(self):
         values = np.array([[10.0], [10.0], [12.0]])
         ds = self._make_dataset(n_times=3, n_repeats=1, values=values)
         from bencher.variables.results import ResultFloat
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg(
-            [rv],
-            method="percentage",
-            regression_percentage=50.0,  # percentage stays quiet
-            regression_absolute=11.0,  # 12 > 11 ceiling
-        )
+        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=11.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
-        methods = {r.method: r for r in report.results}
-        assert methods["percentage"].regressed is False
-        assert methods["absolute"].regressed is True
-        assert methods["absolute"].baseline_value == 11.0
+        assert len(report.results) == 1
+        assert report.results[0].method == "absolute"
+        assert report.results[0].regressed is True
+        assert report.results[0].baseline_value == 11.0
 
-    def test_absolute_guard_without_history(self):
-        """Absolute guard works even with a single over_time point (no history)."""
+    def test_method_absolute_without_history(self):
+        """'absolute' runs even with a single over_time point — needs no baseline."""
         values = np.array([[60.0, 70.0]])
         ds = self._make_dataset(n_times=1, n_repeats=2, values=values)
         from bencher.variables.results import ResultFloat
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], regression_absolute=50.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=50.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 1
         assert report.results[0].method == "absolute"
         assert report.results[0].regressed is True
 
-    def test_guards_default_disabled(self):
-        """With no delta/absolute set, behavior matches pre-guard output."""
-        values = np.array([[100.0], [100.0], [105.0]])
+    def test_method_delta_missing_threshold_skipped(self, caplog):
+        import logging as _logging
+
+        values = np.array([[100.0], [100.0], [108.0]])
         ds = self._make_dataset(n_times=3, n_repeats=1, values=values)
         from bencher.variables.results import ResultFloat
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", regression_percentage=10.0)
-        report = detect_regressions(ds, bench_cfg, run_cfg)
-        assert len(report.results) == 1
-        assert report.results[0].method == "percentage"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=None)
+        with caplog.at_level(_logging.WARNING):
+            report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.results == []
+        assert any("regression_delta" in rec.message for rec in caplog.records)
 
-    def test_absolute_opt_dir_none_skipped(self, caplog):
+    def test_method_absolute_opt_dir_none_skipped(self, caplog):
         import logging as _logging
 
         values = np.array([[10.0], [10.0], [10.0]])
@@ -844,55 +834,23 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.none)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], regression_absolute=5.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=5.0)
         with caplog.at_level(_logging.WARNING):
             report = detect_regressions(ds, bench_cfg, run_cfg)
-        assert not any(r.method == "absolute" for r in report.results)
+        assert report.results == []
         assert any("OptDir.none" in rec.message for rec in caplog.records)
 
-    def test_delta_guard_skipped_without_history(self):
+    def test_method_delta_skipped_without_history(self):
+        """'delta' needs a baseline — skip when n_times < 2."""
         values = np.array([[100.0]])
         ds = self._make_dataset(n_times=1, n_repeats=1, values=values)
         from bencher.variables.results import ResultFloat
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], regression_delta=1.0, regression_absolute=50.0)
+        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=1.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
-        methods = [r.method for r in report.results]
-        # Delta needs history; only absolute runs with n_times=1.
-        assert "delta" not in methods
-        assert "absolute" in methods
-
-    def test_guards_run_with_adaptive_method(self):
-        """Delta + absolute guards produce their own results alongside the adaptive detector."""
-        rng = np.random.default_rng(0)
-        stable = 100.0 + rng.normal(0, 2.0, size=(20, 4))
-        jump = 150.0 + rng.normal(0, 2.0, size=(1, 4))
-        values = np.vstack([stable, jump])
-        ds = self._make_dataset(n_times=21, n_repeats=4, values=values)
-        from bencher.variables.results import ResultFloat
-
-        rv = ResultFloat(units="s", direction=OptDir.minimize)
-        rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg(
-            [rv],
-            method="adaptive",
-            regression_mad=3.5,
-            regression_delta=5.0,  # +50 jump easily trips
-            regression_absolute=120.0,  # current mean ~150 > ceiling
-        )
-        report = detect_regressions(ds, bench_cfg, run_cfg)
-        methods = {r.method: r for r in report.results}
-        assert "adaptive" in methods
-        assert "delta" in methods
-        assert "absolute" in methods
-        assert methods["adaptive"].regressed is True
-        assert methods["delta"].regressed is True
-        assert methods["absolute"].regressed is True
-        # Adaptive still carries history metadata for replay plots even when guards are layered.
-        assert methods["adaptive"].historical is not None
-        assert methods["delta"].historical is not None
+        assert report.results == []
 
 
 # ── RegressionError ────────────────────────────────────────────────────────

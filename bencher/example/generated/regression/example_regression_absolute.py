@@ -24,6 +24,7 @@ def example_regression_absolute(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
     """Regression detection — hard absolute ceiling."""
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
     run_cfg.regression_detection = True
+    run_cfg.regression_method = "absolute"
     # SLA: response_time must stay below 25 ms no matter what history says.
     run_cfg.regression_absolute = 25.0
     run_cfg.regression_fail = False

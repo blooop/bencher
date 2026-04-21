@@ -348,10 +348,8 @@ class LatencyBenchmark(bn.ParametrizedSweep):
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
 run_cfg.regression_detection = True
-# Loose percentage threshold to show it stays quiet, while the delta guard
-# fires on the additive ms step.
-run_cfg.regression_percentage = 20.0
-run_cfg.regression_delta = 2.0  # ms
+run_cfg.regression_method = "delta"
+run_cfg.regression_delta = 2.0  # ms — max acceptable change vs historical mean
 run_cfg.regression_fail = False
 
 benchable = LatencyBenchmark()
@@ -407,6 +405,7 @@ class SlaBenchmark(bn.ParametrizedSweep):
         body = """\
 run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
 run_cfg.regression_detection = True
+run_cfg.regression_method = "absolute"
 # SLA: response_time must stay below 25 ms no matter what history says.
 run_cfg.regression_absolute = 25.0
 run_cfg.regression_fail = False

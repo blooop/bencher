@@ -352,9 +352,12 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     regression_method: str = param.Selector(
         default="adaptive",
-        objects=["percentage", "adaptive"],
-        doc="Detection method: 'percentage' (mean comparison) or "
-        "'adaptive' (robust MAD-based step + drift test for noisy metrics).",
+        objects=["percentage", "adaptive", "delta", "absolute"],
+        doc="Detection method. 'percentage': mean comparison vs historical mean. "
+        "'adaptive': robust MAD-based step + drift test for noisy metrics. "
+        "'delta': absolute-unit change vs historical mean (uses regression_delta). "
+        "'absolute': hard directional threshold, no history required (uses "
+        "regression_absolute).",
     )
 
     regression_mad: float = param.Number(
@@ -378,20 +381,21 @@ class BenchRunCfg(BenchPlotSrvCfg):
     regression_delta: float = param.Number(
         default=None,
         allow_None=True,
-        doc="Largest acceptable absolute-unit delta of the current run's mean "
-        "from the mean of all historical per-time means, respecting the result "
-        "variable's OptDir (minimize: curr - hist must not exceed; maximize: "
-        "hist - curr must not exceed). Runs in addition to regression_method. "
-        "None disables this check.",
+        doc="Threshold for regression_method='delta'. Largest acceptable "
+        "absolute-unit delta of the current run's mean from the mean of all "
+        "historical per-time means, respecting the result variable's OptDir "
+        "(minimize: curr - hist must not exceed; maximize: hist - curr must "
+        "not exceed). Ignored when regression_method is not 'delta'.",
     )
 
     regression_absolute: float = param.Number(
         default=None,
         allow_None=True,
-        doc="Hard absolute threshold that the current run's mean must not "
-        "violate in the direction of the result variable's OptDir (minimize: "
-        "ceiling; maximize: floor). No history required. Runs in addition to "
-        "regression_method. None disables this check.",
+        doc="Threshold for regression_method='absolute'. Hard directional limit "
+        "the current run's mean must not violate in the direction of the result "
+        "variable's OptDir (minimize: ceiling; maximize: floor). No history "
+        "required — fires on the first recording. Ignored when regression_method "
+        "is not 'absolute'.",
     )
 
     regression_fail: bool = param.Boolean(

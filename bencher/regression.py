@@ -279,19 +279,20 @@ def _regression_plot_spec(
 
     # Shared declarative band layers — both matplotlib and holoviews iterate
     # this list so the two backends render the same thing by construction.
-    # Each entry is (lo, hi, color, alpha, label). The acceptance band always
-    # shades green: it represents the *valid* region, not the pass/fail
-    # verdict (verdict colouring lives on the current marker + connector).
+    # Each entry is (lo, hi, color, alpha, label). The acceptance band shades
+    # green: it represents the *valid* region, not the pass/fail verdict
+    # (verdict colouring lives on the current marker + connector).
+    #
+    # When the detector produces two bands (adaptive's dual-band gate: MAD and
+    # percent), a value is acceptable iff it lies inside EITHER band, so the
+    # combined acceptance region is the union — [min(lows), max(highs)]. A
+    # single merged band keeps the plot readable.
     valid_color = "#2ca02c"
-    # Light blue for the secondary (percentage) band — clearly distinct from
-    # the green MAD band after alpha blending, and distinct from the darker
-    # blue (#1f77b4) used for the history line so it doesn't read as part of
-    # the data series.
-    valid_color_light = "#6baed6"
     band_layers: list[tuple[float, float, str, float, str]] = []
     if mad_band is not None and pct_band is not None:
-        band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "MAD band"))
-        band_layers.append((pct_band[0], pct_band[1], valid_color_light, 0.15, "percentage band"))
+        combined_lo = min(mad_band[0], pct_band[0])
+        combined_hi = max(mad_band[1], pct_band[1])
+        band_layers.append((combined_lo, combined_hi, valid_color, 0.15, "acceptance band"))
     elif mad_band is not None:
         band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "acceptance band"))
     elif pct_band is not None:
@@ -1002,8 +1003,7 @@ def detect_delta(
     ``hist_mean - curr > max_delta``; ``none`` uses the absolute delta and fails
     on either side. Baseline is the mean of all historical per-time means, so
     this compares the current scalar against a flat historical average in
-    absolute units (not percent). Intended as an additive guard alongside the
-    statistical methods.
+    absolute units (not percent). Selected via ``regression_method='delta'``.
     """
     hist_clean = _clean_1d(historical_time_means)
     hist_mean = float(np.nanmean(hist_clean)) if len(hist_clean) else float("nan")
@@ -1128,18 +1128,19 @@ def _attach_plot_metadata(
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
-    For each numeric result variable, splits the dataset at the last over_time
-    index, runs the configured statistical method (percentage/adaptive), and
-    layers the optional additive guards (regression_delta, regression_absolute)
-    on top. regression_absolute runs even with a single over_time point since
-    it needs no baseline.
+    For each numeric result variable, dispatches to the detector chosen by
+    ``run_cfg.regression_method`` (``percentage``, ``adaptive``, ``delta``, or
+    ``absolute``). ``absolute`` runs even with a single over_time point since
+    it needs no baseline; every other method requires history.
 
     Args:
         dataset: xarray Dataset with an over_time dimension.
         bench_cfg: BenchCfg with ``result_vars`` list.
-        run_cfg: BenchRunCfg. Reads ``regression_method``, ``regression_mad``,
-            ``regression_percentage``, ``regression_delta`` and
-            ``regression_absolute``.
+        run_cfg: BenchRunCfg. Reads ``regression_method`` and its
+            method-specific threshold: ``regression_percentage`` for
+            ``percentage``; ``regression_mad`` (plus ``regression_percentage``
+            as a dual-band gate) for ``adaptive``; ``regression_delta`` for
+            ``delta``; ``regression_absolute`` for ``absolute``.
 
     Returns:
         RegressionReport with one result per variable per fired detector/guard.
@@ -1149,21 +1150,34 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     if "over_time" not in dataset.dims:
         return report
 
+    method = run_cfg.regression_method
     n_times = dataset.sizes["over_time"]
-    regression_absolute = getattr(run_cfg, "regression_absolute", None)
-    regression_delta = getattr(run_cfg, "regression_delta", None)
 
-    # With no history, only the absolute guard has anything to compare against.
-    if n_times < 2 and regression_absolute is None:
+    # Only the 'absolute' method can run without history.
+    if n_times < 2 and method != "absolute":
         return report
 
-    method = run_cfg.regression_method
     regression_mad = getattr(run_cfg, "regression_mad", None)
     if regression_mad is None:
         regression_mad = _METHOD_DEFAULTS["adaptive"]
     regression_percentage = getattr(run_cfg, "regression_percentage", None)
     if regression_percentage is None:
         regression_percentage = _METHOD_DEFAULTS["percentage"]
+    regression_delta = getattr(run_cfg, "regression_delta", None)
+    regression_absolute = getattr(run_cfg, "regression_absolute", None)
+
+    # Method-specific thresholds without a value disable detection for that var.
+    if method == "delta" and regression_delta is None:
+        logging.warning(
+            "regression_method='delta' requires regression_delta to be set; skipping detection"
+        )
+        return report
+    if method == "absolute" and regression_absolute is None:
+        logging.warning(
+            "regression_method='absolute' requires regression_absolute to be set; "
+            "skipping detection"
+        )
+        return report
 
     time_coord = dataset["over_time"].values
 
@@ -1189,83 +1203,67 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         time_means_arr, hist_samples_flat, hist_x_flat = _compute_history_arrays(da)
         history_available = time_means_arr is not None and len(historical_clean) > 0
 
-        if history_available:
-            if method == "percentage":
-                result = detect_percentage(
-                    var_name,
-                    time_means_arr,
-                    current_mean_scalar,
-                    regression_percentage,
-                    direction,
-                )
-            elif method == "adaptive":
-                result = detect_adaptive(
-                    var_name,
-                    time_means_arr,
-                    current_mean_scalar,
-                    regression_mad=regression_mad,
-                    direction=direction,
-                    historical_samples=historical_clean,
-                    regression_percentage=regression_percentage,
-                )
-            else:
-                logging.warning(f"Unknown regression method '{method}', falling back to percentage")
-                result = detect_percentage(
-                    var_name,
-                    time_means_arr,
-                    current_mean_scalar,
-                    regression_percentage,
-                    direction,
-                )
-            _attach_plot_metadata(
-                result,
-                time_coord=time_coord,
-                current_samples=current_clean,
-                time_means=time_means_arr,
-                hist_samples_flat=hist_samples_flat,
-                hist_x_flat=hist_x_flat,
-            )
-            report.results.append(result)
+        # 'absolute' runs with or without history; every other method needs a baseline.
+        if method != "absolute" and not history_available:
+            continue
 
-        # Additive guards — run independently of the statistical method.
-        if regression_delta is not None and history_available:
-            delta_result = detect_delta(
+        if method == "percentage":
+            result = detect_percentage(
+                var_name,
+                time_means_arr,
+                current_mean_scalar,
+                regression_percentage,
+                direction,
+            )
+        elif method == "adaptive":
+            result = detect_adaptive(
+                var_name,
+                time_means_arr,
+                current_mean_scalar,
+                regression_mad=regression_mad,
+                direction=direction,
+                historical_samples=historical_clean,
+                regression_percentage=regression_percentage,
+            )
+        elif method == "delta":
+            result = detect_delta(
                 var_name,
                 time_means_arr,
                 current_mean_scalar,
                 max_delta=regression_delta,
                 direction=direction,
             )
-            _attach_plot_metadata(
-                delta_result,
-                time_coord=time_coord,
-                current_samples=current_clean,
-                time_means=time_means_arr,
-                hist_samples_flat=hist_samples_flat,
-                hist_x_flat=hist_x_flat,
-            )
-            report.results.append(delta_result)
-
-        if regression_absolute is not None:
+        elif method == "absolute":
             if direction == OptDir.none:
                 logging.warning(
-                    f"regression_absolute skipped for '{var_name}': OptDir.none has no direction"
+                    f"regression_method='absolute' skipped for '{var_name}': "
+                    "OptDir.none has no direction"
                 )
-            else:
-                abs_result = detect_absolute(
-                    var_name,
-                    current_mean_scalar,
-                    limit=regression_absolute,
-                    direction=direction,
-                )
-                _attach_plot_metadata(
-                    abs_result,
-                    time_coord=time_coord,
-                    current_samples=current_clean,
-                    time_means=None,
-                    hist_samples_flat=None,
-                    hist_x_flat=None,
-                )
-                report.results.append(abs_result)
+                continue
+            result = detect_absolute(
+                var_name,
+                current_mean_scalar,
+                limit=regression_absolute,
+                direction=direction,
+            )
+        else:
+            logging.warning(f"Unknown regression method '{method}', falling back to percentage")
+            result = detect_percentage(
+                var_name,
+                time_means_arr,
+                current_mean_scalar,
+                regression_percentage,
+                direction,
+            )
+
+        _attach_plot_metadata(
+            result,
+            time_coord=time_coord,
+            current_samples=current_clean,
+            time_means=time_means_arr if method != "absolute" else None,
+            hist_samples_flat=hist_samples_flat if method != "absolute" else None,
+            hist_x_flat=hist_x_flat if method != "absolute" else None,
+        )
+        report.results.append(result)
 
     return report
