@@ -239,7 +239,16 @@ def _regression_plot_spec(
         x_current = 0
 
     verdict_color = "#d62728" if result.regressed else "#2ca02c"
-    verdict_label = "REGRESSED" if result.regressed else "OK"
+    if result.regressed:
+        # For adaptive, surface which sub-test triggered so drift-only
+        # regressions (where the current value may sit inside the step-test
+        # band) aren't visually confusing.
+        fired = ""
+        if "fired=" in result.details:
+            fired = result.details.split("fired=")[1].split(",")[0]
+        verdict_label = f"REGRESSED ({fired})" if fired else "REGRESSED"
+    else:
+        verdict_label = "OK"
 
     change_str = (
         f"{result.change_percent:+.1f}%"
