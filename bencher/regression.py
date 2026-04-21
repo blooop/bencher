@@ -769,9 +769,17 @@ def detect_percentage(
     threshold_percent: float = 5.0,
     direction: OptDir = OptDir.minimize,
 ) -> RegressionResult:
-    """Compare current mean vs historical mean by percentage threshold."""
-    hist_mean = float(np.nanmean(historical))
-    curr_mean = float(np.nanmean(current))
+    """Compare current mean vs historical mean by percentage threshold.
+
+    Simple escape hatch: one directional rule comparing the current mean
+    against the historical mean. Same shape as :func:`detect_delta` and
+    :func:`detect_absolute`; contrast with :func:`detect_adaptive` which
+    layers noise modelling, drift test, and a dual-band AND gate.
+    """
+    hist_clean = _clean_1d(historical)
+    curr_clean = _clean_1d(current)
+    hist_mean = float(np.mean(hist_clean)) if len(hist_clean) else float("nan")
+    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
     change = _safe_change_percent(curr_mean, hist_mean)
 
     exceeds = _exceeds_directional_threshold(change, threshold_percent, direction)
@@ -998,12 +1006,13 @@ def detect_delta(
 ) -> RegressionResult:
     """Fail when the current mean's delta from history exceeds ``max_delta``.
 
-    The comparison respects ``direction``: ``minimize`` fails when
-    ``curr - hist_mean > max_delta``; ``maximize`` fails when
-    ``hist_mean - curr > max_delta``; ``none`` uses the absolute delta and fails
-    on either side. Baseline is the mean of all historical per-time means, so
-    this compares the current scalar against a flat historical average in
-    absolute units (not percent). Selected via ``regression_method='delta'``.
+    Simple escape hatch: one directional rule on the absolute-unit delta
+    between the current mean and the mean of all historical per-time means.
+    ``minimize`` fails when ``curr - hist_mean > max_delta``; ``maximize``
+    fails when ``hist_mean - curr > max_delta``; ``none`` uses ``|delta|``.
+    Same shape as :func:`detect_percentage` and :func:`detect_absolute`;
+    contrast with :func:`detect_adaptive` which layers noise modelling and
+    drift testing. Selected via ``regression_method='delta'``.
     """
     hist_clean = _clean_1d(historical_time_means)
     hist_mean = float(np.nanmean(hist_clean)) if len(hist_clean) else float("nan")
@@ -1041,9 +1050,12 @@ def detect_absolute(
 ) -> RegressionResult:
     """Fail when current mean violates an absolute limit in the direction of OptDir.
 
-    Needs no historical data. For ``OptDir.minimize`` ``limit`` is a ceiling;
-    for ``OptDir.maximize`` it's a floor. ``OptDir.none`` has no direction so
-    the guard records a non-regressed result and leaves it to the caller to log.
+    Simple escape hatch: one directional rule against a fixed limit — no
+    historical data required. For ``OptDir.minimize`` ``limit`` is a ceiling;
+    for ``OptDir.maximize`` it's a floor; ``OptDir.none`` records a
+    non-regressed result and leaves it to the caller to log. Same shape as
+    :func:`detect_percentage` and :func:`detect_delta`; contrast with
+    :func:`detect_adaptive` which needs history to estimate noise.
     """
     curr_clean = _clean_1d(current)
     curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
