@@ -375,6 +375,25 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "collapse to zero.",
     )
 
+    regression_delta: float = param.Number(
+        default=None,
+        allow_None=True,
+        doc="Largest acceptable absolute-unit delta of the current run's mean "
+        "from the mean of all historical per-time means, respecting the result "
+        "variable's OptDir (minimize: curr - hist must not exceed; maximize: "
+        "hist - curr must not exceed). Runs in addition to regression_method. "
+        "None disables this check.",
+    )
+
+    regression_absolute: float = param.Number(
+        default=None,
+        allow_None=True,
+        doc="Hard absolute threshold that the current run's mean must not "
+        "violate in the direction of the result variable's OptDir (minimize: "
+        "ceiling; maximize: floor). No history required. Runs in addition to "
+        "regression_method. None disables this check.",
+    )
+
     regression_fail: bool = param.Boolean(
         False,
         doc="If True, raise RegressionError when a regression is detected. "

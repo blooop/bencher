@@ -988,6 +988,85 @@ def detect_adaptive(
     )
 
 
+def detect_delta(
+    variable: str,
+    historical_time_means: np.ndarray,
+    current: np.ndarray,
+    max_delta: float,
+    direction: OptDir = OptDir.minimize,
+) -> RegressionResult:
+    """Fail when |curr - hist_mean| exceeds ``max_delta`` in the direction of OptDir.
+
+    Baseline is the mean of all historical per-time means, so this compares the
+    current scalar against a flat historical average in absolute units (not
+    percent). Intended as an additive guard alongside the statistical methods.
+    """
+    hist_clean = _clean_1d(historical_time_means)
+    hist_mean = float(np.nanmean(hist_clean)) if len(hist_clean) else float("nan")
+    curr_clean = _clean_1d(current)
+    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
+    delta = curr_mean - hist_mean
+
+    if direction == OptDir.minimize:
+        regressed = delta > max_delta
+    elif direction == OptDir.maximize:
+        regressed = delta < -max_delta
+    else:
+        regressed = abs(delta) > max_delta
+
+    return RegressionResult(
+        variable=variable,
+        method="delta",
+        regressed=regressed,
+        current_value=curr_mean,
+        baseline_value=hist_mean,
+        change_percent=_safe_change_percent(curr_mean, hist_mean),
+        threshold=max_delta,
+        direction=direction.value,
+        details=f"delta={delta:+.4g} vs max |{max_delta}|",
+        band_lower=hist_mean - max_delta,
+        band_upper=hist_mean + max_delta,
+    )
+
+
+def detect_absolute(
+    variable: str,
+    current: np.ndarray,
+    limit: float,
+    direction: OptDir = OptDir.minimize,
+) -> RegressionResult:
+    """Fail when current mean violates an absolute limit in the direction of OptDir.
+
+    Needs no historical data. For ``OptDir.minimize`` ``limit`` is a ceiling;
+    for ``OptDir.maximize`` it's a floor. ``OptDir.none`` has no direction so
+    the guard records a non-regressed result and leaves it to the caller to log.
+    """
+    curr_clean = _clean_1d(current)
+    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
+
+    if direction == OptDir.minimize:
+        regressed = curr_mean > limit
+        detail = f"current={curr_mean:.4g} vs ceiling {limit}"
+    elif direction == OptDir.maximize:
+        regressed = curr_mean < limit
+        detail = f"current={curr_mean:.4g} vs floor {limit}"
+    else:
+        regressed = False
+        detail = f"OptDir.none: absolute guard skipped (current={curr_mean:.4g})"
+
+    return RegressionResult(
+        variable=variable,
+        method="absolute",
+        regressed=regressed,
+        current_value=curr_mean,
+        baseline_value=float(limit),
+        change_percent=float("nan"),
+        threshold=float(limit),
+        direction=direction.value,
+        details=detail,
+    )
+
+
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
@@ -1008,7 +1087,11 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         return report
 
     n_times = dataset.sizes["over_time"]
-    if n_times < 2:
+    regression_absolute = getattr(run_cfg, "regression_absolute", None)
+    regression_delta = getattr(run_cfg, "regression_delta", None)
+
+    # With no history, only the absolute guard has anything to compare against.
+    if n_times < 2 and regression_absolute is None:
         return report
 
     method = run_cfg.regression_method
@@ -1018,6 +1101,8 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     regression_percentage = getattr(run_cfg, "regression_percentage", None)
     if regression_percentage is None:
         regression_percentage = _METHOD_DEFAULTS["percentage"]
+
+    time_coord = dataset["over_time"].values
 
     for rv in bench_cfg.result_vars:
         if not isinstance(rv, SCALAR_RESULT_TYPES):
@@ -1034,76 +1119,122 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         current_clean = _clean_1d(da.isel(over_time=-1).values)
         historical_clean = _clean_1d(da.isel(over_time=slice(None, -1)).values)
 
-        if len(current_clean) == 0 or len(historical_clean) == 0:
+        if len(current_clean) == 0:
             continue
+        history_available = len(historical_clean) > 0
 
-        # Aggregate every non-time dim (parameter grid, repeats) into a single
-        # scalar per time point before handing the series to any detector.
-        # Without this, a 2-D param sweep over time threads both detection and
-        # the history plot through parameter-grid structure — the line zigzags
-        # through cells instead of showing time drift, and the baseline/band
-        # end up wildly out of scale relative to individual cells.
-        reduce_dims = [d for d in da.dims if d != "over_time"]
-        time_means_arr = (
-            da.isel(over_time=slice(None, -1))
-            .mean(dim=reduce_dims, skipna=True)
-            .values.astype(float)
-        )
         current_mean_scalar = np.array([float(da.isel(over_time=-1).mean(skipna=True).values)])
 
-        if method == "percentage":
-            result = detect_percentage(
-                var_name,
-                time_means_arr,
-                current_mean_scalar,
-                regression_percentage,
-                direction,
+        time_means_arr: np.ndarray | None = None
+        hist_samples_flat: np.ndarray | None = None
+        hist_x_flat: np.ndarray | None = None
+
+        if history_available:
+            # Aggregate every non-time dim (parameter grid, repeats) into a single
+            # scalar per time point before handing the series to any detector.
+            # Without this, a 2-D param sweep over time threads both detection and
+            # the history plot through parameter-grid structure — the line zigzags
+            # through cells instead of showing time drift, and the baseline/band
+            # end up wildly out of scale relative to individual cells.
+            reduce_dims = [d for d in da.dims if d != "over_time"]
+            time_means_arr = (
+                da.isel(over_time=slice(None, -1))
+                .mean(dim=reduce_dims, skipna=True)
+                .values.astype(float)
             )
-        elif method == "adaptive":
-            result = detect_adaptive(
+
+            if method == "percentage":
+                result = detect_percentage(
+                    var_name,
+                    time_means_arr,
+                    current_mean_scalar,
+                    regression_percentage,
+                    direction,
+                )
+            elif method == "adaptive":
+                result = detect_adaptive(
+                    var_name,
+                    time_means_arr,
+                    current_mean_scalar,
+                    regression_mad=regression_mad,
+                    direction=direction,
+                    historical_samples=historical_clean,
+                    regression_percentage=regression_percentage,
+                )
+            else:
+                logging.warning(f"Unknown regression method '{method}', falling back to percentage")
+                result = detect_percentage(
+                    var_name,
+                    time_means_arr,
+                    current_mean_scalar,
+                    regression_percentage,
+                    direction,
+                )
+
+            # Retain the arrays used for plotting so downstream consumers
+            # (reports, bot comments) can rebuild the diagnostic without
+            # re-running detection.
+            result.historical = time_means_arr
+            result.historical_x = time_coord[:-1]
+            result.current_x = time_coord[-1]
+            result.current_samples = current_clean
+
+            # Per-sample historical scatter: flatten the 2D slice (all repeats
+            # at every historical time point) and broadcast the time coords so
+            # the renderers can show every sample as a dot at its real x
+            # position.
+            hist_slice = da.isel(over_time=slice(None, -1))
+            if hist_slice.size > 0:
+                hist_2d = np.moveaxis(
+                    np.asarray(hist_slice.values, dtype=float),
+                    list(hist_slice.dims).index("over_time"),
+                    0,
+                ).reshape(hist_slice.sizes["over_time"], -1)
+                hist_samples_flat = hist_2d.ravel()
+                hist_x_flat = np.repeat(time_coord[:-1], hist_2d.shape[1])
+                mask = ~np.isnan(hist_samples_flat)
+                result.historical_all = hist_samples_flat[mask]
+                result.historical_all_x = hist_x_flat[mask]
+
+            report.results.append(result)
+
+        # Additive guards — run independently of the statistical method.
+        if regression_delta is not None and history_available:
+            delta_result = detect_delta(
                 var_name,
                 time_means_arr,
                 current_mean_scalar,
-                regression_mad=regression_mad,
+                max_delta=regression_delta,
                 direction=direction,
-                historical_samples=historical_clean,
-                regression_percentage=regression_percentage,
             )
-        else:
-            logging.warning(f"Unknown regression method '{method}', falling back to percentage")
-            result = detect_percentage(
-                var_name,
-                time_means_arr,
-                current_mean_scalar,
-                regression_percentage,
-                direction,
-            )
+            delta_result.historical = time_means_arr
+            delta_result.historical_x = time_coord[:-1]
+            delta_result.current_x = time_coord[-1]
+            delta_result.current_samples = current_clean
+            if hist_samples_flat is not None and hist_x_flat is not None:
+                mask = ~np.isnan(hist_samples_flat)
+                delta_result.historical_all = hist_samples_flat[mask]
+                delta_result.historical_all_x = hist_x_flat[mask]
+            report.results.append(delta_result)
 
-        # Retain the arrays used for plotting so downstream consumers (reports,
-        # bot comments) can rebuild the diagnostic without re-running detection.
-        time_coord = dataset["over_time"].values
-        result.historical = time_means_arr
-        # Per-time means are aligned with over_time, one value per time point.
-        result.historical_x = time_coord[:-1]
-        result.current_x = time_coord[-1]
-        result.current_samples = current_clean
-
-        # Per-sample historical scatter: flatten the 2D slice (all repeats at
-        # every historical time point) and broadcast the time coords so the
-        # renderers can show every sample as a dot at its real x position.
-        hist_slice = da.isel(over_time=slice(None, -1))
-        if hist_slice.size > 0:
-            hist_2d = np.moveaxis(
-                np.asarray(hist_slice.values, dtype=float),
-                list(hist_slice.dims).index("over_time"),
-                0,
-            ).reshape(hist_slice.sizes["over_time"], -1)
-            hist_samples_flat = hist_2d.ravel()
-            hist_x_flat = np.repeat(time_coord[:-1], hist_2d.shape[1])
-            mask = ~np.isnan(hist_samples_flat)
-            result.historical_all = hist_samples_flat[mask]
-            result.historical_all_x = hist_x_flat[mask]
-
-        report.results.append(result)
+        if regression_absolute is not None:
+            if direction == OptDir.none:
+                logging.warning(
+                    f"regression_absolute skipped for '{var_name}': OptDir.none has no direction"
+                )
+            else:
+                abs_result = detect_absolute(
+                    var_name,
+                    current_mean_scalar,
+                    limit=regression_absolute,
+                    direction=direction,
+                )
+                if history_available:
+                    abs_result.historical_x = time_coord[:-1]
+                    abs_result.current_x = time_coord[-1]
+                else:
+                    abs_result.current_x = time_coord[-1]
+                abs_result.current_samples = current_clean
+                report.results.append(abs_result)
 
     return report
