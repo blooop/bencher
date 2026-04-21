@@ -241,6 +241,8 @@ class AdaptiveNoiseRobustness(bn.ParametrizedSweep):
 
 REGRESSION_EXAMPLES = [
     "regression_percentage",
+    "regression_delta",
+    "regression_absolute",
     *[f"regression_{tuning}" for tuning in _TUNING],
 ]
 
@@ -253,6 +255,12 @@ class MetaRegression(MetaGeneratorBase):
     def benchmark(self):
         if self.example == "regression_percentage":
             self._generate_percentage_over_time()
+            return
+        if self.example == "regression_delta":
+            self._generate_delta_over_time()
+            return
+        if self.example == "regression_absolute":
+            self._generate_absolute_over_time()
             return
 
         for tuning, spec in _TUNING.items():
@@ -311,6 +319,123 @@ for i, offset in enumerate(releases):
             output_dir=OUTPUT_DIR,
             filename="example_regression_percentage",
             function_name="example_regression_percentage",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"over_time": True},
+        )
+
+    def _generate_delta_over_time(self):
+        """Over_time example where the delta guard fires on an absolute-unit change
+        the percentage method would tolerate."""
+        imports = "from datetime import datetime, timedelta\n\nimport bencher as bn"
+        class_code = '''\
+class LatencyBenchmark(bn.ParametrizedSweep):
+    """Latency benchmark with a small absolute step the delta guard catches."""
+
+    connections = bn.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
+    payload_kb = bn.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
+
+    response_time = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
+
+    _time_offset = 0.0  # set externally per snapshot
+
+    def benchmark(self):
+        base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
+        # Additive ms step per release — percent change stays tiny at high
+        # baselines, but the absolute delta exceeds the guard.
+        self.response_time = base_rt + self._time_offset'''
+        body = """\
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
+run_cfg.regression_detection = True
+run_cfg.regression_method = "delta"
+run_cfg.regression_delta = 2.0  # ms — max acceptable change vs historical mean
+run_cfg.regression_fail = False
+
+benchable = LatencyBenchmark()
+bench = benchable.to_bench(run_cfg)
+
+# Stable baseline, then a +3 ms absolute step that's under 20% but over 2 ms.
+releases = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0]
+
+base_time = datetime(2024, 1, 1)
+for i, offset in enumerate(releases):
+    benchable._time_offset = offset
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    run_cfg.auto_plot = i == len(releases) - 1
+    bench.plot_sweep(
+        "regression_delta",
+        input_vars=["connections", "payload_kb"],
+        result_vars=["response_time"],
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(seconds=i),
+        aggregate=True,
+    )
+"""
+        self.generate_example(
+            title="Regression detection — absolute delta guard",
+            output_dir=OUTPUT_DIR,
+            filename="example_regression_delta",
+            function_name="example_regression_delta",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"over_time": True},
+        )
+
+    def _generate_absolute_over_time(self):
+        """Over_time example where the absolute guard enforces a hard ceiling
+        regardless of history."""
+        imports = "from datetime import datetime, timedelta\n\nimport bencher as bn"
+        class_code = '''\
+class SlaBenchmark(bn.ParametrizedSweep):
+    """SLA benchmark with a hard response-time ceiling."""
+
+    connections = bn.FloatSweep(default=50, bounds=[10, 200], doc="Concurrent clients")
+    payload_kb = bn.FloatSweep(default=64, bounds=[1, 256], doc="Request payload size in KB")
+
+    response_time = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
+
+    _time_offset = 0.0  # set externally per snapshot
+
+    def benchmark(self):
+        base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
+        self.response_time = base_rt * (1.0 + self._time_offset)'''
+        body = """\
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
+run_cfg.regression_detection = True
+run_cfg.regression_method = "absolute"
+# SLA: response_time must stay below 25 ms no matter what history says.
+run_cfg.regression_absolute = 25.0
+run_cfg.regression_fail = False
+
+benchable = SlaBenchmark()
+bench = benchable.to_bench(run_cfg)
+
+# Each successive release scales response time up until the SLA ceiling is breached.
+releases = [0.0, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5]
+
+base_time = datetime(2024, 1, 1)
+for i, offset in enumerate(releases):
+    benchable._time_offset = offset
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    run_cfg.auto_plot = i == len(releases) - 1
+    bench.plot_sweep(
+        "regression_absolute",
+        input_vars=["connections", "payload_kb"],
+        result_vars=["response_time"],
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(seconds=i),
+        aggregate=True,
+    )
+"""
+        self.generate_example(
+            title="Regression detection — hard absolute ceiling",
+            output_dir=OUTPUT_DIR,
+            filename="example_regression_absolute",
+            function_name="example_regression_absolute",
             imports=imports,
             body=body,
             class_code=class_code,

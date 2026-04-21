@@ -1,5 +1,6 @@
 """Tests for bencher.regression module."""
 
+import math
 import os
 
 import numpy as np
@@ -12,7 +13,9 @@ from bencher.regression import (
     RegressionReport,
     RegressionResult,
     build_regression_overlay,
+    detect_absolute,
     detect_adaptive,
+    detect_delta,
     detect_percentage,
     detect_regressions,
     render_regression_png,
@@ -298,6 +301,120 @@ class TestDetectAdaptive:
         assert result.regressed
 
 
+# ── detect_delta ───────────────────────────────────────────────────────────
+
+
+class TestDetectDelta:
+    def test_within_tolerance_no_regression(self):
+        hist = np.array([100.0, 101.0, 99.0, 100.5])
+        curr = np.array([101.0, 102.0])
+        result = detect_delta("x", hist, curr, max_delta=5.0, direction=OptDir.minimize)
+        assert not result.regressed
+        assert result.method == "delta"
+
+    def test_regression_above_delta_minimize(self):
+        hist = np.array([100.0, 100.0, 100.0])
+        curr = np.array([110.0, 112.0])
+        result = detect_delta("x", hist, curr, max_delta=5.0, direction=OptDir.minimize)
+        assert result.regressed
+        # Band is symmetric around historical mean.
+        assert result.band_lower == 95.0
+        assert result.band_upper == 105.0
+
+    def test_regression_below_delta_maximize(self):
+        hist = np.array([100.0, 100.0, 100.0])
+        curr = np.array([90.0, 88.0])
+        result = detect_delta("x", hist, curr, max_delta=5.0, direction=OptDir.maximize)
+        assert result.regressed
+
+    def test_improvement_not_regression_minimize(self):
+        hist = np.array([100.0, 100.0])
+        curr = np.array([80.0])
+        result = detect_delta("x", hist, curr, max_delta=5.0, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_improvement_not_regression_maximize(self):
+        hist = np.array([100.0, 100.0])
+        curr = np.array([120.0])
+        result = detect_delta("x", hist, curr, max_delta=5.0, direction=OptDir.maximize)
+        assert not result.regressed
+
+    def test_direction_none_symmetric(self):
+        hist = np.array([100.0, 100.0])
+        result_above = detect_delta(
+            "x", hist, np.array([108.0]), max_delta=5.0, direction=OptDir.none
+        )
+        result_below = detect_delta(
+            "x", hist, np.array([92.0]), max_delta=5.0, direction=OptDir.none
+        )
+        assert result_above.regressed
+        assert result_below.regressed
+
+    def test_nan_handling(self):
+        hist = np.array([100.0, np.nan, 100.0])
+        curr = np.array([105.0, np.nan])
+        result = detect_delta("x", hist, curr, max_delta=10.0, direction=OptDir.minimize)
+        assert not result.regressed
+
+    def test_exactly_at_delta_is_not_regression(self):
+        hist = np.array([100.0, 100.0])
+        curr = np.array([105.0])
+        result = detect_delta("x", hist, curr, max_delta=5.0, direction=OptDir.minimize)
+        assert not result.regressed  # strict '>'
+
+    def test_empty_hist_is_not_regression(self):
+        """Empty history → no baseline to compare against, guard disables itself."""
+        result = detect_delta(
+            "x", np.array([]), np.array([105.0]), max_delta=10.0, direction=OptDir.minimize
+        )
+        assert not result.regressed
+
+    def test_all_nan_hist_is_not_regression(self):
+        result = detect_delta(
+            "x",
+            np.array([np.nan, np.nan]),
+            np.array([105.0]),
+            max_delta=10.0,
+            direction=OptDir.minimize,
+        )
+        assert not result.regressed
+
+
+# ── detect_absolute ────────────────────────────────────────────────────────
+
+
+class TestDetectAbsolute:
+    def test_under_ceiling_minimize_not_regression(self):
+        result = detect_absolute("x", np.array([40.0]), limit=50.0, direction=OptDir.minimize)
+        assert not result.regressed
+        assert result.method == "absolute"
+        assert result.baseline_value == 50.0
+
+    def test_over_ceiling_minimize_regression(self):
+        result = detect_absolute("x", np.array([60.0]), limit=50.0, direction=OptDir.minimize)
+        assert result.regressed
+
+    def test_over_floor_maximize_not_regression(self):
+        result = detect_absolute("x", np.array([120.0]), limit=100.0, direction=OptDir.maximize)
+        assert not result.regressed
+
+    def test_under_floor_maximize_regression(self):
+        result = detect_absolute("x", np.array([80.0]), limit=100.0, direction=OptDir.maximize)
+        assert result.regressed
+
+    def test_direction_none_not_regression(self):
+        result = detect_absolute("x", np.array([1000.0]), limit=50.0, direction=OptDir.none)
+        assert not result.regressed
+        assert "skipped" in result.details
+
+    def test_nan_only_current(self):
+        result = detect_absolute("x", np.array([np.nan]), limit=50.0, direction=OptDir.minimize)
+        # nan > 50 is False; guard should not flag.
+        assert not result.regressed
+        assert math.isnan(result.current_value)
+        assert result.baseline_value == 50.0
+
+
 # ── RegressionReport ───────────────────────────────────────────────────────
 
 
@@ -364,6 +481,8 @@ class TestDetectRegressions:
         method="percentage",
         regression_mad=None,
         regression_percentage=None,
+        regression_delta=None,
+        regression_absolute=None,
     ):
         """Create minimal bench_cfg and run_cfg mocks."""
 
@@ -372,12 +491,30 @@ class TestDetectRegressions:
                 self.result_vars = result_vars
 
         class FakeRunCfg:
-            def __init__(self, method, regression_mad, regression_percentage):
+            def __init__(
+                self,
+                method,
+                regression_mad,
+                regression_percentage,
+                regression_delta,
+                regression_absolute,
+            ):
                 self.regression_method = method
                 self.regression_mad = regression_mad
                 self.regression_percentage = regression_percentage
+                self.regression_delta = regression_delta
+                self.regression_absolute = regression_absolute
 
-        return FakeBenchCfg(result_vars), FakeRunCfg(method, regression_mad, regression_percentage)
+        return (
+            FakeBenchCfg(result_vars),
+            FakeRunCfg(
+                method,
+                regression_mad,
+                regression_percentage,
+                regression_delta,
+                regression_absolute,
+            ),
+        )
 
     def test_no_over_time_dim(self):
         ds = xr.Dataset({"x": (["repeat"], [1.0, 2.0])})
@@ -630,6 +767,90 @@ class TestDetectRegressions:
         assert isinstance(result.regressed, bool)
         assert result.regressed is True
         assert result.method is not None
+
+    def test_method_delta_dispatches_only_delta(self):
+        """regression_method='delta' runs the delta detector alone, no percentage result."""
+        values = np.array([[100.0], [100.0], [108.0]])  # +8 from baseline
+        ds = self._make_dataset(n_times=3, n_repeats=1, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=5.0)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert len(report.results) == 1
+        assert report.results[0].method == "delta"
+        assert report.results[0].regressed is True
+
+    def test_method_absolute_dispatches_only_absolute(self):
+        values = np.array([[10.0], [10.0], [12.0]])
+        ds = self._make_dataset(n_times=3, n_repeats=1, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=11.0)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert len(report.results) == 1
+        assert report.results[0].method == "absolute"
+        assert report.results[0].regressed is True
+        assert report.results[0].baseline_value == 11.0
+
+    def test_method_absolute_without_history(self):
+        """'absolute' runs even with a single over_time point — needs no baseline."""
+        values = np.array([[60.0, 70.0]])
+        ds = self._make_dataset(n_times=1, n_repeats=2, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=50.0)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert len(report.results) == 1
+        assert report.results[0].method == "absolute"
+        assert report.results[0].regressed is True
+
+    def test_method_delta_missing_threshold_skipped(self, caplog):
+        import logging as _logging
+
+        values = np.array([[100.0], [100.0], [108.0]])
+        ds = self._make_dataset(n_times=3, n_repeats=1, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=None)
+        with caplog.at_level(_logging.WARNING):
+            report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.results == []
+        assert any("regression_delta" in rec.message for rec in caplog.records)
+
+    def test_method_absolute_opt_dir_none_skipped(self, caplog):
+        import logging as _logging
+
+        values = np.array([[10.0], [10.0], [10.0]])
+        ds = self._make_dataset(n_times=3, n_repeats=1, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.none)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=5.0)
+        with caplog.at_level(_logging.WARNING):
+            report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.results == []
+        assert any("OptDir.none" in rec.message for rec in caplog.records)
+
+    def test_method_delta_skipped_without_history(self):
+        """'delta' needs a baseline — skip when n_times < 2."""
+        values = np.array([[100.0]])
+        ds = self._make_dataset(n_times=1, n_repeats=1, values=values)
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "metric"
+        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=1.0)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.results == []
 
 
 # ── RegressionError ────────────────────────────────────────────────────────

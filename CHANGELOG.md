@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.89.0] - 2026-04-21
+
+### Added
+- Two new values for `BenchRunCfg.regression_method`: `"delta"` and `"absolute"`. Each selects a dedicated detector and its threshold comes from a new `BenchRunCfg` field:
+  - `"delta"` uses `regression_delta`: largest acceptable absolute-unit change of the current run's mean from the mean of all historical per-time means, respecting the result variable's `OptDir`. Useful when a percent threshold obscures sensitivity at tiny baselines or when CI wants a flat unit ceiling on drift.
+  - `"absolute"` uses `regression_absolute`: hard directional threshold (ceiling for `OptDir.minimize`, floor for `OptDir.maximize`) against the current run's mean. No history required — fires on the very first recording.
+- `detect_delta()` and `detect_absolute()` public detectors in `bencher.regression`, mirroring the `detect_percentage` / `detect_adaptive` shape so they participate in the shared plot/report pipeline.
+- `detect_regressions()` now runs with a single `over_time` point when `regression_method="absolute"`, so contractual limits can gate even the initial benchmark run.
+- Gallery examples `example_regression_delta` and `example_regression_absolute` demonstrating the new methods.
+
+### Changed
+- Regression diagnostic plot: when the adaptive detector produces both a MAD band and a percent band, they are now merged into a single combined acceptance band (the union of both — matching the adaptive gate, which flags a regression only when both tests fail). Previously the plot layered two separately-coloured bands.
+
 ## [1.87.0] - 2026-04-19
 
 ### Added
