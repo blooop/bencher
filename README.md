@@ -52,6 +52,29 @@ Bencher is designed to work with stochastic pure functions with no side effects.
     return data and plot
     
 
+## Resource Management with `sampling_context`
+
+If your benchmark holds external resources (DB pools, GPU handles, simulators) you
+may want to release them *before* the interactive result viewer starts. Wrapping
+the entire `bn.run()` call in a `with` block won't work — the context stays open
+while the Panel/Bokeh server blocks:
+
+```python
+# Anti-pattern: resources held during the entire viewing session
+with gpu_context():
+    bn.run(my_bench, show=True)
+```
+
+Instead, pass the context manager as `sampling_context`. It wraps only the sampling
+phase; its `__exit__` runs before the server starts:
+
+```python
+bn.run(my_bench, show=True, sampling_context=gpu_context())
+```
+
+`save` and `publish` still execute inside the context (during sampling), so results
+are persisted before the resource is released.
+
 ## Demo
 
 if you have [pixi](https://github.com/prefix-dev/pixi/) installed you can run a demo example with:
