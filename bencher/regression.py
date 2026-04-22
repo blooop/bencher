@@ -113,11 +113,7 @@ class RegressionReport:
         else:
             lines.append(f"Regressions detected in {len(regressed)} variable(s):")
             for r in regressed:
-                lines.append(
-                    f"  {r.variable}: {r.change_percent:+.2f}% change "
-                    f"(baseline={r.baseline_value:.4g}, current={r.current_value:.4g}, "
-                    f"method={r.method}, threshold={r.threshold})"
-                )
+                lines.append(_format_summary_line(r))
         return "\n".join(lines)
 
     def to_markdown(self) -> str:
@@ -131,11 +127,7 @@ class RegressionReport:
             lines.append("| Variable | Change | Baseline | Current | Method | Threshold |")
             lines.append("|----------|-------:|----------:|--------:|--------|----------:|")
             for r in regressed:
-                lines.append(
-                    f"| {r.variable} | {r.change_percent:+.1f}% "
-                    f"| {r.baseline_value:.4g} | {r.current_value:.4g} "
-                    f"| {r.method} | {r.threshold} |"
-                )
+                lines.append(_format_markdown_row(r))
         else:
             lines.append("**No regressions detected**\n")
 
@@ -158,6 +150,107 @@ class RegressionReport:
 
         md = pn.pane.Markdown(self.to_markdown(), name="Regression Report", width=800)
         report.prepend_to_result(bench_res, md)
+
+
+@dataclass(frozen=True)
+class _MethodCells:
+    """Per-method rendering of a single regression result.
+
+    Each detector has a different gate — percent ratio, MAD-sigma, absolute
+    delta, hard limit — so the report cells must describe it in its own
+    units. This bundle is the single source of truth consumed by both the
+    text summary and the markdown table.
+
+    Attributes:
+        change: Change column (markdown) — gated quantity in its own units.
+        baseline: Baseline column (markdown) — em-dash for absolute (no
+            historical baseline exists).
+        threshold: Threshold column (markdown) — carries the gate's native
+            units (``±T%``, ``Tσ``, ``±T``, or a direction-aware inequality).
+        summary_lead: First clause of the summary line, before the details
+            parenthesis. Captures the gated quantity in sentence form.
+        summary_standalone: When True, the summary line skips the
+            ``(baseline=…, current=…, threshold=…)`` tail because
+            ``summary_lead`` already contains the relevant values. Used by
+            the absolute method (no baseline, limit is in the lead).
+    """
+
+    change: str
+    baseline: str
+    threshold: str
+    summary_lead: str
+    summary_standalone: bool = False
+
+
+def _method_cells(r: RegressionResult) -> _MethodCells:
+    """Build the per-method cell bundle.
+
+    Notes on the ``absolute`` branch: ``baseline_value`` and ``threshold``
+    both hold the limit for this detector (see :func:`detect_absolute`);
+    the code reads from ``threshold`` to make the intent ("this is the
+    gate value") explicit.
+    """
+    c, b, t = r.current_value, r.baseline_value, r.threshold
+    if r.method == "absolute":
+        if r.direction == OptDir.maximize.value:
+            ineq, label = "≥", "floor"
+        elif r.direction == OptDir.minimize.value:
+            ineq, label = "≤", "ceiling"
+        else:
+            ineq, label = "", "limit"
+        threshold_cell = f"{ineq} {t:.4g}" if ineq else f"{t:.4g}"
+        return _MethodCells(
+            change="—",
+            baseline="—",
+            threshold=threshold_cell,
+            summary_lead=f"current={c:.4g} vs {label}={t:.4g}",
+            summary_standalone=True,
+        )
+    if r.method == "delta":
+        # The gate is in absolute units; percent change is informational at
+        # best and misleading at worst (scales with baseline magnitude).
+        delta = c - b
+        return _MethodCells(
+            change=f"{delta:+.4g}",
+            baseline=f"{b:.4g}",
+            threshold=f"±{t:.4g}",
+            summary_lead=f"Δ={delta:+.4g}",
+        )
+    if r.method == "adaptive":
+        # Threshold is MAD-sigma units, not percent — flag σ so the threshold
+        # isn't read as a bare percent next to the change_percent value.
+        return _MethodCells(
+            change=f"{r.change_percent:+.1f}%",
+            baseline=f"{b:.4g}",
+            threshold=f"{t:g}σ",
+            summary_lead=f"{r.change_percent:+.2f}% change",
+        )
+    # percentage and unknown-method fallback.
+    return _MethodCells(
+        change=f"{r.change_percent:+.1f}%",
+        baseline=f"{b:.4g}",
+        threshold=f"±{t:g}%",
+        summary_lead=f"{r.change_percent:+.2f}% change",
+    )
+
+
+def _format_summary_line(r: RegressionResult) -> str:
+    cells = _method_cells(r)
+    if cells.summary_standalone:
+        return f"  {r.variable}: {cells.summary_lead} (method={r.method})"
+    return (
+        f"  {r.variable}: {cells.summary_lead} "
+        f"(baseline={r.baseline_value:.4g}, current={r.current_value:.4g}, "
+        f"method={r.method}, threshold={cells.threshold})"
+    )
+
+
+def _format_markdown_row(r: RegressionResult) -> str:
+    cells = _method_cells(r)
+    return (
+        f"| {r.variable} | {cells.change} | {cells.baseline} | "
+        f"{r.current_value:.4g} | {r.method} | {cells.threshold} |"
+    )
 
 
 def _regression_plot_spec(

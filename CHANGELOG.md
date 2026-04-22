@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.91.0] - 2026-04-22
+
+### Added
+- Regression report is now auto-embedded as a Markdown panel at the top of `to_auto_plots()` whenever `regression_report.has_regressions` is true. Previously only the per-variable overlay plots were injected, so absolute-method fires (which have no history/overlay) were silent in the report.
+
+### Changed
+- Regression report rendering (`RegressionReport.summary()` and `to_markdown()`) now dispatches per method so each row describes its actual gate:
+  - `percentage`: threshold shown as `±T%`.
+  - `adaptive`: threshold shown as `Tσ` (change remains in percent).
+  - `delta`: Change column shows the raw Δ (not percent, since the gate is in absolute units); threshold rendered as `±T`.
+  - `absolute`: Change and Baseline cells rendered as em-dash (no historical baseline); Threshold cell carries the direction-aware inequality (`≤ L` for `OptDir.minimize`, `≥ L` for `OptDir.maximize`). Summary line phrased as `current=X vs ceiling|floor=Y`.
+
+### Fixed
+- `RegressionResult.summary()` / `RegressionReport.to_markdown()` no longer render `+nan%` or mislabel the hard limit as `Baseline` for `regression_method="absolute"` results.
+
 ## [1.90.0] - 2026-04-22
 
 ### Added
