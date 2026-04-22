@@ -7,7 +7,8 @@ import logging
 import signal
 import sys
 import time
-from typing import Callable, TYPE_CHECKING
+from contextlib import AbstractContextManager
+from typing import Any, Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -76,7 +77,7 @@ def run(
     over_time: bool | None = None,
     backend: str | None = None,
     optimise: int | bool = 0,
-    sampling_context=None,
+    sampling_context: AbstractContextManager[Any] | None = None,
     **kwargs,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
