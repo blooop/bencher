@@ -1,10 +1,11 @@
 """Tests for the bn.run() convenience function."""
 # pylint: disable=protected-access
 
+import contextlib
 import signal
 import sys
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import warnings
 import bencher as bn
 from bencher.example.example_simple_float import SimpleFloat, example_simple_float
@@ -241,6 +242,99 @@ class TestServerShutdown(unittest.TestCase):
         # Calling again should be a no-op
         _install_sigterm_handler()
         self.assertTrue(_run_mod._sigterm_installed)
+
+
+class TestSamplingContext(unittest.TestCase):
+    """Tests for the sampling_context parameter of bn.run()."""
+
+    def test_none_preserves_default_code_path(self):
+        """sampling_context=None calls br.run() with the original show value."""
+        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+            mock_br = MagicMock()
+            mock_br.run.return_value = []
+            mock_br.servers = []
+            MockRunner.return_value = mock_br
+
+            bn.run(lambda run_cfg: None, show=False, sampling_context=None)
+
+            mock_br.run.assert_called_once()
+            call_kwargs = mock_br.run.call_args[1]
+            self.assertFalse(call_kwargs["show"])
+            mock_br.show.assert_not_called()
+
+    def test_context_exit_before_show(self):
+        """With sampling_context, __exit__ runs before br.show() is invoked."""
+        exit_called = False
+
+        @contextlib.contextmanager
+        def tracking_ctx():
+            nonlocal exit_called
+            yield
+            exit_called = True
+
+        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+            mock_br = MagicMock()
+            mock_br.run.return_value = []
+            mock_br.servers = [MagicMock()]  # simulate a running server
+
+            def fake_show(**_kwargs):
+                # At the time show() is called, __exit__ must have already run.
+                self.assertTrue(exit_called, "__exit__ must run before show()")
+
+            mock_br.show.side_effect = fake_show
+            MockRunner.return_value = mock_br
+
+            bn.run(lambda run_cfg: None, show=True, sampling_context=tracking_ctx())
+
+            # br.run() was called with show=False (sampling phase only)
+            call_kwargs = mock_br.run.call_args[1]
+            self.assertFalse(call_kwargs["show"])
+            mock_br.show.assert_called_once()
+
+    def test_show_false_with_context_no_show_call(self):
+        """show=False + sampling_context calls __exit__ but not br.show()."""
+        exit_called = False
+
+        @contextlib.contextmanager
+        def tracking_ctx():
+            nonlocal exit_called
+            yield
+            exit_called = True
+
+        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+            mock_br = MagicMock()
+            mock_br.run.return_value = []
+            mock_br.servers = []
+            MockRunner.return_value = mock_br
+
+            bn.run(lambda run_cfg: None, show=False, sampling_context=tracking_ctx())
+
+            self.assertTrue(exit_called)
+            mock_br.show.assert_not_called()
+
+    def test_exception_during_sampling_still_exits_context(self):
+        """An exception during sampling still calls __exit__ and skips br.show()."""
+        exit_called = False
+
+        @contextlib.contextmanager
+        def tracking_ctx():
+            nonlocal exit_called
+            try:
+                yield
+            finally:
+                exit_called = True
+
+        with patch("bencher.bench_runner.BenchRunner") as MockRunner:
+            mock_br = MagicMock()
+            mock_br.run.side_effect = RuntimeError("sampling exploded")
+            mock_br.servers = []
+            MockRunner.return_value = mock_br
+
+            with self.assertRaises(RuntimeError):
+                bn.run(lambda run_cfg: None, show=True, sampling_context=tracking_ctx())
+
+            self.assertTrue(exit_called)
+            mock_br.show.assert_not_called()
 
 
 if __name__ == "__main__":

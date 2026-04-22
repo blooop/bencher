@@ -7,7 +7,8 @@ import logging
 import signal
 import sys
 import time
-from typing import Callable, TYPE_CHECKING
+from contextlib import AbstractContextManager
+from typing import Any, Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg
 from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -76,6 +77,7 @@ def run(
     over_time: bool | None = None,
     backend: str | None = None,
     optimise: int | bool = 0,
+    sampling_context: AbstractContextManager[Any] | None = None,
     **kwargs,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
@@ -108,6 +110,25 @@ def run(
         optimise: When > 0, appends optuna analysis plots (parameter importance,
             with/without repeats comparison, best parameters) from the sweep results
             to the report. Defaults to 0 (no optimisation analysis).
+        sampling_context: An optional context manager that wraps only the sampling
+            phase (``br.run(...)``).  Its ``__exit__`` is guaranteed to run *before*
+            the Panel/Bokeh server starts, so resources held by the context (DB
+            pools, GPU handles, simulators, etc.) are released while nothing blocks.
+            ``save`` and ``publish`` still execute inside the context (they happen
+            during ``br.run(show=False, ...)``).  Defaults to ``None`` (no wrapper,
+            fully backward-compatible).
+
+            **Anti-pattern** — wrapping the whole call keeps resources held during
+            the interactive viewing session::
+
+                with gpu_context():          # held for the entire viewing session!
+                    bn.run(target, show=True)
+
+            **Recommended** — use ``sampling_context`` so the context exits before
+            the server starts::
+
+                bn.run(target, show=True, sampling_context=gpu_context())
+
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
@@ -168,27 +189,40 @@ def run(
 
     # Case 1: Callable — wrap in BenchRunner
     br = BenchRunner(target, publisher=publisher)
+    _run_kwargs = dict(
+        level=level,
+        repeats=repeats,
+        max_level=max_level,
+        max_repeats=max_repeats,
+        run_cfg=run_cfg,
+        save=save,
+        publish=publish,
+        grouped=grouped,
+        cache_samples=cache_samples,
+        over_time=over_time,
+        backend=backend,
+    )
+
     try:
-        results = br.run(
-            level=level,
-            repeats=repeats,
-            max_level=max_level,
-            max_repeats=max_repeats,
-            run_cfg=run_cfg,
-            show=show,
-            save=save,
-            publish=publish,
-            grouped=grouped,
-            cache_samples=cache_samples,
-            over_time=over_time,
-            backend=backend,
-        )
+        if sampling_context is None:
+            # Default path — behavior is identical to the original implementation.
+            results = br.run(show=show, **_run_kwargs)
+        else:
+            # Wrap only the sampling phase so __exit__ runs before the server starts.
+            # save/publish happen inside br.run(show=False, ...) and therefore execute
+            # while the context is still active.
+            with sampling_context:
+                results = br.run(show=False, **_run_kwargs)
+            # Context has exited — resources are released. Now start the server.
+            if show:
+                br.show()
     finally:
         if bench_to_close is not None:
             try:
                 bench_to_close.close()
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("Error closing bench")
+
     if show and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.
         _active_runners.append(br)

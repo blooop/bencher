@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.90.0] - 2026-04-22
+## [1.91.0] - 2026-04-22
 
 ### Added
 - Regression report is now auto-embedded as a Markdown panel at the top of `to_auto_plots()` whenever `regression_report.has_regressions` is true. Previously only the per-variable overlay plots were injected, so absolute-method fires (which have no history/overlay) were silent in the report.
@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `RegressionResult.summary()` / `RegressionReport.to_markdown()` no longer render `+nan%` or mislabel the hard limit as `Baseline` for `regression_method="absolute"` results.
+
+## [1.90.0] - 2026-04-22
+
+### Added
+- `sampling_context` parameter on `bn.run()`: an optional context manager that wraps only the sampling phase. Its `__exit__` is guaranteed to run before the Panel/Bokeh server starts, so external resources (DB pools, GPU handles, simulators) are released while nothing blocks. `save` and `publish` still execute inside the context. Defaults to `None` (fully backward-compatible).
 
 ## [1.89.0] - 2026-04-21
 
