@@ -665,11 +665,6 @@ class TestMethodCellsPublic:
         """MethodCells and method_cells are importable from the top-level package."""
         assert bn.MethodCells is not None
         assert bn.method_cells is not None
-        # Private aliases still resolve for one release for backwards compat.
-        from bencher.regression import _MethodCells, _method_cells
-
-        assert _MethodCells is bn.MethodCells
-        assert _method_cells is bn.method_cells
 
     def test_percentage_cells(self):
         cells = bn.method_cells(self._result("percentage", "minimize"))

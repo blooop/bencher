@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Public `MethodCells` dataclass and `method_cells(result)` helper in `bencher.regression`, re-exported from the top-level `bencher` package. Downstream report builders can now call `method_cells(r)` to get pre-rendered, method-aware display strings (change, baseline, threshold, summary lead) for a `RegressionResult` and embed them in a custom layout — custom columns, non-markdown output, CI comments with status decoration, etc. — without reimplementing per-method dispatch (and drifting when new detection methods are added).
 
-### Deprecated
-- The private names `_MethodCells` / `_method_cells` remain as module-level aliases to the new public symbols for one release. New callers should use `MethodCells` / `method_cells`.
+### Removed
+- The private names `_MethodCells` / `_method_cells` are gone. Update callers to the public `MethodCells` / `method_cells`.
 
 ## [1.91.0] - 2026-04-22
 

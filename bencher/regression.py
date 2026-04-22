@@ -255,12 +255,6 @@ def method_cells(r: RegressionResult) -> MethodCells:
     )
 
 
-# Deprecated private aliases — will be removed in a future release.
-# New callers should use `MethodCells` / `method_cells` directly.
-_MethodCells = MethodCells
-_method_cells = method_cells
-
-
 def _format_summary_line(r: RegressionResult) -> str:
     cells = method_cells(r)
     if cells.summary_standalone:
