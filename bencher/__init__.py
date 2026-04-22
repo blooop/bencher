@@ -116,7 +116,13 @@ except ModuleNotFoundError:
     pass
 
 
-from .regression import RegressionResult, RegressionReport, RegressionError
+from .regression import (
+    RegressionResult,
+    RegressionReport,
+    RegressionError,
+    MethodCells,
+    method_cells,
+)
 from .perf_tracker import PerfTracker, PerfReport
 from .git_info import git_time_event
 from .plotting.plot_filter import VarRange, PlotFilter

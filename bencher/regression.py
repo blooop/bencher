@@ -153,13 +153,23 @@ class RegressionReport:
 
 
 @dataclass(frozen=True)
-class _MethodCells:
+class MethodCells:
     """Per-method rendering of a single regression result.
 
     Each detector has a different gate — percent ratio, MAD-sigma, absolute
     delta, hard limit — so the report cells must describe it in its own
     units. This bundle is the single source of truth consumed by both the
-    text summary and the markdown table.
+    built-in text summary and the markdown table, and is exposed as public
+    API so downstream report builders can produce their own layouts
+    (custom columns, non-markdown output, templated HTML, GitHub PR
+    comments with status decoration, etc.) without reimplementing method
+    dispatch and drifting when new detection methods are added.
+
+    Example — building a minimal custom row from a RegressionResult::
+
+        from bencher import method_cells
+        cells = method_cells(result)
+        row = f"{result.variable}: {cells.change} (gate {cells.threshold})"
 
     Attributes:
         change: Change column (markdown) — gated quantity in its own units.
@@ -182,8 +192,19 @@ class _MethodCells:
     summary_standalone: bool = False
 
 
-def _method_cells(r: RegressionResult) -> _MethodCells:
-    """Build the per-method cell bundle.
+def method_cells(r: RegressionResult) -> MethodCells:
+    """Build the per-method cell bundle for a :class:`RegressionResult`.
+
+    Returns a :class:`MethodCells` with pre-rendered display strings for
+    the result's change, baseline, and threshold, plus the summary lead
+    clause. Dispatches on ``r.method`` so each gate describes itself in
+    its native units. Safe to call on any ``RegressionResult`` — unknown
+    methods fall back to the percentage-style rendering.
+
+    Intended for consumers that want to embed regression results in a
+    custom layout while staying consistent with how the built-in
+    :meth:`RegressionReport.summary` and :meth:`RegressionReport.to_markdown`
+    present each method.
 
     Notes on the ``absolute`` branch: ``baseline_value`` and ``threshold``
     both hold the limit for this detector (see :func:`detect_absolute`);
@@ -199,7 +220,7 @@ def _method_cells(r: RegressionResult) -> _MethodCells:
         else:
             ineq, label = "", "limit"
         threshold_cell = f"{ineq} {t:.4g}" if ineq else f"{t:.4g}"
-        return _MethodCells(
+        return MethodCells(
             change="—",
             baseline="—",
             threshold=threshold_cell,
@@ -210,7 +231,7 @@ def _method_cells(r: RegressionResult) -> _MethodCells:
         # The gate is in absolute units; percent change is informational at
         # best and misleading at worst (scales with baseline magnitude).
         delta = c - b
-        return _MethodCells(
+        return MethodCells(
             change=f"{delta:+.4g}",
             baseline=f"{b:.4g}",
             threshold=f"±{t:.4g}",
@@ -219,14 +240,14 @@ def _method_cells(r: RegressionResult) -> _MethodCells:
     if r.method == "adaptive":
         # Threshold is MAD-sigma units, not percent — flag σ so the threshold
         # isn't read as a bare percent next to the change_percent value.
-        return _MethodCells(
+        return MethodCells(
             change=f"{r.change_percent:+.1f}%",
             baseline=f"{b:.4g}",
             threshold=f"{t:g}σ",
             summary_lead=f"{r.change_percent:+.2f}% change",
         )
     # percentage and unknown-method fallback.
-    return _MethodCells(
+    return MethodCells(
         change=f"{r.change_percent:+.1f}%",
         baseline=f"{b:.4g}",
         threshold=f"±{t:g}%",
@@ -234,8 +255,14 @@ def _method_cells(r: RegressionResult) -> _MethodCells:
     )
 
 
+# Deprecated private aliases — will be removed in a future release.
+# New callers should use `MethodCells` / `method_cells` directly.
+_MethodCells = MethodCells
+_method_cells = method_cells
+
+
 def _format_summary_line(r: RegressionResult) -> str:
-    cells = _method_cells(r)
+    cells = method_cells(r)
     if cells.summary_standalone:
         return f"  {r.variable}: {cells.summary_lead} (method={r.method})"
     return (
@@ -246,7 +273,7 @@ def _format_summary_line(r: RegressionResult) -> str:
 
 
 def _format_markdown_row(r: RegressionResult) -> str:
-    cells = _method_cells(r)
+    cells = method_cells(r)
     return (
         f"| {r.variable} | {cells.change} | {cells.baseline} | "
         f"{r.current_value:.4g} | {r.method} | {cells.threshold} |"
