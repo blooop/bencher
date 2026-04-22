@@ -635,6 +635,111 @@ class TestRegressionReport:
         assert "latency" in md
 
 
+# ── method_cells public helper ────────────────────────────────────────────
+
+
+class TestMethodCellsPublic:
+    """Direct coverage of the public method_cells helper.
+
+    Downstream report builders call this to render a RegressionResult in a
+    custom layout; the invariants below are what those callers rely on.
+    """
+
+    @staticmethod
+    def _result(method: str, direction: str, **overrides) -> RegressionResult:
+        defaults = dict(
+            variable="m",
+            method=method,
+            regressed=True,
+            current_value=110.0,
+            baseline_value=100.0,
+            change_percent=10.0,
+            threshold=5.0,
+            direction=direction,
+            details="test",
+        )
+        defaults.update(overrides)
+        return RegressionResult(**defaults)
+
+    def test_exported_from_bencher_package(self):
+        """MethodCells and method_cells are importable from the top-level package."""
+        assert bn.MethodCells is not None
+        assert bn.method_cells is not None
+
+    def test_percentage_cells(self):
+        cells = bn.method_cells(self._result("percentage", "minimize"))
+        assert cells.change == "+10.0%"
+        assert cells.baseline == "100"
+        assert cells.threshold == "±5%"
+        assert cells.summary_lead == "+10.00% change"
+        assert cells.summary_standalone is False
+
+    def test_adaptive_cells_tag_sigma_on_threshold(self):
+        cells = bn.method_cells(self._result("adaptive", "minimize", threshold=3.5))
+        assert cells.change == "+10.0%"
+        assert cells.threshold == "3.5σ"
+        assert cells.summary_standalone is False
+
+    def test_delta_cells_use_raw_delta(self):
+        cells = bn.method_cells(
+            self._result("delta", "minimize", current_value=108.0, baseline_value=100.0)
+        )
+        assert cells.change == "+8"
+        assert cells.baseline == "100"
+        assert cells.threshold == "±5"
+        assert cells.summary_lead == "Δ=+8"
+
+    def test_absolute_maximize_shows_floor(self):
+        cells = bn.method_cells(
+            self._result(
+                "absolute",
+                OptDir.maximize.value,
+                current_value=3.5,
+                baseline_value=5.0,
+                threshold=5.0,
+                change_percent=float("nan"),
+            )
+        )
+        assert cells.change == "—"
+        assert cells.baseline == "—"
+        assert cells.threshold == "≥ 5"
+        assert cells.summary_lead == "current=3.5 vs floor=5"
+        assert cells.summary_standalone is True
+
+    def test_absolute_minimize_shows_ceiling(self):
+        cells = bn.method_cells(
+            self._result(
+                "absolute",
+                OptDir.minimize.value,
+                current_value=12.0,
+                baseline_value=10.0,
+                threshold=10.0,
+                change_percent=float("nan"),
+            )
+        )
+        assert cells.threshold == "≤ 10"
+        assert "ceiling=10" in cells.summary_lead
+
+    def test_absolute_direction_none_has_no_inequality(self):
+        cells = bn.method_cells(
+            self._result(
+                "absolute",
+                OptDir.none.value,
+                current_value=7.0,
+                baseline_value=5.0,
+                threshold=5.0,
+                change_percent=float("nan"),
+            )
+        )
+        assert cells.threshold == "5"  # no ≥/≤ prefix for OptDir.none
+        assert "limit=5" in cells.summary_lead
+
+    def test_unknown_method_falls_back_to_percentage_style(self):
+        cells = bn.method_cells(self._result("something-new", "minimize"))
+        assert cells.change == "+10.0%"
+        assert cells.threshold == "±5%"
+
+
 # ── detect_regressions integration ────────────────────────────────────────
 
 
