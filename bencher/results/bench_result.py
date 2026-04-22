@@ -232,7 +232,17 @@ class BenchResult(
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
 
         # --- Regression report (auto-inserted when regression detection is enabled) ---
+        # Summary table surfaces whenever a regression fires (including the
+        # absolute-method case which has no history and therefore no overlay).
         has_multiple_times = "over_time" in self.ds.dims and self.ds.sizes["over_time"] > 1
+        if self.regression_report is not None and self.regression_report.has_regressions:
+            plot_cols.append(
+                pn.pane.Markdown(
+                    self.regression_report.to_markdown(),
+                    name="Regression Report",
+                    width=800,
+                )
+            )
         if self.regression_report is not None and has_multiple_times:
             for r in self.regression_report.results:
                 if r.historical is None or len(r.historical) == 0:

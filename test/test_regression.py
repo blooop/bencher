@@ -1118,6 +1118,59 @@ class TestEndToEnd:
         with pytest.raises(bn.RegressionError):
             bench.plot_sweep(plot_callbacks=False)
 
+    def test_auto_plots_surfaces_report_markdown_when_regressed(self):
+        """to_auto_plots must embed the regression markdown panel when a
+        regression fires, so users see the summary table in the report."""
+        import panel as pn
+
+        _degrade_state["counter"] = 0
+        run_cfg = bn.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 1
+        run_cfg.regression_detection = True
+        run_cfg.regression_method = "percentage"
+        run_cfg.regression_fail = False
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+
+        bench = bn.Bench("test_regression_panel", _DegradingBench(), run_cfg=run_cfg)
+        bench.plot_sweep(plot_callbacks=False)
+        bench.sample_cache = None
+        res = bench.plot_sweep(plot_callbacks=False)
+
+        assert res.regression_report is not None and res.regression_report.has_regressions
+        panel = res.to_auto_plots()
+        md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
+        report_panes = [p for p in md_panes if p.name == "Regression Report"]
+        assert len(report_panes) == 1, "expected exactly one Regression Report panel"
+        # The rendered markdown should be the same string to_markdown() produces.
+        assert report_panes[0].object == res.regression_report.to_markdown()
+        assert "regression(s) detected" in report_panes[0].object
+
+    def test_auto_plots_omits_report_when_no_regression(self):
+        """No regression → no markdown panel injected."""
+        import panel as pn
+
+        run_cfg = bn.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 2
+        run_cfg.regression_detection = True
+        run_cfg.regression_method = "percentage"
+        run_cfg.regression_fail = False
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+
+        bench = bn.Bench("test_regression_no_panel", _SimpleBench(), run_cfg=run_cfg)
+        bench.plot_sweep(plot_callbacks=False)
+        bench.sample_cache = None
+        res = bench.plot_sweep(plot_callbacks=False)
+
+        assert res.regression_report is not None and not res.regression_report.has_regressions
+        panel = res.to_auto_plots()
+        md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
+        report_panes = [p for p in md_panes if p.name == "Regression Report"]
+        assert report_panes == []
+
 
 # ── Renderers ───────────────────────────────────────────────────────────────
 
