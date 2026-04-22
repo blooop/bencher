@@ -113,11 +113,7 @@ class RegressionReport:
         else:
             lines.append(f"Regressions detected in {len(regressed)} variable(s):")
             for r in regressed:
-                lines.append(
-                    f"  {r.variable}: {r.change_percent:+.2f}% change "
-                    f"(baseline={r.baseline_value:.4g}, current={r.current_value:.4g}, "
-                    f"method={r.method}, threshold={r.threshold})"
-                )
+                lines.append(_format_summary_line(r))
         return "\n".join(lines)
 
     def to_markdown(self) -> str:
@@ -131,11 +127,7 @@ class RegressionReport:
             lines.append("| Variable | Change | Baseline | Current | Method | Threshold |")
             lines.append("|----------|-------:|----------:|--------:|--------|----------:|")
             for r in regressed:
-                lines.append(
-                    f"| {r.variable} | {r.change_percent:+.1f}% "
-                    f"| {r.baseline_value:.4g} | {r.current_value:.4g} "
-                    f"| {r.method} | {r.threshold} |"
-                )
+                lines.append(_format_markdown_row(r))
         else:
             lines.append("**No regressions detected**\n")
 
@@ -158,6 +150,73 @@ class RegressionReport:
 
         md = pn.pane.Markdown(self.to_markdown(), name="Regression Report", width=800)
         report.prepend_to_result(bench_res, md)
+
+
+def _absolute_direction_label(direction: str) -> str:
+    """Word form of the absolute-method limit ('floor'/'ceiling'/'limit')."""
+    if direction == OptDir.maximize.value:
+        return "floor"
+    if direction == OptDir.minimize.value:
+        return "ceiling"
+    return "limit"
+
+
+def _absolute_inequality(direction: str) -> str:
+    """Inequality glyph for the absolute-method limit ('≥'/'≤'/'')."""
+    if direction == OptDir.maximize.value:
+        return "≥"
+    if direction == OptDir.minimize.value:
+        return "≤"
+    return ""
+
+
+def _format_summary_line(r: RegressionResult) -> str:
+    """Render a regressed variable per-method so the output describes the
+    real gate: percent for percentage, MAD-sigma for adaptive, absolute delta
+    for delta, hard limit (no historical baseline) for absolute."""
+    v, b, c, t = r.variable, r.baseline_value, r.current_value, r.threshold
+    if r.method == "absolute":
+        # No historical baseline — change_percent is NaN, baseline_value is
+        # the limit. Phrase the line as current-vs-limit.
+        label = _absolute_direction_label(r.direction)
+        return f"  {v}: current={c:.4g} vs {label}={t:.4g} (method=absolute)"
+    if r.method == "delta":
+        # The gate is in absolute units; percent change is informational at
+        # best and misleading at worst (changes with baseline magnitude).
+        delta = c - b
+        return (
+            f"  {v}: Δ={delta:+.4g} (baseline={b:.4g}, current={c:.4g}, "
+            f"method=delta, threshold=±{t:.4g})"
+        )
+    if r.method == "adaptive":
+        # Threshold is MAD-sigma units, not percent — flag the σ so it
+        # doesn't read as a bare percent next to the change_percent value.
+        return (
+            f"  {v}: {r.change_percent:+.2f}% change "
+            f"(baseline={b:.4g}, current={c:.4g}, method=adaptive, threshold={t:g}σ)"
+        )
+    return (
+        f"  {v}: {r.change_percent:+.2f}% change "
+        f"(baseline={b:.4g}, current={c:.4g}, method={r.method}, threshold=±{t:g}%)"
+    )
+
+
+def _format_markdown_row(r: RegressionResult) -> str:
+    """Render one per-method table row. Cell contents match the gate: the
+    Change column shows the gated quantity (percent / raw delta / em-dash),
+    the Threshold column carries the gate's native units (±%, σ, ± raw, or
+    direction-aware inequality)."""
+    v, b, c, t = r.variable, r.baseline_value, r.current_value, r.threshold
+    if r.method == "absolute":
+        ineq = _absolute_inequality(r.direction)
+        limit_cell = f"{ineq} {t:.4g}" if ineq else f"{t:.4g}"
+        return f"| {v} | — | — | {c:.4g} | absolute | {limit_cell} |"
+    if r.method == "delta":
+        delta = c - b
+        return f"| {v} | {delta:+.4g} | {b:.4g} | {c:.4g} | delta | ±{t:.4g} |"
+    if r.method == "adaptive":
+        return f"| {v} | {r.change_percent:+.1f}% | {b:.4g} | {c:.4g} | adaptive | {t:g}σ |"
+    return f"| {v} | {r.change_percent:+.1f}% | {b:.4g} | {c:.4g} | {r.method} | ±{t:g}% |"
 
 
 def _regression_plot_spec(

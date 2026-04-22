@@ -456,6 +456,114 @@ class TestRegressionReport:
         assert len(report.regressed_variables) == 1
         assert "metric_a" in report.summary()
 
+    # ---- format: per-method rendering ----
+
+    def test_percentage_output(self):
+        """Percentage renders change as '+NN.N%' with '±T%' threshold."""
+        r = RegressionResult(
+            variable="metric_a",
+            method="percentage",
+            regressed=True,
+            current_value=110.0,
+            baseline_value=100.0,
+            change_percent=10.0,
+            threshold=5.0,
+            direction="minimize",
+            details="test",
+        )
+        report = RegressionReport(results=[r])
+        expected_summary = (
+            "Regressions detected in 1 variable(s):\n"
+            "  metric_a: +10.00% change (baseline=100, current=110, "
+            "method=percentage, threshold=±5%)"
+        )
+        assert report.summary() == expected_summary
+        assert "| metric_a | +10.0% | 100 | 110 | percentage | ±5% |" in report.to_markdown()
+
+    def test_adaptive_output_has_sigma_units(self):
+        """Adaptive renders change as percent but tags threshold as '{T}σ'."""
+        r = RegressionResult(
+            variable="lat",
+            method="adaptive",
+            regressed=True,
+            current_value=150.0,
+            baseline_value=100.0,
+            change_percent=50.0,
+            threshold=3.5,
+            direction="minimize",
+            details="test",
+        )
+        report = RegressionReport(results=[r])
+        summary = report.summary()
+        assert "+50.00% change" in summary
+        assert "threshold=3.5σ" in summary
+        assert "| lat | +50.0% | 100 | 150 | adaptive | 3.5σ |" in report.to_markdown()
+
+    def test_delta_output_shows_raw_delta(self):
+        """Delta's gate is in absolute units — show Δ, not percent."""
+        r = RegressionResult(
+            variable="lat",
+            method="delta",
+            regressed=True,
+            current_value=108.0,
+            baseline_value=100.0,
+            change_percent=8.0,  # informational only — should not surface
+            threshold=5.0,
+            direction="minimize",
+            details="test",
+        )
+        report = RegressionReport(results=[r])
+        expected_summary = (
+            "Regressions detected in 1 variable(s):\n"
+            "  lat: Δ=+8 (baseline=100, current=108, method=delta, threshold=±5)"
+        )
+        assert report.summary() == expected_summary
+        assert "% change" not in report.summary()  # percent-change is hidden
+        assert "| lat | +8 | 100 | 108 | delta | ±5 |" in report.to_markdown()
+
+    def test_absolute_regressed_summary_no_nan_minimize(self):
+        """Absolute regressed result must not render '+nan%' or mislabel the limit."""
+        r = detect_absolute("latency", np.array([60.0]), limit=50.0, direction=OptDir.minimize)
+        report = RegressionReport(results=[r])
+        text = report.summary()
+        assert "nan" not in text.lower()
+        assert "% change" not in text
+        assert "current=60 vs ceiling=50" in text  # no historical baseline — phrased as vs limit
+        assert "baseline=" not in text
+
+    def test_absolute_regressed_summary_floor_maximize(self):
+        """Maximize direction renders 'floor=' instead of 'ceiling='."""
+        r = detect_absolute("throughput", np.array([80.0]), limit=100.0, direction=OptDir.maximize)
+        report = RegressionReport(results=[r])
+        text = report.summary()
+        assert "current=80 vs floor=100" in text
+        assert "ceiling=" not in text
+
+    def test_absolute_regressed_markdown_no_nan_minimize(self):
+        """Absolute: baseline cell is em-dash, threshold cell is '≤ limit'."""
+        r = detect_absolute("latency", np.array([60.0]), limit=50.0, direction=OptDir.minimize)
+        report = RegressionReport(results=[r])
+        md = report.to_markdown()
+        assert "nan" not in md.lower()
+        assert "| latency | — | — | 60 | absolute | ≤ 50 |" in md
+
+    def test_absolute_regressed_markdown_maximize_floor(self):
+        r = detect_absolute("throughput", np.array([80.0]), limit=100.0, direction=OptDir.maximize)
+        report = RegressionReport(results=[r])
+        md = report.to_markdown()
+        assert "| throughput | — | — | 80 | absolute | ≥ 100 |" in md
+
+    def test_absolute_non_regressed_renders_cleanly(self):
+        """Non-regressed absolute results show up in the passed list, no nan leak."""
+        r = detect_absolute("latency", np.array([40.0]), limit=50.0, direction=OptDir.minimize)
+        report = RegressionReport(results=[r])
+        text = report.summary()
+        md = report.to_markdown()
+        assert "nan" not in text.lower()
+        assert "nan" not in md.lower()
+        assert "No regressions" in text
+        assert "latency" in md
+
 
 # ── detect_regressions integration ────────────────────────────────────────
 
