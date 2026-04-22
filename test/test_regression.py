@@ -494,9 +494,12 @@ class TestRegressionReport:
             details="test",
         )
         report = RegressionReport(results=[r])
-        summary = report.summary()
-        assert "+50.00% change" in summary
-        assert "threshold=3.5σ" in summary
+        expected_summary = (
+            "Regressions detected in 1 variable(s):\n"
+            "  lat: +50.00% change (baseline=100, current=150, "
+            "method=adaptive, threshold=3.5σ)"
+        )
+        assert report.summary() == expected_summary
         assert "| lat | +50.0% | 100 | 150 | adaptive | 3.5σ |" in report.to_markdown()
 
     def test_delta_output_shows_raw_delta(self):
@@ -520,6 +523,73 @@ class TestRegressionReport:
         assert report.summary() == expected_summary
         assert "% change" not in report.summary()  # percent-change is hidden
         assert "| lat | +8 | 100 | 108 | delta | ±5 |" in report.to_markdown()
+
+    # Negative-change variants — signed formatting (`:+` / raw `-`) is easy
+    # to get wrong, so pin the output for a regression in the opposite
+    # direction on each method.
+
+    def test_percentage_output_negative(self):
+        """Percentage: maximize direction, value fell below baseline."""
+        r = RegressionResult(
+            variable="thr",
+            method="percentage",
+            regressed=True,
+            current_value=50.0,
+            baseline_value=100.0,
+            change_percent=-50.0,
+            threshold=10.0,
+            direction="maximize",
+            details="test",
+        )
+        report = RegressionReport(results=[r])
+        expected_summary = (
+            "Regressions detected in 1 variable(s):\n"
+            "  thr: -50.00% change (baseline=100, current=50, "
+            "method=percentage, threshold=±10%)"
+        )
+        assert report.summary() == expected_summary
+        assert "| thr | -50.0% | 100 | 50 | percentage | ±10% |" in report.to_markdown()
+
+    def test_adaptive_output_negative(self):
+        r = RegressionResult(
+            variable="thr",
+            method="adaptive",
+            regressed=True,
+            current_value=50.0,
+            baseline_value=100.0,
+            change_percent=-50.0,
+            threshold=3.5,
+            direction="maximize",
+            details="test",
+        )
+        report = RegressionReport(results=[r])
+        expected_summary = (
+            "Regressions detected in 1 variable(s):\n"
+            "  thr: -50.00% change (baseline=100, current=50, "
+            "method=adaptive, threshold=3.5σ)"
+        )
+        assert report.summary() == expected_summary
+        assert "| thr | -50.0% | 100 | 50 | adaptive | 3.5σ |" in report.to_markdown()
+
+    def test_delta_output_negative(self):
+        r = RegressionResult(
+            variable="thr",
+            method="delta",
+            regressed=True,
+            current_value=92.0,
+            baseline_value=100.0,
+            change_percent=-8.0,
+            threshold=5.0,
+            direction="maximize",
+            details="test",
+        )
+        report = RegressionReport(results=[r])
+        expected_summary = (
+            "Regressions detected in 1 variable(s):\n"
+            "  thr: Δ=-8 (baseline=100, current=92, method=delta, threshold=±5)"
+        )
+        assert report.summary() == expected_summary
+        assert "| thr | -8 | 100 | 92 | delta | ±5 |" in report.to_markdown()
 
     def test_absolute_regressed_summary_no_nan_minimize(self):
         """Absolute regressed result must not render '+nan%' or mislabel the limit."""
