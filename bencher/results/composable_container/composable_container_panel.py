@@ -12,13 +12,29 @@ from bencher.results.composable_container.composable_container_base import (
 _LABEL_STYLES = {
     "white-space": "nowrap",
     "min-width": "max-content",
-    "padding": "0 2px",
-    "font-size": "0.9em",
-    "color": "rgba(0, 0, 0, 0.75)",
+    "padding": "0 4px",
+    "font-size": "0.95em",
+    "font-weight": "500",
+    "color": "rgba(0, 0, 0, 0.88)",
     "text-align": "center",
 }
-_CELL_DIVIDER = "1px solid rgba(0, 0, 0, 0.08)"
+_CELL_DIVIDER = "1px solid rgba(0, 0, 0, 0.18)"
 _CELL_GAP = "6px"
+
+
+def make_label_pane(text: str) -> pn.pane.Markdown:
+    """Build a Markdown pane styled as a grid dimension label.
+
+    Used both by ComposableContainerPanel (leading label on each slice) and
+    by the grid-rendering pipeline in bench_result_base to repeat labels
+    across wide rows/columns.
+    """
+    return pn.pane.Markdown(
+        text,
+        align=("center", "center"),
+        margin=(0, 2),
+        styles=_LABEL_STYLES,
+    )
 
 
 @dataclass(kw_only=True)
@@ -38,9 +54,12 @@ class ComposableContainerPanel(ComposableContainerBase):
 
         styles = {}
         if self.nesting_depth is not None:
-            # A single thin divider between cells, regardless of recursion depth.
-            # Depth is communicated by the background tint, not border thickness.
+            # Grid lines on each slice wrapper: right + bottom edges combine
+            # across siblings to form a visible grid. Depth is communicated by
+            # the background tint, not by border thickness, so the line weight
+            # is constant across recursion levels.
             styles["border-bottom"] = _CELL_DIVIDER
+            styles["border-right"] = _CELL_DIVIDER
         if self.background_col is not None:
             styles["background"] = self.background_col
 
@@ -63,12 +82,7 @@ class ComposableContainerPanel(ComposableContainerBase):
 
         label = self.label_formatter(self.var_name, self.var_value)
         if label is not None:
-            side = pn.pane.Markdown(
-                label,
-                align=("center", "center"),
-                margin=(0, 2),
-                styles=_LABEL_STYLES,
-            )
+            side = make_label_pane(label)
             if self.compose_method == ComposeType.sequence:
                 # For Tabs, label sits outside the tab bar in a wrapper Column
                 self.container.append(side)

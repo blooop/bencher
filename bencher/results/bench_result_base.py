@@ -33,6 +33,7 @@ from bencher.variables.results import (
 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
+    make_label_pane,
 )
 from bencher.results.composable_container.composable_container_base import (
     ComposeType,
@@ -829,28 +830,72 @@ class BenchResultBase:
                     compose_method=ComposeType.down if not horizontal else ComposeType.right,
                 )
                 max_label_chars = 0
+                # For very long rows/columns, sprinkle extra label copies into
+                # the content so the dim label stays visible when scrolled far
+                # from the start.
+                repeat_label_every = 5
+                # Collect every label pane we create at this level so we can
+                # apply uniform width in a single post-pass.
+                level_labels: list[pn.pane.Markdown] = []
+                # For dimension > 2 we inject the outer label into each inner
+                # row/column of the content so it aligns row-for-row with the
+                # inner dim's labels — and we SKIP the single centered bracket
+                # label on inner_container (which would create a duplicate
+                # outer column).  For dim <= 2 we keep the centered bracket
+                # labels (simple 2D grids read best that way).
+                inject_into_children = num_pane_dims > 2
                 for label_val, panes in slices:
                     inner_container = ComposableContainerPanel(
                         name=outer_container.name,
                         nesting_depth=depth,
-                        var_name=selected_dim,
-                        var_value=label_val,
                         compose_method=ComposeType.down if horizontal else ComposeType.right,
                     )
                     label_text = ComposableContainerBase.label_formatter(selected_dim, label_val)
+                    inner_container.append(panes)
                     if label_text is not None:
                         max_label_chars = max(max_label_chars, len(label_text))
-                    inner_container.append(panes)
+
+                        injected = False
+                        if inject_into_children and isinstance(panes, (pn.Row, pn.Column)):
+                            for child in list(panes):
+                                if isinstance(child, (pn.Row, pn.Column)):
+                                    lead = make_label_pane(label_text)
+                                    trail = make_label_pane(label_text)
+                                    child.insert(0, lead)
+                                    child.append(trail)
+                                    level_labels.extend([lead, trail])
+                                    injected = True
+
+                        if not injected:
+                            # Fallback for dim <= 2 (or when panes has no
+                            # sub-layout children): single bracket labels on
+                            # inner_container itself.
+                            leading = make_label_pane(label_text)
+                            trailing = make_label_pane(label_text)
+                            inner_container.container.insert(0, leading)
+                            inner_container.container.append(trailing)
+                            level_labels.extend([leading, trailing])
+
+                        # Every-N mid-interleave in the content for very wide
+                        # or tall layouts (unchanged).
+                        if (
+                            isinstance(panes, (pn.Row, pn.Column))
+                            and len(panes) > repeat_label_every
+                        ):
+                            insert_points = list(
+                                range(repeat_label_every, len(panes), repeat_label_every)
+                            )
+                            for idx in reversed(insert_points):
+                                mid = make_label_pane(label_text)
+                                panes.insert(idx, mid)
+                                level_labels.append(mid)
                     outer_container.append(inner_container.container)
-                # Force every label in this outer container to the same width so the
-                # content panes line up in their columns. Use `ch` units (width of "0"
-                # in the label's font) instead of a pixel estimate so alignment
-                # survives font/DPI changes.
-                if max_label_chars > 0:
+                # Apply uniform width (in `ch` units) to every label we created
+                # at this level so labels line up across slices.
+                if max_label_chars > 0 and level_labels:
                     label_width = f"{max_label_chars + 2}ch"
-                    for c in outer_container.container:
-                        label_pane = c[0]
-                        label_pane.styles = {**label_pane.styles, "width": label_width}
+                    for lbl in level_labels:
+                        lbl.styles = {**lbl.styles, "width": label_width}
         else:
             # When over_time is active with >1 time points, the dataset still
             # contains the over_time dimension (it was excluded from pane recursion
