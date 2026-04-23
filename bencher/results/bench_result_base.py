@@ -859,22 +859,21 @@ class BenchResultBase:
                         if inject_into_children and isinstance(panes, (pn.Row, pn.Column)):
                             for child in list(panes):
                                 if isinstance(child, (pn.Row, pn.Column)):
-                                    lead = make_label_pane(label_text)
-                                    trail = make_label_pane(label_text)
+                                    # Single-sided (leading only).  Injected
+                                    # labels carry the outer dim's own tint so
+                                    # they don't pick up the inner dim's bg.
+                                    lead = make_label_pane(label_text, bg_color=dim_color)
                                     child.insert(0, lead)
-                                    child.append(trail)
-                                    level_labels.extend([lead, trail])
+                                    level_labels.append(lead)
                                     injected = True
 
                         if not injected:
                             # Fallback for dim <= 2 (or when panes has no
-                            # sub-layout children): single bracket labels on
+                            # sub-layout children): single leading label on
                             # inner_container itself.
                             leading = make_label_pane(label_text)
-                            trailing = make_label_pane(label_text)
                             inner_container.container.insert(0, leading)
-                            inner_container.container.append(trailing)
-                            level_labels.extend([leading, trailing])
+                            level_labels.append(leading)
 
                         # Every-N mid-interleave in the content for very wide
                         # or tall layouts (unchanged).

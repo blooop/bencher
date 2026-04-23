@@ -22,18 +22,22 @@ _CELL_DIVIDER = "1px solid rgba(0, 0, 0, 0.18)"
 _CELL_GAP = "6px"
 
 
-def make_label_pane(text: str) -> pn.pane.Markdown:
+def make_label_pane(text: str, bg_color: str | None = None) -> pn.pane.Markdown:
     """Build a Markdown pane styled as a grid dimension label.
 
-    Used both by ComposableContainerPanel (leading label on each slice) and
-    by the grid-rendering pipeline in bench_result_base to repeat labels
-    across wide rows/columns.
+    `bg_color`, when provided, is painted on the label's content box.  It
+    does not stretch to fill the whole cell — attempts to do that (via
+    sizing_mode / flex-stretch wrappers) interfere with Panel's row-height
+    calculations and squash the plot content.
     """
+    styles = dict(_LABEL_STYLES)
+    if bg_color is not None:
+        styles["background"] = bg_color
     return pn.pane.Markdown(
         text,
         align=("center", "center"),
         margin=(0, 2),
-        styles=_LABEL_STYLES,
+        styles=styles,
     )
 
 
