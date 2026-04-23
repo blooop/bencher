@@ -92,9 +92,23 @@ class TestComposableContainerPanel:
     def test_styles_border_and_background(self):
         c = ComposableContainerPanel(
             compose_method=ComposeType.right,
-            width=2,
+            nesting_depth=2,
             background_col="#ff0000",
         )
         styles = c.container.styles
         assert "border-bottom" in styles
         assert styles["background"] == "#ff0000"
+
+    def test_border_is_thin_regardless_of_depth(self):
+        """Nesting depth must NOT thicken the divider — depth is shown via background tint."""
+        shallow = ComposableContainerPanel(compose_method=ComposeType.right, nesting_depth=1)
+        deep = ComposableContainerPanel(compose_method=ComposeType.right, nesting_depth=5)
+        assert shallow.container.styles["border-bottom"] == deep.container.styles["border-bottom"]
+
+    def test_label_nowrap_styles(self):
+        """Labels must carry the CSS that prevents Markdown wrapping — replaces the old max_len*7 hack."""
+        c = ComposableContainerPanel(compose_method=ComposeType.right, var_name="x", var_value="1")
+        c.append(pn.pane.Markdown("A"))
+        label_pane = c.render()[0]
+        assert label_pane.styles.get("white-space") == "nowrap"
+        assert label_pane.styles.get("min-width") == "max-content"

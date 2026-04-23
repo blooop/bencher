@@ -52,7 +52,6 @@ class ComposableContainerBase:
 
     compose_method: ComposeType = ComposeType.right
     container: list[Any] = field(default_factory=list)
-    label_len: int = 0
 
     @staticmethod
     def label_formatter(var_name: str, var_value: int | float | str) -> str:

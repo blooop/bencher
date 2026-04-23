@@ -9,12 +9,24 @@ from bencher.results.composable_container.composable_container_base import (
 )
 
 
+_LABEL_STYLES = {
+    "white-space": "nowrap",
+    "min-width": "max-content",
+    "padding": "0 2px",
+    "font-size": "0.9em",
+    "color": "rgba(0, 0, 0, 0.75)",
+    "text-align": "center",
+}
+_CELL_DIVIDER = "1px solid rgba(0, 0, 0, 0.08)"
+_CELL_GAP = "6px"
+
+
 @dataclass(kw_only=True)
 class ComposableContainerPanel(ComposableContainerBase):
     name: str | None = None
     var_name: str | None = None
     var_value: str | None = None
-    width: int | None = None
+    nesting_depth: int | None = None
     background_col: str | None = None
     horizontal: bool | None = None
 
@@ -25,33 +37,38 @@ class ComposableContainerPanel(ComposableContainerBase):
             self.compose_method = ComposeType.down if self.horizontal else ComposeType.right
 
         styles = {}
-        if self.width is not None:
-            styles["border-bottom"] = f"{self.width}px solid grey"
+        if self.nesting_depth is not None:
+            # A single thin divider between cells, regardless of recursion depth.
+            # Depth is communicated by the background tint, not border thickness.
+            styles["border-bottom"] = _CELL_DIVIDER
         if self.background_col is not None:
             styles["background"] = self.background_col
 
-        container_args = {"name": self.name, "styles": styles}
+        container_args = {"name": self.name, "styles": {**styles, "gap": _CELL_GAP}}
 
         match self.compose_method:
             case ComposeType.right:
                 self.container = pn.Row(**container_args)
-                align = ("end", "center")
             case ComposeType.down:
                 self.container = pn.Column(**container_args)
-                align = ("center", "center")
             case ComposeType.sequence:
                 self._tabs = pn.Tabs(**container_args)
                 self.container = pn.Column(**container_args)
-                align = ("center", "center")
             case ComposeType.overlay:
-                styles["position"] = "relative"
-                self.container = pn.Column(**container_args)
-                align = ("center", "center")
+                overlay_args = {
+                    **container_args,
+                    "styles": {**container_args["styles"], "position": "relative"},
+                }
+                self.container = pn.Column(**overlay_args)
 
         label = self.label_formatter(self.var_name, self.var_value)
         if label is not None:
-            self.label_len = len(label)
-            side = pn.pane.Markdown(label, align=align)
+            side = pn.pane.Markdown(
+                label,
+                align=("center", "center"),
+                margin=(0, 2),
+                styles=_LABEL_STYLES,
+            )
             if self.compose_method == ComposeType.sequence:
                 # For Tabs, label sits outside the tab bar in a wrapper Column
                 self.container.append(side)

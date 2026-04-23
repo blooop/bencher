@@ -797,6 +797,10 @@ class BenchResultBase:
 
         if num_pane_dims > target_dimension and num_pane_dims != 0:
             selected_dim = pane_dims[-1]
+            depth = num_pane_dims - target_dimension - 1
+            # Color is indexed by the position of the selected dim in the original
+            # sweep (so each dim always gets the same tint across the grid), not by
+            # recursion depth. Preserves the previous behavior.
             dim_color = color_tuple_to_css(int_to_col(num_pane_dims - 2, 0.05, 1.0))
             use_tabs = pane_layout in (PaneLayout.tabs, PaneLayout.tabs_and_grid)
             child_layout = self._child_pane_layout(pane_layout)
@@ -824,20 +828,29 @@ class BenchResultBase:
                     background_col=dim_color,
                     compose_method=ComposeType.down if not horizontal else ComposeType.right,
                 )
-                max_len = 0
+                max_label_chars = 0
                 for label_val, panes in slices:
                     inner_container = ComposableContainerPanel(
                         name=outer_container.name,
-                        width=num_pane_dims - target_dimension,
+                        nesting_depth=depth,
                         var_name=selected_dim,
                         var_value=label_val,
                         compose_method=ComposeType.down if horizontal else ComposeType.right,
                     )
-                    max_len = max(max_len, inner_container.label_len)
+                    label_text = ComposableContainerBase.label_formatter(selected_dim, label_val)
+                    if label_text is not None:
+                        max_label_chars = max(max_label_chars, len(label_text))
                     inner_container.append(panes)
                     outer_container.append(inner_container.container)
-                for c in outer_container.container:
-                    c[0].width = max_len * 7
+                # Force every label in this outer container to the same width so the
+                # content panes line up in their columns. Use `ch` units (width of "0"
+                # in the label's font) instead of a pixel estimate so alignment
+                # survives font/DPI changes.
+                if max_label_chars > 0:
+                    label_width = f"{max_label_chars + 2}ch"
+                    for c in outer_container.container:
+                        label_pane = c[0]
+                        label_pane.styles = {**label_pane.styles, "width": label_width}
         else:
             # When over_time is active with >1 time points, the dataset still
             # contains the over_time dimension (it was excluded from pane recursion
