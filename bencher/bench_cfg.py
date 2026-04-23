@@ -21,6 +21,22 @@ from bencher.results.laxtex_result import to_latex
 T = TypeVar("T")  # Generic type variable
 
 
+SHOW_MODES = ("live", "static", "published", "none")
+_SHOW_ALIASES = {True: "live", False: "none", None: "none"}
+
+
+def normalize_show(value) -> str:
+    """Normalize a ``show`` argument to one of :data:`SHOW_MODES`.
+
+    Accepts ``True``/``False``/``None`` or the literal strings in
+    :data:`SHOW_MODES`. Raises :class:`ValueError` for anything else.
+    """
+    v = _SHOW_ALIASES.get(value, value)
+    if v not in SHOW_MODES:
+        raise ValueError(f"show must be one of {list(SHOW_MODES)} or bool, got {value!r}")
+    return v
+
+
 class BenchPlotSrvCfg(param.Parameterized):
     """Configuration for the benchmarking plot server.
 
@@ -31,7 +47,11 @@ class BenchPlotSrvCfg(param.Parameterized):
         port (int): The port to launch panel with
         allow_ws_origin (bool): Add the port to the whitelist (warning will disable remote
                                access if set to true)
-        show (bool): Open the served page in a web browser
+        show (bool | str): Where to view the report. ``True``/``"live"`` (default) starts a
+                           Panel server and blocks. ``"static"`` saves an embedded HTML file
+                           and opens it in the browser, returning immediately. ``"published"``
+                           opens the published URL after ``publish=True`` (requires publish).
+                           ``False``/``"none"`` displays nothing.
     """
 
     port: int | None = param.Integer(None, doc="The port to launch panel with")
@@ -39,7 +59,15 @@ class BenchPlotSrvCfg(param.Parameterized):
         False,
         doc="Add the port to the whitelist, (warning will disable remote access if set to true)",
     )
-    show: bool = param.Boolean(True, doc="Open the served page in a web browser")
+    show = param.Parameter(
+        True,
+        doc=(
+            "Where to view the report. True/'live' (default) starts a Panel server and "
+            "blocks. 'static' saves an embedded HTML file and opens it in the browser, "
+            "returning immediately. 'published' opens the published URL after publish=True "
+            "(requires publish=True). False/'none' displays nothing."
+        ),
+    )
 
 
 class BenchRunCfg(BenchPlotSrvCfg):

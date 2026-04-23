@@ -123,6 +123,48 @@ class TestRun(unittest.TestCase):
             self.assertTrue(hasattr(r, "report"))
 
 
+class TestShowEnum(unittest.TestCase):
+    """Tests for the bool | str ``show`` enum on bn.run() / BenchRunner."""
+
+    def test_normalize_show_aliases(self):
+        from bencher.bench_cfg import normalize_show
+
+        self.assertEqual(normalize_show(True), "live")
+        self.assertEqual(normalize_show(False), "none")
+        self.assertEqual(normalize_show(None), "none")
+        for v in ("live", "static", "published", "none"):
+            self.assertEqual(normalize_show(v), v)
+
+    def test_normalize_show_rejects_bogus(self):
+        from bencher.bench_cfg import normalize_show
+
+        with self.assertRaises(ValueError):
+            normalize_show("bogus")
+
+    def test_published_without_publish_raises(self):
+        with self.assertRaises(ValueError):
+            bn.run(example_simple_float, show="published", publish=False)
+
+    def test_show_static_opens_browser_and_returns(self):
+        """show='static' saves an HTML file, opens the browser, and does not leave a server."""
+        with patch("bencher.bench_runner.webbrowser.open") as mock_open:
+            results = bn.run(example_simple_float, show="static")
+
+        self.assertIsInstance(results, list)
+        self.assertGreater(len(results), 0)
+        mock_open.assert_called()
+        opened_uri = mock_open.call_args[0][0]
+        self.assertTrue(opened_uri.startswith("file://"))
+        self.assertTrue(opened_uri.endswith(".html"))
+
+    def test_show_none_string_equivalent_to_false(self):
+        """show='none' behaves like show=False — no server, no browser."""
+        with patch("bencher.bench_runner.webbrowser.open") as mock_open:
+            results = bn.run(example_simple_float, show="none")
+        mock_open.assert_not_called()
+        self.assertIsInstance(results, list)
+
+
 class TestAddRunDeprecation(unittest.TestCase):
     """Tests for the add_run() deprecation warning."""
 

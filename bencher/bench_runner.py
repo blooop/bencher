@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Callable, Protocol, runtime_checkable
 import logging
 import warnings
+import webbrowser
 import inspect
 from datetime import datetime
-from bencher.bench_cfg import BenchRunCfg, BenchCfg
+from bencher.bench_cfg import BenchRunCfg, BenchCfg, normalize_show
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
@@ -290,7 +291,7 @@ class BenchRunner:
         run_cfg: BenchRunCfg | None = None,
         publish: bool = False,
         debug: bool = False,
-        show: bool = False,
+        show: bool | str = False,
         save: bool = False,
         grouped: bool = False,
         cache_samples: bool | None = None,
@@ -318,7 +319,10 @@ class BenchRunner:
             run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
             publish (bool, optional): Publish the results to git, requires a publish url to be set up. Defaults to False.
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
-            show (bool, optional): show the results in the local web browser. Defaults to False.
+            show (bool | str, optional): How to display results. ``True``/``"live"`` starts a
+                Panel server (blocks); ``"static"`` saves HTML and opens it in the browser
+                (returns); ``"published"`` opens the published URL (requires ``publish=True``);
+                ``False``/``"none"`` displays nothing. Defaults to False.
             save (bool, optional): save the results to disk in index.html. Defaults to False.
             grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to False.
             cache_samples (bool | None, optional): Use the sample cache to reuse previous results.
@@ -432,41 +436,72 @@ class BenchRunner:
         return self.results
 
     def show_publish(
-        self, report: BenchReport, show: bool, publish: bool, save: bool, debug: bool
+        self,
+        report: BenchReport,
+        show: bool | str,
+        publish: bool,
+        save: bool,
+        debug: bool,
     ) -> None:
         """Handle publishing, saving, and displaying of a benchmark report.
 
         Args:
             report (BenchReport): The benchmark report to process
-            show (bool): Whether to display the report in a browser
+            show (bool | str): How to display the report. See
+                :func:`bencher.bench_cfg.normalize_show` for accepted values.
             publish (bool): Whether to publish the report
             save (bool): Whether to save the report to disk
             debug (bool): Whether to enable debug mode for publishing
         """
+        show_mode = normalize_show(show)
+
         if save:
             report.save(
                 directory="reports", filename=f"{report.bench_name}.html", in_html_folder=False
             )
+
+        published_url: str | None = None
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
-                report.publish_gh_pages(p.github_user, p.repo_name, p.folder_name, p.branch_name)
+                published_url = report.publish_gh_pages(
+                    p.github_user, p.repo_name, p.folder_name, p.branch_name
+                )
             elif isinstance(self.publisher, Publisher):
                 try:
-                    url = self.publisher.publish(report)
-                    if url:
-                        logging.info("Benchmark report published at %s", url)
+                    published_url = self.publisher.publish(report)
+                    if published_url:
+                        logging.info("Benchmark report published at %s", published_url)
                 except Exception:  # pylint: disable=broad-except
                     logging.exception("Publisher.publish() failed — continuing benchmark")
             else:
-                report.publish(remote_callback=self.publisher, debug=debug)
-        if show:
+                published_url = report.publish(remote_callback=self.publisher, debug=debug)
+
+        if show_mode == "live":
             self.servers.append(report.show(self.run_cfg))
+        elif show_mode == "static":
+            path = report.save()  # default: cachedir/html/<bench_name>.html
+            try:
+                webbrowser.open(path.resolve().as_uri())
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Failed to open browser for %s", path)
+        elif show_mode == "published":
+            if published_url:
+                try:
+                    webbrowser.open(published_url)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logging.exception("Failed to open %s", published_url)
+            else:
+                logging.warning(
+                    "show='published' but no publish URL is available "
+                    "(publish=False or the publisher returned None) — nothing to open"
+                )
+        # show_mode == "none" → no-op
 
     def show(
         self,
         report: BenchReport | None = None,
-        show: bool = True,
+        show: bool | str = True,
         publish: bool = False,
         save: bool = False,
         debug: bool = False,
@@ -478,7 +513,8 @@ class BenchRunner:
 
         Args:
             report (BenchReport, optional): The report to process. Defaults to None (most recent).
-            show (bool, optional): Whether to display in browser. Defaults to True.
+            show (bool | str, optional): How to display. See :meth:`run` for accepted values.
+                Defaults to True.
             publish (bool, optional): Whether to publish the report. Defaults to False.
             save (bool, optional): Whether to save to disk. Defaults to False.
             debug (bool, optional): Enable debug mode for publishing. Defaults to False.
