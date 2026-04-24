@@ -148,8 +148,6 @@ class TestShowEnum(unittest.TestCase):
 
     def test_show_static_opens_browser_and_returns(self):
         """show='static' saves an HTML file, opens the browser, and does not leave a server."""
-        from bencher.run import _active_runners
-
         with patch("bencher.bench_runner.webbrowser.open") as mock_open:
             results = bn.run(example_simple_float, show="static")
 
