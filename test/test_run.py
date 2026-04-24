@@ -138,8 +138,9 @@ class TestShowEnum(unittest.TestCase):
     def test_normalize_show_rejects_bogus(self):
         from bencher.bench_cfg import normalize_show
 
-        with self.assertRaises(ValueError):
-            normalize_show("bogus")
+        for bad in ("bogus", 2, [], object()):
+            with self.assertRaises(ValueError):
+                normalize_show(bad)
 
     def test_published_without_publish_raises(self):
         with self.assertRaises(ValueError):
@@ -147,6 +148,8 @@ class TestShowEnum(unittest.TestCase):
 
     def test_show_static_opens_browser_and_returns(self):
         """show='static' saves an HTML file, opens the browser, and does not leave a server."""
+        from bencher.run import _active_runners
+
         with patch("bencher.bench_runner.webbrowser.open") as mock_open:
             results = bn.run(example_simple_float, show="static")
 
@@ -156,6 +159,7 @@ class TestShowEnum(unittest.TestCase):
         opened_uri = mock_open.call_args[0][0]
         self.assertTrue(opened_uri.startswith("file://"))
         self.assertTrue(opened_uri.endswith(".html"))
+        self.assertEqual(len(_active_runners), 0)
 
     def test_show_none_string_equivalent_to_false(self):
         """show='none' behaves like show=False — no server, no browser."""

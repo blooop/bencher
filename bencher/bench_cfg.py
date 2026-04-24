@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 import param
 import panel as pn
@@ -21,17 +21,22 @@ from bencher.results.laxtex_result import to_latex
 T = TypeVar("T")  # Generic type variable
 
 
-SHOW_MODES = ("live", "static", "published", "none")
-_SHOW_ALIASES = {True: "live", False: "none", None: "none"}
+ShowMode = Literal["live", "static", "published", "none"]
+SHOW_MODES: tuple[ShowMode, ...] = ("live", "static", "published", "none")
+SHOW_ALIASES: dict[bool | None, ShowMode] = {True: "live", False: "none", None: "none"}
 
 
-def normalize_show(value) -> str:
+def normalize_show(value: bool | str | None) -> ShowMode:
     """Normalize a ``show`` argument to one of :data:`SHOW_MODES`.
 
-    Accepts ``True``/``False``/``None`` or the literal strings in
-    :data:`SHOW_MODES`. Raises :class:`ValueError` for anything else.
+    Accepts :class:`bool`, :class:`str`, or ``None``:
+    ``True``/``False``/``None`` or the literal strings in :data:`SHOW_MODES`.
+    Raises :class:`ValueError` for anything else.
     """
-    v = _SHOW_ALIASES.get(value, value)
+    try:
+        v = SHOW_ALIASES.get(value, value)
+    except TypeError:
+        v = value
     if v not in SHOW_MODES:
         raise ValueError(f"show must be one of {list(SHOW_MODES)} or bool, got {value!r}")
     return v
@@ -59,8 +64,9 @@ class BenchPlotSrvCfg(param.Parameterized):
         False,
         doc="Add the port to the whitelist, (warning will disable remote access if set to true)",
     )
-    show = param.Parameter(
+    show = param.ObjectSelector(
         True,
+        objects=[True, False, None, "live", "static", "published", "none"],
         doc=(
             "Where to view the report. True/'live' (default) starts a Panel server and "
             "blocks. 'static' saves an embedded HTML file and opens it in the browser, "

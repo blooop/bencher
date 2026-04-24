@@ -455,6 +455,9 @@ class BenchRunner:
         """
         show_mode = normalize_show(show)
 
+        if show_mode == "published" and not publish:
+            raise ValueError("show='published' requires publish=True")
+
         if save:
             report.save(
                 directory="reports", filename=f"{report.bench_name}.html", in_html_folder=False
