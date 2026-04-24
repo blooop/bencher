@@ -223,7 +223,7 @@ def run(
                 results = br.run(show=False, **_run_kwargs)
             # Context has exited — resources are released. Now display the report.
             if show_mode != "none":
-                br.show(show=show)
+                br.show(show=show, publish=publish)
     finally:
         if bench_to_close is not None:
             try:

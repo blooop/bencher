@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.92.0] - 2026-04-22
 
 ### Added
+- `show` parameter on `bn.run()`, `BenchRunner.run()`, and `BenchRunner.show()` now accepts string display modes in addition to `bool`: `"live"` (start Panel server, blocks — same as `True`), `"static"` (save an embedded HTML file and open in the browser, returns immediately), `"published"` (open the published URL — requires `publish=True`), and `"none"` (display nothing — same as `False`).
 - Public `MethodCells` dataclass and `method_cells(result)` helper in `bencher.regression`, re-exported from the top-level `bencher` package. Downstream report builders can now call `method_cells(r)` to get pre-rendered, method-aware display strings (change, baseline, threshold, summary lead) for a `RegressionResult` and embed them in a custom layout — custom columns, non-markdown output, CI comments with status decoration, etc. — without reimplementing per-method dispatch (and drifting when new detection methods are added).
 
 ### Removed
