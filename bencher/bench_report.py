@@ -18,12 +18,12 @@ from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_cfg import BenchRunCfg
 
 
-def _inline_rrd(html_path: Path) -> None:
+def _inline_rrd(html_path: Path, rrd_base: Path | None = None) -> None:
     """Inline .rrd data in a saved HTML report (no-op if no rerun iframes)."""
     try:
         from bencher.utils_rrd import inline_rrd_iframes
 
-        inline_rrd_iframes(html_path)
+        inline_rrd_iframes(html_path, rrd_base=rrd_base)
     except Exception:  # pylint: disable=broad-except
         logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
@@ -213,7 +213,7 @@ class BenchReport(BenchPlotServer):
                 tab_path = tab_dir / tab_file
                 logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
                 pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
-                _inline_rrd(tab_path)
+                _inline_rrd(tab_path, rrd_base=base_path)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 
             # Generate an index page with tab buttons and an iframe.

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.94.0] - 2026-04-25
+
+### Fixed
+- Rerun viewer panes now work in saved HTML reports (`show="html"` / `ShowMode.HTML`). Previously the viewer failed because browsers block `fetch()` from `file://` origins. The `.rrd` data is now base64-encoded directly into the viewer HTML page and loaded via the rerun `open_channel()` / `send_rrd()` API, bypassing the fetch entirely.
+- Multi-tab reports with rerun panes: tab files in `_tabs/` now correctly reference `../_rrd/` instead of `_rrd/`, fixing broken relative paths.
+
 ## [1.93.0] - 2026-04-25
 
 ### Added
