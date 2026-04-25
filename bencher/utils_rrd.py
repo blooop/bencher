@@ -299,7 +299,8 @@ def _write_inline_viewer(rrd_path: Path, version: str, dest_dir: Path) -> str:
     rrd_b64 = base64.b64encode(rrd_path.read_bytes()).decode("ascii")
     html = _CDN_VIEWER_INLINE_TEMPLATE.format(version=version, rrd_base64=rrd_b64)
     job_key = rrd_path.parent.name
-    filename = f"viewer_{job_key}.html"
+    rrd_stem = rrd_path.stem
+    filename = f"viewer_{job_key}_{rrd_stem}.html"
     viewer_path = dest_dir / filename
     viewer_path.write_text(html, encoding="utf-8")
     return filename
