@@ -10,7 +10,9 @@ See ``utils_rerun.py`` for functions that require the rerun Python SDK
 (live capture, recording management, etc.).
 """
 
+import base64
 import logging
+import os
 import re
 import shutil
 from importlib.metadata import PackageNotFoundError, version as get_package_version
@@ -33,7 +35,7 @@ def _get_rerun_version() -> str:
     try:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
-        return "0.31.1"
+        return "0.31.3"
 
 
 def rrd_to_pane(
@@ -155,6 +157,33 @@ try {{
 </script></body></html>
 """
 
+_CDN_VIEWER_INLINE_TEMPLATE = """\
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<style>html,body{{margin:0;padding:0;width:100%;height:100%;overflow:hidden}}</style>
+</head><body>
+<div id="c" style="width:100vw;height:100vh"></div>
+<div id="e" style="color:red;padding:20px;font-family:monospace;white-space:pre-wrap"></div>
+<script id="rrd-data" type="application/octet-stream">{rrd_base64}</script>
+<script type="module">
+try {{
+  const b64 = document.getElementById("rrd-data").textContent.trim();
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const {{WebViewer}} = await import(
+    "https://cdn.jsdelivr.net/npm/@rerun-io/web-viewer@{version}/+esm"
+  );
+  const v = new WebViewer();
+  await v.start(null, document.getElementById("c"),
+                {{hide_welcome_screen:true,width:"100%",height:"100%"}});
+  const ch = v.open_channel("inline");
+  ch.send_rrd(bin);
+  ch.close();
+}} catch(e) {{
+  document.getElementById("e").textContent = e.message + "\\n" + e.stack;
+}}
+</script></body></html>
+"""
+
 # Cache of written viewer page filenames, keyed by version (for /rrd_static/ URLs).
 _cdn_viewer_files: dict[str, str] = {}
 
@@ -261,22 +290,48 @@ _RRD_IFRAME_RE = re.compile(
 )
 
 
-def inline_rrd_iframes(html_path: Path) -> None:
+def _write_inline_viewer(rrd_path: Path, version: str, dest_dir: Path) -> str:
+    """Create a self-contained viewer HTML with the .rrd data inlined as base64.
+
+    Returns the filename (relative to *dest_dir*) of the written viewer page.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    rrd_b64 = base64.b64encode(rrd_path.read_bytes()).decode("ascii")
+    html = _CDN_VIEWER_INLINE_TEMPLATE.format(version=version, rrd_base64=rrd_b64)
+    job_key = rrd_path.parent.name
+    filename = f"viewer_{job_key}.html"
+    viewer_path = dest_dir / filename
+    viewer_path.write_text(html, encoding="utf-8")
+    return filename
+
+
+def inline_rrd_iframes(html_path: Path, rrd_base: Path | None = None) -> None:
     """Post-process a saved HTML report for static hosting.
 
     Scans the HTML file for rerun viewer iframes (those pointing at
-    ``/rrd_static/``), copies the referenced ``.rrd`` files from the
-    local cache, writes a CDN viewer HTML page alongside each one, and
-    rewrites the iframe ``src`` to a relative URL.  The result works on
-    any static host (RTD, GitHub Pages, ``file://``) without a Panel
-    server.
+    ``/rrd_static/``), generates self-contained viewer pages with the
+    ``.rrd`` data inlined as base64, and rewrites the iframe ``src`` to
+    point to them.  The result works from ``file://`` without a server.
+
+    Parameters
+    ----------
+    html_path:
+        Path to the saved HTML file to post-process.
+    rrd_base:
+        Directory where ``_rrd/`` should be created.  When ``None``
+        (default), uses ``html_path.parent``.  Pass the top-level report
+        directory for multi-tab saves so all tabs share one ``_rrd/``.
 
     Called automatically by ``BenchReport.save()``.
     """
     html = html_path.read_text(encoding="utf-8")
     cache_root = _RRD_CACHE_DIR.resolve()
     report_dir = html_path.parent
-    rrd_dir = report_dir / "_rrd"
+    if rrd_base is not None:
+        rrd_dir = rrd_base / "_rrd"
+    else:
+        rrd_dir = report_dir / "_rrd"
+    rrd_rel_prefix = os.path.relpath(rrd_dir, report_dir).replace("\\", "/")
 
     changed = False
 
@@ -288,12 +343,9 @@ def inline_rrd_iframes(html_path: Path) -> None:
             logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
             return m.group(0)
 
-        viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_dir)
+        viewer_name = _write_inline_viewer(rrd_path, version, rrd_dir)
 
-        # Rewrite the iframe src to the local viewer + rrd.
-        # Keep the same double encoding (&amp;lt;) as Panel's save uses for
-        # all HTML content — Bokeh JS decodes two levels when rendering.
-        relative_url = f"_rrd/{viewer_name}?url={rrd_name}"
+        relative_url = f"{rrd_rel_prefix}/{viewer_name}"
         changed = True
         return (
             f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
