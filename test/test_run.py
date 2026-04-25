@@ -123,6 +123,52 @@ class TestRun(unittest.TestCase):
             self.assertTrue(hasattr(r, "report"))
 
 
+class TestShowEnum(unittest.TestCase):
+    """Tests for the bool | str ``show`` enum on bn.run() / BenchRunner."""
+
+    def test_normalize_show_aliases(self):
+        from bencher.bench_cfg import ShowMode, normalize_show
+
+        self.assertIs(normalize_show(True), ShowMode.LIVE)
+        self.assertIs(normalize_show(False), ShowMode.NONE)
+        self.assertIs(normalize_show(None), ShowMode.NONE)
+        self.assertIs(normalize_show("static"), ShowMode.HTML)
+        for mode in ShowMode:
+            self.assertIs(normalize_show(mode), mode)
+            self.assertIs(normalize_show(mode.value), mode)
+
+    def test_normalize_show_rejects_bogus(self):
+        from bencher.bench_cfg import normalize_show
+
+        for bad in ("bogus", 2, [], object()):
+            with self.assertRaises(ValueError):
+                normalize_show(bad)
+
+    def test_published_without_publish_raises(self):
+        with self.assertRaises(ValueError):
+            bn.run(example_simple_float, show="published", publish=False)
+
+    def test_show_static_opens_browser_and_returns(self):
+        """show='static' saves an HTML file, opens the browser, and does not leave a server."""
+        with patch("bencher.bench_runner.webbrowser.open") as mock_open:
+            results = bn.run(example_simple_float, show="html")
+
+        self.assertIsInstance(results, list)
+        self.assertGreater(len(results), 0)
+        mock_open.assert_called()
+        opened_uri = mock_open.call_args[0][0]
+        self.assertTrue(opened_uri.startswith("file://"))
+        self.assertTrue(opened_uri.endswith(".html"))
+        self.assertEqual(len(_active_runners), 0)
+
+    def test_show_none_string_equivalent_to_false(self):
+        """show='none' behaves like show=False — no server, no browser."""
+        with patch("bencher.bench_runner.webbrowser.open") as mock_open:
+            results = bn.run(example_simple_float, show="none")
+        mock_open.assert_not_called()
+        self.assertIsInstance(results, list)
+
+
 class TestAddRunDeprecation(unittest.TestCase):
     """Tests for the add_run() deprecation warning."""
 

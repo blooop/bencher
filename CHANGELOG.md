@@ -5,9 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.93.0] - 2026-04-25
+
+### Added
+- `ShowMode` StrEnum (`live`, `html`, `published`, `none`) exported from the top-level `bencher` package. `bn.run(show=bn.ShowMode.HTML)` gives autocomplete and typo detection while plain strings (`show="html"`) and booleans (`show=True`) keep working. The old `"static"` spelling is accepted as an alias for `ShowMode.HTML`.
+
+### Changed
+- The `show` parameter on `bn.run()`, `BenchRunner.run()`, `BenchRunner.show()`, and `BenchPlotSrvCfg` now accepts `ShowMode` in addition to `bool | str`.
+- Renamed the `"static"` display mode to `"html"` (`"static"` remains supported via alias).
+
 ## [1.92.0] - 2026-04-22
 
 ### Added
+- `show` parameter on `bn.run()`, `BenchRunner.run()`, and `BenchRunner.show()` now accepts string display modes in addition to `bool`: `"live"` (start Panel server, blocks — same as `True`), `"static"` (save an embedded HTML file and open in the browser, returns immediately), `"published"` (open the published URL — requires `publish=True`), and `"none"` (display nothing — same as `False`).
 - Public `MethodCells` dataclass and `method_cells(result)` helper in `bencher.regression`, re-exported from the top-level `bencher` package. Downstream report builders can now call `method_cells(r)` to get pre-rendered, method-aware display strings (change, baseline, threshold, summary lead) for a `RegressionResult` and embed them in a custom layout — custom columns, non-markdown output, CI comments with status decoration, etc. — without reimplementing per-method dispatch (and drifting when new detection methods are added).
 
 ### Removed

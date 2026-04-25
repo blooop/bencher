@@ -10,7 +10,7 @@ import time
 from contextlib import AbstractContextManager
 from typing import Any, Callable, TYPE_CHECKING
 
-from bencher.bench_cfg import BenchRunCfg, BenchCfg
+from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 if TYPE_CHECKING:
@@ -68,7 +68,7 @@ def run(
     max_level: int | None = None,
     max_repeats: int | None = None,
     run_cfg: BenchRunCfg | None = None,
-    show: bool = True,
+    show: bool | str | ShowMode = True,
     save: bool = False,
     publish: bool = False,
     publisher: Publisher | GithubPagesCfg | Callable | None = None,
@@ -96,7 +96,11 @@ def run(
         max_level: Maximum level for progressive runs. Defaults to None (single level).
         max_repeats: Maximum repeats for progressive runs. Defaults to None (single repeat count).
         run_cfg: Optional explicit BenchRunCfg. Defaults to None.
-        show: Show results in browser. Defaults to True.
+        show: Where to view the report. Accepts ``True``/``ShowMode.LIVE`` (default — start
+            a Panel server and block on ``input()`` until the user presses Enter),
+            ``ShowMode.HTML`` (save an embedded HTML file and open it in the browser, then
+            return), ``ShowMode.PUBLISHED`` (open the URL returned by publish — requires
+            ``publish=True``), or ``False``/``ShowMode.NONE`` (display nothing).
         save: Save results to disk. Defaults to False.
         publish: Publish results. Defaults to False.
         publisher: An object conforming to the :class:`Publisher` protocol (i.e. has a
@@ -133,6 +137,10 @@ def run(
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
     from bencher.bench_runner import BenchRunner, _resolve_cache_samples
+
+    show_mode = normalize_show(show)
+    if show_mode is ShowMode.PUBLISHED and not publish:
+        raise ValueError("show='published' requires publish=True")
 
     cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 
@@ -213,9 +221,9 @@ def run(
             # while the context is still active.
             with sampling_context:
                 results = br.run(show=False, **_run_kwargs)
-            # Context has exited — resources are released. Now start the server.
-            if show:
-                br.show()
+            # Context has exited — resources are released. Now display the report.
+            if show_mode is not ShowMode.NONE:
+                br.show(show=show, publish=publish)
     finally:
         if bench_to_close is not None:
             try:
@@ -223,7 +231,7 @@ def run(
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("Error closing bench")
 
-    if show and br.servers:
+    if show_mode is ShowMode.LIVE and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.
         _active_runners.append(br)
         _install_sigterm_handler()
