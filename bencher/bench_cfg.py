@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+from enum import auto
+from strenum import LowercaseStrEnum
 
-from typing import Any, Literal, TypeVar
+from typing import Any, TypeVar
 
 import param
 import panel as pn
@@ -21,25 +23,40 @@ from bencher.results.laxtex_result import to_latex
 T = TypeVar("T")  # Generic type variable
 
 
-ShowMode = Literal["live", "static", "published", "none"]
-SHOW_MODES: tuple[ShowMode, ...] = ("live", "static", "published", "none")
-SHOW_ALIASES: dict[bool | None, ShowMode] = {True: "live", False: "none", None: "none"}
+class ShowMode(LowercaseStrEnum):
+    """Display mode for benchmark reports."""
+
+    LIVE = auto()
+    HTML = auto()
+    PUBLISHED = auto()
+    NONE = auto()
 
 
-def normalize_show(value: bool | str | None) -> ShowMode:
-    """Normalize a ``show`` argument to one of :data:`SHOW_MODES`.
+_SHOW_ALIASES: dict[bool | None | str, ShowMode] = {
+    True: ShowMode.LIVE,
+    False: ShowMode.NONE,
+    None: ShowMode.NONE,
+    "static": ShowMode.HTML,
+}
 
-    Accepts :class:`bool`, :class:`str`, or ``None``:
-    ``True``/``False``/``None`` or the literal strings in :data:`SHOW_MODES`.
-    Raises :class:`ValueError` for anything else.
+
+def normalize_show(value: bool | str | ShowMode | None) -> ShowMode:
+    """Normalize a ``show`` argument to a :class:`ShowMode`.
+
+    Accepts ``True``/``False``/``None``, any :class:`ShowMode` member, or
+    the corresponding string value.  Raises :class:`ValueError` for
+    anything else.
     """
     try:
-        v = SHOW_ALIASES.get(value, value)
+        v = _SHOW_ALIASES.get(value, value)
     except TypeError:
         v = value
-    if v not in SHOW_MODES:
-        raise ValueError(f"show must be one of {list(SHOW_MODES)} or bool, got {value!r}")
-    return v
+    try:
+        return ShowMode(v)
+    except ValueError:
+        raise ValueError(
+            f"show must be one of {[m.value for m in ShowMode]} or bool, got {value!r}"
+        ) from None
 
 
 class BenchPlotSrvCfg(param.Parameterized):
@@ -52,11 +69,12 @@ class BenchPlotSrvCfg(param.Parameterized):
         port (int): The port to launch panel with
         allow_ws_origin (bool): Add the port to the whitelist (warning will disable remote
                                access if set to true)
-        show (bool | str): Where to view the report. ``True``/``"live"`` (default) starts a
-                           Panel server and blocks. ``"static"`` saves an embedded HTML file
-                           and opens it in the browser, returning immediately. ``"published"``
-                           opens the published URL after ``publish=True`` (requires publish).
-                           ``False``/``"none"`` displays nothing.
+        show (bool | str | ShowMode): Where to view the report.
+            ``True``/``ShowMode.LIVE`` (default) starts a Panel server and blocks.
+            ``ShowMode.HTML`` saves an embedded HTML file and opens it in the browser,
+            returning immediately.  ``ShowMode.PUBLISHED`` opens the published URL after
+            ``publish=True`` (requires publish).  ``False``/``ShowMode.NONE`` displays
+            nothing.
     """
 
     port: int | None = param.Integer(None, doc="The port to launch panel with")
@@ -68,10 +86,10 @@ class BenchPlotSrvCfg(param.Parameterized):
         True,
         objects=[True, False, None, "live", "static", "published", "none"],
         doc=(
-            "Where to view the report. True/'live' (default) starts a Panel server and "
-            "blocks. 'static' saves an embedded HTML file and opens it in the browser, "
-            "returning immediately. 'published' opens the published URL after publish=True "
-            "(requires publish=True). False/'none' displays nothing."
+            "Where to view the report. True/ShowMode.LIVE (default) starts a Panel server "
+            "and blocks. ShowMode.HTML saves an embedded HTML file and opens it in the "
+            "browser, returning immediately. ShowMode.PUBLISHED opens the published URL "
+            "after publish=True (requires publish=True). False/ShowMode.NONE displays nothing."
         ),
     )
 

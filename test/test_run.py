@@ -127,13 +127,15 @@ class TestShowEnum(unittest.TestCase):
     """Tests for the bool | str ``show`` enum on bn.run() / BenchRunner."""
 
     def test_normalize_show_aliases(self):
-        from bencher.bench_cfg import normalize_show
+        from bencher.bench_cfg import ShowMode, normalize_show
 
-        self.assertEqual(normalize_show(True), "live")
-        self.assertEqual(normalize_show(False), "none")
-        self.assertEqual(normalize_show(None), "none")
-        for v in ("live", "static", "published", "none"):
-            self.assertEqual(normalize_show(v), v)
+        self.assertIs(normalize_show(True), ShowMode.LIVE)
+        self.assertIs(normalize_show(False), ShowMode.NONE)
+        self.assertIs(normalize_show(None), ShowMode.NONE)
+        self.assertIs(normalize_show("static"), ShowMode.HTML)
+        for mode in ShowMode:
+            self.assertIs(normalize_show(mode), mode)
+            self.assertIs(normalize_show(mode.value), mode)
 
     def test_normalize_show_rejects_bogus(self):
         from bencher.bench_cfg import normalize_show
@@ -149,7 +151,7 @@ class TestShowEnum(unittest.TestCase):
     def test_show_static_opens_browser_and_returns(self):
         """show='static' saves an HTML file, opens the browser, and does not leave a server."""
         with patch("bencher.bench_runner.webbrowser.open") as mock_open:
-            results = bn.run(example_simple_float, show="static")
+            results = bn.run(example_simple_float, show="html")
 
         self.assertIsInstance(results, list)
         self.assertGreater(len(results), 0)

@@ -14,7 +14,7 @@ import panel as pn
 from diskcache import Cache
 from tornado.web import StaticFileHandler
 
-from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg, normalize_show
+from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg, ShowMode, normalize_show
 
 logging.basicConfig(level=logging.INFO)
 
@@ -76,9 +76,7 @@ class BenchPlotServer:
         if plot_cfg.port is not None and plot_cfg.allow_ws_origin:
             os.environ["BOKEH_ALLOW_WS_ORIGIN"] = f"localhost:{plot_cfg.port}"
 
-        # ``show`` accepts the display-mode enum as well as bool; coerce to the bool
-        # that ``pn.serve(show=...)`` expects (auto-open browser only in live mode).
-        auto_open = normalize_show(plot_cfg.show) == "live"
+        auto_open = normalize_show(plot_cfg.show) is ShowMode.LIVE
         return self.serve(bench_name, plots_instance, port=plot_cfg.port, show=auto_open)
 
     def load_data_from_cache(self, bench_name: str) -> tuple[BenchCfg, list[pn.panel]] | None:

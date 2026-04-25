@@ -6,7 +6,7 @@ import warnings
 import webbrowser
 import inspect
 from datetime import datetime
-from bencher.bench_cfg import BenchRunCfg, BenchCfg, normalize_show
+from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
@@ -291,7 +291,7 @@ class BenchRunner:
         run_cfg: BenchRunCfg | None = None,
         publish: bool = False,
         debug: bool = False,
-        show: bool | str = False,
+        show: bool | str | ShowMode = False,
         save: bool = False,
         grouped: bool = False,
         cache_samples: bool | None = None,
@@ -319,10 +319,11 @@ class BenchRunner:
             run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
             publish (bool, optional): Publish the results to git, requires a publish url to be set up. Defaults to False.
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
-            show (bool | str, optional): How to display results. ``True``/``"live"`` starts a
-                Panel server (blocks); ``"static"`` saves HTML and opens it in the browser
-                (returns); ``"published"`` opens the published URL (requires ``publish=True``);
-                ``False``/``"none"`` displays nothing. Defaults to False.
+            show (bool | str | ShowMode, optional): How to display results.
+                ``True``/``ShowMode.LIVE`` starts a Panel server (blocks);
+                ``ShowMode.HTML`` saves HTML and opens it in the browser (returns);
+                ``ShowMode.PUBLISHED`` opens the published URL (requires ``publish=True``);
+                ``False``/``ShowMode.NONE`` displays nothing. Defaults to False.
             save (bool, optional): save the results to disk in index.html. Defaults to False.
             grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to False.
             cache_samples (bool | None, optional): Use the sample cache to reuse previous results.
@@ -438,7 +439,7 @@ class BenchRunner:
     def show_publish(
         self,
         report: BenchReport,
-        show: bool | str,
+        show: bool | str | ShowMode,
         publish: bool,
         save: bool,
         debug: bool,
@@ -447,7 +448,7 @@ class BenchRunner:
 
         Args:
             report (BenchReport): The benchmark report to process
-            show (bool | str): How to display the report. See
+            show (bool | str | ShowMode): How to display the report. See
                 :func:`bencher.bench_cfg.normalize_show` for accepted values.
             publish (bool): Whether to publish the report
             save (bool): Whether to save the report to disk
@@ -480,15 +481,15 @@ class BenchRunner:
             else:
                 published_url = report.publish(remote_callback=self.publisher, debug=debug)
 
-        if show_mode == "live":
+        if show_mode is ShowMode.LIVE:
             self.servers.append(report.show(self.run_cfg))
-        elif show_mode == "static":
+        elif show_mode is ShowMode.HTML:
             path = report.save()  # default: cachedir/html/<bench_name>.html
             try:
                 webbrowser.open(path.resolve().as_uri())
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("Failed to open browser for %s", path)
-        elif show_mode == "published":
+        elif show_mode is ShowMode.PUBLISHED:
             if published_url:
                 try:
                     webbrowser.open(published_url)
@@ -499,12 +500,11 @@ class BenchRunner:
                     "show='published' but no publish URL is available "
                     "(publish=False or the publisher returned None) — nothing to open"
                 )
-        # show_mode == "none" → no-op
 
     def show(
         self,
         report: BenchReport | None = None,
-        show: bool | str = True,
+        show: bool | str | ShowMode = True,
         publish: bool = False,
         save: bool = False,
         debug: bool = False,
@@ -516,8 +516,8 @@ class BenchRunner:
 
         Args:
             report (BenchReport, optional): The report to process. Defaults to None (most recent).
-            show (bool | str, optional): How to display. See :meth:`run` for accepted values.
-                Defaults to True.
+            show (bool | str | ShowMode, optional): How to display. See :meth:`run` for
+                accepted values. Defaults to True.
             publish (bool, optional): Whether to publish the report. Defaults to False.
             save (bool, optional): Whether to save to disk. Defaults to False.
             debug (bool, optional): Enable debug mode for publishing. Defaults to False.
