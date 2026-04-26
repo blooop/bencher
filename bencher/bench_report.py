@@ -21,13 +21,18 @@ from bencher.bench_cfg import BenchRunCfg
 def _inline_rrd(
     html_path: Path,
     rrd_base: Path | None = None,
-    inline_data: bool = False,
+    portable: bool = False,
 ) -> None:
-    """Inline .rrd data in a saved HTML report (no-op if no rerun iframes)."""
+    """Rewrite .rrd viewer iframes in a saved HTML report for static hosting.
+
+    By default copies .rrd files as sidecars (fast, works on any HTTP server).
+    With ``portable=True``, base64-encodes the data into the viewer HTML so
+    the report works from ``file://`` without a server.
+    """
     try:
         from bencher.utils_rrd import inline_rrd_iframes
 
-        inline_rrd_iframes(html_path, rrd_base=rrd_base, inline_data=inline_data)
+        inline_rrd_iframes(html_path, rrd_base=rrd_base, portable=portable)
     except Exception:  # pylint: disable=broad-except
         logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
@@ -205,7 +210,7 @@ class BenchReport(BenchPlotServer):
                 # Save inner content directly so the Tabs sidebar is not rendered
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
                 content.save(filename=index_path, progress=True, embed=True, **kwargs)
-                _inline_rrd(index_path, inline_data=portable)
+                _inline_rrd(index_path, portable=portable)
                 return index_path
 
             # Save each tab to its own HTML so HoloMap sliders don't collide.
@@ -223,7 +228,7 @@ class BenchReport(BenchPlotServer):
                 tab_path = tab_dir / tab_file
                 logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
                 pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
-                _inline_rrd(tab_path, rrd_base=base_path, inline_data=portable)
+                _inline_rrd(tab_path, rrd_base=base_path, portable=portable)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 
             # Generate an index page with tab buttons and an iframe.

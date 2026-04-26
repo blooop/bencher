@@ -309,7 +309,7 @@ def _write_inline_viewer(rrd_path: Path, version: str, dest_dir: Path) -> str:
 def inline_rrd_iframes(
     html_path: Path,
     rrd_base: Path | None = None,
-    inline_data: bool = False,
+    portable: bool = False,
 ) -> None:
     """Post-process a saved HTML report for static hosting.
 
@@ -325,7 +325,7 @@ def inline_rrd_iframes(
         Directory where ``_rrd/`` should be created.  When ``None``
         (default), uses ``html_path.parent``.  Pass the top-level report
         directory for multi-tab saves so all tabs share one ``_rrd/``.
-    inline_data:
+    portable:
         When ``True``, base64-encode the ``.rrd`` data directly into the
         viewer HTML so the report works from ``file://`` without any
         server.  This can be very slow for large recordings (hundreds of
@@ -354,7 +354,7 @@ def inline_rrd_iframes(
             logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
             return m.group(0)
 
-        if inline_data:
+        if portable:
             viewer_name = _write_inline_viewer(rrd_path, version, rrd_dir)
             relative_url = f"{rrd_rel_prefix}/{viewer_name}"
         else:
