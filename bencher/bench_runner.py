@@ -484,7 +484,7 @@ class BenchRunner:
         if show_mode is ShowMode.LIVE:
             self.servers.append(report.show(self.run_cfg))
         elif show_mode is ShowMode.HTML:
-            path = report.save()  # default: cachedir/html/<bench_name>.html
+            path = report.save(portable=True)  # file:// needs inline .rrd data
             try:
                 webbrowser.open(path.resolve().as_uri())
             except Exception:  # pylint: disable=broad-exception-caught
