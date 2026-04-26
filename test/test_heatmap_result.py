@@ -65,3 +65,22 @@ class TestHeatmapResult(unittest.TestCase):
         # Pass list tap_var with use_tap=False to exercise list-handling (lines 99-112)
         result = self.res_2d.to_heatmap(tap_var=[rv], use_tap=False)
         self.assertIsNotNone(result)
+
+    def test_to_heatmap_suppressed_for_cat_only_inputs(self):
+        """Heatmap auto-plot must not fire when there are <2 float vars (cat-only inputs).
+
+        For 2 cats / 0 floats the new filter rejects, so the auto path returns
+        a Markdown debug panel (or None) rather than a HoloViews heatmap pane.
+        """
+        import holoviews as hv
+
+        bench_cat = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
+        res_cat = bench_cat.plot_sweep(
+            "test_hm_cat_only",
+            input_vars=[BenchableObject.param.wave, BenchableObject.param.variant],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        result = res_cat.to_heatmap(override=False)
+        self.assertNotIsInstance(result, (hv.HeatMap, hv.HoloMap))

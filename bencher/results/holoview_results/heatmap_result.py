@@ -70,7 +70,7 @@ class HeatmapResult(HoloviewResult):
 
         return self.filter(
             heatmap_cb,
-            float_range=VarRange(0, None),
+            float_range=VarRange(2, None),
             cat_range=VarRange(0, None),
             input_range=VarRange(2, None),
             panel_range=VarRange(0, None),
@@ -80,6 +80,14 @@ class HeatmapResult(HoloviewResult):
             override=override,
             **kwargs,
         )
+
+    def _pick_xy_axes(self) -> tuple[str, str]:
+        """Pick x/y axis names, preferring float vars then falling back to cat vars."""
+        axes = list(self.plt_cnt_cfg.float_vars)
+        for iv in self.bench_cfg.input_vars:
+            if iv not in axes:
+                axes.append(iv)
+        return axes[0].name, axes[1].name
 
     def to_heatmap_ds(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
@@ -101,8 +109,7 @@ class HeatmapResult(HoloviewResult):
         if len(dataset.dims) < 2:
             return None
 
-        x = self.bench_cfg.input_vars[0].name
-        y = self.bench_cfg.input_vars[1].name
+        x, y = self._pick_xy_axes()
         C = result_var.name
         title = f"Heatmap of {result_var.name}"
 
@@ -147,8 +154,7 @@ class HeatmapResult(HoloviewResult):
         Returns:
             pn.Row: A panel row containing the interactive heatmap and tap info.
         """
-        x = self.bench_cfg.input_vars[0].name
-        y = self.bench_cfg.input_vars[1].name
+        x, y = self._pick_xy_axes()
         C = result_var.name
         title = f"Heatmap of {result_var.name}"
         df = dataset[C].to_dataframe().reset_index()
@@ -192,10 +198,11 @@ class HeatmapResult(HoloviewResult):
             xrotation=30,
         )
         htmap_posxy = hv.streams.Tap(source=htmap, x=0, y=0)
+        x_name, y_name = self._pick_xy_axes()
 
         def tap_plot(x, y):
-            kwargs[self.bench_cfg.input_vars[0].name] = x
-            kwargs[self.bench_cfg.input_vars[1].name] = y
+            kwargs[x_name] = x
+            kwargs[y_name] = y
             return self.get_nearest_holomap(**kwargs).opts(width=width, height=height)
 
         tap_htmap = hv.DynamicMap(tap_plot, streams=[htmap_posxy])
