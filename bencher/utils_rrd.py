@@ -306,13 +306,16 @@ def _write_inline_viewer(rrd_path: Path, version: str, dest_dir: Path) -> str:
     return filename
 
 
-def inline_rrd_iframes(html_path: Path, rrd_base: Path | None = None) -> None:
+def inline_rrd_iframes(
+    html_path: Path,
+    rrd_base: Path | None = None,
+    portable: bool = False,
+) -> None:
     """Post-process a saved HTML report for static hosting.
 
     Scans the HTML file for rerun viewer iframes (those pointing at
-    ``/rrd_static/``), generates self-contained viewer pages with the
-    ``.rrd`` data inlined as base64, and rewrites the iframe ``src`` to
-    point to them.  The result works from ``file://`` without a server.
+    ``/rrd_static/``), copies the ``.rrd`` files next to the report, and
+    rewrites the iframe ``src`` to relative URLs.
 
     Parameters
     ----------
@@ -322,6 +325,13 @@ def inline_rrd_iframes(html_path: Path, rrd_base: Path | None = None) -> None:
         Directory where ``_rrd/`` should be created.  When ``None``
         (default), uses ``html_path.parent``.  Pass the top-level report
         directory for multi-tab saves so all tabs share one ``_rrd/``.
+    portable:
+        When ``True``, base64-encode the ``.rrd`` data directly into the
+        viewer HTML so the report works from ``file://`` without any
+        server.  This can be very slow for large recordings (hundreds of
+        MB or more).  When ``False`` (default), the ``.rrd`` is copied as
+        a sidecar file and loaded via a relative URL — the report must be
+        served over HTTP (any static server works).
 
     Called automatically by ``BenchReport.save()``.
     """
@@ -344,9 +354,13 @@ def inline_rrd_iframes(html_path: Path, rrd_base: Path | None = None) -> None:
             logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
             return m.group(0)
 
-        viewer_name = _write_inline_viewer(rrd_path, version, rrd_dir)
+        if portable:
+            viewer_name = _write_inline_viewer(rrd_path, version, rrd_dir)
+            relative_url = f"{rrd_rel_prefix}/{viewer_name}"
+        else:
+            viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_dir)
+            relative_url = f"{rrd_rel_prefix}/{viewer_name}?url={quote(rrd_name)}"
 
-        relative_url = f"{rrd_rel_prefix}/{viewer_name}"
         changed = True
         return (
             f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
