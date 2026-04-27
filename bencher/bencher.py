@@ -53,6 +53,15 @@ for handler in logging.root.handlers:
     handler.setFormatter(formatter)
 
 
+def _agg_job_args(kwargs, agg_vars, combo):
+    """Build job_args dict by merging Optuna-suggested kwargs with aggregate combo values."""
+    job_args = dict(kwargs)
+    if agg_vars:
+        for v, val in zip(agg_vars, combo):
+            job_args[v.name] = val
+    return job_args
+
+
 class Bench(BenchPlotServer):
     def __init__(
         self,
@@ -1068,19 +1077,15 @@ class Bench(BenchPlotServer):
         constant_inputs = self.define_const_inputs(const_vars_in) or {}
 
         # --- resolve aggregation ----------------------------------------
-        input_var_names = [iv.name for iv in input_vars_in]
-        agg_over_dims = resolve_aggregate(aggregate, input_var_names)
-
-        if agg_over_dims:
-            agg_set = set(agg_over_dims)
-            optuna_vars = [iv for iv in input_vars_in if iv.name not in agg_set]
-            agg_vars = [iv for iv in input_vars_in if iv.name in agg_set]
-        else:
-            optuna_vars = input_vars_in
-            agg_vars = []
+        optuna_vars, agg_vars = self._split_optuna_and_agg_vars(input_vars_in, aggregate)
 
         needs_agg = bool(agg_vars) or repeats > 1
-        agg_callable = AGG_FN_MAP[agg_fn] if needs_agg else None
+        if needs_agg:
+            if agg_fn not in AGG_FN_MAP:
+                raise ValueError(f"Unknown agg_fn={agg_fn!r}, must be one of {sorted(AGG_FN_MAP)}")
+            agg_callable = AGG_FN_MAP[agg_fn]
+        else:
+            agg_callable = None
 
         if title is None:
             title = "Optimize " + " vs ".join(iv.name for iv in input_vars_in)
@@ -1337,6 +1342,36 @@ class Bench(BenchPlotServer):
         )
         return added
 
+    @staticmethod
+    def _split_optuna_and_agg_vars(input_vars, aggregate):
+        """Partition *input_vars* into Optuna-tuned and aggregated lists."""
+        input_var_names = [iv.name for iv in input_vars]
+        agg_over_dims = resolve_aggregate(aggregate, input_var_names)
+        if agg_over_dims:
+            agg_set = set(agg_over_dims)
+            optuna_vars = [iv for iv in input_vars if iv.name not in agg_set]
+            agg_vars = [iv for iv in input_vars if iv.name in agg_set]
+        else:
+            optuna_vars = input_vars
+            agg_vars = []
+        return optuna_vars, agg_vars
+
+    def _run_optuna_job(self, trial, job_args, repeat, constant_inputs, tag):
+        """Submit a single worker evaluation and return the result dict."""
+        full_input = dict(job_args)
+        full_input.update(constant_inputs)
+        full_input["repeat"] = repeat
+
+        cache_key = self._build_cache_key(full_input, tag)
+        job = Job(
+            job_id=f"optimize:trial_{trial.number}",
+            function=self.worker,
+            job_args=job_args,
+            job_key=cache_key,
+            tag=tag,
+        )
+        return self.sample_cache.submit(job).result()
+
     def _make_optuna_objective(
         self,
         input_vars,
@@ -1354,45 +1389,16 @@ class Bench(BenchPlotServer):
 
             if agg_vars or repeats > 1:
                 agg_combos = list(product(*(v.values() for v in agg_vars))) if agg_vars else [()]
-                all_results = []
-                for combo in agg_combos:
-                    for rep in range(1, repeats + 1):
-                        job_args = dict(kwargs)
-                        if agg_vars:
-                            for v, val in zip(agg_vars, combo):
-                                job_args[v.name] = val
-
-                        full_input = dict(job_args)
-                        full_input.update(constant_inputs)
-                        full_input["repeat"] = rep
-
-                        cache_key = self._build_cache_key(full_input, tag)
-                        job = Job(
-                            job_id=f"optimize:trial_{trial.number}",
-                            function=self.worker,
-                            job_args=job_args,
-                            job_key=cache_key,
-                            tag=tag,
-                        )
-                        job_future = self.sample_cache.submit(job)
-                        all_results.append(job_future.result())
-
+                all_results = [
+                    self._run_optuna_job(
+                        trial, _agg_job_args(kwargs, agg_vars, combo), rep, constant_inputs, tag
+                    )
+                    for combo in agg_combos
+                    for rep in range(1, repeats + 1)
+                ]
                 output = [agg_callable([r[tn] for r in all_results]) for tn in target_names]
             else:
-                full_input = dict(kwargs)
-                full_input.update(constant_inputs)
-                full_input["repeat"] = 1
-
-                cache_key = self._build_cache_key(full_input, tag)
-                job = Job(
-                    job_id=f"optimize:trial_{trial.number}",
-                    function=self.worker,
-                    job_args=kwargs,
-                    job_key=cache_key,
-                    tag=tag,
-                )
-                job_future = self.sample_cache.submit(job)
-                result_dict = job_future.result()
+                result_dict = self._run_optuna_job(trial, kwargs, 1, constant_inputs, tag)
                 output = [result_dict[tn] for tn in target_names]
 
             return tuple(output) if len(output) > 1 else output[0]

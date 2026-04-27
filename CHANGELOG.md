@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.98.0] - 2026-04-27
+
+### Added
+- `aggregate`, `agg_fn`, and `repeats` parameters for `optimize()`, matching the `plot_sweep()` API. Aggregated dimensions are looped inside the Optuna objective so the optimizer sees robust metrics (e.g. mean loss across seeds or repeated boolean outcomes).
+- `AGG_FN_MAP` in `bencher/utils.py` — NaN-safe numpy aggregation functions for objective-level aggregation.
+- Example `example_optimize_aggregate.py` demonstrating sweep-then-optimize with dimension aggregation and repeats.
+
+### Fixed
+- Missing `skipna=True` on `REDUCE` and `MINMAX` repeat aggregation in `bench_result_base.py`.
+- `np.mean` → `np.nanmean` in `optuna_result.py` aggregation to match xarray's NaN-safe behavior.
+
 ## [1.97.0] - 2026-04-27
 
 ### Fixed

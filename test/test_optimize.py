@@ -220,6 +220,23 @@ class TestAggregateOptimize:
         assert "x" in result.study.best_params
         assert "seed" in result.study.best_params
 
+    @pytest.mark.parametrize("agg_fn", ["mean", "sum", "max", "min", "median"])
+    def test_optimize_all_agg_fns(self, agg_fn):
+        bench = bn.Bench(f"agg_fn_{agg_fn}", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            n_trials=10,
+            aggregate=["seed"],
+            agg_fn=agg_fn,
+            plot=False,
+        )
+        assert result is not None
+        assert result.study.best_value is not None
+
+    def test_optimize_invalid_agg_fn(self):
+        bench = bn.Bench("bad_agg_fn", SphereWithSeed(), run_cfg=_run_cfg())
+        with pytest.raises(ValueError, match="Unknown agg_fn"):
+            bench.optimize(n_trials=5, aggregate=["seed"], agg_fn="bogus", plot=False)
+
 
 class TestConvenience:
     def test_to_optimize(self):
