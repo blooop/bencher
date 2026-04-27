@@ -144,7 +144,9 @@ from .cache_management import (
 )
 from .results.bench_result import BenchResult
 from .results.optimize_result import OptimizeResult
-from .results.video_result import VideoResult
+from .results.pane_result import PaneResult
+
+VideoResult = PaneResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg, Publisher
 from .job import Executors

@@ -5,14 +5,15 @@ from bencher.example.example_rerun_over_time import ControlSystemSweep
 
 
 def example_rerun_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Rerun Sweep — control system response across damping ratios."""
+    """Rerun Sweep — control system response across damping ratios and natural frequencies."""
     bench = ControlSystemSweep().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=["damping_ratio"],
+        input_vars=["damping_ratio", "omega_n"],
         result_vars=["out_overshoot", "out_settling_time", "out_rerun"],
-        description="Sweep the damping ratio of a second-order control system and "
-        "visualise each step response in the rerun viewer.  Low damping causes "
-        "overshoot and ringing; high damping is sluggish but stable.",
+        description="Sweep the damping ratio and natural frequency of a second-order "
+        "control system.  aggregate=True collapses omega_n so you can see the "
+        "mean ± std across frequencies for each damping ratio.",
+        aggregate=True,
     )
 
     return bench

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.97.0] - 2026-04-27
+
+### Fixed
+- `aggregate=True` no longer duplicates pane-type results (rerun, image, video). Pane results store file paths that cannot be numerically aggregated, so they now only render in the non-aggregated view.
+- Line plotter crash when aggregating: `plt_cnt_cfg` still referenced collapsed dimensions, causing holoviews `DataError` on missing dimension names. Swapped to post-aggregation config during `map_plot_panes` calls.
+- `remove_plots` no longer raises `ValueError` when combined with `numeric_only`.
+
+### Changed
+- Renamed `VideoResult` to `PaneResult` to reflect that it handles all pane types (rerun, image, video), not just video.
+
+### Added
+- Image and video aggregate examples (`example_result_image_aggregate`, `example_result_video_aggregate`) to exercise and demonstrate pane-result aggregation.
+- `omega_n` sweep added to `ControlSystemSweep` for multi-input rerun testing.
+
 ## [1.94.0] - 2026-04-25
 
 ### Fixed

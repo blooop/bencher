@@ -11,7 +11,7 @@ from bencher.variables.results import (
 )
 
 
-class VideoResult(BenchResultBase):
+class PaneResult(BenchResultBase):
     def to_video(self, result_var: Parameter | None = None, **kwargs):
         vc = VideoControls()
         return pn.Column(
