@@ -345,7 +345,6 @@ class MetaImageVideoRich(MetaGeneratorBase):
             run_kwargs={"level": 2},
         )
 
-
     # -- Image aggregate -------------------------------------------------------
 
     def _gen_image_aggregate(self):
@@ -355,7 +354,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "bench.plot_sweep(\n"
             '    input_vars=["sides", "color"],\n'
             '    result_vars=["polygon", "area"],\n'
-            '    description="aggregate=True collapses the color dimension. '\
+            '    description="aggregate=True collapses the color dimension. '
             "The area scalar is averaged over colors (mean \\u00b1 std), "
             'but polygon images should only appear once in the non-aggregated view.",\n'
             "    aggregate=True,\n"
@@ -381,7 +380,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "bench.plot_sweep(\n"
             '    input_vars=["sides", "speed"],\n'
             '    result_vars=["animation", "frame_snapshot", "max_angle"],\n'
-            '    description="aggregate=True collapses the speed dimension. '\
+            '    description="aggregate=True collapses the speed dimension. '
             "Videos and images should only appear once in the non-aggregated view, "
             'not duplicated in the aggregated view.",\n'
             "    aggregate=True,\n"

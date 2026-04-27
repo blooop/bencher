@@ -24,6 +24,7 @@ def _draw_polygon_image(points, color, linewidth, size=200):
 
 class PolygonRenderer(bn.ParametrizedSweep):
     """Renders polygon images with configurable sides, radius, and color."""
+
     sides = bn.IntSweep(default=3, bounds=(3, 7), doc="Number of polygon sides")
     radius = bn.FloatSweep(default=0.6, bounds=(0.2, 1.0), doc="Polygon radius")
     color = bn.StringSweep(["red", "green", "blue"], doc="Line color")

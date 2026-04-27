@@ -24,6 +24,7 @@ def _draw_polygon_image(points, color, linewidth, size=200):
 
 class PolygonAnimator(bn.ParametrizedSweep):
     """Renders rotating polygon animations."""
+
     sides = bn.IntSweep(default=4, bounds=(3, 7), doc="Number of polygon sides")
     speed = bn.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
     animation = bn.ResultVideo(doc="Rotating polygon video")
