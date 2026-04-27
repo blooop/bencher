@@ -120,7 +120,7 @@ for i, deg in enumerate(degradations):
         )
 
     def _generate_sweep(self):
-        """1 input var (damping_ratio), single sweep, no over_time."""
+        """2 input vars (damping_ratio, omega_n), single sweep, aggregate=True."""
         imports = (
             "import bencher as bn\n"
             "from bencher.example.example_rerun_over_time import ControlSystemSweep"
@@ -128,11 +128,12 @@ for i, deg in enumerate(degradations):
         body = """\
 bench = ControlSystemSweep().to_bench(run_cfg)
 bench.plot_sweep(
-    input_vars=["damping_ratio"],
+    input_vars=["damping_ratio", "omega_n"],
     result_vars=["out_overshoot", "out_settling_time", "out_rerun"],
-    description="Sweep the damping ratio of a second-order control system and "
-    "visualise each step response in the rerun viewer.  Low damping causes "
-    "overshoot and ringing; high damping is sluggish but stable.",
+    description="Sweep the damping ratio and natural frequency of a second-order "
+    "control system.  aggregate=True collapses omega_n so you can see the "
+    "mean \\u00b1 std across frequencies for each damping ratio.",
+    aggregate=True,
 )
 """
         self.generate_example(

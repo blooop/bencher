@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 from bencher.results.video_summary import VideoSummaryResult
-from bencher.results.video_result import VideoResult
+from bencher.results.pane_result import PaneResult
 from bencher.results.volume_result import VolumeResult
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
@@ -138,7 +138,7 @@ class BenchResult(
             HistogramResult.to_plot,
             VolumeResult.to_plot,
             # PanelResult.to_video,
-            VideoResult.to_panes,
+            PaneResult.to_panes,
         ]
 
     @staticmethod
@@ -169,6 +169,7 @@ class BenchResult(
         remove_plots: list[callable] | None = None,
         default_container=pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
+        numeric_only: bool = False,
         **kwargs,
     ) -> list[pn.panel]:
         """Automatically generate plots based on the provided plot callbacks.
@@ -178,6 +179,9 @@ class BenchResult(
             remove_plots (list[callable], optional): List of plot callback functions to exclude. Defaults to None.
             default_container (type, optional): Default container type for the plots. Defaults to pn.Column.
             override (bool, optional): Whether to override unsupported plots. Defaults to False.
+            numeric_only (bool, optional): When True, skip pane-type result callbacks
+                (images, videos, rerun, etc.) that cannot be numerically aggregated.
+                Defaults to False.
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
@@ -189,6 +193,8 @@ class BenchResult(
 
         if plot_list is None:
             plot_list = BenchResult.default_plot_callbacks()
+        if numeric_only:
+            plot_list = [cb for cb in plot_list if cb is not PaneResult.to_panes]
         if remove_plots is not None:
             for p in remove_plots:
                 plot_list.remove(p)
@@ -289,6 +295,7 @@ class BenchResult(
                 }
                 plot_cols.append(
                     self.to_auto(
+                        numeric_only=True,
                         agg_over_dims=self.bench_cfg.agg_over_dims,
                         agg_fn=self.bench_cfg.agg_fn,
                         **agg_kwargs,

@@ -15,7 +15,7 @@ from bencher.utils import (
     get_nearest_coords,
     listify,
 )
-from bencher.results.video_result import VideoResult
+from bencher.results.pane_result import PaneResult
 from bencher.results.bench_result_base import ReduceType
 
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
@@ -28,7 +28,7 @@ use_tap = True
 _AGG_TITLE = "All Time Points (aggregated)"
 
 
-class HoloviewResult(VideoResult):
+class HoloviewResult(PaneResult):
     @staticmethod
     def set_default_opts(width: int = 600, height: int = 600) -> dict:
         """Set default options for HoloViews visualizations.

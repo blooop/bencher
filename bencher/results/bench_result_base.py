@@ -709,17 +709,23 @@ class BenchResultBase:
                     hv_dataset = self.to_hv_dataset(
                         reduce=reduce, agg_over_dims=agg_dims, agg_fn=agg_fn
                     )
-            return self.map_plot_panes(
-                plot_callback=plot_callback,
-                hv_dataset=hv_dataset,
-                target_dimension=target_dimension,
-                result_var=result_var,
-                result_types=result_types,
-                pane_collection=pane_collection,
-                reduce=reduce,
-                pane_layout=pane_layout,
-                **kwargs,
-            )
+            prev_cfg = self.plt_cnt_cfg
+            if agg_over_dims:
+                self.plt_cnt_cfg = check_cfg
+            try:
+                return self.map_plot_panes(
+                    plot_callback=plot_callback,
+                    hv_dataset=hv_dataset,
+                    target_dimension=target_dimension,
+                    result_var=result_var,
+                    result_types=result_types,
+                    pane_collection=pane_collection,
+                    reduce=reduce,
+                    pane_layout=pane_layout,
+                    **kwargs,
+                )
+            finally:
+                self.plt_cnt_cfg = prev_cfg
         return matches_res.to_panel()
 
     def to_panes_multi_panel(
