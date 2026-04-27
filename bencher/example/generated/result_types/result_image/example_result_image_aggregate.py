@@ -48,9 +48,7 @@ def example_result_image_aggregate(run_cfg: bn.BenchRunCfg | None = None) -> bn.
     bench.plot_sweep(
         input_vars=["sides", "color"],
         result_vars=["polygon", "area"],
-        description="aggregate=True collapses the color dimension. The area scalar is "
-        "averaged over colors (mean ± std), but polygon images should only appear "
-        "once in the non-aggregated view.",
+        description="aggregate=True collapses the color dimension. The area scalar is averaged over colors (mean \u00b1 std), but polygon images should only appear once in the non-aggregated view.",
         aggregate=True,
     )
 
