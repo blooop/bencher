@@ -197,7 +197,8 @@ class BenchResult(
             plot_list = [cb for cb in plot_list if cb is not PaneResult.to_panes]
         if remove_plots is not None:
             for p in remove_plots:
-                plot_list.remove(p)
+                if p in plot_list:
+                    plot_list.remove(p)
 
         kwargs = self.set_plot_size(**kwargs)
 
