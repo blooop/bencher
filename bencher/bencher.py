@@ -32,7 +32,7 @@ from bencher.variables.results import ResultHmap
 from bencher.results.bench_result import BenchResult
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str, resolve_aggregate
+from bencher.utils import params_to_str, resolve_aggregate, AGG_FN_MAP
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
 from bencher.sweep_timings import SweepTimings, phase_timer
@@ -51,6 +51,15 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 for handler in logging.root.handlers:
     handler.setFormatter(formatter)
+
+
+def _agg_job_args(kwargs, agg_vars, combo):
+    """Build job_args dict by merging Optuna-suggested kwargs with aggregate combo values."""
+    job_args = dict(kwargs)
+    if agg_vars:
+        for v, val in zip(agg_vars, combo):
+            job_args[v.name] = val
+    return job_args
 
 
 class Bench(BenchPlotServer):
@@ -1022,6 +1031,9 @@ class Bench(BenchPlotServer):
         n_trials: int = 100,
         sampler: optuna.samplers.BaseSampler | None = None,
         warm_start: bool = True,
+        aggregate: bool | int | list[str] | None = None,
+        agg_fn: str = "mean",
+        repeats: int = 1,
         tag: str = "",
         run_cfg: BenchRunCfg | None = None,
         plot: bool = True,
@@ -1037,6 +1049,17 @@ class Bench(BenchPlotServer):
             n_trials: Number of new optuna trials to run.
             sampler: Optuna sampler.  Defaults to ``TPESampler``.
             warm_start: Seed the study with previously cached evaluations.
+            aggregate: Dimensions to aggregate inside the objective function.
+                Same semantics as ``plot_sweep``: *True* aggregates all but the
+                first input dim, an *int N* aggregates the last N dims, or a
+                *list[str]* names specific dims.  Aggregated dims are looped
+                over internally so Optuna sees the aggregated value.
+            agg_fn: Aggregation function name (``"mean"``, ``"sum"``, ``"max"``,
+                ``"min"``, ``"median"``).  Applied when *aggregate* is set or
+                *repeats* > 1.
+            repeats: Number of times to evaluate each parameter combination.
+                Each repeat uses a different ``repeat`` index and gets its own
+                cache key.  Results are aggregated with *agg_fn*.
             tag: Cache tag (same semantics as ``plot_sweep``).
             run_cfg: Run configuration.  Defaults to ``BenchRunCfg()``.
             plot: If *True*, append visualisation to ``self.report``.
@@ -1052,6 +1075,17 @@ class Bench(BenchPlotServer):
             input_vars, result_vars, const_vars, run_cfg
         )
         constant_inputs = self.define_const_inputs(const_vars_in) or {}
+
+        # --- resolve aggregation ----------------------------------------
+        optuna_vars, agg_vars = self._split_optuna_and_agg_vars(input_vars_in, aggregate)
+
+        needs_agg = bool(agg_vars) or repeats > 1
+        if needs_agg:
+            if agg_fn not in AGG_FN_MAP:
+                raise ValueError(f"Unknown agg_fn={agg_fn!r}, must be one of {sorted(AGG_FN_MAP)}")
+            agg_callable = AGG_FN_MAP[agg_fn]
+        else:
+            agg_callable = None
 
         if title is None:
             title = "Optimize " + " vs ".join(iv.name for iv in input_vars_in)
@@ -1108,7 +1142,13 @@ class Bench(BenchPlotServer):
 
         # --- run optimisation -------------------------------------------
         objective = self._make_optuna_objective(
-            input_vars_in, constant_inputs, target_names, bench_cfg.tag
+            optuna_vars,
+            constant_inputs,
+            target_names,
+            bench_cfg.tag,
+            agg_vars=agg_vars,
+            agg_callable=agg_callable,
+            repeats=repeats,
         )
         study.optimize(objective, n_trials=n_trials)
 
@@ -1302,31 +1342,65 @@ class Bench(BenchPlotServer):
         )
         return added
 
-    def _make_optuna_objective(self, input_vars, constant_inputs, target_names, tag):
+    @staticmethod
+    def _split_optuna_and_agg_vars(input_vars, aggregate):
+        """Partition *input_vars* into Optuna-tuned and aggregated lists."""
+        input_var_names = [iv.name for iv in input_vars]
+        agg_over_dims = resolve_aggregate(aggregate, input_var_names)
+        if agg_over_dims:
+            agg_set = set(agg_over_dims)
+            optuna_vars = [iv for iv in input_vars if iv.name not in agg_set]
+            agg_vars = [iv for iv in input_vars if iv.name in agg_set]
+        else:
+            optuna_vars = input_vars
+            agg_vars = []
+        return optuna_vars, agg_vars
+
+    def _run_optuna_job(self, trial, job_args, repeat, constant_inputs, tag):
+        """Submit a single worker evaluation and return the result dict."""
+        full_input = dict(job_args)
+        full_input.update(constant_inputs)
+        full_input["repeat"] = repeat
+
+        cache_key = self._build_cache_key(full_input, tag)
+        job = Job(
+            job_id=f"optimize:trial_{trial.number}",
+            function=self.worker,
+            job_args=job_args,
+            job_key=cache_key,
+            tag=tag,
+        )
+        return self.sample_cache.submit(job).result()
+
+    def _make_optuna_objective(
+        self,
+        input_vars,
+        constant_inputs,
+        target_names,
+        tag,
+        agg_vars=None,
+        agg_callable=None,
+        repeats=1,
+    ):
         """Return an objective function compatible with ``study.optimize()``."""
 
         def objective(trial: optuna.trial.Trial):
-            kwargs = {}
-            for iv in input_vars:
-                kwargs[iv.name] = sweep_var_to_suggest(iv, trial)
+            kwargs = {iv.name: sweep_var_to_suggest(iv, trial) for iv in input_vars}
 
-            full_input = dict(kwargs)
-            full_input.update(constant_inputs)
-            full_input["repeat"] = 1
+            if agg_vars or repeats > 1:
+                agg_combos = list(product(*(v.values() for v in agg_vars))) if agg_vars else [()]
+                all_results = [
+                    self._run_optuna_job(
+                        trial, _agg_job_args(kwargs, agg_vars, combo), rep, constant_inputs, tag
+                    )
+                    for combo in agg_combos
+                    for rep in range(1, repeats + 1)
+                ]
+                output = [agg_callable([r[tn] for r in all_results]) for tn in target_names]
+            else:
+                result_dict = self._run_optuna_job(trial, kwargs, 1, constant_inputs, tag)
+                output = [result_dict[tn] for tn in target_names]
 
-            cache_key = self._build_cache_key(full_input, tag)
-
-            job = Job(
-                job_id=f"optimize:trial_{trial.number}",
-                function=self.worker,
-                job_args=kwargs,
-                job_key=cache_key,
-                tag=tag,
-            )
-            job_future = self.sample_cache.submit(job)
-            result_dict = job_future.result()
-
-            output = [result_dict[tn] for tn in target_names]
             return tuple(output) if len(output) > 1 else output[0]
 
         return objective

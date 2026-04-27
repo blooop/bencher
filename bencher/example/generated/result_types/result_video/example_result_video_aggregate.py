@@ -50,9 +50,7 @@ def example_result_video_aggregate(run_cfg: bn.BenchRunCfg | None = None) -> bn.
     bench.plot_sweep(
         input_vars=["sides", "speed"],
         result_vars=["animation", "frame_snapshot", "max_angle"],
-        description="aggregate=True collapses the speed dimension. Videos and images "
-        "should only appear once in the non-aggregated view, not duplicated "
-        "in the aggregated view.",
+        description="aggregate=True collapses the speed dimension. Videos and images should only appear once in the non-aggregated view, not duplicated in the aggregated view.",
         aggregate=True,
     )
 

@@ -379,6 +379,15 @@ def resolve_aggregate(
     )
 
 
+AGG_FN_MAP: dict[str, Callable] = {
+    "mean": lambda vals: float(np.nanmean(vals)),
+    "sum": lambda vals: float(np.nansum(vals)),
+    "max": lambda vals: float(np.nanmax(vals)),
+    "min": lambda vals: float(np.nanmin(vals)),
+    "median": lambda vals: float(np.nanmedian(vals)),
+}
+
+
 def callable_name(any_callable: Callable[..., Any]) -> str:
     """Extract the name of a callable object, handling various callable types.
 
