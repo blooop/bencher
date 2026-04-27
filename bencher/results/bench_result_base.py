@@ -297,8 +297,8 @@ class BenchResultBase:
 
         match reduce:
             case ReduceType.REDUCE:
-                ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
-                ds_reduce_std = ds_out.std(dim="repeat", keep_attrs=False)
+                ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
+                ds_reduce_std = ds_out.std(dim="repeat", skipna=True, keep_attrs=False)
                 # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std
                 n_repeats = ds_out.sizes["repeat"]
                 for rv in self.bench_cfg.result_vars:
@@ -310,9 +310,9 @@ class BenchResultBase:
                     ds_reduce_mean[f"{var}_std"] = ds_reduce_std[var]
                 ds_out = ds_reduce_mean
             case ReduceType.MINMAX:  # TODO, need to pass mean, center of minmax, and minmax
-                ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
-                ds_reduce_min = ds_out.min(dim="repeat")
-                ds_reduce_max = ds_out.max(dim="repeat")
+                ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
+                ds_reduce_min = ds_out.min(dim="repeat", skipna=True)
+                ds_reduce_max = ds_out.max(dim="repeat", skipna=True)
                 # Assign range vars directly onto mean dataset (avoids xr.merge copy)
                 ds_range = ds_reduce_max - ds_reduce_min
                 for var in ds_range.data_vars:

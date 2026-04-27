@@ -49,7 +49,7 @@ def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
                 f"Result variable '{rv.name}' must be numeric to aggregate over "
                 f"non-optimized variable combinations, but got dtype {arr.dtype}"
             )
-        aggregated.append(float(np.mean(arr)))
+        aggregated.append(float(np.nanmean(arr)))
     return tuple(aggregated)
 
 

@@ -155,6 +155,72 @@ class TestAutoDetection:
         assert "y" in result.best_params
 
 
+class SphereWithSeed(bn.ParametrizedSweep):
+    """Sphere with a nuisance dimension to aggregate over."""
+
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+    seed = bn.IntSweep(default=0, bounds=[0, 2], samples=3)
+
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    def benchmark(self):
+        self.loss = float(self.x**2 + self.seed * 0.1)
+
+
+class NoisySphere(bn.ParametrizedSweep):
+    """Sphere with stochastic noise — benefits from repeat aggregation."""
+
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    def benchmark(self):
+        import random
+
+        self.loss = float(self.x**2 + random.gauss(0, 0.1))
+
+
+class TestAggregateOptimize:
+    def test_optimize_with_aggregate(self):
+        bench = bn.Bench("agg_optim", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            n_trials=15,
+            aggregate=["seed"],
+            agg_fn="mean",
+            plot=False,
+        )
+        assert result is not None
+        assert result.study.best_value is not None
+        assert "seed" not in result.study.best_params
+        assert "x" in result.study.best_params
+
+    def test_optimize_with_repeats(self):
+        bench = bn.Bench("rep_optim", NoisySphere(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=15, repeats=3, agg_fn="mean", plot=False)
+        assert result is not None
+        assert result.study.best_value is not None
+
+    def test_optimize_with_aggregate_and_repeats(self):
+        bench = bn.Bench("agg_rep_optim", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(
+            n_trials=10,
+            aggregate=["seed"],
+            repeats=2,
+            agg_fn="mean",
+            plot=False,
+        )
+        assert result is not None
+        assert "seed" not in result.study.best_params
+
+    def test_optimize_no_aggregate_unchanged(self):
+        """Default behavior (no aggregate, repeats=1) still works."""
+        bench = bn.Bench("no_agg_optim", SphereWithSeed(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=10, plot=False)
+        assert result is not None
+        assert "x" in result.study.best_params
+        assert "seed" in result.study.best_params
+
+
 class TestConvenience:
     def test_to_optimize(self):
         result = Sphere().to_optimize(n_trials=15, plot=False)
