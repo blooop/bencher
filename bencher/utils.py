@@ -494,6 +494,43 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma
         os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
 
 
+def normalize_fidelity_kwargs(
+    *,
+    fidelity: int,
+    max_fidelity: int | None,
+    kwargs: dict[str, Any],
+    default_fidelity: int = 2,
+    stacklevel: int = 2,
+) -> tuple[int, int | None]:
+    """Translate deprecated ``level``/``max_level`` kwargs to ``fidelity``/``max_fidelity``.
+
+    Raises ``TypeError`` when old and new names are both provided.
+    """
+    import warnings
+
+    if "level" in kwargs:
+        if fidelity != default_fidelity:
+            raise TypeError("Cannot pass both 'level' and 'fidelity'; use 'fidelity' only.")
+        warnings.warn(
+            "The 'level' parameter is deprecated; use 'fidelity' instead.",
+            DeprecationWarning,
+            stacklevel=stacklevel,
+        )
+        fidelity = kwargs.pop("level")
+    if "max_level" in kwargs:
+        if max_fidelity is not None:
+            raise TypeError(
+                "Cannot pass both 'max_level' and 'max_fidelity'; use 'max_fidelity' only."
+            )
+        warnings.warn(
+            "The 'max_level' parameter is deprecated; use 'max_fidelity' instead.",
+            DeprecationWarning,
+            stacklevel=stacklevel,
+        )
+        max_fidelity = kwargs.pop("max_level")
+    return fidelity, max_fidelity
+
+
 def github_content(remote: str, branch_name: str, filename: str):  # pragma: no cover
     raw = remote.replace(".git", "").replace(
         "https://github.com/", "https://raw.githubusercontent.com/"

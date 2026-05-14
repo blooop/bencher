@@ -157,21 +157,21 @@ from .factories import create_bench, create_bench_runner
 from .run import run
 
 
-def __getattr__(name: str):
-    if name == "LEVEL_SAMPLES":
-        warnings.warn(
-            "'LEVEL_SAMPLES' is deprecated; use 'FIDELITY_SAMPLES' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return FIDELITY_SAMPLES
-    if name == "with_level":
-        warnings.warn(
-            "'with_level' is deprecated; use 'with_fidelity' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        from .variables.inputs import with_level
+_DEPRECATED_ALIASES = {
+    "LEVEL_SAMPLES": "FIDELITY_SAMPLES",
+    "with_level": "with_fidelity",
+}
 
-        return with_level
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+def __getattr__(name: str):
+    import sys
+
+    new_name = _DEPRECATED_ALIASES.get(name)
+    if new_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"'{name}' is deprecated; use '{new_name}' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return getattr(sys.modules[__name__], new_name)

@@ -245,8 +245,39 @@ class TestBenchRunner(unittest.TestCase):
         """Passing both level= and fidelity= to BenchRunner.run() raises TypeError."""
         br = bn.BenchRunner("conflict_test")
         br.add(lambda run_cfg, report: bn.BenchCfg())
-        with self.assertRaises(TypeError, msg="Cannot pass both"):
+        with self.assertRaises(TypeError):
             br.run(fidelity=3, level=4)
+
+    def test_benchrunner_run_max_level_and_max_fidelity_conflict_raises(self):
+        """Passing both max_level= and max_fidelity= to BenchRunner.run() raises TypeError."""
+        br = bn.BenchRunner("conflict_test_max")
+        br.add(lambda run_cfg, report: bn.BenchCfg())
+        with self.assertRaises(TypeError):
+            br.run(max_fidelity=3, max_level=4)
+
+    def test_benchrunner_run_max_level_deprecation_translates(self):
+        """Using deprecated max_level= emits a warning and translates to max_fidelity."""
+        seen = []
+
+        def capture_cfg(run_cfg, report):
+            seen.append(run_cfg.fidelity)
+            return bn.BenchCfg()
+
+        br = bn.BenchRunner("depr_test")
+        br.add(capture_cfg)
+
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            br.run(fidelity=2, max_level=3)
+            self.assertTrue(any("'max_level' parameter is deprecated" in str(x.message) for x in w))
+        self.assertEqual(sorted(set(seen)), [2, 3])
+
+    def test_setup_run_cfg_level_and_fidelity_conflict_raises(self):
+        """Passing both level= and fidelity= to setup_run_cfg() raises TypeError."""
+        with self.assertRaises(TypeError):
+            bn.BenchRunner.setup_run_cfg(fidelity=3, level=4)
 
     def test_benchrunner_no_name_instantiation(self):
         """Test that BenchRunner can be instantiated without a name."""

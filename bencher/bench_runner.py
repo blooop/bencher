@@ -155,6 +155,8 @@ class BenchRunner:
             BenchRunCfg: A new configuration object with the specified settings
         """
         if level is not None:
+            if fidelity != 2:
+                raise TypeError("Cannot pass both 'level' and 'fidelity'; use 'fidelity' only.")
             warnings.warn(
                 "The 'level' parameter is deprecated; use 'fidelity' instead.",
                 DeprecationWarning,
@@ -344,26 +346,11 @@ class BenchRunner:
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
         """
-        if "level" in kwargs:
-            if fidelity != 2:
-                raise TypeError("Cannot pass both 'level' and 'fidelity'; use 'fidelity' only.")
-            warnings.warn(
-                "The 'level' parameter is deprecated; use 'fidelity' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            fidelity = kwargs.pop("level")
-        if "max_level" in kwargs:
-            if max_fidelity is not None:
-                raise TypeError(
-                    "Cannot pass both 'max_level' and 'max_fidelity'; use 'max_fidelity' only."
-                )
-            warnings.warn(
-                "The 'max_level' parameter is deprecated; use 'max_fidelity' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            max_fidelity = kwargs.pop("max_level")
+        from bencher.utils import normalize_fidelity_kwargs
+
+        fidelity, max_fidelity = normalize_fidelity_kwargs(
+            fidelity=fidelity, max_fidelity=max_fidelity, kwargs=kwargs, stacklevel=2
+        )
 
         cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 

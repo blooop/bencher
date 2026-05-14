@@ -7,7 +7,6 @@ import logging
 import signal
 import sys
 import time
-import warnings
 from contextlib import AbstractContextManager
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -138,27 +137,11 @@ def run(
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
     from bencher.bench_runner import BenchRunner, _resolve_cache_samples
+    from bencher.utils import normalize_fidelity_kwargs
 
-    if "level" in kwargs:
-        if fidelity != 2:
-            raise TypeError("Cannot pass both 'level' and 'fidelity'; use 'fidelity' only.")
-        warnings.warn(
-            "The 'level' parameter is deprecated; use 'fidelity' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        fidelity = kwargs.pop("level")
-    if "max_level" in kwargs:
-        if max_fidelity is not None:
-            raise TypeError(
-                "Cannot pass both 'max_level' and 'max_fidelity'; use 'max_fidelity' only."
-            )
-        warnings.warn(
-            "The 'max_level' parameter is deprecated; use 'max_fidelity' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        max_fidelity = kwargs.pop("max_level")
+    fidelity, max_fidelity = normalize_fidelity_kwargs(
+        fidelity=fidelity, max_fidelity=max_fidelity, kwargs=kwargs, stacklevel=2
+    )
 
     show_mode = normalize_show(show)
     if show_mode is ShowMode.PUBLISHED and not publish:

@@ -65,6 +65,16 @@ class TestSweep:
         with pytest.raises(ValueError, match="samples must be greater than 0"):
             sweep(name="param1", samples=0)
 
+    def test_max_level_deprecated_alias_maps_to_max_fidelity(self):
+        with pytest.warns(DeprecationWarning, match="max_level"):
+            cfg = sweep(name="param1", max_level=3)
+        assert cfg["max_fidelity"] == 3
+        assert "max_level" not in cfg
+
+    def test_max_level_and_max_fidelity_conflict_raises(self):
+        with pytest.raises(TypeError, match="Cannot pass both"):
+            sweep(name="param1", max_fidelity=5, max_level=3)
+
 
 class TestPDeprecation:
     def test_p_emits_deprecation_warning(self):

@@ -65,6 +65,21 @@ class TestFidelityToSamples(unittest.TestCase):
         self.assertEqual(BenchRunCfg.level_to_samples(5), BenchRunCfg.fidelity_to_samples(5))
 
 
+# ---------- with_level backward-compat ----------
+
+
+class TestWithLevelBackwardCompat(unittest.TestCase):
+    def test_bn_with_level_warns_and_delegates(self):
+        """bn.with_level emits DeprecationWarning and returns same result as with_fidelity."""
+        arr = list(range(20))
+        with self.assertWarns(DeprecationWarning):
+            fn = bn.with_level
+        self.assertTrue(callable(fn))
+        result_alias = fn(arr, 3)
+        result_direct = bn.with_fidelity(arr, 3)
+        self.assertEqual(result_alias, result_direct)
+
+
 # ---------- samples_per_var ----------
 
 

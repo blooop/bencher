@@ -706,13 +706,16 @@ def sweep(
         dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.
     """
     if max_level is not None:
+        if max_fidelity is not None:
+            raise TypeError(
+                "Cannot pass both 'max_level' and 'max_fidelity'; use 'max_fidelity' only."
+            )
         warnings.warn(
             "The 'max_level' parameter is deprecated; use 'max_fidelity' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
-        if max_fidelity is None:
-            max_fidelity = max_level
+        max_fidelity = max_level
 
     if max_fidelity is not None and max_fidelity <= 0:
         raise ValueError("max_fidelity must be greater than 0")
@@ -778,7 +781,8 @@ def with_fidelity(arr: list, fidelity: int) -> list:
     """
     if fidelity < 1:
         raise ValueError(f"fidelity must be >= 1, got {fidelity}")
-    n = FIDELITY_SAMPLES[min(12, fidelity)]
+    max_index = len(FIDELITY_SAMPLES) - 1
+    n = FIDELITY_SAMPLES[min(max_index, fidelity)]
     return SweepBase.indices_to_samples(None, n, list(arr))
 
 
