@@ -120,4 +120,4 @@ def example_video_tap(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:  # pra
 
 
 if __name__ == "__main__":
-    bn.run(example_video_tap, level=2)
+    bn.run(example_video_tap, fidelity=2)

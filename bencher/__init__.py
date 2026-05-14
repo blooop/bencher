@@ -7,7 +7,7 @@ from .bench_cfg import ShowMode
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
-from .variables.sweep_base import hash_sha1, LEVEL_SAMPLES
+from .variables.sweep_base import hash_sha1, FIDELITY_SAMPLES
 from .variables.inputs import (
     IntSweep,
     FloatSweep,
@@ -19,7 +19,7 @@ from .variables.inputs import (
 )
 from .variables.time import TimeSnapshot
 
-from .variables.inputs import box, p, sweep
+from .variables.inputs import box, p, sweep, with_fidelity
 from .variables.results import (
     ResultFloat,
     ResultVar,
@@ -155,3 +155,23 @@ from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
 from .factories import create_bench, create_bench_runner
 from .run import run
+
+
+def __getattr__(name: str):
+    if name == "LEVEL_SAMPLES":
+        warnings.warn(
+            "'LEVEL_SAMPLES' is deprecated; use 'FIDELITY_SAMPLES' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return FIDELITY_SAMPLES
+    if name == "with_level":
+        warnings.warn(
+            "'with_level' is deprecated; use 'with_fidelity' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .variables.inputs import with_level
+
+        return with_level
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

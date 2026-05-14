@@ -22,7 +22,7 @@ No code changes to plotting logic are needed — the type signature of your para
 Sample each point multiple times to get a statistical distribution:
 
 ```python
-bn.run(SimpleFloat, level=3, repeats=10)
+bn.run(SimpleFloat, fidelity=3, repeats=10)
 ```
 
 Or with the manual API:
@@ -43,7 +43,7 @@ Bencher assumes your function is a stochastic pure function — given the same i
 Enable `over_time` to record time-series snapshots that can be scrubbed via a slider:
 
 ```python
-bn.run(MyBench, level=3, repeats=3, over_time=True)
+bn.run(MyBench, fidelity=3, repeats=3, over_time=True)
 ```
 
 For multi-snapshot tracking (e.g. CI pipelines), call `plot_sweep()` in a loop with different `time_src` values:
@@ -71,7 +71,7 @@ Each run adds a time slider to the plots. When combined with repeats, the Optuna
 When `use_optuna=True`, Bencher integrates with [Optuna](https://optuna.org/) for parameter importance analysis:
 
 ```python
-bn.run(MyBench, level=3, repeats=3, optimise=30)
+bn.run(MyBench, fidelity=3, repeats=3, optimise=30)
 ```
 
 Or with the manual API:
@@ -107,7 +107,7 @@ result = MyBench().to_optimize(n_trials=50)
 print(result.summary())
 
 # Or via bn.run() — runs a grid sweep then optimises with 30 extra trials
-bn.run(MyBench, level=3, optimise=30)
+bn.run(MyBench, fidelity=3, optimise=30)
 ```
 
 ## Composable Containers

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import warnings
 from enum import auto
 from strenum import LowercaseStrEnum
 
@@ -12,7 +13,7 @@ import panel as pn
 from datetime import datetime
 from copy import deepcopy
 
-from bencher.variables.sweep_base import hash_sha1, describe_variable, LEVEL_SAMPLES
+from bencher.variables.sweep_base import hash_sha1, describe_variable, FIDELITY_SAMPLES
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
 from bencher.results.composable_container.composable_container_base import PaneLayout
@@ -107,23 +108,23 @@ class BenchRunCfg(BenchPlotSrvCfg):
         # Use defaults — each variable uses its own ``samples`` setting:
         run_cfg = BenchRunCfg()
 
-        # Set a sampling level (geometrically increasing sample counts):
-        run_cfg = BenchRunCfg(level=5)        # 9 samples per variable
-        run_cfg = BenchRunCfg(level=8)        # 65 samples per variable
+        # Set a sampling fidelity (geometrically increasing sample counts):
+        run_cfg = BenchRunCfg(fidelity=5)        # 9 samples per variable
+        run_cfg = BenchRunCfg(fidelity=8)        # 65 samples per variable
 
         # Or set an exact sample count directly:
         run_cfg = BenchRunCfg(samples_per_var=20)
 
-    Level-to-samples mapping
-    ~~~~~~~~~~~~~~~~~~~~~~~~
-    ====== ======= ====== ======= ====== =======
-    Level  Samples Level  Samples Level  Samples
-    ====== ======= ====== ======= ====== =======
-    1      1       5      9       9      129
-    2      2       6      17      10     257
-    3      3       7      33      11     513
-    4      5       8      65      12     1025
-    ====== ======= ====== ======= ====== =======
+    Fidelity-to-samples mapping
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ========= ======= ========= ======= ========= =======
+    Fidelity  Samples Fidelity  Samples Fidelity  Samples
+    ========= ======= ========= ======= ========= =======
+    1         1       5         9       9         129
+    2         2       6         17      10        257
+    3         3       7         33      11        513
+    4         5       8         65      12        1025
+    ========= ======= ========= ======= ========= =======
 
     Attributes:
         repeats (int): The number of times to sample the inputs
@@ -162,8 +163,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
         dry_run (bool): Preview sweep grid without executing the benchmark function
-        level (int): Method of defining the number of samples to sweep over
-        samples_per_var (int | None): Explicit sample count per variable (overrides level)
+        fidelity (int): Method of defining the number of samples to sweep over
+        samples_per_var (int | None): Explicit sample count per variable (overrides fidelity)
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
         executor (Executors): Executor for running the benchmark
@@ -177,14 +178,14 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
 
-    level: int = param.Integer(
+    fidelity: int = param.Integer(
         default=0,
         bounds=[0, 12],
         doc="Controls sample count for every sweep variable at once. "
-        "Level 0 (default) uses each variable's own `samples` setting. "
-        "Levels 1-12 override with geometrically increasing counts: "
+        "Fidelity 0 (default) uses each variable's own `samples` setting. "
+        "Fidelity 1-12 override with geometrically increasing counts: "
         "1→1, 2→2, 3→3, 4→5, 5→9, 6→17, 7→33, 8→65, 9→129, 10→257, 11→513, 12→1025. "
-        "Use `BenchRunCfg.level_to_samples(level)` to query programmatically, "
+        "Use `BenchRunCfg.fidelity_to_samples(fidelity)` to query programmatically, "
         "or set `samples_per_var` for a direct sample count.",
     )
 
@@ -193,7 +194,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         allow_None=True,
         bounds=(1, None),
         doc="Explicit number of samples per sweep variable. "
-        "When set, takes precedence over `level`. "
+        "When set, takes precedence over `fidelity`. "
         "Example: samples_per_var=20 gives exactly 20 samples for every input variable.",
     )
 
@@ -458,6 +459,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     def __init__(self, **params: Any) -> None:
         """Initialize BenchRunCfg with current datetime if not provided."""
+        if "level" in params:
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'fidelity' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            params.setdefault("fidelity", params.pop("level"))
         if "run_date" not in params:
             params["run_date"] = datetime.now()
         super().__init__(**params)
@@ -515,27 +523,39 @@ class BenchRunCfg(BenchPlotSrvCfg):
         return BenchRunCfg(**vars(parser.parse_args()))
 
     @staticmethod
-    def level_to_samples(level: int, max_level: int = 12) -> int:
-        """Return the number of samples-per-variable for a given *level*.
+    def fidelity_to_samples(fidelity: int, max_fidelity: int = 12) -> int:
+        """Return the number of samples-per-variable for a given *fidelity*.
 
         Args:
-            level: Sampling level (1-12).
-            max_level: Cap applied before lookup. Defaults to 12.
+            fidelity: Sampling fidelity (1-12).
+            max_fidelity: Cap applied before lookup. Defaults to 12.
 
         Returns:
-            The sample count for this level.
+            The sample count for this fidelity.
 
         Raises:
-            ValueError: If *level* is out of range.
+            ValueError: If *fidelity* is out of range.
 
         Example::
 
-            >>> BenchRunCfg.level_to_samples(5)
+            >>> BenchRunCfg.fidelity_to_samples(5)
             9
         """
-        if level < 1 or level >= len(LEVEL_SAMPLES):
-            raise ValueError(f"level must be between 1 and {len(LEVEL_SAMPLES) - 1}, got {level}")
-        return LEVEL_SAMPLES[min(max_level, level)]
+        if fidelity < 1 or fidelity >= len(FIDELITY_SAMPLES):
+            raise ValueError(
+                f"fidelity must be between 1 and {len(FIDELITY_SAMPLES) - 1}, got {fidelity}"
+            )
+        return FIDELITY_SAMPLES[min(max_fidelity, fidelity)]
+
+    @staticmethod
+    def level_to_samples(level: int, max_level: int = 12) -> int:
+        """Deprecated: use :meth:`fidelity_to_samples` instead."""
+        warnings.warn(
+            "'level_to_samples' is deprecated; use 'fidelity_to_samples' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return BenchRunCfg.fidelity_to_samples(fidelity=level, max_fidelity=max_level)
 
     def deep(self):
         return deepcopy(self)
@@ -551,11 +571,18 @@ class BenchRunCfg(BenchPlotSrvCfg):
         mutated.  This lets benchmark functions declare sensible defaults while still
         allowing callers to override::
 
-            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
+            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, fidelity=4)
 
         Raises:
             ValueError: If any key in *defaults* is not a recognised parameter.
         """
+        if "level" in defaults:
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'fidelity' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            defaults.setdefault("fidelity", defaults.pop("level"))
         unknown = set(defaults) - set(cls.param)
         if unknown:
             raise ValueError(f"Unknown BenchRunCfg parameter(s): {', '.join(sorted(unknown))}")
@@ -864,8 +891,8 @@ class BenchCfg(BenchRunCfg):
         benchmark_sampling_str.append(f"    run date: {self.run_date}")
         if self.run_tag:
             benchmark_sampling_str.append(f"    run tag: {self.run_tag}")
-        if self.level is not None:
-            benchmark_sampling_str.append(f"    bench level: {self.level}")
+        if self.fidelity is not None:
+            benchmark_sampling_str.append(f"    bench fidelity: {self.fidelity}")
         benchmark_sampling_str.append(f"    cache_results: {self.cache_results}")
         benchmark_sampling_str.append(f"    cache_samples {self.cache_samples}")
         benchmark_sampling_str.append(f"    only_hash_tag: {self.only_hash_tag}")

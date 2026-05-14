@@ -26,4 +26,4 @@ def example_container_tabs(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_container_tabs, level=2)
+    bn.run(example_container_tabs, fidelity=2)

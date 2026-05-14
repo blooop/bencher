@@ -101,12 +101,14 @@ class TestValuesReturnType:
                 mutated = sw.with_samples(2)
                 self._assert_plain_list(mutated.values(), f"{name}.with_samples(2).values()")
 
-    def test_with_level_values(self):
-        """After with_level(), all sweep types must return a plain list."""
+    def test_with_fidelity_values(self):
+        """After with_fidelity(), all sweep types must return a plain list."""
         for name, sw in _build_sweeps().items():
-            for level in (1, 2, 3, 4):
-                mutated = sw.with_level(level)
-                self._assert_plain_list(mutated.values(), f"{name}.with_level({level}).values()")
+            for fidelity in (1, 2, 3, 4):
+                mutated = sw.with_fidelity(fidelity)
+                self._assert_plain_list(
+                    mutated.values(), f"{name}.with_fidelity({fidelity}).values()"
+                )
 
     def test_with_sample_values_returns_plain_list(self):
         sw = StringSweep(["a", "b", "c"])
@@ -131,20 +133,20 @@ class TestPickleRaw:
 
 
 # ---------------------------------------------------------------------------
-# 3. Pickle round-trip after mutations (with_level, with_samples, etc.)
+# 3. Pickle round-trip after mutations (with_fidelity, with_samples, etc.)
 # ---------------------------------------------------------------------------
 
 
 class TestPickleAfterMutation:
     """Sweeps must remain picklable after every mutation method."""
 
-    @pytest.mark.parametrize("level", [1, 2, 3, 4, 5])
-    def test_pickle_after_with_level(self, level):
+    @pytest.mark.parametrize("fidelity", [1, 2, 3, 4, 5])
+    def test_pickle_after_with_fidelity(self, fidelity):
         for name, sw in _build_sweeps().items():
-            mutated = sw.with_level(level)
+            mutated = sw.with_fidelity(fidelity)
             restored = _pickle_roundtrip(mutated)
             assert restored.values() == mutated.values(), (
-                f"Pickle failed for {name}.with_level({level})"
+                f"Pickle failed for {name}.with_fidelity({fidelity})"
             )
 
     def test_pickle_after_with_samples(self):
@@ -203,12 +205,12 @@ class TestDeepcopy:
             cloned = copy.deepcopy(sw)
             assert _values_equal(cloned.values(), sw.values()), f"Deepcopy failed for {name}"
 
-    def test_deepcopy_after_with_level(self):
+    def test_deepcopy_after_with_fidelity(self):
         for name, sw in _build_sweeps().items():
-            mutated = sw.with_level(3)
+            mutated = sw.with_fidelity(3)
             cloned = copy.deepcopy(mutated)
             assert cloned.values() == mutated.values(), (
-                f"Deepcopy after with_level failed for {name}"
+                f"Deepcopy after with_fidelity failed for {name}"
             )
 
     def test_deepcopy_after_with_samples(self):
@@ -223,7 +225,7 @@ class TestDeepcopy:
         """Modifying the clone must not affect the original."""
         sw = StringSweep(["a", "b", "c"])
         cloned = copy.deepcopy(sw)
-        cloned_level = cloned.with_level(1)
+        cloned_level = cloned.with_fidelity(1)
         assert sw.values() == ["a", "b", "c"]
         assert cloned_level.values() == ["a"]
 
@@ -259,14 +261,14 @@ class TestMultiprocessing:
                 f"Multiprocessing round-trip failed for {name}"
             )
 
-    @pytest.mark.parametrize("level", [1, 2, 3, 4])
-    def test_multiprocessing_after_with_level(self, level):
+    @pytest.mark.parametrize("fidelity", [1, 2, 3, 4])
+    def test_multiprocessing_after_with_fidelity(self, fidelity):
         """This is the exact scenario that PR #854 fixed."""
         for name, sw in _build_sweeps().items():
-            mutated = sw.with_level(level)
+            mutated = sw.with_fidelity(fidelity)
             result = self._roundtrip_via_pool(mutated)
             assert result == mutated.values(), (
-                f"Multiprocessing failed for {name}.with_level({level})"
+                f"Multiprocessing failed for {name}.with_fidelity({fidelity})"
             )
 
     def test_multiprocessing_after_with_samples(self):
@@ -283,24 +285,24 @@ class TestMultiprocessing:
         result = self._roundtrip_via_pool(mutated)
         assert result == ["a", "c"]
 
-    def test_multiprocessing_selector_with_level_string(self):
-        """Explicit regression test: StringSweep.with_level() must be picklable."""
+    def test_multiprocessing_selector_with_fidelity_string(self):
+        """Explicit regression test: StringSweep.with_fidelity() must be picklable."""
         sw = StringSweep(["a", "b", "c"])
-        mutated = sw.with_level(4)
+        mutated = sw.with_fidelity(4)
         result = self._roundtrip_via_pool(mutated)
         assert result == mutated.values()
 
-    def test_multiprocessing_selector_with_level_enum(self):
-        """Explicit regression test: EnumSweep.with_level() must be picklable."""
+    def test_multiprocessing_selector_with_fidelity_enum(self):
+        """Explicit regression test: EnumSweep.with_fidelity() must be picklable."""
         sw = EnumSweep(Color)
-        mutated = sw.with_level(3)
+        mutated = sw.with_fidelity(3)
         result = self._roundtrip_via_pool(mutated)
         assert result == mutated.values()
 
-    def test_multiprocessing_selector_with_level_bool(self):
-        """Explicit regression test: BoolSweep.with_level() must be picklable."""
+    def test_multiprocessing_selector_with_fidelity_bool(self):
+        """Explicit regression test: BoolSweep.with_fidelity() must be picklable."""
         sw = BoolSweep()
-        mutated = sw.with_level(2)
+        mutated = sw.with_fidelity(2)
         result = self._roundtrip_via_pool(mutated)
         assert result == mutated.values()
 
@@ -320,7 +322,7 @@ class TestPickleInContainer:
     def test_dict_of_mutated_sweeps(self):
         container = {}
         for name, sw in _build_sweeps().items():
-            container[name] = sw.with_level(3)
+            container[name] = sw.with_fidelity(3)
 
         restored = _pickle_roundtrip(container)
         for name in container:
@@ -329,50 +331,50 @@ class TestPickleInContainer:
             )
 
     def test_list_of_mutated_sweeps(self):
-        sweeps = [sw.with_level(3) for sw in _build_sweeps().values()]
+        sweeps = [sw.with_fidelity(3) for sw in _build_sweeps().values()]
         restored = _pickle_roundtrip(sweeps)
         for orig, rest in zip(sweeps, restored):
             assert rest.values() == orig.values()
 
     def test_nested_structure(self):
         """Deeply nested structure containing sweeps must pickle."""
-        sw = StringSweep(["x", "y", "z"]).with_level(2)
+        sw = StringSweep(["x", "y", "z"]).with_fidelity(2)
         container = {"config": {"input_vars": [sw], "metadata": {"name": "test"}}}
         restored = _pickle_roundtrip(container)
         assert restored["config"]["input_vars"][0].values() == sw.values()
 
 
 # ---------------------------------------------------------------------------
-# 7. Chained mutations (with_level -> deepcopy -> pickle, etc.)
+# 7. Chained mutations (with_fidelity -> deepcopy -> pickle, etc.)
 # ---------------------------------------------------------------------------
 
 
 class TestChainedMutations:
     """Multiple mutations chained together must remain serializable."""
 
-    def test_with_level_then_deepcopy_then_pickle(self):
-        sw = StringSweep(["a", "b", "c", "d"]).with_level(3)
+    def test_with_fidelity_then_deepcopy_then_pickle(self):
+        sw = StringSweep(["a", "b", "c", "d"]).with_fidelity(3)
         cloned = copy.deepcopy(sw)
         restored = _pickle_roundtrip(cloned)
         assert restored.values() == sw.values()
 
-    def test_with_samples_then_with_level_then_pickle(self):
+    def test_with_samples_then_with_fidelity_then_pickle(self):
         sw = IntSweep(bounds=(0, 100))
-        mutated = sw.with_samples(20).with_level(3)
+        mutated = sw.with_samples(20).with_fidelity(3)
         restored = _pickle_roundtrip(mutated)
         assert restored.values() == mutated.values()
 
-    def test_with_level_then_with_sample_values_then_pickle(self):
-        sw = EnumSweep(Color).with_level(2)
+    def test_with_fidelity_then_with_sample_values_then_pickle(self):
+        sw = EnumSweep(Color).with_fidelity(2)
         mutated = sw.with_sample_values([Color.GREEN])
         restored = _pickle_roundtrip(mutated)
         assert restored.values() == [Color.GREEN]
 
-    def test_double_with_level(self):
-        """Applying with_level twice must not corrupt internal state."""
+    def test_double_with_fidelity(self):
+        """Applying with_fidelity twice must not corrupt internal state."""
         sw = StringSweep(["a", "b", "c", "d"])
-        lvl2 = sw.with_level(2)
-        lvl3 = lvl2.with_level(3)
+        lvl2 = sw.with_fidelity(2)
+        lvl3 = lvl2.with_fidelity(3)
         restored = _pickle_roundtrip(lvl3)
         assert restored.values() == lvl3.values()
 
@@ -386,22 +388,22 @@ class TestPickleProtocols:
     """Sweeps must work with all pickle protocols, not just the highest."""
 
     @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
-    def test_all_protocols_string_sweep_with_level(self, protocol):
-        sw = StringSweep(["a", "b", "c"]).with_level(3)
+    def test_all_protocols_string_sweep_with_fidelity(self, protocol):
+        sw = StringSweep(["a", "b", "c"]).with_fidelity(3)
         data = pickle.dumps(sw, protocol=protocol)
         restored = pickle.loads(data)  # noqa: S301
         assert restored.values() == sw.values()
 
     @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
-    def test_all_protocols_enum_sweep_with_level(self, protocol):
-        sw = EnumSweep(Color).with_level(2)
+    def test_all_protocols_enum_sweep_with_fidelity(self, protocol):
+        sw = EnumSweep(Color).with_fidelity(2)
         data = pickle.dumps(sw, protocol=protocol)
         restored = pickle.loads(data)  # noqa: S301
         assert restored.values() == sw.values()
 
     @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
-    def test_all_protocols_bool_sweep_with_level(self, protocol):
-        sw = BoolSweep().with_level(2)
+    def test_all_protocols_bool_sweep_with_fidelity(self, protocol):
+        sw = BoolSweep().with_fidelity(2)
         data = pickle.dumps(sw, protocol=protocol)
         restored = pickle.loads(data)  # noqa: S301
         assert restored.values() == sw.values()
@@ -430,24 +432,24 @@ class TestParametrizedSweepPickle:
         assert restored.label == cfg.label
         assert restored.enabled == cfg.enabled
 
-    def test_class_params_pickle_after_with_level(self):
-        """Each class-level param, after with_level(), must pickle."""
+    def test_class_params_pickle_after_with_fidelity(self):
+        """Each class-level param, after with_fidelity(), must pickle."""
         for p_name in ("color", "label", "enabled", "count", "ratio"):
             param = SampleConfig.param[p_name]  # pylint: disable=unsubscriptable-object
-            mutated = param.with_level(2)
+            mutated = param.with_fidelity(2)
             restored = _pickle_roundtrip(mutated)
             assert restored.values() == mutated.values(), (
-                f"ParametrizedSweep.param.{p_name}.with_level(2) failed pickle"
+                f"ParametrizedSweep.param.{p_name}.with_fidelity(2) failed pickle"
             )
 
     def test_input_vars_list_pickles(self):
-        """Simulates what Bench does: collects input_vars as with_level'd sweeps."""
+        """Simulates what Bench does: collects input_vars as with_fidelity'd sweeps."""
         input_vars = [
-            SampleConfig.param.color.with_level(2),
-            SampleConfig.param.label.with_level(3),
-            SampleConfig.param.enabled.with_level(2),
-            SampleConfig.param.count.with_level(3),
-            SampleConfig.param.ratio.with_level(3),
+            SampleConfig.param.color.with_fidelity(2),
+            SampleConfig.param.label.with_fidelity(3),
+            SampleConfig.param.enabled.with_fidelity(2),
+            SampleConfig.param.count.with_fidelity(3),
+            SampleConfig.param.ratio.with_fidelity(3),
         ]
         restored = _pickle_roundtrip(input_vars)
         for orig, rest in zip(input_vars, restored):

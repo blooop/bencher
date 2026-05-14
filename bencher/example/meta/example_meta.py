@@ -93,13 +93,13 @@ class BenchMeta(bn.ParametrizedSweep):
 
     sample_over_time = bn.BoolSweep(default=False)
 
-    level = bn.IntSweep(default=2, units="level", bounds=(2, 5))
+    fidelity = bn.IntSweep(default=2, units="fidelity", bounds=(2, 5))
 
     plots = bn.ResultReference(units="int")
 
     def benchmark(self):
         run_cfg = bn.BenchRunCfg()
-        run_cfg.level = self.level
+        run_cfg.fidelity = self.fidelity
         run_cfg.repeats = self.sample_with_repeats
         run_cfg.over_time = self.sample_over_time
         run_cfg.plot_size = 500

@@ -175,7 +175,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "bench.add_plot_callback(bn.BenchResult.to_sweep_summary)\n"
-            "bench.add_plot_callback(bn.BenchResult.to_panes, level=3)\n"
+            "bench.add_plot_callback(bn.BenchResult.to_panes, fidelity=3)\n"
             'sweep_vars = ["sides", "radius", "color"]\n'
             "for i in range(1, len(sweep_vars) + 1):\n"
             "    bench.plot_sweep(\n"

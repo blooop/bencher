@@ -41,39 +41,39 @@ class TestRun(unittest.TestCase):
         self.assertIsInstance(results, list)
         self.assertGreater(len(results), 0)
 
-    def test_run_callable_level_propagates(self):
-        """bn.run() propagates level to the benchmark result for callables."""
-        results = bn.run(example_simple_float, level=3, show=False)
+    def test_run_callable_fidelity_propagates(self):
+        """bn.run() propagates fidelity to the benchmark result for callables."""
+        results = bn.run(example_simple_float, fidelity=3, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.level, 3)
+        self.assertEqual(results[0].last_run_cfg.fidelity, 3)
 
     def test_run_callable_repeats_propagates(self):
         """bn.run() propagates repeats to the benchmark result for callables."""
-        results = bn.run(example_simple_float, level=2, repeats=3, show=False)
+        results = bn.run(example_simple_float, fidelity=2, repeats=3, show=False)
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0].last_run_cfg.repeats, 3)
 
-    def test_run_sweep_class_level_propagates(self):
-        """bn.run() propagates level to the benchmark result for ParametrizedSweep classes."""
-        results = bn.run(SimpleFloat, level=3, show=False)
+    def test_run_sweep_class_fidelity_propagates(self):
+        """bn.run() propagates fidelity to the benchmark result for ParametrizedSweep classes."""
+        results = bn.run(SimpleFloat, fidelity=3, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.level, 3)
+        self.assertEqual(results[0].last_run_cfg.fidelity, 3)
 
     def test_run_sweep_class_repeats_propagates(self):
         """bn.run() propagates repeats to the benchmark result for ParametrizedSweep classes."""
-        results = bn.run(SimpleFloat, level=2, repeats=2, show=False)
+        results = bn.run(SimpleFloat, fidelity=2, repeats=2, show=False)
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0].last_run_cfg.repeats, 2)
 
-    def test_run_sweep_instance_level_propagates(self):
-        """bn.run() propagates level to the benchmark result for ParametrizedSweep instances."""
-        results = bn.run(SimpleFloat(), level=3, show=False)
+    def test_run_sweep_instance_fidelity_propagates(self):
+        """bn.run() propagates fidelity to the benchmark result for ParametrizedSweep instances."""
+        results = bn.run(SimpleFloat(), fidelity=3, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.level, 3)
+        self.assertEqual(results[0].last_run_cfg.fidelity, 3)
 
     def test_run_sweep_instance_repeats_propagates(self):
         """bn.run() propagates repeats for ParametrizedSweep instances."""
-        results = bn.run(SimpleFloat(), level=2, repeats=2, show=False)
+        results = bn.run(SimpleFloat(), fidelity=2, repeats=2, show=False)
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0].last_run_cfg.repeats, 2)
 
@@ -90,10 +90,20 @@ class TestRun(unittest.TestCase):
         results = bn.run(example_simple_float, show=False, save=True)
         self.assertIsInstance(results, list)
 
+    def test_run_level_and_fidelity_conflict_raises(self):
+        """bn.run() raises TypeError when both level= and fidelity= are passed."""
+        with self.assertRaises(TypeError):
+            bn.run(example_simple_float, fidelity=3, level=4, show=False)
+
+    def test_run_max_level_and_max_fidelity_conflict_raises(self):
+        """bn.run() raises TypeError when both max_level= and max_fidelity= are passed."""
+        with self.assertRaises(TypeError):
+            bn.run(example_simple_float, max_fidelity=3, max_level=4, show=False)
+
     def test_run_progressive_levels(self):
-        """bn.run() with max_level produces results for each level."""
-        results = bn.run(example_simple_float, level=2, max_level=3, show=False)
-        self.assertEqual(len(results), 2)  # level 2 and level 3
+        """bn.run() with max_fidelity produces results for each fidelity."""
+        results = bn.run(example_simple_float, fidelity=2, max_fidelity=3, show=False)
+        self.assertEqual(len(results), 2)  # fidelity 2 and fidelity 3
 
     def test_run_progressive_repeats(self):
         """bn.run() with max_repeats produces results for each repeat count."""
@@ -101,9 +111,9 @@ class TestRun(unittest.TestCase):
         self.assertEqual(len(results), 2)  # repeats 1 and repeats 2
 
     def test_run_progressive_levels_and_repeats(self):
-        """bn.run() with both max_level and max_repeats produces the cross product."""
+        """bn.run() with both max_fidelity and max_repeats produces the cross product."""
         results = bn.run(
-            example_simple_float, level=2, max_level=3, repeats=1, max_repeats=2, show=False
+            example_simple_float, fidelity=2, max_fidelity=3, repeats=1, max_repeats=2, show=False
         )
         # 2 levels x 2 repeat counts = 4 results
         self.assertEqual(len(results), 4)

@@ -9,4 +9,4 @@ if __name__ == "__main__":
     runner.add(example_image)
     runner.add(example_video)
 
-    runner.run(level=2, grouped=True, show=True, cache_samples=False)
+    runner.run(fidelity=2, grouped=True, show=True, cache_samples=False)

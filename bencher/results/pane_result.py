@@ -25,11 +25,11 @@ class PaneResult(BenchResultBase):
         hv_dataset=None,
         target_dimension: int = 0,
         container=None,
-        level: int | None = None,
+        fidelity: int | None = None,
         **kwargs,
     ) -> pn.pane.panel | None:
         if hv_dataset is None:
-            hv_dataset = self.to_hv_dataset(ReduceType.SQUEEZE, level=level)
+            hv_dataset = self.to_hv_dataset(ReduceType.SQUEEZE, fidelity=fidelity)
         elif not isinstance(hv_dataset, hv.Dataset):
             hv_dataset = hv.Dataset(hv_dataset)
         return self.map_plot_panes(

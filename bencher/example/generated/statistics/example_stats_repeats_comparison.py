@@ -10,7 +10,7 @@ def example_stats_repeats_comparison(run_cfg: bn.BenchRunCfg | None = None) -> b
     for n_repeats in [1, 5, 20]:
         noise = 0.3 if n_repeats > 1 else 0.0
         sweep_cfg = bn.BenchRunCfg()
-        sweep_cfg.level = 3
+        sweep_cfg.fidelity = 3
         sweep_cfg.repeats = n_repeats
         bench.plot_sweep(
             title=f"{n_repeats} repeat(s)",

@@ -134,28 +134,37 @@ class BenchRunner:
     @staticmethod
     def setup_run_cfg(
         run_cfg: BenchRunCfg | None = None,
-        level: int = 2,
+        fidelity: int = 2,
         cache_samples: bool = False,
         over_time: bool | None = None,
+        level: int | None = None,
     ) -> BenchRunCfg:
         """Configure benchmark run settings with reasonable defaults.
 
-        Creates a copy of the provided configuration with the specified level and
+        Creates a copy of the provided configuration with the specified fidelity and
         caching behavior settings applied.
 
         Args:
             run_cfg (BenchRunCfg, optional): Base configuration to modify. Defaults to None.
-            level (int, optional): Benchmark sampling resolution level. Defaults to 2.
+            fidelity (int, optional): Benchmark sampling resolution fidelity. Defaults to 2.
             cache_samples (bool, optional): Whether to enable sample caching. Defaults to False.
             over_time (bool, optional): Enable time-series benchmarking. None preserves run_cfg value.
+            level (int, optional): Deprecated. Use ``fidelity`` instead.
 
         Returns:
             BenchRunCfg: A new configuration object with the specified settings
         """
+        if level is not None:
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'fidelity' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            fidelity = level
         run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
         run_cfg_out.cache_samples = cache_samples
         run_cfg_out.only_hash_tag = cache_samples
-        run_cfg_out.level = level
+        run_cfg_out.fidelity = fidelity
         if over_time is not None:
             run_cfg_out.over_time = over_time
         return run_cfg_out
@@ -279,10 +288,10 @@ class BenchRunner:
 
     def run(
         self,
-        # New unified parameters (level and repeats are starting values)
-        level: int = 2,
+        # New unified parameters (fidelity and repeats are starting values)
+        fidelity: int = 2,
         repeats: int = 1,
-        max_level: int | None = None,
+        max_fidelity: int | None = None,
         max_repeats: int | None = None,
         # Legacy parameters for backward compatibility (deprecated)
         min_level: int | None = None,
@@ -302,18 +311,18 @@ class BenchRunner:
         """Unified interface for running benchmarks.
 
         This function provides a single entry point for benchmark runs:
-        - Single runs: Use level and repeats parameters only
-        - Progressive runs: Set max_level and/or max_repeats for automatic progression
+        - Single runs: Use fidelity and repeats parameters only
+        - Progressive runs: Set max_fidelity and/or max_repeats for automatic progression
 
         Args:
             # Primary parameters (starting values)
-            level (int): Starting benchmark level. Defaults to 2.
+            fidelity (int): Starting benchmark fidelity. Defaults to 2.
             repeats (int): Starting number of repeats. Defaults to 1.
-            max_level (int, optional): Maximum level for progression. If None, uses single level.
+            max_fidelity (int, optional): Maximum fidelity for progression. If None, uses single fidelity.
             max_repeats (int, optional): Maximum repeats for progression. If None, uses single repeat count.
 
-            # Legacy parameters (deprecated - use level/max_level instead)
-            min_level (int, optional): DEPRECATED - use 'level' parameter instead.
+            # Legacy parameters (deprecated - use fidelity/max_fidelity instead)
+            min_level (int, optional): DEPRECATED - use 'fidelity' parameter instead.
             start_repeats (int, optional): DEPRECATED - use 'repeats' parameter instead.
 
             run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
@@ -335,17 +344,38 @@ class BenchRunner:
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
         """
+        if "level" in kwargs:
+            if fidelity != 2:
+                raise TypeError("Cannot pass both 'level' and 'fidelity'; use 'fidelity' only.")
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'fidelity' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            fidelity = kwargs.pop("level")
+        if "max_level" in kwargs:
+            if max_fidelity is not None:
+                raise TypeError(
+                    "Cannot pass both 'max_level' and 'max_fidelity'; use 'max_fidelity' only."
+                )
+            warnings.warn(
+                "The 'max_level' parameter is deprecated; use 'max_fidelity' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            max_fidelity = kwargs.pop("max_level")
+
         cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 
         # Handle deprecation warnings for legacy parameters
         if min_level is not None:
             warnings.warn(
-                "min_level parameter is deprecated. Use 'level' parameter instead.",
+                "min_level parameter is deprecated. Use 'fidelity' parameter instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-            if level == 2:  # Only override if level is still default
-                level = min_level
+            if fidelity == 2:  # Only override if fidelity is still default
+                fidelity = min_level
 
         if start_repeats is not None:
             warnings.warn(
@@ -360,20 +390,20 @@ class BenchRunner:
         # settings directly — no second copy via setup_run_cfg needed.
         run_cfg = deepcopy(self.run_cfg if run_cfg is None else run_cfg)
 
-        # Set up level and repeat ranges
-        min_level = level
-        final_max_level = max_level if max_level is not None else level
+        # Set up fidelity and repeat ranges
+        min_fidelity = fidelity
+        final_max_fidelity = max_fidelity if max_fidelity is not None else fidelity
         min_repeats = repeats
         final_max_repeats = max_repeats if max_repeats is not None else repeats
 
         # Auto-enable sample caching for progressive runs when not explicitly set
         if cache_samples is None:
-            is_progressive = final_max_level > min_level or final_max_repeats > min_repeats
+            is_progressive = final_max_fidelity > min_fidelity or final_max_repeats > min_repeats
             if is_progressive:
                 logging.info(
                     "Automatically enabling cache_samples for progressive run "
-                    "(max_level=%s, max_repeats=%s). Pass cache_samples=False to disable.",
-                    final_max_level,
+                    "(max_fidelity=%s, max_repeats=%s). Pass cache_samples=False to disable.",
+                    final_max_fidelity,
                     final_max_repeats,
                 )
                 cache_samples = True
@@ -388,15 +418,15 @@ class BenchRunner:
             run_cfg.backend = backend
 
         for r in range(min_repeats, final_max_repeats + 1):
-            for lvl in range(min_level, final_max_level + 1):
+            for lvl in range(min_fidelity, final_max_fidelity + 1):
                 report_level = None
                 if grouped:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
                 for bch_fn in self.bench_fns:
                     run_lvl = deepcopy(run_cfg)
-                    run_lvl.level = lvl
+                    run_lvl.fidelity = lvl
                     run_lvl.repeats = r
-                    logging.info(f"Running {bch_fn} at level: {lvl} with repeats:{r}")
+                    logging.info(f"Running {bch_fn} at fidelity: {lvl} with repeats:{r}")
                     res, active_report = self._execute_bench_fn(bch_fn, run_lvl, report_level)
                     if grouped:
                         if report_level is not None and active_report is not report_level:

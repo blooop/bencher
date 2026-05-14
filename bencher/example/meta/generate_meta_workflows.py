@@ -51,7 +51,7 @@ class SineWave(bn.ParametrizedSweep):
 #   runner = bn.BenchRunner("comparison")
 #   runner.add(sine_benchmark_fn)    # each fn returns a Bench
 #   runner.add(cosine_benchmark_fn)
-#   runner.run(level=3)              # runs all, collects reports
+#   runner.run(fidelity=3)              # runs all, collects reports
 #
 # BenchRunner is useful when you have separate benchmark functions
 # that you want to run together and compare side by side.

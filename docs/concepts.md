@@ -83,7 +83,7 @@ flowchart LR
         RT["③ Run Definition"]
         subgraph RN ["bn.run()"]
             direction TB
-            Level[level]
+            Level[fidelity]
             Repeats[repeats]
             Opts[save · optimise · over_time]
             Level ~~~ Repeats ~~~ Opts
@@ -133,7 +133,7 @@ def example_my_bench(run_cfg=None):
 
 # 3. Run Definition — set sampling density, repeats, and output options
 if __name__ == "__main__":
-    bn.run(example_my_bench, level=4, repeats=5)
+    bn.run(example_my_bench, fidelity=4, repeats=5)
 ```
 
 1. **Problem Definition** (`ParametrizedSweep`) — Declares the grammar's *Data* and
@@ -160,9 +160,9 @@ while holding the others fixed:
 flowchart TD
     Define(["① Define — ParametrizedSweep"])
     Configure(["② Configure — plot_sweep()"])
-    Debug(["③ Debug — bn.run( level=2 )"])
+    Debug(["③ Debug — bn.run( fidelity=2 )"])
     Check{"Works?"}
-    Refine(["④ Refine — bn.run( level=5, repeats=10 )"])
+    Refine(["④ Refine — bn.run( fidelity=5, repeats=10 )"])
     Done{"Add params?"}
 
     Define --> Configure --> Debug --> Check
@@ -188,10 +188,10 @@ flowchart TD
    and benchmark function.
 2. **Configure** — Set up `plot_sweep()` calls (Stage 2) to choose which parameters to vary
    and which results to collect.
-3. **Debug** — Run at a low level with few repeats (Stage 3: `level=2, repeats=1`) to verify
+3. **Debug** — Run at a low level with few repeats (Stage 3: `fidelity=2, repeats=1`) to verify
    the pipeline works end-to-end. Because results are cached, fixing and re-running is cheap.
-4. **Refine** — Increase `level` and `repeats` (Stage 3 only) to get publication-quality
-   statistics. The level system's binary subdivision means higher levels reuse all previously
+4. **Refine** — Increase `fidelity` and `repeats` (Stage 3 only) to get publication-quality
+   statistics. The fidelity system's binary subdivision means higher fidelity reuses all previously
    cached points — you only pay for the new midpoints.
 
 ## Bencher's Primitives
@@ -342,36 +342,36 @@ code changes to the plotting logic. See the [Plot Types gallery](reference/meta/
 for every available plot type, and the
 [Bool Plot Types gallery](reference/meta/bool_plot_types/index) for boolean-specific variants.
 
-## The Level System
+## The Fidelity System
 
-The `level` parameter provides a single knob to control sampling density across all dimensions
+The `fidelity` parameter provides a single knob to control sampling density across all dimensions
 simultaneously. It indexes into a predefined sample count table:
 
-| Level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+| Fidelity | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Samples | 1 | 2 | 3 | 5 | 9 | 17 | 33 | 65 | 129 | 257 | 513 | 1025 |
 
-From level 4 onward, the count follows the formula `2^(level-2) + 1`: level 4 gives
-`2^2 + 1 = 5`, level 5 gives `2^3 + 1 = 9`, level 6 gives `2^4 + 1 = 17`, and so on.
+From fidelity 4 onward, the count follows the formula `2^(fidelity-2) + 1`: fidelity 4 gives
+`2^2 + 1 = 5`, fidelity 5 gives `2^3 + 1 = 9`, fidelity 6 gives `2^4 + 1 = 17`, and so on.
 Samples are distributed evenly across each parameter's range using `numpy.linspace`.
 
-The `2n - 1` relationship between consecutive counts is deliberate. Because each level has
-exactly twice-minus-one the samples of the previous level, the new samples land at the
+The `2n - 1` relationship between consecutive counts is deliberate. Because each fidelity level has
+exactly twice-minus-one the samples of the previous fidelity, the new samples land at the
 midpoints between existing ones. For example, on a `[0, 1]` range:
 
-- **Level 5** (9 samples): 0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0
-- **Level 6** (17 samples): 0, 0.0625, 0.125, 0.1875, 0.25, ...
+- **Fidelity 5** (9 samples): 0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0
+- **Fidelity 6** (17 samples): 0, 0.0625, 0.125, 0.1875, 0.25, ...
 
-Every sample from level 5 appears at an even index in the level 6 grid. The odd indices are
+Every sample from fidelity 5 appears at an even index in the fidelity 6 grid. The odd indices are
 new points filling the gaps between previous samples. This is binary subdivision — the same
 principle used in multigrid methods and progressive image rendering.
 
-This enables a natural workflow: start at a low level for quick iteration, then increase for
-publication-quality results. Because higher levels are strict supersets of lower ones, cached
+This enables a natural workflow: start at a low fidelity for quick iteration, then increase for
+publication-quality results. Because higher fidelity levels are strict supersets of lower ones, cached
 results from earlier runs are reused automatically — you only pay for the new midpoints.
 
-See the [Level System gallery](reference/meta/levels/index) for an interactive demo showing how
-increasing the level progressively refines the sample grid.
+See the [Fidelity System gallery](reference/meta/levels/index) for an interactive demo showing how
+increasing the fidelity progressively refines the sample grid.
 
 ## Connections to Related Ideas
 
@@ -379,7 +379,7 @@ Bencher sits at the intersection of several established concepts:
 
 - **Design of Experiments** — Factorial designs are exactly Cartesian products of factor levels.
   Bencher's sweep system is a programmatic way to define full factorial experiments, with the
-  level system providing fractional-factorial-like progressive refinement.
+  fidelity system providing fractional-factorial-like progressive refinement.
 
 - **Tidy Data** (Wickham, 2014) — Bencher's xarray output is inherently tidy: each variable
   forms a dimension or coordinate, each observation is a point in the N-D grid, and each type

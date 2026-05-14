@@ -593,13 +593,13 @@ class TestBenchRunnerParallelIntegrity:
             "integrity_serial", run_cfg=self._make_run_cfg(Executors.SERIAL)
         )
         serial_runner.add_bench(SimpleFloatConfig())
-        serial_results = serial_runner.run(level=2)
+        serial_results = serial_runner.run(fidelity=2)
 
         parallel_runner = bn.BenchRunner(
             "integrity_parallel", run_cfg=self._make_run_cfg(Executors.MULTIPROCESSING)
         )
         parallel_runner.add_bench(SimpleFloatConfig())
-        parallel_results = parallel_runner.run(level=2)
+        parallel_results = parallel_runner.run(fidelity=2)
 
         assert len(serial_results) == len(parallel_results)
         for serial_cfg, parallel_cfg in zip(serial_results, parallel_results):
@@ -618,13 +618,13 @@ class TestBenchRunnerParallelIntegrity:
             "integrity_multi_serial", run_cfg=self._make_run_cfg(Executors.SERIAL)
         )
         serial_runner.add_bench(MultiResultConfig())
-        serial_results = serial_runner.run(level=2)
+        serial_results = serial_runner.run(fidelity=2)
 
         parallel_runner = bn.BenchRunner(
             "integrity_multi_parallel", run_cfg=self._make_run_cfg(Executors.MULTIPROCESSING)
         )
         parallel_runner.add_bench(MultiResultConfig())
-        parallel_results = parallel_runner.run(level=2)
+        parallel_results = parallel_runner.run(fidelity=2)
 
         assert len(serial_results) == len(parallel_results)
         for serial_cfg, parallel_cfg in zip(serial_results, parallel_results):

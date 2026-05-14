@@ -16,4 +16,4 @@ if __name__ == "__main__":
     bench_runner.add(optuna_rastrigin)
     bench_runner.add(example_sample_cache)
 
-    bench_runner.run(level=4, show=True, grouped=True, save=False)
+    bench_runner.run(fidelity=4, show=True, grouped=True, save=False)

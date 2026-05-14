@@ -242,12 +242,12 @@ class TestBenchResultBase(unittest.TestCase):
 
         # bm.__call__(float_vars=1, sample_with_repeats=1)
 
-    def test_select_level(self):
+    def test_select_fidelity(self):
         bench = TstBench().to_bench()
 
         res = bench.plot_sweep(
             input_vars=["float_var", "cat_var"],
-            run_cfg=bn.BenchRunCfg(level=4),
+            run_cfg=bn.BenchRunCfg(fidelity=4),
             plot_callbacks=False,
         )
 
@@ -260,13 +260,13 @@ class TestBenchResultBase(unittest.TestCase):
         ds_raw = res.to_dataset()
         asserts(ds_raw, [0, 1, 2, 3, 4], ["a", "b", "c", "d", "e"])
 
-        ds_filtered_all = res.select_level(ds_raw, 2)
+        ds_filtered_all = res.select_fidelity(ds_raw, 2)
         asserts(ds_filtered_all, [0, 4], ["a", "e"])
 
-        ds_filtered_types = res.select_level(ds_raw, 2, float)
+        ds_filtered_types = res.select_fidelity(ds_raw, 2, float)
         asserts(ds_filtered_types, [0, 4], ["a", "b", "c", "d", "e"])
 
-        ds_filtered_names = res.select_level(ds_raw, 2, exclude_names="cat_var")
+        ds_filtered_names = res.select_fidelity(ds_raw, 2, exclude_names="cat_var")
         asserts(ds_filtered_names, [0, 4], ["a", "b", "c", "d", "e"])
 
     def _make_1d_result(self, repeats=1):
@@ -519,11 +519,11 @@ class TestBenchResultBase(unittest.TestCase):
         ds_str = res.to_dataset(result_var=rv_param.name, deep=False)
         self.assertIs(ds_param, ds_str)
 
-    def test_to_dataset_cache_different_levels(self):
-        """Different level values should produce different cache entries."""
+    def test_to_dataset_cache_different_fidelities(self):
+        """Different fidelity values should produce different cache entries."""
         res = self._make_1d_result()
-        ds_none = res.to_dataset(level=None, deep=False)
-        ds_1 = res.to_dataset(level=1, deep=False)
+        ds_none = res.to_dataset(fidelity=None, deep=False)
+        ds_1 = res.to_dataset(fidelity=1, deep=False)
         self.assertIsNot(ds_none, ds_1)
 
     def test_to_dataset_deep_default_returns_copy(self):

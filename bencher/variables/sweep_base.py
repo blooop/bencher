@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any
 from copy import deepcopy
+import warnings
 
 import numpy as np
 import param
@@ -13,13 +14,24 @@ from bencher.utils import hash_sha1
 # param and slots don't work easily with multiple inheritance so define here
 shared_slots = ["units", "samples", "optimize"]
 
-# Mapping from level index to number of samples per variable.
-# Level 0 means "use the variable's own samples setting".
-# Levels 1-13 produce geometrically increasing sample counts:
-#   level 1 →  1,  level 2 →  2,  level 3 →  3,  level 4 →  5,
-#   level 5 →  9,  level 6 → 17,  level 7 → 33,  level 8 → 65,
-#   level 9 → 129, level 10 → 257, level 11 → 513, level 12 → 1025, level 13 → 2049
-LEVEL_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+# Mapping from fidelity index to number of samples per variable.
+# Fidelity 0 means "use the variable's own samples setting".
+# Fidelity 1-13 produce geometrically increasing sample counts:
+#   fidelity 1 →  1,  fidelity 2 →  2,  fidelity 3 →  3,  fidelity 4 →  5,
+#   fidelity 5 →  9,  fidelity 6 → 17,  fidelity 7 → 33,  fidelity 8 → 65,
+#   fidelity 9 → 129, fidelity 10 → 257, fidelity 11 → 513, fidelity 12 → 1025, fidelity 13 → 2049
+FIDELITY_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+
+
+def __getattr__(name: str):
+    if name == "LEVEL_SAMPLES":
+        warnings.warn(
+            "'LEVEL_SAMPLES' is deprecated; use 'FIDELITY_SAMPLES' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return FIDELITY_SAMPLES
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def describe_variable(
@@ -287,12 +299,22 @@ class SweepBase(param.Parameter):
         """
         return (deepcopy(self), const_value)
 
-    def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
-        assert level >= 1
-        # TODO work out if the order can be returned in level order always
-        sampled = self.with_samples(LEVEL_SAMPLES[min(max_level, level)])
+    def with_fidelity(self, fidelity: int = 1, max_fidelity: int = 12) -> SweepBase:
+        if fidelity < 1:
+            raise ValueError(f"fidelity must be >= 1, got {fidelity}")
+        # TODO work out if the order can be returned in fidelity order always
+        sampled = self.with_samples(FIDELITY_SAMPLES[min(max_fidelity, fidelity)])
         # list() is required because SweepSelector.values() may return a param
         # ListProxy that holds a circular reference back to the original parameter
         # via ListProxy._parameter, which breaks pickle (and therefore multiprocessing).
         out = self.with_sample_values(list(sampled.values()))
         return out
+
+    def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
+        """Deprecated: use :meth:`with_fidelity` instead."""
+        warnings.warn(
+            "'with_level' is deprecated; use 'with_fidelity' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.with_fidelity(fidelity=level, max_fidelity=max_level)

@@ -105,7 +105,7 @@ class SweepExecutor:
             variable (param.Parameter | str | dict | tuple): The variable to convert, can be:
                 - param.Parameter: Already a parameter object
                 - str: Name of a parameter in the worker_class_instance
-                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
+                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_fidelity'
                 - tuple: Tuple that can be converted to a parameter
             var_type (str): Type of variable ('input', 'result', or 'const') for error messages
             run_cfg (BenchRunCfg | None): Run configuration for level settings
@@ -137,9 +137,9 @@ class SweepExecutor:
                 param_var = param_var.with_bounds(b[0], b[1], variable.get("samples"))
             elif variable.get("samples"):
                 param_var = param_var.with_samples(variable["samples"])
-            if variable.get("max_level"):
+            if variable.get("max_fidelity"):
                 if run_cfg is not None:
-                    param_var = param_var.with_level(run_cfg.level, variable["max_level"])
+                    param_var = param_var.with_fidelity(run_cfg.fidelity, variable["max_fidelity"])
             variable = param_var
         if not isinstance(variable, param.Parameter):
             raise TypeError(
