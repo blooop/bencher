@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.99.0] - 2026-05-15
+
+### Changed
+- Renamed `level` API to `subsampling_divisions` across the entire public interface (`BenchRunCfg.subsampling_divisions`, `subsampling_divisions_to_samples()`, `with_subsampling_divisions()`, `SUBSAMPLING_DIVISIONS_SAMPLES`, `max_subsampling_divisions`, `select_subsampling_divisions()`).
+- Added `UNSET` sentinel for default detection so that `run(subsampling_divisions=2, level=3)` correctly raises `TypeError`.
+- Extracted shared `normalize_subsampling_divisions_kwargs()` helper to centralize deprecation logic.
+
+### Deprecated
+- `level`, `max_level`, `min_level` parameters — use `subsampling_divisions`, `max_subsampling_divisions` instead. Old names still work with `DeprecationWarning`.
+- `LEVEL_SAMPLES` constant — use `SUBSAMPLING_DIVISIONS_SAMPLES`.
+- `with_level()` function — use `with_subsampling_divisions()`.
+- `level_to_samples()` method — use `subsampling_divisions_to_samples()`.
+- `select_level()` function — use `select_subsampling_divisions()`.
+
 ## [1.98.0] - 2026-04-27
 
 ### Added

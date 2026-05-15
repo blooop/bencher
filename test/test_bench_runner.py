@@ -272,7 +272,7 @@ class TestBenchRunner(unittest.TestCase):
         """Using deprecated max_level= emits a warning and translates to max_subsampling_divisions."""
         seen = []
 
-        def capture_cfg(run_cfg, report):
+        def capture_cfg(run_cfg, _report):
             seen.append(run_cfg.subsampling_divisions)
             return bn.BenchCfg()
 
