@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 from param import Integer, Number, Selector
 import yaml
-from bencher.variables.sweep_base import SweepBase, shared_slots, FIDELITY_SAMPLES
+from bencher.variables.sweep_base import SweepBase, shared_slots, SUBSAMPLING_DIVISIONS_SAMPLES
 
 
 # Sentinel value used to indicate that the actual selectable values for a SweepSelector
@@ -679,7 +679,7 @@ def sweep(
     *,
     samples: int | None = None,
     bounds: tuple[float, float] | None = None,
-    max_fidelity: int | None = None,
+    max_subsampling_divisions: int | None = None,
     max_level: int | None = None,
 ) -> dict[str, Any] | SweepBase:
     """Create a parameter specification for use in plot_sweep input_vars.
@@ -700,25 +700,25 @@ def sweep(
         values: A list of values for the parameter.
         samples: The number of samples. Must be > 0 if provided.
         bounds: ``(low, high)`` tuple to override the sweep range.
-        max_fidelity: The maximum fidelity. Must be > 0 if provided.
+        max_subsampling_divisions: The maximum subsampling_divisions. Must be > 0 if provided.
 
     Returns:
         dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.
     """
     if max_level is not None:
-        if max_fidelity is not None:
+        if max_subsampling_divisions is not None:
             raise TypeError(
-                "Cannot pass both 'max_level' and 'max_fidelity'; use 'max_fidelity' only."
+                "Cannot pass both 'max_level' and 'max_subsampling_divisions'; use 'max_subsampling_divisions' only."
             )
         warnings.warn(
-            "The 'max_level' parameter is deprecated; use 'max_fidelity' instead.",
+            "The 'max_level' parameter is deprecated; use 'max_subsampling_divisions' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
-        max_fidelity = max_level
+        max_subsampling_divisions = max_level
 
-    if max_fidelity is not None and max_fidelity <= 0:
-        raise ValueError("max_fidelity must be greater than 0")
+    if max_subsampling_divisions is not None and max_subsampling_divisions <= 0:
+        raise ValueError("max_subsampling_divisions must be greater than 0")
 
     if samples is not None and samples <= 0:
         raise ValueError("samples must be greater than 0")
@@ -731,10 +731,10 @@ def sweep(
 
     # If a SweepBase param object is passed, delegate to its methods directly
     if isinstance(name, SweepBase):
-        if max_fidelity is not None:
+        if max_subsampling_divisions is not None:
             raise ValueError(
-                "max_fidelity is not supported when passing a SweepBase object to sweep(). "
-                "Use the string-based API instead: sweep('param_name', max_fidelity=N)"
+                "max_subsampling_divisions is not supported when passing a SweepBase object to sweep(). "
+                "Use the string-based API instead: sweep('param_name', max_subsampling_divisions=N)"
             )
         if values is not None:
             return name.with_sample_values(values)
@@ -747,7 +747,7 @@ def sweep(
     return {
         "name": name,
         "values": values,
-        "max_fidelity": max_fidelity,
+        "max_subsampling_divisions": max_subsampling_divisions,
         "samples": samples,
         "bounds": bounds,
     }
@@ -759,38 +759,44 @@ def p(
     *,
     samples: int | None = None,
     bounds: tuple[float, float] | None = None,
-    max_fidelity: int | None = None,
+    max_subsampling_divisions: int | None = None,
 ) -> dict[str, Any] | SweepBase:
     """Deprecated: use ``bn.sweep()`` instead."""
     warnings.warn("bn.p() is deprecated, use bn.sweep() instead", DeprecationWarning, stacklevel=2)
-    return sweep(name, values, samples=samples, bounds=bounds, max_fidelity=max_fidelity)
+    return sweep(
+        name,
+        values,
+        samples=samples,
+        bounds=bounds,
+        max_subsampling_divisions=max_subsampling_divisions,
+    )
 
 
-def with_fidelity(arr: list, fidelity: int) -> list:
-    """Apply fidelity-based sampling to a list of values.
+def with_subsampling_divisions(arr: list, subsampling_divisions: int) -> list:
+    """Apply subsampling_divisions-based sampling to a list of values.
 
-    Uses the same fidelity→sample-count table as SweepBase.with_fidelity and picks
+    Uses the same subsampling_divisions→sample-count table as SweepBase.with_subsampling_divisions and picks
     evenly spaced items from *arr* by index.
 
     Args:
         arr (list): list of values to sample from
-        fidelity (int): The sampling fidelity to apply (higher fidelity provides more samples)
+        subsampling_divisions (int): The sampling subsampling_divisions to apply (higher subsampling_divisions provides more samples)
 
     Returns:
-        list: The fidelity-sampled values
+        list: The subsampling_divisions-sampled values
     """
-    if fidelity < 1:
-        raise ValueError(f"fidelity must be >= 1, got {fidelity}")
-    max_index = len(FIDELITY_SAMPLES) - 1
-    n = FIDELITY_SAMPLES[min(max_index, fidelity)]
+    if subsampling_divisions < 1:
+        raise ValueError(f"subsampling_divisions must be >= 1, got {subsampling_divisions}")
+    max_index = len(SUBSAMPLING_DIVISIONS_SAMPLES) - 1
+    n = SUBSAMPLING_DIVISIONS_SAMPLES[min(max_index, subsampling_divisions)]
     return SweepBase.indices_to_samples(None, n, list(arr))
 
 
 def with_level(arr: list, level: int) -> list:
-    """Deprecated: use :func:`with_fidelity` instead."""
+    """Deprecated: use :func:`with_subsampling_divisions` instead."""
     warnings.warn(
-        "'with_level' is deprecated; use 'with_fidelity' instead.",
+        "'with_level' is deprecated; use 'with_subsampling_divisions' instead.",
         DeprecationWarning,
         stacklevel=2,
     )
-    return with_fidelity(arr, fidelity=level)
+    return with_subsampling_divisions(arr, subsampling_divisions=level)

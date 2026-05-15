@@ -7,6 +7,7 @@ import webbrowser
 import inspect
 from datetime import datetime
 from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
+from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
@@ -134,39 +135,43 @@ class BenchRunner:
     @staticmethod
     def setup_run_cfg(
         run_cfg: BenchRunCfg | None = None,
-        fidelity: int = 2,
+        subsampling_divisions=UNSET,
         cache_samples: bool = False,
         over_time: bool | None = None,
         level: int | None = None,
     ) -> BenchRunCfg:
         """Configure benchmark run settings with reasonable defaults.
 
-        Creates a copy of the provided configuration with the specified fidelity and
+        Creates a copy of the provided configuration with the specified subsampling_divisions and
         caching behavior settings applied.
 
         Args:
             run_cfg (BenchRunCfg, optional): Base configuration to modify. Defaults to None.
-            fidelity (int, optional): Benchmark sampling resolution fidelity. Defaults to 2.
+            subsampling_divisions (int, optional): Benchmark sampling resolution subsampling_divisions. Defaults to 2.
             cache_samples (bool, optional): Whether to enable sample caching. Defaults to False.
             over_time (bool, optional): Enable time-series benchmarking. None preserves run_cfg value.
-            level (int, optional): Deprecated. Use ``fidelity`` instead.
+            level (int, optional): Deprecated. Use ``subsampling_divisions`` instead.
 
         Returns:
             BenchRunCfg: A new configuration object with the specified settings
         """
         if level is not None:
-            if fidelity != 2:
-                raise TypeError("Cannot pass both 'level' and 'fidelity'; use 'fidelity' only.")
+            if subsampling_divisions is not UNSET:
+                raise TypeError(
+                    "Cannot pass both 'level' and 'subsampling_divisions'; use 'subsampling_divisions' only."
+                )
             warnings.warn(
-                "The 'level' parameter is deprecated; use 'fidelity' instead.",
+                "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-            fidelity = level
+            subsampling_divisions = level
+        if subsampling_divisions is UNSET:
+            subsampling_divisions = 2
         run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
         run_cfg_out.cache_samples = cache_samples
         run_cfg_out.only_hash_tag = cache_samples
-        run_cfg_out.fidelity = fidelity
+        run_cfg_out.subsampling_divisions = subsampling_divisions
         if over_time is not None:
             run_cfg_out.over_time = over_time
         return run_cfg_out
@@ -290,10 +295,10 @@ class BenchRunner:
 
     def run(
         self,
-        # New unified parameters (fidelity and repeats are starting values)
-        fidelity: int = 2,
+        # New unified parameters (subsampling_divisions and repeats are starting values)
+        subsampling_divisions=UNSET,
         repeats: int = 1,
-        max_fidelity: int | None = None,
+        max_subsampling_divisions: int | None = None,
         max_repeats: int | None = None,
         # Legacy parameters for backward compatibility (deprecated)
         min_level: int | None = None,
@@ -313,18 +318,18 @@ class BenchRunner:
         """Unified interface for running benchmarks.
 
         This function provides a single entry point for benchmark runs:
-        - Single runs: Use fidelity and repeats parameters only
-        - Progressive runs: Set max_fidelity and/or max_repeats for automatic progression
+        - Single runs: Use subsampling_divisions and repeats parameters only
+        - Progressive runs: Set max_subsampling_divisions and/or max_repeats for automatic progression
 
         Args:
             # Primary parameters (starting values)
-            fidelity (int): Starting benchmark fidelity. Defaults to 2.
+            subsampling_divisions (int): Starting benchmark subsampling_divisions. Defaults to 2.
             repeats (int): Starting number of repeats. Defaults to 1.
-            max_fidelity (int, optional): Maximum fidelity for progression. If None, uses single fidelity.
+            max_subsampling_divisions (int, optional): Maximum subsampling_divisions for progression. If None, uses single subsampling_divisions.
             max_repeats (int, optional): Maximum repeats for progression. If None, uses single repeat count.
 
-            # Legacy parameters (deprecated - use fidelity/max_fidelity instead)
-            min_level (int, optional): DEPRECATED - use 'fidelity' parameter instead.
+            # Legacy parameters (deprecated - use subsampling_divisions/max_subsampling_divisions instead)
+            min_level (int, optional): DEPRECATED - use 'subsampling_divisions' parameter instead.
             start_repeats (int, optional): DEPRECATED - use 'repeats' parameter instead.
 
             run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
@@ -346,10 +351,15 @@ class BenchRunner:
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
         """
-        from bencher.utils import normalize_fidelity_kwargs
+        from bencher.utils import normalize_subsampling_divisions_kwargs
 
-        fidelity, max_fidelity = normalize_fidelity_kwargs(
-            fidelity=fidelity, max_fidelity=max_fidelity, kwargs=kwargs, stacklevel=2
+        subsampling_divisions, max_subsampling_divisions, subsampling_divisions_was_set = (
+            normalize_subsampling_divisions_kwargs(
+                subsampling_divisions=subsampling_divisions,
+                max_subsampling_divisions=max_subsampling_divisions,
+                kwargs=kwargs,
+                stacklevel=2,
+            )
         )
 
         cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
@@ -357,12 +367,12 @@ class BenchRunner:
         # Handle deprecation warnings for legacy parameters
         if min_level is not None:
             warnings.warn(
-                "min_level parameter is deprecated. Use 'fidelity' parameter instead.",
+                "min_level parameter is deprecated. Use 'subsampling_divisions' parameter instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-            if fidelity == 2:  # Only override if fidelity is still default
-                fidelity = min_level
+            if not subsampling_divisions_was_set:
+                subsampling_divisions = min_level
 
         if start_repeats is not None:
             warnings.warn(
@@ -377,20 +387,27 @@ class BenchRunner:
         # settings directly — no second copy via setup_run_cfg needed.
         run_cfg = deepcopy(self.run_cfg if run_cfg is None else run_cfg)
 
-        # Set up fidelity and repeat ranges
-        min_fidelity = fidelity
-        final_max_fidelity = max_fidelity if max_fidelity is not None else fidelity
+        # Set up subsampling_divisions and repeat ranges
+        min_subsampling_divisions = subsampling_divisions
+        final_max_subsampling_divisions = (
+            max_subsampling_divisions
+            if max_subsampling_divisions is not None
+            else subsampling_divisions
+        )
         min_repeats = repeats
         final_max_repeats = max_repeats if max_repeats is not None else repeats
 
         # Auto-enable sample caching for progressive runs when not explicitly set
         if cache_samples is None:
-            is_progressive = final_max_fidelity > min_fidelity or final_max_repeats > min_repeats
+            is_progressive = (
+                final_max_subsampling_divisions > min_subsampling_divisions
+                or final_max_repeats > min_repeats
+            )
             if is_progressive:
                 logging.info(
                     "Automatically enabling cache_samples for progressive run "
-                    "(max_fidelity=%s, max_repeats=%s). Pass cache_samples=False to disable.",
-                    final_max_fidelity,
+                    "(max_subsampling_divisions=%s, max_repeats=%s). Pass cache_samples=False to disable.",
+                    final_max_subsampling_divisions,
                     final_max_repeats,
                 )
                 cache_samples = True
@@ -405,15 +422,17 @@ class BenchRunner:
             run_cfg.backend = backend
 
         for r in range(min_repeats, final_max_repeats + 1):
-            for lvl in range(min_fidelity, final_max_fidelity + 1):
+            for lvl in range(min_subsampling_divisions, final_max_subsampling_divisions + 1):
                 report_level = None
                 if grouped:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
                 for bch_fn in self.bench_fns:
                     run_lvl = deepcopy(run_cfg)
-                    run_lvl.fidelity = lvl
+                    run_lvl.subsampling_divisions = lvl
                     run_lvl.repeats = r
-                    logging.info(f"Running {bch_fn} at fidelity: {lvl} with repeats:{r}")
+                    logging.info(
+                        f"Running {bch_fn} at subsampling_divisions: {lvl} with repeats:{r}"
+                    )
                     res, active_report = self._execute_bench_fn(bch_fn, run_lvl, report_level)
                     if grouped:
                         if report_level is not None and active_report is not report_level:

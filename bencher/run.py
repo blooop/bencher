@@ -11,6 +11,7 @@ from contextlib import AbstractContextManager
 from typing import Any, Callable, TYPE_CHECKING
 
 from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
+from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 if TYPE_CHECKING:
@@ -63,9 +64,9 @@ def _install_sigterm_handler() -> None:
 def run(
     target: Callable | type | ParametrizedSweep,
     *,
-    fidelity: int = 2,
+    subsampling_divisions=UNSET,
     repeats: int = 1,
-    max_fidelity: int | None = None,
+    max_subsampling_divisions: int | None = None,
     max_repeats: int | None = None,
     run_cfg: BenchRunCfg | None = None,
     show: bool | str | ShowMode = True,
@@ -91,9 +92,9 @@ def run(
 
     Args:
         target: A benchmark function, ParametrizedSweep class, or ParametrizedSweep instance.
-        fidelity: Benchmark sampling resolution fidelity. Defaults to 2.
+        subsampling_divisions: Benchmark sampling resolution subsampling_divisions. Defaults to 2.
         repeats: Number of repeats. Defaults to 1.
-        max_fidelity: Maximum fidelity for progressive runs. Defaults to None (single fidelity).
+        max_subsampling_divisions: Maximum subsampling_divisions for progressive runs. Defaults to None (single subsampling_divisions).
         max_repeats: Maximum repeats for progressive runs. Defaults to None (single repeat count).
         run_cfg: Optional explicit BenchRunCfg. Defaults to None.
         show: Where to view the report. Accepts ``True``/``ShowMode.LIVE`` (default — start
@@ -137,10 +138,13 @@ def run(
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
     from bencher.bench_runner import BenchRunner, _resolve_cache_samples
-    from bencher.utils import normalize_fidelity_kwargs
+    from bencher.utils import normalize_subsampling_divisions_kwargs
 
-    fidelity, max_fidelity = normalize_fidelity_kwargs(
-        fidelity=fidelity, max_fidelity=max_fidelity, kwargs=kwargs, stacklevel=2
+    subsampling_divisions, max_subsampling_divisions, _ = normalize_subsampling_divisions_kwargs(
+        subsampling_divisions=subsampling_divisions,
+        max_subsampling_divisions=max_subsampling_divisions,
+        kwargs=kwargs,
+        stacklevel=2,
     )
 
     show_mode = normalize_show(show)
@@ -203,9 +207,9 @@ def run(
     # Case 1: Callable — wrap in BenchRunner
     br = BenchRunner(target, publisher=publisher)
     _run_kwargs = dict(
-        fidelity=fidelity,
+        subsampling_divisions=subsampling_divisions,
         repeats=repeats,
-        max_fidelity=max_fidelity,
+        max_subsampling_divisions=max_subsampling_divisions,
         max_repeats=max_repeats,
         run_cfg=run_cfg,
         save=save,

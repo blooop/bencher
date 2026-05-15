@@ -19,7 +19,7 @@ class TestSweep:
             "name": "param1",
             "values": None,
             "samples": None,
-            "max_fidelity": None,
+            "max_subsampling_divisions": None,
             "bounds": None,
         }
 
@@ -29,7 +29,7 @@ class TestSweep:
             "name": "param1",
             "values": [1, 2, 3],
             "samples": None,
-            "max_fidelity": None,
+            "max_subsampling_divisions": None,
             "bounds": None,
         }
 
@@ -39,7 +39,7 @@ class TestSweep:
             "name": "param1",
             "values": None,
             "samples": None,
-            "max_fidelity": None,
+            "max_subsampling_divisions": None,
             "bounds": (0, 10),
         }
 
@@ -49,31 +49,31 @@ class TestSweep:
             "name": "param1",
             "values": None,
             "samples": 5,
-            "max_fidelity": None,
+            "max_subsampling_divisions": None,
             "bounds": (0, 10),
         }
 
-    def test_raises_value_error_max_fidelity_zero(self):
-        with pytest.raises(ValueError, match="max_fidelity must be greater than 0"):
-            sweep(name="param1", max_fidelity=0)
+    def test_raises_value_error_max_subsampling_divisions_zero(self):
+        with pytest.raises(ValueError, match="max_subsampling_divisions must be greater than 0"):
+            sweep(name="param1", max_subsampling_divisions=0)
 
-    def test_raises_value_error_max_fidelity_negative(self):
-        with pytest.raises(ValueError, match="max_fidelity must be greater than 0"):
-            sweep(name="param1", max_fidelity=-1)
+    def test_raises_value_error_max_subsampling_divisions_negative(self):
+        with pytest.raises(ValueError, match="max_subsampling_divisions must be greater than 0"):
+            sweep(name="param1", max_subsampling_divisions=-1)
 
     def test_raises_value_error_samples_zero(self):
         with pytest.raises(ValueError, match="samples must be greater than 0"):
             sweep(name="param1", samples=0)
 
-    def test_max_level_deprecated_alias_maps_to_max_fidelity(self):
+    def test_max_level_deprecated_alias_maps_to_max_subsampling_divisions(self):
         with pytest.warns(DeprecationWarning, match="max_level"):
             cfg = sweep(name="param1", max_level=3)
-        assert cfg["max_fidelity"] == 3
+        assert cfg["max_subsampling_divisions"] == 3
         assert "max_level" not in cfg
 
-    def test_max_level_and_max_fidelity_conflict_raises(self):
+    def test_max_level_and_max_subsampling_divisions_conflict_raises(self):
         with pytest.raises(TypeError, match="Cannot pass both"):
-            sweep(name="param1", max_fidelity=5, max_level=3)
+            sweep(name="param1", max_subsampling_divisions=5, max_level=3)
 
 
 class TestPDeprecation:

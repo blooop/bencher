@@ -15,7 +15,7 @@ from textwrap import wrap
 from bencher.utils import int_to_col, color_tuple_to_css, callable_name
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.variables.inputs import with_fidelity
+from bencher.variables.inputs import with_subsampling_divisions
 
 from bencher.variables.results import OptDir
 from copy import deepcopy
@@ -181,7 +181,7 @@ class BenchResultBase:
         self,
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultFloat | None = None,
-        fidelity: int | None = None,
+        subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
     ) -> hv.Dataset:
@@ -198,7 +198,7 @@ class BenchResultBase:
             ds_out = self.to_dataset(
                 reduce,
                 result_var=result_var,
-                fidelity=fidelity,
+                subsampling_divisions=subsampling_divisions,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
@@ -210,7 +210,7 @@ class BenchResultBase:
             self.to_dataset(
                 reduce,
                 result_var=result_var,
-                fidelity=fidelity,
+                subsampling_divisions=subsampling_divisions,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
@@ -227,7 +227,7 @@ class BenchResultBase:
         self,
         reduce: ReduceType,
         result_var: ResultFloat | str | None,
-        fidelity: int | None,
+        subsampling_divisions: int | None,
         agg_over_dims: list[str] | None,
         agg_fn: str | None,
     ) -> tuple:
@@ -238,13 +238,13 @@ class BenchResultBase:
         dims_key = tuple(sorted(agg_over_dims)) if agg_over_dims else None
         # fn is irrelevant when no agg dims — aggregation is skipped entirely
         fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
-        return (reduce, rv_key, fidelity, dims_key, fn_key)
+        return (reduce, rv_key, subsampling_divisions, dims_key, fn_key)
 
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultFloat | str | None = None,
-        fidelity: int | None = None,
+        subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
         deep: bool = True,
@@ -265,7 +265,9 @@ class BenchResultBase:
             a deep copy is returned so callers can safely mutate the result. Internal
             hot paths pass ``deep=False`` to reuse the cached object directly.
         """
-        cache_key = self._to_dataset_cache_key(reduce, result_var, fidelity, agg_over_dims, agg_fn)
+        cache_key = self._to_dataset_cache_key(
+            reduce, result_var, subsampling_divisions, agg_over_dims, agg_fn
+        )
         if cache_key in self._to_dataset_cache:
             cached = self._to_dataset_cache[cache_key]
             return cached.copy(deep=True) if deep else cached
@@ -380,11 +382,13 @@ class BenchResultBase:
                     agg_over_dims,
                     list(ds_out.dims),
                 )
-        if fidelity is not None:
+        if subsampling_divisions is not None:
             coords_no_repeat = {}
             for c, v in ds_out.coords.items():
                 if c != "repeat":
-                    coords_no_repeat[c] = with_fidelity(v.to_numpy(), fidelity)
+                    coords_no_repeat[c] = with_subsampling_divisions(
+                        v.to_numpy(), subsampling_divisions
+                    )
             ds_out = ds_out.sel(coords_no_repeat)
         self._to_dataset_cache[cache_key] = ds_out
         return ds_out.copy(deep=True) if deep else ds_out
@@ -1015,29 +1019,29 @@ class BenchResultBase:
         return val
 
     @staticmethod
-    def select_fidelity(
+    def select_subsampling_divisions(
         dataset: xr.Dataset,
-        fidelity: int,
+        subsampling_divisions: int,
         include_types: list[type] | None = None,
         exclude_names: list[str] | None = None,
     ) -> xr.Dataset:
-        """Given a dataset, return a reduced dataset that only contains data from a specified fidelity.  By default all types of variables are filtered at the specified fidelity.  If you only want to get a reduced fidelity for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
+        """Given a dataset, return a reduced dataset that only contains data from a specified subsampling_divisions.  By default all types of variables are filtered at the specified subsampling_divisions.  If you only want to get a reduced subsampling_divisions for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
             dataset (xr.Dataset): dataset to filter
-            fidelity (int): desired data resolution fidelity
+            subsampling_divisions (int): desired data resolution subsampling_divisions
             include_types (list[type], optional): Only filter data of these types. Defaults to None.
             exclude_names (list[str], optional): Only filter data with these variable names. Defaults to None.
 
         Returns:
-            xr.Dataset: A reduced dataset at the specified fidelity
+            xr.Dataset: A reduced dataset at the specified subsampling_divisions
 
         Example:  a dataset with float_var: [1,2,3,4,5] cat_var: [a,b,c,d,e]
 
-        select_fidelity(ds,2) -> [1,5] [a,e]
-        select_fidelity(ds,2,(float)) -> [1,5] [a,b,c,d,e]
-        select_fidelity(ds,2,exclude_names=["cat_var]) -> [1,5] [a,b,c,d,e]
+        select_subsampling_divisions(ds,2) -> [1,5] [a,e]
+        select_subsampling_divisions(ds,2,(float)) -> [1,5] [a,b,c,d,e]
+        select_subsampling_divisions(ds,2,exclude_names=["cat_var]) -> [1,5] [a,b,c,d,e]
 
-        see test_bench_result_base.py -> test_select_fidelity()
+        see test_bench_result_base.py -> test_select_subsampling_divisions()
         """
         coords_no_repeat = {}
         for c, v in dataset.coords.items():
@@ -1050,7 +1054,9 @@ class BenchResultBase:
                 if exclude_names is not None and c in listify(exclude_names):
                     include = False
                 if include:
-                    coords_no_repeat[c] = with_fidelity(v.to_numpy(), fidelity)
+                    coords_no_repeat[c] = with_subsampling_divisions(
+                        v.to_numpy(), subsampling_divisions
+                    )
         return dataset.sel(coords_no_repeat)
 
     @staticmethod
@@ -1060,16 +1066,19 @@ class BenchResultBase:
         include_types: list[type] | None = None,
         exclude_names: list[str] | None = None,
     ) -> xr.Dataset:
-        """Deprecated: use :meth:`select_fidelity` instead."""
+        """Deprecated: use :meth:`select_subsampling_divisions` instead."""
         import warnings
 
         warnings.warn(
-            "'select_level' is deprecated; use 'select_fidelity' instead.",
+            "'select_level' is deprecated; use 'select_subsampling_divisions' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return BenchResultBase.select_fidelity(
-            dataset, fidelity=level, include_types=include_types, exclude_names=exclude_names
+        return BenchResultBase.select_subsampling_divisions(
+            dataset,
+            subsampling_divisions=level,
+            include_types=include_types,
+            exclude_names=exclude_names,
         )
 
     # MAPPING TO LOWER LEVEL BENCHCFG functions so they are available at a top level.

@@ -94,7 +94,7 @@ def example_tab_bar_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.result_vars = ["tab_bar_image", "rows_used", "overflow"]
 
     bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
-    bench.add_plot_callback(bn.BenchResult.to_panes, fidelity=2)
+    bench.add_plot_callback(bn.BenchResult.to_panes, subsampling_divisions=2)
 
     bench.plot_sweep(
         "Tab Bar: num_tabs sweep",

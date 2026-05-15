@@ -7,7 +7,7 @@ from .bench_cfg import ShowMode
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
-from .variables.sweep_base import hash_sha1, FIDELITY_SAMPLES
+from .variables.sweep_base import hash_sha1, SUBSAMPLING_DIVISIONS_SAMPLES
 from .variables.inputs import (
     IntSweep,
     FloatSweep,
@@ -19,7 +19,7 @@ from .variables.inputs import (
 )
 from .variables.time import TimeSnapshot
 
-from .variables.inputs import box, p, sweep, with_fidelity
+from .variables.inputs import box, p, sweep, with_subsampling_divisions
 from .variables.results import (
     ResultFloat,
     ResultVar,
@@ -158,8 +158,8 @@ from .run import run
 
 
 _DEPRECATED_ALIASES = {
-    "LEVEL_SAMPLES": "FIDELITY_SAMPLES",
-    "with_level": "with_fidelity",
+    "LEVEL_SAMPLES": "SUBSAMPLING_DIVISIONS_SAMPLES",
+    "with_level": "with_subsampling_divisions",
 }
 
 

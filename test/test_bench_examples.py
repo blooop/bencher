@@ -19,7 +19,7 @@ class TestBenchExamples(unittest.TestCase):
         cfg = bn.BenchRunCfg()
         if not self.generate_all:
             cfg.repeats = 2
-            cfg.fidelity = 2
+            cfg.subsampling_divisions = 2
         cfg.clear_cache = True
         return cfg
 

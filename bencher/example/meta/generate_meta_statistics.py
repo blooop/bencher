@@ -74,7 +74,7 @@ class MetaStatistics(MetaGeneratorBase):
             "for n_repeats in [1, 5, 20]:\n"
             "    noise = 0.3 if n_repeats > 1 else 0.0\n"
             "    sweep_cfg = bn.BenchRunCfg()\n"
-            "    sweep_cfg.fidelity = 3\n"
+            "    sweep_cfg.subsampling_divisions = 3\n"
             "    sweep_cfg.repeats = n_repeats\n"
             "    bench.plot_sweep(\n"
             '        title=f"{n_repeats} repeat(s)",\n'

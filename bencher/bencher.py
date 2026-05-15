@@ -438,17 +438,17 @@ class Bench(BenchPlotServer):
                     run_cfg.samples_per_var,
                     len(input_vars_in),
                 )
-        elif run_cfg.fidelity > 0:
+        elif run_cfg.subsampling_divisions > 0:
             inputs = []
-            logging.debug("Input vars prior to fidelity adjustment: %s", input_vars_in)
+            logging.debug("Input vars prior to subsampling_divisions adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
-                    inputs.append(i.with_fidelity(run_cfg.fidelity))
+                    inputs.append(i.with_subsampling_divisions(run_cfg.subsampling_divisions))
                 input_vars_in = inputs
                 logging.info(
-                    "fidelity=%d → %d samples per variable",
-                    run_cfg.fidelity,
-                    BenchRunCfg.fidelity_to_samples(run_cfg.fidelity),
+                    "subsampling_divisions=%d → %d samples per variable",
+                    run_cfg.subsampling_divisions,
+                    BenchRunCfg.subsampling_divisions_to_samples(run_cfg.subsampling_divisions),
                 )
 
         # if any of the inputs have been include as constants, remove those variables from the list of constants

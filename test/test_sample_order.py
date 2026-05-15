@@ -36,7 +36,7 @@ class TestSampleOrder(unittest.TestCase):
             cache_results=False,
             cache_samples=False,
             executor=bn.Executors.SERIAL,
-            fidelity=2,  # keep dataset small and consistent without mutating class defaults
+            subsampling_divisions=2,  # keep dataset small and consistent without mutating class defaults
         )
 
         res_in = bench1.plot_sweep(

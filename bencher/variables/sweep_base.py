@@ -14,23 +14,23 @@ from bencher.utils import hash_sha1
 # param and slots don't work easily with multiple inheritance so define here
 shared_slots = ["units", "samples", "optimize"]
 
-# Mapping from fidelity index to number of samples per variable.
-# Fidelity 0 means "use the variable's own samples setting".
-# Fidelity 1-13 produce geometrically increasing sample counts:
-#   fidelity 1 →  1,  fidelity 2 →  2,  fidelity 3 →  3,  fidelity 4 →  5,
-#   fidelity 5 →  9,  fidelity 6 → 17,  fidelity 7 → 33,  fidelity 8 → 65,
-#   fidelity 9 → 129, fidelity 10 → 257, fidelity 11 → 513, fidelity 12 → 1025, fidelity 13 → 2049
-FIDELITY_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+# Mapping from subsampling_divisions index to number of samples per variable.
+# Subsampling Divisions 0 means "use the variable's own samples setting".
+# Subsampling Divisions 1-13 produce geometrically increasing sample counts:
+#   subsampling_divisions 1 →  1,  subsampling_divisions 2 →  2,  subsampling_divisions 3 →  3,  subsampling_divisions 4 →  5,
+#   subsampling_divisions 5 →  9,  subsampling_divisions 6 → 17,  subsampling_divisions 7 → 33,  subsampling_divisions 8 → 65,
+#   subsampling_divisions 9 → 129, subsampling_divisions 10 → 257, subsampling_divisions 11 → 513, subsampling_divisions 12 → 1025, subsampling_divisions 13 → 2049
+SUBSAMPLING_DIVISIONS_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
 
 
 def __getattr__(name: str):
     if name == "LEVEL_SAMPLES":
         warnings.warn(
-            "'LEVEL_SAMPLES' is deprecated; use 'FIDELITY_SAMPLES' instead.",
+            "'LEVEL_SAMPLES' is deprecated; use 'SUBSAMPLING_DIVISIONS_SAMPLES' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return FIDELITY_SAMPLES
+        return SUBSAMPLING_DIVISIONS_SAMPLES
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -299,11 +299,15 @@ class SweepBase(param.Parameter):
         """
         return (deepcopy(self), const_value)
 
-    def with_fidelity(self, fidelity: int = 1, max_fidelity: int = 12) -> SweepBase:
-        if fidelity < 1:
-            raise ValueError(f"fidelity must be >= 1, got {fidelity}")
-        # TODO work out if the order can be returned in fidelity order always
-        sampled = self.with_samples(FIDELITY_SAMPLES[min(max_fidelity, fidelity)])
+    def with_subsampling_divisions(
+        self, subsampling_divisions: int = 1, max_subsampling_divisions: int = 12
+    ) -> SweepBase:
+        if subsampling_divisions < 1:
+            raise ValueError(f"subsampling_divisions must be >= 1, got {subsampling_divisions}")
+        # TODO work out if the order can be returned in subsampling_divisions order always
+        sampled = self.with_samples(
+            SUBSAMPLING_DIVISIONS_SAMPLES[min(max_subsampling_divisions, subsampling_divisions)]
+        )
         # list() is required because SweepSelector.values() may return a param
         # ListProxy that holds a circular reference back to the original parameter
         # via ListProxy._parameter, which breaks pickle (and therefore multiprocessing).
@@ -311,10 +315,12 @@ class SweepBase(param.Parameter):
         return out
 
     def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
-        """Deprecated: use :meth:`with_fidelity` instead."""
+        """Deprecated: use :meth:`with_subsampling_divisions` instead."""
         warnings.warn(
-            "'with_level' is deprecated; use 'with_fidelity' instead.",
+            "'with_level' is deprecated; use 'with_subsampling_divisions' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return self.with_fidelity(fidelity=level, max_fidelity=max_level)
+        return self.with_subsampling_divisions(
+            subsampling_divisions=level, max_subsampling_divisions=max_level
+        )

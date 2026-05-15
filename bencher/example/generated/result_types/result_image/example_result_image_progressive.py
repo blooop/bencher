@@ -46,7 +46,7 @@ def example_result_image_progressive(run_cfg: bn.BenchRunCfg | None = None) -> b
     """ResultImage: Progressive Multi-Parameter Sweep."""
     bench = PolygonRenderer().to_bench(run_cfg)
     bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
-    bench.add_plot_callback(bn.BenchResult.to_panes, fidelity=3)
+    bench.add_plot_callback(bn.BenchResult.to_panes, subsampling_divisions=3)
     sweep_vars = ["sides", "radius", "color"]
     for i in range(1, len(sweep_vars) + 1):
         bench.plot_sweep(

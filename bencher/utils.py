@@ -494,41 +494,75 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma
         os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
 
 
-def normalize_fidelity_kwargs(
+class _Unset:
+    """Sentinel for distinguishing 'not provided' from 'explicitly passed the default'."""
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self):
+        return "<UNSET>"
+
+    def __bool__(self):
+        return False
+
+
+UNSET = _Unset()
+
+
+def normalize_subsampling_divisions_kwargs(
     *,
-    fidelity: int,
-    max_fidelity: int | None,
+    subsampling_divisions: int | _Unset,
+    max_subsampling_divisions: int | None,
     kwargs: dict[str, Any],
-    default_fidelity: int = 2,
+    default_subsampling_divisions: int = 2,
     stacklevel: int = 2,
-) -> tuple[int, int | None]:
-    """Translate deprecated ``level``/``max_level`` kwargs to ``fidelity``/``max_fidelity``.
+) -> tuple[int, int | None, bool]:
+    """Translate deprecated ``level``/``max_level`` kwargs to ``subsampling_divisions``/``max_subsampling_divisions``.
+
+    *subsampling_divisions* should be passed as ``UNSET`` when the caller did not provide it,
+    so that ``run(subsampling_divisions=2, level=3)`` correctly raises ``TypeError`` instead of
+    silently preferring ``level``.
+
+    Returns ``(subsampling_divisions, max_subsampling_divisions, subsampling_divisions_was_set)`` where *subsampling_divisions_was_set*
+    is ``True`` when the caller explicitly provided *subsampling_divisions* or *level*.
 
     Raises ``TypeError`` when old and new names are both provided.
     """
     import warnings
 
+    subsampling_divisions_was_set = subsampling_divisions is not UNSET
+    if subsampling_divisions is UNSET:
+        subsampling_divisions = default_subsampling_divisions
+
     if "level" in kwargs:
-        if fidelity != default_fidelity:
-            raise TypeError("Cannot pass both 'level' and 'fidelity'; use 'fidelity' only.")
-        warnings.warn(
-            "The 'level' parameter is deprecated; use 'fidelity' instead.",
-            DeprecationWarning,
-            stacklevel=stacklevel,
-        )
-        fidelity = kwargs.pop("level")
-    if "max_level" in kwargs:
-        if max_fidelity is not None:
+        if subsampling_divisions_was_set:
             raise TypeError(
-                "Cannot pass both 'max_level' and 'max_fidelity'; use 'max_fidelity' only."
+                "Cannot pass both 'level' and 'subsampling_divisions'; use 'subsampling_divisions' only."
             )
         warnings.warn(
-            "The 'max_level' parameter is deprecated; use 'max_fidelity' instead.",
+            "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
             DeprecationWarning,
             stacklevel=stacklevel,
         )
-        max_fidelity = kwargs.pop("max_level")
-    return fidelity, max_fidelity
+        subsampling_divisions = kwargs.pop("level")
+        subsampling_divisions_was_set = True
+    if "max_level" in kwargs:
+        if max_subsampling_divisions is not None:
+            raise TypeError(
+                "Cannot pass both 'max_level' and 'max_subsampling_divisions'; use 'max_subsampling_divisions' only."
+            )
+        warnings.warn(
+            "The 'max_level' parameter is deprecated; use 'max_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=stacklevel,
+        )
+        max_subsampling_divisions = kwargs.pop("max_level")
+    return subsampling_divisions, max_subsampling_divisions, subsampling_divisions_was_set
 
 
 def github_content(remote: str, branch_name: str, filename: str):  # pragma: no cover

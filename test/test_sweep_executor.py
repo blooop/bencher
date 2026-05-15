@@ -159,13 +159,13 @@ class TestSweepExecutor(unittest.TestCase):
         # Should return non-empty stats string
         self.assertIsInstance(result, str)
 
-    def test_convert_vars_to_params_with_max_fidelity(self):
-        """Test max_fidelity handling when run_cfg.fidelity is set."""
+    def test_convert_vars_to_params_with_max_subsampling_divisions(self):
+        """Test max_subsampling_divisions handling when run_cfg.subsampling_divisions is set."""
         run_cfg = BenchRunCfg()
-        run_cfg.fidelity = 2
+        run_cfg.subsampling_divisions = 2
 
         result = self.executor.convert_vars_to_params(
-            {"name": "theta", "max_fidelity": 3},
+            {"name": "theta", "max_subsampling_divisions": 3},
             "input",
             run_cfg,
             worker_class_instance=self.worker_instance,
@@ -173,7 +173,7 @@ class TestSweepExecutor(unittest.TestCase):
         )
 
         self.assertEqual(result.name, "theta")
-        # The parameter should have been processed with fidelity adjustment
+        # The parameter should have been processed with subsampling_divisions adjustment
 
     def test_convert_vars_to_params_bad_string_gives_helpful_error(self):
         """Test that a typo in a string variable name gives a helpful KeyError."""

@@ -52,7 +52,7 @@ def create_bench_runner(
     """Create a BenchRunner instance from a ParametrizedSweep.
 
     Enables fluent chaining like:
-        MyConfig().to_bench_runner().add(func).run(fidelity=2, max_fidelity=4)
+        MyConfig().to_bench_runner().add(func).run(subsampling_divisions=2, max_subsampling_divisions=4)
 
     Args:
         sweep: The ParametrizedSweep instance to use as the benchmark class.

@@ -92,29 +92,29 @@ Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magn
 [Sampling Strategies gallery](reference/meta/sampling/index) for examples of how different
 sweep types produce different sample distributions.
 
-## The Fidelity System
+## The Subsampling Divisions System
 
-Instead of specifying `samples` on each sweep variable, you can use the `fidelity`
+Instead of specifying `samples` on each sweep variable, you can use the `subsampling_divisions`
 parameter to control sampling density globally with a single knob:
 
-| Fidelity | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+| Subsampling Divisions | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 |---|---|---|---|---|---|---|---|
 | Samples per dimension | 1 | 2 | 3 | 5 | 9 | 17 | 33 |
 
-Higher fidelity levels reuse all lower-fidelity samples (binary subdivision), so cached results
+Higher subsampling_divisions levels reuse all lower-subsampling_divisions samples (binary subdivision), so cached results
 carry over automatically. Start low for quick iteration, increase for publication
 quality:
 
 ```python
 # Quick check — 2 samples per dimension
-bn.run(example_benchmark, fidelity=2)
+bn.run(example_benchmark, subsampling_divisions=2)
 
 # Publication quality — 9 samples per dimension
-bn.run(example_benchmark, fidelity=5)
+bn.run(example_benchmark, subsampling_divisions=5)
 ```
 
-See [Concepts: The Fidelity System](concepts.md#the-fidelity-system) for the full formula
-and theory, and the [Fidelity System gallery](reference/meta/levels/index) for an interactive
+See [Concepts: The Subsampling Divisions System](concepts.md#the-subsampling_divisions-system) for the full formula
+and theory, and the [Subsampling Divisions System gallery](reference/meta/levels/index) for an interactive
 demo.
 
 ## Result Types
@@ -172,7 +172,7 @@ bench.plot_sweep(
     input_vars=[
         "size",                                    # full range from bounds
         bn.sweep("method", ["fast", "accurate"]),  # explicit subset
-        bn.sweep("workers", max_fidelity=3),           # auto-pick up to 3 values
+        bn.sweep("workers", max_subsampling_divisions=3),           # auto-pick up to 3 values
     ],
 )
 ```
@@ -217,7 +217,7 @@ def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     return bench
 
 if __name__ == "__main__":
-    bn.run(example_foo, fidelity=4)    # fidelity controls sweep detail depth
+    bn.run(example_foo, subsampling_divisions=4)    # subsampling_divisions controls sweep detail depth
 ```
 
 ## The benchmark() Method

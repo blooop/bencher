@@ -12,7 +12,7 @@ class TestOptimizeBoundMethod(unittest.TestCase):
     def test_optimize_after_plot_sweep_with_bound_method(self):
         """optimize() should succeed when the Bench was created with a bound method."""
         explorer = ToyOptimisationProblem()
-        run_cfg = bn.BenchRunCfg(fidelity=2)
+        run_cfg = bn.BenchRunCfg(subsampling_divisions=2)
 
         bench = bn.Bench("Rastrigin", explorer.rastrigin, run_cfg=run_cfg)
         bench.plot_sweep(
@@ -60,7 +60,7 @@ class TestOptimizeBoundMethod(unittest.TestCase):
         """bn.run() with optimise parameter should work for bound-method benchmarks."""
         from bencher.example.optuna.example_optuna import optuna_rastrigin
 
-        results = bn.run(optuna_rastrigin, optimise=5, show=False, fidelity=2)
+        results = bn.run(optuna_rastrigin, optimise=5, show=False, subsampling_divisions=2)
         self.assertIsNotNone(results)
 
 

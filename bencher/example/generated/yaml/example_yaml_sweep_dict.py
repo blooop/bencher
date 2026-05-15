@@ -36,4 +36,4 @@ def example_yaml_sweep_dict(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_yaml_sweep_dict, fidelity=7)
+    bn.run(example_yaml_sweep_dict, subsampling_divisions=7)
