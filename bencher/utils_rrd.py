@@ -122,9 +122,12 @@ def rrd_file_to_pane(  # pragma: no cover
 
     # CDN viewer page is served from the same Panel origin — relative URL works.
     viewer_url = _cdn_viewer_url(relative, viewer_version)
-    return pn.pane.HTML(
+    iframe = (
         f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-        f' frameborder="0" allowfullscreen></iframe>',
+        f' frameborder="0" allowfullscreen></iframe>'
+    )
+    return pn.pane.HTML(
+        _wrap_viewer_controls(iframe, width, height),
         width=width,
         height=height,
     )
@@ -183,6 +186,39 @@ try {{
 }}
 </script></body></html>
 """
+
+
+def _wrap_viewer_controls(iframe_html: str, width: int, height: int) -> str:
+    """Wrap a rerun-viewer iframe with fullscreen and open-in-new-tab controls.
+
+    Controls float at the top-center (away from the viewer's own corner UI)
+    and read their target from the wrapped iframe's DOM, so portable/inline
+    URL rewriting in ``inline_rrd_iframes()`` keeps working without touching
+    the buttons.
+    """
+    btn = (
+        "background:rgba(0,0,0,0.55);color:white;border:0;"
+        "padding:2px 7px;cursor:pointer;border-radius:3px;font:14px/1 sans-serif"
+    )
+    link = btn + ";text-decoration:none;display:inline-block;line-height:1.4"
+    fs_js = "this.closest('.bencher-rrd-wrap').querySelector('iframe').requestFullscreen()"
+    # Anchor with target=_blank rather than window.open(): the latter is silently
+    # blocked by popup-blockers in some browsers even from a user click.  The
+    # onclick sets href to the iframe's current src so portable/inline URL
+    # rewriting in inline_rrd_iframes() (which only touches the iframe) is fine.
+    nt_js = "this.href=this.closest('.bencher-rrd-wrap').querySelector('iframe').src"
+    return (
+        f'<div class="bencher-rrd-wrap"'
+        f' style="position:relative;display:inline-block;width:{width}px;height:{height}px">'
+        f"{iframe_html}"
+        f'<div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);'
+        f'display:flex;gap:4px;z-index:10">'
+        f'<button title="Fullscreen" style="{btn}" onclick="{fs_js}">⛶</button>'
+        f'<a title="Open in new tab" href="about:blank" target="_blank" rel="noopener"'
+        f' style="{link}" onclick="{nt_js}">↗</a>'
+        f"</div></div>"
+    )
+
 
 # Cache of written viewer page filenames, keyed by version (for /rrd_static/ URLs).
 _cdn_viewer_files: dict[str, str] = {}
@@ -261,9 +297,12 @@ def _portable_rrd_pane(
     viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_subdir)
 
     viewer_url = f"_rrd/{viewer_name}?url={quote(rrd_name)}"
-    return pn.pane.HTML(
+    iframe = (
         f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-        f' frameborder="0" allowfullscreen></iframe>',
+        f' frameborder="0" allowfullscreen></iframe>'
+    )
+    return pn.pane.HTML(
+        _wrap_viewer_controls(iframe, width, height),
         width=width,
         height=height,
     )
