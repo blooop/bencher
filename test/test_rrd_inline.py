@@ -127,6 +127,7 @@ class TestInlineRrdIframes(unittest.TestCase):
 
         # The iframe src and anchor href both contain the same URL.  Patch
         # _write_rrd_sidecar to count invocations.
+        # pylint: disable=protected-access
         import bencher.utils_rrd as mod
 
         original = mod._write_rrd_sidecar
