@@ -27,4 +27,4 @@ def example_bool_plot_line(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_bool_plot_line, level=3)
+    bn.run(example_bool_plot_line, subsampling_divisions=3)

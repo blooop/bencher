@@ -40,4 +40,4 @@ def example_workflow_bench_runner(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_workflow_bench_runner, level=3)
+    bn.run(example_workflow_bench_runner, subsampling_divisions=3)

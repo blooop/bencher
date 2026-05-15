@@ -40,4 +40,4 @@ def example_optim_2_objectives_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_optim_2_objectives_1d, level=3, repeats=3, optimise=30)
+    bn.run(example_optim_2_objectives_1d, subsampling_divisions=3, repeats=3, optimise=30)

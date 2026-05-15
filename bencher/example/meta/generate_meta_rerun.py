@@ -74,7 +74,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_regression(self):
@@ -143,7 +143,7 @@ bench.plot_sweep(
             function_name="example_rerun_sweep",
             imports=imports,
             body=body,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
 

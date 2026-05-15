@@ -30,4 +30,4 @@ def example_bool_plot_scatter_jitter(run_cfg: bn.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bn.run(example_bool_plot_scatter_jitter, level=3, repeats=50)
+    bn.run(example_bool_plot_scatter_jitter, subsampling_divisions=3, repeats=50)

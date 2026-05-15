@@ -15,22 +15,22 @@ class MetaLevels(MetaGeneratorBase):
     def benchmark(self):
         imports = "import bencher as bn\nfrom bencher.example.meta.example_meta import BenchMeta"
         levels_desc = (
-            "Subsampling Divisions levels let you perform parameter sweeps without "
+            "Subsampling divisions let you perform parameter sweeps without "
             "having to decide how many samples to take when defining the class. "
-            "If you perform a sweep at subsampling_divisions 2, all those points are reused when "
-            "sampling at subsampling_divisions 3. Higher subsampling_divisions reuses the points from lower "
-            "subsampling_divisions to avoid recomputing potentially expensive samples. This "
+            "If you perform a sweep at subsampling_divisions=2, all those points are reused when "
+            "sampling at subsampling_divisions=3. Higher values reuse the points from lower "
+            "ones to avoid recomputing potentially expensive samples. This "
             "enables a workflow where you quickly see results at low resolution "
-            "to sense-check the code, then run at a high subsampling_divisions for full "
+            "to sense-check the code, then run at a high value for full "
             "detail. When calling a sweep at a high subsampling_divisions you can publish "
-            "intermediate lower-subsampling_divisions results as computation continues, letting "
+            "intermediate lower-resolution results as computation continues, letting "
             "you track progress and end the sweep early when you have "
             "sufficient resolution."
         )
         levels_post = (
-            "Each panel shows the benchmark sampled at a different subsampling_divisions. "
-            "Higher subsampling_divisions produces more sample points. Notice how lower-subsampling_divisions "
-            "sample points are a subset of higher-subsampling_divisions points -- no work is wasted."
+            "Each panel shows the benchmark sampled at a different subsampling_divisions value. "
+            "Higher values produce more sample points. Notice how lower "
+            "sample points are a subset of higher ones -- no work is wasted."
         )
         body = (
             "bench = BenchMeta().to_bench(run_cfg)\n"

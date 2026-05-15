@@ -52,4 +52,4 @@ def example_advanced_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_time_event, level=3, over_time=True)
+    bn.run(example_advanced_time_event, subsampling_divisions=3, over_time=True)

@@ -144,7 +144,7 @@ if __name__ == "__main__":
    input parameters to vary (`input_vars`), which metrics to collect (`result_vars`), which
    parameters to pin (`const_vars`), and adds descriptions for the report.
 3. **Run Definition** (`bn.run()` / `BenchRunCfg`) — Controls *Scales* and *Statistics*:
-   `level` sets sampling density, `repeats` determines statistical power, and flags like
+   `subsampling_divisions` sets sampling density, `repeats` determines statistical power, and flags like
    `save`, `optimise`, `over_time`, and `publish` control output and execution behavior.
 
 ### Iterative Workflow
@@ -188,7 +188,7 @@ flowchart TD
    and benchmark function.
 2. **Configure** — Set up `plot_sweep()` calls (Stage 2) to choose which parameters to vary
    and which results to collect.
-3. **Debug** — Run at a low level with few repeats (Stage 3: `subsampling_divisions=2, repeats=1`) to verify
+3. **Debug** — Run at a low value with few repeats (Stage 3: `subsampling_divisions=2, repeats=1`) to verify
    the pipeline works end-to-end. Because results are cached, fixing and re-running is cheap.
 4. **Refine** — Increase `subsampling_divisions` and `repeats` (Stage 3 only) to get publication-quality
    statistics. The subsampling_divisions system's binary subdivision means higher subsampling_divisions reuses all previously
@@ -205,7 +205,7 @@ Bencher's design maps onto six primitives, each paralleling a grammar of graphic
 | Geometry | Plot result classes | `LineResult`, `BarResult`, `HeatmapResult`, etc. |
 | Statistics | Repeats + `ReduceType` | Mean/std/min/max over repeated measurements |
 | Facets | Recursive panel slicing | Extra dimensions beyond plot capacity become nested subplots |
-| Scales | `SweepBase` + level system | Bounds, sampling density, type-aware ranges |
+| Scales | `SweepBase` + subsampling divisions system | Bounds, sampling density, type-aware ranges |
 
 ### Parameters (Input Space)
 
@@ -355,8 +355,8 @@ From subsampling_divisions 4 onward, the count follows the formula `2^(subsampli
 `2^2 + 1 = 5`, subsampling_divisions 5 gives `2^3 + 1 = 9`, subsampling_divisions 6 gives `2^4 + 1 = 17`, and so on.
 Samples are distributed evenly across each parameter's range using `numpy.linspace`.
 
-The `2n - 1` relationship between consecutive counts is deliberate. Because each subsampling_divisions level has
-exactly twice-minus-one the samples of the previous subsampling_divisions, the new samples land at the
+The `2n - 1` relationship between consecutive counts is deliberate. Because each subsampling_divisions value has
+exactly twice-minus-one the samples of the previous one, the new samples land at the
 midpoints between existing ones. For example, on a `[0, 1]` range:
 
 - **Subsampling Divisions 5** (9 samples): 0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0
@@ -367,7 +367,7 @@ new points filling the gaps between previous samples. This is binary subdivision
 principle used in multigrid methods and progressive image rendering.
 
 This enables a natural workflow: start at a low subsampling_divisions for quick iteration, then increase for
-publication-quality results. Because higher subsampling_divisions levels are strict supersets of lower ones, cached
+publication-quality results. Because higher subsampling_divisions values are strict supersets of lower ones, cached
 results from earlier runs are reused automatically — you only pay for the new midpoints.
 
 See the [Subsampling Divisions System gallery](reference/meta/levels/index) for an interactive demo showing how

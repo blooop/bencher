@@ -57,4 +57,4 @@ def example_workflow_input_output_cfg(run_cfg: bn.BenchRunCfg | None = None) -> 
 
 
 if __name__ == "__main__":
-    bn.run(example_workflow_input_output_cfg, level=3)
+    bn.run(example_workflow_input_output_cfg, subsampling_divisions=3)

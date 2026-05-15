@@ -58,4 +58,4 @@ def example_result_video_aggregate(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_result_video_aggregate, level=2)
+    bn.run(example_result_video_aggregate, subsampling_divisions=2)

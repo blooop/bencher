@@ -14,4 +14,4 @@ def example_plot_volume(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_plot_volume, level=2)
+    bn.run(example_plot_volume, subsampling_divisions=2)

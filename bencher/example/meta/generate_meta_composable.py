@@ -118,7 +118,7 @@ class MetaComposableVideo(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 2},
+            run_kwargs={"subsampling_divisions": 2},
         )
 
 
@@ -172,7 +172,7 @@ class MetaComposablePanel(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 2},
+            run_kwargs={"subsampling_divisions": 2},
         )
 
 
@@ -220,7 +220,7 @@ class MetaComposableDataset(MetaGeneratorBase):
             class_code=class_code,
             input_vars='["duration"]',
             result_vars='["result_ds"]',
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
 
@@ -284,7 +284,7 @@ class MetaComposableAllTypes(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 2},
+            run_kwargs={"subsampling_divisions": 2},
         )
 
 

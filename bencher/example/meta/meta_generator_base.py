@@ -33,7 +33,7 @@ class MetaGeneratorBase(bn.ParametrizedSweep):
             body: Unindented function body lines. Indentation is applied automatically.
             class_code: Optional class definition emitted between imports and function.
             run_kwargs: Dict of keyword args for ``bn.run()`` in ``__main__``
-                        (e.g. ``{"level": 4, "repeats": 10}``).
+                        (e.g. ``{"subsampling_divisions": 4, "repeats": 10}``).
         """
         if run_kwargs is None:
             run_kwargs = {}
@@ -100,7 +100,7 @@ if __name__ == "__main__":
             post_sweep_line: Optional line after plot_sweep (e.g. 'res.to_bar()').
             run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
             extra_imports: Optional list of additional import lines.
-            run_kwargs: Dict of kwargs for bn.run() (e.g. {"level": 4, "repeats": 10}).
+            run_kwargs: Dict of kwargs for bn.run() (e.g. {"subsampling_divisions": 4, "repeats": 10}).
             module_docstring: Optional override for the module-level docstring.
         """
         import_lines = []

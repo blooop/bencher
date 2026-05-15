@@ -114,9 +114,9 @@ bn.run(MyBench, subsampling_divisions=3, optimise=30)
 
 Bencher includes a composable container system for combining visual outputs. See the [Composition](concepts.md#composition) section in A Grammar of Benchmarking and the [Composable Containers](reference/meta/composable_containers/index) gallery.
 
-## Sampling and Level System
+## Sampling and Subsampling Divisions System
 
-The `level` parameter controls sampling density across all dimensions with a single knob. Higher levels are strict supersets of lower ones, so cached results are reused automatically. See [The Level System](concepts.md#the-level-system) for the conceptual explanation, the [Level System](reference/meta/levels/index) gallery for an interactive demo, and the [Sampling Strategies](reference/meta/sampling/index) gallery for related sampling techniques.
+The `subsampling_divisions` parameter controls sampling density across all dimensions with a single knob. Higher values are strict supersets of lower ones, so cached results are reused automatically. See [The Subsampling Divisions System](concepts.md#the-subsampling-divisions-system) for the conceptual explanation, the [Subsampling Divisions System](reference/meta/levels/index) gallery for an interactive demo, and the [Sampling Strategies](reference/meta/sampling/index) gallery for related sampling techniques.
 
 ## Running Examples
 

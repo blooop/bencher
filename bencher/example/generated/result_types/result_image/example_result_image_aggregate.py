@@ -56,4 +56,4 @@ def example_result_image_aggregate(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_aggregate, level=3)
+    bn.run(example_result_image_aggregate, subsampling_divisions=3)

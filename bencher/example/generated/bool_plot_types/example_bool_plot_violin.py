@@ -28,4 +28,4 @@ def example_bool_plot_violin(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_bool_plot_violin, level=3, repeats=50)
+    bn.run(example_bool_plot_violin, subsampling_divisions=3, repeats=50)

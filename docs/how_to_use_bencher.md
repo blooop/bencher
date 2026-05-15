@@ -41,7 +41,7 @@ Notice the three stages in the code above:
    `benchmark()` method
 2. **Sweep Definition** — `plot_sweep()` selects which parameters to vary and which
    results to collect
-3. **Run Definition** — `bn.run()` sets sampling density (`level`), `repeats`, and
+3. **Run Definition** — `bn.run()` sets sampling density (`subsampling_divisions`), `repeats`, and
    output options
 
 Every bencher example follows this pattern. See
@@ -101,7 +101,7 @@ parameter to control sampling density globally with a single knob:
 |---|---|---|---|---|---|---|---|
 | Samples per dimension | 1 | 2 | 3 | 5 | 9 | 17 | 33 |
 
-Higher subsampling_divisions levels reuse all lower-subsampling_divisions samples (binary subdivision), so cached results
+Higher subsampling_divisions values reuse all lower samples (binary subdivision), so cached results
 carry over automatically. Start low for quick iteration, increase for publication
 quality:
 
@@ -113,7 +113,7 @@ bn.run(example_benchmark, subsampling_divisions=2)
 bn.run(example_benchmark, subsampling_divisions=5)
 ```
 
-See [Concepts: The Subsampling Divisions System](concepts.md#the-subsampling_divisions-system) for the full formula
+See [Concepts: The Subsampling Divisions System](concepts.md#the-subsampling-divisions-system) for the full formula
 and theory, and the [Subsampling Divisions System gallery](reference/meta/levels/index) for an interactive
 demo.
 
@@ -198,7 +198,7 @@ slicing, comparing, and pinning parameters.
 
 | Parameter | Default | What it does |
 |---|---|---|
-| `level` | 0 | Sampling density per dimension (see Level System above) |
+| `subsampling_divisions` | 0 | Sampling density per dimension (see Subsampling Divisions System above) |
 | `repeats` | 1 | How many times to evaluate each combination |
 | `cache_samples` | False | Cache individual results across runs (resume interrupted sweeps) |
 | `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |

@@ -434,7 +434,7 @@ SECTION_GROUPS = [
             ("Result Types", "result_types"),
             ("Plot Types", "plot_types"),
             ("Bool Plot Types", "bool_plot_types"),
-            ("Level System", "levels"),
+            ("Subsampling Divisions System", "levels"),
             ("Sampling Strategies", "sampling"),
             ("Composable Containers", "composable_containers"),
             ("Container Tab Layouts", "container_tabs"),

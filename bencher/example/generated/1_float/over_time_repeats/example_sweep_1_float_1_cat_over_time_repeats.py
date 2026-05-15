@@ -49,4 +49,4 @@ def example_sweep_1_float_1_cat_over_time_repeats(
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_1_float_1_cat_over_time_repeats, level=4, over_time=True)
+    bn.run(example_sweep_1_float_1_cat_over_time_repeats, subsampling_divisions=4, over_time=True)

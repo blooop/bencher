@@ -59,4 +59,4 @@ def example_result_image_progressive(run_cfg: bn.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_progressive, level=3)
+    bn.run(example_result_image_progressive, subsampling_divisions=3)
