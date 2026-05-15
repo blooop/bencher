@@ -199,11 +199,15 @@ def _wrap_viewer_controls(iframe_html: str, viewer_url: str, width: int, height:
     A real anchor (rather than ``window.open()``) avoids popup-blocker false
     positives that silently swallow the click in some browsers.
     """
+    # Shared style for both controls.  ``font: 14px/1`` (size/line-height) keeps
+    # the button and the anchor the same height — without that the anchor's
+    # default ``line-height`` differs and the two icons render at different
+    # sizes side-by-side.
     btn = (
         "background:rgba(0,0,0,0.55);color:white;border:0;"
         "padding:2px 7px;cursor:pointer;border-radius:3px;font:14px/1 sans-serif"
     )
-    link = btn + ";text-decoration:none;display:inline-block;line-height:1.4"
+    link = btn + ";text-decoration:none;display:inline-block"
     fs_js = "this.closest('.bencher-rrd-wrap').querySelector('iframe').requestFullscreen()"
     return (
         f'<div class="bencher-rrd-wrap"'
