@@ -55,4 +55,4 @@ def example_advanced_cache_patterns(run_cfg: bn.BenchRunCfg | None = None) -> bn
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_cache_patterns, level=3, repeats=5)
+    bn.run(example_advanced_cache_patterns, subsampling_divisions=3, repeats=5)

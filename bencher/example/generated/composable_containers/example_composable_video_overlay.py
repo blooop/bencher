@@ -79,4 +79,4 @@ def example_composable_video_overlay(run_cfg: bn.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bn.run(example_composable_video_overlay, level=2)
+    bn.run(example_composable_video_overlay, subsampling_divisions=2)

@@ -50,4 +50,4 @@ def example_const_vars_compare(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
 
 
 if __name__ == "__main__":
-    bn.run(example_const_vars_compare, level=4)
+    bn.run(example_const_vars_compare, subsampling_divisions=4)

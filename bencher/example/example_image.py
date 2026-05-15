@@ -54,7 +54,7 @@ def example_image(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = BenchPolygons().to_bench(run_cfg)
 
     bench.add_plot_callback(bn.BenchResult.to_sweep_summary)
-    bench.add_plot_callback(bn.BenchResult.to_panes, level=3)
+    bench.add_plot_callback(bn.BenchResult.to_panes, subsampling_divisions=3)
 
     sweep_vars = ["sides", "radius", "linewidth", "color"]
 
@@ -71,4 +71,4 @@ def example_image(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_image, level=3, show=bn.ShowMode.HTML)
+    bn.run(example_image, subsampling_divisions=3, show=bn.ShowMode.HTML)

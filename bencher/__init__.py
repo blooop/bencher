@@ -7,7 +7,7 @@ from .bench_cfg import ShowMode
 from .bench_runner import BenchRunner
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
-from .variables.sweep_base import hash_sha1, LEVEL_SAMPLES
+from .variables.sweep_base import hash_sha1, SUBSAMPLING_DIVISIONS_SAMPLES
 from .variables.inputs import (
     IntSweep,
     FloatSweep,
@@ -19,7 +19,7 @@ from .variables.inputs import (
 )
 from .variables.time import TimeSnapshot
 
-from .variables.inputs import box, p, sweep
+from .variables.inputs import box, p, sweep, with_subsampling_divisions
 from .variables.results import (
     ResultFloat,
     ResultVar,
@@ -155,3 +155,23 @@ from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
 from .factories import create_bench, create_bench_runner
 from .run import run
+
+
+_DEPRECATED_ALIASES = {
+    "LEVEL_SAMPLES": "SUBSAMPLING_DIVISIONS_SAMPLES",
+    "with_level": "with_subsampling_divisions",
+}
+
+
+def __getattr__(name: str):
+    import sys
+
+    new_name = _DEPRECATED_ALIASES.get(name)
+    if new_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"'{name}' is deprecated; use '{new_name}' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return getattr(sys.modules[__name__], new_name)

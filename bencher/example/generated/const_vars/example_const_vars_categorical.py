@@ -55,4 +55,4 @@ def example_const_vars_categorical(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_const_vars_categorical, level=4)
+    bn.run(example_const_vars_categorical, subsampling_divisions=4)

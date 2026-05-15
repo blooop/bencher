@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import warnings
 from enum import auto
 from strenum import LowercaseStrEnum
 
@@ -12,7 +13,7 @@ import panel as pn
 from datetime import datetime
 from copy import deepcopy
 
-from bencher.variables.sweep_base import hash_sha1, describe_variable, LEVEL_SAMPLES
+from bencher.variables.sweep_base import hash_sha1, describe_variable, SUBSAMPLING_DIVISIONS_SAMPLES
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import OptDir
 from bencher.results.composable_container.composable_container_base import PaneLayout
@@ -107,23 +108,23 @@ class BenchRunCfg(BenchPlotSrvCfg):
         # Use defaults — each variable uses its own ``samples`` setting:
         run_cfg = BenchRunCfg()
 
-        # Set a sampling level (geometrically increasing sample counts):
-        run_cfg = BenchRunCfg(level=5)        # 9 samples per variable
-        run_cfg = BenchRunCfg(level=8)        # 65 samples per variable
+        # Set a sampling subsampling_divisions (geometrically increasing sample counts):
+        run_cfg = BenchRunCfg(subsampling_divisions=5)        # 9 samples per variable
+        run_cfg = BenchRunCfg(subsampling_divisions=8)        # 65 samples per variable
 
         # Or set an exact sample count directly:
         run_cfg = BenchRunCfg(samples_per_var=20)
 
-    Level-to-samples mapping
-    ~~~~~~~~~~~~~~~~~~~~~~~~
-    ====== ======= ====== ======= ====== =======
-    Level  Samples Level  Samples Level  Samples
-    ====== ======= ====== ======= ====== =======
-    1      1       5      9       9      129
-    2      2       6      17      10     257
-    3      3       7      33      11     513
-    4      5       8      65      12     1025
-    ====== ======= ====== ======= ====== =======
+    Subsampling Divisions-to-samples mapping
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ========= ======= ========= ======= ========= =======
+    Subsampling Divisions  Samples Subsampling Divisions  Samples Subsampling Divisions  Samples
+    ========= ======= ========= ======= ========= =======
+    1         1       5         9       9         129
+    2         2       6         17      10        257
+    3         3       7         33      11        513
+    4         5       8         65      12        1025
+    ========= ======= ========= ======= ========= =======
 
     Attributes:
         repeats (int): The number of times to sample the inputs
@@ -162,8 +163,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
         dry_run (bool): Preview sweep grid without executing the benchmark function
-        level (int): Method of defining the number of samples to sweep over
-        samples_per_var (int | None): Explicit sample count per variable (overrides level)
+        subsampling_divisions (int): Method of defining the number of samples to sweep over
+        samples_per_var (int | None): Explicit sample count per variable (overrides subsampling_divisions)
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
         executor (Executors): Executor for running the benchmark
@@ -177,14 +178,14 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
 
-    level: int = param.Integer(
+    subsampling_divisions: int = param.Integer(
         default=0,
         bounds=[0, 12],
         doc="Controls sample count for every sweep variable at once. "
-        "Level 0 (default) uses each variable's own `samples` setting. "
-        "Levels 1-12 override with geometrically increasing counts: "
+        "Subsampling Divisions 0 (default) uses each variable's own `samples` setting. "
+        "Subsampling Divisions 1-12 override with geometrically increasing counts: "
         "1→1, 2→2, 3→3, 4→5, 5→9, 6→17, 7→33, 8→65, 9→129, 10→257, 11→513, 12→1025. "
-        "Use `BenchRunCfg.level_to_samples(level)` to query programmatically, "
+        "Use `BenchRunCfg.subsampling_divisions_to_samples(subsampling_divisions)` to query programmatically, "
         "or set `samples_per_var` for a direct sample count.",
     )
 
@@ -193,7 +194,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         allow_None=True,
         bounds=(1, None),
         doc="Explicit number of samples per sweep variable. "
-        "When set, takes precedence over `level`. "
+        "When set, takes precedence over `subsampling_divisions`. "
         "Example: samples_per_var=20 gives exactly 20 samples for every input variable.",
     )
 
@@ -458,6 +459,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     def __init__(self, **params: Any) -> None:
         """Initialize BenchRunCfg with current datetime if not provided."""
+        if "level" in params:
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            params.setdefault("subsampling_divisions", params.pop("level"))
         if "run_date" not in params:
             params["run_date"] = datetime.now()
         super().__init__(**params)
@@ -515,27 +523,43 @@ class BenchRunCfg(BenchPlotSrvCfg):
         return BenchRunCfg(**vars(parser.parse_args()))
 
     @staticmethod
-    def level_to_samples(level: int, max_level: int = 12) -> int:
-        """Return the number of samples-per-variable for a given *level*.
+    def subsampling_divisions_to_samples(
+        subsampling_divisions: int, max_subsampling_divisions: int = 12
+    ) -> int:
+        """Return the number of samples-per-variable for a given *subsampling_divisions*.
 
         Args:
-            level: Sampling level (1-12).
-            max_level: Cap applied before lookup. Defaults to 12.
+            subsampling_divisions: Sampling subsampling_divisions (1-12).
+            max_subsampling_divisions: Cap applied before lookup. Defaults to 12.
 
         Returns:
-            The sample count for this level.
+            The sample count for this subsampling_divisions.
 
         Raises:
-            ValueError: If *level* is out of range.
+            ValueError: If *subsampling_divisions* is out of range.
 
         Example::
 
-            >>> BenchRunCfg.level_to_samples(5)
+            >>> BenchRunCfg.subsampling_divisions_to_samples(5)
             9
         """
-        if level < 1 or level >= len(LEVEL_SAMPLES):
-            raise ValueError(f"level must be between 1 and {len(LEVEL_SAMPLES) - 1}, got {level}")
-        return LEVEL_SAMPLES[min(max_level, level)]
+        if subsampling_divisions < 1 or subsampling_divisions >= len(SUBSAMPLING_DIVISIONS_SAMPLES):
+            raise ValueError(
+                f"subsampling_divisions must be between 1 and {len(SUBSAMPLING_DIVISIONS_SAMPLES) - 1}, got {subsampling_divisions}"
+            )
+        return SUBSAMPLING_DIVISIONS_SAMPLES[min(max_subsampling_divisions, subsampling_divisions)]
+
+    @staticmethod
+    def level_to_samples(level: int, max_level: int = 12) -> int:
+        """Deprecated: use :meth:`subsampling_divisions_to_samples` instead."""
+        warnings.warn(
+            "'level_to_samples' is deprecated; use 'subsampling_divisions_to_samples' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return BenchRunCfg.subsampling_divisions_to_samples(
+            subsampling_divisions=level, max_subsampling_divisions=max_level
+        )
 
     def deep(self):
         return deepcopy(self)
@@ -551,11 +575,18 @@ class BenchRunCfg(BenchPlotSrvCfg):
         mutated.  This lets benchmark functions declare sensible defaults while still
         allowing callers to override::
 
-            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
+            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, subsampling_divisions=4)
 
         Raises:
             ValueError: If any key in *defaults* is not a recognised parameter.
         """
+        if "level" in defaults:
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            defaults.setdefault("subsampling_divisions", defaults.pop("level"))
         unknown = set(defaults) - set(cls.param)
         if unknown:
             raise ValueError(f"Unknown BenchRunCfg parameter(s): {', '.join(sorted(unknown))}")
@@ -864,8 +895,10 @@ class BenchCfg(BenchRunCfg):
         benchmark_sampling_str.append(f"    run date: {self.run_date}")
         if self.run_tag:
             benchmark_sampling_str.append(f"    run tag: {self.run_tag}")
-        if self.level is not None:
-            benchmark_sampling_str.append(f"    bench level: {self.level}")
+        if self.subsampling_divisions is not None:
+            benchmark_sampling_str.append(
+                f"    bench subsampling_divisions: {self.subsampling_divisions}"
+            )
         benchmark_sampling_str.append(f"    cache_results: {self.cache_results}")
         benchmark_sampling_str.append(f"    cache_samples {self.cache_samples}")
         benchmark_sampling_str.append(f"    only_hash_tag: {self.only_hash_tag}")

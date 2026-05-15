@@ -38,4 +38,4 @@ def example_advanced_report_save(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_report_save, level=3)
+    bn.run(example_advanced_report_save, subsampling_divisions=3)

@@ -474,7 +474,7 @@ for i, offset in enumerate(releases):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
 

@@ -199,7 +199,7 @@ def run_example_and_save(py_file: Path, docs_dir: Path, generated_dir: Path, pag
 
     run_kwargs = _extract_run_kwargs(py_file)
     run_cfg = bn.BenchRunCfg()
-    run_cfg.level = run_kwargs.get("level", 4)
+    run_cfg.subsampling_divisions = run_kwargs.get("subsampling_divisions", 4)
     run_cfg.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
         run_cfg.use_optuna = run_kwargs["use_optuna"]
@@ -434,7 +434,7 @@ SECTION_GROUPS = [
             ("Result Types", "result_types"),
             ("Plot Types", "plot_types"),
             ("Bool Plot Types", "bool_plot_types"),
-            ("Level System", "levels"),
+            ("Subsampling Divisions System", "levels"),
             ("Sampling Strategies", "sampling"),
             ("Composable Containers", "composable_containers"),
             ("Container Tab Layouts", "container_tabs"),

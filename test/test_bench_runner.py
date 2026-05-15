@@ -11,7 +11,7 @@ class TestBenchRunner(unittest.TestCase):
         bench_runner = bn.BenchRunner("bench_runner_test")
         self.assertEqual(bench_runner.run_cfg.cache_samples, False)
         self.assertEqual(bench_runner.run_cfg.only_hash_tag, False)
-        self.assertEqual(bench_runner.run_cfg.level, 2)
+        self.assertEqual(bench_runner.run_cfg.subsampling_divisions, 2)
         self.assertEqual(bench_runner.publisher, None)
         self.assertEqual(bench_runner.bench_fns, [])
 
@@ -85,68 +85,74 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(results[0].bench_cfg.run_tag, "1")
 
     # def test_benchrunner_level_1(self):
-    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(min_level=1)
+    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(min_subsampling_divisions=1)
     #     self.assertEqual(results[0].result_samples(), 1)
 
     # def test_benchrunner_level_1_only(self):
-    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(level=1)
+    #     results = bn.BenchRunner("bench_runner_test", AllSweepVars()).run(subsampling_divisions=1)
     #     self.assertEqual(results[0].result_samples(), 1)
 
     def test_benchrunner_repeats(self):
         res = bn.Bench(
-            "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=1)
+            "float",
+            SimpleBenchClassFloat(),
+            run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=1),
         ).plot_sweep("float")
         self.assertEqual(res.result_samples(), 2)
 
         res = bn.Bench(
-            "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=5)
+            "float",
+            SimpleBenchClassFloat(),
+            run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=5),
         ).plot_sweep("float")
         self.assertEqual(res.result_samples(), 10)
 
     def test_benchrunner_unified_interface(self):
-        """Test the new unified interface with level/repeats and max_level/max_repeats."""
+        """Test the new unified interface with subsampling_divisions/repeats and max_subsampling_divisions/max_repeats."""
         # Track what configurations are run
         executed_configs = []
 
         def simple_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
-            executed_configs.append((run_cfg.level, run_cfg.repeats))
+            executed_configs.append((run_cfg.subsampling_divisions, run_cfg.repeats))
             bench = bn.Bench("test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
             return bench.plot_sweep("test")
 
-        # Test 1: Single level and repeats (no max values)
+        # Test 1: Single subsampling_divisions and repeats (no max values)
         br1 = bn.BenchRunner()
         br1.add(simple_benchmark)
         executed_configs.clear()
-        results = br1.run(level=2, repeats=1)
+        results = br1.run(subsampling_divisions=2, repeats=1)
         self.assertEqual(len(results), 1)
         self.assertEqual(len(executed_configs), 1)
         self.assertEqual(executed_configs[0], (2, 1))
 
-        # Test 2: Progressive levels (level=2, max_level=3, repeats=1)
+        # Test 2: Progressive subsampling_divisions (subsampling_divisions=2, max_subsampling_divisions=3, repeats=1)
         br2 = bn.BenchRunner()
         br2.add(simple_benchmark)
         executed_configs.clear()
-        results = br2.run(level=2, repeats=1, max_level=3)
-        # Should run at level 2 and 3 = 2 results
-        levels = sorted([config[0] for config in executed_configs])
-        self.assertEqual(levels, [2, 3])
+        results = br2.run(subsampling_divisions=2, repeats=1, max_subsampling_divisions=3)
+        # Should run at subsampling_divisions 2 and 3 = 2 results
+        fidelities = sorted([config[0] for config in executed_configs])
+        self.assertEqual(fidelities, [2, 3])
         self.assertEqual(len(executed_configs), 2)
 
-        # Test 3: Progressive repeats (level=2, repeats=1, max_repeats=2)
+        # Test 3: Progressive repeats (subsampling_divisions=2, repeats=1, max_repeats=2)
         br3 = bn.BenchRunner()
         br3.add(simple_benchmark)
         executed_configs.clear()
-        results = br3.run(level=2, repeats=1, max_repeats=2)
+        results = br3.run(subsampling_divisions=2, repeats=1, max_repeats=2)
         # Should run with repeats 1 and 2 = 2 results
         repeats = sorted([config[1] for config in executed_configs])
         self.assertEqual(repeats, [1, 2])
         self.assertEqual(len(executed_configs), 2)
 
-        # Test 4: Both progressive (level=2-3, repeats=1-2) = 4 combinations
+        # Test 4: Both progressive (subsampling_divisions=2-3, repeats=1-2) = 4 combinations
         br4 = bn.BenchRunner()
         br4.add(simple_benchmark)
         executed_configs.clear()
-        results = br4.run(level=2, repeats=1, max_level=3, max_repeats=2)
+        results = br4.run(
+            subsampling_divisions=2, repeats=1, max_subsampling_divisions=3, max_repeats=2
+        )
         # Check all combinations were executed
         expected_combinations = [(2, 1), (2, 2), (3, 1), (3, 2)]
         self.assertEqual(sorted(executed_configs), sorted(expected_combinations))
@@ -183,6 +189,114 @@ class TestBenchRunner(unittest.TestCase):
                 )
             )
 
+    def test_benchrunner_level_kwarg_deprecation(self):
+        """Test that passing level= to BenchRunner.run() emits DeprecationWarning."""
+        import warnings
+
+        bench_runner = bn.BenchRunner("test_level_deprecation")
+
+        def simple_test(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:  # pylint: disable=unused-argument
+            cfg = bn.BenchCfg()
+            cfg.run_cfg = run_cfg
+            return cfg
+
+        bench_runner.add(simple_test)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            bench_runner.run(level=3)
+            self.assertTrue(
+                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
+            )
+
+    def test_setup_run_cfg_level_kwarg_deprecation(self):
+        """Test that passing level= to setup_run_cfg() emits DeprecationWarning."""
+        import warnings
+
+        bench_runner = bn.BenchRunner("test_setup_deprecation")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cfg = bench_runner.setup_run_cfg(level=4)
+            self.assertEqual(cfg.subsampling_divisions, 4)
+            self.assertTrue(
+                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
+            )
+
+    def test_benchruncfg_level_kwarg_deprecation(self):
+        """Test that BenchRunCfg(level=5) emits DeprecationWarning and sets subsampling_divisions."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cfg = bn.BenchRunCfg(level=5)
+            self.assertEqual(cfg.subsampling_divisions, 5)
+            self.assertTrue(
+                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
+            )
+
+    def test_with_defaults_level_kwarg_deprecation(self):
+        """Test that BenchRunCfg.with_defaults(level=4) emits DeprecationWarning."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cfg = bn.BenchRunCfg.with_defaults(None, level=4)
+            self.assertEqual(cfg.subsampling_divisions, 4)
+            self.assertTrue(
+                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
+            )
+
+    def test_benchrunner_run_level_and_subsampling_divisions_conflict_raises(self):
+        """Passing both level= and subsampling_divisions= to BenchRunner.run() raises TypeError."""
+        br = bn.BenchRunner("conflict_test")
+        br.add(lambda run_cfg, report: bn.BenchCfg())
+        with self.assertRaises(TypeError):
+            br.run(subsampling_divisions=3, level=4)
+
+    def test_benchrunner_run_level_and_subsampling_divisions_default_conflict_raises(self):
+        """Passing subsampling_divisions=2 (the default) plus level= still raises TypeError."""
+        br = bn.BenchRunner("conflict_test_default")
+        br.add(lambda run_cfg, report: bn.BenchCfg())
+        with self.assertRaises(TypeError):
+            br.run(subsampling_divisions=2, level=4)
+
+    def test_benchrunner_run_max_level_and_max_subsampling_divisions_conflict_raises(self):
+        """Passing both max_level= and max_subsampling_divisions= to BenchRunner.run() raises TypeError."""
+        br = bn.BenchRunner("conflict_test_max")
+        br.add(lambda run_cfg, report: bn.BenchCfg())
+        with self.assertRaises(TypeError):
+            br.run(max_subsampling_divisions=3, max_level=4)
+
+    def test_benchrunner_run_max_level_deprecation_translates(self):
+        """Using deprecated max_level= emits a warning and translates to max_subsampling_divisions."""
+        seen = []
+
+        def capture_cfg(run_cfg, _report):
+            seen.append(run_cfg.subsampling_divisions)
+            return bn.BenchCfg()
+
+        br = bn.BenchRunner("depr_test")
+        br.add(capture_cfg)
+
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            br.run(subsampling_divisions=2, max_level=3)
+            self.assertTrue(any("'max_level' parameter is deprecated" in str(x.message) for x in w))
+        self.assertEqual(sorted(set(seen)), [2, 3])
+
+    def test_setup_run_cfg_level_and_subsampling_divisions_conflict_raises(self):
+        """Passing both level= and subsampling_divisions= to setup_run_cfg() raises TypeError."""
+        with self.assertRaises(TypeError):
+            bn.BenchRunner.setup_run_cfg(subsampling_divisions=3, level=4)
+
+    def test_setup_run_cfg_level_and_subsampling_divisions_default_conflict_raises(self):
+        """Passing subsampling_divisions=2 (the default) plus level= still raises TypeError."""
+        with self.assertRaises(TypeError):
+            bn.BenchRunner.setup_run_cfg(subsampling_divisions=2, level=4)
+
     def test_benchrunner_no_name_instantiation(self):
         """Test that BenchRunner can be instantiated without a name."""
         bench_runner = bn.BenchRunner()
@@ -198,16 +312,16 @@ class TestBenchRunner(unittest.TestCase):
             return bench.plot_sweep("test")
 
         bench_runner.add(test_benchmark)
-        results = bench_runner.run(level=2, repeats=1)
+        results = bench_runner.run(subsampling_divisions=2, repeats=1)
         self.assertEqual(len(results), 1)
 
     # def test_benchrunner_cache(self):
     #     res = bn.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=1)
+    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=1)
     #     ).plot_sweep("float")
 
     #     res = bn.Bench(
-    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(level=2, repeats=5)
+    #         "float", SimpleBenchClassFloat(), run_cfg=bn.BenchRunCfg(subsampling_divisions=2, repeats=5)
     #     ).plot_sweep("float")
     #     self.assertEqual(res.result_samples(), 10)
 
@@ -222,16 +336,16 @@ class TestBenchRunner(unittest.TestCase):
     #     results = bench_runner.run()
 
     #     self.assertEqual(len(results), 10)
-    #     self.assertEqual(results[0].level, 1)
-    #     self.assertEqual(results[1].level, 1)
-    #     self.assertEqual(results[2].level, 2)
-    #     self.assertEqual(results[3].level, 2)
-    #     self.assertEqual(results[4].level, 3)
-    #     self.assertEqual(results[5].level, 3)
-    #     self.assertEqual(results[6].level, 4)
-    #     self.assertEqual(results[7].level, 4)
-    #     self.assertEqual(results[8].level, 5)
-    #     self.assertEqual(results[9].level, 5)
+    #     self.assertEqual(results[0].subsampling_divisions, 1)
+    #     self.assertEqual(results[1].subsampling_divisions, 1)
+    #     self.assertEqual(results[2].subsampling_divisions, 2)
+    #     self.assertEqual(results[3].subsampling_divisions, 2)
+    #     self.assertEqual(results[4].subsampling_divisions, 3)
+    #     self.assertEqual(results[5].subsampling_divisions, 3)
+    #     self.assertEqual(results[6].subsampling_divisions, 4)
+    #     self.assertEqual(results[7].subsampling_divisions, 4)
+    #     self.assertEqual(results[8].subsampling_divisions, 5)
+    #     self.assertEqual(results[9].subsampling_divisions, 5)
 
     # Tests that bn.BenchRunner can run Benchable functions with custom configuration, after fixing the import statements
     # def test_benchrunner_run_custom_configuration_fixed_fixed_import_statements(self):
@@ -244,11 +358,11 @@ class TestBenchRunner(unittest.TestCase):
     #     run_cfg = bn.BenchRunCfg()
     #     run_cfg.cache_samples = False
     #     run_cfg.only_hash_tag = False
-    #     run_cfg.level = 3
+    #     run_cfg.subsampling_divisions = 3
     #     results = bench_runner.run(run_cfg=run_cfg)
     #     self.assertEqual(len(results), 2)
-    #     self.assertEqual(results[0].level, 3)
-    #     self.assertEqual(results[1].level, 3)
+    #     self.assertEqual(results[0].subsampling_divisions, 3)
+    #     self.assertEqual(results[1].subsampling_divisions, 3)
 
     # Tests that bn.BenchRunner can publish results of Benchable functions (fixed)
     # def test_benchrunner_publish_results_fixed(self):
@@ -292,7 +406,7 @@ class TestBenchRunner(unittest.TestCase):
         """Test running benchmarks in grouped mode."""
         bench_runner = bn.BenchRunner("test_grouped")
         bench_runner.add_bench(SimpleBenchClass())
-        results = bench_runner.run(level=2, repeats=1, grouped=True)
+        results = bench_runner.run(subsampling_divisions=2, repeats=1, grouped=True)
         self.assertTrue(len(results) > 0)
 
     def test_benchrunner_v2_signature(self):
@@ -304,21 +418,21 @@ class TestBenchRunner(unittest.TestCase):
 
         bench_runner = bn.BenchRunner("test_v2")
         bench_runner.add(v2_benchmark)
-        results = bench_runner.run(level=2, repeats=1)
+        results = bench_runner.run(subsampling_divisions=2, repeats=1)
         self.assertEqual(len(results), 1)
 
-    def test_benchrunner_progressive_levels(self):
-        """Test progressive level runs."""
+    def test_benchrunner_progressive_subsampling_divisions(self):
+        """Test progressive subsampling_divisions runs."""
         executed = []
 
         def tracking_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
-            executed.append(run_cfg.level)
+            executed.append(run_cfg.subsampling_divisions)
             bench = bn.Bench("track", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
             return bench.plot_sweep("track_sweep")
 
         br = bn.BenchRunner("test_progressive")
         br.add(tracking_benchmark)
-        br.run(level=2, max_level=3, repeats=1)
+        br.run(subsampling_divisions=2, max_subsampling_divisions=3, repeats=1)
         self.assertEqual(sorted(executed), [2, 3])
 
     def test_benchrunner_merge_reports(self):
@@ -432,15 +546,15 @@ class TestBenchRunner(unittest.TestCase):
 
         br = bn.BenchRunner("test_auto_cache")
         br.add(tracking_bench)
-        br.run(level=2, max_level=3)
+        br.run(subsampling_divisions=2, max_subsampling_divisions=3)
 
         # All executed configs should have cache_samples=True
         for cfg in executed_cfgs:
             self.assertTrue(cfg.cache_samples)
             self.assertTrue(cfg.only_hash_tag)
 
-    def test_single_level_no_auto_cache(self):
-        """Single-level run (no max_level) leaves cache_samples=False."""
+    def test_single_subsampling_divisions_no_auto_cache(self):
+        """Single-subsampling_divisions run (no max_subsampling_divisions) leaves cache_samples=False."""
         executed_cfgs = []
 
         def tracking_bench(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
@@ -450,19 +564,25 @@ class TestBenchRunner(unittest.TestCase):
 
         br = bn.BenchRunner("test_no_auto_cache")
         br.add(tracking_bench)
-        br.run(level=2)
+        br.run(subsampling_divisions=2)
 
         self.assertEqual(len(executed_cfgs), 1)
         self.assertFalse(executed_cfgs[0].cache_samples)
 
     def test_bench_reuse_report_cleared(self):
-        """Progressive bn.run() with ParametrizedSweep produces only last level's report."""
-        # Progressive run from level=2 to max_level=3
+        """Progressive bn.run() with ParametrizedSweep produces only last subsampling_divisions's report."""
+        # Progressive run from subsampling_divisions=2 to max_subsampling_divisions=3
         progressive_results = bn.run(
-            SimpleBenchClassFloat, level=2, max_level=3, show=False, cache_samples=True
+            SimpleBenchClassFloat,
+            subsampling_divisions=2,
+            max_subsampling_divisions=3,
+            show=False,
+            cache_samples=True,
         )
         # Single-level run at the final level as a baseline for tab count
-        single_results = bn.run(SimpleBenchClassFloat, level=3, show=False, cache_samples=False)
+        single_results = bn.run(
+            SimpleBenchClassFloat, subsampling_divisions=3, show=False, cache_samples=False
+        )
 
         prog_report = getattr(progressive_results[-1], "report", None)
         single_report = getattr(single_results[-1], "report", None)
@@ -475,14 +595,18 @@ class TestBenchRunner(unittest.TestCase):
         self.assertEqual(
             single_tabs,
             prog_tabs,
-            "Progressive run should not accumulate tabs across levels; "
-            "only the last level's report should be present.",
+            "Progressive run should not accumulate tabs across subsampling_divisions levels; "
+            "only the last subsampling_divisions's report should be present.",
         )
 
     def test_bench_reuse_cache_hits(self):
-        """Progressive run where level N+1 gets cache hits from level N's samples."""
+        """Progressive run where subsampling_divisions N+1 gets cache hits from subsampling_divisions N's samples."""
         results = bn.run(
-            SimpleBenchClassFloat, level=2, max_level=3, show=False, cache_samples=True
+            SimpleBenchClassFloat,
+            subsampling_divisions=2,
+            max_subsampling_divisions=3,
+            show=False,
+            cache_samples=True,
         )
         last_result = results[-1]
         self.assertIsNotNone(

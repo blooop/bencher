@@ -41,7 +41,7 @@ Notice the three stages in the code above:
    `benchmark()` method
 2. **Sweep Definition** — `plot_sweep()` selects which parameters to vary and which
    results to collect
-3. **Run Definition** — `bn.run()` sets sampling density (`level`), `repeats`, and
+3. **Run Definition** — `bn.run()` sets sampling density (`subsampling_divisions`), `repeats`, and
    output options
 
 Every bencher example follows this pattern. See
@@ -92,29 +92,29 @@ Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magn
 [Sampling Strategies gallery](reference/meta/sampling/index) for examples of how different
 sweep types produce different sample distributions.
 
-## The Level System
+## The Subsampling Divisions System
 
-Instead of specifying `samples` on each sweep variable, you can use the `level`
+Instead of specifying `samples` on each sweep variable, you can use the `subsampling_divisions`
 parameter to control sampling density globally with a single knob:
 
-| Level | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+| Subsampling Divisions | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 |---|---|---|---|---|---|---|---|
 | Samples per dimension | 1 | 2 | 3 | 5 | 9 | 17 | 33 |
 
-Higher levels reuse all lower-level samples (binary subdivision), so cached results
+Higher subsampling_divisions values reuse all lower samples (binary subdivision), so cached results
 carry over automatically. Start low for quick iteration, increase for publication
 quality:
 
 ```python
 # Quick check — 2 samples per dimension
-bn.run(example_benchmark, level=2)
+bn.run(example_benchmark, subsampling_divisions=2)
 
 # Publication quality — 9 samples per dimension
-bn.run(example_benchmark, level=5)
+bn.run(example_benchmark, subsampling_divisions=5)
 ```
 
-See [Concepts: The Level System](concepts.md#the-level-system) for the full formula
-and theory, and the [Level System gallery](reference/meta/levels/index) for an interactive
+See [Concepts: The Subsampling Divisions System](concepts.md#the-subsampling-divisions-system) for the full formula
+and theory, and the [Subsampling Divisions System gallery](reference/meta/levels/index) for an interactive
 demo.
 
 ## Result Types
@@ -172,7 +172,7 @@ bench.plot_sweep(
     input_vars=[
         "size",                                    # full range from bounds
         bn.sweep("method", ["fast", "accurate"]),  # explicit subset
-        bn.sweep("workers", max_level=3),           # auto-pick up to 3 values
+        bn.sweep("workers", max_subsampling_divisions=3),           # auto-pick up to 3 values
     ],
 )
 ```
@@ -198,7 +198,7 @@ slicing, comparing, and pinning parameters.
 
 | Parameter | Default | What it does |
 |---|---|---|
-| `level` | 0 | Sampling density per dimension (see Level System above) |
+| `subsampling_divisions` | 0 | Sampling density per dimension (see Subsampling Divisions System above) |
 | `repeats` | 1 | How many times to evaluate each combination |
 | `cache_samples` | False | Cache individual results across runs (resume interrupted sweeps) |
 | `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
@@ -217,7 +217,7 @@ def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     return bench
 
 if __name__ == "__main__":
-    bn.run(example_foo, level=4)    # level controls sweep detail depth
+    bn.run(example_foo, subsampling_divisions=4)    # subsampling_divisions controls sweep detail depth
 ```
 
 ## The benchmark() Method

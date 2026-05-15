@@ -52,4 +52,4 @@ def example_result_image_0d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_0d, level=3)
+    bn.run(example_result_image_0d, subsampling_divisions=3)

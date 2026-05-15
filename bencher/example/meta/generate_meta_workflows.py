@@ -51,7 +51,7 @@ class SineWave(bn.ParametrizedSweep):
 #   runner = bn.BenchRunner("comparison")
 #   runner.add(sine_benchmark_fn)    # each fn returns a Bench
 #   runner.add(cosine_benchmark_fn)
-#   runner.run(level=3)              # runs all, collects reports
+#   runner.run(subsampling_divisions=3)              # runs all, collects reports
 #
 # BenchRunner is useful when you have separate benchmark functions
 # that you want to run together and compare side by side.
@@ -73,7 +73,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_multi_sweep(self):
@@ -133,7 +133,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_input_output_cfg(self):
@@ -200,7 +200,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_getting_started(self):
@@ -316,7 +316,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "repeats": 10},
+            run_kwargs={"subsampling_divisions": 3, "repeats": 10},
         )
 
 

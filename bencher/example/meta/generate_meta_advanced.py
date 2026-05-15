@@ -98,7 +98,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "repeats": 5},
+            run_kwargs={"subsampling_divisions": 3, "repeats": 5},
         )
 
     def _generate_time_event(self):
@@ -157,7 +157,7 @@ for i, event_name in enumerate(events):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_git_time_event(self):
@@ -212,7 +212,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_max_time_events(self):
@@ -275,7 +275,7 @@ for i in range(5):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_report_save(self):
@@ -316,7 +316,7 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_agg_over_time(self):
@@ -381,7 +381,7 @@ for i, offset in enumerate(time_offsets):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "over_time": True},
+            run_kwargs={"subsampling_divisions": 4, "over_time": True},
         )
 
     def _generate_share_axis(self):
@@ -425,7 +425,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_cartesian_animation(self):
@@ -506,7 +506,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "cache_samples": False},
+            run_kwargs={"subsampling_divisions": 4, "cache_samples": False},
         )
 
 

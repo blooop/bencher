@@ -123,7 +123,7 @@ def example_meta_aggregation():
             "shows the full faceted heatmaps (one per direction)."
         ),
         aggregate=["direction"],
-        run_kwargs={"level": 4},
+        run_kwargs={"subsampling_divisions": 4},
     )
 
     # ---- 2) aggregate=True: 1 float + 1 cat → collapse to 1-D (keep first) ----
@@ -149,7 +149,7 @@ def example_meta_aggregation():
             "full detail."
         ),
         aggregate=True,
-        run_kwargs={"level": 4},
+        run_kwargs={"subsampling_divisions": 4},
     )
 
     # ---- 3) aggregate=1: 1 float + 2 cat → last cat collapsed → line + 1 cat ----
@@ -175,7 +175,7 @@ def example_meta_aggregation():
             "variable list."
         ),
         aggregate=1,
-        run_kwargs={"level": 4},
+        run_kwargs={"subsampling_divisions": 4},
     )
 
     # ---- 4) aggregate 2 cats: 2 float + 2 cat → heatmap (both cats averaged out) ----
@@ -204,7 +204,7 @@ def example_meta_aggregation():
             "gradient pattern."
         ),
         aggregate=["direction", "scale"],
-        run_kwargs={"level": 4},
+        run_kwargs={"subsampling_divisions": 4},
     )
 
     # ---- 5) aggregate + agg_fn="max": 2 float + 1 cat → heatmap of max ----
@@ -231,5 +231,5 @@ def example_meta_aggregation():
         ),
         aggregate=["direction"],
         agg_fn="max",
-        run_kwargs={"level": 4},
+        run_kwargs={"subsampling_divisions": 4},
     )

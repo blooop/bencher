@@ -39,7 +39,7 @@ class TestRunCfgMutationSafety(unittest.TestCase):
 
         snapshot = {k: getattr(br.run_cfg, k) for k in br.run_cfg.param if k != "name"}
 
-        br.run(level=3, repeats=1, cache_samples=False, over_time=True)
+        br.run(subsampling_divisions=3, repeats=1, cache_samples=False, over_time=True)
 
         for k, v in snapshot.items():
             self.assertEqual(getattr(br.run_cfg, k), v, f"self.run_cfg.{k} was mutated")
@@ -49,10 +49,10 @@ class TestRunCfgMutationSafety(unittest.TestCase):
         br = bn.BenchRunner("test_explicit")
         br.add(_simple_benchmark)
 
-        explicit_cfg = bn.BenchRunCfg(level=5, repeats=3, run_tag="explicit")
+        explicit_cfg = bn.BenchRunCfg(subsampling_divisions=5, repeats=3, run_tag="explicit")
         snapshot = {k: getattr(explicit_cfg, k) for k in explicit_cfg.param if k != "name"}
 
-        br.run(run_cfg=explicit_cfg, level=2, repeats=1)
+        br.run(run_cfg=explicit_cfg, subsampling_divisions=2, repeats=1)
 
         for k, v in snapshot.items():
             self.assertEqual(getattr(explicit_cfg, k), v, f"explicit run_cfg.{k} was mutated")
@@ -72,27 +72,27 @@ class TestPerIterationIsolation(unittest.TestCase):
 
         br = bn.BenchRunner("test_independent")
         br.add(capturing_benchmark)
-        br.run(level=2, max_level=3, repeats=1)
+        br.run(subsampling_divisions=2, max_subsampling_divisions=3, repeats=1)
 
         self.assertEqual(len(received_cfgs), 2)
         self.assertIsNot(received_cfgs[0], received_cfgs[1])
-        self.assertEqual(received_cfgs[0].level, 2)
-        self.assertEqual(received_cfgs[1].level, 3)
+        self.assertEqual(received_cfgs[0].subsampling_divisions, 2)
+        self.assertEqual(received_cfgs[1].subsampling_divisions, 3)
 
-    def test_level_repeats_combinations(self):
-        """Multi-level, multi-repeat runs must produce the exact (level, repeats) pairs."""
+    def test_subsampling_divisions_repeats_combinations(self):
+        """Multi-subsampling_divisions, multi-repeat runs must produce the exact (subsampling_divisions, repeats) pairs."""
         combos = []
 
         def tracking_benchmark(run_cfg, report):
-            combos.append((run_cfg.level, run_cfg.repeats))
+            combos.append((run_cfg.subsampling_divisions, run_cfg.repeats))
             bench = bn.Bench("track", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
             return bench.plot_sweep("track")
 
         br = bn.BenchRunner("test_combos")
         br.add(tracking_benchmark)
-        br.run(level=2, max_level=3, repeats=1, max_repeats=2)
+        br.run(subsampling_divisions=2, max_subsampling_divisions=3, repeats=1, max_repeats=2)
 
-        # repeats is outer loop, level is inner loop
+        # repeats is outer loop, subsampling_divisions is inner loop
         expected = [(2, 1), (3, 1), (2, 2), (3, 2)]
         self.assertEqual(combos, expected)
 
@@ -102,10 +102,10 @@ class TestSetupRunCfg(unittest.TestCase):
 
     def test_setup_run_cfg_does_not_mutate_input(self):
         """setup_run_cfg must not mutate the input run_cfg."""
-        original = bn.BenchRunCfg(level=5, run_tag="orig")
+        original = bn.BenchRunCfg(subsampling_divisions=5, run_tag="orig")
         snapshot = {k: getattr(original, k) for k in original.param if k != "name"}
 
-        BenchRunner.setup_run_cfg(original, level=2, cache_samples=False)
+        BenchRunner.setup_run_cfg(original, subsampling_divisions=2, cache_samples=False)
 
         for k, v in snapshot.items():
             self.assertEqual(getattr(original, k), v, f"input run_cfg.{k} was mutated")
@@ -151,7 +151,7 @@ class TestCopyElimination(unittest.TestCase):
         br = bn.BenchRunner("test_count")
         br.add(_simple_benchmark)
 
-        br.run(level=2, repeats=1)  # 1 bench_fn, 1 level, 1 repeat
+        br.run(subsampling_divisions=2, repeats=1)  # 1 bench_fn, 1 level, 1 repeat
 
         # Expected: 1 at entry (copy self.run_cfg) + 1 per-iteration = 2 total
         self.assertEqual(mock_dc.call_count, 2)
@@ -162,7 +162,7 @@ class TestCopyElimination(unittest.TestCase):
         br = bn.BenchRunner("test_count_explicit")
         br.add(_simple_benchmark)
 
-        br.run(run_cfg=bn.BenchRunCfg(run_tag="test"), level=2, repeats=1)
+        br.run(run_cfg=bn.BenchRunCfg(run_tag="test"), subsampling_divisions=2, repeats=1)
 
         # Expected: 1 call in setup_run_cfg + 1 per-iteration = 2 total
         # Before optimization this was also 2 (no redundant copy when run_cfg is provided)

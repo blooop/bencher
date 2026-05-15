@@ -29,4 +29,4 @@ def example_composable_dataset_right(run_cfg: bn.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bn.run(example_composable_dataset_right, level=3)
+    bn.run(example_composable_dataset_right, subsampling_divisions=3)

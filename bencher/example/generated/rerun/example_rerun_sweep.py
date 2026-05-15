@@ -20,4 +20,4 @@ def example_rerun_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_rerun_sweep, level=3)
+    bn.run(example_rerun_sweep, subsampling_divisions=3)

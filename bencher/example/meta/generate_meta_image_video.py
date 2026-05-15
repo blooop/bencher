@@ -119,7 +119,7 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
         filename = function_name
         title = f"{self.result_kind.replace('_', ' ').title()}: {info['dims_label']} input"
 
-        level = 2 if self.input_dims >= 2 else 3
+        sd = 2 if self.input_dims >= 2 else 3
 
         self.generate_sweep_example(
             title=title,
@@ -132,7 +132,7 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
             result_vars=result_vars,
             class_code=class_code,
             extra_imports=_EXTRA_IMPORTS,
-            run_kwargs={"level": level},
+            run_kwargs={"subsampling_divisions": sd},
         )
 
 
@@ -175,7 +175,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "bench.add_plot_callback(bn.BenchResult.to_sweep_summary)\n"
-            "bench.add_plot_callback(bn.BenchResult.to_panes, level=3)\n"
+            "bench.add_plot_callback(bn.BenchResult.to_panes, subsampling_divisions=3)\n"
             'sweep_vars = ["sides", "radius", "color"]\n'
             "for i in range(1, len(sweep_vars) + 1):\n"
             "    bench.plot_sweep(\n"
@@ -192,7 +192,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     # -- Mixed image + scalar results ----------------------------------------
@@ -215,7 +215,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     # -- Image sweep to video grid -------------------------------------------
@@ -245,7 +245,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     # -- Image over_time slider ------------------------------------------------
@@ -280,7 +280,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     # -- Composable container video from images ------------------------------
@@ -342,7 +342,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=composable_class_code,
-            run_kwargs={"level": 2},
+            run_kwargs={"subsampling_divisions": 2},
         )
 
     # -- Image aggregate -------------------------------------------------------
@@ -368,7 +368,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     # -- Video aggregate -------------------------------------------------------
@@ -394,7 +394,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_VIDEO_CLASS_CODE,
-            run_kwargs={"level": 2},
+            run_kwargs={"subsampling_divisions": 2},
         )
 
 
