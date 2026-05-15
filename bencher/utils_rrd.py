@@ -35,7 +35,7 @@ def _get_rerun_version() -> str:
     try:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
-        return "0.31.3"
+        return "0.32.0"
 
 
 def rrd_to_pane(

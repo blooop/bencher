@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed `level` API to `subsampling_divisions` across the entire public interface (`BenchRunCfg.subsampling_divisions`, `subsampling_divisions_to_samples()`, `with_subsampling_divisions()`, `SUBSAMPLING_DIVISIONS_SAMPLES`, `max_subsampling_divisions`, `select_subsampling_divisions()`).
 - Added `UNSET` sentinel for default detection so that `run(subsampling_divisions=2, level=3)` correctly raises `TypeError`.
 - Extracted shared `normalize_subsampling_divisions_kwargs()` helper to centralize deprecation logic.
+- Bumped `rerun-sdk` and `rerun-notebook` from 0.31.3 to 0.32.0.
+- Updated fallback rerun version in `utils_rrd.py` to 0.32.0.
 
 ### Deprecated
 - `level`, `max_level`, `min_level` parameters — use `subsampling_divisions`, `max_subsampling_divisions` instead. Old names still work with `DeprecationWarning`.
