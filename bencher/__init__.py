@@ -124,6 +124,13 @@ from .regression import (
     MethodCells,
     method_cells,
 )
+from .ci import (
+    write_performance_summary,
+    render_regression_plots,
+    warn_on_regressions,
+    parse_performance_summary,
+    generate_regression_comment,
+)
 from .perf_tracker import PerfTracker, PerfReport
 from .git_info import git_time_event
 from .plotting.plot_filter import VarRange, PlotFilter
