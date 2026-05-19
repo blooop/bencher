@@ -803,6 +803,15 @@ class BenchResultBase:
             pane_dims = [d for d in dims if d != "over_time"]
         else:
             pane_dims = dims
+
+        # repeat dim for media results is handled by _pane_repeat_grid, not pane recursion
+        if (
+            "repeat" in pane_dims
+            and dataset.sizes.get("repeat", 0) > 1
+            and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
+        ):
+            pane_dims = [d for d in pane_dims if d != "repeat"]
+
         num_pane_dims = len(pane_dims)
 
         if num_pane_dims > target_dimension and num_pane_dims != 0:
@@ -863,6 +872,12 @@ class BenchResultBase:
                 if isinstance(result_var, ResultRerun):
                     return self._pane_over_time_grid(dataset, result_var)
                 return self._pane_over_time_slider(dataset, result_var)
+            if (
+                "repeat" in list(dataset.sizes)
+                and dataset.sizes["repeat"] > 1
+                and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
+            ):
+                return self._pane_repeat_grid(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.render()
@@ -972,6 +987,42 @@ class BenchResultBase:
 
         if not items:
             return pn.pane.Markdown("*No rerun data available*")
+        return pn.Row(*items)
+
+    def _pane_repeat_grid(
+        self,
+        dataset: xr.Dataset,
+        result_var,
+    ) -> pn.Row | pn.pane.Markdown:
+        """Render multi-repeat pane results as a grid of labelled panels.
+
+        When repeats > 1 and the result is a media type (ResultRerun,
+        ResultVideo, ResultImage), the repeat dimension survives SQUEEZE
+        reduction.  This method iterates each repeat and renders a panel
+        so all recordings are visible, not just the first/last.
+        """
+        from bencher.utils_rrd import rrd_file_to_pane
+
+        is_rerun = isinstance(result_var, ResultRerun)
+        repeat_vals = list(dataset.coords["repeat"].values)
+
+        items = []
+        for idx, repeat_val in enumerate(repeat_vals):
+            ds_r = dataset.isel(repeat=idx)
+            filepath = str(self.zero_dim_da_to_val(ds_r[result_var.name]))
+            if filepath == "NAN" or not os.path.isfile(filepath):
+                continue
+            label = f"Repeat {repeat_val}"
+            if is_rerun:
+                pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
+            elif isinstance(result_var, ResultVideo):
+                pane = pn.pane.Video(filepath, width=getattr(result_var, "width", 400))
+            else:
+                pane = pn.pane.PNG(filepath, width=getattr(result_var, "width", 400))
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+
+        if not items:
+            return pn.pane.Markdown("*No media data available for repeats*")
         return pn.Row(*items)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
