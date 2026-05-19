@@ -1,4 +1,4 @@
-"""Auto-generated example: Rerun Repeat — multiple recordings per sweep point."""
+"""Auto-generated example: Rerun Repeat — one recording per repeat, all visible in the report."""
 
 import rerun as rr
 import bencher as bn
@@ -28,6 +28,7 @@ class RerunRepeatSweep(bn.ParametrizedSweep):
 
 def example_rerun_repeat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Rerun Repeat — one recording per repeat, all visible in the report."""
+    RerunRepeatSweep._call_count = 0
     bench = RerunRepeatSweep().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=[],
@@ -36,9 +37,9 @@ def example_rerun_repeat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
         "``repeats > 1``.  Each repeat produces a distinct recording "
         "and the report renders all of them as a labelled grid.",
     )
+
     return bench
 
 
 if __name__ == "__main__":
-    RerunRepeatSweep._call_count = 0
     bn.run(example_rerun_repeat, repeats=3)

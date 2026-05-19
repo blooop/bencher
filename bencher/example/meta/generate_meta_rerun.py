@@ -1,9 +1,10 @@
 """Meta-generator: Rerun visualization integration examples.
 
-Generates three rerun examples:
+Generates four rerun examples:
 - capture_window: basic rerun capture in a single sweep
 - regression: 0 input vars, 3 over-time snapshots with regression on the 3rd
 - sweep: 1 input var (damping_ratio), single sweep, no over_time
+- repeat: 0 input vars, repeats > 1 — exercises the media-grid renderer
 """
 
 import bencher as bn
@@ -15,6 +16,7 @@ RERUN_EXAMPLES = [
     "capture_window",
     "regression",
     "sweep",
+    "repeat",
 ]
 
 
@@ -30,6 +32,8 @@ class MetaRerun(MetaGeneratorBase):
             self._generate_regression()
         elif self.example == "sweep":
             self._generate_sweep()
+        elif self.example == "repeat":
+            self._generate_repeat()
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
@@ -144,6 +148,52 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             run_kwargs={"subsampling_divisions": 3},
+        )
+
+    def _generate_repeat(self):
+        """0 input vars, repeats > 1 — every repeat must render in the report."""
+        imports = "import rerun as rr\nimport bencher as bn"
+        class_code = '''
+class RerunRepeatSweep(bn.ParametrizedSweep):
+    """Sweep that produces a rerun recording for each repeat.
+
+    Each call to ``benchmark()`` logs a box whose size varies with the
+    repeat index (via a class counter) so the recordings are visually
+    distinct.  With ``repeats > 1`` and no input sweep, the report
+    should display a grid of labelled recordings — one per repeat.
+    """
+
+    out_val = bn.ResultFloat(units="v", doc="box half-size used")
+    out_rerun = bn.ResultRerun(width=400, height=400)
+
+    _call_count = 0
+
+    def benchmark(self):
+        RerunRepeatSweep._call_count += 1
+        size = float(self._call_count)
+        self.out_val = size
+        rr.log("boxes", rr.Boxes2D(half_sizes=[size, 1]))
+        self.out_rerun = bn.capture_rerun_window()'''
+        body = """\
+RerunRepeatSweep._call_count = 0
+bench = RerunRepeatSweep().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=[],
+    result_vars=["out_val", "out_rerun"],
+    description="Demonstrates that ``ResultRerun`` works correctly with "
+    "``repeats > 1``.  Each repeat produces a distinct recording "
+    "and the report renders all of them as a labelled grid.",
+)
+"""
+        self.generate_example(
+            title="Rerun Repeat — one recording per repeat, all visible in the report",
+            output_dir=OUTPUT_DIR,
+            filename="example_rerun_repeat",
+            function_name="example_rerun_repeat",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"repeats": 3},
         )
 
 
