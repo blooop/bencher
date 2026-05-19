@@ -593,6 +593,59 @@ class TestZeroDimDaToValMultiRepeat(unittest.TestCase):
         self.assertEqual(val, "only.rrd")
 
 
+class _RerunRepeatBench(bn.ParametrizedSweep):
+    """Helper that produces a ResultRerun per repeat."""
+
+    out_val = bn.ResultFloat()
+    out_rerun = bn.ResultRerun(width=200, height=200)
+    _counter = 0
+
+    def benchmark(self):
+        import rerun as rr
+
+        _RerunRepeatBench._counter += 1
+        self.out_val = float(self._counter)
+        rr.log("test", rr.Scalars(self.out_val))
+        self.out_rerun = bn.capture_rerun_window()
+
+
+class TestPaneRepeatGrid(unittest.TestCase):
+    """_pane_repeat_grid renders all repeats for media results."""
+
+    def test_rerun_repeat_grid_renders_all_repeats(self):
+        """With repeats=3 and ResultRerun, the report should contain all 3 recordings."""
+        _RerunRepeatBench._counter = 0
+        bench = _RerunRepeatBench().to_bench()
+        res = bench.plot_sweep(
+            "repeat_grid_test",
+            input_vars=[],
+            result_vars=[_RerunRepeatBench.param.out_val, _RerunRepeatBench.param.out_rerun],
+            run_cfg=bn.BenchRunCfg(repeats=3),
+            plot_callbacks=False,
+        )
+        ds = res.to_dataset(reduce=ReduceType.SQUEEZE)
+        self.assertIn("repeat", ds.dims)
+        self.assertEqual(ds.sizes["repeat"], 3)
+        paths = [str(v) for v in ds["out_rerun"].values]
+        self.assertEqual(len(paths), 3)
+        for p in paths:
+            self.assertNotEqual(p, "NAN")
+
+    def test_single_repeat_no_grid(self):
+        """With repeats=1 the repeat dim is squeezed out — no grid needed."""
+        _RerunRepeatBench._counter = 0
+        bench = _RerunRepeatBench().to_bench()
+        res = bench.plot_sweep(
+            "single_repeat_test",
+            input_vars=[],
+            result_vars=[_RerunRepeatBench.param.out_val, _RerunRepeatBench.param.out_rerun],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+        ds = res.to_dataset(reduce=ReduceType.SQUEEZE)
+        self.assertNotIn("repeat", ds.dims)
+
+
 class _IndependentAxisBench(bn.ParametrizedSweep):
     """Helper with two result vars that opt out of shared axes."""
 
