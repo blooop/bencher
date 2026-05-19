@@ -803,6 +803,17 @@ class BenchResultBase:
             pane_dims = [d for d in dims if d != "over_time"]
         else:
             pane_dims = dims
+
+        # Media results handle the repeat dim via _pane_media_grid, not
+        # pane recursion — exclude it so _iter_pane_slices doesn't peel
+        # it before the media grid can render all repeats.
+        if (
+            "repeat" in pane_dims
+            and dataset.sizes.get("repeat", 0) > 1
+            and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
+        ):
+            pane_dims = [d for d in pane_dims if d != "repeat"]
+
         num_pane_dims = len(pane_dims)
 
         if num_pane_dims > target_dimension and num_pane_dims != 0:
