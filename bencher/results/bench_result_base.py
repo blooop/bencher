@@ -1001,9 +1001,6 @@ class BenchResultBase:
         reduction.  This method iterates each repeat and renders a panel
         so all recordings are visible, not just the first/last.
         """
-        from bencher.utils_rrd import rrd_file_to_pane
-
-        is_rerun = isinstance(result_var, ResultRerun)
         repeat_vals = list(dataset.coords["repeat"].values)
 
         items = []
@@ -1013,12 +1010,16 @@ class BenchResultBase:
             if filepath == "NAN" or not os.path.isfile(filepath):
                 continue
             label = f"Repeat {repeat_val}"
-            if is_rerun:
+            if isinstance(result_var, ResultRerun):
+                from bencher.utils_rrd import rrd_file_to_pane
+
                 pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
             elif isinstance(result_var, ResultVideo):
                 pane = pn.pane.Video(filepath, width=getattr(result_var, "width", 400))
-            else:
+            elif isinstance(result_var, ResultImage):
                 pane = pn.pane.PNG(filepath, width=getattr(result_var, "width", 400))
+            else:
+                pane = pn.pane.Markdown(f"`{filepath}`")
             items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
 
         if not items:
