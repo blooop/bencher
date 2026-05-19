@@ -549,12 +549,14 @@ class TestBenchResultBase(unittest.TestCase):
         self.assertIsNot(ds1, ds2)
 
 
-class TestZeroDimDaToValMultiRepeat(unittest.TestCase):
-    """Guard against silently dropping repeats in zero_dim_da_to_val.
+class TestZeroDimDaToValStrict(unittest.TestCase):
+    """``zero_dim_da_to_val`` is contract-checked: it refuses multi-valued dims.
 
-    With repeats > 1 and a media-type result (ResultRerun/Video/Image), the
-    DataArray passed in still has a multi-valued ``repeat`` dim. The function
-    must not silently return ``values[0]`` — that drops every later repeat.
+    Multi-valued dims must be peeled by the caller (recursion, ``isel``, or
+    the media-grid helper) — otherwise the function would silently collapse a
+    dimension and drop every other repeat / time sample.  Making it strict
+    catches that class of bug at the source instead of silently degrading
+    visualisations.
     """
 
     @staticmethod
@@ -565,9 +567,20 @@ class TestZeroDimDaToValMultiRepeat(unittest.TestCase):
         cfg.result_hmaps = []
         return BenchResultBase(cfg)
 
-    def test_multi_valued_repeat_returns_latest(self):
-        """With a surviving multi-valued ``repeat`` dim, return the most
-        recent value (``values[-1]``), not the first."""
+    def test_zero_dim_unchanged(self):
+        """A truly zero-dim DataArray must still return its scalar value."""
+        res = self._make_base()
+        da = xr.DataArray(42.0, name="out_val")
+        self.assertEqual(res.zero_dim_da_to_val(da), 42.0)
+
+    def test_size_one_dim_returns_single_value(self):
+        """A dim of size 1 should return that single value (it is effectively scalar)."""
+        res = self._make_base()
+        da = xr.DataArray(["only.rrd"], dims=["repeat"], coords={"repeat": [1]}, name="out_rerun")
+        self.assertEqual(res.zero_dim_da_to_val(da), "only.rrd")
+
+    def test_multi_valued_dim_raises(self):
+        """Refuse to silently collapse a multi-valued dim — caller must peel it."""
         res = self._make_base()
         da = xr.DataArray(
             ["path1.rrd", "path2.rrd", "path3.rrd"],
@@ -575,22 +588,94 @@ class TestZeroDimDaToValMultiRepeat(unittest.TestCase):
             coords={"repeat": [1, 2, 3]},
             name="out_rerun",
         )
-        val = res.zero_dim_da_to_val(da)
-        self.assertEqual(val, "path3.rrd")
+        with self.assertRaisesRegex(ValueError, "repeat"):
+            res.zero_dim_da_to_val(da)
 
-    def test_zero_dim_unchanged(self):
-        """A truly zero-dim DataArray must still return its scalar value."""
+    def test_scalar_coord_extracted_after_isel(self):
+        """After ``isel`` peels a dim, the leftover scalar coord must still extract."""
         res = self._make_base()
-        da = xr.DataArray(42.0, name="out_val")
-        val = res.zero_dim_da_to_val(da)
-        self.assertEqual(val, 42.0)
+        da = xr.DataArray(
+            ["p1.rrd", "p2.rrd", "p3.rrd"],
+            dims=["repeat"],
+            coords={"repeat": [1, 2, 3]},
+            name="out_rerun",
+        )
+        sliced = da.isel(repeat=-1)  # scalar coord 'repeat' = 3
+        self.assertEqual(res.zero_dim_da_to_val(sliced), "p3.rrd")
 
-    def test_size_one_repeat_returns_single_value(self):
-        """A repeat dim of size 1 should return that single value."""
-        res = self._make_base()
-        da = xr.DataArray(["only.rrd"], dims=["repeat"], coords={"repeat": [1]}, name="out_rerun")
-        val = res.zero_dim_da_to_val(da)
-        self.assertEqual(val, "only.rrd")
+
+class _RepeatImageBench(bn.ParametrizedSweep):
+    """Minimal benchmark that produces a unique ResultImage per call."""
+
+    out_image = bn.ResultImage()
+
+    def benchmark(self):
+        from PIL import Image
+
+        path = bn.gen_image_path("repeat_test")
+        img = Image.new("RGB", (4, 4), (0, 0, 0))
+        img.save(path, "PNG")
+        self.out_image = str(path)
+
+
+class TestMediaGridShowsAllRepeats(unittest.TestCase):
+    """End-to-end: a media result with repeats > 1 must show every repeat,
+    not silently drop all but one.  Future code paths that don't peel
+    ``repeat`` via recursion (e.g. callers with target_dimension >= 1, or
+    new layouts) must still produce one labelled cell per repeat."""
+
+    def _stored_paths(self, res):
+        return sorted({str(v) for v in res.ds["out_image"].values.flatten() if v})
+
+    @staticmethod
+    def _collect_strings(node, acc):
+        if hasattr(node, "object") and isinstance(node.object, str):
+            acc.append(node.object)
+        if hasattr(node, "__iter__"):
+            try:
+                for child in node:
+                    TestMediaGridShowsAllRepeats._collect_strings(child, acc)
+            except TypeError:
+                pass
+        return acc
+
+    def test_panes_renders_all_repeat_paths(self):
+        bench = _RepeatImageBench().to_bench(bn.BenchRunCfg(repeats=3, cache_results=False))
+        res = bench.plot_sweep(plot_callbacks=False)
+
+        stored = self._stored_paths(res)
+        self.assertEqual(len(stored), 3, f"expected 3 distinct image paths, got {stored}")
+
+        from bencher.results.pane_result import PaneResult
+
+        pr = PaneResult(res.bench_cfg)
+        pr.ds = res.ds
+        pr.plt_cnt_cfg = res.plt_cnt_cfg
+        panel = pr.to_panes()
+        self.assertIsNotNone(panel)
+
+        rendered = "\n".join(self._collect_strings(panel, []))
+        for p in stored:
+            self.assertIn(
+                p,
+                rendered,
+                f"image path {p} missing from rendered panel — repeats are being dropped",
+            )
+
+    def test_pane_media_grid_helper_emits_one_cell_per_repeat(self):
+        """The grid helper must produce one labelled pane per repeat coord
+        when called with a surviving multi-valued repeat dim."""
+        bench = _RepeatImageBench().to_bench(bn.BenchRunCfg(repeats=3, cache_results=False))
+        res = bench.plot_sweep(plot_callbacks=False)
+        rv = res.bench_cfg.result_vars[0]
+
+        # pylint: disable=protected-access
+        grid = res._pane_media_grid(res.ds, rv)
+
+        stored = self._stored_paths(res)
+        rendered_str = "\n".join(self._collect_strings(grid, []))
+        for p in stored:
+            self.assertIn(p, rendered_str, f"grid missing {p}")
 
 
 class _RerunRepeatBench(bn.ParametrizedSweep):
@@ -610,11 +695,11 @@ class _RerunRepeatBench(bn.ParametrizedSweep):
 
 
 class TestPaneRepeatGrid(unittest.TestCase):
-    """_pane_repeat_grid renders all repeats for media results."""
+    """_pane_media_grid renders all repeats for media results."""
 
     def test_rerun_repeat_grid_renders_all_repeats(self):
         """With repeats=3 and ResultRerun, the report should contain all 3 recordings."""
-        _RerunRepeatBench._counter = 0
+        _RerunRepeatBench._counter = 0  # pylint: disable=protected-access
         bench = _RerunRepeatBench().to_bench()
         res = bench.plot_sweep(
             "repeat_grid_test",
@@ -633,7 +718,7 @@ class TestPaneRepeatGrid(unittest.TestCase):
 
     def test_single_repeat_no_grid(self):
         """With repeats=1 the repeat dim is squeezed out — no grid needed."""
-        _RerunRepeatBench._counter = 0
+        _RerunRepeatBench._counter = 0  # pylint: disable=protected-access
         bench = _RerunRepeatBench().to_bench()
         res = bench.plot_sweep(
             "single_repeat_test",

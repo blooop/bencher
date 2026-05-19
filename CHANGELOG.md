@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.101.0] - 2026-05-19
+
+### Fixed
+- Media results (`ResultRerun`, `ResultVideo`, `ResultImage`) with `repeats > 1` now render every repeat instead of silently dropping all but one. Previously the repeat dimension was peeled by generic pane recursion and `zero_dim_da_to_val` quietly returned `values[0]`, leaving N-1 recordings on disk but invisible in the report.
+
+### Changed
+- `zero_dim_da_to_val` is now strict: it raises `ValueError` when handed a DataArray with a multi-valued dimension, instead of silently collapsing it. Callers must peel multi-valued dims (via recursion, `isel`, or `_pane_media_grid`) first.
+- Extracted shared `_render_media_cell` helper used by both `_pane_media_grid` and `_pane_over_time_slider` so new media types only need to be wired up in one place.
+- Generalised the over-time-specific grid into `_pane_media_grid`, which iterates the cartesian product of every surviving multi-valued dim (`over_time`, `repeat`, future custom dims) and lays out cells as a `pn.Row` (1-D) or `pn.GridBox` with `ncols` (N-D). `_pane_over_time_grid` is kept as a thin shim.
+
+### Added
+- `example_rerun_repeat.py` — standalone gallery example demonstrating `ResultRerun` with `repeats > 1`.
+
+### Tests
+- `TestMediaGridShowsAllRepeats` — end-to-end test that a `ResultImage` sweep with `repeats=3` renders all three image paths in the final Panel layout.
+- `TestPaneRepeatGrid` — verifies the `repeat` dim survives SQUEEZE on a `ResultRerun` sweep with `repeats=3` and is squeezed away when `repeats=1`.
+- `TestZeroDimDaToValMultiRepeat` — unit tests covering the strict multi-valued-dim guard, size-1 dims, zero-dim scalars, and the post-`isel` scalar-coord case.
+
 ## [1.100.0] - 2026-05-15
 
 ### Added

@@ -427,6 +427,12 @@ class HoloviewResult(PaneResult):
                         kdims[d.name] = k
                 for rv, cont in zip(result_var_plots, cont_instances):
                     val = dataset[rv.name].sel(**kdims)
+                    # Tap selects on input dims only — any remaining
+                    # multi-valued dim (e.g. ``repeat``) must be peeled
+                    # explicitly or zero_dim_da_to_val will refuse to
+                    # silently collapse it.
+                    for d in [d for d in val.dims if val.sizes[d] > 1]:
+                        val = val.isel({d: -1})
                     item = self.zero_dim_da_to_val(val)
                     title.object = "Selected: " + ", ".join(f"{k}:{v}" for k, v in kdims.items())
                     cont.object = item

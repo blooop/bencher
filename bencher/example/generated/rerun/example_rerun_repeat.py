@@ -1,6 +1,5 @@
 """Auto-generated example: Rerun Repeat — multiple recordings per sweep point."""
 
-import math
 import rerun as rr
 import bencher as bn
 

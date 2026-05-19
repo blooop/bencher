@@ -803,15 +803,6 @@ class BenchResultBase:
             pane_dims = [d for d in dims if d != "over_time"]
         else:
             pane_dims = dims
-
-        # repeat dim for media results is handled by _pane_repeat_grid, not pane recursion
-        if (
-            "repeat" in pane_dims
-            and dataset.sizes.get("repeat", 0) > 1
-            and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
-        ):
-            pane_dims = [d for d in pane_dims if d != "repeat"]
-
         num_pane_dims = len(pane_dims)
 
         if num_pane_dims > target_dimension and num_pane_dims != 0:
@@ -858,26 +849,21 @@ class BenchResultBase:
                 for c in outer_container.container:
                     c[0].width = max_len * 7
         else:
-            # When over_time is active with >1 time points, the dataset still
-            # contains the over_time dimension (it was excluded from pane recursion
-            # so hvplot numeric plots can use groupby).  For pane-type results
-            # (images, videos) we need to build a Panel slider manually because
-            # they are not HoloViews objects and cannot use hv.HoloMap.
-            if (
-                self.bench_cfg.over_time
-                and "over_time" in list(dataset.sizes)
-                and dataset.sizes["over_time"] > 1
-                and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
-            ):
-                if isinstance(result_var, ResultRerun):
-                    return self._pane_over_time_grid(dataset, result_var)
-                return self._pane_over_time_slider(dataset, result_var)
-            if (
-                "repeat" in list(dataset.sizes)
-                and dataset.sizes["repeat"] > 1
-                and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
-            ):
-                return self._pane_repeat_grid(dataset, result_var)
+            # When the recursion leaves any multi-valued dim behind (e.g.
+            # ``over_time`` is excluded from pane recursion so numeric plots
+            # can use hvplot groupby, or ``repeat`` survives a non-zero
+            # target_dimension), a pane-type result must still render every
+            # cell — otherwise samples are silently dropped.  Dispatch to the
+            # generic media grid (or the legacy over-time slider for the
+            # single-dim Video/Image case, where the slider UX is preserved).
+            if isinstance(result_var, (ResultVideo, ResultImage, ResultRerun)):
+                multi_dims = [d for d in dataset.sizes if dataset.sizes[d] > 1]
+                if multi_dims:
+                    if multi_dims == ["over_time"] and isinstance(
+                        result_var, (ResultVideo, ResultImage)
+                    ):
+                        return self._pane_over_time_slider(dataset, result_var)
+                    return self._pane_media_grid(dataset, result_var)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.render()
@@ -917,6 +903,12 @@ class BenchResultBase:
         html_list = []
         for idx, _t in enumerate(time_vals):
             ds_t = dataset.isel(over_time=idx)
+            # Peel any other surviving multi-valued dim (e.g. ``repeat``)
+            # by taking the most recent entry — the slider is 1-D so it can
+            # only show one cell per time point.  Multi-dim media should
+            # use _pane_media_grid (dispatched separately for that case).
+            for d in [d for d in ds_t.dims if ds_t.sizes[d] > 1]:
+                ds_t = ds_t.isel({d: -1})
             filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
             if filepath == "NAN" or not os.path.isfile(filepath):
                 html_list.append(_NO_DATA_HTML)
@@ -964,82 +956,102 @@ class BenchResultBase:
         dataset: xr.Dataset,
         result_var,
     ) -> pn.Row | pn.pane.Markdown:
-        """Render over_time pane results as a grid of labelled panels.
+        """Backwards-compatible shim for the over_time-specific grid."""
+        return self._pane_media_grid(dataset, result_var)
 
-        Used for ResultRerun because rerun iframes do not work inside a
-        Bokeh JS slider swap (the viewer fails to re-initialise).
-        """
-        from bencher.utils_rrd import rrd_file_to_pane
+    @staticmethod
+    def _format_coord_label(value) -> str:
+        """Format a single coord value for a media-grid cell label."""
+        if isinstance(value, np.datetime64) or (
+            hasattr(value, "dtype") and np.issubdtype(value.dtype, np.datetime64)
+        ):
+            return str(pd.to_datetime(value))
+        return str(value)
 
-        time_vals = list(dataset.coords["over_time"].values)
-        over_time_dtype = dataset.coords["over_time"].dtype
-        is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
-        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+    def _render_media_cell(self, ds_cell: xr.Dataset, result_var) -> pn.viewable.Viewable | None:
+        """Render a single, fully-sliced media-result cell, or return None
+        when the underlying file is missing/NAN."""
+        filepath = str(self.zero_dim_da_to_val(ds_cell[result_var.name]))
+        if filepath in ("NAN", "nan") or not os.path.isfile(filepath):
+            return None
+        if isinstance(result_var, ResultRerun):
+            from bencher.utils_rrd import rrd_file_to_pane
 
-        items = []
-        for idx, label in enumerate(labels):
-            ds_t = dataset.isel(over_time=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if filepath == "NAN" or not os.path.isfile(filepath):
-                continue
-            pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
-            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+            return rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
+        if isinstance(result_var, ResultVideo):
+            return pn.pane.Video(filepath)
+        if isinstance(result_var, ResultImage):
+            return pn.pane.Image(filepath)
+        # Fallback for other path-like results.
+        return pn.pane.Markdown(f"`{filepath}`")
 
-        if not items:
-            return pn.pane.Markdown("*No rerun data available*")
-        return pn.Row(*items)
-
-    def _pane_repeat_grid(
+    def _pane_media_grid(
         self,
         dataset: xr.Dataset,
         result_var,
-    ) -> pn.Row | pn.pane.Markdown:
-        """Render multi-repeat pane results as a grid of labelled panels.
+    ) -> pn.viewable.Viewable:
+        """Render every (multi-valued dim) combination of a media result as
+        a labelled grid.  Handles any mix of surviving dims (``over_time``,
+        ``repeat``, future custom dims) so we never silently drop a sample.
 
-        When repeats > 1 and the result is a media type (ResultRerun,
-        ResultVideo, ResultImage), the repeat dimension survives SQUEEZE
-        reduction.  This method iterates each repeat and renders a panel
-        so all recordings are visible, not just the first/last.
+        Returns a Markdown placeholder if no files are available.
         """
-        repeat_vals = list(dataset.coords["repeat"].values)
+        from itertools import product
 
-        items = []
-        for idx, repeat_val in enumerate(repeat_vals):
-            ds_r = dataset.isel(repeat=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_r[result_var.name]))
-            if filepath == "NAN" or not os.path.isfile(filepath):
+        # Pick up any dim still carrying more than one entry — this is where
+        # silent drops used to happen.  Order is preserved so the outer dim
+        # (e.g. over_time) varies along the column axis.
+        grid_dims = [d for d in dataset.dims if dataset.sizes[d] > 1]
+
+        if not grid_dims:
+            cell = self._render_media_cell(dataset, result_var)
+            return cell if cell is not None else pn.pane.Markdown("*No media data available*")
+
+        coord_lists = [list(dataset.coords[d].values) for d in grid_dims]
+        items: list[pn.viewable.Viewable] = []
+        for combo in product(*coord_lists):
+            sel = dict(zip(grid_dims, combo))
+            ds_cell = dataset.sel(sel)
+            cell = self._render_media_cell(ds_cell, result_var)
+            if cell is None:
                 continue
-            label = f"Repeat {repeat_val}"
-            if isinstance(result_var, ResultRerun):
-                from bencher.utils_rrd import rrd_file_to_pane
-
-                pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
-            elif isinstance(result_var, ResultVideo):
-                pane = pn.pane.Video(filepath, width=getattr(result_var, "width", 400))
-            elif isinstance(result_var, ResultImage):
-                pane = pn.pane.PNG(filepath, width=getattr(result_var, "width", 400))
-            else:
-                pane = pn.pane.Markdown(f"`{filepath}`")
-            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+            label = ", ".join(f"{d}={self._format_coord_label(v)}" for d, v in sel.items())
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), cell))
 
         if not items:
-            return pn.pane.Markdown("*No media data available for repeats*")
-        return pn.Row(*items)
+            return pn.pane.Markdown("*No media data available*")
+        # 1-D layout: row.  N-D: GridBox wrapped to the size of the last dim
+        # so each row corresponds to one value of the outer dims.
+        if len(grid_dims) == 1:
+            return pn.Row(*items)
+        ncols = dataset.sizes[grid_dims[-1]]
+        return pn.GridBox(*items, ncols=ncols)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
-        # todo this is really horrible, need to improve
+        """Extract a single value from a zero-dimensional xarray.
+
+        Multi-valued dims must be peeled by the caller (via recursion,
+        ``isel``, or :meth:`_pane_media_grid`) — passing one through is a
+        bug because it would silently collapse a dimension and drop every
+        other sample.  Raises ``ValueError`` in that case so the bug is
+        caught at the source rather than producing a degraded plot.
+        """
         if isinstance(da_ds, xr.Dataset):
             var_name = list(da_ds.keys())[0]
             da = da_ds[var_name]
         else:
             da = da_ds
 
-        # When the recursion in _to_panes_da hasn't peeled every dim (e.g. a
-        # surviving multi-valued 'repeat' dim with a media-type result), take
-        # the last entry along each remaining dim so we don't silently return
-        # values[0] and drop every later repeat / time sample.
-        for dim_name in list(da.dims):
-            da = da.isel({dim_name: -1})
+        multi_dims = [d for d in da.dims if da.sizes[d] > 1]
+        if multi_dims:
+            raise ValueError(
+                f"zero_dim_da_to_val received DataArray with multi-valued dim(s) "
+                f"{multi_dims}; caller must peel them first "
+                f"(e.g. via isel) or use _pane_media_grid for media results."
+            )
+
+        # Squeeze remaining size-1 dims to land on a true scalar.
+        da = da.squeeze(drop=False)
 
         if not da.coords:
             return da.values.squeeze().item()
