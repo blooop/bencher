@@ -1,11 +1,12 @@
 import unittest
 import bencher as bn
 import numpy as np
+import xarray as xr
 import holoviews as hv
 import panel as pn
 
 from bencher.example.meta.example_meta import BenchableObject
-from bencher.results.bench_result_base import ReduceType
+from bencher.results.bench_result_base import BenchResultBase, ReduceType
 
 
 class TstBench(bn.ParametrizedSweep):
@@ -284,8 +285,6 @@ class TestBenchResultBase(unittest.TestCase):
         rv = res.bench_cfg.result_vars[0]
         da = res.get_optimal_value_indices(rv)
         self.assertIsNotNone(da)
-        import xarray as xr
-
         self.assertIsInstance(da, xr.DataArray)
 
     def test_get_optimal_vec(self):
@@ -548,6 +547,50 @@ class TestBenchResultBase(unittest.TestCase):
         self.assertEqual(len(res._to_dataset_cache), 0)  # pylint: disable=protected-access
         ds2 = res.to_dataset(deep=False)
         self.assertIsNot(ds1, ds2)
+
+
+class TestZeroDimDaToValMultiRepeat(unittest.TestCase):
+    """Guard against silently dropping repeats in zero_dim_da_to_val.
+
+    With repeats > 1 and a media-type result (ResultRerun/Video/Image), the
+    DataArray passed in still has a multi-valued ``repeat`` dim. The function
+    must not silently return ``values[0]`` — that drops every later repeat.
+    """
+
+    @staticmethod
+    def _make_base():
+        # BenchResultBase.__init__ only reads bench_cfg.result_hmaps, so a
+        # minimal stub works without spinning up a full sweep.
+        cfg = bn.BenchCfg()
+        cfg.result_hmaps = []
+        return BenchResultBase(cfg)
+
+    def test_multi_valued_repeat_returns_latest(self):
+        """With a surviving multi-valued ``repeat`` dim, return the most
+        recent value (``values[-1]``), not the first."""
+        res = self._make_base()
+        da = xr.DataArray(
+            ["path1.rrd", "path2.rrd", "path3.rrd"],
+            dims=["repeat"],
+            coords={"repeat": [1, 2, 3]},
+            name="out_rerun",
+        )
+        val = res.zero_dim_da_to_val(da)
+        self.assertEqual(val, "path3.rrd")
+
+    def test_zero_dim_unchanged(self):
+        """A truly zero-dim DataArray must still return its scalar value."""
+        res = self._make_base()
+        da = xr.DataArray(42.0, name="out_val")
+        val = res.zero_dim_da_to_val(da)
+        self.assertEqual(val, 42.0)
+
+    def test_size_one_repeat_returns_single_value(self):
+        """A repeat dim of size 1 should return that single value."""
+        res = self._make_base()
+        da = xr.DataArray(["only.rrd"], dims=["repeat"], coords={"repeat": [1]}, name="out_rerun")
+        val = res.zero_dim_da_to_val(da)
+        self.assertEqual(val, "only.rrd")
 
 
 class _IndependentAxisBench(bn.ParametrizedSweep):

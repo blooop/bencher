@@ -976,18 +976,22 @@ class BenchResultBase:
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve
-        dim = None
         if isinstance(da_ds, xr.Dataset):
-            dim = list(da_ds.keys())[0]
-            da = da_ds[dim]
+            var_name = list(da_ds.keys())[0]
+            da = da_ds[var_name]
         else:
             da = da_ds
 
-        for k in da.coords.keys():
-            dim = k
-            break
-        if dim is None:
-            return da_ds.values.squeeze().item()
+        # When the recursion in _to_panes_da hasn't peeled every dim (e.g. a
+        # surviving multi-valued 'repeat' dim with a media-type result), take
+        # the last entry along each remaining dim so we don't silently return
+        # values[0] and drop every later repeat / time sample.
+        for dim_name in list(da.dims):
+            da = da.isel({dim_name: -1})
+
+        if not da.coords:
+            return da.values.squeeze().item()
+        dim = next(iter(da.coords.keys()))
         return da.expand_dims(dim).values[0]
 
     def ds_to_container(  # pylint: disable=too-many-return-statements
