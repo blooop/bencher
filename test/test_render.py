@@ -4,6 +4,7 @@ import gc
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from bencher import Bench, BenchRunCfg, render_report, save_result, load_result
 from bencher.render import main as render_main
@@ -185,6 +186,23 @@ class TestSaveLoadRender(unittest.TestCase):
             rc = render_main([str(path), str(out_dir)])
             self.assertEqual(rc, 0)
             self.assertTrue(any(out_dir.rglob("*.html")))
+
+    def test_cli_render_failure_returns_1(self):
+        """A render failure must be caught by the CLI guard and reported as exit
+        code 1 (not propagated), with the error logged."""
+        bench = _make_bench()
+        res = self._collect(bench)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "result.pkl"
+            save_result(res, path)
+            out_dir = Path(tmp) / "report"
+            with (
+                mock.patch("bencher.render.render_report", side_effect=RuntimeError("boom")),
+                self.assertLogs("bencher.render", level="ERROR") as cm,
+            ):
+                rc = render_main([str(path), str(out_dir)])
+            self.assertEqual(rc, 1)
+            self.assertTrue(any("boom" in line for line in cm.output))
 
     def test_cli_bad_args(self):
         self.assertEqual(render_main([]), 2)
