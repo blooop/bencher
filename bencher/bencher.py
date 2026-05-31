@@ -281,6 +281,7 @@ class Bench(BenchPlotServer):
         sample_order: SampleOrder = SampleOrder.INORDER,
         aggregate: bool | int | list[str] | None = None,
         agg_fn: str = "mean",
+        auto_plot: bool = True,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -318,6 +319,13 @@ class Bench(BenchPlotServer):
                 If a list, uses the provided callbacks. Defaults to None.
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
                 Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
+            auto_plot (bool, optional): If True (default), build the holoviews/panel report
+                immediately after the sweep. Set False to collect samples and compute regression
+                detection WITHOUT constructing any plotting objects — the returned BenchResult is
+                fully populated (dataset + regression_report) and can be rendered later, in a
+                separate process, via :func:`bencher.render_report`. Useful when the collecting
+                process holds foreign C-extension state (e.g. ROS/rclpy) that makes in-process
+                holoviews/bokeh garbage collection unsafe. See also :meth:`Bench.collect`.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
@@ -375,6 +383,13 @@ class Bench(BenchPlotServer):
 
         if run_cfg.only_plot:
             run_cfg.cache_results = True
+
+        # auto_plot lives on BenchRunCfg (BenchCfg inherits it), so run_cfg
+        # values override the BenchCfg constructor via param.update in
+        # run_sweep. Apply the explicit plot_sweep(auto_plot=...) here so the
+        # caller's choice survives that merge. Defaults to True (unchanged
+        # behaviour); set False to collect without building any plots.
+        run_cfg.auto_plot = auto_plot
 
         self.last_run_cfg = run_cfg
 
@@ -500,6 +515,8 @@ class Bench(BenchPlotServer):
             plot_callbacks=plot_callbacks,
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
+            # auto_plot is applied via run_cfg (above) so it survives the
+            # run_cfg -> bench_cfg param merge in run_sweep.
         )
         if run_cfg.dry_run:
             total = 1
@@ -524,6 +541,28 @@ class Bench(BenchPlotServer):
             return BenchResult(bench_cfg)
 
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
+
+    def collect(self, *args, **kwargs) -> BenchResult:
+        """Run a sweep and collect results WITHOUT building any plots.
+
+        Equivalent to :meth:`plot_sweep` with ``auto_plot=False``: it executes the sweep,
+        merges over-time history, and computes regression detection, but constructs **no**
+        holoviews/panel/bokeh objects. The returned :class:`BenchResult` is fully populated
+        (dataset + ``regression_report``) and is the safe artifact to persist
+        (:func:`bencher.save_result`) and render later — in a separate, clean process —
+        via :func:`bencher.render_report`.
+
+        This is the collection half of a collect/render split, intended for callers whose
+        process holds foreign C-extension state (e.g. ROS/rclpy/DDS) where in-process
+        holoviews/bokeh allocation and the resulting garbage collection can segfault. Accepts
+        the same arguments as :meth:`plot_sweep` (``auto_plot`` is forced to ``False``).
+
+        Returns:
+            BenchResult: Fully-populated result with no plots built.
+        """
+        if "auto_plot" in kwargs:
+            raise TypeError("collect() forces auto_plot=False; do not pass auto_plot")
+        return self.plot_sweep(*args, auto_plot=False, **kwargs)
 
     @staticmethod
     def filter_overridable_params(
