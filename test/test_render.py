@@ -126,6 +126,21 @@ class TestSaveLoadRender(unittest.TestCase):
             # Dataset round-trips with identical variables.
             self.assertEqual(set(loaded.ds.data_vars), set(res.ds.data_vars))
 
+    def test_save_result_preserves_object_index(self):
+        """save_result must strip object_index for pickling but leave the live
+        object unchanged (it can hold non-pickleable ResultReference objects)."""
+        bench = _make_bench()
+        res = self._collect(bench)
+        # Inject a sentinel (object) so the invariant is tested deterministically
+        # regardless of whether the benchmark produced reference results.
+        sentinel = [object(), object()]
+        res.object_index = sentinel
+        with tempfile.TemporaryDirectory() as tmp:
+            save_result(res, Path(tmp) / "result.pkl")
+        # Same list identity and contents after saving.
+        self.assertIs(res.object_index, sentinel)
+        self.assertEqual(len(res.object_index), 2)
+
     def test_render_report_from_object(self):
         bench = _make_bench()
         res = self._collect(bench)
