@@ -95,6 +95,21 @@ class TestCollect(unittest.TestCase):
         )
         self.assertGreater(len(bench.report.pane), 0)
 
+    def test_run_cfg_auto_plot_false_is_honored(self):
+        """auto_plot=None (default) must defer to run_cfg.auto_plot, so a caller
+        can disable plotting once on the run_cfg and have nested plot_sweep
+        calls honour it (without passing auto_plot to each one)."""
+        bench = _make_bench()
+        run_cfg = BenchRunCfg(repeats=1)
+        run_cfg.auto_plot = False
+        bench.plot_sweep(
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            run_cfg=run_cfg,
+            title="run_cfg_auto_plot_false",
+        )
+        self.assertEqual(len(bench.report.pane), 0)
+
     def test_collect_rejects_explicit_auto_plot(self):
         bench = _make_bench()
         with self.assertRaises(TypeError):

@@ -281,7 +281,7 @@ class Bench(BenchPlotServer):
         sample_order: SampleOrder = SampleOrder.INORDER,
         aggregate: bool | int | list[str] | None = None,
         agg_fn: str = "mean",
-        auto_plot: bool = True,
+        auto_plot: bool | None = None,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -319,13 +319,18 @@ class Bench(BenchPlotServer):
                 If a list, uses the provided callbacks. Defaults to None.
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
                 Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
-            auto_plot (bool, optional): If True (default), build the holoviews/panel report
-                immediately after the sweep. Set False to collect samples and compute regression
-                detection WITHOUT constructing any plotting objects — the returned BenchResult is
-                fully populated (dataset + regression_report) and can be rendered later, in a
-                separate process, via :func:`bencher.render_report`. Useful when the collecting
-                process holds foreign C-extension state (e.g. ROS/rclpy) that makes in-process
-                holoviews/bokeh garbage collection unsafe. See also :meth:`Bench.collect`.
+            auto_plot (bool, optional): Whether to build the holoviews/panel report
+                immediately after the sweep. ``None`` (default) respects ``run_cfg.auto_plot``
+                (itself ``True`` by default), so behaviour is unchanged unless a caller opts
+                out. ``False`` collects samples and computes regression detection WITHOUT
+                constructing any plotting objects — the returned BenchResult is fully populated
+                (dataset + regression_report) and can be rendered later, in a separate process,
+                via :func:`bencher.render_report`. Useful when the collecting process holds
+                foreign C-extension state (e.g. ROS/rclpy) that makes in-process holoviews/bokeh
+                garbage collection unsafe. See also :meth:`Bench.collect`. Because ``None``
+                defers to ``run_cfg``, setting ``run_cfg.auto_plot = False`` once disables
+                plotting for every ``plot_sweep`` call that uses that config — including calls
+                nested inside benchmark functions you don't control.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
@@ -386,10 +391,12 @@ class Bench(BenchPlotServer):
 
         # auto_plot lives on BenchRunCfg (BenchCfg inherits it), so run_cfg
         # values override the BenchCfg constructor via param.update in
-        # run_sweep. Apply the explicit plot_sweep(auto_plot=...) here so the
-        # caller's choice survives that merge. Defaults to True (unchanged
-        # behaviour); set False to collect without building any plots.
-        run_cfg.auto_plot = auto_plot
+        # run_sweep. Apply an explicit plot_sweep(auto_plot=...) here so it
+        # survives that merge. auto_plot=None defers to run_cfg.auto_plot
+        # (default True) — this is what lets a caller set run_cfg.auto_plot
+        # once and have nested plot_sweep calls honour it.
+        if auto_plot is not None:
+            run_cfg.auto_plot = auto_plot
 
         self.last_run_cfg = run_cfg
 
