@@ -6,4 +6,4 @@ sphinx_copybutton
 sphinxcontrib-mermaid
 playwright
 Pillow
-rerun-sdk>=0.31.1,<0.34
+rerun-sdk>=0.33.0,<0.34
