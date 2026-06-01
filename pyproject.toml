@@ -192,7 +192,7 @@ jobs = 16                                                  #detect number of cor
 ignore-paths = ["docs/.*", "bencher/example/generated/.*"]
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = "C,logging-fstring-interpolation,line-too-long,fixme,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,duplicate-code,too-many-public-methods,too-many-nested-blocks,cyclic-import,too-many-positional-arguments"
+disable = "C,logging-fstring-interpolation,line-too-long,fixme,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,duplicate-code,too-many-public-methods,too-many-nested-blocks,cyclic-import,too-many-positional-arguments,too-many-ancestors"
 enable = "no-else-return,consider-using-in"
 
 [tool.coverage.run]
