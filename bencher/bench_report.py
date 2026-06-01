@@ -123,13 +123,17 @@ class BenchReport(BenchPlotServer):
             label = label[:57] + "..."
         return label
 
-    def append_result(self, bench_res: BenchResult) -> None:
+    def append_result(self, bench_res: BenchResult, render_from: BenchResult | None = None) -> None:
         self.bench_results.append(bench_res)
         title = bench_res.bench_cfg.title
         label = self._time_event_label(bench_res)
         if label:
             title = f"{title} [{label}]"
-        self.append_tab(bench_res.plot(), title)
+        # render_from lets callers register one result for identity-based tab
+        # routing (append_to_result) while building the pane from another — used
+        # by the BENCHER_FORCE_SPLIT_RENDER path to render from a deserialized
+        # copy without breaking routing. Defaults to bench_res (normal path).
+        self.append_tab((render_from or bench_res).plot(), title)
 
     def append_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
         """Append *pane* to the tab that belongs to *bench_res*."""
