@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.100.0"
+version = "1.101.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -135,6 +135,10 @@ lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
+# Re-run the whole suite with the collect/render split forced on: every auto_plot
+# report build is routed through save_result -> load_result -> render so any
+# pickle / render-from-loaded divergence surfaces in the existing assertions.
+test-split = { cmd = "pytest", env = { BENCHER_FORCE_SPLIT_RENDER = "1" } }
 coverage = "coverage run -m pytest && coverage xml -o coverage.xml"
 coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"

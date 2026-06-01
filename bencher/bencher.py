@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 import warnings
 from datetime import datetime
+from pathlib import Path
 from concurrent.futures import as_completed
 from itertools import product, combinations
 
@@ -281,6 +284,7 @@ class Bench(BenchPlotServer):
         sample_order: SampleOrder = SampleOrder.INORDER,
         aggregate: bool | int | list[str] | None = None,
         agg_fn: str = "mean",
+        auto_plot: bool | None = None,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -318,6 +322,18 @@ class Bench(BenchPlotServer):
                 If a list, uses the provided callbacks. Defaults to None.
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
                 Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
+            auto_plot (bool, optional): Whether to build the holoviews/panel report
+                immediately after the sweep. ``None`` (default) respects ``run_cfg.auto_plot``
+                (itself ``True`` by default), so behaviour is unchanged unless a caller opts
+                out. ``False`` collects samples and computes regression detection WITHOUT
+                constructing any plotting objects — the returned BenchResult is fully populated
+                (dataset + regression_report) and can be rendered later, in a separate process,
+                via :func:`bencher.render_report`. Useful when the collecting process holds
+                foreign C-extension state (e.g. ROS/rclpy) that makes in-process holoviews/bokeh
+                garbage collection unsafe. See also :meth:`Bench.collect`. Because ``None``
+                defers to ``run_cfg``, setting ``run_cfg.auto_plot = False`` once disables
+                plotting for every ``plot_sweep`` call that uses that config — including calls
+                nested inside benchmark functions you don't control.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
@@ -375,6 +391,15 @@ class Bench(BenchPlotServer):
 
         if run_cfg.only_plot:
             run_cfg.cache_results = True
+
+        # auto_plot lives on BenchRunCfg (BenchCfg inherits it), so run_cfg
+        # values override the BenchCfg constructor via param.update in
+        # run_sweep. Apply an explicit plot_sweep(auto_plot=...) here so it
+        # survives that merge. auto_plot=None defers to run_cfg.auto_plot
+        # (default True) — this is what lets a caller set run_cfg.auto_plot
+        # once and have nested plot_sweep calls honour it.
+        if auto_plot is not None:
+            run_cfg.auto_plot = auto_plot
 
         self.last_run_cfg = run_cfg
 
@@ -500,6 +525,8 @@ class Bench(BenchPlotServer):
             plot_callbacks=plot_callbacks,
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
+            # auto_plot is applied via run_cfg (above) so it survives the
+            # run_cfg -> bench_cfg param merge in run_sweep.
         )
         if run_cfg.dry_run:
             total = 1
@@ -524,6 +551,28 @@ class Bench(BenchPlotServer):
             return BenchResult(bench_cfg)
 
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
+
+    def collect(self, *args, **kwargs) -> BenchResult:
+        """Run a sweep and collect results WITHOUT building any plots.
+
+        Equivalent to :meth:`plot_sweep` with ``auto_plot=False``: it executes the sweep,
+        merges over-time history, and computes regression detection, but constructs **no**
+        holoviews/panel/bokeh objects. The returned :class:`BenchResult` is fully populated
+        (dataset + ``regression_report``) and is the safe artifact to persist
+        (:func:`bencher.save_result`) and render later — in a separate, clean process —
+        via :func:`bencher.render_report`.
+
+        This is the collection half of a collect/render split, intended for callers whose
+        process holds foreign C-extension state (e.g. ROS/rclpy/DDS) where in-process
+        holoviews/bokeh allocation and the resulting garbage collection can segfault. Accepts
+        the same arguments as :meth:`plot_sweep` (``auto_plot`` is forced to ``False``).
+
+        Returns:
+            BenchResult: Fully-populated result with no plots built.
+        """
+        if "auto_plot" in kwargs:
+            raise TypeError("collect() forces auto_plot=False; do not pass auto_plot")
+        return self.plot_sweep(*args, auto_plot=False, **kwargs)
 
     @staticmethod
     def filter_overridable_params(
@@ -709,7 +758,10 @@ class Bench(BenchPlotServer):
 
         if bench_cfg.auto_plot:
             with phase_timer() as elapsed:
-                self.report.append_result(bench_res)
+                if os.environ.get("BENCHER_FORCE_SPLIT_RENDER"):
+                    self._append_result_via_split(bench_res)
+                else:
+                    self.report.append_result(bench_res)
             timings.render_ms = elapsed()
 
         timings.total_ms = timings.compute_total()
@@ -717,6 +769,38 @@ class Bench(BenchPlotServer):
 
         self.results.append(bench_res)
         return bench_res
+
+    def _append_result_via_split(self, bench_res: BenchResult) -> None:
+        """Append a result to the report through the collect/render split.
+
+        Used only when the ``BENCHER_FORCE_SPLIT_RENDER`` env var is set. Instead
+        of rendering ``bench_res`` in-process, it round-trips the result through
+        pickle (:func:`bencher.save_result` / :func:`bencher.load_result`) and
+        rebuilds the report tab from the *deserialized* copy — the same serialize
+        then render-from-loaded steps that :func:`bencher.render_report` performs
+        out of process.
+
+        This lets a dedicated CI job re-run the entire existing test/example suite
+        with the split pipeline forced on, so any divergence between in-process and
+        split rendering (unpicklable result types, render paths that relied on live
+        state) surfaces in the existing assertions. The round-trip stays in-process
+        here so the full suite remains fast; a separate test covers the subprocess
+        boundary.
+        """
+        # Local import keeps render (and its holoviews/panel imports) out of the
+        # hot path when the switch is off.
+        from bencher.render import save_result, load_result
+
+        with tempfile.TemporaryDirectory(prefix="bencher_force_split_") as tmp:
+            path = save_result(bench_res, Path(tmp) / "result.pkl")
+            loaded = load_result(path)
+        # render_report runs post_setup on a freshly-loaded result; mirror that
+        # so the forced path matches the real out-of-process render exactly.
+        loaded.post_setup()
+        # Register the live result for tab routing (so identity-based
+        # append_to_result, e.g. optimize(plot=True), still works) but render the
+        # tab pane from the deserialized copy — that copy is what we want to test.
+        self.report.append_result(bench_res, render_from=loaded)
 
     # TODO: Remove thin wrapper methods in major version bump - callers can use helpers directly
     def convert_vars_to_params(

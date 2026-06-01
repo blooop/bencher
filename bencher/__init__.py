@@ -5,6 +5,7 @@ warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=Us
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .bench_cfg import ShowMode
 from .bench_runner import BenchRunner
+from .render import render_report, save_result, load_result
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
 from .variables.sweep_base import hash_sha1, SUBSAMPLING_DIVISIONS_SAMPLES
