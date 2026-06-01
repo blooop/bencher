@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.101.1] - 2026-06-01
+
+### Fixed
+- Pylint failures introduced by the `param` 2.4.0 / `panel` 1.9.2 dependency bumps: the deeper class hierarchy pushed several sweep classes (`BoolSweep`, `StringSweep`, `EnumSweep`, `YamlSweep`, `IntSweep`, time sweeps) over the `too-many-ancestors` threshold, so that check is now disabled alongside the other `too-many-*` checks.
+- Renamed the `IntSweep._validate_value` parameter from `val` to `value` to match param 2.x's signature and silence `arguments-renamed` (W0237).
+
+- Cleared the three pre-existing `ty` warnings: corrected the `_InputResult` namedtuple's first argument to match its variable name, explicitly imported `moviepy.video.VideoClip` for the `write_video_raw` annotation, and suppressed the `unsupported-base` false positive on `BenchResult`'s optional `RerunResult` base.
+
+### Changed
+- Raised the minimum `param` requirement from `>=1.13.0` to `>=2.0`. The validation override now matches param 2.x's `_validate_value(self, value, allow_None)` signature.
+- Dependency audit: raised upper bounds to the latest releases — `numpy` `<=2.4.6`, `xarray` `<=2026.4.0`, `pandas` `<=3.0.3`, `scikit-learn` `<=1.8.0`. Full test suite passes against all bumped versions.
+- Migrated panel widget construction from the deprecated `name=` to `label=` (`Button`, `DiscreteSlider`, and example sliders) ahead of its removal in panel 2.0, and raised the panel floor to `>=1.9.0` (the release that introduced `Widget.label`).
+
 ## [1.101.0] - 2026-06-01
 
 ### Added

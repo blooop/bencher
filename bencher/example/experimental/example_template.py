@@ -24,8 +24,8 @@ def cosine(freq, phase):
     )
 
 
-freq_widget = pn.widgets.FloatSlider(name="Frequency", start=0, end=10, value=2)
-phase_widget = pn.widgets.FloatSlider(name="Phase", start=0, end=np.pi)
+freq_widget = pn.widgets.FloatSlider(label="Frequency", start=0, end=10, value=2)
+phase_widget = pn.widgets.FloatSlider(label="Phase", start=0, end=np.pi)
 
 sine = pn.bind(sine, freq=freq_widget, phase=phase_widget)
 cosine = pn.bind(cosine, freq=freq_widget, phase=phase_widget)
