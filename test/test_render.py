@@ -121,6 +121,44 @@ class TestCollect(unittest.TestCase):
             )
 
 
+class TestCollectParity(unittest.TestCase):
+    """Layer A: collect() must compute the same artifacts as plot_sweep().
+
+    The split is only safe to rely on if disabling auto_plot changes *nothing*
+    about the computed result. ExampleBenchCfg is deterministic (``noisy``
+    defaults to False), so the two paths must produce byte-identical datasets.
+    """
+
+    PARITY_KWARGS = dict(
+        input_vars=[ExampleBenchCfg.param.theta],
+        result_vars=[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
+        title="collect_parity",
+    )
+
+    def test_collect_dataset_matches_plot_sweep(self):
+        import xarray as xr
+
+        bench_plot, bench_collect = _make_bench(), _make_bench()
+        res_plot = bench_plot.plot_sweep(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
+        res_collect = bench_collect.collect(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
+
+        # plot_sweep built a report tab; collect built none. The *data* is equal.
+        self.assertGreater(len(bench_plot.report.pane), 0)
+        self.assertEqual(len(bench_collect.report.pane), 0)
+        xr.testing.assert_equal(res_collect.ds, res_plot.ds)
+        self.assertEqual(set(res_collect.ds.data_vars), set(res_plot.ds.data_vars))
+
+    def test_collect_regression_report_matches_plot_sweep(self):
+        res_plot = _make_bench().plot_sweep(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
+        res_collect = _make_bench().collect(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
+        # Regression detection runs during collection too; without over_time both
+        # paths leave it at the default (None).
+        self.assertEqual(
+            getattr(res_collect, "regression_report", None),
+            getattr(res_plot, "regression_report", None),
+        )
+
+
 class TestSaveLoadRender(unittest.TestCase):
     def _collect(self, bench: Bench):
         return bench.collect(

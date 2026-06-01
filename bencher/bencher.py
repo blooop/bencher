@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 import warnings
 from datetime import datetime
+from pathlib import Path
 from concurrent.futures import as_completed
 from itertools import product, combinations
 
@@ -755,7 +758,10 @@ class Bench(BenchPlotServer):
 
         if bench_cfg.auto_plot:
             with phase_timer() as elapsed:
-                self.report.append_result(bench_res)
+                if os.environ.get("BENCHER_FORCE_SPLIT_RENDER"):
+                    self._append_result_via_split(bench_res)
+                else:
+                    self.report.append_result(bench_res)
             timings.render_ms = elapsed()
 
         timings.total_ms = timings.compute_total()
@@ -763,6 +769,38 @@ class Bench(BenchPlotServer):
 
         self.results.append(bench_res)
         return bench_res
+
+    def _append_result_via_split(self, bench_res: BenchResult) -> None:
+        """Append a result to the report through the collect/render split.
+
+        Used only when the ``BENCHER_FORCE_SPLIT_RENDER`` env var is set. Instead
+        of rendering ``bench_res`` in-process, it round-trips the result through
+        pickle (:func:`bencher.save_result` / :func:`bencher.load_result`) and
+        rebuilds the report tab from the *deserialized* copy — the same serialize
+        then render-from-loaded steps that :func:`bencher.render_report` performs
+        out of process.
+
+        This lets a dedicated CI job re-run the entire existing test/example suite
+        with the split pipeline forced on, so any divergence between in-process and
+        split rendering (unpicklable result types, render paths that relied on live
+        state) surfaces in the existing assertions. The round-trip stays in-process
+        here so the full suite remains fast; a separate test covers the subprocess
+        boundary.
+        """
+        # Local import keeps render (and its holoviews/panel imports) out of the
+        # hot path when the switch is off.
+        from bencher.render import save_result, load_result
+
+        with tempfile.TemporaryDirectory(prefix="bencher_force_split_") as tmp:
+            path = save_result(bench_res, Path(tmp) / "result.pkl")
+            loaded = load_result(path)
+        # render_report runs post_setup on a freshly-loaded result; mirror that
+        # so the forced path matches the real out-of-process render exactly.
+        loaded.post_setup()
+        # Register the live result for tab routing (so identity-based
+        # append_to_result, e.g. optimize(plot=True), still works) but render the
+        # tab pane from the deserialized copy — that copy is what we want to test.
+        self.report.append_result(bench_res, render_from=loaded)
 
     # TODO: Remove thin wrapper methods in major version bump - callers can use helpers directly
     def convert_vars_to_params(

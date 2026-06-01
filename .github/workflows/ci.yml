@@ -30,3 +30,23 @@ jobs:
         uses: codecov/codecov-action@v6
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Re-run the suite with the collect/render split forced on, so every report
+  # build goes through save_result -> load_result -> render. Catches any divergence
+  # between in-process and split rendering (unpicklable result types, render paths
+  # that relied on live state). See bencher/render.py and test/test_render.py.
+  ci-split:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: prefix-dev/setup-pixi@v0.9.5
+        with:
+          cache: true
+          frozen: true
+          environments: py313
+      - name: Forced collect/render split
+        run: |
+          pixi update
+          pixi run -e py313 generate-examples
+          pixi run -e py313 test-split
