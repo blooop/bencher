@@ -40,7 +40,10 @@ from bencher.utils import listify, resolve_aggregate
 
 
 class BenchResult(
-    RerunResult,
+    # RerunResult resolves to either the real class or a fallback stub via the
+    # try/except import above; ty sees that union and can't compute an MRO, but at
+    # runtime exactly one definition is bound.
+    RerunResult,  # ty: ignore[unsupported-base]
     VolumeResult,
     BoxWhiskerResult,
     ViolinResult,

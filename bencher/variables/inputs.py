@@ -558,16 +558,16 @@ class IntSweep(Integer, SweepBase):
         return self.indices_to_samples(self.samples, sample_values)
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
-    def _validate_value(self, val, allow_None):
-        if callable(val):
+    def _validate_value(self, value, allow_None):
+        if callable(value):
             return
 
-        if allow_None and val is None:
+        if allow_None and value is None:
             return
 
-        if not isinstance(val, (int, np.integer)):
+        if not isinstance(value, (int, np.integer)):
             raise ValueError(
-                "Integer parameter %r must be an integer, not type %r." % (self.name, type(val))
+                "Integer parameter %r must be an integer, not type %r." % (self.name, type(value))
             )
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
