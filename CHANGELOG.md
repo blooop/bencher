@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.101.0] - 2026-06-01
+
+### Added
+- Collect/render split for out-of-process report rendering. Building a report allocates large holoviews/panel/bokeh object graphs; when CPython's cyclic GC traverses them alongside foreign live C-extension state (e.g. ROS 2 `rclpy`/DDS), the process can segfault. The split lets rendering happen in a clean process that never imported the foreign extension:
+  - `plot_sweep(auto_plot=...)` — new parameter (defaults to `None`, deferring to `run_cfg.auto_plot`, itself `True`). When `False`, the sweep runs and regression detection is computed but no plotting objects are constructed.
+  - `Bench.collect(...)` — thin wrapper for `plot_sweep(auto_plot=False)`; returns a fully-populated, picklable `BenchResult` (dataset + regression report).
+  - `bencher.save_result()` / `load_result()` / `render_report()` (new `bencher.render` module) — persist a collected result and render the HTML report from it, optionally in a separate process via `python -m bencher.render <result> <out_dir>`.
+- Three test layers guarding the split against divergence from the normal `plot_sweep` path: parity tests (`collect()` computes the same dataset/regression as `plot_sweep()`), a breadth round-trip over every generated result type (save → load → render to HTML, plus a real-subprocess media test), and the `BENCHER_FORCE_SPLIT_RENDER=1` switch that reroutes every auto-plot report build through serialize/render-from-loaded so `pixi run test-split` re-runs the whole suite over the split pipeline (own parallel py313-only `ci-split` job).
+
+### Changed
+- `BenchReport.append_result()` gained an optional `render_from=` argument so a caller can register one result for identity-based tab routing while building the tab pane from another (used by the forced-split path).
+
 ## [1.100.0] - 2026-05-15
 
 ### Added
