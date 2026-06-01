@@ -32,7 +32,7 @@ class VideoControls:
         buttons = pn.Row()
 
         for name, cb in zip(button_names, buttom_cb):
-            button = pn.widgets.Button(name=name)
+            button = pn.widgets.Button(label=name)
             pn.bind(cb, button, watch=True)
             buttons.append(button)
 

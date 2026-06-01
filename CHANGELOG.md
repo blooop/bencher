@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Raised the minimum `param` requirement from `>=1.13.0` to `>=2.0`. The validation override now matches param 2.x's `_validate_value(self, value, allow_None)` signature.
 - Dependency audit: raised upper bounds to the latest releases — `numpy` `<=2.4.6`, `xarray` `<=2026.4.0`, `pandas` `<=3.0.3`, `scikit-learn` `<=1.8.0`. Full test suite passes against all bumped versions.
+- Migrated panel widget construction from the deprecated `name=` to `label=` (`Button`, `DiscreteSlider`, and example sliders) ahead of its removal in panel 2.0, and raised the panel floor to `>=1.9.0` (the release that introduced `Widget.label`).
 
 ## [1.101.0] - 2026-06-01
 

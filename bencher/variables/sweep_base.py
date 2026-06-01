@@ -154,7 +154,7 @@ class SweepBase(param.Parameter):
         Returns:
             pn.widgets.slider.DiscreteSlider: A panel slider with the values() of the sweep variable
         """
-        return pn.widgets.slider.DiscreteSlider(name=self.name, options=list(self.values()))
+        return pn.widgets.slider.DiscreteSlider(label=self.name, options=list(self.values()))
 
     def as_dim(self, compute_values=False) -> hv.Dimension:
         """Takes a sweep variable and turns it into a holoview dimension
