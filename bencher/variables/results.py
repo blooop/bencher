@@ -110,12 +110,17 @@ class ResultFloat(Number):
         direction: OptDir = OptDir.minimize,
         share_axis=True,
         max_time_events=None,
+        default=0,
         **params,
     ):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
-        self.default = 0  # json is terrible and does not support nan values
+        # Defaults to 0 because NaN is not JSON-serialisable; callers that want
+        # an unrecorded sample treated as "missing" (dropped before regression
+        # and aggregation, which use nan-aware reductions) can opt in with
+        # ``default=float("nan")``.
+        self.default = default
         self.direction = direction
         self.share_axis = share_axis
         self.max_time_events = max_time_events
@@ -148,11 +153,19 @@ class ResultVec(param.List):
     _hash_exclude = ("max_time_events",)
 
     def __init__(
-        self, size, units="ul", direction: OptDir = OptDir.minimize, max_time_events=None, **params
+        self,
+        size,
+        units="ul",
+        direction: OptDir = OptDir.minimize,
+        max_time_events=None,
+        default=0,
+        **params,
     ):
         param.List.__init__(self, **params)
         self.units = units
-        self.default = 0  # json is terrible and does not support nan values
+        # See ResultFloat.__init__ — defaults to 0 for JSON-safety; pass
+        # ``default=float("nan")`` to treat unrecorded samples as missing.
+        self.default = default
         self.direction = direction
         self.size = size
         self.max_time_events = max_time_events
