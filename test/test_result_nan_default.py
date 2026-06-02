@@ -8,6 +8,8 @@ dropped by the nan-aware reductions used for regression/aggregation.
 """
 
 import math
+import os
+import tempfile
 import unittest
 from enum import auto
 
@@ -87,6 +89,45 @@ class TestNanDefaultEndToEnd(unittest.TestCase):
         ds = _run_sweep(UnrecordedNanBench).to_dataset()
         for val in ds["out"].values.flat:
             self.assertTrue(np.isnan(val))
+
+
+class TestNanDefaultSerialization(unittest.TestCase):
+    """Opting into a NaN default must not break the serialization/render paths.
+
+    The hardcoded ``0`` default was historically justified with the comment
+    "json is terrible and does not support nan values".  The package no longer
+    uses ``json`` directly: collected results are pickled
+    (``save_result``/``load_result``) and plots are serialised to the browser by
+    bokeh, which encodes NaN as ``null``.  A NaN default must therefore survive
+    both the pickle cache path and the HoloViews -> bokeh render-to-HTML path
+    without raising or silently corrupting the data.
+    """
+
+    @staticmethod
+    def _collect_nan():
+        bench = UnrecordedNanBench().to_bench(bn.BenchRunCfg(repeats=1))
+        return bench.collect(
+            input_vars=["cat"],
+            result_vars=["out"],
+            title="nan-serialise",
+        )
+
+    def test_save_load_pickle_roundtrip_preserves_nan(self):
+        res = self._collect_nan()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = bn.save_result(res, os.path.join(tmp, "res.pkl"))
+            loaded = bn.load_result(path)
+        for val in loaded.to_dataset()["out"].values.flat:
+            self.assertTrue(np.isnan(val))
+
+    def test_render_report_with_nan_default_succeeds(self):
+        # render_report is the only step that builds holoviews/panel/bokeh
+        # objects and serialises them to HTML (bokeh JSON-encodes the data).
+        # A NaN default must not break that path.
+        res = self._collect_nan()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = bn.render_report(res, tmp)
+            self.assertTrue(os.path.exists(out))
 
 
 if __name__ == "__main__":

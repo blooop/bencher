@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.102.0] - 2026-06-02
+
+### Added
+- Optional `default=` argument on `ResultFloat` and `ResultVec` (defaults to `0`, so no behaviour change). The hardcoded `0` default meant an *unrecorded* sample — a run that aborts before measuring, or a result var the worker never sets — was indistinguishable from a real `0` measurement, dragging nan-aware regression/aggregation means toward zero. Callers can now opt in with `default=float("nan")` so unrecorded samples are treated as missing and dropped by the existing `np.nanmean`/`np.nansum` reductions. `default` is not a hashed slot, so opting in does not invalidate `over_time` history for an otherwise-identical result var.
+- `test/test_result_nan_default.py`: backward-compat (default still `0`), NaN/explicit-default opt-in, hash stability, end-to-end unrecorded-sample handling, plus serialization coverage — a pickle `save_result`/`load_result` round-trip and a HoloViews→bokeh `render_report` HTML render both preserve/handle the NaN default.
+
 ## [1.101.1] - 2026-06-01
 
 ### Fixed
