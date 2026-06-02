@@ -73,7 +73,7 @@ test = [
     "sphinxcontrib-mermaid>=1.0,<3.0",
     "coverage>=7.5.4,<=7.14.1",
     "prek>=0.2.28,<0.5.0",
-    "ty>=0.0.13,<=0.0.40",
+    "ty>=0.0.13,<=0.0.42",
 ]
 
 #adds support for embedding rerun windows (alpha)
