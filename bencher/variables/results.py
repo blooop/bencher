@@ -28,6 +28,7 @@ IMPORTANT — hash_persistent() contract:
 
 from __future__ import annotations
 
+import math
 import warnings
 from enum import auto
 from typing import Callable, Any
@@ -456,6 +457,62 @@ ALL_RESULT_TYPES = (
     ResultReference,
     ResultVolume,
 )
+
+
+# --- Missing / unrecorded-sample representation ----------------------------
+#
+# Single source of truth for how a *missing* entry of a result variable is
+# stored in its typed backing array.  An entry is "missing" when a job never
+# wrote it (a run that aborts before measuring, or a result var the worker
+# never sets) or when an over_time entry is aged out past ``max_time_events``.
+#
+# The representation is dtype-specific because xarray/numpy arrays are typed —
+# there is no single value that is both storage-valid and reduction-aware
+# across every dtype:
+#   - numeric types (float/bool/vec, and any future numeric) -> NaN   (float)
+#   - index-backed reference types (reference/dataset)       -> -1    (int)
+#   - object/file/string types (path/video/image/string/...) -> "NAN" (object)
+#
+# Both dataset initialisation (``ResultCollector.setup_dataset``) and over_time
+# aging (``_null_old_entries``) build their arrays from ``result_missing_fill``,
+# and consumers test for missingness with ``result_is_missing`` instead of
+# hardcoding ``np.isnan`` / ``== "NAN"`` / ``== -1`` per call site.
+_REFERENCE_MISSING_TYPES = (ResultReference, ResultDataSet)
+_OBJECT_MISSING_TYPES = (
+    ResultPath,
+    ResultVideo,
+    ResultImage,
+    ResultString,
+    ResultContainer,
+    ResultRerun,
+)
+# Single-column result types that get a data variable in the dataset. ResultVec
+# is handled separately (it expands to one column per element); ResultHmap and
+# ResultVolume are stored out-of-band and intentionally get no data variable.
+DATA_VAR_RESULT_TYPES = SCALAR_RESULT_TYPES + _REFERENCE_MISSING_TYPES + _OBJECT_MISSING_TYPES
+
+
+def result_missing_fill(rv) -> tuple[Any, type]:
+    """Return the ``(fill_value, numpy_dtype)`` used for missing entries of *rv*."""
+    if isinstance(rv, _REFERENCE_MISSING_TYPES):
+        return -1, int
+    if isinstance(rv, _OBJECT_MISSING_TYPES):
+        return "NAN", object
+    # ResultFloat / ResultBool / ResultVec / ResultVolume and any future numeric.
+    return float("nan"), float
+
+
+def result_is_missing(rv, value) -> bool:
+    """True when *value* is the missing/unrecorded sentinel for *rv*'s storage."""
+    fill, _ = result_missing_fill(rv)
+    if isinstance(fill, float) and math.isnan(fill):
+        if value is None:
+            return True
+        try:
+            return math.isnan(float(value))
+        except (TypeError, ValueError):
+            return False
+    return value == fill
 
 
 class ResultVar(ResultFloat):
