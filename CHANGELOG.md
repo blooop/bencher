@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.103.0] - 2026-06-03
+
+### Changed
+- **BREAKING**: The default value for `ResultFloat` and `ResultVec` is now `NaN` instead of `0`. An *unrecorded* sample — a run that aborts before measuring, or a result var the worker never sets — is now treated as missing and dropped by the nan-aware regression/aggregation reductions, instead of masquerading as a real `0` measurement and dragging means toward zero. This matches the storage layer, which already initialises result arrays with `NaN`. Callers who want unrecorded samples to read as `0` can opt out with `default=0`. `ResultBool` is intentionally unchanged (default stays `0`/`False`): `False` is a meaningful default for a binary outcome, and the binomial-std calculation treats bool means as proportions over a fixed repeat count.
+- `CACHE_VERSION` bumped `3` → `4`, atomically invalidating all benchmark and `over_time` history caches so stale `0`-filled entries cannot mix with new `NaN`-default runs on the `over_time` axis.
+
 ## [1.102.0] - 2026-06-02
 
 ### Added
