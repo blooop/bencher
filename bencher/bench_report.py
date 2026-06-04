@@ -172,6 +172,7 @@ class BenchReport(BenchPlotServer):
         filename: str | None = None,
         in_html_folder: bool = True,
         portable: bool = False,
+        emit_json: bool | str = False,
         **kwargs,
     ) -> Path:
         """Save the result to a html file.
@@ -184,6 +185,11 @@ class BenchReport(BenchPlotServer):
             directory (str | Path, optional): base folder to save to. Defaults to "cachedir" which should be ignored by git.
             filename (str, optional): The name of the html file. Defaults to the name of the benchmark
             in_html_folder (bool, optional): Put the saved files in a html subfolder to help keep the results separate from source code. Defaults to True.
+            emit_json (bool | str, optional): When truthy, also write a
+                machine-readable ``result.json`` (see
+                :func:`bencher.report_export.result_to_dict`) next to the HTML
+                for each contained result. A string sets the filename when the
+                report holds a single result. Defaults to False (no JSON).
             portable (bool, optional): When True, base64-encode .rrd data
                 directly into the viewer HTML so the report works from
                 ``file://`` without any server.  When False (default), .rrd
@@ -208,6 +214,9 @@ class BenchReport(BenchPlotServer):
             os.makedirs(base_path.absolute(), exist_ok=True)
 
             index_path = base_path / filename
+
+            if emit_json:
+                self._emit_json(base_path, emit_json)
 
             if len(self.pane) <= 1:
                 logging.info(f"saving html output to: {index_path.absolute()}")
@@ -246,6 +255,28 @@ class BenchReport(BenchPlotServer):
                 if br.timings is not None:
                     br.timings.report_save_ms = self.last_save_ms
                     br.timings.total_ms = br.timings.compute_total()
+
+    def _emit_json(self, base_path: Path, emit_json: bool | str) -> None:
+        """Write a machine-readable result.json for each contained result.
+
+        A string ``emit_json`` sets the filename when there is exactly one
+        result; with multiple results each is named ``<bench_name>.result.json``
+        so they do not collide.
+        """
+        from bencher.report_export import result_to_json
+
+        results = self.bench_results
+        single_name = emit_json if isinstance(emit_json, str) else "result.json"
+        for br in results:
+            if len(results) == 1:
+                name = single_name
+            else:
+                safe = "".join(
+                    c if c.isalnum() or c in "-_" else "_"
+                    for c in (br.bench_cfg.bench_name or "result")
+                )
+                name = f"{safe}.result.json"
+            result_to_json(br, base_path / name)
 
     @staticmethod
     def _write_iframe_index(index_path: Path, tab_files: list) -> None:
