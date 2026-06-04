@@ -29,6 +29,7 @@ required.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import pickle
 import sys
@@ -82,6 +83,7 @@ def render_report(
     filename: str | None = None,
     in_html_folder: bool = False,
     portable: bool = False,
+    emit_json: bool | str = False,
 ) -> Path:
     """Render a collected result to an HTML report.
 
@@ -102,6 +104,8 @@ def render_report(
         filename: Output HTML filename. Defaults to ``<bench_name>.html``.
         in_html_folder: Forwarded to :meth:`BenchReport.save`.
         portable: Forwarded to :meth:`BenchReport.save` (base64-inline assets).
+        emit_json: Forwarded to :meth:`BenchReport.save`; when truthy also writes
+            a machine-readable ``result.json`` next to the HTML.
 
     Returns:
         The path to the saved report.
@@ -124,27 +128,90 @@ def render_report(
         filename=filename,
         in_html_folder=in_html_folder,
         portable=portable,
+        emit_json=emit_json,
     )
 
 
+def _render_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m bencher.render",
+        description="Render a saved benchmark result to HTML (and optionally JSON).",
+    )
+    parser.add_argument("result_path", nargs="?", help="Path to a saved .pkl result")
+    parser.add_argument("output_dir", nargs="?", help="Directory to write the report into")
+    parser.add_argument(
+        "--json",
+        dest="json_path",
+        metavar="PATH",
+        help="Also write a machine-readable result.json to PATH",
+    )
+    return parser
+
+
+def _compare_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m bencher.render compare",
+        description="Diff two saved results into a machine-readable comparison JSON.",
+    )
+    parser.add_argument("baseline", help="Path to the baseline .pkl result")
+    parser.add_argument("candidate", help="Path to the candidate .pkl result")
+    parser.add_argument(
+        "--json", dest="json_path", metavar="PATH", required=True, help="Write comparison JSON here"
+    )
+    return parser
+
+
+def _run_compare(argv: list[str]) -> int:
+    from bencher.report_export import comparison_to_json
+
+    args = _compare_parser().parse_args(argv)
+    for label, path in (("baseline", args.baseline), ("candidate", args.candidate)):
+        if not Path(path).exists():
+            print(f"{label} result file not found: {path}", file=sys.stderr)
+            return 2
+    try:
+        out = comparison_to_json(
+            load_result(args.baseline), load_result(args.candidate), args.json_path
+        )
+    except Exception:  # noqa: BLE001  pylint: disable=broad-exception-caught
+        logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
+        return 1
+    print(out)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI entrypoint: ``python -m bencher.render <result_path> <output_dir>``."""
+    """CLI entrypoint.
+
+    Render: ``python -m bencher.render <result.pkl> <output_dir> [--json PATH]``
+    Compare: ``python -m bencher.render compare <a.pkl> <b.pkl> --json PATH``
+    """
     argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 2:
+
+    if argv and argv[0] == "compare":
+        return _run_compare(argv[1:])
+
+    args = _render_parser().parse_args(argv)
+
+    if not args.result_path or not args.output_dir:
         print(
-            "Usage: python -m bencher.render <result_path> <output_dir>",
+            "Usage: python -m bencher.render <result_path> <output_dir> [--json PATH]",
             file=sys.stderr,
         )
         return 2
-    result_path, output_dir = argv
-    if not Path(result_path).exists():
-        print(f"Result file not found: {result_path}", file=sys.stderr)
+    if not Path(args.result_path).exists():
+        print(f"Result file not found: {args.result_path}", file=sys.stderr)
         return 2
     try:
-        out = render_report(result_path, output_dir)
+        bench_res = load_result(args.result_path)
+        out = render_report(bench_res, args.output_dir)
+        if args.json_path:
+            from bencher.report_export import result_to_json
+
+            result_to_json(bench_res, args.json_path)
     except Exception:  # noqa: BLE001  pylint: disable=broad-exception-caught
         # Top-level CLI guard: convert any render failure into a clean exit code.
-        logger.exception("Failed to render report from %s", result_path)
+        logger.exception("Failed to render report from %s", args.result_path)
         return 1
     print(out)
     return 0
