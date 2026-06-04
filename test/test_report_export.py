@@ -71,7 +71,7 @@ class TestResultToDict(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = result_to_json(res, Path(tmp) / "sub" / "result.json")
             self.assertTrue(path.exists())
-            loaded = json.loads(path.read_text())
+            loaded = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(loaded["bench_name"], "test_export")
 
 
@@ -168,7 +168,7 @@ class TestCompareResults(unittest.TestCase):
                 _collect(offset=0.0), _collect(offset=0.2), Path(tmp) / "cmp.json"
             )
             self.assertTrue(path.exists())
-            loaded = json.loads(path.read_text())
+            loaded = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(loaded["schema_version"], 1)
             self.assertIn("summary", loaded)
 
