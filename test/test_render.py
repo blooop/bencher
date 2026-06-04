@@ -294,6 +294,30 @@ class TestSaveLoadRender(unittest.TestCase):
             )
             self.assertEqual(rc, 2)
 
+    def test_cli_compare_value_error_surfaced(self):
+        """A ValueError from compare (e.g. no shared metrics) must be printed to
+        stderr so the user sees why, not only logged generically."""
+        import io
+        import contextlib
+
+        bench_a, bench_b = _make_bench(), _make_bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "a.pkl"
+            b = Path(tmp) / "b.pkl"
+            save_result(self._collect(bench_a), a)
+            save_result(self._collect(bench_b), b)
+            stderr = io.StringIO()
+            with (
+                mock.patch(
+                    "bencher.report_export.comparison_to_json",
+                    side_effect=ValueError("no comparable scalar result variables"),
+                ),
+                contextlib.redirect_stderr(stderr),
+            ):
+                rc = render_main(["compare", str(a), str(b), "--json", str(Path(tmp) / "c.json")])
+            self.assertEqual(rc, 1)
+            self.assertIn("no comparable scalar result variables", stderr.getvalue())
+
     def test_save_emit_json_opt_in(self):
         """BenchReport.save(emit_json=...) writes result.json next to the HTML."""
         import json

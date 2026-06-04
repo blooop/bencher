@@ -161,18 +161,41 @@ def _compare_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
+    """Load a saved result, returning ``(result, 0)`` or ``(None, exit_code)``.
+
+    Centralizes the existence check + load + error logging shared by the
+    render and compare flows, preserving their exit-code contract (``2`` for a
+    missing file, ``1`` for a load failure).
+    """
+    if not Path(path).exists():
+        print(f"{label} file not found: {path}", file=sys.stderr)
+        return None, 2
+    try:
+        return load_result(path), 0
+    except Exception:  # noqa: BLE001  pylint: disable=broad-exception-caught
+        logger.exception("Failed to load %s from %s", label, path)
+        return None, 1
+
+
 def _run_compare(argv: list[str]) -> int:
     from bencher.report_export import comparison_to_json
 
     args = _compare_parser().parse_args(argv)
-    for label, path in (("baseline", args.baseline), ("candidate", args.candidate)):
-        if not Path(path).exists():
-            print(f"{label} result file not found: {path}", file=sys.stderr)
-            return 2
+    baseline, code = _load_or_fail(args.baseline, "baseline result")
+    if baseline is None:
+        return code
+    candidate, code = _load_or_fail(args.candidate, "candidate result")
+    if candidate is None:
+        return code
     try:
-        out = comparison_to_json(
-            load_result(args.baseline), load_result(args.candidate), args.json_path
-        )
+        out = comparison_to_json(baseline, candidate, args.json_path)
+    except ValueError as exc:
+        # Surface the specific, actionable message (e.g. no shared metrics) to
+        # the user rather than only logging a generic "failed to compare".
+        print(f"compare failed: {exc}", file=sys.stderr)
+        logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
+        return 1
     except Exception:  # noqa: BLE001  pylint: disable=broad-exception-caught
         logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
         return 1
@@ -199,11 +222,10 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    if not Path(args.result_path).exists():
-        print(f"Result file not found: {args.result_path}", file=sys.stderr)
-        return 2
+    bench_res, code = _load_or_fail(args.result_path, "result")
+    if bench_res is None:
+        return code
     try:
-        bench_res = load_result(args.result_path)
         out = render_report(bench_res, args.output_dir)
         if args.json_path:
             from bencher.report_export import result_to_json

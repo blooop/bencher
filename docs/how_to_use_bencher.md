@@ -309,7 +309,7 @@ res = bench.collect(input_vars=[...], result_vars=[...], run_cfg=run_cfg)
 bn.result_to_dict(res)             # dict: schema_version, metrics, regressions, provenance
 bn.result_to_json(res, "result.json")
 
-# A/B between two independently-collected results -> comparison.json
+# A/B between two independently collected results -> comparison.json
 cmp = bn.compare_results(baseline_res, candidate_res)   # per-metric verdict + summary counts
 bn.comparison_to_json(baseline_res, candidate_res, "comparison.json")
 ```
