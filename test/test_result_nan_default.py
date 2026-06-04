@@ -18,7 +18,7 @@ import numpy as np
 from strenum import StrEnum
 
 import bencher as bn
-from bencher.variables.results import ResultFloat, ResultVec
+from bencher.variables.results import ResultBool, ResultFloat, ResultVec
 
 
 class _Cat(StrEnum):
@@ -69,6 +69,14 @@ class TestNanDefaultConstruction(unittest.TestCase):
     def test_explicit_zero_default_opt_out(self):
         self.assertEqual(ResultFloat(default=0).default, 0)
         self.assertEqual(ResultVec(size=2, default=0).default, 0)
+
+    def test_bool_default_stays_false_not_nan(self):
+        # ResultBool intentionally keeps a 0 (=False) default rather than NaN:
+        # False is a meaningful default for a binary outcome and the binomial-std
+        # calc treats bool means as proportions over a fixed repeat count.
+        self.assertEqual(ResultBool().default, 0)
+        self.assertFalse(ResultBool().default)
+        self.assertFalse(math.isnan(ResultBool().default))
 
     def test_explicit_numeric_default_still_honoured(self):
         self.assertEqual(ResultFloat(default=5).default, 5)
