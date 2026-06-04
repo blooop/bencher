@@ -903,8 +903,12 @@ class BenchResultBase:
         html_list = []
         for idx, _t in enumerate(time_vals):
             ds_t = dataset.isel(over_time=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if result_is_missing(result_var, filepath) or not os.path.isfile(filepath):
+            value = self.zero_dim_da_to_val(ds_t[result_var.name])
+            if result_is_missing(result_var, value):
+                html_list.append(_NO_DATA_HTML)
+                continue
+            filepath = str(value)
+            if not os.path.isfile(filepath):
                 html_list.append(_NO_DATA_HTML)
                 continue
             if is_rerun:
@@ -965,8 +969,11 @@ class BenchResultBase:
         items = []
         for idx, label in enumerate(labels):
             ds_t = dataset.isel(over_time=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if result_is_missing(result_var, filepath) or not os.path.isfile(filepath):
+            value = self.zero_dim_da_to_val(ds_t[result_var.name])
+            if result_is_missing(result_var, value):
+                continue
+            filepath = str(value)
+            if not os.path.isfile(filepath):
                 continue
             pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
             items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))

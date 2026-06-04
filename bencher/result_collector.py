@@ -219,8 +219,9 @@ class ResultCollector:
         for rv in bench_cfg.result_vars:
             if type(rv) is ResultVec:
                 # ResultVec expands to one column per vector element.
+                fill, dtype = result_missing_fill(rv)
                 for i in range(rv.size):
-                    result_data = np.full(dims_cfg.dims_size, np.nan)
+                    result_data = np.full(dims_cfg.dims_size, fill, dtype=dtype)
                     data_vars[rv.index_name(i)] = (dims_cfg.dims_name, result_data)
             elif isinstance(rv, DATA_VAR_RESULT_TYPES):
                 fill, dtype = result_missing_fill(rv)

@@ -503,7 +503,14 @@ def result_missing_fill(rv) -> tuple[Any, type]:
 
 
 def result_is_missing(rv, value) -> bool:
-    """True when *value* is the missing/unrecorded sentinel for *rv*'s storage."""
+    """True when *value* is the missing/unrecorded sentinel for *rv*'s storage.
+
+    For NaN-backed (numeric) types, both NaN and ``None`` count as missing — the
+    latter is treated as missing intentionally so a value that never reached the
+    typed array (e.g. an absent object-index entry) is not mistaken for real
+    data. For the ``-1`` / ``"NAN"`` sentinel types, missingness is exact
+    equality with the sentinel.
+    """
     fill, _ = result_missing_fill(rv)
     if isinstance(fill, float) and math.isnan(fill):
         if value is None:
