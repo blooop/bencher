@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.104.0] - 2026-06-08
+
+### Changed
+- Sped up `import bencher` (~19s → ~4s warm) by lazy-loading two heavy plotting dependencies that were imported eagerly at module load but only needed when a plot is rendered. `holoview_result.py` no longer registers the holoviews plotly backend (`hv.extension("bokeh", "plotly")` → `hv.extension("bokeh")`) — nothing in bencher renders through it, since `SurfaceResult`/`VolumeResult` build `plotly.graph_objs` figures directly and wrap them in `pn.pane.Plotly`. The `optuna.visualization` imports (which pull in sklearn's fANOVA evaluator) were moved into the functions that use them (`param_importance()`, `collect_optuna_plots()`). No public API changes.
+
 ## [1.103.1] - 2026-06-08
 
 ### Fixed

@@ -20,7 +20,10 @@ from bencher.results.bench_result_base import ReduceType
 
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
-hv.extension("bokeh", "plotly")
+# NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders
+# through the holoviews plotly backend (Surface/Volume use plotly.graph_objs
+# directly via pn.pane.Plotly), and registering it eagerly costs ~6s at import.
+hv.extension("bokeh")
 
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True

@@ -5,7 +5,9 @@ import logging
 import optuna
 import panel as pn
 import param
-from optuna.visualization import plot_param_importances
+
+# NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
+# import). It is only needed by param_importance(), so import it lazily there.
 
 from bencher.bench_cfg import BenchCfg
 
@@ -52,6 +54,8 @@ def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> o
 def param_importance(
     bench_cfg: BenchCfg, study: optuna.Study, plot_width: int | None = None
 ) -> pn.Column:
+    from optuna.visualization import plot_param_importances
+
     col_importance = pn.Column()
     for idx, tgt in enumerate(bench_cfg.optuna_targets()):
 
