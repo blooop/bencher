@@ -90,6 +90,31 @@ class RegressionResult:
         """Build a :class:`holoviews.Overlay` of this result (see :func:`build_regression_overlay`)."""
         return build_regression_overlay(self, historical=historical, current=current)
 
+    def to_dict(self) -> dict:
+        """Return a JSON-serializable summary of this result.
+
+        Emits only scalar fields — the numpy ``historical``/``current_samples``
+        arrays (kept for replotting) are intentionally omitted. Non-finite
+        floats (NaN/inf, e.g. a zero-baseline percent change) become ``None``
+        so the output is strict, ``json.dumps``-able JSON.
+        """
+        out = {
+            "variable": self.variable,
+            "method": self.method,
+            "regressed": bool(self.regressed),
+            "current_value": _finite_or_none(self.current_value),
+            "baseline_value": _finite_or_none(self.baseline_value),
+            "change_percent": _finite_or_none(self.change_percent),
+            "threshold": _finite_or_none(self.threshold),
+            "direction": self.direction,
+            "details": self.details,
+        }
+        for band in ("band_lower", "band_upper", "percent_band_lower", "percent_band_upper"):
+            value = getattr(self, band)
+            if value is not None:
+                out[band] = _finite_or_none(value)
+        return out
+
 
 @dataclass
 class RegressionReport:
@@ -139,6 +164,17 @@ class RegressionReport:
             )
 
         return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        """Return a JSON-serializable summary of all regression results.
+
+        Mirrors :meth:`to_markdown`/:meth:`summary` but emits structured data
+        for agents and CI to consume instead of prose.
+        """
+        return {
+            "has_regressions": self.has_regressions,
+            "results": [r.to_dict() for r in self.results],
+        }
 
     def append_to_report(self, report) -> None:
         """Append a formatted regression summary to a :class:`BenchReport`."""
@@ -852,6 +888,14 @@ def _clean_1d(a: np.ndarray) -> np.ndarray:
     """Flatten to 1-D float and remove NaNs."""
     flat = np.asarray(a, dtype=float).ravel()
     return flat[~np.isnan(flat)]
+
+
+def _finite_or_none(value: float | None) -> float | None:
+    """Coerce a float to a strict-JSON-safe value: non-finite (NaN/inf) -> None."""
+    if value is None:
+        return None
+    value = float(value)
+    return value if np.isfinite(value) else None
 
 
 def _safe_change_percent(current: float, baseline: float) -> float:
