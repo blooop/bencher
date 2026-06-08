@@ -7,7 +7,7 @@ import panel as pn
 import param
 
 # NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
-# import). It is only needed by collect_optuna_plots(), so import it lazily there.
+# import). It is only needed by param_importance(), so import it lazily there.
 
 from bencher.bench_cfg import BenchCfg
 
