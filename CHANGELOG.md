@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.103.1] - 2026-06-08
+
+### Fixed
+- Histograms rendered at hvplot's default 700×300 instead of the shared 600×600 used by every other plot type. `HoloviewResult.set_default_opts()` registered the default figure size for `Curve`, `Points`, `Bars`, `Scatter`, `BoxWhisker`, `Violin`, and `HeatMap`, but `Histogram` was missing so it escaped to hvplot's own default. Also registered `Area` and `ErrorBars` for consistency (`ErrorBars` would likewise escape when returned standalone from `to_error_bar()`; `Area` previously inherited the size only by virtue of being overlaid). The default-sized element list is now centralized in `HoloviewResult.DEFAULT_SIZED_ELEMENTS` and reused by both `set_default_opts()` and `test_default_opts_cover_all_element_types`, so the coverage guard stays in sync as new element types are added.
+
 ## [1.102.0] - 2026-06-02
 
 ### Added

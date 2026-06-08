@@ -32,6 +32,21 @@ _AGG_TITLE = "All Time Points (aggregated)"
 
 
 class HoloviewResult(PaneResult):
+    # Element types that carry the shared default figure size. Centralized here (rather
+    # than inline in set_default_opts) so tests can assert coverage stays in sync as new
+    # element types are added. HeatMap/GridSpace are excluded because they take extra opts.
+    DEFAULT_SIZED_ELEMENTS = (
+        hv.Curve,
+        hv.Points,
+        hv.Bars,
+        hv.Scatter,
+        hv.BoxWhisker,
+        hv.Violin,
+        hv.Histogram,
+        hv.Area,
+        hv.ErrorBars,
+    )
+
     @staticmethod
     def set_default_opts(width: int = 600, height: int = 600) -> dict:
         """Set default options for HoloViews visualizations.
@@ -45,12 +60,10 @@ class HoloviewResult(PaneResult):
         """
         width_height = {"width": width, "height": height, "tools": ["hover"]}
         hv.opts.defaults(
-            hv.opts.Curve(**width_height),
-            hv.opts.Points(**width_height),
-            hv.opts.Bars(**width_height),
-            hv.opts.Scatter(**width_height),
-            hv.opts.BoxWhisker(**width_height),
-            hv.opts.Violin(**width_height),
+            *(
+                getattr(hv.opts, element.__name__)(**width_height)
+                for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS
+            ),
             hv.opts.HeatMap(cmap="plasma", **width_height, colorbar=True),
             # hv.opts.Surface(**width_heigh),
             hv.opts.GridSpace(plot_size=400),
