@@ -50,6 +50,11 @@ class TestHoloviewResult(unittest.TestCase):
             plot_callbacks=False,
         )
 
+    def tearDown(self):
+        # Any test that mutates the global HoloViews defaults (e.g. with a custom
+        # width/height) must not leak into other tests, so restore the standard defaults.
+        HoloviewResult.set_default_opts()
+
     def test_set_default_opts(self):
         result = HoloviewResult.set_default_opts()
         self.assertIn("width", result)
@@ -62,6 +67,21 @@ class TestHoloviewResult(unittest.TestCase):
         result = HoloviewResult.set_default_opts(width=800, height=400)
         self.assertEqual(result["width"], 800)
         self.assertEqual(result["height"], 400)
+
+    def test_default_opts_cover_all_element_types(self):
+        """Every element type bencher emits must carry the shared default size.
+
+        Histogram/Area/ErrorBars were previously absent from hv.opts.defaults, so a
+        histogram silently fell back to hvplot's 700x300 instead of 600x600. The list of
+        sized elements is centralized on HoloviewResult so this test stays in sync as new
+        element types are registered.
+        """
+        HoloviewResult.set_default_opts()
+        for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS:
+            registered = hv.Store.options(backend="bokeh")[element.name]
+            opts = registered.groups["plot"].options
+            self.assertEqual(opts.get("width"), 600, element.name)
+            self.assertEqual(opts.get("height"), 600, element.name)
 
     def test_to_hv_type_curve(self):
         chart = self.res_1d.to_hv_type(hv.Curve)
