@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.104.1] - 2026-06-09
+
+### Fixed
+- 30° x-axis label rotation (and `title`/`ylabel`) were silently dropped on plots that hvplot returns as a panel layout — specifically over_time time-series lines that pair `widget_location="bottom"` with an extra categorical `by` widget, which come back as a `pn.Column([HoloViews pane, WidgetBox])`. `HoloviewResult._apply_opts` only handled bare HoloViews elements (`.opts`) and `pn.pane.HoloViews` wrappers (`.object`); the layout container has neither, so the options never reached the nested pane and long x-axis labels (e.g. `over_time` datetime/`TimeEvent` ticks) rendered horizontally and unreadable. `_apply_opts` now recurses into panel layout containers to apply options to the nested pane. hv elements never expose `.objects`, so the new branch only catches panel layouts. Added unit coverage in `test/test_holoview_result.py` for all three input shapes (bare element, pane wrapper, layout container).
+
 ## [1.104.0] - 2026-06-08
 
 ### Changed

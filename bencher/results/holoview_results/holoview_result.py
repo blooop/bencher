@@ -154,15 +154,32 @@ class HoloviewResult(PaneResult):
 
     @staticmethod
     def _apply_opts(plot, **opts_kwargs):
-        """Apply .opts() to a plot, handling panel.pane.HoloViews wrappers.
+        """Apply .opts() to a plot, handling panel wrappers and layout containers.
 
-        When hvplot is called with widget_location, it returns a panel pane
-        whose underlying .object is the actual holoviews element.
+        hvplot may return any of:
+          (a) a bare HoloViews element/DynamicMap/Overlay (has ``.opts``),
+          (b) a ``pn.pane.HoloViews`` wrapper whose underlying ``.object`` is the
+              actual holoviews element, or
+          (c) a panel layout container (``Row``/``Column``/``WidgetBox``) — this
+              happens when ``widget_location`` splits the plot from its widgets,
+              e.g. an over_time time-series line with a categorical ``by`` widget.
+              The HoloViews pane is then nested inside ``.objects``.
+
+        Without the container case, options such as ``xrotation``, ``title`` and
+        ``ylabel`` were silently dropped for those split plots (the over_time
+        x-axis kept its default horizontal labels). Recurse into containers so
+        the options reach the nested pane.
         """
-        if hasattr(plot, "opts"):
-            return plot.opts(**opts_kwargs)
+        # Panel layout containers expose .objects (panes/elements never do).
+        if hasattr(plot, "objects") and not hasattr(plot, "object"):
+            for child in plot.objects:
+                HoloviewResult._apply_opts(child, **opts_kwargs)
+            return plot
         if hasattr(plot, "object") and hasattr(plot.object, "opts"):
             plot.object = plot.object.opts(**opts_kwargs)
+            return plot
+        if hasattr(plot, "opts"):
+            return plot.opts(**opts_kwargs)
         return plot
 
     @staticmethod
