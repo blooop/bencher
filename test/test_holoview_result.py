@@ -202,7 +202,11 @@ class TestHoloviewResult(unittest.TestCase):
         """
         pane = pn.pane.HoloViews(hv.Curve([(0, 0), (1, 1)]))
         column = pn.Column(pane, pn.widgets.Select(options=["a", "b"]))
-        HoloviewResult._apply_opts(column, xrotation=30)
-        self.assertEqual(
-            hv.Store.lookup_options("bokeh", pane.object, "plot").options.get("xrotation"), 30
+        HoloviewResult._apply_opts(
+            column, xrotation=30, title="A long title", ylabel="Custom Y Label"
         )
+        # title/ylabel are plot options for Curve in the bokeh backend, alongside xrotation.
+        plot_opts = hv.Store.lookup_options("bokeh", pane.object, "plot").options
+        self.assertEqual(plot_opts.get("xrotation"), 30)
+        self.assertEqual(plot_opts.get("title"), "A long title")
+        self.assertEqual(plot_opts.get("ylabel"), "Custom Y Label")
