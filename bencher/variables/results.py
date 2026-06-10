@@ -28,6 +28,7 @@ IMPORTANT — hash_persistent() contract:
 
 from __future__ import annotations
 
+import math
 import warnings
 from enum import auto
 from typing import Callable, Any
@@ -144,6 +145,18 @@ class ResultBool(ResultFloat):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
         self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
+
+    def _validate_bounds(self, val, bounds, inclusive_bounds):
+        # NaN is the sentinel for an unrecorded ("missing") sample — see
+        # ResultFloat.__init__.  It lies outside the [0, 1] bounds, so param's
+        # bounds check would reject both ``default=float("nan")`` (re-validated
+        # whenever a subclass overrides the Parameter) and any NaN *value* set
+        # at runtime to mark a sample missing.  Treat NaN as always valid so a
+        # result bool can use the same missing sentinel as ResultFloat, while
+        # still rejecting genuinely out-of-range values.
+        if isinstance(val, float) and math.isnan(val):
+            return
+        super()._validate_bounds(val, bounds, inclusive_bounds)
 
 
 class ResultVec(param.List):

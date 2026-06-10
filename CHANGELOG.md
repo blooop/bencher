@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `ResultBool` rejected NaN as a default or value even though NaN is the documented "missing"/unrecorded sentinel for result variables (see `ResultFloat.__init__`). `ResultBool` locks its bounds to `[0, 1]`, and param validates a Parameter's default against its bounds whenever a subclass *overrides* it (and validates every value assignment). So `ResultBool(default=float("nan"))` raised `must be at most 1, not nan` the moment a subclass overrode the inherited Parameter, and assigning `float("nan")` at runtime to mark a sample missing raised the same — making the NaN "missing" sentinel that already works for `ResultFloat` unusable for `ResultBool`. `ResultBool._validate_bounds` now treats NaN as in-bounds, so result bools can use the same missing sentinel as `ResultFloat` while genuinely out-of-range values (e.g. `2.0`) are still rejected. Added coverage in `test/test_result_nan_default.py`.
+
 ## [1.104.1] - 2026-06-09
 
 ### Fixed

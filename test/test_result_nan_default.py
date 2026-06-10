@@ -17,7 +17,7 @@ import numpy as np
 from strenum import StrEnum
 
 import bencher as bn
-from bencher.variables.results import ResultFloat, ResultVec
+from bencher.variables.results import ResultBool, ResultFloat, ResultVec
 
 
 class _Cat(StrEnum):
@@ -65,6 +65,14 @@ class TestNanDefaultConstruction(unittest.TestCase):
         self.assertTrue(math.isnan(ResultFloat(default=float("nan")).default))
         self.assertTrue(math.isnan(ResultVec(size=2, default=float("nan")).default))
 
+    def test_bool_default_is_zero_for_backward_compat(self):
+        self.assertEqual(ResultBool().default, 0)
+
+    def test_bool_default_can_be_nan(self):
+        # ResultBool locks bounds to [0, 1]; NaN must still be accepted as the
+        # "missing" sentinel rather than rejected as out-of-bounds.
+        self.assertTrue(math.isnan(ResultBool(default=float("nan")).default))
+
     def test_explicit_numeric_default_still_honoured(self):
         self.assertEqual(ResultFloat(default=5).default, 5)
 
@@ -75,6 +83,53 @@ class TestNanDefaultConstruction(unittest.TestCase):
             ResultFloat(units="s").hash_persistent(),
             ResultFloat(units="s", default=float("nan")).hash_persistent(),
         )
+
+
+class TestResultBoolNanBounds(unittest.TestCase):
+    """``ResultBool`` locks bounds to [0, 1], but NaN is the missing sentinel.
+
+    param validates a Parameter's default against its bounds when a *subclass*
+    overrides it, and validates every value assignment.  Without NaN being
+    treated as in-bounds, an overridden NaN default (or a NaN assigned at
+    runtime to mark a sample missing) would raise "must be at most 1, not nan".
+    """
+
+    def test_override_inherited_resultbool_with_nan_default(self):
+        class Base(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="base")
+
+        # Overriding the inherited Parameter triggers param's bounds
+        # re-validation of the default; NaN must be accepted.
+        class Child(Base):
+            flag = ResultBool(default=float("nan"), doc="child override")
+
+        self.assertTrue(math.isnan(Child.param.flag.default))
+
+    def test_nan_value_assignment_accepted(self):
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="x")
+
+        obj = B()
+        obj.flag = float("nan")  # mark missing at runtime
+        self.assertTrue(math.isnan(obj.flag))
+
+    def test_real_outcomes_still_coerce_in_bounds(self):
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="x")
+
+        obj = B()
+        obj.flag = True
+        self.assertEqual(obj.flag, 1)
+        obj.flag = False
+        self.assertEqual(obj.flag, 0)
+
+    def test_out_of_bounds_value_still_rejected(self):
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(doc="x")
+
+        obj = B()
+        with self.assertRaises(ValueError):
+            obj.flag = 2.0
 
 
 class TestNanDefaultEndToEnd(unittest.TestCase):
