@@ -153,9 +153,15 @@ class ResultBool(ResultFloat):
         # whenever a subclass overrides the Parameter) and any NaN *value* set
         # at runtime to mark a sample missing.  Treat NaN as always valid so a
         # result bool can use the same missing sentinel as ResultFloat, while
-        # still rejecting genuinely out-of-range values.
-        if isinstance(val, float) and math.isnan(val):
-            return
+        # still rejecting genuinely out-of-range values.  Use math.isnan rather
+        # than ``isinstance(val, float)`` so numpy NaN scalars (e.g. np.float32)
+        # are also recognised; non-numeric values (None, str) raise here and
+        # fall through to the normal bounds check.
+        try:
+            if math.isnan(val):
+                return
+        except (TypeError, ValueError):
+            pass
         super()._validate_bounds(val, bounds, inclusive_bounds)
 
 

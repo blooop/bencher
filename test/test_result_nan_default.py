@@ -113,6 +113,16 @@ class TestResultBoolNanBounds(unittest.TestCase):
         obj.flag = float("nan")  # mark missing at runtime
         self.assertTrue(math.isnan(obj.flag))
 
+    def test_numpy_nan_scalar_accepted(self):
+        # The NaN check uses math.isnan rather than isinstance(val, float) so
+        # numpy NaN scalars (not subclasses of built-in float) are recognised too.
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="x")
+
+        obj = B()
+        obj.flag = np.float32("nan")
+        self.assertTrue(math.isnan(obj.flag))
+
     def test_real_outcomes_still_coerce_in_bounds(self):
         class B(bn.ParametrizedSweep):
             flag = ResultBool(default=float("nan"), doc="x")
@@ -129,7 +139,9 @@ class TestResultBoolNanBounds(unittest.TestCase):
 
         obj = B()
         with self.assertRaises(ValueError):
-            obj.flag = 2.0
+            obj.flag = 2.0  # above upper bound
+        with self.assertRaises(ValueError):
+            obj.flag = -1.0  # below lower bound
 
 
 class TestNanDefaultEndToEnd(unittest.TestCase):

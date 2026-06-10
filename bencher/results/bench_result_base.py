@@ -301,12 +301,16 @@ class BenchResultBase:
             case ReduceType.REDUCE:
                 ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
                 ds_reduce_std = ds_out.std(dim="repeat", skipna=True, keep_attrs=False)
-                # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std
-                n_repeats = ds_out.sizes["repeat"]
+                # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std.
+                # n is the per-cell count of *valid* (non-NaN) repeats, not the full
+                # repeat dim size: NaN is the "missing" sentinel (see ResultBool /
+                # ResultFloat.__init__) and p above is a skipna mean, so dividing by the
+                # full dim size would understate the SE when any repeat is missing.
                 for rv in self.bench_cfg.result_vars:
                     if isinstance(rv, ResultBool) and rv.name in ds_reduce_std.data_vars:
                         p = ds_reduce_mean[rv.name]
-                        ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_repeats)
+                        n_valid = ds_out[rv.name].notnull().sum(dim="repeat")
+                        ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_valid)
                 # Assign std vars directly onto mean dataset (avoids xr.merge copy)
                 for var in ds_reduce_std.data_vars:
                     ds_reduce_mean[f"{var}_std"] = ds_reduce_std[var]

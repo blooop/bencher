@@ -426,6 +426,33 @@ class TestNoneHandling(unittest.TestCase):
             self.assertTrue(np.isnan(val))
 
 
+class TestBinomialSEWithMissingRepeats(unittest.TestCase):
+    """Binomial SE must divide by the count of valid (non-NaN) repeats.
+
+    NaN is the "missing" sentinel for result variables, and REDUCE computes the
+    mean with skipna=True.  The ResultBool binomial SE must therefore use the
+    per-cell valid repeat count rather than the full repeat-dimension size,
+    otherwise a missing repeat understates the error.
+    """
+
+    def test_se_uses_valid_repeat_count(self):
+        res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
+        # Inject a known pattern with one missing (NaN) repeat into a cell so the
+        # valid count (3) differs from the repeat-dim size (4).
+        res.ds["out"][dict(cat=0)] = np.array([1.0, 0.0, 1.0, np.nan])
+        res._to_dataset_cache.clear()  # pylint: disable=protected-access
+
+        ds = res.to_dataset(reduce=bn.ReduceType.REDUCE)
+        p = float(ds["out"][dict(cat=0)])
+        se = float(ds["out_std"][dict(cat=0)])
+
+        self.assertAlmostEqual(p, 2.0 / 3.0)  # skipna mean over 3 valid samples
+        n_valid = 3
+        self.assertAlmostEqual(se, float(np.sqrt(p * (1 - p) / n_valid)))
+        # The full-dim-size SE would be measurably smaller; ensure we didn't use it.
+        self.assertNotAlmostEqual(se, float(np.sqrt(p * (1 - p) / 4)))
+
+
 # ===========================================================================
 # Category 12: ResultBool Class Properties
 # ===========================================================================
