@@ -195,8 +195,8 @@ class TestDataIntegrity(unittest.TestCase):
         self.assertEqual(BoolBenchDeterministic.param.out.bounds, (0, 1))
 
     def test_result_bool_default(self):
-        """ResultBool.default should be 0."""
-        self.assertEqual(BoolBenchDeterministic.param.out.default, 0)
+        """ResultBool.default should be NaN (an unrecorded repeat is missing, not False)."""
+        self.assertTrue(np.isnan(BoolBenchDeterministic.param.out.default))
 
     def test_result_bool_units(self):
         """ResultBool.units should be 'ratio'."""

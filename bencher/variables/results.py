@@ -111,16 +111,19 @@ class ResultFloat(Number):
         direction: OptDir = OptDir.minimize,
         share_axis=True,
         max_time_events=None,
-        default=0,
+        default=float("nan"),
         **params,
     ):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
-        # Defaults to 0 because NaN is not JSON-serialisable; callers that want
-        # an unrecorded sample treated as "missing" (dropped before regression
-        # and aggregation, which use nan-aware reductions) can opt in with
-        # ``default=float("nan")``.
+        # Defaults to NaN so an *unrecorded* sample (a run that aborts before
+        # measuring, or a result var the worker never sets) is treated as
+        # missing and dropped by the nan-aware reductions used for regression
+        # and aggregation, rather than masquerading as a real 0 measurement.
+        # This matches the storage layer, which initialises result arrays with
+        # NaN. Callers that want unrecorded samples to read as 0 opt out with
+        # ``default=0``.
         self.default = default
         self.direction = direction
         self.share_axis = share_axis
@@ -141,8 +144,18 @@ class ResultBool(ResultFloat):
     For continuous scalar metrics (time, distance, score), use ``ResultFloat`` instead.
     """
 
-    def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
+    def __init__(
+        self, units="ratio", direction: OptDir = OptDir.minimize, default=float("nan"), **params
+    ):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
+        # Defaults to NaN like ResultFloat (see ResultFloat.__init__): an
+        # *unrecorded* repeat is "missing", not a recorded failure, so it is
+        # dropped from the success proportion rather than counted as False. The
+        # binomial-std calc in bench_result_base divides p*(1-p) by the per-cell
+        # count of valid (non-NaN) repeats, so missing repeats don't understate
+        # the SE. A worker that wants a crash/abort to count as a failure must
+        # record False on its failure path; callers wanting the old False-fill
+        # opt out with ``default=0``.
         self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
 
@@ -177,13 +190,13 @@ class ResultVec(param.List):
         units="ul",
         direction: OptDir = OptDir.minimize,
         max_time_events=None,
-        default=0,
+        default=float("nan"),
         **params,
     ):
         param.List.__init__(self, **params)
         self.units = units
-        # See ResultFloat.__init__ — defaults to 0 for JSON-safety; pass
-        # ``default=float("nan")`` to treat unrecorded samples as missing.
+        # See ResultFloat.__init__ — defaults to NaN so unrecorded samples are
+        # treated as missing; pass ``default=0`` to make them read as 0.
         self.default = default
         self.direction = direction
         self.size = size

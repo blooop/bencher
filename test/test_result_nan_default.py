@@ -1,10 +1,10 @@
-"""Tests for the opt-in NaN default on scalar result variables.
+"""Tests for the NaN default on scalar result variables.
 
-``ResultFloat``/``ResultVec`` default to 0 because NaN is not JSON-serialisable,
-but a 0 default means an *unrecorded* sample (e.g. a run that aborted before
-measuring) is indistinguishable from a real 0 measurement.  Callers can opt in
-to ``default=float("nan")`` so unrecorded samples are treated as missing and
-dropped by the nan-aware reductions used for regression/aggregation.
+``ResultFloat``/``ResultVec``/``ResultBool`` default to NaN so an *unrecorded*
+sample (e.g. a run that aborted before measuring) is treated as missing and
+dropped by the nan-aware reductions used for regression/aggregation, rather than
+being indistinguishable from a real 0/``False`` measurement.  Callers can opt
+out with ``default=0`` to make unrecorded samples read as 0.
 """
 
 import math
@@ -26,10 +26,10 @@ class _Cat(StrEnum):
 
 
 class UnrecordedZeroBench(bn.ParametrizedSweep):
-    """Result var with the default 0 default; benchmark never records it."""
+    """Result var that opts out to a 0 default; benchmark never records it."""
 
     cat = bn.EnumSweep(_Cat)
-    out = bn.ResultFloat(doc="never recorded")
+    out = bn.ResultFloat(doc="never recorded", default=0)
 
     def benchmark(self):
         return self.get_results_values_as_dict()
@@ -57,21 +57,24 @@ def _run_sweep(bench_cls):
 
 
 class TestNanDefaultConstruction(unittest.TestCase):
-    def test_default_is_zero_for_backward_compat(self):
-        self.assertEqual(ResultFloat().default, 0)
-        self.assertEqual(ResultVec(size=2).default, 0)
+    def test_default_is_nan(self):
+        self.assertTrue(math.isnan(ResultFloat().default))
+        self.assertTrue(math.isnan(ResultVec(size=2).default))
+        self.assertTrue(math.isnan(ResultBool().default))
 
     def test_default_can_be_nan(self):
         self.assertTrue(math.isnan(ResultFloat(default=float("nan")).default))
         self.assertTrue(math.isnan(ResultVec(size=2, default=float("nan")).default))
 
-    def test_bool_default_is_zero_for_backward_compat(self):
-        self.assertEqual(ResultBool().default, 0)
-
     def test_bool_default_can_be_nan(self):
         # ResultBool locks bounds to [0, 1]; NaN must still be accepted as the
         # "missing" sentinel rather than rejected as out-of-bounds.
         self.assertTrue(math.isnan(ResultBool(default=float("nan")).default))
+
+    def test_explicit_zero_default_opt_out(self):
+        self.assertEqual(ResultFloat(default=0).default, 0)
+        self.assertEqual(ResultVec(size=2, default=0).default, 0)
+        self.assertEqual(ResultBool(default=0).default, 0)
 
     def test_explicit_numeric_default_still_honoured(self):
         self.assertEqual(ResultFloat(default=5).default, 5)
