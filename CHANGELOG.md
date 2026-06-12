@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.107.0] - 2026-06-12
+
+### Changed
+- Centralised the representation of *missing*/unrecorded result-variable entries. The dtype-specific sentinels (`NaN` for numeric types, `-1` for `ResultReference`/`ResultDataSet`, `"NAN"` for object/file types) were duplicated across `ResultCollector.setup_dataset` (initial fill) and `_sentinel_for_result_var` (over_time aging), and consumers hardcoded the check per call site (`== "NAN"` for file panes). New helpers in `bencher.variables.results` — `result_missing_fill(rv)` and `result_is_missing(rv, value)` — are now the single source of truth; the two `isinstance` ladders collapse into one polymorphic call and the hardcoded `== "NAN"` file checks in `bench_result_base.py` use the shared predicate. **No behaviour change**: the stored fill values and dtypes are identical, so the on-disk cache format, `BenchCfg` hashes, and every reduction are unchanged (`CACHE_VERSION` stays at `4`). Direct coverage in `test/test_result_missing.py`.
+
 ## [1.106.2] - 2026-06-12
 
 ### Added

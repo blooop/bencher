@@ -29,6 +29,7 @@ IMPORTANT — hash_persistent() contract:
 from __future__ import annotations
 
 import math
+import numbers
 import warnings
 from enum import auto
 from typing import Callable, Any
@@ -532,17 +533,21 @@ def result_is_missing(rv, value) -> bool:
     For NaN-backed (numeric) types, both NaN and ``None`` count as missing — the
     latter is treated as missing intentionally so a value that never reached the
     typed array (e.g. an absent object-index entry) is not mistaken for real
-    data. For the ``-1`` / ``"NAN"`` sentinel types, missingness is exact
-    equality with the sentinel.
+    data. Non-numeric values (strings, lists, …) are never missing for a
+    numeric type: they cannot be the NaN sentinel, so no float coercion is
+    attempted (the *string* ``"nan"`` is real data, not a missing marker). For
+    the ``-1`` / ``"NAN"`` sentinel types, missingness is exact equality with
+    the sentinel.
     """
     fill, _ = result_missing_fill(rv)
     if isinstance(fill, float) and math.isnan(fill):
         if value is None:
             return True
-        try:
+        # numbers.Real covers python ints/floats/bools and numpy scalars
+        # (numpy registers them with the numbers ABC tower).
+        if isinstance(value, numbers.Real):
             return math.isnan(float(value))
-        except (TypeError, ValueError):
-            return False
+        return False
     return value == fill
 
 
