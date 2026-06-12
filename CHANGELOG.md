@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.106.0] - 2026-06-12
+
+### Fixed
+- `Bench.optimize()` never passed `const_vars` to the worker: `_run_optuna_job` folded the constants into the **cache key** but submitted only the trial-suggested values as `job_args`, so every Optuna trial silently ran with the worker class's parameter *defaults* for all `const_vars`. Constants are now merged into the submitted `job_args` (mirroring the sweep path's `WorkerJob.setup_hashes`); trial-suggested values keep precedence since `_resolve_optimize_vars` already strips colliding const entries. Regression coverage in `test/test_optimize.py::TestConstVars` for both the plain and `aggregate`/`repeats>1` branches.
+- `CACHE_VERSION` bumped to `"4"`: because the old cache key already included the constants, any cached `optimize()` entries produced with non-default `const_vars` hold values actually computed with worker defaults — wrong data under a correct-looking key, indistinguishable on disk from good entries. The bump wipes the cache tree on first use of the new version so the fixed code can never warm-start from poisoned entries.
+
 ## [1.105.0] - 2026-06-11
 
 ### Changed
