@@ -63,7 +63,7 @@ class CategoricalProblem(bn.ParametrizedSweep):
 
 
 def _run_cfg():
-    """Minimal run config with caching enabled."""
+    """Minimal run config (single repeat, default caching off)."""
     cfg = bn.BenchRunCfg()
     cfg.repeats = 1
     return cfg
