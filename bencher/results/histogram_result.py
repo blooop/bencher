@@ -52,9 +52,12 @@ class HistogramResult(HoloviewResult):
 
     def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
         """Render a single histogram from a dataset (no over_time handling)."""
+        units = getattr(result_var, "units", "") or ""
+        xlabel = f"{result_var.name} [{units}]" if units else result_var.name
         plot = dataset.hvplot(
             kind="hist",
             y=[result_var.name],
+            xlabel=xlabel,
             ylabel="count",
             legend="bottom_right",
             title=f"{result_var.name} vs Count",

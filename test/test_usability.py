@@ -12,7 +12,7 @@ class BenchFloat(bn.ParametrizedSweep):
     """Test class using the benchmark() pattern."""
 
     theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=5)
-    out_sin = bn.ResultVar(units="v")
+    out_sin = bn.ResultFloat(units="v")
 
     def benchmark(self):
         self.out_sin = math.sin(self.theta)
