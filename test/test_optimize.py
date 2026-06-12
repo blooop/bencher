@@ -62,6 +62,26 @@ class CategoricalProblem(bn.ParametrizedSweep):
         self.score = lookup[self.color] + (0.0 if self.flag else 0.3)
 
 
+class FlakySphere(bn.ParametrizedSweep):
+    """Sphere whose worker raises on its first invocation, then succeeds.
+
+    Models a flaky expensive worker (e.g. a simulator cold-start failure).
+    Tests must reset ``FlakySphere.calls = 0`` before use.
+    """
+
+    calls = 0  # class-level so the counter survives however the worker is invoked
+
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    def benchmark(self):
+        FlakySphere.calls += 1
+        if FlakySphere.calls == 1:
+            raise RuntimeError("infra flake")
+        self.loss = float(self.x**2)
+
+
 def _run_cfg():
     """Minimal run config (single repeat, default caching off)."""
     cfg = bn.BenchRunCfg()
@@ -304,6 +324,36 @@ class TestConvenience:
         assert result.best_params is not None
         assert result.best_value >= 0
         assert result.n_new_trials == 15
+
+
+class TestCatch:
+    def test_optimize_without_catch_aborts_study(self):
+        FlakySphere.calls = 0
+        bench = bn.Bench("test_opt_no_catch", FlakySphere(), run_cfg=_run_cfg())
+        with pytest.raises(RuntimeError, match="infra flake"):
+            bench.optimize(n_trials=5, plot=False, warm_start=False)
+
+    def test_optimize_with_catch_continues_after_failed_trial(self):
+        from optuna.trial import TrialState
+
+        FlakySphere.calls = 0
+        bench = bn.Bench("test_opt_catch", FlakySphere(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=5, plot=False, warm_start=False, catch=(RuntimeError,))
+
+        assert result is not None
+        states = [t.state for t in result.study.trials]
+        assert len(states) == 5
+        assert states.count(TrialState.FAIL) == 1
+        assert states.count(TrialState.COMPLETE) == 4
+        assert result.best_value >= 0  # surviving trials still produce a best value
+
+    def test_to_optimize_forwards_catch(self):
+        FlakySphere.calls = 0
+        result = FlakySphere().to_optimize(
+            n_trials=3, plot=False, warm_start=False, catch=(RuntimeError,)
+        )
+        assert result is not None
+        assert len(result.study.trials) == 3
 
 
 class TestCategoricalInputs:
