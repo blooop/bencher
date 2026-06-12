@@ -9,6 +9,7 @@ import panel as pn
 
 import bencher as bn
 from bencher.results.holoview_results.scatter_result import ScatterResult
+from test.helpers import run_named_sweep
 
 
 class Cat1DBench(bn.ParametrizedSweep):
@@ -66,13 +67,7 @@ with warnings.catch_warnings():
 
 
 def _run_sweep(bench_class, name, input_vars, repeats=1):
-    run_cfg = bn.BenchRunCfg(
-        repeats=repeats, cache_results=False, cache_samples=False, auto_plot=False
-    )
-    bench = bn.Bench(name, bench_class(), run_cfg=run_cfg)
-    return bench.plot_sweep(
-        name, input_vars=input_vars, result_vars=["score"], plot_callbacks=False
-    )
+    return run_named_sweep(bench_class, name, input_vars, ["score"], repeats)
 
 
 class TestScatterResult(unittest.TestCase):

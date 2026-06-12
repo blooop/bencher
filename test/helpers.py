@@ -34,3 +34,31 @@ def run_cfg_with(repeats: int) -> bn.BenchRunCfg:
     return bn.BenchRunCfg(
         repeats=repeats, cache_results=False, cache_samples=False, auto_plot=False
     )
+
+
+def run_named_sweep(bench_class, name, input_vars, result_vars, repeats=1):
+    """Run a sweep on a freshly named ``Bench`` with caching and plot callbacks disabled.
+
+    Shared by the bar and scatter result tests, which construct the bench by name.
+    """
+    bench = bn.Bench(name, bench_class(), run_cfg=run_cfg_with(repeats))
+    return bench.plot_sweep(
+        name, input_vars=input_vars, result_vars=result_vars, plot_callbacks=False
+    )
+
+
+def run_dist_sweep(worker_cls, input_vars, repeats, name_prefix):
+    """Run a categorical ``value`` sweep via ``to_bench`` for distribution-style tests.
+
+    Shared by the box-whisker, violin and scatter-jitter result tests, which each
+    previously defined an identical ``_run_sweep`` differing only by name prefix.
+    """
+    run_cfg = run_cfg_with(repeats)
+    bench = worker_cls().to_bench(run_cfg)
+    return bench.plot_sweep(
+        f"{name_prefix}_{worker_cls.__name__}_{repeats}",
+        input_vars=input_vars,
+        result_vars=["value"],
+        run_cfg=run_cfg,
+        plot_callbacks=False,
+    )

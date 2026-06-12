@@ -11,7 +11,7 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
-from test.helpers import inner_element as _inner_element
+from test.helpers import inner_element as _inner_element, run_dist_sweep
 
 
 class JitterBench(bn.ParametrizedSweep):
@@ -48,15 +48,7 @@ class NanBench(bn.ParametrizedSweep):
 
 
 def _run_sweep(worker_cls, input_vars, repeats):
-    run_cfg = bn.BenchRunCfg(repeats=repeats, cache_results=False, cache_samples=False)
-    bench = worker_cls().to_bench(run_cfg)
-    return bench.plot_sweep(
-        f"test_scatter_jitter_{worker_cls.__name__}_{repeats}",
-        input_vars=input_vars,
-        result_vars=["value"],
-        run_cfg=run_cfg,
-        plot_callbacks=False,
-    )
+    return run_dist_sweep(worker_cls, input_vars, repeats, "test_scatter_jitter")
 
 
 class TestScatterJitterResult(unittest.TestCase):
