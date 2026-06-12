@@ -1,6 +1,5 @@
 import unittest
 from hypothesis import given, strategies as st  # pylint: disable=unused-import
-import pytest
 from bencher.variables.inputs import IntSweep, EnumSweep, StringSweep, BoolSweep, FloatSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultFloat
@@ -195,13 +194,6 @@ class TestVarSweeps(unittest.TestCase):
 
     @given(st.integers(min_value=1, max_value=10))
     def test_int_sweep_samples(self, samples):
-        int_sweep = IntSweep(bounds=[0, 10], samples=samples)
-        self.assertEqual(int_sweep.default, 0)
-        self.assertEqual(len(int_sweep.values()), samples)
-
-    @pytest.mark.skip
-    @given(st.integers(min_value=1, max_value=10))
-    def test_int_sweep_samples_all(self, samples):
         int_sweep = IntSweep(bounds=[0, 10], samples=samples)
         self.assertEqual(int_sweep.default, 0)
         self.assertEqual(len(int_sweep.values()), samples)

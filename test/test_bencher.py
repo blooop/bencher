@@ -201,8 +201,9 @@ class TestBencher(unittest.TestCase):
             ),
         )
 
-    # TODO There are still name collisions when run on all possible inputs, but at the moment the name collisions end up plotting an identical graph anyway so it doesn't matter that much. Future work is to enable this test to confirm that all graph names are fully unique even if they have the same pixels.
-    @pytest.mark.skip()
+    @pytest.mark.skip(
+        reason="name collisions across input permutations; see plans/05-test-coverage.md task 4"
+    )
     @settings(deadline=10000)
     @given(
         input_vars=st.sampled_from(input_var_cat_permutations),
