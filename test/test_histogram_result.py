@@ -118,11 +118,12 @@ class TestHistogramResult(unittest.TestCase):
         self.assertEqual(frequencies.sum(), N_REPEATS)
 
     def test_axis_labels_and_title(self):
-        """Title contains the result var name; y axis is labelled 'count'."""
+        """Title contains the result var name; x axis shows units, y axis is 'count'."""
         rv = self.res.bench_cfg.result_vars[0]
         plot = self.res.to_histogram_ds(self.raw_ds, rv)
         opts = plot.opts.get().kwargs
         self.assertEqual(opts["title"], "value vs Count")
+        self.assertEqual(opts["xlabel"], "value [m]")
         self.assertEqual(opts["ylabel"], "count")
         self.assertEqual(opts["xrotation"], 30)
 
