@@ -238,6 +238,66 @@ class TestAggregateOptimize:
             bench.optimize(n_trials=5, aggregate=["seed"], agg_fn="bogus", plot=False)
 
 
+class OffsetSphere(bn.ParametrizedSweep):
+    """Sphere with a constant offset; records what the worker actually received."""
+
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+    offset = bn.FloatSweep(default=0.0, bounds=[0, 100], samples=3)
+
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    observed_offsets: list[float] = []
+    observed_x: list[float] = []
+
+    def benchmark(self):
+        type(self).observed_offsets.append(float(self.offset))
+        type(self).observed_x.append(float(self.x))
+        self.loss = float(self.x**2 + self.offset)
+
+
+class TestConstVars:
+    def setup_method(self):
+        OffsetSphere.observed_offsets.clear()
+        OffsetSphere.observed_x.clear()
+
+    def test_const_vars_reach_worker(self):
+        """const_vars must be passed to the worker, not just hashed into the cache key."""
+        cfg = OffsetSphere()
+        bench = bn.Bench("test_opt_const_vars", cfg, run_cfg=_run_cfg())
+        result = bench.optimize(
+            input_vars=["x"],
+            const_vars=dict(offset=50.0),
+            n_trials=5,
+            warm_start=False,
+            plot=False,
+        )
+
+        # Every trial must see the non-default constant, not the class default of 0.0.
+        assert OffsetSphere.observed_offsets == [50.0] * 5
+        # loss = x**2 + offset, so with offset delivered the best value is >= 50.
+        assert result.best_value >= 50.0
+        # Constants must not override the trial-suggested values for optimized vars.
+        suggested_x = [t.params["x"] for t in result.study.trials]
+        assert sorted(OffsetSphere.observed_x) == sorted(suggested_x)
+
+    def test_const_vars_reach_worker_with_repeats(self):
+        """The aggregate/repeats branch must also deliver const_vars to the worker."""
+        cfg = OffsetSphere()
+        bench = bn.Bench("test_opt_const_vars_rep", cfg, run_cfg=_run_cfg())
+        result = bench.optimize(
+            input_vars=["x"],
+            const_vars=dict(offset=50.0),
+            n_trials=3,
+            repeats=2,
+            agg_fn="mean",
+            warm_start=False,
+            plot=False,
+        )
+
+        assert OffsetSphere.observed_offsets == [50.0] * 6
+        assert result.best_value >= 50.0
+
+
 class TestConvenience:
     def test_to_optimize(self):
         result = Sphere().to_optimize(n_trials=15, plot=False)

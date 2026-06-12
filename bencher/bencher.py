@@ -1447,10 +1447,13 @@ class Bench(BenchPlotServer):
         full_input["repeat"] = repeat
 
         cache_key = self._build_cache_key(full_input, tag)
+        # Mirror the sweep path (WorkerJob.setup_hashes): constants must reach the
+        # worker, not just the cache key. Collisions with input_vars are already
+        # stripped in _resolve_optimize_vars, so suggested values are never clobbered.
         job = Job(
             job_id=f"optimize:trial_{trial.number}",
             function=self.worker,
-            job_args=job_args,
+            job_args=dict(job_args) | constant_inputs,
             job_key=cache_key,
             tag=tag,
         )
