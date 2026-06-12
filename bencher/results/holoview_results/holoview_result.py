@@ -13,6 +13,7 @@ from bencher.utils import (
     get_nearest_coords1D,
     hmap_canonical_input,
     get_nearest_coords,
+    label_with_units,
     listify,
 )
 from bencher.results.pane_result import PaneResult
@@ -254,6 +255,12 @@ class HoloviewResult(PaneResult):
             return None
         kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
         groupby = [d for d in ds_dims if d not in kdims]
+
+        # Show units on both axes: x from the float input var, y from the result var
+        kwargs.setdefault("ylabel", label_with_units(result_var))
+        x_var = next((fv for fv in self.plt_cnt_cfg.float_vars if fv.name == kdims[0]), None)
+        if x_var is not None:
+            kwargs.setdefault("xlabel", label_with_units(x_var))
 
         vdims = [var, std_var] if has_spread else [var]
 

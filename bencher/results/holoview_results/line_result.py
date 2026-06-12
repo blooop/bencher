@@ -7,6 +7,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
+from bencher.utils import label_with_units
 from bencher.variables.results import SCALAR_RESULT_TYPES
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
@@ -123,6 +124,7 @@ class LineResult(HoloviewResult):
             ):
                 return None
             title = self.title_from_ds(da_plot, result_var, **kwargs)
+            kwargs.setdefault("ylabel", label_with_units(result_var))
             plot = da_plot.hvplot.line(
                 x="over_time",
                 y=da_plot.name,
@@ -142,6 +144,9 @@ class LineResult(HoloviewResult):
         if self.plt_cnt_cfg.cat_cnt >= 1:
             by = self.plt_cnt_cfg.cat_vars[0].name
         title = self.title_from_ds(da_plot, result_var, **kwargs)
+        # Show units on both axes: x from the float input var, y from the result var
+        kwargs.setdefault("xlabel", label_with_units(self.plt_cnt_cfg.float_vars[0]))
+        kwargs.setdefault("ylabel", label_with_units(result_var))
 
         if self._use_holomap_for_time(dataset):
 
@@ -190,6 +195,9 @@ class LineResult(HoloviewResult):
         if self.plt_cnt_cfg.cat_cnt >= 1:
             by = self.plt_cnt_cfg.cat_vars[0].name
         title = self.title_from_ds(da_plot, result_var, **kwargs)
+        # Show units on both axes: x from the float input var, y from the result var
+        kwargs.setdefault("xlabel", label_with_units(self.plt_cnt_cfg.float_vars[0]))
+        kwargs.setdefault("ylabel", label_with_units(result_var))
         plot = da_plot.hvplot.line(x=x, by=by, title=title, **kwargs).opts(
             tools=["hover"], xrotation=30
         )
