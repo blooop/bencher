@@ -10,6 +10,8 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.bench_result_base import ReduceType
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
+# pylint: disable=protected-access
+
 
 class TestHoloviewResult(unittest.TestCase):
     @classmethod
@@ -50,6 +52,11 @@ class TestHoloviewResult(unittest.TestCase):
             plot_callbacks=False,
         )
 
+    def tearDown(self):
+        # Any test that mutates the global HoloViews defaults (e.g. with a custom
+        # width/height) must not leak into other tests, so restore the standard defaults.
+        HoloviewResult.set_default_opts()
+
     def test_set_default_opts(self):
         result = HoloviewResult.set_default_opts()
         self.assertIn("width", result)
@@ -62,6 +69,21 @@ class TestHoloviewResult(unittest.TestCase):
         result = HoloviewResult.set_default_opts(width=800, height=400)
         self.assertEqual(result["width"], 800)
         self.assertEqual(result["height"], 400)
+
+    def test_default_opts_cover_all_element_types(self):
+        """Every element type bencher emits must carry the shared default size.
+
+        Histogram/Area/ErrorBars were previously absent from hv.opts.defaults, so a
+        histogram silently fell back to hvplot's 700x300 instead of 600x600. The list of
+        sized elements is centralized on HoloviewResult so this test stays in sync as new
+        element types are registered.
+        """
+        HoloviewResult.set_default_opts()
+        for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS:
+            registered = hv.Store.options(backend="bokeh")[element.name]
+            opts = registered.groups["plot"].options
+            self.assertEqual(opts.get("width"), 600, element.name)
+            self.assertEqual(opts.get("height"), 600, element.name)
 
     def test_to_hv_type_curve(self):
         chart = self.res_1d.to_hv_type(hv.Curve)
@@ -153,3 +175,38 @@ class TestHoloviewResult(unittest.TestCase):
     def test_to_points_reduce(self):
         result = self.res_2d_r2.to_points(reduce=ReduceType.REDUCE)
         self.assertIsInstance(result, hv.Element)
+
+    def test_apply_opts_bare_element(self):
+        """A bare HoloViews element gets opts applied directly."""
+        curve = hv.Curve([(0, 0), (1, 1)])
+        result = HoloviewResult._apply_opts(curve, xrotation=30)
+        self.assertEqual(
+            hv.Store.lookup_options("bokeh", result, "plot").options.get("xrotation"), 30
+        )
+
+    def test_apply_opts_pane_wrapper(self):
+        """A pn.pane.HoloViews wrapper gets opts applied to its .object."""
+        pane = pn.pane.HoloViews(hv.Curve([(0, 0), (1, 1)]))
+        HoloviewResult._apply_opts(pane, xrotation=30)
+        self.assertEqual(
+            hv.Store.lookup_options("bokeh", pane.object, "plot").options.get("xrotation"), 30
+        )
+
+    def test_apply_opts_layout_container(self):
+        """A panel layout container (e.g. from widget_location='bottom') must
+        have opts recursed into its nested HoloViews pane.
+
+        Regression: over_time time-series lines with a categorical `by` widget
+        return a Column(pane, widget_box); previously _apply_opts dropped
+        xrotation/title/ylabel entirely, leaving long x-axis labels unreadable.
+        """
+        pane = pn.pane.HoloViews(hv.Curve([(0, 0), (1, 1)]))
+        column = pn.Column(pane, pn.widgets.Select(options=["a", "b"]))
+        HoloviewResult._apply_opts(
+            column, xrotation=30, title="A long title", ylabel="Custom Y Label"
+        )
+        # title/ylabel are plot options for Curve in the bokeh backend, alongside xrotation.
+        plot_opts = hv.Store.lookup_options("bokeh", pane.object, "plot").options
+        self.assertEqual(plot_opts.get("xrotation"), 30)
+        self.assertEqual(plot_opts.get("title"), "A long title")
+        self.assertEqual(plot_opts.get("ylabel"), "Custom Y Label")

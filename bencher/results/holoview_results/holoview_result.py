@@ -20,7 +20,10 @@ from bencher.results.bench_result_base import ReduceType
 
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
-hv.extension("bokeh", "plotly")
+# NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders
+# through the holoviews plotly backend (Surface/Volume use plotly.graph_objs
+# directly via pn.pane.Plotly), and registering it eagerly costs ~6s at import.
+hv.extension("bokeh")
 
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
@@ -29,6 +32,21 @@ _AGG_TITLE = "All Time Points (aggregated)"
 
 
 class HoloviewResult(PaneResult):
+    # Element types that carry the shared default figure size. Centralized here (rather
+    # than inline in set_default_opts) so tests can assert coverage stays in sync as new
+    # element types are added. HeatMap/GridSpace are excluded because they take extra opts.
+    DEFAULT_SIZED_ELEMENTS = (
+        hv.Curve,
+        hv.Points,
+        hv.Bars,
+        hv.Scatter,
+        hv.BoxWhisker,
+        hv.Violin,
+        hv.Histogram,
+        hv.Area,
+        hv.ErrorBars,
+    )
+
     @staticmethod
     def set_default_opts(width: int = 600, height: int = 600) -> dict:
         """Set default options for HoloViews visualizations.
@@ -42,12 +60,10 @@ class HoloviewResult(PaneResult):
         """
         width_height = {"width": width, "height": height, "tools": ["hover"]}
         hv.opts.defaults(
-            hv.opts.Curve(**width_height),
-            hv.opts.Points(**width_height),
-            hv.opts.Bars(**width_height),
-            hv.opts.Scatter(**width_height),
-            hv.opts.BoxWhisker(**width_height),
-            hv.opts.Violin(**width_height),
+            *(
+                getattr(hv.opts, element.__name__)(**width_height)
+                for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS
+            ),
             hv.opts.HeatMap(cmap="plasma", **width_height, colorbar=True),
             # hv.opts.Surface(**width_heigh),
             hv.opts.GridSpace(plot_size=400),
@@ -138,15 +154,32 @@ class HoloviewResult(PaneResult):
 
     @staticmethod
     def _apply_opts(plot, **opts_kwargs):
-        """Apply .opts() to a plot, handling panel.pane.HoloViews wrappers.
+        """Apply .opts() to a plot, handling panel wrappers and layout containers.
 
-        When hvplot is called with widget_location, it returns a panel pane
-        whose underlying .object is the actual holoviews element.
+        hvplot may return any of:
+          (a) a bare HoloViews element/DynamicMap/Overlay (has ``.opts``),
+          (b) a ``pn.pane.HoloViews`` wrapper whose underlying ``.object`` is the
+              actual holoviews element, or
+          (c) a panel layout container (``Row``/``Column``/``WidgetBox``) — this
+              happens when ``widget_location`` splits the plot from its widgets,
+              e.g. an over_time time-series line with a categorical ``by`` widget.
+              The HoloViews pane is then nested inside ``.objects``.
+
+        Without the container case, options such as ``xrotation``, ``title`` and
+        ``ylabel`` were silently dropped for those split plots (the over_time
+        x-axis kept its default horizontal labels). Recurse into containers so
+        the options reach the nested pane.
         """
-        if hasattr(plot, "opts"):
-            return plot.opts(**opts_kwargs)
+        # Panel layout containers expose .objects (panes/elements never do).
+        if hasattr(plot, "objects") and not hasattr(plot, "object"):
+            for child in plot.objects:
+                HoloviewResult._apply_opts(child, **opts_kwargs)
+            return plot
         if hasattr(plot, "object") and hasattr(plot.object, "opts"):
             plot.object = plot.object.opts(**opts_kwargs)
+            return plot
+        if hasattr(plot, "opts"):
+            return plot.opts(**opts_kwargs)
         return plot
 
     @staticmethod

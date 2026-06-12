@@ -294,6 +294,45 @@ bench.plot_sweep(
 
 See the [Aggregation gallery](reference/meta/aggregation/index) for examples of each mode.
 
+## Machine-Readable Results (Agents & CI)
+
+Bencher already computes per-metric verdicts, optimal values, and regression deltas during
+collection. To consume them programmatically — from an agent, a CI gate, or another script —
+export them as JSON instead of scraping the HTML report or logs.
+
+```python
+import bencher as bn
+
+res = bench.collect(input_vars=[...], result_vars=[...], run_cfg=run_cfg)
+
+# A single run -> result.json
+bn.result_to_dict(res)             # dict: schema_version, metrics, regressions, provenance
+bn.result_to_json(res, "result.json")
+
+# A/B between two independently collected results -> comparison.json
+cmp = bn.compare_results(baseline_res, candidate_res)   # per-metric verdict + summary counts
+bn.comparison_to_json(baseline_res, candidate_res, "comparison.json")
+```
+
+`compare_results` runs the same regression detector used by the over-time path (a percentage
+comparison by default), so each metric's `verdict` is one of `improved` / `regressed` /
+`unchanged` using identical direction/threshold semantics. Pass `run_cfg=` to choose a
+different `regression_method`.
+
+The same artifacts are available from the CLI on a saved result (see the collect/render split):
+
+```bash
+# render HTML and also emit result.json
+python -m bencher.render result.pkl out_dir --json result.json
+
+# diff two saved results
+python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.json
+```
+
+`BenchReport.save(..., emit_json=True)` writes `result.json` next to the HTML for every
+contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
+zero-baseline percent change) are emitted as `null`.
+
 ## Common Mistakes
 
 | Mistake | Fix |

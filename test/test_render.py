@@ -250,6 +250,87 @@ class TestSaveLoadRender(unittest.TestCase):
             rc = render_main([str(Path(tmp) / "nope.pkl"), tmp])
             self.assertEqual(rc, 2)
 
+    def test_cli_render_with_json(self):
+        import json
+
+        bench = _make_bench()
+        res = self._collect(bench)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "result.pkl"
+            save_result(res, path)
+            out_dir = Path(tmp) / "report"
+            json_path = Path(tmp) / "result.json"
+            rc = render_main([str(path), str(out_dir), "--json", str(json_path)])
+            self.assertEqual(rc, 0)
+            self.assertTrue(any(out_dir.rglob("*.html")))
+            self.assertTrue(json_path.exists())
+            self.assertEqual(json.loads(json_path.read_text())["schema_version"], 1)
+
+    def test_cli_compare(self):
+        import json
+
+        bench_a, bench_b = _make_bench(), _make_bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "a.pkl"
+            b = Path(tmp) / "b.pkl"
+            save_result(self._collect(bench_a), a)
+            save_result(self._collect(bench_b), b)
+            cmp_path = Path(tmp) / "cmp.json"
+            rc = render_main(["compare", str(a), str(b), "--json", str(cmp_path)])
+            self.assertEqual(rc, 0)
+            self.assertTrue(cmp_path.exists())
+            self.assertIn("summary", json.loads(cmp_path.read_text()))
+
+    def test_cli_compare_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc = render_main(
+                [
+                    "compare",
+                    str(Path(tmp) / "nope.pkl"),
+                    str(Path(tmp) / "x.pkl"),
+                    "--json",
+                    str(Path(tmp) / "out.json"),
+                ]
+            )
+            self.assertEqual(rc, 2)
+
+    def test_cli_compare_value_error_surfaced(self):
+        """A ValueError from compare (e.g. no shared metrics) must be printed to
+        stderr so the user sees why, not only logged generically."""
+        import io
+        import contextlib
+
+        bench_a, bench_b = _make_bench(), _make_bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "a.pkl"
+            b = Path(tmp) / "b.pkl"
+            save_result(self._collect(bench_a), a)
+            save_result(self._collect(bench_b), b)
+            stderr = io.StringIO()
+            with (
+                mock.patch(
+                    "bencher.report_export.comparison_to_json",
+                    side_effect=ValueError("no comparable scalar result variables"),
+                ),
+                contextlib.redirect_stderr(stderr),
+            ):
+                rc = render_main(["compare", str(a), str(b), "--json", str(Path(tmp) / "c.json")])
+            self.assertEqual(rc, 1)
+            self.assertIn("no comparable scalar result variables", stderr.getvalue())
+
+    def test_save_emit_json_opt_in(self):
+        """BenchReport.save(emit_json=...) writes result.json next to the HTML."""
+        import json
+
+        bench = _make_bench()
+        res = self._collect(bench)
+        bench.report.append_result(res)
+        with tempfile.TemporaryDirectory() as tmp:
+            bench.report.save(directory=tmp, emit_json=True)
+            matches = list(Path(tmp).rglob("result.json"))
+            self.assertTrue(matches)
+            self.assertEqual(json.loads(matches[0].read_text())["schema_version"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

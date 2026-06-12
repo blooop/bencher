@@ -5,11 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.103.0] - 2026-06-03
+## [1.106.2] - 2026-06-12
+
+### Added
+- `catch` parameter on `Bench.optimize()`, forwarded to `optuna.Study.optimize()`: a trial whose worker raises one of the given exception types is recorded as `FAILED` and the study continues with the remaining trials, instead of one raising trial aborting the entire study. The default `()` mirrors Optuna's own default and preserves the existing fail-fast behaviour exactly. `ParametrizedSweep.to_optimize()` already forwards `**kwargs`, so it picks up `catch` with no change. A raising worker leaves no committed sample-cache entry (both the serial and parallel paths raise before `cache.set`), so `FAILED` trials cannot poison the cache. Coverage in `test/test_optimize.py::TestCatch`.
+
+## [1.106.1] - 2026-06-12
 
 ### Changed
-- **BREAKING**: The default value for `ResultFloat` and `ResultVec` is now `NaN` instead of `0`. An *unrecorded* sample — a run that aborts before measuring, or a result var the worker never sets — is now treated as missing and dropped by the nan-aware regression/aggregation reductions, instead of masquerading as a real `0` measurement and dragging means toward zero. This matches the storage layer, which already initialises result arrays with `NaN`. Callers who want unrecorded samples to read as `0` can opt out with `default=0`. `ResultBool` is intentionally unchanged (default stays `0`/`False`): `False` is a meaningful default for a binary outcome, and the binomial-std calculation treats bool means as proportions over a fixed repeat count.
-- `CACHE_VERSION` bumped `3` → `4`, atomically invalidating all benchmark and `over_time` history caches so stale `0`-filled entries cannot mix with new `NaN`-default runs on the `over_time` axis.
+- Version-only re-release of 1.106.0; no code changes.
+
+## [1.106.0] - 2026-06-12
+
+### Fixed
+- `Bench.optimize()` never passed `const_vars` to the worker: `_run_optuna_job` folded the constants into the **cache key** but submitted only the trial-suggested values as `job_args`, so every Optuna trial silently ran with the worker class's parameter *defaults* for all `const_vars`. Constants are now merged into the submitted `job_args` (mirroring the sweep path's `WorkerJob.setup_hashes`); trial-suggested values keep precedence since `_resolve_optimize_vars` already strips colliding const entries. Regression coverage in `test/test_optimize.py::TestConstVars` for both the plain and `aggregate`/`repeats>1` branches.
+- `CACHE_VERSION` bumped to `"4"`: because the old cache key already included the constants, any cached `optimize()` entries produced with non-default `const_vars` hold values actually computed with worker defaults — wrong data under a correct-looking key, indistinguishable on disk from good entries. The bump wipes the cache tree on first use of the new version so the fixed code can never warm-start from poisoned entries.
+
+## [1.105.0] - 2026-06-11
+
+### Changed
+- The default value for `ResultFloat`, `ResultVec`, and `ResultBool` is now `NaN` instead of `0`. An *unrecorded* sample — a run that aborts before measuring, or a result var the worker never sets — is now treated as missing and dropped by the nan-aware regression/aggregation reductions, instead of masquerading as a real `0`/`False` measurement and dragging means toward zero. This matches the storage layer, which already initialises result arrays with `NaN`. Callers who want unrecorded samples to read as `0` can opt out with `default=0`.
+- For `ResultBool`, this means **missing ≠ failure**: an unrecorded repeat is dropped from the success proportion rather than counted as `False`. A worker that wants a crash/abort to count as a failure must explicitly record `False` on its failure path. The binomial standard error already divides by the per-cell count of valid (non-NaN) repeats (see 1.104.2), so missing repeats no longer understate the SE.
+- `CACHE_VERSION` is **not** bumped: the result-var `default` is not part of `BenchCfg.hash_persistent()`, so existing benchmark and `over_time` history caches are preserved. The new `NaN` default only applies to cache *misses* (newly computed cells); already-cached cells keep whatever sentinel they were stored with, so a benchmark with missing samples may transiently hold a mix of `0` (old) and `NaN` (new) until those cells are recomputed.
+
+## [1.104.2] - 2026-06-10
+
+### Fixed
+- `ResultBool` rejected NaN as a default or value even though NaN is the documented "missing"/unrecorded sentinel for result variables (see `ResultFloat.__init__`). `ResultBool` locks its bounds to `[0, 1]`, and param validates a Parameter's default against its bounds whenever a subclass *overrides* it (and validates every value assignment). So `ResultBool(default=float("nan"))` raised `must be at most 1, not nan` the moment a subclass overrode the inherited Parameter, and assigning `float("nan")` at runtime to mark a sample missing raised the same — making the NaN "missing" sentinel that already works for `ResultFloat` unusable for `ResultBool`. `ResultBool._validate_bounds` now treats NaN as in-bounds, so result bools can use the same missing sentinel as `ResultFloat` while genuinely out-of-range values (e.g. `2.0`) are still rejected. Added coverage in `test/test_result_nan_default.py`.
+- The `ResultBool` binomial standard error (`REDUCE` path in `bench_result_base.py`) divided `p*(1-p)` by the full repeat-dimension size while computing `p` with a `skipna=True` mean. Now that NaN is a valid "missing" repeat for `ResultBool`, those diverged and the SE was understated whenever a repeat was missing. The SE now divides by the per-cell count of valid (non-NaN) repeats. Added coverage in `test/test_result_bool.py`.
+
+## [1.104.1] - 2026-06-09
+
+### Fixed
+- 30° x-axis label rotation (and `title`/`ylabel`) were silently dropped on plots that hvplot returns as a panel layout — specifically over_time time-series lines that pair `widget_location="bottom"` with an extra categorical `by` widget, which come back as a `pn.Column([HoloViews pane, WidgetBox])`. `HoloviewResult._apply_opts` only handled bare HoloViews elements (`.opts`) and `pn.pane.HoloViews` wrappers (`.object`); the layout container has neither, so the options never reached the nested pane and long x-axis labels (e.g. `over_time` datetime/`TimeEvent` ticks) rendered horizontally and unreadable. `_apply_opts` now recurses into panel layout containers to apply options to the nested pane. hv elements never expose `.objects`, so the new branch only catches panel layouts. Added unit coverage in `test/test_holoview_result.py` for all three input shapes (bare element, pane wrapper, layout container).
+
+## [1.104.0] - 2026-06-08
+
+### Changed
+- Sped up `import bencher` (~19s → ~4s warm) by lazy-loading two heavy plotting dependencies that were imported eagerly at module load but only needed when a plot is rendered. `holoview_result.py` no longer registers the holoviews plotly backend (`hv.extension("bokeh", "plotly")` → `hv.extension("bokeh")`) — nothing in bencher renders through it, since `SurfaceResult`/`VolumeResult` build `plotly.graph_objs` figures directly and wrap them in `pn.pane.Plotly`. The `optuna.visualization` imports (which pull in sklearn's fANOVA evaluator) were moved into the functions that use them (`param_importance()`, `collect_optuna_plots()`). No public API changes.
+
+## [1.103.1] - 2026-06-08
+
+### Fixed
+- Histograms rendered at hvplot's default 700×300 instead of the shared 600×600 used by every other plot type. `HoloviewResult.set_default_opts()` registered the default figure size for `Curve`, `Points`, `Bars`, `Scatter`, `BoxWhisker`, `Violin`, and `HeatMap`, but `Histogram` was missing so it escaped to hvplot's own default. Also registered `Area` and `ErrorBars` for consistency (`ErrorBars` would likewise escape when returned standalone from `to_error_bar()`; `Area` previously inherited the size only by virtue of being overlaid). The default-sized element list is now centralized in `HoloviewResult.DEFAULT_SIZED_ELEMENTS` and reused by both `set_default_opts()` and `test_default_opts_cover_all_element_types`, so the coverage guard stays in sync as new element types are added.
 
 ## [1.102.0] - 2026-06-02
 

@@ -144,14 +144,38 @@ class ResultBool(ResultFloat):
     For continuous scalar metrics (time, distance, score), use ``ResultFloat`` instead.
     """
 
-    def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
+    def __init__(
+        self, units="ratio", direction: OptDir = OptDir.minimize, default=float("nan"), **params
+    ):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
-        # Stays 0 (=False), unlike ResultFloat's NaN default: False is a
-        # meaningful default for a binary outcome, and the binomial-std calc in
-        # bench_result_base treats bool means as proportions over a fixed
-        # repeat count, which NaN would complicate.
+        # Defaults to NaN like ResultFloat (see ResultFloat.__init__): an
+        # *unrecorded* repeat is "missing", not a recorded failure, so it is
+        # dropped from the success proportion rather than counted as False. The
+        # binomial-std calc in bench_result_base divides p*(1-p) by the per-cell
+        # count of valid (non-NaN) repeats, so missing repeats don't understate
+        # the SE. A worker that wants a crash/abort to count as a failure must
+        # record False on its failure path; callers wanting the old False-fill
+        # opt out with ``default=0``.
         self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
+
+    def _validate_bounds(self, val, bounds, inclusive_bounds):
+        # NaN is the sentinel for an unrecorded ("missing") sample — see
+        # ResultFloat.__init__.  It lies outside the [0, 1] bounds, so param's
+        # bounds check would reject both ``default=float("nan")`` (re-validated
+        # whenever a subclass overrides the Parameter) and any NaN *value* set
+        # at runtime to mark a sample missing.  Treat NaN as always valid so a
+        # result bool can use the same missing sentinel as ResultFloat, while
+        # still rejecting genuinely out-of-range values.  Use math.isnan rather
+        # than ``isinstance(val, float)`` so numpy NaN scalars (e.g. np.float32)
+        # are also recognised; non-numeric values (None, str) raise here and
+        # fall through to the normal bounds check.
+        try:
+            if math.isnan(val):
+                return
+        except (TypeError, ValueError):
+            pass
+        super()._validate_bounds(val, bounds, inclusive_bounds)
 
 
 class ResultVec(param.List):

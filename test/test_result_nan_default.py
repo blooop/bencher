@@ -1,11 +1,10 @@
 """Tests for the NaN default on scalar result variables.
 
-``ResultFloat``/``ResultVec`` default to NaN so an *unrecorded* sample (e.g. a
-run that aborted before measuring) is treated as missing and dropped by the
-nan-aware reductions used for regression/aggregation, rather than being
-indistinguishable from a real 0 measurement.  Callers can opt out with
-``default=0`` to make unrecorded samples read as 0.  ``ResultBool`` keeps a 0
-(``False``) default.
+``ResultFloat``/``ResultVec``/``ResultBool`` default to NaN so an *unrecorded*
+sample (e.g. a run that aborted before measuring) is treated as missing and
+dropped by the nan-aware reductions used for regression/aggregation, rather than
+being indistinguishable from a real 0/``False`` measurement.  Callers can opt
+out with ``default=0`` to make unrecorded samples read as 0.
 """
 
 import math
@@ -61,22 +60,21 @@ class TestNanDefaultConstruction(unittest.TestCase):
     def test_default_is_nan(self):
         self.assertTrue(math.isnan(ResultFloat().default))
         self.assertTrue(math.isnan(ResultVec(size=2).default))
+        self.assertTrue(math.isnan(ResultBool().default))
 
     def test_default_can_be_nan(self):
         self.assertTrue(math.isnan(ResultFloat(default=float("nan")).default))
         self.assertTrue(math.isnan(ResultVec(size=2, default=float("nan")).default))
 
+    def test_bool_default_can_be_nan(self):
+        # ResultBool locks bounds to [0, 1]; NaN must still be accepted as the
+        # "missing" sentinel rather than rejected as out-of-bounds.
+        self.assertTrue(math.isnan(ResultBool(default=float("nan")).default))
+
     def test_explicit_zero_default_opt_out(self):
         self.assertEqual(ResultFloat(default=0).default, 0)
         self.assertEqual(ResultVec(size=2, default=0).default, 0)
-
-    def test_bool_default_stays_false_not_nan(self):
-        # ResultBool intentionally keeps a 0 (=False) default rather than NaN:
-        # False is a meaningful default for a binary outcome and the binomial-std
-        # calc treats bool means as proportions over a fixed repeat count.
-        self.assertEqual(ResultBool().default, 0)
-        self.assertFalse(ResultBool().default)
-        self.assertFalse(math.isnan(ResultBool().default))
+        self.assertEqual(ResultBool(default=0).default, 0)
 
     def test_explicit_numeric_default_still_honoured(self):
         self.assertEqual(ResultFloat(default=5).default, 5)
@@ -88,6 +86,65 @@ class TestNanDefaultConstruction(unittest.TestCase):
             ResultFloat(units="s").hash_persistent(),
             ResultFloat(units="s", default=float("nan")).hash_persistent(),
         )
+
+
+class TestResultBoolNanBounds(unittest.TestCase):
+    """``ResultBool`` locks bounds to [0, 1], but NaN is the missing sentinel.
+
+    param validates a Parameter's default against its bounds when a *subclass*
+    overrides it, and validates every value assignment.  Without NaN being
+    treated as in-bounds, an overridden NaN default (or a NaN assigned at
+    runtime to mark a sample missing) would raise "must be at most 1, not nan".
+    """
+
+    def test_override_inherited_resultbool_with_nan_default(self):
+        class Base(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="base")
+
+        # Overriding the inherited Parameter triggers param's bounds
+        # re-validation of the default; NaN must be accepted.
+        class Child(Base):
+            flag = ResultBool(default=float("nan"), doc="child override")
+
+        self.assertTrue(math.isnan(Child.param.flag.default))
+
+    def test_nan_value_assignment_accepted(self):
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="x")
+
+        obj = B()
+        obj.flag = float("nan")  # mark missing at runtime
+        self.assertTrue(math.isnan(obj.flag))
+
+    def test_numpy_nan_scalar_accepted(self):
+        # The NaN check uses math.isnan rather than isinstance(val, float) so
+        # numpy NaN scalars (not subclasses of built-in float) are recognised too.
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="x")
+
+        obj = B()
+        obj.flag = np.float32("nan")
+        self.assertTrue(math.isnan(obj.flag))
+
+    def test_real_outcomes_still_coerce_in_bounds(self):
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(default=float("nan"), doc="x")
+
+        obj = B()
+        obj.flag = True
+        self.assertEqual(obj.flag, 1)
+        obj.flag = False
+        self.assertEqual(obj.flag, 0)
+
+    def test_out_of_bounds_value_still_rejected(self):
+        class B(bn.ParametrizedSweep):
+            flag = ResultBool(doc="x")
+
+        obj = B()
+        with self.assertRaises(ValueError):
+            obj.flag = 2.0  # above upper bound
+        with self.assertRaises(ValueError):
+            obj.flag = -1.0  # below lower bound
 
 
 class TestNanDefaultEndToEnd(unittest.TestCase):
