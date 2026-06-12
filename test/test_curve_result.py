@@ -9,24 +9,7 @@ import pytest
 import bencher as bn
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.curve_result import CurveResult
-
-
-def run_cfg_with(repeats: int) -> bn.BenchRunCfg:
-    return bn.BenchRunCfg(
-        repeats=repeats, cache_results=False, cache_samples=False, auto_plot=False
-    )
-
-
-def unwrap_hv(obj):
-    """Unwrap a panel Row/HoloViews pane returned by filter() to the hv object inside."""
-    while True:
-        if hasattr(obj, "object"):
-            obj = obj.object
-        elif hasattr(obj, "objects"):
-            assert len(obj.objects) > 0
-            obj = obj.objects[0]
-        else:
-            return obj
+from test.helpers import run_cfg_with, unwrap_hv
 
 
 class CurveBench(bn.ParametrizedSweep):

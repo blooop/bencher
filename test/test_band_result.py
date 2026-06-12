@@ -9,24 +9,8 @@ import pytest
 
 import bencher as bn
 from bencher.results.bench_result_base import ReduceType
-
-
-def run_cfg_with(repeats: int) -> bn.BenchRunCfg:
-    return bn.BenchRunCfg(
-        repeats=repeats, cache_results=False, cache_samples=False, auto_plot=False
-    )
-
-
-def unwrap_hv(obj):
-    """Unwrap a panel Row/HoloViews pane returned by filter() to the hv object inside."""
-    while True:
-        if hasattr(obj, "object"):
-            obj = obj.object
-        elif hasattr(obj, "objects"):
-            assert len(obj.objects) > 0
-            obj = obj.objects[0]
-        else:
-            return obj
+from bencher.results.holoview_results.band_result import BandResult
+from test.helpers import run_cfg_with, unwrap_hv
 
 
 def plot_opts(overlay: hv.Overlay) -> dict:
@@ -63,6 +47,16 @@ class BandNanBench(bn.ParametrizedSweep):
 
     def benchmark(self):
         self.throughput = float("nan") if self.size < 20 else self.size * 0.5
+
+
+class BandVecBench(bn.ParametrizedSweep):
+    """Vector (non-scalar) result — outside BandResult's SCALAR_RESULT_TYPES filter."""
+
+    size = bn.FloatSweep(default=50, bounds=[10, 100], samples=3, doc="Size")
+    vec = bn.ResultVec(size=2, units="m", doc="Vector result")
+
+    def benchmark(self):
+        self.vec = [self.size, self.size * 2]
 
 
 class BandTimeBench(bn.ParametrizedSweep):
@@ -195,6 +189,21 @@ class TestBandResult:
             assert res_1d.to_band_ds(ds, rv) is None
         finally:
             res_1d.regression_report = original
+
+    def test_to_band_rejects_non_scalar_result(self):
+        """A non-scalar (vector) result is outside SCALAR_RESULT_TYPES, so no band is drawn.
+
+        BandResult's filter accepts any float/cat/repeat shape (repeats>=1 included),
+        so the meaningful rejection path is the result type — a vector sweep must not
+        silently produce a misleading band overlay.
+        """
+        run_cfg = run_cfg_with(repeats=3)
+        bench = BandVecBench().to_bench(run_cfg)
+        res = bench.plot_sweep(
+            "band_vec", input_vars=["size"], result_vars=["vec"], run_cfg=run_cfg
+        )
+        result = res.to(BandResult, override=False)
+        assert not isinstance(unwrap_hv(result), hv.Overlay)
 
     def test_band_nan_input_does_not_crash(self):
         """NaN results survive percentile computation and are masked out of the scatter."""

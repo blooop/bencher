@@ -11,6 +11,7 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
+from test.helpers import inner_element as _inner_element
 
 
 class JitterBench(bn.ParametrizedSweep):
@@ -56,13 +57,6 @@ def _run_sweep(worker_cls, input_vars, repeats):
         run_cfg=run_cfg,
         plot_callbacks=False,
     )
-
-
-def _inner_element(overlay):
-    """The plot methods return an hv.Overlay wrapping the distribution element."""
-    items = list(overlay)
-    assert len(items) == 1
-    return items[0]
 
 
 class TestScatterJitterResult(unittest.TestCase):

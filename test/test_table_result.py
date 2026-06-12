@@ -6,12 +6,7 @@ import pytest
 
 import bencher as bn
 from bencher.results.holoview_results.table_result import TableResult
-
-
-def run_cfg_with(repeats: int) -> bn.BenchRunCfg:
-    return bn.BenchRunCfg(
-        repeats=repeats, cache_results=False, cache_samples=False, auto_plot=False
-    )
+from test.helpers import run_cfg_with
 
 
 class TableBench(bn.ParametrizedSweep):
