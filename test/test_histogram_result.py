@@ -64,7 +64,7 @@ def _collect_histograms(panel_obj) -> list[hv.Histogram]:
 class TestHistogramResult(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        DeterministicWorker._counter[0] = 0
+        DeterministicWorker._counter[0] = 0  # pylint: disable=protected-access
         bench = DeterministicWorker().to_bench(_repeats_run_cfg())
         cls.res = bench.plot_sweep(
             "test_hist",
@@ -149,7 +149,7 @@ class TestHistogramResult(unittest.TestCase):
 
     def test_nan_values_are_dropped_not_fatal(self):
         """A NaN sample must not crash rendering; it is excluded from the bin counts."""
-        NanWorker._counter[0] = 0
+        NanWorker._counter[0] = 0  # pylint: disable=protected-access
         bench = NanWorker().to_bench(_repeats_run_cfg())
         res = bench.plot_sweep(
             "test_hist_nan",

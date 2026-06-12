@@ -180,7 +180,7 @@ class TestSweepStructure:
 
     def test_nan_worker_does_not_crash(self):
         """A NaN objective fails that trial but the study and summary still work."""
-        NanSphere._counter[0] = 0
+        NanSphere._counter[0] = 0  # pylint: disable=protected-access
         bench = bn.Bench("opt_res_nan", NanSphere(), run_cfg=_run_cfg())
         res = bench.optimize(n_trials=6, plot=False)
         states = [t.state for t in res.study.trials]
