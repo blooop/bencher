@@ -1121,6 +1121,7 @@ class Bench(BenchPlotServer):
         tag: str = "",
         run_cfg: BenchRunCfg | None = None,
         plot: bool = True,
+        catch: tuple[type[Exception], ...] = (),
     ) -> OptimizeResult | None:
         """Run optuna optimization directly — no full grid sweep required.
 
@@ -1147,6 +1148,13 @@ class Bench(BenchPlotServer):
             tag: Cache tag (same semantics as ``plot_sweep``).
             run_cfg: Run configuration.  Defaults to ``BenchRunCfg()``.
             plot: If *True*, append visualisation to ``self.report``.
+            catch: Exception types that should not abort the study.  Forwarded
+                to ``optuna.Study.optimize``: a trial whose worker raises one
+                of these is recorded as FAILED and the study continues with the
+                remaining trials.  Use for flaky or expensive workers
+                (simulator cold starts, network calls).  The default ``()``
+                preserves fail-fast behaviour: any worker exception aborts the
+                whole study.
 
         Returns:
             OptimizeResult wrapping the completed ``optuna.Study``.
@@ -1234,7 +1242,7 @@ class Bench(BenchPlotServer):
             agg_callable=agg_callable,
             repeats=repeats,
         )
-        study.optimize(objective, n_trials=n_trials)
+        study.optimize(objective, n_trials=n_trials, catch=catch)
 
         # --- clean up cache -------------------------------------------------
         logging.info(self.sample_cache.stats())
@@ -1447,10 +1455,15 @@ class Bench(BenchPlotServer):
         full_input["repeat"] = repeat
 
         cache_key = self._build_cache_key(full_input, tag)
+        # Mirror the sweep path (WorkerJob.setup_hashes): constants must reach the
+        # worker, not just the cache key. Collisions with input_vars are already
+        # stripped in _resolve_optimize_vars, so suggested values are never clobbered.
+        # deepcopy for the same mutation safety worker_kwargs_wrapper gives the sweep
+        # path: a worker mutating a mutable constant must not leak state across trials.
         job = Job(
             job_id=f"optimize:trial_{trial.number}",
             function=self.worker,
-            job_args=job_args,
+            job_args=deepcopy(dict(job_args) | constant_inputs),
             job_key=cache_key,
             tag=tag,
         )

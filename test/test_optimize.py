@@ -62,8 +62,28 @@ class CategoricalProblem(bn.ParametrizedSweep):
         self.score = lookup[self.color] + (0.0 if self.flag else 0.3)
 
 
+class FlakySphere(bn.ParametrizedSweep):
+    """Sphere whose worker raises on its first invocation, then succeeds.
+
+    Models a flaky expensive worker (e.g. a simulator cold-start failure).
+    Tests must reset ``FlakySphere.calls = 0`` before use.
+    """
+
+    calls = 0  # class-level so the counter survives however the worker is invoked
+
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    def benchmark(self):
+        FlakySphere.calls += 1
+        if FlakySphere.calls == 1:
+            raise RuntimeError("infra flake")
+        self.loss = float(self.x**2)
+
+
 def _run_cfg():
-    """Minimal run config with caching enabled."""
+    """Minimal run config (single repeat, default caching off)."""
     cfg = bn.BenchRunCfg()
     cfg.repeats = 1
     return cfg
@@ -238,12 +258,102 @@ class TestAggregateOptimize:
             bench.optimize(n_trials=5, aggregate=["seed"], agg_fn="bogus", plot=False)
 
 
+class OffsetSphere(bn.ParametrizedSweep):
+    """Sphere with a constant offset; records what the worker actually received."""
+
+    x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
+    offset = bn.FloatSweep(default=0.0, bounds=[0, 100], samples=3)
+
+    loss = bn.ResultFloat("ul", bn.OptDir.minimize)
+
+    observed_offsets: list[float] = []
+    observed_x: list[float] = []
+
+    def benchmark(self):
+        type(self).observed_offsets.append(float(self.offset))
+        type(self).observed_x.append(float(self.x))
+        self.loss = float(self.x**2 + self.offset)
+
+
+class TestConstVars:
+    def setup_method(self):
+        OffsetSphere.observed_offsets.clear()
+        OffsetSphere.observed_x.clear()
+
+    def test_const_vars_reach_worker(self):
+        """const_vars must be passed to the worker, not just hashed into the cache key."""
+        cfg = OffsetSphere()
+        bench = bn.Bench("test_opt_const_vars", cfg, run_cfg=_run_cfg())
+        result = bench.optimize(
+            input_vars=["x"],
+            const_vars=dict(offset=50.0),
+            n_trials=5,
+            warm_start=False,
+            plot=False,
+        )
+
+        # Every trial must see the non-default constant, not the class default of 0.0.
+        assert OffsetSphere.observed_offsets == [50.0] * 5
+        # loss = x**2 + offset, so with offset delivered the best value is >= 50.
+        assert result.best_value >= 50.0
+        # Constants must not override the trial-suggested values for optimized vars.
+        suggested_x = [t.params["x"] for t in result.study.trials]
+        assert sorted(OffsetSphere.observed_x) == sorted(suggested_x)
+
+    def test_const_vars_reach_worker_with_repeats(self):
+        """The aggregate/repeats branch must also deliver const_vars to the worker."""
+        cfg = OffsetSphere()
+        bench = bn.Bench("test_opt_const_vars_rep", cfg, run_cfg=_run_cfg())
+        result = bench.optimize(
+            input_vars=["x"],
+            const_vars=dict(offset=50.0),
+            n_trials=3,
+            repeats=2,
+            agg_fn="mean",
+            warm_start=False,
+            plot=False,
+        )
+
+        assert OffsetSphere.observed_offsets == [50.0] * 6
+        assert result.best_value >= 50.0
+
+
 class TestConvenience:
     def test_to_optimize(self):
         result = Sphere().to_optimize(n_trials=15, plot=False)
         assert result.best_params is not None
         assert result.best_value >= 0
         assert result.n_new_trials == 15
+
+
+class TestCatch:
+    def test_optimize_without_catch_aborts_study(self):
+        FlakySphere.calls = 0
+        bench = bn.Bench("test_opt_no_catch", FlakySphere(), run_cfg=_run_cfg())
+        with pytest.raises(RuntimeError, match="infra flake"):
+            bench.optimize(n_trials=5, plot=False, warm_start=False)
+
+    def test_optimize_with_catch_continues_after_failed_trial(self):
+        from optuna.trial import TrialState
+
+        FlakySphere.calls = 0
+        bench = bn.Bench("test_opt_catch", FlakySphere(), run_cfg=_run_cfg())
+        result = bench.optimize(n_trials=5, plot=False, warm_start=False, catch=(RuntimeError,))
+
+        assert result is not None
+        states = [t.state for t in result.study.trials]
+        assert len(states) == 5
+        assert states.count(TrialState.FAIL) == 1
+        assert states.count(TrialState.COMPLETE) == 4
+        assert result.best_value >= 0  # surviving trials still produce a best value
+
+    def test_to_optimize_forwards_catch(self):
+        FlakySphere.calls = 0
+        result = FlakySphere().to_optimize(
+            n_trials=3, plot=False, warm_start=False, catch=(RuntimeError,)
+        )
+        assert result is not None
+        assert len(result.study.trials) == 3
 
 
 class TestCategoricalInputs:

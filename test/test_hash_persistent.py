@@ -736,8 +736,8 @@ class TestSweepSlotCoverage:
 # on-disk benchmark-level and over_time entry in the field.
 # ---------------------------------------------------------------------------
 
-GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "afbbadba143168305abeaab3e2e53ea9c429c2a5"
-GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "6093b4560b17af4dab2f14f5609b7b945499df63"
+GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "4fb6a177d55ff3ca67cbe851076f7606dbe3e364"
+GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "3b91a536f825054f4ec7712808699564014a023a"
 
 
 def _build_golden_bench_cfg():
