@@ -8,6 +8,7 @@ import xarray as xr
 
 from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
+from bencher.utils import label_with_units
 from bencher.variables.results import ResultVar
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
@@ -49,7 +50,7 @@ class ScatterResult(HoloviewResult):
             **kwargs,
         )
 
-    def _to_scatter_ds(  # pylint: disable=unused-argument
+    def _to_scatter_ds(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
     ) -> pn.panel | None:
         """Creates a scatter plot from the provided dataset.
@@ -65,6 +66,10 @@ class ScatterResult(HoloviewResult):
         by = None
         if self.plt_cnt_cfg.cat_cnt > 1:
             by = [v.name for v in self.bench_cfg.input_vars[1:]]
+        # Show units on both axes: x from the first input var, y from the result var
+        kwargs.setdefault("ylabel", label_with_units(result_var))
+        if self.bench_cfg.input_vars:
+            kwargs.setdefault("xlabel", label_with_units(self.bench_cfg.input_vars[0]))
         plot = dataset.hvplot.scatter(
             by=by,
             subplots=False,

@@ -457,6 +457,20 @@ def params_to_str(param_list: list[param.Parameter]) -> list[str]:
     return [get_name(i) for i in param_list]
 
 
+def label_with_units(var: Any) -> str:
+    """Axis label for a variable: ``name [units]``, or just ``name`` if it has no units.
+
+    Args:
+        var (Any): A parameter-like object with a ``name`` and optional ``units`` attribute
+
+    Returns:
+        str: The axis label, e.g. ``"throughput [ops/s]"`` or ``"throughput"``
+    """
+    units = getattr(var, "units", "") or ""
+    # "ul" is the sweep-variable convention for unitless (see sweep_base.describe_variable)
+    return f"{var.name} [{units}]" if units and units != "ul" else var.name
+
+
 def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma: no cover
     """Publish a file to an orphan git branch:
 
