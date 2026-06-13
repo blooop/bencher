@@ -92,6 +92,23 @@ class TestLabelWithUnits(unittest.TestCase):
         """'ul' is the sweep-variable convention for unitless and must not be shown."""
         self.assertEqual(label_with_units(_LabelBench.param.unitless), "unitless")
 
+    def test_no_units_attribute(self):
+        """Objects without a ``units`` attribute fall back to just the name."""
+
+        class _NoUnits:
+            name = "bare"
+
+        self.assertEqual(label_with_units(_NoUnits()), "bare")
+
+    def test_units_none(self):
+        """``units=None`` is treated the same as no units."""
+
+        class _NoneUnits:
+            name = "nothing"
+            units = None
+
+        self.assertEqual(label_with_units(_NoneUnits()), "nothing")
+
 
 class TestCurveAxisUnits(unittest.TestCase):
     @classmethod
@@ -111,12 +128,19 @@ class TestLineAxisUnits(unittest.TestCase):
     def setUpClass(cls):
         cls.res = _run_sweep(FloatBench, "units_line", ["distance"], ["throughput"], repeats=1)
 
-    def test_line_axis_labels_show_units(self):
-        curve = _find_element(self.res.to_line(use_tap=False), hv.Curve)
+    def _assert_line_axis_labels(self, curve):
         self.assertIsNotNone(curve)
         opts = curve.opts.get().kwargs
         self.assertEqual(opts["xlabel"], "distance [m]")
         self.assertEqual(opts["ylabel"], "throughput [ops/s]")
+
+    def test_line_axis_labels_show_units(self):
+        # float-x path: LineResult.to_line_ds
+        self._assert_line_axis_labels(_find_element(self.res.to_line(use_tap=False), hv.Curve))
+
+    def test_line_tap_axis_labels_show_units(self):
+        # tap path: LineResult._to_line_tap_ds
+        self._assert_line_axis_labels(_find_element(self.res.to_line(use_tap=True), hv.Curve))
 
 
 class TestScatterAxisUnits(unittest.TestCase):
