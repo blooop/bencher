@@ -906,13 +906,8 @@ class BenchResultBase:
         )
         html_list = []
         for idx, _t in enumerate(time_vals):
-            ds_t = dataset.isel(over_time=idx)
-            value = self.zero_dim_da_to_val(ds_t[result_var.name])
-            if result_is_missing(result_var, value):
-                html_list.append(_NO_DATA_HTML)
-                continue
-            filepath = str(value)
-            if not os.path.isfile(filepath):
+            filepath = self._over_time_filepath(dataset, result_var, idx)
+            if filepath is None:
                 html_list.append(_NO_DATA_HTML)
                 continue
             if is_rerun:
@@ -953,6 +948,21 @@ class BenchResultBase:
 
         return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
 
+    def _over_time_filepath(self, dataset: xr.Dataset, result_var, idx: int) -> str | None:
+        """Resolve the on-disk filepath for a file-backed result var at an over_time index.
+
+        Returns None when the entry is missing/unrecorded (per ``result_is_missing``)
+        or when the stored path does not point at an existing file.
+        """
+        ds_t = dataset.isel(over_time=idx)
+        value = self.zero_dim_da_to_val(ds_t[result_var.name])
+        if result_is_missing(result_var, value):
+            return None
+        filepath = str(value)
+        if not os.path.isfile(filepath):
+            return None
+        return filepath
+
     def _pane_over_time_grid(
         self,
         dataset: xr.Dataset,
@@ -972,12 +982,8 @@ class BenchResultBase:
 
         items = []
         for idx, label in enumerate(labels):
-            ds_t = dataset.isel(over_time=idx)
-            value = self.zero_dim_da_to_val(ds_t[result_var.name])
-            if result_is_missing(result_var, value):
-                continue
-            filepath = str(value)
-            if not os.path.isfile(filepath):
+            filepath = self._over_time_filepath(dataset, result_var, idx)
+            if filepath is None:
                 continue
             pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
             items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
