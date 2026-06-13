@@ -23,17 +23,17 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
     XARRAY_MULTIDIM_RESULT_TYPES,
-    SCALAR_RESULT_TYPES,
+    DATA_VAR_RESULT_TYPES,
     ResultFloat,
     ResultVec,
     ResultPath,
     ResultVideo,
     ResultImage,
-    ResultString,
     ResultContainer,
     ResultReference,
     ResultDataSet,
     ResultRerun,
+    result_missing_fill,
 )
 from bencher.worker_job import WorkerJob
 from bencher.job import JobFuture
@@ -48,21 +48,10 @@ _MEDIA_RESULT_TYPES = (ResultPath, ResultVideo, ResultImage, ResultContainer, Re
 def _sentinel_for_result_var(rv):
     """Return the sentinel value used for 'missing' entries of this result type.
 
-    ResultVolume falls through to the default np.nan — it is numeric, not
-    file-backed, so no media cleanup is needed even when max_time_events is set.
+    Thin wrapper over the single source of truth in ``bencher.variables.results``
+    (``result_missing_fill``); kept as a local alias for the over_time aging path.
     """
-    if isinstance(rv, SCALAR_RESULT_TYPES):
-        return np.nan
-    if isinstance(rv, (ResultReference, ResultDataSet)):
-        return -1
-    if isinstance(
-        rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer, ResultRerun)
-    ):
-        return "NAN"
-    if isinstance(rv, ResultVec):
-        return np.nan
-    # ResultVolume and any future numeric types default to NaN.
-    return np.nan
+    return result_missing_fill(rv)[0]
 
 
 def _null_old_entries(dataset, rv, var_limit):
@@ -228,22 +217,16 @@ class ResultCollector:
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, SCALAR_RESULT_TYPES):
-                result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(rv, (ResultReference, ResultDataSet)):
-                result_data = np.full(dims_cfg.dims_size, -1, dtype=int)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(
-                rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer)
-            ):
-                result_data = np.full(dims_cfg.dims_size, "NAN", dtype=object)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-
-            elif type(rv) is ResultVec:
+            if type(rv) is ResultVec:
+                # ResultVec expands to one column per vector element.
+                fill, dtype = result_missing_fill(rv)
                 for i in range(rv.size):
-                    result_data = np.full(dims_cfg.dims_size, np.nan)
+                    result_data = np.full(dims_cfg.dims_size, fill, dtype=dtype)
                     data_vars[rv.index_name(i)] = (dims_cfg.dims_name, result_data)
+            elif isinstance(rv, DATA_VAR_RESULT_TYPES):
+                fill, dtype = result_missing_fill(rv)
+                result_data = np.full(dims_cfg.dims_size, fill, dtype=dtype)
+                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
 
         bench_res = BenchResult(bench_cfg)
         bench_res.ds = xr.Dataset(data_vars=data_vars, coords=dims_cfg.coords)
