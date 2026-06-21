@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.107.0"
+version = "1.108.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -30,6 +30,9 @@ dependencies = [
 Repository = "https://github.com/blooop/bencher"
 Home = "https://github.com/blooop/bencher"
 Documentation = "https://bencher.readthedocs.io/en/latest/"
+
+[project.scripts]
+bencher = "bencher.render:main"
 
 [tool.pixi.workspace]
 channels = ["conda-forge", "https://prefix.dev/blooop"]

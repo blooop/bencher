@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from bencher import Bench, BenchRunCfg, render_report, save_result, load_result
-from bencher.render import main as render_main
+from bencher.render import main as render_main, _prog
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 
@@ -317,6 +317,14 @@ class TestSaveLoadRender(unittest.TestCase):
                 rc = render_main(["compare", str(a), str(b), "--json", str(Path(tmp) / "c.json")])
             self.assertEqual(rc, 1)
             self.assertIn("no comparable scalar result variables", stderr.getvalue())
+
+    def test_prog_name_is_invocation_aware(self):
+        """Usage/help shows ``bencher`` under the console script and the
+        explicit module form otherwise, so the displayed command is runnable."""
+        with mock.patch("bencher.render.sys.argv", ["/usr/local/bin/bencher", "--help"]):
+            self.assertEqual(_prog(), "bencher")
+        with mock.patch("bencher.render.sys.argv", ["/path/to/render.py"]):
+            self.assertEqual(_prog(), "python -m bencher.render")
 
     def test_save_emit_json_opt_in(self):
         """BenchReport.save(emit_json=...) writes result.json next to the HTML."""

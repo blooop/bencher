@@ -132,9 +132,20 @@ def render_report(
     )
 
 
+def _prog() -> str:
+    """Program name for ``--help``/usage text.
+
+    Resolves to ``bencher`` when invoked via the installed console script and
+    to the explicit ``python -m bencher.render`` form otherwise, so the usage
+    line always names a command the reader can actually run.
+    """
+    exe = Path(sys.argv[0]).name
+    return "bencher" if exe == "bencher" else "python -m bencher.render"
+
+
 def _render_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m bencher.render",
+        prog=_prog(),
         description="Render a saved benchmark result to HTML (and optionally JSON).",
     )
     parser.add_argument("result_path", nargs="?", help="Path to a saved .pkl result")
@@ -150,7 +161,7 @@ def _render_parser() -> argparse.ArgumentParser:
 
 def _compare_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m bencher.render compare",
+        prog=f"{_prog()} compare",
         description="Diff two saved results into a machine-readable comparison JSON.",
     )
     parser.add_argument("baseline", help="Path to the baseline .pkl result")
@@ -206,8 +217,11 @@ def _run_compare(argv: list[str]) -> int:
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint.
 
-    Render: ``python -m bencher.render <result.pkl> <output_dir> [--json PATH]``
-    Compare: ``python -m bencher.render compare <a.pkl> <b.pkl> --json PATH``
+    Invoke via the installed ``bencher`` console script, or equivalently with
+    ``python -m bencher.render`` when running from a source checkout.
+
+    Render: ``bencher <result.pkl> <output_dir> [--json PATH]``
+    Compare: ``bencher compare <a.pkl> <b.pkl> --json PATH``
     """
     argv = sys.argv[1:] if argv is None else argv
 
@@ -218,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.result_path or not args.output_dir:
         print(
-            "Usage: python -m bencher.render <result_path> <output_dir> [--json PATH]",
+            f"Usage: {_prog()} <result_path> <output_dir> [--json PATH]",
             file=sys.stderr,
         )
         return 2
