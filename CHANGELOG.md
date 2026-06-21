@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.108.0] - 2026-06-21
+
+### Added
+- `bencher` console-script entry point (`[project.scripts]` → `bencher.render:main`), so the render/compare CLI can be invoked as `bencher <result.pkl> <out_dir> [--json PATH]` and `bencher compare <a.pkl> <b.pkl> --json PATH` instead of only `python -m bencher.render …`. **Non-breaking**: the existing `python -m bencher.render` invocation is unchanged and keeps working; this is purely an additional way to reach the same `main()`. Usage/`--help` text is now invocation-aware via a small `_prog()` helper — it shows `bencher` under the console script and `python -m bencher.render` from a source checkout — so the displayed command always matches how the tool was run. Coverage in `test/test_render.py`.
+
 ## [1.107.0] - 2026-06-12
 
 ### Changed
