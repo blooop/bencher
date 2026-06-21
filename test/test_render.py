@@ -321,8 +321,13 @@ class TestSaveLoadRender(unittest.TestCase):
     def test_prog_name_is_invocation_aware(self):
         """Usage/help shows ``bencher`` under the console script and the
         explicit module form otherwise, so the displayed command is runnable."""
-        with mock.patch("bencher.render.sys.argv", ["/usr/local/bin/bencher", "--help"]):
-            self.assertEqual(_prog(), "bencher")
+        for argv0 in (
+            "/usr/local/bin/bencher",
+            "/venv/Scripts/bencher.exe",
+            "/venv/bin/bencher-3.12",
+        ):
+            with mock.patch("bencher.render.sys.argv", [argv0, "--help"]):
+                self.assertEqual(_prog(), "bencher")
         with mock.patch("bencher.render.sys.argv", ["/path/to/render.py"]):
             self.assertEqual(_prog(), "python -m bencher.render")
 

@@ -138,9 +138,14 @@ def _prog() -> str:
     Resolves to ``bencher`` when invoked via the installed console script and
     to the explicit ``python -m bencher.render`` form otherwise, so the usage
     line always names a command the reader can actually run.
+
+    Matches a ``bencher`` prefix rather than an exact name so platform/packaging
+    variants of the launcher still resolve (``bencher.exe`` on Windows,
+    ``bencher-3.12`` for a versioned install); the module form's ``render.py``
+    never matches.
     """
     exe = Path(sys.argv[0]).name
-    return "bencher" if exe == "bencher" else "python -m bencher.render"
+    return "bencher" if exe.startswith("bencher") else "python -m bencher.render"
 
 
 def _render_parser() -> argparse.ArgumentParser:
