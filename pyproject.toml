@@ -10,15 +10,15 @@ license = "MIT"
 requires-python = ">=3.10,<3.14"
 
 dependencies = [
-    "holoviews>=1.15,<=1.22.1",
+    "holoviews>=1.15,<=1.23.0",
     "numpy>=1.0,<=2.4.6",
-    "param>=2.0,<=2.4.0",
+    "param>=2.0,<=2.4.1",
     "hvplot>=0.12.0,<=0.12.2",
     "panel>=1.9.0,<=1.9.3",
     "diskcache>=5.6,<=5.6.3",
     "optuna>=3.2,<=4.9.0",
     "xarray>=2023.7,<=2026.4.0",
-    "plotly>=5.15,<=6.7.0",
+    "plotly>=5.15,<=6.8.0",
     "pandas>=2.0,<=3.0.3",
     "strenum>=0.4.0,<=0.4.15",
     "scikit-learn>=1.2,<=1.8.0",
@@ -64,7 +64,7 @@ holobench = { path = ".", editable = true }
 [project.optional-dependencies]
 test = [
     "nbformat",
-    "nbclient>=0.7,<=0.10.4",
+    "nbclient>=0.7,<=0.11.0",
     "ipykernel",
     "pip",
     "jupyter_bokeh",
@@ -80,7 +80,7 @@ test = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.32.0,<=0.33.0", "rerun-notebook>=0.32.0,<=0.33.0"]
+rerun = ["rerun-sdk>=0.32.0,<=0.33.1", "rerun-notebook>=0.32.0,<=0.33.1"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
