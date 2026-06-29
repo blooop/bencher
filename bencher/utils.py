@@ -12,7 +12,7 @@ from uuid import uuid4
 from functools import partial
 from typing import Callable, Any
 import logging
-import os
+import subprocess
 import tempfile
 import shutil
 
@@ -495,17 +495,18 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma
         filepath_tmp = Path(temp_dir) / filename
 
         logging.info(f"created report at: {filepath_tmp.absolute()}")
-        cd_dir = f"cd {temp_dir} &&"
 
         # create a new git repo and add files to that.  Push the file to another arbitrary repo.  The aim of doing it this way is that no data needs to be downloaded.
 
-        # os.system(f"{cd_dir} git config init.defaultBranch {branch_name}")
-        os.system(f"{cd_dir} git init")
-        os.system(f"{cd_dir} git branch -m {branch_name}")
-        os.system(f"{cd_dir} git add {filename}")
-        os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
-        os.system(f"{cd_dir} git remote add origin {remote}")
-        os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
+        def git(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=temp_dir, check=True)
+
+        git("init")
+        git("branch", "-m", branch_name)
+        git("add", filename)
+        git("commit", "-m", f"publish {branch_name}")
+        git("remote", "add", "origin", remote)
+        git("push", "--set-upstream", "origin", branch_name, "-f")
 
 
 class _Unset:

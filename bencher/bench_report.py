@@ -5,6 +5,7 @@ import logging
 import time
 from typing import Callable, Protocol, runtime_checkable
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 from threading import Thread
@@ -354,14 +355,16 @@ resizeIframe();
             )
             logging.info(f"created report at: {report_path.absolute()}")
 
-            cd_dir = f"cd {directory} &&"
+            def git(*args: str) -> None:
+                subprocess.run(["git", *args], cwd=directory, check=True)
+
             # TODO DON'T OVERWRITE EVERYTHING
-            os.system(f"{cd_dir} git init")
-            os.system(f"{cd_dir} git checkout -b {branch_name}")
-            os.system(f"{cd_dir} git add {folder_name}/index.html")
-            os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
-            os.system(f"{cd_dir} git remote add origin {remote}")
-            os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
+            git("init")
+            git("checkout", "-b", branch_name)
+            git("add", f"{folder_name}/index.html")
+            git("commit", "-m", f"publish {branch_name}")
+            git("remote", "add", "origin", remote)
+            git("push", "--set-upstream", "origin", branch_name, "-f")
 
         logging.info("Published report @")
         logging.info(publish_url)
@@ -399,14 +402,15 @@ resizeIframe();
             report_path = self.save(directory, filename="index.html", in_html_folder=False)
             logging.info(f"created report at: {report_path.absolute()}")
 
-            cd_dir = f"cd {directory} &&"
+            def git(*args: str) -> None:
+                subprocess.run(["git", *args], cwd=directory, check=True)
 
-            os.system(f"{cd_dir} git init")
-            os.system(f"{cd_dir} git checkout -b {branch_name}")
-            os.system(f"{cd_dir} git add index.html")
-            os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
-            os.system(f"{cd_dir} git remote add origin {remote}")
-            os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
+            git("init")
+            git("checkout", "-b", branch_name)
+            git("add", "index.html")
+            git("commit", "-m", f"publish {branch_name}")
+            git("remote", "add", "origin", remote)
+            git("push", "--set-upstream", "origin", branch_name, "-f")
 
         logging.info("Published report @")
         logging.info(publish_url)
