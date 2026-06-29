@@ -260,5 +260,3 @@ inconsistent-mro = "ignore"
 # Ignore unused type: ignore comments (needed for other type checkers)
 unused-ignore-comment = "ignore"
 unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14
-# Ignore deprecation warnings (e.g. os.system soft-deprecation flagged in ty >= 0.0.43)
-deprecated = "ignore"
