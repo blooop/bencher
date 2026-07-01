@@ -56,4 +56,4 @@ def example_workflow_multi_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
 
 
 if __name__ == "__main__":
-    bn.run(example_workflow_multi_sweep, level=3)
+    bn.run(example_workflow_multi_sweep, subsampling_divisions=3)

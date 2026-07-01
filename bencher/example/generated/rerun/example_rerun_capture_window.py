@@ -43,4 +43,4 @@ def example_rerun_capture_window(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
 
 
 if __name__ == "__main__":
-    bn.run(example_rerun_capture_window, level=3)
+    bn.run(example_rerun_capture_window, subsampling_divisions=3)

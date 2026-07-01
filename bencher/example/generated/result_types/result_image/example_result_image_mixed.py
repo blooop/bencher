@@ -55,4 +55,4 @@ def example_result_image_mixed(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_mixed, level=3)
+    bn.run(example_result_image_mixed, subsampling_divisions=3)

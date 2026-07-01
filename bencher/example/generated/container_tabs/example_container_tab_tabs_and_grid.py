@@ -16,4 +16,4 @@ def example_container_tab_tabs_and_grid(run_cfg: bn.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bn.run(example_container_tab_tabs_and_grid, level=2)
+    bn.run(example_container_tab_tabs_and_grid, subsampling_divisions=2)

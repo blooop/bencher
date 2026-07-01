@@ -8,11 +8,8 @@ import optuna
 import panel as pn
 
 
-from optuna.visualization import (
-    plot_param_importances,
-    plot_pareto_front,
-    plot_optimization_history,
-)
+# NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
+# import). It is only used inside collect_optuna_plots(), so import it lazily there.
 from bencher.utils import hmap_canonical_input
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.inputs import BoolSweep
@@ -49,7 +46,7 @@ def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
                 f"Result variable '{rv.name}' must be numeric to aggregate over "
                 f"non-optimized variable combinations, but got dtype {arr.dtype}"
             )
-        aggregated.append(float(np.mean(arr)))
+        aggregated.append(float(np.nanmean(arr)))
     return tuple(aggregated)
 
 
@@ -245,6 +242,11 @@ class OptunaResult(BenchResultBase):
         Returns:
             pn.pane.panel: A panel with optuna visualisations.
         """
+        from optuna.visualization import (
+            plot_param_importances,
+            plot_pareto_front,
+            plot_optimization_history,
+        )
 
         try:
             self.studies = [self.bench_result_to_study(True)]

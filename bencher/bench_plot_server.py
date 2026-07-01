@@ -14,7 +14,7 @@ import panel as pn
 from diskcache import Cache
 from tornado.web import StaticFileHandler
 
-from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg
+from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg, ShowMode, normalize_show
 
 logging.basicConfig(level=logging.INFO)
 
@@ -76,7 +76,8 @@ class BenchPlotServer:
         if plot_cfg.port is not None and plot_cfg.allow_ws_origin:
             os.environ["BOKEH_ALLOW_WS_ORIGIN"] = f"localhost:{plot_cfg.port}"
 
-        return self.serve(bench_name, plots_instance, port=plot_cfg.port, show=plot_cfg.show)
+        auto_open = normalize_show(plot_cfg.show) is ShowMode.LIVE
+        return self.serve(bench_name, plots_instance, port=plot_cfg.port, show=auto_open)
 
     def load_data_from_cache(self, bench_name: str) -> tuple[BenchCfg, list[pn.panel]] | None:
         """Load previously calculated benchmark data from the database and start a plot server to display it

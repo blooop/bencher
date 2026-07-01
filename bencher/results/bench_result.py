@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any, Literal
+from collections.abc import Callable, Sequence
 import logging
 import panel as pn
 from param import Parameter
@@ -15,7 +16,7 @@ except ModuleNotFoundError:
 
 
 from bencher.results.video_summary import VideoSummaryResult
-from bencher.results.video_result import VideoResult
+from bencher.results.pane_result import PaneResult
 from bencher.results.volume_result import VolumeResult
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 
@@ -39,7 +40,10 @@ from bencher.utils import listify, resolve_aggregate
 
 
 class BenchResult(
-    RerunResult,
+    # RerunResult resolves to either the real class or a fallback stub via the
+    # try/except import above; ty sees that union and can't compute an MRO, but at
+    # runtime exactly one definition is bound.
+    RerunResult,  # ty: ignore[unsupported-base]
     VolumeResult,
     BoxWhiskerResult,
     ViolinResult,
@@ -76,6 +80,7 @@ class BenchResult(
         new_instance.ds = original.ds
         new_instance.bench_cfg = original.bench_cfg
         new_instance.plt_cnt_cfg = original.plt_cnt_cfg
+        new_instance.regression_report = original.regression_report
         return new_instance
 
     def to(
@@ -101,6 +106,7 @@ class BenchResult(
         result_instance.ds = self.ds
         result_instance.plt_cnt_cfg = self.plt_cnt_cfg
         result_instance.dataset_list = self.dataset_list
+        result_instance.regression_report = self.regression_report
         # Build kwargs for the plot call, only include reduce if explicitly set
         plot_kwargs = dict(
             result_var=result_var,
@@ -135,7 +141,7 @@ class BenchResult(
             HistogramResult.to_plot,
             VolumeResult.to_plot,
             # PanelResult.to_video,
-            VideoResult.to_panes,
+            PaneResult.to_panes,
         ]
 
     @staticmethod
@@ -166,6 +172,7 @@ class BenchResult(
         remove_plots: list[callable] | None = None,
         default_container=pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
+        numeric_only: bool = False,
         **kwargs,
     ) -> list[pn.panel]:
         """Automatically generate plots based on the provided plot callbacks.
@@ -175,6 +182,9 @@ class BenchResult(
             remove_plots (list[callable], optional): List of plot callback functions to exclude. Defaults to None.
             default_container (type, optional): Default container type for the plots. Defaults to pn.Column.
             override (bool, optional): Whether to override unsupported plots. Defaults to False.
+            numeric_only (bool, optional): When True, skip pane-type result callbacks
+                (images, videos, rerun, etc.) that cannot be numerically aggregated.
+                Defaults to False.
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
@@ -186,9 +196,12 @@ class BenchResult(
 
         if plot_list is None:
             plot_list = BenchResult.default_plot_callbacks()
+        if numeric_only:
+            plot_list = [cb for cb in plot_list if cb is not PaneResult.to_panes]
         if remove_plots is not None:
             for p in remove_plots:
-                plot_list.remove(p)
+                if p in plot_list:
+                    plot_list.remove(p)
 
         kwargs = self.set_plot_size(**kwargs)
 
@@ -208,10 +221,18 @@ class BenchResult(
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
 
-    def to_auto_plots(self, **kwargs) -> pn.panel:
+    def to_auto_plots(
+        self,
+        extra_panels: Sequence[Callable[[BenchResult], pn.viewable.Viewable] | pn.viewable.Viewable]
+        | None = None,
+        **kwargs,
+    ) -> pn.panel:
         """Given the dataset result of a benchmark run, automatically deduce how to plot the data based on the types of variables that were sampled.
 
         Args:
+            extra_panels: Extra panel callables or static panels to inject after the sweep
+                summary and before aggregate/auto plots. Each item is either a
+                callable(BenchResult) -> panel, or a static panel object.
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
@@ -219,6 +240,41 @@ class BenchResult(
         """
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
+
+        # --- Regression report (auto-inserted when regression detection is enabled) ---
+        # Summary table surfaces whenever a regression fires (including the
+        # absolute-method case which has no history and therefore no overlay).
+        has_multiple_times = "over_time" in self.ds.dims and self.ds.sizes["over_time"] > 1
+        if self.regression_report is not None and self.regression_report.has_regressions:
+            plot_cols.append(
+                pn.pane.Markdown(
+                    self.regression_report.to_markdown(),
+                    name="Regression Report",
+                    width=800,
+                )
+            )
+        if self.regression_report is not None and has_multiple_times:
+            for r in self.regression_report.results:
+                if r.historical is None or len(r.historical) == 0:
+                    continue
+                try:
+                    plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
+                except Exception:  # pylint: disable=broad-except
+                    logging.error(
+                        "Failed to render regression overlay for %s", r.variable, exc_info=True
+                    )
+
+        # --- Extra panels (user-injected) ---
+        if extra_panels:
+            for ep in extra_panels:
+                try:
+                    if callable(ep):
+                        plot_cols.append(ep(self))
+                    else:
+                        plot_cols.append(ep)
+                except Exception:  # pylint: disable=broad-except
+                    name = getattr(ep, "__name__", repr(ep))
+                    logging.error("Extra panel %s failed", name, exc_info=True)
 
         # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
@@ -243,6 +299,7 @@ class BenchResult(
                 }
                 plot_cols.append(
                     self.to_auto(
+                        numeric_only=True,
                         agg_over_dims=self.bench_cfg.agg_over_dims,
                         agg_fn=self.bench_cfg.agg_fn,
                         **agg_kwargs,

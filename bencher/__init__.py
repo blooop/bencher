@@ -3,10 +3,18 @@ import warnings
 warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=UserWarning)
 
 from .bencher import Bench, BenchCfg, BenchRunCfg
+from .bench_cfg import ShowMode
 from .bench_runner import BenchRunner
+from .render import render_report, save_result, load_result
+from .report_export import (
+    result_to_dict,
+    result_to_json,
+    compare_results,
+    comparison_to_json,
+)
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
-from .variables.sweep_base import hash_sha1
+from .variables.sweep_base import hash_sha1, SUBSAMPLING_DIVISIONS_SAMPLES
 from .variables.inputs import (
     IntSweep,
     FloatSweep,
@@ -18,7 +26,7 @@ from .variables.inputs import (
 )
 from .variables.time import TimeSnapshot
 
-from .variables.inputs import box, p, sweep
+from .variables.inputs import box, p, sweep, with_subsampling_divisions
 from .variables.results import (
     ResultFloat,
     ResultVar,
@@ -116,22 +124,72 @@ except ModuleNotFoundError:
     pass
 
 
-from .regression import RegressionResult, RegressionReport, RegressionError
+from .regression import (
+    RegressionResult,
+    RegressionReport,
+    RegressionError,
+    MethodCells,
+    method_cells,
+)
 from .perf_tracker import PerfTracker, PerfReport
 from .git_info import git_time_event
 from .plotting.plot_filter import VarRange, PlotFilter
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 from .sample_order import SampleOrder
-from .caching import CachedParams
+from .cache_management import (
+    DEFAULT_CACHE_SIZE_BYTES,
+    CacheDirStats,
+    CacheStats,
+    cache_stats,
+    print_cache_stats,
+    clear_all,
+    clear_media,
+    clean_orphaned_media,
+    cleanup_job_media,
+    ensure_cache_version,
+)
 from .results.bench_result import BenchResult
 from .results.optimize_result import OptimizeResult
-from .results.video_result import VideoResult
+from .results.pane_result import PaneResult
+
+VideoResult = PaneResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
-from .bench_report import BenchReport, GithubPagesCfg
+from .bench_report import BenchReport, GithubPagesCfg, Publisher
 from .job import Executors
 from .sweep_timings import SweepTimings
 from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
 from .factories import create_bench, create_bench_runner
 from .run import run
+from .plugins import (
+    BenchData,
+    CacheHandle,
+    PlotPlugin,
+    PluginRegistry,
+    RunMeta,
+    get_registry,
+    plot_plugin,
+    register_plugin,
+    unregister_plugin,
+)
+
+
+_DEPRECATED_ALIASES = {
+    "LEVEL_SAMPLES": "SUBSAMPLING_DIVISIONS_SAMPLES",
+    "with_level": "with_subsampling_divisions",
+}
+
+
+def __getattr__(name: str):
+    import sys
+
+    new_name = _DEPRECATED_ALIASES.get(name)
+    if new_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"'{name}' is deprecated; use '{new_name}' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return getattr(sys.modules[__name__], new_name)

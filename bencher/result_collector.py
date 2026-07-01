@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from datetime import datetime
 from itertools import product
 from typing import Any
@@ -22,24 +23,76 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
     XARRAY_MULTIDIM_RESULT_TYPES,
-    SCALAR_RESULT_TYPES,
+    DATA_VAR_RESULT_TYPES,
     ResultFloat,
     ResultVec,
     ResultPath,
     ResultVideo,
     ResultImage,
-    ResultString,
     ResultContainer,
     ResultReference,
     ResultDataSet,
+    ResultRerun,
+    result_missing_fill,
 )
 from bencher.worker_job import WorkerJob
 from bencher.job import JobFuture
 
-# Default cache size for benchmark results (100 GB)
-DEFAULT_CACHE_SIZE_BYTES = int(100e9)
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
+
+_MEDIA_RESULT_TYPES = (ResultPath, ResultVideo, ResultImage, ResultContainer, ResultRerun)
+
+
+def _sentinel_for_result_var(rv):
+    """Return the sentinel value used for 'missing' entries of this result type.
+
+    Thin wrapper over the single source of truth in ``bencher.variables.results``
+    (``result_missing_fill``); kept as a local alias for the over_time aging path.
+    """
+    return result_missing_fill(rv)[0]
+
+
+def _null_old_entries(dataset, rv, var_limit):
+    """Null out over_time entries older than *var_limit* for a single result variable.
+
+    **Mutates *dataset* in-place** by writing sentinel values directly into
+    the backing numpy arrays of the affected data variables.
+
+    For media types (images, videos, .rrd files), the referenced files are
+    collected for deferred deletion.  Returns a list of file paths to delete;
+    the caller is responsible for removing them *after* the dataset is cached
+    so that a cache-write failure does not leave orphaned sentinel values.
+    """
+    n_time = dataset.sizes["over_time"]
+    if var_limit is None or var_limit >= n_time:
+        return []
+
+    null_count = n_time - var_limit
+    sentinel = _sentinel_for_result_var(rv)
+    is_media = isinstance(rv, _MEDIA_RESULT_TYPES)
+    files_to_delete = []
+
+    if isinstance(rv, ResultVec):
+        var_names = rv.index_names()
+    else:
+        var_names = [rv.name]
+
+    for vname in var_names:
+        if vname not in dataset:
+            continue
+        da = dataset[vname]
+        # over_time is always the last axis (dims = input_vars + [repeat, over_time])
+        for t_idx in range(null_count):
+            if is_media:
+                old_slice = da.isel(over_time=t_idx).values
+                for val in np.asarray(old_slice).flat:
+                    if val != sentinel and isinstance(val, str) and os.path.isfile(val):
+                        files_to_delete.append(val)
+            da.values[..., t_idx] = sentinel
+
+    return files_to_delete
 
 
 def set_xarray_multidim(
@@ -164,22 +217,16 @@ class ResultCollector:
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, SCALAR_RESULT_TYPES):
-                result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(rv, (ResultReference, ResultDataSet)):
-                result_data = np.full(dims_cfg.dims_size, -1, dtype=int)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(
-                rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer)
-            ):
-                result_data = np.full(dims_cfg.dims_size, "NAN", dtype=object)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-
-            elif type(rv) is ResultVec:
+            if type(rv) is ResultVec:
+                # ResultVec expands to one column per vector element.
+                fill, dtype = result_missing_fill(rv)
                 for i in range(rv.size):
-                    result_data = np.full(dims_cfg.dims_size, np.nan)
+                    result_data = np.full(dims_cfg.dims_size, fill, dtype=dtype)
                     data_vars[rv.index_name(i)] = (dims_cfg.dims_name, result_data)
+            elif isinstance(rv, DATA_VAR_RESULT_TYPES):
+                fill, dtype = result_missing_fill(rv)
+                result_data = np.full(dims_cfg.dims_size, fill, dtype=dtype)
+                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
 
         bench_res = BenchResult(bench_cfg)
         bench_res.ds = xr.Dataset(data_vars=data_vars, coords=dims_cfg.coords)
@@ -355,6 +402,7 @@ class ResultCollector:
         bench_cfg_hash: str,
         clear_history: bool,
         max_time_events: int | None = None,
+        result_vars: list | None = None,
     ) -> xr.Dataset:
         """Load historical data from a cache if over_time is enabled.
 
@@ -368,6 +416,9 @@ class ResultCollector:
             clear_history (bool): If True, clears historical data instead of loading it
             max_time_events (int | None): Maximum number of over_time events to retain.
                 Oldest events are trimmed. None means unlimited.
+            result_vars (list | None): Result variable instances. When a variable has a
+                per-variable ``max_time_events`` smaller than the dataset's over_time
+                size, older entries are set to sentinel and media files are deleted.
 
         Returns:
             xr.Dataset: Combined dataset with both historical and current benchmark data,
@@ -378,9 +429,28 @@ class ResultCollector:
             logger.info("clearing history")
         else:
             logger.info(f"checking historical key: {bench_cfg_hash}")
-            if bench_cfg_hash in c:
-                logger.info("loading historical data from cache")
+            try:
                 ds_old = c[bench_cfg_hash]
+            except KeyError:
+                logger.info("did not detect any historical data")
+            except (
+                AttributeError,
+                TypeError,
+                ModuleNotFoundError,
+                ImportError,
+            ) as exc:
+                logger.warning(
+                    "Failed to deserialize cached history (%s: %s). "
+                    "Discarding stale cache entry and continuing with fresh data.",
+                    type(exc).__name__,
+                    exc,
+                )
+                try:
+                    del c[bench_cfg_hash]
+                except (OSError, KeyError) as del_exc:
+                    logger.debug("Could not remove stale cache entry: %s", del_exc)
+            else:
+                logger.info("loading historical data from cache")
                 if (
                     "over_time" in ds_old.dims
                     and "over_time" in dataset.dims
@@ -393,15 +463,31 @@ class ResultCollector:
                     )
                 else:
                     dataset = xr.concat([ds_old, dataset], "over_time")
-            else:
-                logger.info("did not detect any historical data")
 
         if max_time_events is not None and "over_time" in dataset.dims:
             if dataset.sizes["over_time"] > max_time_events:
                 dataset = dataset.isel(over_time=slice(-max_time_events, None))
 
+        # Per-variable max_time_events: null out older entries for variables
+        # with a per-variable limit smaller than the dataset's over_time size.
+        # File deletion is deferred until after the cache write succeeds.
+        pending_deletes = []
+        if result_vars and "over_time" in dataset.dims:
+            for rv in result_vars:
+                var_limit = getattr(rv, "max_time_events", None)
+                if var_limit is not None:
+                    pending_deletes.extend(_null_old_entries(dataset, rv, var_limit))
+
         logger.info("saving data to history cache")
         c[bench_cfg_hash] = dataset
+
+        for fpath in pending_deletes:
+            try:
+                os.remove(fpath)
+                logger.debug("Deleted nulled media file: %s", fpath)
+            except OSError as exc:
+                logger.warning("Failed to delete media file %s: %s", fpath, exc)
+
         return dataset
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: Any) -> None:

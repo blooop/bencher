@@ -28,6 +28,8 @@ IMPORTANT — hash_persistent() contract:
 
 from __future__ import annotations
 
+import math
+import numbers
 import warnings
 from enum import auto
 from typing import Callable, Any
@@ -97,16 +99,36 @@ class ResultFloat(Number):
     bounds to [0, 1] and produces correct boolean-style plots.
     """
 
-    __slots__ = ["units", "direction", "share_axis"]
-    _hash_exclude = ("share_axis",)  # display-only, not part of benchmark data
+    __slots__ = ["units", "direction", "share_axis", "max_time_events"]
+    # ``direction`` is excluded because flipping minimize<->maximize does not
+    # change the recorded numeric values, only their interpretation for
+    # Pareto/optimizer plots.  Keeping it in the hash would needlessly wipe
+    # over_time history when the user merely retargets the optimizer.
+    _hash_exclude = ("direction", "share_axis", "max_time_events")
 
-    def __init__(self, units="ul", direction: OptDir = OptDir.minimize, share_axis=True, **params):
+    def __init__(
+        self,
+        units="ul",
+        direction: OptDir = OptDir.minimize,
+        share_axis=True,
+        max_time_events=None,
+        default=float("nan"),
+        **params,
+    ):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
-        self.default = 0  # json is terrible and does not support nan values
+        # Defaults to NaN so an *unrecorded* sample (a run that aborts before
+        # measuring, or a result var the worker never sets) is treated as
+        # missing and dropped by the nan-aware reductions used for regression
+        # and aggregation, rather than masquerading as a real 0 measurement.
+        # This matches the storage layer, which initialises result arrays with
+        # NaN. Callers that want unrecorded samples to read as 0 opt out with
+        # ``default=0``.
+        self.default = default
         self.direction = direction
         self.share_axis = share_axis
+        self.max_time_events = max_time_events
 
     def as_dim(self) -> hv.Dimension:
         return hv.Dimension((self.name, self.name), unit=self.units)
@@ -123,23 +145,63 @@ class ResultBool(ResultFloat):
     For continuous scalar metrics (time, distance, score), use ``ResultFloat`` instead.
     """
 
-    def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
+    def __init__(
+        self, units="ratio", direction: OptDir = OptDir.minimize, default=float("nan"), **params
+    ):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
+        # Defaults to NaN like ResultFloat (see ResultFloat.__init__): an
+        # *unrecorded* repeat is "missing", not a recorded failure, so it is
+        # dropped from the success proportion rather than counted as False. The
+        # binomial-std calc in bench_result_base divides p*(1-p) by the per-cell
+        # count of valid (non-NaN) repeats, so missing repeats don't understate
+        # the SE. A worker that wants a crash/abort to count as a failure must
+        # record False on its failure path; callers wanting the old False-fill
+        # opt out with ``default=0``.
         self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
+
+    def _validate_bounds(self, val, bounds, inclusive_bounds):
+        # NaN is the sentinel for an unrecorded ("missing") sample — see
+        # ResultFloat.__init__.  It lies outside the [0, 1] bounds, so param's
+        # bounds check would reject both ``default=float("nan")`` (re-validated
+        # whenever a subclass overrides the Parameter) and any NaN *value* set
+        # at runtime to mark a sample missing.  Treat NaN as always valid so a
+        # result bool can use the same missing sentinel as ResultFloat, while
+        # still rejecting genuinely out-of-range values.  Use math.isnan rather
+        # than ``isinstance(val, float)`` so numpy NaN scalars (e.g. np.float32)
+        # are also recognised; non-numeric values (None, str) raise here and
+        # fall through to the normal bounds check.
+        try:
+            if math.isnan(val):
+                return
+        except (TypeError, ValueError):
+            pass
+        super()._validate_bounds(val, bounds, inclusive_bounds)
 
 
 class ResultVec(param.List):
     """A class to represent fixed size vector result variable"""
 
-    __slots__ = ["units", "direction", "size"]
+    __slots__ = ["units", "direction", "size", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, size, units="ul", direction: OptDir = OptDir.minimize, **params):
+    def __init__(
+        self,
+        size,
+        units="ul",
+        direction: OptDir = OptDir.minimize,
+        max_time_events=None,
+        default=float("nan"),
+        **params,
+    ):
         param.List.__init__(self, **params)
         self.units = units
-        self.default = 0  # json is terrible and does not support nan values
+        # See ResultFloat.__init__ — defaults to NaN so unrecorded samples are
+        # treated as missing; pass ``default=0`` to make them read as 0.
+        self.default = default
         self.direction = direction
         self.size = size
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -198,11 +260,13 @@ def curve(
 
 
 class ResultPath(param.Filename):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", **params):
+    def __init__(self, default=None, units="path", max_time_events=None, **params):
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -214,11 +278,13 @@ class ResultPath(param.Filename):
 
 
 class ResultVideo(param.Filename):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", **params):
+    def __init__(self, default=None, units="path", max_time_events=None, **params):
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -226,11 +292,13 @@ class ResultVideo(param.Filename):
 
 
 class ResultImage(param.Filename):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="path", **params):
+    def __init__(self, default=None, units="path", max_time_events=None, **params):
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -238,11 +306,13 @@ class ResultImage(param.Filename):
 
 
 class ResultString(param.String):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="str", **params):
+    def __init__(self, default=None, units="str", max_time_events=None, **params):
         super().__init__(default=default, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -250,11 +320,13 @@ class ResultString(param.String):
 
 
 class ResultContainer(param.Parameter):
-    __slots__ = ["units"]
+    __slots__ = ["units", "max_time_events"]
+    _hash_exclude = ("max_time_events",)
 
-    def __init__(self, default=None, units="container", **params):
+    def __init__(self, default=None, units="container", max_time_events=None, **params):
         super().__init__(default=default, **params)
         self.units = units
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -278,9 +350,14 @@ class ResultRerun(ResultContainer):
     """
 
     __slots__ = ["width", "height"]
+    # width/height are viewer-pane sizing hints; they do not change the content
+    # of the recorded .rrd file, so they must not invalidate the cache.
+    _hash_exclude = ("width", "height")
 
-    def __init__(self, default=None, units="rerun", width=600, height=600, **params):
-        super().__init__(default=default, units=units, **params)
+    def __init__(
+        self, default=None, units="rerun", width=600, height=600, max_time_events=None, **params
+    ):
+        super().__init__(default=default, units=units, max_time_events=max_time_events, **params)
         self.width = width
         self.height = height
         # Eagerly create a rerun recording so that rr.log() calls in
@@ -305,8 +382,8 @@ class ResultRerun(ResultContainer):
 class ResultReference(param.Parameter):
     """Use this class to save arbitrary objects that are not picklable or native to panel.  You can pass a container callback that takes the object and returns a panel pane to be displayed"""
 
-    __slots__ = ["units", "obj", "container"]
-    _hash_exclude = ("obj", "container")  # runtime state, not deterministic config
+    __slots__ = ["units", "obj", "container", "max_time_events"]
+    _hash_exclude = ("obj", "container", "max_time_events")
 
     def __init__(
         self,
@@ -314,12 +391,14 @@ class ResultReference(param.Parameter):
         container: Callable[Any, pn.pane.panel] | None = None,
         default: Any | None = None,
         units: str = "container",
+        max_time_events=None,
         **params,
     ):
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
         self.container = container
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -327,19 +406,21 @@ class ResultReference(param.Parameter):
 
 
 class ResultDataSet(param.Parameter):
-    __slots__ = ["units", "obj"]
-    _hash_exclude = ("obj",)  # runtime state, not deterministic config
+    __slots__ = ["units", "obj", "max_time_events"]
+    _hash_exclude = ("obj", "max_time_events")
 
     def __init__(
         self,
         obj: Any | None = None,
         default: Any | None = None,
         units: str = "dataset",
+        max_time_events=None,
         **params,
     ):
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -347,13 +428,14 @@ class ResultDataSet(param.Parameter):
 
 
 class ResultVolume(param.Parameter):
-    __slots__ = ["units", "obj"]
-    _hash_exclude = ("obj",)  # runtime state, not deterministic config
+    __slots__ = ["units", "obj", "max_time_events"]
+    _hash_exclude = ("obj", "max_time_events")
 
-    def __init__(self, obj=None, default=None, units="container", **params):
+    def __init__(self, obj=None, default=None, units="container", max_time_events=None, **params):
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
+        self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -400,6 +482,73 @@ ALL_RESULT_TYPES = (
     ResultReference,
     ResultVolume,
 )
+
+
+# --- Missing / unrecorded-sample representation ----------------------------
+#
+# Single source of truth for how a *missing* entry of a result variable is
+# stored in its typed backing array.  An entry is "missing" when a job never
+# wrote it (a run that aborts before measuring, or a result var the worker
+# never sets) or when an over_time entry is aged out past ``max_time_events``.
+#
+# The representation is dtype-specific because xarray/numpy arrays are typed —
+# there is no single value that is both storage-valid and reduction-aware
+# across every dtype:
+#   - numeric types (float/bool/vec, and any future numeric) -> NaN   (float)
+#   - index-backed reference types (reference/dataset)       -> -1    (int)
+#   - object/file/string types (path/video/image/string/...) -> "NAN" (object)
+#
+# Both dataset initialisation (``ResultCollector.setup_dataset``) and over_time
+# aging (``_null_old_entries``) build their arrays from ``result_missing_fill``,
+# and consumers test for missingness with ``result_is_missing`` instead of
+# hardcoding ``np.isnan`` / ``== "NAN"`` / ``== -1`` per call site.
+_REFERENCE_MISSING_TYPES = (ResultReference, ResultDataSet)
+_OBJECT_MISSING_TYPES = (
+    ResultPath,
+    ResultVideo,
+    ResultImage,
+    ResultString,
+    ResultContainer,
+    ResultRerun,
+)
+# Single-column result types that get a data variable in the dataset. ResultVec
+# is handled separately (it expands to one column per element); ResultHmap and
+# ResultVolume are stored out-of-band and intentionally get no data variable.
+DATA_VAR_RESULT_TYPES = SCALAR_RESULT_TYPES + _REFERENCE_MISSING_TYPES + _OBJECT_MISSING_TYPES
+
+
+def result_missing_fill(rv) -> tuple[Any, type]:
+    """Return the ``(fill_value, numpy_dtype)`` used for missing entries of *rv*."""
+    if isinstance(rv, _REFERENCE_MISSING_TYPES):
+        return -1, int
+    if isinstance(rv, _OBJECT_MISSING_TYPES):
+        return "NAN", object
+    # ResultFloat / ResultBool / ResultVec / ResultVolume and any future numeric.
+    return float("nan"), float
+
+
+def result_is_missing(rv, value) -> bool:
+    """True when *value* is the missing/unrecorded sentinel for *rv*'s storage.
+
+    For NaN-backed (numeric) types, both NaN and ``None`` count as missing — the
+    latter is treated as missing intentionally so a value that never reached the
+    typed array (e.g. an absent object-index entry) is not mistaken for real
+    data. Non-numeric values (strings, lists, …) are never missing for a
+    numeric type: they cannot be the NaN sentinel, so no float coercion is
+    attempted (the *string* ``"nan"`` is real data, not a missing marker). For
+    the ``-1`` / ``"NAN"`` sentinel types, missingness is exact equality with
+    the sentinel.
+    """
+    fill, _ = result_missing_fill(rv)
+    if isinstance(fill, float) and math.isnan(fill):
+        if value is None:
+            return True
+        # numbers.Real covers python ints/floats/bools and numpy scalars
+        # (numpy registers them with the numbers ABC tower).
+        if isinstance(value, numbers.Real):
+            return math.isnan(float(value))
+        return False
+    return value == fill
 
 
 class ResultVar(ResultFloat):

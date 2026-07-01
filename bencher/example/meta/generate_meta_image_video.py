@@ -61,6 +61,7 @@ class PolygonAnimator(bn.ParametrizedSweep):
     speed = bn.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
     animation = bn.ResultVideo(doc="Rotating polygon video")
     frame_snapshot = bn.ResultImage(doc="Last frame snapshot")
+    max_angle = bn.ResultFloat(units="deg", doc="Maximum rotation angle in the animation")
 
     def benchmark(self):
         vid_writer = bn.VideoWriter()
@@ -71,7 +72,8 @@ class PolygonAnimator(bn.ParametrizedSweep):
             img = _draw_polygon_image(points, "white", linewidth=3, size=200)
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
-        self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)"""
+        self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)
+        self.max_angle = self.speed * 360.0 * (num_frames - 1) / num_frames"""
 )
 
 _EXTRA_IMPORTS = ["import math", "import numpy as np", "from PIL import Image, ImageDraw"]
@@ -117,7 +119,7 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
         filename = function_name
         title = f"{self.result_kind.replace('_', ' ').title()}: {info['dims_label']} input"
 
-        level = 2 if self.input_dims >= 2 else 3
+        sd = 2 if self.input_dims >= 2 else 3
 
         self.generate_sweep_example(
             title=title,
@@ -130,7 +132,7 @@ class MetaImageVideoSweeps(MetaGeneratorBase):
             result_vars=result_vars,
             class_code=class_code,
             extra_imports=_EXTRA_IMPORTS,
-            run_kwargs={"level": level},
+            run_kwargs={"subsampling_divisions": sd},
         )
 
 
@@ -147,6 +149,8 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "result_image_to_video",
             "result_image_composable",
             "result_image_over_time",
+            "result_image_aggregate",
+            "result_video_aggregate",
         ],
         doc="Rich example to generate",
     )
@@ -159,6 +163,8 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "result_image_to_video": self._gen_to_video,
             "result_image_composable": self._gen_composable,
             "result_image_over_time": self._gen_over_time,
+            "result_image_aggregate": self._gen_image_aggregate,
+            "result_video_aggregate": self._gen_video_aggregate,
         }[name]
         generator()
 
@@ -169,7 +175,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
         body = (
             "bench = PolygonRenderer().to_bench(run_cfg)\n"
             "bench.add_plot_callback(bn.BenchResult.to_sweep_summary)\n"
-            "bench.add_plot_callback(bn.BenchResult.to_panes, level=3)\n"
+            "bench.add_plot_callback(bn.BenchResult.to_panes, subsampling_divisions=3)\n"
             'sweep_vars = ["sides", "radius", "color"]\n'
             "for i in range(1, len(sweep_vars) + 1):\n"
             "    bench.plot_sweep(\n"
@@ -186,7 +192,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     # -- Mixed image + scalar results ----------------------------------------
@@ -209,7 +215,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     # -- Image sweep to video grid -------------------------------------------
@@ -239,7 +245,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     # -- Image over_time slider ------------------------------------------------
@@ -274,7 +280,7 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=_IMAGE_CLASS_CODE,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     # -- Composable container video from images ------------------------------
@@ -336,7 +342,59 @@ class MetaImageVideoRich(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=composable_class_code,
-            run_kwargs={"level": 2},
+            run_kwargs={"subsampling_divisions": 2},
+        )
+
+    # -- Image aggregate -------------------------------------------------------
+
+    def _gen_image_aggregate(self):
+        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        body = (
+            "bench = PolygonRenderer().to_bench(run_cfg)\n"
+            "bench.plot_sweep(\n"
+            '    input_vars=["sides", "color"],\n'
+            '    result_vars=["polygon", "area"],\n'
+            '    description="aggregate=True collapses the color dimension. '
+            "The area scalar is averaged over colors (mean \\u00b1 std), "
+            'but polygon images should only appear once in the non-aggregated view.",\n'
+            "    aggregate=True,\n"
+            ")\n"
+        )
+        self.generate_example(
+            title="ResultImage: Aggregate with Mixed Image and Scalar",
+            output_dir=f"{OUTPUT_DIR}/result_image",
+            filename="example_result_image_aggregate",
+            function_name="example_result_image_aggregate",
+            imports=imports,
+            body=body,
+            class_code=_IMAGE_CLASS_CODE,
+            run_kwargs={"subsampling_divisions": 3},
+        )
+
+    # -- Video aggregate -------------------------------------------------------
+
+    def _gen_video_aggregate(self):
+        imports = "\n".join(["import bencher as bn"] + _EXTRA_IMPORTS)
+        body = (
+            "bench = PolygonAnimator().to_bench(run_cfg)\n"
+            "bench.plot_sweep(\n"
+            '    input_vars=["sides", "speed"],\n'
+            '    result_vars=["animation", "frame_snapshot", "max_angle"],\n'
+            '    description="aggregate=True collapses the speed dimension. '
+            "Videos and images should only appear once in the non-aggregated view, "
+            'not duplicated in the aggregated view.",\n'
+            "    aggregate=True,\n"
+            ")\n"
+        )
+        self.generate_example(
+            title="ResultVideo: Aggregate with Mixed Video and Image",
+            output_dir=f"{OUTPUT_DIR}/result_video",
+            filename="example_result_video_aggregate",
+            function_name="example_result_video_aggregate",
+            imports=imports,
+            body=body,
+            class_code=_VIDEO_CLASS_CODE,
+            run_kwargs={"subsampling_divisions": 2},
         )
 
 
@@ -368,6 +426,8 @@ def example_meta_image_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
                     "result_image_to_video",
                     "result_image_composable",
                     "result_image_over_time",
+                    "result_image_aggregate",
+                    "result_video_aggregate",
                 ],
             ),
         ],

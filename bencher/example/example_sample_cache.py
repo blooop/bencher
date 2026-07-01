@@ -1,5 +1,10 @@
 import bencher as bn
 
+# NOTE: This example intentionally uses the legacy separate-function pattern
+# (passing instance.crashy_fn as the worker) rather than the modern benchmark()
+# method, because it demonstrates crash recovery with cache_samples — the worker
+# must be able to raise exceptions that the cache system catches and resumes from.
+
 
 class UnreliableClass(bn.ParametrizedSweep):
     """This class helps demonstrate benchmarking a function that sometimes crashes during sampling.  By using BenchRunCfg.cache_samples you can store the results of every call to the benchmark function so data is not lost in the event of a crash.  However, because cache invalidation is hard (https://martinfowler.com/bliki/TwoHardThings.html) you need to be mindful of how you could get bad results due to incorrect cache data.  For example if you change your benchmark function and use the sample cache you will not get correct values; you will need to use BenchRunCfg.clear_sample_cache to purge any out of date results."""

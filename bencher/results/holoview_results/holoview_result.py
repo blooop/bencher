@@ -10,16 +10,21 @@ import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
 import xarray as xr
 
 from bencher.utils import (
+    get_nearest_coords1D,
     hmap_canonical_input,
     get_nearest_coords,
+    label_with_units,
     listify,
 )
-from bencher.results.video_result import VideoResult
+from bencher.results.pane_result import PaneResult
 from bencher.results.bench_result_base import ReduceType
 
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
-hv.extension("bokeh", "plotly")
+# NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders
+# through the holoviews plotly backend (Surface/Volume use plotly.graph_objs
+# directly via pn.pane.Plotly), and registering it eagerly costs ~6s at import.
+hv.extension("bokeh")
 
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
@@ -27,7 +32,22 @@ use_tap = True
 _AGG_TITLE = "All Time Points (aggregated)"
 
 
-class HoloviewResult(VideoResult):
+class HoloviewResult(PaneResult):
+    # Element types that carry the shared default figure size. Centralized here (rather
+    # than inline in set_default_opts) so tests can assert coverage stays in sync as new
+    # element types are added. HeatMap/GridSpace are excluded because they take extra opts.
+    DEFAULT_SIZED_ELEMENTS = (
+        hv.Curve,
+        hv.Points,
+        hv.Bars,
+        hv.Scatter,
+        hv.BoxWhisker,
+        hv.Violin,
+        hv.Histogram,
+        hv.Area,
+        hv.ErrorBars,
+    )
+
     @staticmethod
     def set_default_opts(width: int = 600, height: int = 600) -> dict:
         """Set default options for HoloViews visualizations.
@@ -41,12 +61,10 @@ class HoloviewResult(VideoResult):
         """
         width_height = {"width": width, "height": height, "tools": ["hover"]}
         hv.opts.defaults(
-            hv.opts.Curve(**width_height),
-            hv.opts.Points(**width_height),
-            hv.opts.Bars(**width_height),
-            hv.opts.Scatter(**width_height),
-            hv.opts.BoxWhisker(**width_height),
-            hv.opts.Violin(**width_height),
+            *(
+                getattr(hv.opts, element.__name__)(**width_height)
+                for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS
+            ),
             hv.opts.HeatMap(cmap="plasma", **width_height, colorbar=True),
             # hv.opts.Surface(**width_heigh),
             hv.opts.GridSpace(plot_size=400),
@@ -109,7 +127,7 @@ class HoloviewResult(VideoResult):
                 res = plot_callback(rv)
                 if res is not None:
                     got_results = True
-                    pt += plot_callback(rv)
+                    pt += res
             return pt if got_results else None
         return plot_callback(self.bench_cfg.result_vars[0])
 
@@ -137,15 +155,32 @@ class HoloviewResult(VideoResult):
 
     @staticmethod
     def _apply_opts(plot, **opts_kwargs):
-        """Apply .opts() to a plot, handling panel.pane.HoloViews wrappers.
+        """Apply .opts() to a plot, handling panel wrappers and layout containers.
 
-        When hvplot is called with widget_location, it returns a panel pane
-        whose underlying .object is the actual holoviews element.
+        hvplot may return any of:
+          (a) a bare HoloViews element/DynamicMap/Overlay (has ``.opts``),
+          (b) a ``pn.pane.HoloViews`` wrapper whose underlying ``.object`` is the
+              actual holoviews element, or
+          (c) a panel layout container (``Row``/``Column``/``WidgetBox``) — this
+              happens when ``widget_location`` splits the plot from its widgets,
+              e.g. an over_time time-series line with a categorical ``by`` widget.
+              The HoloViews pane is then nested inside ``.objects``.
+
+        Without the container case, options such as ``xrotation``, ``title`` and
+        ``ylabel`` were silently dropped for those split plots (the over_time
+        x-axis kept its default horizontal labels). Recurse into containers so
+        the options reach the nested pane.
         """
-        if hasattr(plot, "opts"):
-            return plot.opts(**opts_kwargs)
+        # Panel layout containers expose .objects (panes/elements never do).
+        if hasattr(plot, "objects") and not hasattr(plot, "object"):
+            for child in plot.objects:
+                HoloviewResult._apply_opts(child, **opts_kwargs)
+            return plot
         if hasattr(plot, "object") and hasattr(plot.object, "opts"):
             plot.object = plot.object.opts(**opts_kwargs)
+            return plot
+        if hasattr(plot, "opts"):
+            return plot.opts(**opts_kwargs)
         return plot
 
     @staticmethod
@@ -220,6 +255,12 @@ class HoloviewResult(VideoResult):
             return None
         kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
         groupby = [d for d in ds_dims if d not in kdims]
+
+        # Show units on both axes: x from the float input var, y from the result var
+        kwargs.setdefault("ylabel", label_with_units(result_var))
+        x_var = next((fv for fv in self.plt_cnt_cfg.float_vars if fv.name == kdims[0]), None)
+        if x_var is not None:
+            kwargs.setdefault("xlabel", label_with_units(x_var))
 
         vdims = [var, std_var] if has_spread else [var]
 
@@ -305,9 +346,22 @@ class HoloviewResult(VideoResult):
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
 
+        # Use isel (positional) rather than sel (label-based) so a single time
+        # slice is always returned, even when over_time has duplicate coord
+        # values. With sel, duplicates yield a multi-row slice and hvplot
+        # returns a DynamicMap, while unique values drop the dim and return
+        # plain elements — mixed types break the HoloMap assertion.
+        seen: set = set()
         for idx in slider_indices:
             t = times[idx]
-            ds_t = dataset.sel(over_time=t)
+            try:
+                key = t.item() if hasattr(t, "item") else t
+            except ValueError:
+                key = idx
+            if key in seen:
+                continue
+            seen.add(key)
+            ds_t = dataset.isel(over_time=idx)
             holomap[t] = make_plot_fn(ds_t)
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
@@ -356,6 +410,85 @@ class HoloviewResult(VideoResult):
             )
 
         return slider_pane
+
+    def _build_tap_plot(
+        self,
+        plot: hv.Element,
+        dataset: xr.Dataset,
+        result_var_plots: list[Parameter],
+        container: type | list[type] | None = None,
+        tap_container_direction: type | None = None,
+    ) -> pn.Row:
+        """Wrap a plot element with interactive PointerXY tap functionality.
+
+        Sets up ``hv.streams.PointerXY`` and ``hv.streams.MouseLeave`` on the
+        given *plot*, updating the supplied containers with the nearest data
+        point values as the user hovers.
+
+        Args:
+            plot: The base HoloViews element to attach tap streams to.
+            dataset: The full xarray Dataset for value look-ups.
+            result_var_plots: Result variables whose values are shown on tap.
+            container: Panel container type(s) for displaying tapped values.
+            tap_container_direction: Layout class (``pn.Row`` or ``pn.Column``)
+                for the tap containers.  Defaults to ``pn.Column``.
+
+        Returns:
+            A ``pn.Row`` containing the interactive plot and tap info panel.
+        """
+        result_var_plots, cont_instances = self.setup_results_and_containers(
+            result_var_plots, container
+        )
+        title = pn.pane.Markdown("Selected: None")
+
+        input_vars = self.bench_cfg.input_vars
+        num_inputs = self.plt_cnt_cfg.inputs_cnt
+        state = dict(x=None, y=None, update=False)
+
+        def _on_pointer(x, y):  # pragma: no cover
+            x_nearest = get_nearest_coords1D(x, dataset.coords[input_vars[0].name].data)
+            if x_nearest != state["x"]:
+                state["x"] = x_nearest
+                state["update"] = True
+
+            if num_inputs > 1:
+                y_nearest = get_nearest_coords1D(y, dataset.coords[input_vars[1].name].data)
+                if y_nearest != state["y"]:
+                    state["y"] = y_nearest
+                    state["update"] = True
+
+            if state["update"]:
+                kdims = {input_vars[0].name: state["x"]}
+                if num_inputs > 1:
+                    kdims[input_vars[1].name] = state["y"]
+
+                if hasattr(plot, "current_key"):
+                    for d, k in zip(plot.kdims, plot.current_key):
+                        kdims[d.name] = k
+                for rv, cont in zip(result_var_plots, cont_instances):
+                    val = dataset[rv.name].sel(**kdims)
+                    item = self.zero_dim_da_to_val(val)
+                    title.object = "Selected: " + ", ".join(f"{k}:{v}" for k, v in kdims.items())
+                    cont.object = item
+                    if hasattr(cont, "autoplay"):
+                        cont.paused = False
+                        cont.time = 0
+                        cont.loop = True
+                        cont.autoplay = True
+                state["update"] = False
+
+        def _on_exit(x, y):  # pragma: no cover  # pylint: disable=unused-argument
+            state["update"] = True
+
+        posxy = hv.streams.PointerXY(source=plot)
+        posxy.add_subscriber(_on_pointer)
+        leave = hv.streams.MouseLeave(source=plot)
+        leave.add_subscriber(_on_exit)
+
+        if tap_container_direction is None:
+            tap_container_direction = pn.Column
+        bound_plot = tap_container_direction(*cont_instances)
+        return pn.Row(plot, pn.Column(title, bound_plot))
 
     def hv_container_ds(
         self,

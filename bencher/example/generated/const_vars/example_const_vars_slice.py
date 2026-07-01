@@ -46,4 +46,4 @@ def example_const_vars_slice(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_const_vars_slice, level=3)
+    bn.run(example_const_vars_slice, subsampling_divisions=3)

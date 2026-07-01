@@ -1,9 +1,9 @@
 """Meta-generator: Rerun visualization integration examples.
 
-Demonstrates how to use the rerun spatial logging library with bencher for
-interactive 2D/3D result visualization. The generated examples show the API
-patterns but guard the rerun import so they run safely without the optional
-rerun-sdk dependency installed.
+Generates three rerun examples:
+- capture_window: basic rerun capture in a single sweep
+- regression: 0 input vars, 3 over-time snapshots with regression on the 3rd
+- sweep: 1 input var (damping_ratio), single sweep, no over_time
 """
 
 import bencher as bn
@@ -13,6 +13,8 @@ OUTPUT_DIR = "rerun"
 
 RERUN_EXAMPLES = [
     "capture_window",
+    "regression",
+    "sweep",
 ]
 
 
@@ -24,6 +26,10 @@ class MetaRerun(MetaGeneratorBase):
     def benchmark(self):
         if self.example == "capture_window":
             self._generate_capture_window()
+        elif self.example == "regression":
+            self._generate_regression()
+        elif self.example == "sweep":
+            self._generate_sweep()
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
@@ -68,7 +74,76 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
+        )
+
+    def _generate_regression(self):
+        """0 input vars, 3 over-time snapshots, regression on the 3rd."""
+        imports = (
+            "from datetime import datetime, timedelta\n\n"
+            "import bencher as bn\n"
+            "from bencher.example.example_rerun_over_time import ControlSystemSweep"
+        )
+        body = """\
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
+run_cfg.regression_detection = True
+run_cfg.regression_method = "percentage"
+run_cfg.regression_fail = False
+
+benchable = ControlSystemSweep()
+bench = benchable.to_bench(run_cfg)
+base_time = datetime(2024, 1, 1)
+
+# 3 calibration runs: stable, stable, then controller tuning degrades
+degradations = [0.0, 0.0, 0.4]
+for i, deg in enumerate(degradations):
+    benchable._degradation = deg
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    bench.plot_sweep(
+        "controller_monitoring",
+        input_vars=[],
+        result_vars=["out_overshoot", "out_settling_time", "out_rerun"],
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(days=i),
+    )
+"""
+        self.generate_example(
+            title="Rerun Regression — detect controller degradation over time",
+            output_dir=OUTPUT_DIR,
+            filename="example_rerun_regression",
+            function_name="example_rerun_regression",
+            imports=imports,
+            body=body,
+            run_kwargs={"over_time": True},
+        )
+
+    def _generate_sweep(self):
+        """2 input vars (damping_ratio, omega_n), single sweep, aggregate=True."""
+        imports = (
+            "import bencher as bn\n"
+            "from bencher.example.example_rerun_over_time import ControlSystemSweep"
+        )
+        body = """\
+bench = ControlSystemSweep().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=["damping_ratio", "omega_n"],
+    result_vars=["out_overshoot", "out_settling_time", "out_rerun"],
+    description="Sweep the damping ratio and natural frequency of a second-order "
+    "control system.  aggregate=True collapses omega_n so you can see the "
+    "mean \\u00b1 std across frequencies for each damping ratio.",
+    aggregate=True,
+)
+"""
+        self.generate_example(
+            title="Rerun Sweep — control system response across damping ratios",
+            output_dir=OUTPUT_DIR,
+            filename="example_rerun_sweep",
+            function_name="example_rerun_sweep",
+            imports=imports,
+            body=body,
+            run_kwargs={"subsampling_divisions": 3},
         )
 
 

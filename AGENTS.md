@@ -86,6 +86,14 @@ Bencher is a benchmarking framework built around these core concepts:
 - Coverage reporting with coverage.py
 - Examples serve as integration tests
 - Meta-generated examples in `bencher/example/meta/`
+- **Collect/render split coverage** (`bencher/render.py`): three layers guard the
+  out-of-process render pipeline against divergence from the normal `plot_sweep` path —
+  (A) parity tests in `test/test_render.py` assert `collect()` computes the same dataset
+  as `plot_sweep()`; (B) `test/test_split_render_examples.py` round-trips every result
+  type through save → load → render; (C) setting `BENCHER_FORCE_SPLIT_RENDER=1` reroutes
+  every auto_plot report build through that serialize/render-from-loaded path, so
+  `pixi run test-split` re-runs the *entire* suite over the split pipeline (its own CI
+  job, `ci-split`).
 
 ### Generated Example Naming Convention
 

@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import Callable, Protocol, runtime_checkable
 import logging
 import warnings
+import webbrowser
 import inspect
 from datetime import datetime
-from bencher.bench_cfg import BenchRunCfg, BenchCfg
+from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
+from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.bencher import Bench
-from bencher.bench_report import BenchReport, GithubPagesCfg
+from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
 from copy import deepcopy
 
 
@@ -133,28 +135,43 @@ class BenchRunner:
     @staticmethod
     def setup_run_cfg(
         run_cfg: BenchRunCfg | None = None,
-        level: int = 2,
+        subsampling_divisions=UNSET,
         cache_samples: bool = False,
         over_time: bool | None = None,
+        level: int | None = None,
     ) -> BenchRunCfg:
         """Configure benchmark run settings with reasonable defaults.
 
-        Creates a copy of the provided configuration with the specified level and
+        Creates a copy of the provided configuration with the specified subsampling_divisions and
         caching behavior settings applied.
 
         Args:
             run_cfg (BenchRunCfg, optional): Base configuration to modify. Defaults to None.
-            level (int, optional): Benchmark sampling resolution level. Defaults to 2.
+            subsampling_divisions (int, optional): Benchmark sampling resolution subsampling_divisions. Defaults to 2.
             cache_samples (bool, optional): Whether to enable sample caching. Defaults to False.
             over_time (bool, optional): Enable time-series benchmarking. None preserves run_cfg value.
+            level (int, optional): Deprecated. Use ``subsampling_divisions`` instead.
 
         Returns:
             BenchRunCfg: A new configuration object with the specified settings
         """
+        if level is not None:
+            if subsampling_divisions is not UNSET:
+                raise TypeError(
+                    "Cannot pass both 'level' and 'subsampling_divisions'; use 'subsampling_divisions' only."
+                )
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            subsampling_divisions = level
+        if subsampling_divisions is UNSET:
+            subsampling_divisions = 2
         run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
         run_cfg_out.cache_samples = cache_samples
         run_cfg_out.only_hash_tag = cache_samples
-        run_cfg_out.level = level
+        run_cfg_out.subsampling_divisions = subsampling_divisions
         if over_time is not None:
             run_cfg_out.over_time = over_time
         return run_cfg_out
@@ -278,10 +295,10 @@ class BenchRunner:
 
     def run(
         self,
-        # New unified parameters (level and repeats are starting values)
-        level: int = 2,
+        # New unified parameters (subsampling_divisions and repeats are starting values)
+        subsampling_divisions=UNSET,
         repeats: int = 1,
-        max_level: int | None = None,
+        max_subsampling_divisions: int | None = None,
         max_repeats: int | None = None,
         # Legacy parameters for backward compatibility (deprecated)
         min_level: int | None = None,
@@ -290,7 +307,7 @@ class BenchRunner:
         run_cfg: BenchRunCfg | None = None,
         publish: bool = False,
         debug: bool = False,
-        show: bool = False,
+        show: bool | str | ShowMode = False,
         save: bool = False,
         grouped: bool = False,
         cache_samples: bool | None = None,
@@ -301,24 +318,28 @@ class BenchRunner:
         """Unified interface for running benchmarks.
 
         This function provides a single entry point for benchmark runs:
-        - Single runs: Use level and repeats parameters only
-        - Progressive runs: Set max_level and/or max_repeats for automatic progression
+        - Single runs: Use subsampling_divisions and repeats parameters only
+        - Progressive runs: Set max_subsampling_divisions and/or max_repeats for automatic progression
 
         Args:
             # Primary parameters (starting values)
-            level (int): Starting benchmark level. Defaults to 2.
+            subsampling_divisions (int): Starting benchmark subsampling_divisions. Defaults to 2.
             repeats (int): Starting number of repeats. Defaults to 1.
-            max_level (int, optional): Maximum level for progression. If None, uses single level.
+            max_subsampling_divisions (int, optional): Maximum subsampling_divisions for progression. If None, uses single subsampling_divisions.
             max_repeats (int, optional): Maximum repeats for progression. If None, uses single repeat count.
 
-            # Legacy parameters (deprecated - use level/max_level instead)
-            min_level (int, optional): DEPRECATED - use 'level' parameter instead.
+            # Legacy parameters (deprecated - use subsampling_divisions/max_subsampling_divisions instead)
+            min_level (int, optional): DEPRECATED - use 'subsampling_divisions' parameter instead.
             start_repeats (int, optional): DEPRECATED - use 'repeats' parameter instead.
 
             run_cfg (BenchRunCfg, optional): benchmark run configuration. Defaults to None.
             publish (bool, optional): Publish the results to git, requires a publish url to be set up. Defaults to False.
             debug (bool, optional): Enable debug output during publishing. Defaults to False.
-            show (bool, optional): show the results in the local web browser. Defaults to False.
+            show (bool | str | ShowMode, optional): How to display results.
+                ``True``/``ShowMode.LIVE`` starts a Panel server (blocks);
+                ``ShowMode.HTML`` saves HTML and opens it in the browser (returns);
+                ``ShowMode.PUBLISHED`` opens the published URL (requires ``publish=True``);
+                ``False``/``ShowMode.NONE`` displays nothing. Defaults to False.
             save (bool, optional): save the results to disk in index.html. Defaults to False.
             grouped (bool, optional): Produce a single html page with all the benchmarks included. Defaults to False.
             cache_samples (bool | None, optional): Use the sample cache to reuse previous results.
@@ -330,17 +351,28 @@ class BenchRunner:
         Returns:
             list[BenchCfg]: A list of benchmark configuration objects with results
         """
+        from bencher.utils import normalize_subsampling_divisions_kwargs
+
+        subsampling_divisions, max_subsampling_divisions, subsampling_divisions_was_set = (
+            normalize_subsampling_divisions_kwargs(
+                subsampling_divisions=subsampling_divisions,
+                max_subsampling_divisions=max_subsampling_divisions,
+                kwargs=kwargs,
+                stacklevel=2,
+            )
+        )
+
         cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 
         # Handle deprecation warnings for legacy parameters
         if min_level is not None:
             warnings.warn(
-                "min_level parameter is deprecated. Use 'level' parameter instead.",
+                "min_level parameter is deprecated. Use 'subsampling_divisions' parameter instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-            if level == 2:  # Only override if level is still default
-                level = min_level
+            if not subsampling_divisions_was_set:
+                subsampling_divisions = min_level
 
         if start_repeats is not None:
             warnings.warn(
@@ -355,20 +387,27 @@ class BenchRunner:
         # settings directly — no second copy via setup_run_cfg needed.
         run_cfg = deepcopy(self.run_cfg if run_cfg is None else run_cfg)
 
-        # Set up level and repeat ranges
-        min_level = level
-        final_max_level = max_level if max_level is not None else level
+        # Set up subsampling_divisions and repeat ranges
+        min_subsampling_divisions = subsampling_divisions
+        final_max_subsampling_divisions = (
+            max_subsampling_divisions
+            if max_subsampling_divisions is not None
+            else subsampling_divisions
+        )
         min_repeats = repeats
         final_max_repeats = max_repeats if max_repeats is not None else repeats
 
         # Auto-enable sample caching for progressive runs when not explicitly set
         if cache_samples is None:
-            is_progressive = final_max_level > min_level or final_max_repeats > min_repeats
+            is_progressive = (
+                final_max_subsampling_divisions > min_subsampling_divisions
+                or final_max_repeats > min_repeats
+            )
             if is_progressive:
                 logging.info(
                     "Automatically enabling cache_samples for progressive run "
-                    "(max_level=%s, max_repeats=%s). Pass cache_samples=False to disable.",
-                    final_max_level,
+                    "(max_subsampling_divisions=%s, max_repeats=%s). Pass cache_samples=False to disable.",
+                    final_max_subsampling_divisions,
                     final_max_repeats,
                 )
                 cache_samples = True
@@ -383,15 +422,17 @@ class BenchRunner:
             run_cfg.backend = backend
 
         for r in range(min_repeats, final_max_repeats + 1):
-            for lvl in range(min_level, final_max_level + 1):
+            for lvl in range(min_subsampling_divisions, final_max_subsampling_divisions + 1):
                 report_level = None
                 if grouped:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
                 for bch_fn in self.bench_fns:
                     run_lvl = deepcopy(run_cfg)
-                    run_lvl.level = lvl
+                    run_lvl.subsampling_divisions = lvl
                     run_lvl.repeats = r
-                    logging.info(f"Running {bch_fn} at level: {lvl} with repeats:{r}")
+                    logging.info(
+                        f"Running {bch_fn} at subsampling_divisions: {lvl} with repeats:{r}"
+                    )
                     res, active_report = self._execute_bench_fn(bch_fn, run_lvl, report_level)
                     if grouped:
                         if report_level is not None and active_report is not report_level:
@@ -432,34 +473,74 @@ class BenchRunner:
         return self.results
 
     def show_publish(
-        self, report: BenchReport, show: bool, publish: bool, save: bool, debug: bool
+        self,
+        report: BenchReport,
+        show: bool | str | ShowMode,
+        publish: bool,
+        save: bool,
+        debug: bool,
     ) -> None:
         """Handle publishing, saving, and displaying of a benchmark report.
 
         Args:
             report (BenchReport): The benchmark report to process
-            show (bool): Whether to display the report in a browser
+            show (bool | str | ShowMode): How to display the report. See
+                :func:`bencher.bench_cfg.normalize_show` for accepted values.
             publish (bool): Whether to publish the report
             save (bool): Whether to save the report to disk
             debug (bool): Whether to enable debug mode for publishing
         """
+        show_mode = normalize_show(show)
+
+        if show_mode == "published" and not publish:
+            raise ValueError("show='published' requires publish=True")
+
         if save:
             report.save(
                 directory="reports", filename=f"{report.bench_name}.html", in_html_folder=False
             )
+
+        published_url: str | None = None
         if publish and self.publisher is not None:
             if isinstance(self.publisher, GithubPagesCfg):
                 p = self.publisher
-                report.publish_gh_pages(p.github_user, p.repo_name, p.folder_name, p.branch_name)
+                published_url = report.publish_gh_pages(
+                    p.github_user, p.repo_name, p.folder_name, p.branch_name
+                )
+            elif isinstance(self.publisher, Publisher):
+                try:
+                    published_url = self.publisher.publish(report)
+                    if published_url:
+                        logging.info("Benchmark report published at %s", published_url)
+                except Exception:  # pylint: disable=broad-except
+                    logging.exception("Publisher.publish() failed — continuing benchmark")
             else:
-                report.publish(remote_callback=self.publisher, debug=debug)
-        if show:
+                published_url = report.publish(remote_callback=self.publisher, debug=debug)
+
+        if show_mode is ShowMode.LIVE:
             self.servers.append(report.show(self.run_cfg))
+        elif show_mode is ShowMode.HTML:
+            path = report.save(portable=True)  # file:// needs inline .rrd data
+            try:
+                webbrowser.open(path.resolve().as_uri())
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Failed to open browser for %s", path)
+        elif show_mode is ShowMode.PUBLISHED:
+            if published_url:
+                try:
+                    webbrowser.open(published_url)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logging.exception("Failed to open %s", published_url)
+            else:
+                logging.warning(
+                    "show='published' but no publish URL is available "
+                    "(publish=False or the publisher returned None) — nothing to open"
+                )
 
     def show(
         self,
         report: BenchReport | None = None,
-        show: bool = True,
+        show: bool | str | ShowMode = True,
         publish: bool = False,
         save: bool = False,
         debug: bool = False,
@@ -471,7 +552,8 @@ class BenchRunner:
 
         Args:
             report (BenchReport, optional): The report to process. Defaults to None (most recent).
-            show (bool, optional): Whether to display in browser. Defaults to True.
+            show (bool | str | ShowMode, optional): How to display. See :meth:`run` for
+                accepted values. Defaults to True.
             publish (bool, optional): Whether to publish the report. Defaults to False.
             save (bool, optional): Whether to save to disk. Defaults to False.
             debug (bool, optional): Enable debug mode for publishing. Defaults to False.

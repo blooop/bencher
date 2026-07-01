@@ -5,11 +5,12 @@ from copy import deepcopy
 from enum import Enum
 from pathlib import Path
 from typing import Any
+import warnings
 
 import numpy as np
 from param import Integer, Number, Selector
 import yaml
-from bencher.variables.sweep_base import SweepBase, shared_slots
+from bencher.variables.sweep_base import SweepBase, shared_slots, SUBSAMPLING_DIVISIONS_SAMPLES
 
 
 # Sentinel value used to indicate that the actual selectable values for a SweepSelector
@@ -59,6 +60,45 @@ class SweepSelector(Selector, SweepBase):
             list[Any]: A list of parameter values to sweep through
         """
         return self.indices_to_samples(self.samples, self.objects)
+
+    def _sweep_identity(self) -> tuple:
+        """Include ``objects`` so changing the option set busts the cache.
+
+        Each element is fingerprinted in one of two ways:
+
+        * If it exposes ``__bencher_hash__`` (e.g. :class:`YamlSelection`),
+          that hook is called — returning something cross-process stable.
+          This is the required contract for arbitrary / user-defined types.
+        * Otherwise we fall back to ``str(o)``.  This is safe for primitive
+          option types (``str``, ``bool``, ``Enum``, numeric) whose ``__str__``
+          is deterministic, but an object inheriting the default
+          ``object.__str__`` will render as ``<Foo at 0x7f...>`` — a memory
+          address that changes every process and would silently produce
+          different cache keys on every run.  If you put custom instances in
+          a :class:`SweepSelector`, either implement ``__bencher_hash__`` or
+          a deterministic ``__str__``/``__repr__``.
+        """
+
+        def _obj_fingerprint(o):
+            hook = getattr(o, "__bencher_hash__", None)
+            if callable(hook):
+                return hook()
+            return str(o)
+
+        objects = self.objects
+        if isinstance(objects, dict):
+            # Sort by key-string so semantically equal dicts with different
+            # insertion orders produce the same fingerprint.
+            items = sorted(
+                ((str(k), _obj_fingerprint(v)) for k, v in objects.items()),
+                key=lambda kv: kv[0],
+            )
+            obj_tuple = tuple(items)
+        elif objects is not None:
+            obj_tuple = tuple(_obj_fingerprint(o) for o in objects)
+        else:
+            obj_tuple = ()
+        return super()._sweep_identity() + (obj_tuple,)
 
     # ------------------------------------------------------------------
     # Dynamic update helpers
@@ -358,6 +398,10 @@ class YamlSweep(SweepSelector):
     """
 
     __slots__ = shared_slots + ["yaml_path", "_entries", "default_key"]
+    # ``objects`` already carries the fingerprint of every YAML entry (via
+    # :meth:`YamlSelection.__bencher_hash__`), so these internal fields are
+    # redundant for cache identity.
+    _sweep_hash_exclude = ("yaml_path", "_entries", "default_key")
 
     def __init__(
         self,
@@ -491,6 +535,11 @@ class IntSweep(Integer, SweepBase):
     def _coerce_bound(self, value):
         return int(value)
 
+    def _sweep_identity(self) -> tuple:
+        """Include bounds and sample_values so a reshaped sweep busts the cache."""
+        sample_values = tuple(self.sample_values) if self.sample_values is not None else None
+        return super()._sweep_identity() + (self.sweep_bounds, sample_values)
+
     def values(self) -> list[int]:
         """Return all the values for the parameter sweep.
 
@@ -509,16 +558,16 @@ class IntSweep(Integer, SweepBase):
         return self.indices_to_samples(self.samples, sample_values)
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
-    def _validate_value(self, val, allow_None):
-        if callable(val):
+    def _validate_value(self, value, allow_None):
+        if callable(value):
             return
 
-        if allow_None and val is None:
+        if allow_None and value is None:
             return
 
-        if not isinstance(val, (int, np.integer)):
+        if not isinstance(value, (int, np.integer)):
             raise ValueError(
-                "Integer parameter %r must be an integer, not type %r." % (self.name, type(val))
+                "Integer parameter %r must be an integer, not type %r." % (self.name, type(value))
             )
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
@@ -576,6 +625,11 @@ class FloatSweep(Number, SweepBase):
     def _coerce_bound(self, value):
         return float(value)
 
+    def _sweep_identity(self) -> tuple:
+        """Include bounds, sample_values, and step so a reshaped sweep busts the cache."""
+        sample_values = tuple(self.sample_values) if self.sample_values is not None else None
+        return super()._sweep_identity() + (self.sweep_bounds, sample_values, self.step)
+
     def values(self) -> list[float]:
         """Return all the values for the parameter sweep.
 
@@ -625,6 +679,7 @@ def sweep(
     *,
     samples: int | None = None,
     bounds: tuple[float, float] | None = None,
+    max_subsampling_divisions: int | None = None,
     max_level: int | None = None,
 ) -> dict[str, Any] | SweepBase:
     """Create a parameter specification for use in plot_sweep input_vars.
@@ -645,13 +700,25 @@ def sweep(
         values: A list of values for the parameter.
         samples: The number of samples. Must be > 0 if provided.
         bounds: ``(low, high)`` tuple to override the sweep range.
-        max_level: The maximum level. Must be > 0 if provided.
+        max_subsampling_divisions: The maximum subsampling_divisions. Must be > 0 if provided.
 
     Returns:
         dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.
     """
-    if max_level is not None and max_level <= 0:
-        raise ValueError("max_level must be greater than 0")
+    if max_level is not None:
+        if max_subsampling_divisions is not None:
+            raise TypeError(
+                "Cannot pass both 'max_level' and 'max_subsampling_divisions'; use 'max_subsampling_divisions' only."
+            )
+        warnings.warn(
+            "The 'max_level' parameter is deprecated; use 'max_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        max_subsampling_divisions = max_level
+
+    if max_subsampling_divisions is not None and max_subsampling_divisions <= 0:
+        raise ValueError("max_subsampling_divisions must be greater than 0")
 
     if samples is not None and samples <= 0:
         raise ValueError("samples must be greater than 0")
@@ -664,10 +731,10 @@ def sweep(
 
     # If a SweepBase param object is passed, delegate to its methods directly
     if isinstance(name, SweepBase):
-        if max_level is not None:
+        if max_subsampling_divisions is not None:
             raise ValueError(
-                "max_level is not supported when passing a SweepBase object to sweep(). "
-                "Use the string-based API instead: sweep('param_name', max_level=N)"
+                "max_subsampling_divisions is not supported when passing a SweepBase object to sweep(). "
+                "Use the string-based API instead: sweep('param_name', max_subsampling_divisions=N)"
             )
         if values is not None:
             return name.with_sample_values(values)
@@ -680,7 +747,7 @@ def sweep(
     return {
         "name": name,
         "values": values,
-        "max_level": max_level,
+        "max_subsampling_divisions": max_subsampling_divisions,
         "samples": samples,
         "bounds": bounds,
     }
@@ -692,29 +759,44 @@ def p(
     *,
     samples: int | None = None,
     bounds: tuple[float, float] | None = None,
-    max_level: int | None = None,
+    max_subsampling_divisions: int | None = None,
 ) -> dict[str, Any] | SweepBase:
     """Deprecated: use ``bn.sweep()`` instead."""
-    import warnings
-
     warnings.warn("bn.p() is deprecated, use bn.sweep() instead", DeprecationWarning, stacklevel=2)
-    return sweep(name, values, samples=samples, bounds=bounds, max_level=max_level)
+    return sweep(
+        name,
+        values,
+        samples=samples,
+        bounds=bounds,
+        max_subsampling_divisions=max_subsampling_divisions,
+    )
 
 
-def with_level(arr: list, level: int) -> list:
-    """Apply level-based sampling to a list of values.
+def with_subsampling_divisions(arr: list, subsampling_divisions: int) -> list:
+    """Apply subsampling_divisions-based sampling to a list of values.
 
-    Uses the same level→sample-count table as SweepBase.with_level and picks
+    Uses the same subsampling_divisions→sample-count table as SweepBase.with_subsampling_divisions and picks
     evenly spaced items from *arr* by index.
 
     Args:
         arr (list): list of values to sample from
-        level (int): The sampling level to apply (higher levels provide more samples)
+        subsampling_divisions (int): The sampling subsampling_divisions to apply (higher subsampling_divisions provides more samples)
 
     Returns:
-        list: The level-sampled values
+        list: The subsampling_divisions-sampled values
     """
-    assert level >= 1
-    level_samples = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
-    n = level_samples[min(12, level)]
+    if subsampling_divisions < 1:
+        raise ValueError(f"subsampling_divisions must be >= 1, got {subsampling_divisions}")
+    max_index = len(SUBSAMPLING_DIVISIONS_SAMPLES) - 1
+    n = SUBSAMPLING_DIVISIONS_SAMPLES[min(max_index, subsampling_divisions)]
     return SweepBase.indices_to_samples(None, n, list(arr))
+
+
+def with_level(arr: list, level: int) -> list:
+    """Deprecated: use :func:`with_subsampling_divisions` instead."""
+    warnings.warn(
+        "'with_level' is deprecated; use 'with_subsampling_divisions' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return with_subsampling_divisions(arr, subsampling_divisions=level)

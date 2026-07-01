@@ -7,13 +7,16 @@ import logging
 import signal
 import sys
 import time
-from typing import Callable, TYPE_CHECKING
+from contextlib import AbstractContextManager
+from typing import Any, Callable, TYPE_CHECKING
 
-from bencher.bench_cfg import BenchRunCfg, BenchCfg
+from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
+from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 if TYPE_CHECKING:
     from bencher.bencher import Bench
+    from bencher.bench_report import GithubPagesCfg, Publisher
 
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
@@ -61,19 +64,21 @@ def _install_sigterm_handler() -> None:
 def run(
     target: Callable | type | ParametrizedSweep,
     *,
-    level: int = 2,
+    subsampling_divisions=UNSET,
     repeats: int = 1,
-    max_level: int | None = None,
+    max_subsampling_divisions: int | None = None,
     max_repeats: int | None = None,
     run_cfg: BenchRunCfg | None = None,
-    show: bool = True,
+    show: bool | str | ShowMode = True,
     save: bool = False,
     publish: bool = False,
+    publisher: Publisher | GithubPagesCfg | Callable | None = None,
     grouped: bool = False,
     cache_samples: bool | None = None,
     over_time: bool | None = None,
     backend: str | None = None,
     optimise: int | bool = 0,
+    sampling_context: AbstractContextManager[Any] | None = None,
     **kwargs,
 ) -> list[BenchCfg]:
     """Run a benchmark target with sensible defaults.
@@ -87,14 +92,21 @@ def run(
 
     Args:
         target: A benchmark function, ParametrizedSweep class, or ParametrizedSweep instance.
-        level: Benchmark sampling resolution level. Defaults to 2.
+        subsampling_divisions: Benchmark sampling resolution subsampling_divisions. Defaults to 2.
         repeats: Number of repeats. Defaults to 1.
-        max_level: Maximum level for progressive runs. Defaults to None (single level).
+        max_subsampling_divisions: Maximum subsampling_divisions for progressive runs. Defaults to None (single subsampling_divisions).
         max_repeats: Maximum repeats for progressive runs. Defaults to None (single repeat count).
         run_cfg: Optional explicit BenchRunCfg. Defaults to None.
-        show: Show results in browser. Defaults to True.
+        show: Where to view the report. Accepts ``True``/``ShowMode.LIVE`` (default — start
+            a Panel server and block on ``input()`` until the user presses Enter),
+            ``ShowMode.HTML`` (save an embedded HTML file and open it in the browser, then
+            return), ``ShowMode.PUBLISHED`` (open the URL returned by publish — requires
+            ``publish=True``), or ``False``/``ShowMode.NONE`` (display nothing).
         save: Save results to disk. Defaults to False.
         publish: Publish results. Defaults to False.
+        publisher: An object conforming to the :class:`Publisher` protocol (i.e. has a
+            ``publish(report)`` method).  Passed to :class:`BenchRunner` and called
+            after each progressive iteration when *publish* is ``True``.
         grouped: Produce a single HTML page with all benchmarks. Defaults to False.
         cache_samples: Use sample cache for previous results. None (default) auto-enables
             for progressive runs. Pass False to disable even for progressive runs.
@@ -103,11 +115,41 @@ def run(
         optimise: When > 0, appends optuna analysis plots (parameter importance,
             with/without repeats comparison, best parameters) from the sweep results
             to the report. Defaults to 0 (no optimisation analysis).
+        sampling_context: An optional context manager that wraps only the sampling
+            phase (``br.run(...)``).  Its ``__exit__`` is guaranteed to run *before*
+            the Panel/Bokeh server starts, so resources held by the context (DB
+            pools, GPU handles, simulators, etc.) are released while nothing blocks.
+            ``save`` and ``publish`` still execute inside the context (they happen
+            during ``br.run(show=False, ...)``).  Defaults to ``None`` (no wrapper,
+            fully backward-compatible).
+
+            **Anti-pattern** — wrapping the whole call keeps resources held during
+            the interactive viewing session::
+
+                with gpu_context():          # held for the entire viewing session!
+                    bn.run(target, show=True)
+
+            **Recommended** — use ``sampling_context`` so the context exits before
+            the server starts::
+
+                bn.run(target, show=True, sampling_context=gpu_context())
 
     Returns:
         list[BenchCfg]: A list of benchmark configuration objects with results.
     """
     from bencher.bench_runner import BenchRunner, _resolve_cache_samples
+    from bencher.utils import normalize_subsampling_divisions_kwargs
+
+    subsampling_divisions, max_subsampling_divisions, _ = normalize_subsampling_divisions_kwargs(
+        subsampling_divisions=subsampling_divisions,
+        max_subsampling_divisions=max_subsampling_divisions,
+        kwargs=kwargs,
+        stacklevel=2,
+    )
+
+    show_mode = normalize_show(show)
+    if show_mode is ShowMode.PUBLISHED and not publish:
+        raise ValueError("show='published' requires publish=True")
 
     cache_samples = _resolve_cache_samples(cache_samples, kwargs, stacklevel=1)
 
@@ -163,29 +205,42 @@ def run(
         target = _with_optimise
 
     # Case 1: Callable — wrap in BenchRunner
-    br = BenchRunner(target)
+    br = BenchRunner(target, publisher=publisher)
+    _run_kwargs = dict(
+        subsampling_divisions=subsampling_divisions,
+        repeats=repeats,
+        max_subsampling_divisions=max_subsampling_divisions,
+        max_repeats=max_repeats,
+        run_cfg=run_cfg,
+        save=save,
+        publish=publish,
+        grouped=grouped,
+        cache_samples=cache_samples,
+        over_time=over_time,
+        backend=backend,
+    )
+
     try:
-        results = br.run(
-            level=level,
-            repeats=repeats,
-            max_level=max_level,
-            max_repeats=max_repeats,
-            run_cfg=run_cfg,
-            show=show,
-            save=save,
-            publish=publish,
-            grouped=grouped,
-            cache_samples=cache_samples,
-            over_time=over_time,
-            backend=backend,
-        )
+        if sampling_context is None:
+            # Default path — behavior is identical to the original implementation.
+            results = br.run(show=show, **_run_kwargs)
+        else:
+            # Wrap only the sampling phase so __exit__ runs before the server starts.
+            # save/publish happen inside br.run(show=False, ...) and therefore execute
+            # while the context is still active.
+            with sampling_context:
+                results = br.run(show=False, **_run_kwargs)
+            # Context has exited — resources are released. Now display the report.
+            if show_mode is not ShowMode.NONE:
+                br.show(show=show, publish=publish)
     finally:
         if bench_to_close is not None:
             try:
                 bench_to_close.close()
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("Error closing bench")
-    if show and br.servers:
+
+    if show_mode is ShowMode.LIVE and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.
         _active_runners.append(br)
         _install_sigterm_handler()

@@ -30,7 +30,15 @@ class HistogramResult(HoloviewResult):
             pn.pane.Pane | None: A panel containing the histogram if data is appropriate,
                                   otherwise returns filter match results.
         """
-        return self.filter(
+        # With multiple over_time entries, show histogram only for the latest snapshot;
+        # the line plot already covers the full time series.
+        ds = self.ds
+        if self.bench_cfg.over_time and "over_time" in ds.dims and ds.sizes["over_time"] > 1:
+            ds = ds.isel(over_time=-1)
+        self_snapshot = self.__class__.__new__(self.__class__)
+        self_snapshot.__dict__.update(self.__dict__)
+        self_snapshot.ds = ds
+        return self_snapshot.filter(
             self.to_histogram_ds,
             float_range=VarRange(0, 0),
             cat_range=VarRange(0, None),
@@ -44,9 +52,12 @@ class HistogramResult(HoloviewResult):
 
     def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
         """Render a single histogram from a dataset (no over_time handling)."""
+        units = getattr(result_var, "units", "") or ""
+        xlabel = f"{result_var.name} [{units}]" if units else result_var.name
         plot = dataset.hvplot(
             kind="hist",
             y=[result_var.name],
+            xlabel=xlabel,
             ylabel="count",
             legend="bottom_right",
             title=f"{result_var.name} vs Count",

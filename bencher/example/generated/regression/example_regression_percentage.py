@@ -1,4 +1,4 @@
-"""Auto-generated example: Regression detection — percentage threshold over time."""
+"""Auto-generated example: Regression detection — default method over time."""
 
 from datetime import datetime, timedelta
 
@@ -24,10 +24,9 @@ class ServerBenchmark(bn.ParametrizedSweep):
 
 
 def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    """Regression detection — percentage threshold over time."""
+    """Regression detection — default method over time."""
     run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
     run_cfg.regression_detection = True
-    run_cfg.regression_method = "percentage"
     run_cfg.regression_fail = False
 
     benchable = ServerBenchmark()
@@ -50,16 +49,6 @@ def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
             time_src=base_time + timedelta(seconds=i),
             aggregate=True,
         )
-
-    # Regression report
-    res = bench.results[-1]
-    report = res.regression_report
-    if report is not None:
-        print("\n" + report.summary())
-        regressed = [r.variable for r in report.regressed_variables]
-        if regressed:
-            lines = [report.summary(), "", f"Regressed variables: {regressed}"]
-            bench.report.append_markdown("\n".join(lines), name="Regression Report")
 
     return bench
 

@@ -11,7 +11,7 @@ from bencher.variables.results import (
 )
 
 
-class VideoResult(BenchResultBase):
+class PaneResult(BenchResultBase):
     def to_video(self, result_var: Parameter | None = None, **kwargs):
         vc = VideoControls()
         return pn.Column(
@@ -25,11 +25,13 @@ class VideoResult(BenchResultBase):
         hv_dataset=None,
         target_dimension: int = 0,
         container=None,
-        level: int | None = None,
+        subsampling_divisions: int | None = None,
         **kwargs,
     ) -> pn.pane.panel | None:
         if hv_dataset is None:
-            hv_dataset = self.to_hv_dataset(ReduceType.SQUEEZE, level=level)
+            hv_dataset = self.to_hv_dataset(
+                ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions
+            )
         elif not isinstance(hv_dataset, hv.Dataset):
             hv_dataset = hv.Dataset(hv_dataset)
         return self.map_plot_panes(

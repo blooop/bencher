@@ -270,8 +270,8 @@ class MetaPlotTypes(MetaGeneratorBase):
         const_vars = "dict(noise_scale=0.15)" if cfg["repeats"] > 1 else None
         extra_imports = [cfg["extra_import"]] if cfg.get("extra_import") else None
 
-        level = 2 if cfg["float_dims"] >= 2 else 3
-        run_kwargs = {"level": level}
+        sd = 2 if cfg["float_dims"] >= 2 else 3
+        run_kwargs = {"subsampling_divisions": sd}
         if cfg["repeats"] > 1:
             run_kwargs["repeats"] = cfg["repeats"]
 

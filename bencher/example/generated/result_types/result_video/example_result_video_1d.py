@@ -30,6 +30,7 @@ class PolygonAnimator(bn.ParametrizedSweep):
     speed = bn.FloatSweep(default=1.0, bounds=(0.5, 3.0), doc="Rotation speed multiplier")
     animation = bn.ResultVideo(doc="Rotating polygon video")
     frame_snapshot = bn.ResultImage(doc="Last frame snapshot")
+    max_angle = bn.ResultFloat(units="deg", doc="Maximum rotation angle in the animation")
 
     def benchmark(self):
         vid_writer = bn.VideoWriter()
@@ -41,6 +42,7 @@ class PolygonAnimator(bn.ParametrizedSweep):
             vid_writer.append(np.array(img.convert("RGB")))
         self.animation = vid_writer.write()
         self.frame_snapshot = bn.VideoWriter.extract_frame(self.animation)
+        self.max_angle = self.speed * 360.0 * (num_frames - 1) / num_frames
 
 
 def example_result_video_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
@@ -52,4 +54,4 @@ def example_result_video_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_result_video_1d, level=3)
+    bn.run(example_result_video_1d, subsampling_divisions=3)

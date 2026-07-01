@@ -33,4 +33,4 @@ def example_result_vec_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_result_vec_2d, level=2)
+    bn.run(example_result_vec_2d, subsampling_divisions=2)

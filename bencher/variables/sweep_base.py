@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any
 from copy import deepcopy
+import warnings
 
 import numpy as np
 import param
@@ -12,6 +13,25 @@ from bencher.utils import hash_sha1
 # slots that are shared across all Sweep classes
 # param and slots don't work easily with multiple inheritance so define here
 shared_slots = ["units", "samples", "optimize"]
+
+# Mapping from subsampling_divisions index to number of samples per variable.
+# Subsampling Divisions 0 means "use the variable's own samples setting".
+# Subsampling Divisions 1-13 produce geometrically increasing sample counts:
+#   subsampling_divisions 1 →  1,  subsampling_divisions 2 →  2,  subsampling_divisions 3 →  3,  subsampling_divisions 4 →  5,
+#   subsampling_divisions 5 →  9,  subsampling_divisions 6 → 17,  subsampling_divisions 7 → 33,  subsampling_divisions 8 → 65,
+#   subsampling_divisions 9 → 129, subsampling_divisions 10 → 257, subsampling_divisions 11 → 513, subsampling_divisions 12 → 1025, subsampling_divisions 13 → 2049
+SUBSAMPLING_DIVISIONS_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+
+
+def __getattr__(name: str):
+    if name == "LEVEL_SAMPLES":
+        warnings.warn(
+            "'LEVEL_SAMPLES' is deprecated; use 'SUBSAMPLING_DIVISIONS_SAMPLES' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return SUBSAMPLING_DIVISIONS_SAMPLES
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def describe_variable(
@@ -80,9 +100,43 @@ class SweepBase(param.Parameter):
         """
         raise NotImplementedError
 
+    # Slots deliberately omitted from the identity tuple.  Subclasses may
+    # extend this via their own ``_sweep_hash_exclude`` attribute; the
+    # slot-coverage test walks the MRO and unions them all.  A slot is
+    # considered properly declared if it either appears in
+    # :meth:`_sweep_identity` (changing it changes the hash) OR is listed
+    # in ``_sweep_hash_exclude`` on some ancestor.
+    _sweep_hash_exclude: tuple[str, ...] = ("optimize",)
+
+    def _sweep_identity(self) -> tuple:
+        """Return the tuple of values that uniquely identifies this sweep for
+        the benchmark-level and over_time history caches.
+
+        Subclasses MUST override and call ``super()._sweep_identity() + (...)``
+        to append any shape-affecting fields: bounds, sample_values, step,
+        ``objects``, etc.  Any field that changes the set of sampled values
+        or the coordinate labels of the resulting xarray must contribute
+        here, otherwise the benchmark-level cache and over_time history
+        will silently serve stale data for a reshaped sweep.
+
+        The class name is included so that different Sweep subclasses with
+        the same identity tuple do not collide.
+
+        Note: the sample cache is keyed solely by concrete input values
+        (see :class:`bencher.worker_job.WorkerJob`) and is unaffected by
+        this hash, so widening a sweep range still reuses per-sample cache
+        entries for overlapping inputs.
+        """
+        return (type(self).__name__, self.units, self.samples)  # pylint: disable=no-member
+
     def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return hash_sha1((self.units, self.samples))  # pylint: disable=no-member
+        """Deterministic hash based on :meth:`_sweep_identity`.
+
+        Avoids Python's per-process hash randomisation so two Bench runs
+        (or two processes) compute identical cache keys for equivalent
+        sweeps.
+        """
+        return hash_sha1(self._sweep_identity())
 
     def sampling_str(self) -> str:
         """Generate a string representation of the of the sampling procedure"""
@@ -100,7 +154,7 @@ class SweepBase(param.Parameter):
         Returns:
             pn.widgets.slider.DiscreteSlider: A panel slider with the values() of the sweep variable
         """
-        return pn.widgets.slider.DiscreteSlider(name=self.name, options=list(self.values()))
+        return pn.widgets.slider.DiscreteSlider(label=self.name, options=list(self.values()))
 
     def as_dim(self, compute_values=False) -> hv.Dimension:
         """Takes a sweep variable and turns it into a holoview dimension
@@ -245,13 +299,28 @@ class SweepBase(param.Parameter):
         """
         return (deepcopy(self), const_value)
 
-    def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
-        assert level >= 1
-        # TODO work out if the order can be returned in level order always
-        samples = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
-        sampled = self.with_samples(samples[min(max_level, level)])
+    def with_subsampling_divisions(
+        self, subsampling_divisions: int = 1, max_subsampling_divisions: int = 12
+    ) -> SweepBase:
+        if subsampling_divisions < 1:
+            raise ValueError(f"subsampling_divisions must be >= 1, got {subsampling_divisions}")
+        # TODO work out if the order can be returned in subsampling_divisions order always
+        sampled = self.with_samples(
+            SUBSAMPLING_DIVISIONS_SAMPLES[min(max_subsampling_divisions, subsampling_divisions)]
+        )
         # list() is required because SweepSelector.values() may return a param
         # ListProxy that holds a circular reference back to the original parameter
         # via ListProxy._parameter, which breaks pickle (and therefore multiprocessing).
         out = self.with_sample_values(list(sampled.values()))
         return out
+
+    def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
+        """Deprecated: use :meth:`with_subsampling_divisions` instead."""
+        warnings.warn(
+            "'with_level' is deprecated; use 'with_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.with_subsampling_divisions(
+            subsampling_divisions=level, max_subsampling_divisions=max_level
+        )

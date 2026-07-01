@@ -39,4 +39,4 @@ def example_advanced_share_axis(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_share_axis, level=3)
+    bn.run(example_advanced_share_axis, subsampling_divisions=3)

@@ -178,7 +178,7 @@ class TestDrawRegression:
 
     def test_timeline(self):
         tl = TimelineShape(Shape(), 3)
-        assert _render_hash(tl, 500, 200) == "7d903d8b7bc4bc5e084d7bd7c4a441bb"
+        assert _render_hash(tl, 500, 200) == "c77e2b39b2cdc21008b7f7008955be3b"
 
 
 # ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ from bencher.utils import hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
 from bencher.factories import create_bench, create_bench_runner
 
-_InputResult = namedtuple("inputresult", ["inputs", "results"])
+_InputResult = namedtuple("_InputResult", ["inputs", "results"])
 _input_result_cache: dict[tuple, _InputResult] = {}
 
 
@@ -225,13 +225,12 @@ class ParametrizedSweep(Parameterized):
         # Legacy path: subclass overrides __call__() and handles
         # update_params_from_kwargs + super().__call__() itself.
         if type(self).__call__ is ParametrizedSweep.__call__:
-            warnings.warn(
+            msg = (
                 f"{type(self).__name__} does not override benchmark(). "
                 "Results will contain only default values. "
-                "Define a benchmark() method on your class.",
-                UserWarning,
-                stacklevel=2,
+                "Define a benchmark() method on your class."
             )
+            warnings.warn(msg, UserWarning, stacklevel=2)
         return self.get_results_values_as_dict()
 
     def benchmark(self):
@@ -267,6 +266,6 @@ class ParametrizedSweep(Parameterized):
         """Create a BenchRunner instance from this ParametrizedSweep.
 
         Enables fluent chaining like:
-            MyConfig().to_bench_runner().add(func).run(level=2, max_level=4)
+            MyConfig().to_bench_runner().add(func).run(subsampling_divisions=2, max_subsampling_divisions=4)
         """
         return create_bench_runner(self, run_cfg=run_cfg, name=name)

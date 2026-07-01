@@ -28,4 +28,4 @@ def example_bool_plot_box_whisker(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_bool_plot_box_whisker, level=3, repeats=50)
+    bn.run(example_bool_plot_box_whisker, subsampling_divisions=3, repeats=50)

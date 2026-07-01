@@ -98,7 +98,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "repeats": 5},
+            run_kwargs={"subsampling_divisions": 3, "repeats": 5},
         )
 
     def _generate_time_event(self):
@@ -157,12 +157,12 @@ for i, event_name in enumerate(events):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_git_time_event(self):
         """Git commit time event example."""
-        imports = "import bencher as bn"
+        imports = "import random\n\nimport bencher as bn"
         class_code = '''\
 class ServerLatency(bn.ParametrizedSweep):
     """Simulates server latency measurements across endpoints.
@@ -177,11 +177,19 @@ class ServerLatency(bn.ParametrizedSweep):
         ["/api/users", "/api/orders", "/api/health"], doc="API endpoint"
     )
 
-    latency = bn.ResultFloat(units="ms", doc="Response latency")
+    latency = bn.ResultFloat(units="ms", doc="Response latency", direction=bn.OptDir.minimize)
+
+    _BASE = {"/api/users": 48.0, "/api/orders": 125.0, "/api/health": 8.0}
 
     def benchmark(self):
-        self.latency = {"/api/users": 48, "/api/orders": 125, "/api/health": 8}[self.endpoint]'''
+        base = self._BASE[self.endpoint]
+        # Gaussian per-run noise so the regression band has a visible width.
+        self.latency = base + random.gauss(0, 0.08 * base)'''
         body = """\
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
+run_cfg.regression_detection = True
+
 bench = ServerLatency().to_bench(run_cfg)
 
 # git_time_event() returns a string like "2024-06-15 abc1234d".
@@ -204,7 +212,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_max_time_events(self):
@@ -267,7 +275,7 @@ for i in range(5):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_report_save(self):
@@ -308,7 +316,7 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_agg_over_time(self):
@@ -373,7 +381,7 @@ for i, offset in enumerate(time_offsets):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "over_time": True},
+            run_kwargs={"subsampling_divisions": 4, "over_time": True},
         )
 
     def _generate_share_axis(self):
@@ -417,7 +425,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_cartesian_animation(self):
@@ -498,7 +506,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "cache_samples": False},
+            run_kwargs={"subsampling_divisions": 4, "cache_samples": False},
         )
 
 

@@ -16,8 +16,25 @@ from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.job import FutureCache
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
-# Default cache size for benchmark results (100 GB)
-DEFAULT_CACHE_SIZE_BYTES = int(100e9)
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
+
+
+def _resolve_param(
+    name: str,
+    worker: ParametrizedSweep,
+    var_type: str,
+) -> param.Parameter:
+    """Look up a param.Parameter by *name* on *worker*, raising a helpful KeyError if missing."""
+    all_params = worker.param.objects(instance=False)
+    if name not in all_params:
+        available = sorted(k for k in all_params if k != "name")
+        raise KeyError(
+            f"{var_type.capitalize()} variable '{name}' not found on "
+            f"{type(worker).__name__}. "
+            f"Available parameters: {available}"
+        ) from None
+    return all_params[name]
+
 
 # Metadata keys that must never be forwarded to the worker function.
 _META_KEYS = frozenset({"over_time", "time_event"})
@@ -88,7 +105,7 @@ class SweepExecutor:
             variable (param.Parameter | str | dict | tuple): The variable to convert, can be:
                 - param.Parameter: Already a parameter object
                 - str: Name of a parameter in the worker_class_instance
-                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
+                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_subsampling_divisions'
                 - tuple: Tuple that can be converted to a parameter
             var_type (str): Type of variable ('input', 'result', or 'const') for error messages
             run_cfg (BenchRunCfg | None): Run configuration for level settings
@@ -109,9 +126,10 @@ class SweepExecutor:
                     f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
                 )
         if isinstance(variable, str):
-            variable = worker_class_instance.param.objects(instance=False)[variable]
+            variable = _resolve_param(variable, worker_class_instance, var_type)
         if isinstance(variable, dict):
-            param_var = worker_class_instance.param.objects(instance=False)[variable["name"]]
+            var_name = variable["name"]
+            param_var = _resolve_param(var_name, worker_class_instance, var_type)
             if variable.get("values"):
                 param_var = param_var.with_sample_values(variable["values"])
             elif variable.get("bounds"):
@@ -119,9 +137,11 @@ class SweepExecutor:
                 param_var = param_var.with_bounds(b[0], b[1], variable.get("samples"))
             elif variable.get("samples"):
                 param_var = param_var.with_samples(variable["samples"])
-            if variable.get("max_level"):
+            if variable.get("max_subsampling_divisions"):
                 if run_cfg is not None:
-                    param_var = param_var.with_level(run_cfg.level, variable["max_level"])
+                    param_var = param_var.with_subsampling_divisions(
+                        run_cfg.subsampling_divisions, variable["max_subsampling_divisions"]
+                    )
             variable = param_var
         if not isinstance(variable, param.Parameter):
             raise TypeError(

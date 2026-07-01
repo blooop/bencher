@@ -159,13 +159,13 @@ class TestSweepExecutor(unittest.TestCase):
         # Should return non-empty stats string
         self.assertIsInstance(result, str)
 
-    def test_convert_vars_to_params_with_max_level(self):
-        """Test max_level handling when run_cfg.level is set."""
+    def test_convert_vars_to_params_with_max_subsampling_divisions(self):
+        """Test max_subsampling_divisions handling when run_cfg.subsampling_divisions is set."""
         run_cfg = BenchRunCfg()
-        run_cfg.level = 2
+        run_cfg.subsampling_divisions = 2
 
         result = self.executor.convert_vars_to_params(
-            {"name": "theta", "max_level": 3},
+            {"name": "theta", "max_subsampling_divisions": 3},
             "input",
             run_cfg,
             worker_class_instance=self.worker_instance,
@@ -173,7 +173,37 @@ class TestSweepExecutor(unittest.TestCase):
         )
 
         self.assertEqual(result.name, "theta")
-        # The parameter should have been processed with level adjustment
+        # The parameter should have been processed with subsampling_divisions adjustment
+
+    def test_convert_vars_to_params_bad_string_gives_helpful_error(self):
+        """Test that a typo in a string variable name gives a helpful KeyError."""
+        with self.assertRaises(KeyError) as ctx:
+            self.executor.convert_vars_to_params(
+                "thetaa",
+                "input",
+                None,
+                worker_class_instance=self.worker_instance,
+                worker_input_cfg=ExampleBenchCfg,
+            )
+        msg = str(ctx.exception)
+        self.assertIn("thetaa", msg)
+        self.assertIn("not found", msg)
+        self.assertIn("Available parameters", msg)
+        self.assertIn("theta", msg)  # listed in available parameters
+
+    def test_convert_vars_to_params_bad_dict_name_gives_helpful_error(self):
+        """Test that a typo in a dict variable name gives a helpful KeyError."""
+        with self.assertRaises(KeyError) as ctx:
+            self.executor.convert_vars_to_params(
+                {"name": "thetaa"},
+                "input",
+                None,
+                worker_class_instance=self.worker_instance,
+                worker_input_cfg=ExampleBenchCfg,
+            )
+        msg = str(ctx.exception)
+        self.assertIn("thetaa", msg)
+        self.assertIn("not found", msg)
 
     def test_clear_tag_from_sample_cache_lazy_init(self):
         """Test clear_tag_from_sample_cache initializes cache if None."""

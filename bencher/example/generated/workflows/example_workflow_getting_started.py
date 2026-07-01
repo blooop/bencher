@@ -121,4 +121,4 @@ def example_workflow_getting_started(run_cfg: bn.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bn.run(example_workflow_getting_started, level=3, repeats=10)
+    bn.run(example_workflow_getting_started, subsampling_divisions=3, repeats=10)

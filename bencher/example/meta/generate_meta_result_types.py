@@ -256,7 +256,7 @@ class MetaResultTypes(MetaGeneratorBase):
             f"with {self.input_dims}D input sweep."
         )
 
-        level = 2 if self.input_dims >= 2 else 3
+        sd = 2 if self.input_dims >= 2 else 3
         self.generate_sweep_example(
             title=title,
             output_dir=sub_dir,
@@ -269,7 +269,7 @@ class MetaResultTypes(MetaGeneratorBase):
             class_code=class_code,
             extra_imports=[imports],
             description=description,
-            run_kwargs={"level": level},
+            run_kwargs={"subsampling_divisions": sd},
         )
 
 

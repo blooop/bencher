@@ -334,7 +334,7 @@ class TimelineShape(Shape):
 
             # Frame number label below the strip (skipped when drawn as fixed-size overlay)
             if not self._skip_labels:
-                label = f"t={i}"
+                label = f"t={i + 1}"
                 bbox = img.textbbox((0, 0), label, font=font_label)
                 tw = bbox[2] - bbox[0]
                 lx = fx + (frame_w - tw) // 2
@@ -406,7 +406,7 @@ class TimelineShape(Shape):
             center = fx + scaled_fw / 2
             if center < 0 or center > canvas_w:
                 continue
-            label = f"t={i}"
+            label = f"t={i + 1}"
             bbox = img.textbbox((0, 0), label, font=font_label)
             tw = bbox[2] - bbox[0]
             img.text(

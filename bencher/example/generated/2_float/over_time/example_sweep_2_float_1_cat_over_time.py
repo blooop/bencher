@@ -51,4 +51,4 @@ def example_sweep_2_float_1_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_2_float_1_cat_over_time, level=4, over_time=True)
+    bn.run(example_sweep_2_float_1_cat_over_time, subsampling_divisions=4, over_time=True)

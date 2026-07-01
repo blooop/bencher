@@ -42,7 +42,7 @@ def test_generated_example(example_path):
     assert example_fns, f"No example_* function found in {example_path}"
 
     run_cfg = bn.BenchRunCfg()
-    run_cfg.level = 2
+    run_cfg.subsampling_divisions = 2
     run_cfg.repeats = 2
     result = example_fns[0](run_cfg)
     assert result is not None
