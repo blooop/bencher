@@ -63,13 +63,23 @@
     padding: 10px 8px;
 }
 
-/* --- Bencher report iframes (sized by bencher-embed.js from heights the
-       reports post themselves) --- */
+/* --- Bencher report iframes (sized by bencher-embed.js from the natural
+       content size the reports post themselves) --- */
 iframe.bencher-report {
     min-height: 400px;
     width: 100%;
     border: none;
     overflow: hidden;
+    display: block;
+}
+
+/* Wide reports keep their natural scale; this wrapper provides the
+   horizontal scrollbar. overflow-y stays hidden so the page keeps a single
+   vertical scrollbar. */
+.bencher-report-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
 }
 
 /* Escape hatch above each embedded report (useful when wide reports are

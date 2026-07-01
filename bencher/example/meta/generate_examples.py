@@ -268,11 +268,13 @@ def run_example_and_save(
    <a class="bencher-report-link"
       href="_reports/{stem}/{bench.bench_name}.html"
       target="_blank">Open report in new tab &#8599;</a>
+   <div class="bencher-report-wrap">
    <iframe class="bencher-report"
            src="_reports/{stem}/{bench.bench_name}.html"
            scrolling="no" allowfullscreen
            style="width:100%; min-height:400px; border:none; overflow:hidden;">
    </iframe>
+   </div>
 """
     rst_path.write_text(rst_content, encoding="utf-8")
 

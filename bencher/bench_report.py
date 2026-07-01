@@ -48,27 +48,17 @@ _EMBED_HEIGHT_SCRIPT = """
 (function () {
   "use strict";
   if (window.parent === window) return; /* standalone page: leave it alone */
-  var MIN_ZOOM = 0.5;
-  var curZoom = 1;
   function report() {
     var de = document.documentElement;
     var body = document.body;
     if (!body) return;
-    /* Shrink content that is wider than the iframe. zoom participates in
-       layout (unlike transform), so the height we post stays accurate. */
-    var availW = window.innerWidth;
-    var naturalW = Math.max(de.scrollWidth, body.scrollWidth) / curZoom;
-    var target = availW > 0 && naturalW > availW ? Math.max(MIN_ZOOM, availW / naturalW) : 1;
-    if (Math.abs(target - curZoom) > 0.02) {
-      curZoom = target;
-      body.style.zoom = String(target);
+    /* Content keeps its natural scale; the embedder is told the full size and
+       provides horizontal scrolling when the content is wider than the page. */
+    var h = Math.max(de.scrollHeight, body.scrollHeight);
+    var w = Math.max(de.scrollWidth, body.scrollWidth);
+    if (h > 0) {
+      window.parent.postMessage({ type: "bencher:height", height: h, width: w }, "*");
     }
-    requestAnimationFrame(function () {
-      var h = Math.max(de.scrollHeight, body.scrollHeight);
-      if (h > 0) {
-        window.parent.postMessage({ type: "bencher:height", height: h }, "*");
-      }
-    });
   }
   function init() {
     var de = document.documentElement;
@@ -77,8 +67,10 @@ _EMBED_HEIGHT_SCRIPT = """
        ResizeObserver; un-pin so the document takes its natural height. */
     de.style.height = "auto";
     body.style.height = "auto";
-    de.style.overflowY = "hidden";
-    body.style.overflowY = "hidden";
+    /* The embedder sizes the iframe to the posted width/height, so this
+       document never needs its own scrollbars. */
+    de.style.overflow = "hidden";
+    body.style.overflow = "hidden";
     new ResizeObserver(report).observe(body);
     new ResizeObserver(report).observe(de);
     report();
@@ -406,15 +398,21 @@ window.addEventListener('message', function (e) {{
   if (!e.data || e.data.type !== 'bencher:height') return;
   if (e.source !== _content.contentWindow) return;
   _content.style.height = e.data.height + 'px';
+  var w = Number(e.data.width) || 0;
+  /* Keep natural scale: grow the inner iframe to the content's full width and
+     let the embedder (or this page when standalone) scroll horizontally. */
+  _content.style.width = w > document.documentElement.clientWidth ? w + 'px' : '';
   if (_embedded) {{
     var bar = document.querySelector('.tab-bar');
     window.parent.postMessage(
-      {{ type: 'bencher:height', height: e.data.height + (bar ? bar.offsetHeight : 0) }}, '*');
+      {{ type: 'bencher:height',
+         height: e.data.height + (bar ? bar.offsetHeight : 0),
+         width: w }}, '*');
   }}
 }});
 if (_embedded) {{
-  document.documentElement.style.overflowY = 'hidden';
-  document.body.style.overflowY = 'hidden';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
 }}
 </script></body></html>"""
         with open(index_path, "w", encoding="utf-8") as f:

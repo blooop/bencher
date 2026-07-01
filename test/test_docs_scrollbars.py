@@ -37,6 +37,8 @@ PAGE_SIMPLE = "reference/meta/1_float/no_repeats/example_sweep_1_float_0_cat_no_
 PAGE_TALL = "reference/meta/statistics/example_stats_repeats_comparison.html"
 PAGE_MULTITAB = "reference/meta/0_float/over_time/example_sweep_0_float_0_cat_over_time.html"
 PAGE_WIDE = "reference/meta/plot_types/example_plot_heatmap.html"
+# Wider than the viewport: must keep natural scale and scroll horizontally.
+PAGE_XWIDE = "reference/meta/3_float/with_repeats/example_sweep_3_float_2_cat_with_repeats.html"
 # A report opened directly (not embedded) must keep native page scrolling.
 PAGE_STANDALONE = (
     "reference/meta/1_float/no_repeats/_reports/"
@@ -101,6 +103,23 @@ _IFRAME_FIT_JS = """
   if (!f || !f.contentDocument) return null;
   const doc = f.contentDocument.documentElement;
   return [f.clientHeight, Math.max(doc.scrollHeight, f.contentDocument.body.scrollHeight)];
+}
+"""
+
+# JS: width/scale measurements for the report iframe and its scroll wrapper.
+_IFRAME_WIDTH_JS = """
+(selector) => {
+  const f = document.querySelector(selector);
+  if (!f || !f.contentDocument) return null;
+  const doc = f.contentDocument;
+  const wrap = f.parentElement;
+  return {
+    iframeW: f.clientWidth,
+    contentW: Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth),
+    wrapW: wrap.clientWidth,
+    wrapScrollW: wrap.scrollWidth,
+    zoom: doc.body.style.zoom || '',
+  };
 }
 """
 
@@ -192,9 +211,17 @@ def _assert_no_horizontal_overflow(page, label: str):
     )
 
 
+def _assert_natural_scale(page, label: str):
+    """The report must never be zoomed/scaled down to fit."""
+    m = page.evaluate(_IFRAME_WIDTH_JS, REPORT_IFRAME_SELECTOR)
+    assert m is not None, f"{label}: report iframe or its document not found"
+    assert m["zoom"] in ("", "1"), f"{label}: report content is scaled (zoom={m['zoom']})"
+
+
 def _assert_page_ok(page, label: str, min_height: int = 0):
     _assert_single_scrollbar(page, label)
     _assert_iframe_fits(page, label, min_height=min_height)
+    _assert_natural_scale(page, label)
     _assert_no_horizontal_overflow(page, label)
 
 
@@ -212,6 +239,24 @@ def test_tall_page_single_scrollbar(page, base_url):
 def test_wide_page_single_scrollbar(page, base_url):
     _goto(page, base_url, PAGE_WIDE)
     _assert_page_ok(page, "wide")
+
+
+def test_xwide_page_natural_scale_with_horizontal_scroll(page, base_url):
+    _goto(page, base_url, PAGE_XWIDE)
+    _assert_single_scrollbar(page, "xwide")
+    _assert_iframe_fits(page, "xwide")
+    _assert_natural_scale(page, "xwide")
+    _assert_no_horizontal_overflow(page, "xwide")
+    m = page.evaluate(_IFRAME_WIDTH_JS, REPORT_IFRAME_SELECTOR)
+    # The report must be fully reachable at natural scale: the iframe grows to
+    # the content width and the wrapper provides the horizontal scrollbar.
+    assert m["iframeW"] >= m["contentW"] - 4, (
+        f"xwide: content clipped ({m['contentW']}px in {m['iframeW']}px iframe)"
+    )
+    assert m["contentW"] > m["wrapW"], (
+        f"xwide: expected a report wider than the content area, got {m}"
+    )
+    assert m["wrapScrollW"] > m["wrapW"], f"xwide: wrapper is not horizontally scrollable ({m})"
 
 
 def test_multitab_page_single_scrollbar_across_tabs(page, base_url):
