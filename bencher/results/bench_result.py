@@ -232,38 +232,14 @@ class BenchResult(
             list[pn.panel]: A list of panel objects containing the generated plots.
         """
         self.plt_cnt_cfg.print_debug = False
-        plot_list = listify(plot_list)
-        remove_plots = listify(remove_plots)
-
-        # Translate requested plots into registry names; unknown callables keep
-        # working through the legacy direct-call path.
-        include_names: list[str] | None = None
-        extra_callbacks: list[callable] = []
-        if plot_list is not None:
-            include_names = []
-            for entry in plot_list:
-                if isinstance(entry, str):
-                    include_names.append(entry)
-                elif entry in CALLBACK_TO_PLUGIN:
-                    include_names.append(CALLBACK_TO_PLUGIN[entry])
-                else:
-                    extra_callbacks.append(entry)
-
-        exclude_names: set[str] = set()
-        if numeric_only:
-            exclude_names.add(PANES_PLUGIN_NAME)
-        if remove_plots is not None:
-            for entry in remove_plots:
-                if isinstance(entry, str):
-                    exclude_names.add(entry)
-                elif entry in CALLBACK_TO_PLUGIN:
-                    exclude_names.add(CALLBACK_TO_PLUGIN[entry])
-                elif entry in extra_callbacks:
-                    extra_callbacks.remove(entry)
+        include_names, extra_callbacks = self._normalize_plot_list(listify(plot_list))
+        exclude_names, extra_callbacks = self._plot_exclusions(
+            listify(remove_plots), extra_callbacks, numeric_only
+        )
 
         kwargs = self.set_plot_size(**kwargs)
-
         data = self.to_bench_data(render_kwargs=dict(override=override, **kwargs))
+
         row = EmptyContainer(default_container())
         for plugin in get_registry().select(
             data, include=include_names, exclude=exclude_names or None, backend=backend
@@ -282,6 +258,49 @@ class BenchResult(
         if len(row.pane) == 0:
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
+
+    @staticmethod
+    def _normalize_plot_list(
+        plot_list: list[callable | str] | None,
+    ) -> tuple[list[str] | None, list[callable]]:
+        """Split a to_auto plot_list into registry names and legacy callables.
+
+        Known callbacks translate to their plugin names; unknown callables keep
+        working through the legacy direct-call path. None means "no restriction"
+        (all registered plugins participate)."""
+        if plot_list is None:
+            return None, []
+        include_names: list[str] = []
+        extra_callbacks: list[callable] = []
+        for entry in plot_list:
+            if isinstance(entry, str):
+                include_names.append(entry)
+            elif entry in CALLBACK_TO_PLUGIN:
+                include_names.append(CALLBACK_TO_PLUGIN[entry])
+            else:
+                extra_callbacks.append(entry)
+        return include_names, extra_callbacks
+
+    @staticmethod
+    def _plot_exclusions(
+        remove_plots: list[callable | str] | None,
+        extra_callbacks: list[callable],
+        numeric_only: bool,
+    ) -> tuple[set[str], list[callable]]:
+        """Compute the plugin names to exclude and drop removed legacy callables."""
+        exclude_names: set[str] = set()
+        if numeric_only:
+            exclude_names.add(PANES_PLUGIN_NAME)
+        kept_callbacks = list(extra_callbacks)
+        if remove_plots is not None:
+            for entry in remove_plots:
+                if isinstance(entry, str):
+                    exclude_names.add(entry)
+                elif entry in CALLBACK_TO_PLUGIN:
+                    exclude_names.add(CALLBACK_TO_PLUGIN[entry])
+                elif entry in kept_callbacks:
+                    kept_callbacks.remove(entry)
+        return exclude_names, kept_callbacks
 
     def to_auto_plots(
         self,
