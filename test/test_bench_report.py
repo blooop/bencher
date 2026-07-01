@@ -69,6 +69,34 @@ class TestBenchReport(unittest.TestCase):
             report.save(directory=td, in_html_folder=False)
         self.assertGreater(report.last_save_ms, 0.0)
 
+    def test_save_injects_embed_height_script(self):
+        """Single-tab saves carry the bencher:height reporter exactly once."""
+        report = BenchReport("embed_single")
+        report.append_markdown("# Test", name="test")
+        with tempfile.TemporaryDirectory() as td:
+            path = report.save(directory=td, in_html_folder=False)
+            content = path.read_text(encoding="utf-8")
+        self.assertEqual(content.count("bencher:height embed reporter"), 1)
+
+    def test_save_multitab_injects_script_and_relay(self):
+        """Multi-tab saves: each tab carries the reporter; the index relays heights."""
+        report = BenchReport("embed_multi")
+        report.append_tab(pn.pane.Markdown("Tab 0"), "tab0")
+        report.append_tab(pn.pane.Markdown("Tab 1"), "tab1")
+        with tempfile.TemporaryDirectory() as td:
+            index_path = report.save(directory=td, in_html_folder=False)
+            index_content = index_path.read_text(encoding="utf-8")
+            tab_dir = index_path.parent / "_tabs"
+            tab_files = sorted(tab_dir.glob("*.html"))
+            tab_contents = [p.read_text(encoding="utf-8") for p in tab_files]
+        self.assertEqual(len(tab_contents), 2)
+        for tab_content in tab_contents:
+            self.assertEqual(tab_content.count("bencher:height embed reporter"), 1)
+        # The index listens for child heights and relays them upward
+        self.assertIn("bencher:height", index_content)
+        self.assertIn("postMessage", index_content)
+        self.assertNotIn("bencher:height embed reporter", index_content)
+
     def test_append_always_targets_last_tab(self):
         """append() puts content into the last tab, regardless of intent."""
         report = BenchReport("multi")
