@@ -200,6 +200,7 @@ class BenchResult(
         default_container=pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
         numeric_only: bool = False,
+        backend: str | None = None,
         **kwargs,
     ) -> list[pn.panel]:
         """Automatically generate plots by dispatching through the plot plugin registry.
@@ -222,6 +223,9 @@ class BenchResult(
             numeric_only (bool, optional): When True, skip the pane-type result plugin
                 (images, videos, rerun, etc.) that cannot be numerically aggregated.
                 Defaults to False.
+            backend (str, optional): Preferred rendering backend. Chart types the
+                preferred backend implements render through it; the rest keep their
+                best other implementation. Defaults to None (highest priority wins).
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
@@ -262,7 +266,7 @@ class BenchResult(
         data = self.to_bench_data(render_kwargs=dict(override=override, **kwargs))
         row = EmptyContainer(default_container())
         for plugin in get_registry().select(
-            data, include=include_names, exclude=exclude_names or None
+            data, include=include_names, exclude=exclude_names or None, backend=backend
         ):
             try:
                 row.append(plugin.render(data))

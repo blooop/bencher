@@ -203,6 +203,26 @@ class TestUserPluginsInToAuto(unittest.TestCase):
         panes = self.res.to_auto(plot_list=["line"])
         self.assertEqual([p.object for p in panes], ["replaced line"])
 
+    def test_backend_swap_under_same_plotter(self):
+        """An alternative backend's implementation of an existing chart type is
+        chosen when preferred, without touching the plotter set."""
+
+        @plot_plugin(name="line", backend="alt", priority=1)
+        def _alt_line(_: BenchData) -> pn.viewable.Viewable:
+            return pn.pane.Markdown("alt-backend line")
+
+        try:
+            # Default: the built-in holoviews line wins on priority.
+            default_panes = self.res.to_auto(plot_list=["line"])
+            self.assertNotIn(
+                "alt-backend line", [getattr(p, "object", None) for p in default_panes]
+            )
+            # Preferring the alt backend swaps the implementation of the same plotter.
+            swapped = self.res.to_auto(plot_list=["line"], backend="alt")
+            self.assertEqual([p.object for p in swapped], ["alt-backend line"])
+        finally:
+            unregister_plugin("line", backend="alt")
+
     def test_failing_user_plugin_logged_not_raised(self):
         @plot_plugin(name="user.extra")
         def _boom(_: BenchData) -> pn.viewable.Viewable:
