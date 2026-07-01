@@ -18,6 +18,19 @@ from bencher.results.holoview_results.line_result import LineResult
 
 BUILTIN_ORDER = ["bar", "box_whisker", "curve", "line", "heatmap", "histogram", "volume", "panes"]
 
+NAMED_ONLY = [
+    "violin",
+    "scatter_jitter",
+    "scatter",
+    "band",
+    "surface",
+    "table",
+    "tabulator",
+    "dataset",
+    "video_summary",
+    "rerun",
+]
+
 
 class Linear(bn.ParametrizedSweep):
     x = bn.FloatSweep(default=0, bounds=[0, 2], samples=3)
@@ -34,6 +47,14 @@ class FloatCat(bn.ParametrizedSweep):
 
     def benchmark(self):
         self.value = self.x * (2.0 if self.kind == "a" else 3.0)
+
+
+class Cat(bn.ParametrizedSweep):
+    kind = bn.StringSweep(["a", "b"])
+    value = bn.ResultFloat(units="m")
+
+    def benchmark(self):
+        self.value = 2.0 if self.kind == "a" else 3.0
 
 
 def run_sweep(sweep_cls=Linear, repeats: int = 1) -> BenchResult:
@@ -232,6 +253,94 @@ class TestUserPluginsInToAuto(unittest.TestCase):
             panes = self.res.to_auto()
         self.assertTrue(any("user.extra" in msg for msg in captured.output))
         self.assertGreater(len(panes), 0)
+
+
+class TestNamedOnlyPlugins(unittest.TestCase):
+    """Phase 3: every result type is addressable by name, without changing what a
+    default report renders."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Distribution plots (violin, scatter_jitter) require cat-only inputs with
+        # repeats >= 2, so the named-only tests sweep a categorical variable.
+        cls.res = run_sweep(Cat, repeats=2)
+
+    def test_registered_as_named_only(self):
+        reg = get_registry()
+        for name in NAMED_ONLY:
+            plugin = reg.get(name)
+            self.assertIsNotNone(plugin, f"{name} not registered")
+            self.assertFalse(plugin.auto, f"{name} must be named-only (auto=False)")
+            self.assertIn("legacy_result", plugin.requires)
+
+    def test_backend_assignments(self):
+        reg = get_registry()
+        # Rerun is its own first-class backend; Plotly appears only where a plot
+        # already required it (surface, like the volume built-in).
+        self.assertEqual(reg.get("rerun").backend, "rerun")
+        self.assertEqual(reg.get("surface").backend, "plotly")
+        for name in ("violin", "scatter_jitter", "scatter", "band", "table"):
+            self.assertEqual(reg.get(name).backend, "holoviews")
+        for name in ("tabulator", "dataset", "video_summary"):
+            self.assertEqual(reg.get(name).backend, "panel")
+
+    def test_never_auto_selected(self):
+        data = self.res.to_bench_data()
+        selected = {p.name for p in get_registry().select(data)}
+        self.assertEqual(selected & set(NAMED_ONLY), set())
+
+    def test_violin_by_name_renders(self):
+        panes = self.res.to_auto(plot_list=["violin"])
+        self.assertEqual(len(panes), 1)
+        self.assertNotIsInstance(panes[0], pn.pane.Markdown)
+
+    def test_named_only_name_and_callable_equivalent(self):
+        from bencher.results.holoview_results.distribution_result.violin_result import (
+            ViolinResult,
+        )
+
+        by_name = self.res.to_auto(plot_list=["violin"])
+        by_callable = self.res.to_auto(plot_list=[ViolinResult.to_plot])
+        self.assertEqual(_pane_types(by_name), _pane_types(by_callable))
+
+    def test_table_by_name_renders(self):
+        panes = self.res.to_auto(plot_list=["table"])
+        self.assertEqual(len(panes), 1)
+        self.assertNotIsInstance(panes[0], pn.pane.Markdown)
+
+    def test_named_only_composes_with_auto_set(self):
+        default = self.res.to_auto()
+        with_violin = self.res.to_auto(
+            plot_list=[p.name for p in get_registry().select(self.res.to_bench_data())] + ["violin"]
+        )
+        self.assertEqual(len(with_violin), len(default) + 1)
+
+    def test_fixed_signature_callback_gets_only_declared_kwargs(self):
+        """Renderers without **kwargs (e.g. RerunResult.to_rerun) must not receive
+        the override/plot-size kwargs to_auto always rides along."""
+        calls = {}
+
+        def fixed_callback(result, width=0):  # no **kwargs
+            calls["result"] = result
+            calls["width"] = width
+            return pn.pane.Markdown("fixed")
+
+        plugin = LegacyResultPlugin(
+            name="fixed",
+            backend="test",
+            match=PlotFilter.match_all(),
+            priority=0,
+            requires=frozenset({"legacy_result"}),
+            callback=fixed_callback,
+        )
+        marker = object()
+        data = BenchData.fake().with_changes(
+            legacy_result=marker, render_kwargs={"override": False, "width": 600}
+        )
+        pane = plugin.render(data)
+        self.assertEqual(pane.object, "fixed")
+        self.assertIs(calls["result"], marker)
+        self.assertEqual(calls["width"], 600)
 
 
 class TestToBenchData(unittest.TestCase):

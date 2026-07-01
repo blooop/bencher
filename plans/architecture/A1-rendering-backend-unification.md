@@ -156,5 +156,13 @@ above:
    `RerunResult`) as named plugins.
 3. **Phase 0 and Phase 2 landed as planned** — #932 merged main + contract fixes
    (`PlotFilter.match_all()` decorator default, `(name, backend)` keying);
-   `feature/plugin-builtins` wraps the built-in chart set and routes `to_auto` through
+   #970 wraps the built-in chart set and routes `to_auto` through
    `registry.select()` with output parity verified against the legacy callback loop.
+4. **Revised Phase 3 landed** (`feature/plugin-named-plotters`): named-only plugins
+   (`auto=False` — in the registry, selectable by name, never auto-selected) cover the
+   remaining result types: violin, scatter_jitter, scatter, band, table (holoviews);
+   tabulator, dataset, video_summary (panel); surface (plotly, pre-existing 3D only);
+   **rerun as its own backend** (`RerunResult.to_rerun`, SDK imported lazily so
+   registration needs no install guard). Default report output unchanged. Next: A2
+   (declarative signatures, ranking, serializable plot specs) lifts the dynamic
+   `to_plot`-internal filters into the registry.
