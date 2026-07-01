@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.111.0] - 2026-07-01
+
+### Changed
+- **`to_auto` dispatches through the plot plugin registry** (A1 Phase 2). The built-in chart types (bar, box_whisker, curve, line, heatmap, histogram, volume, panes) are registered as thin wrappers (`bencher/plugins/builtins.py`) that delegate to the existing renderer methods — renderer logic and report output are unchanged (priorities encode the legacy callback order; parity covered in `test/test_plugins_builtins.py`). What changes: user plugins registered with `@bencher.plot_plugin` / `bencher.register_plugin` or shipped via the `bencher.plot_plugins` entry-point group now appear in reports automatically; built-ins can be overridden by registering the same (name, backend); `plot_list`/`remove_plots` accept plugin names (`"line"`, `"heatmap"`, ...) alongside the legacy callables (which keep working, unknown callables via direct call); and `to_auto(backend=...)` states a preferred rendering backend — chart types the preferred backend implements swap to it, the rest keep their best other implementation.
+- New `BenchResult.to_bench_data()` builds the frozen `BenchData` contract from a live result (first step of the A3 data-contract migration). Transitional `BenchData.legacy_result`/`render_kwargs` fields carry the live result and plot kwargs for the wrapped built-ins; they are not part of the stable plugin contract and disappear when renderers consume `BenchData` directly.
+
+## [1.110.0] - 2026-07-01
+
+### Added
+- **Plot plugin infrastructure (tier 0, purely additive)** — the first piece of the plan to replace the inheritance-based rendering system in `bencher/results/` with a plugin registry (see `plans/architecture/A1-rendering-backend-unification.md` and `docs/plot_plugin_design.md`). New `bencher.plugins` package exposing, at the top level: `BenchData` (frozen value type: dataset, input/result vars, `plt_cnt_cfg`, `RunMeta`, optional `optimizer_study`/`baseline_runs`/`cache`), the `PlotPlugin` protocol and `@plot_plugin` decorator, and `PluginRegistry` with `get_registry()`/`register_plugin()`/`unregister_plugin()`. Plugins are `(chart-type × backend)` pairs with a `PlotFilter` match rule, priority, capability gating via `requires`, lazy entry-point discovery (`bencher.plot_plugins` group), and error-pane substitution on render failure (`strict=True` re-raises). **No existing code path queries the registry yet**; built-in chart types migrate onto it in subsequent PRs. Coverage in `test/test_plugins.py`.
+
 ## [1.108.0] - 2026-06-21
 
 ### Added

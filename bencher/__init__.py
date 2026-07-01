@@ -162,6 +162,17 @@ from .video_writer import VideoWriter, add_image
 from .class_enum import ClassEnum, ExampleEnum
 from .factories import create_bench, create_bench_runner
 from .run import run
+from .plugins import (
+    BenchData,
+    CacheHandle,
+    PlotPlugin,
+    PluginRegistry,
+    RunMeta,
+    get_registry,
+    plot_plugin,
+    register_plugin,
+    unregister_plugin,
+)
 
 
 _DEPRECATED_ALIASES = {

@@ -36,6 +36,13 @@ from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.dataset_result import DataSetResult
+from bencher.plugins.bench_data import BenchData, RunMeta
+from bencher.plugins.registry import get_registry
+from bencher.plugins.builtins import (
+    CALLBACK_TO_PLUGIN,
+    PANES_PLUGIN_NAME,
+    register_builtin_plugins,
+)
 from bencher.utils import listify, resolve_aggregate
 
 
@@ -166,51 +173,82 @@ class BenchResult(
             return pn.Column(*[cb(self) for cb in self.bench_cfg.plot_callbacks])
         return None
 
+    def to_bench_data(self, render_kwargs: dict | None = None) -> BenchData:
+        """Snapshot this result as the frozen plugin data contract.
+
+        The transitional ``legacy_result``/``render_kwargs`` fields carry the live
+        result object and the plot kwargs for the wrapped built-in renderers; they
+        disappear once renderers consume BenchData directly.
+
+        Returns:
+            BenchData: The frozen data handle plot plugins receive.
+        """
+        return BenchData(
+            dataset=self.ds,
+            input_vars=tuple(self.bench_cfg.input_vars),
+            result_vars=tuple(self.bench_cfg.result_vars),
+            plt_cnt_cfg=self.plt_cnt_cfg,
+            run_meta=RunMeta(name=self.bench_cfg.bench_name or ""),
+            legacy_result=self,
+            render_kwargs=render_kwargs if render_kwargs is not None else {},
+        )
+
     def to_auto(
         self,
-        plot_list: list[callable] | None = None,
-        remove_plots: list[callable] | None = None,
+        plot_list: list[callable | str] | None = None,
+        remove_plots: list[callable | str] | None = None,
         default_container=pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
         numeric_only: bool = False,
+        backend: str | None = None,
         **kwargs,
     ) -> list[pn.panel]:
-        """Automatically generate plots based on the provided plot callbacks.
+        """Automatically generate plots by dispatching through the plot plugin registry.
+
+        Every registered plugin whose match rule fits this sweep renders, in
+        priority order — the built-in chart types (registered in
+        :mod:`bencher.plugins.builtins`) plus any user plugins registered with
+        ``bencher.register_plugin`` / ``@bencher.plot_plugin`` or discovered via
+        the ``bencher.plot_plugins`` entry-point group.
 
         Args:
-            plot_list (list[callable], optional): List of plot callback functions to use. Defaults to None.
-            remove_plots (list[callable], optional): List of plot callback functions to exclude. Defaults to None.
+            plot_list (list[callable | str], optional): Restrict to these plots. Entries are
+                plugin names ("line", "heatmap", ...) or, for backward compatibility, legacy
+                plot callbacks (e.g. ``LineResult.to_plot``); unrecognized callables are
+                invoked directly as before. Defaults to None (all matching plugins).
+            remove_plots (list[callable | str], optional): Plots to exclude, same entry
+                forms as plot_list. Defaults to None.
             default_container (type, optional): Default container type for the plots. Defaults to pn.Column.
             override (bool, optional): Whether to override unsupported plots. Defaults to False.
-            numeric_only (bool, optional): When True, skip pane-type result callbacks
+            numeric_only (bool, optional): When True, skip the pane-type result plugin
                 (images, videos, rerun, etc.) that cannot be numerically aggregated.
                 Defaults to False.
+            backend (str, optional): Preferred rendering backend. Chart types the
+                preferred backend implements render through it; the rest keep their
+                best other implementation. Defaults to None (highest priority wins).
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
             list[pn.panel]: A list of panel objects containing the generated plots.
         """
         self.plt_cnt_cfg.print_debug = False
-        plot_list = listify(plot_list)
-        remove_plots = listify(remove_plots)
-
-        if plot_list is None:
-            plot_list = BenchResult.default_plot_callbacks()
-        if numeric_only:
-            plot_list = [cb for cb in plot_list if cb is not PaneResult.to_panes]
-        if remove_plots is not None:
-            for p in remove_plots:
-                if p in plot_list:
-                    plot_list.remove(p)
+        include_names, extra_callbacks = self._normalize_plot_list(listify(plot_list))
+        exclude_names, extra_callbacks = self._plot_exclusions(
+            listify(remove_plots), extra_callbacks, numeric_only
+        )
 
         kwargs = self.set_plot_size(**kwargs)
+        data = self.to_bench_data(render_kwargs=dict(override=override, **kwargs))
 
         row = EmptyContainer(default_container())
-        for plot_callback in plot_list:
-            if self.plt_cnt_cfg.print_debug:
-                print(f"checking: {plot_callback.__name__}")
-            # the callbacks are passed from the static class definition, so self needs to be
-            # passed before the plotting callback can be called
+        for plugin in get_registry().select(
+            data, include=include_names, exclude=exclude_names or None, backend=backend
+        ):
+            try:
+                row.append(plugin.render(data))
+            except Exception:  # pylint: disable=broad-except
+                logging.error("Plot plugin %s failed", plugin.name, exc_info=True)
+        for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
             except Exception:  # pylint: disable=broad-except
@@ -220,6 +258,49 @@ class BenchResult(
         if len(row.pane) == 0:
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
+
+    @staticmethod
+    def _normalize_plot_list(
+        plot_list: list[callable | str] | None,
+    ) -> tuple[list[str] | None, list[callable]]:
+        """Split a to_auto plot_list into registry names and legacy callables.
+
+        Known callbacks translate to their plugin names; unknown callables keep
+        working through the legacy direct-call path. None means "no restriction"
+        (all registered plugins participate)."""
+        if plot_list is None:
+            return None, []
+        include_names: list[str] = []
+        extra_callbacks: list[callable] = []
+        for entry in plot_list:
+            if isinstance(entry, str):
+                include_names.append(entry)
+            elif entry in CALLBACK_TO_PLUGIN:
+                include_names.append(CALLBACK_TO_PLUGIN[entry])
+            else:
+                extra_callbacks.append(entry)
+        return include_names, extra_callbacks
+
+    @staticmethod
+    def _plot_exclusions(
+        remove_plots: list[callable | str] | None,
+        extra_callbacks: list[callable],
+        numeric_only: bool,
+    ) -> tuple[set[str], list[callable]]:
+        """Compute the plugin names to exclude and drop removed legacy callables."""
+        exclude_names: set[str] = set()
+        if numeric_only:
+            exclude_names.add(PANES_PLUGIN_NAME)
+        kept_callbacks = list(extra_callbacks)
+        if remove_plots is not None:
+            for entry in remove_plots:
+                if isinstance(entry, str):
+                    exclude_names.add(entry)
+                elif entry in CALLBACK_TO_PLUGIN:
+                    exclude_names.add(CALLBACK_TO_PLUGIN[entry])
+                elif entry in kept_callbacks:
+                    kept_callbacks.remove(entry)
+        return exclude_names, kept_callbacks
 
     def to_auto_plots(
         self,
@@ -351,3 +432,9 @@ class BenchResult(
         return pn.pane.Markdown(
             f"{header}\n" + "\n".join(rows) if rows else "No result variables found."
         )
+
+
+# The built-in chart set dispatches through the plugin registry (see to_auto);
+# register it as soon as the result classes exist so any import path that can
+# construct a BenchResult also has the registry populated.
+register_builtin_plugins()
