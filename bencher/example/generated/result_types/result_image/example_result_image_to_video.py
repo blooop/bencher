@@ -62,4 +62,4 @@ def example_result_image_to_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_to_video, level=3)
+    bn.run(example_result_image_to_video, subsampling_divisions=3)

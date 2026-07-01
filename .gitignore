@@ -196,6 +196,7 @@ docs/autoapi/*
 
 # Claude Code local settings (personal, not shared)
 .claude/settings.local.json
+.claude/worktrees/
 _tabs/*
 
 # Auto-generated docs (HTML reports, RST files) — examples are tracked

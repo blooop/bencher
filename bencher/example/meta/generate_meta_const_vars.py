@@ -71,7 +71,7 @@ class MetaConstVars(MetaGeneratorBase):
             input_vars='["cpu_load", "memory_pct"]',
             result_vars='["latency"]',
             const_vars="dict(disk_io=0.5)",
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _gen_compare(self):
@@ -95,7 +95,7 @@ class MetaConstVars(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=SERVER_BENCHMARK_CLASS_CODE,
-            run_kwargs={"level": 4},
+            run_kwargs={"subsampling_divisions": 4},
         )
 
     def _gen_categorical(self):
@@ -124,7 +124,7 @@ class MetaConstVars(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=SERVER_BENCHMARK_CLASS_CODE,
-            run_kwargs={"level": 4},
+            run_kwargs={"subsampling_divisions": 4},
         )
 
     def _gen_noise(self):
@@ -140,7 +140,7 @@ class MetaConstVars(MetaGeneratorBase):
             input_vars='["cpu_load", "memory_pct"]',
             result_vars='["latency", "throughput"]',
             const_vars="dict(noise_scale=0.3)",
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
 

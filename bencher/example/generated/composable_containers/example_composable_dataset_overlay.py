@@ -29,4 +29,4 @@ def example_composable_dataset_overlay(run_cfg: bn.BenchRunCfg | None = None) ->
 
 
 if __name__ == "__main__":
-    bn.run(example_composable_dataset_overlay, level=3)
+    bn.run(example_composable_dataset_overlay, subsampling_divisions=3)

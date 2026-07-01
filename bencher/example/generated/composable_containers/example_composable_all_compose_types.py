@@ -94,4 +94,4 @@ def example_composable_all_compose_types(run_cfg: bn.BenchRunCfg | None = None) 
 
 
 if __name__ == "__main__":
-    bn.run(example_composable_all_compose_types, level=2)
+    bn.run(example_composable_all_compose_types, subsampling_divisions=2)

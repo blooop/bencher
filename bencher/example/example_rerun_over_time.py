@@ -27,6 +27,9 @@ class ControlSystemSweep(bn.ParametrizedSweep):
     damping_ratio = bn.FloatSweep(
         default=0.7, bounds=[0.1, 2.0], doc="Damping ratio (zeta)", samples=5
     )
+    omega_n = bn.FloatSweep(
+        default=5.0, bounds=[2.0, 10.0], doc="Natural frequency (rad/s)", samples=3
+    )
 
     out_overshoot = bn.ResultFloat(units="%", doc="peak overshoot", direction=bn.OptDir.minimize)
     out_settling_time = bn.ResultFloat(
@@ -40,7 +43,7 @@ class ControlSystemSweep(bn.ParametrizedSweep):
         n_steps = 200
         dt = 0.02
         setpoint = 1.0
-        omega_n = 5.0  # natural frequency  rad/s
+        omega_n = self.omega_n
         zeta = max(0.05, self.damping_ratio - self._degradation)
 
         y, dy = 0.0, 0.0

@@ -33,4 +33,4 @@ def example_plot_box_whisker(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_plot_box_whisker, level=3, repeats=10)
+    bn.run(example_plot_box_whisker, subsampling_divisions=3, repeats=10)

@@ -1,4 +1,5 @@
 import numpy as np
+import moviepy.video.VideoClip
 import moviepy.video.io.ImageSequenceClip
 import moviepy.video.io.VideoFileClip
 from pathlib import Path

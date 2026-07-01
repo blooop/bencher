@@ -454,7 +454,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
 
     sample_with_repeats = bn.IntSweep(default=1, bounds=(1, 100))
     sample_over_time = bn.BoolSweep(default=False)
-    level = bn.IntSweep(default=2, units="level", bounds=(2, 5))
+    subsampling_divisions = bn.IntSweep(default=2, units="subsampling_divisions", bounds=(2, 5))
 
     plots = bn.ResultReference(units="int")
 
@@ -546,7 +546,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 imports=imports,
                 body=body,
                 class_code=class_code,
-                run_kwargs={"level": 4, "over_time": True},
+                run_kwargs={"subsampling_divisions": 4, "over_time": True},
             )
         else:
             noise_val = 0.15 if self.sample_with_repeats > 1 else 0.0
@@ -554,7 +554,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 info, self.float_vars_count, self.categorical_vars_count, noise_val
             )
 
-            run_kwargs = {"level": 4}
+            run_kwargs = {"subsampling_divisions": 4}
             if self.sample_with_repeats > 1:
                 run_kwargs["repeats"] = self.sample_with_repeats
 

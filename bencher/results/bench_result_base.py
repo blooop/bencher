@@ -15,7 +15,7 @@ from textwrap import wrap
 from bencher.utils import int_to_col, color_tuple_to_css, callable_name
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.variables.inputs import with_level
+from bencher.variables.inputs import with_subsampling_divisions
 
 from bencher.variables.results import OptDir
 from copy import deepcopy
@@ -29,6 +29,7 @@ from bencher.variables.results import (
     ResultVideo,
     ResultImage,
     ResultRerun,
+    result_is_missing,
 )
 
 from bencher.results.composable_container.composable_container_panel import (
@@ -181,7 +182,7 @@ class BenchResultBase:
         self,
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultFloat | None = None,
-        level: int | None = None,
+        subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
     ) -> hv.Dataset:
@@ -198,7 +199,7 @@ class BenchResultBase:
             ds_out = self.to_dataset(
                 reduce,
                 result_var=result_var,
-                level=level,
+                subsampling_divisions=subsampling_divisions,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
@@ -210,7 +211,7 @@ class BenchResultBase:
             self.to_dataset(
                 reduce,
                 result_var=result_var,
-                level=level,
+                subsampling_divisions=subsampling_divisions,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
@@ -227,7 +228,7 @@ class BenchResultBase:
         self,
         reduce: ReduceType,
         result_var: ResultFloat | str | None,
-        level: int | None,
+        subsampling_divisions: int | None,
         agg_over_dims: list[str] | None,
         agg_fn: str | None,
     ) -> tuple:
@@ -238,13 +239,13 @@ class BenchResultBase:
         dims_key = tuple(sorted(agg_over_dims)) if agg_over_dims else None
         # fn is irrelevant when no agg dims — aggregation is skipped entirely
         fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
-        return (reduce, rv_key, level, dims_key, fn_key)
+        return (reduce, rv_key, subsampling_divisions, dims_key, fn_key)
 
     def to_dataset(
         self,
         reduce: ReduceType = ReduceType.AUTO,
         result_var: ResultFloat | str | None = None,
-        level: int | None = None,
+        subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
         agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
         deep: bool = True,
@@ -265,7 +266,9 @@ class BenchResultBase:
             a deep copy is returned so callers can safely mutate the result. Internal
             hot paths pass ``deep=False`` to reuse the cached object directly.
         """
-        cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
+        cache_key = self._to_dataset_cache_key(
+            reduce, result_var, subsampling_divisions, agg_over_dims, agg_fn
+        )
         if cache_key in self._to_dataset_cache:
             cached = self._to_dataset_cache[cache_key]
             return cached.copy(deep=True) if deep else cached
@@ -297,22 +300,26 @@ class BenchResultBase:
 
         match reduce:
             case ReduceType.REDUCE:
-                ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
-                ds_reduce_std = ds_out.std(dim="repeat", keep_attrs=False)
-                # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std
-                n_repeats = ds_out.sizes["repeat"]
+                ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
+                ds_reduce_std = ds_out.std(dim="repeat", skipna=True, keep_attrs=False)
+                # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std.
+                # n is the per-cell count of *valid* (non-NaN) repeats, not the full
+                # repeat dim size: NaN is the "missing" sentinel (see ResultBool /
+                # ResultFloat.__init__) and p above is a skipna mean, so dividing by the
+                # full dim size would understate the SE when any repeat is missing.
                 for rv in self.bench_cfg.result_vars:
                     if isinstance(rv, ResultBool) and rv.name in ds_reduce_std.data_vars:
                         p = ds_reduce_mean[rv.name]
-                        ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_repeats)
+                        n_valid = ds_out[rv.name].notnull().sum(dim="repeat")
+                        ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_valid)
                 # Assign std vars directly onto mean dataset (avoids xr.merge copy)
                 for var in ds_reduce_std.data_vars:
                     ds_reduce_mean[f"{var}_std"] = ds_reduce_std[var]
                 ds_out = ds_reduce_mean
             case ReduceType.MINMAX:  # TODO, need to pass mean, center of minmax, and minmax
-                ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
-                ds_reduce_min = ds_out.min(dim="repeat")
-                ds_reduce_max = ds_out.max(dim="repeat")
+                ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
+                ds_reduce_min = ds_out.min(dim="repeat", skipna=True)
+                ds_reduce_max = ds_out.max(dim="repeat", skipna=True)
                 # Assign range vars directly onto mean dataset (avoids xr.merge copy)
                 ds_range = ds_reduce_max - ds_reduce_min
                 for var in ds_range.data_vars:
@@ -380,11 +387,13 @@ class BenchResultBase:
                     agg_over_dims,
                     list(ds_out.dims),
                 )
-        if level is not None:
+        if subsampling_divisions is not None:
             coords_no_repeat = {}
             for c, v in ds_out.coords.items():
                 if c != "repeat":
-                    coords_no_repeat[c] = with_level(v.to_numpy(), level)
+                    coords_no_repeat[c] = with_subsampling_divisions(
+                        v.to_numpy(), subsampling_divisions
+                    )
             ds_out = ds_out.sel(coords_no_repeat)
         self._to_dataset_cache[cache_key] = ds_out
         return ds_out.copy(deep=True) if deep else ds_out
@@ -709,17 +718,23 @@ class BenchResultBase:
                     hv_dataset = self.to_hv_dataset(
                         reduce=reduce, agg_over_dims=agg_dims, agg_fn=agg_fn
                     )
-            return self.map_plot_panes(
-                plot_callback=plot_callback,
-                hv_dataset=hv_dataset,
-                target_dimension=target_dimension,
-                result_var=result_var,
-                result_types=result_types,
-                pane_collection=pane_collection,
-                reduce=reduce,
-                pane_layout=pane_layout,
-                **kwargs,
-            )
+            prev_cfg = self.plt_cnt_cfg
+            if agg_over_dims:
+                self.plt_cnt_cfg = check_cfg
+            try:
+                return self.map_plot_panes(
+                    plot_callback=plot_callback,
+                    hv_dataset=hv_dataset,
+                    target_dimension=target_dimension,
+                    result_var=result_var,
+                    result_types=result_types,
+                    pane_collection=pane_collection,
+                    reduce=reduce,
+                    pane_layout=pane_layout,
+                    **kwargs,
+                )
+            finally:
+                self.plt_cnt_cfg = prev_cfg
         return matches_res.to_panel()
 
     def to_panes_multi_panel(
@@ -891,9 +906,8 @@ class BenchResultBase:
         )
         html_list = []
         for idx, _t in enumerate(time_vals):
-            ds_t = dataset.isel(over_time=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if filepath == "NAN" or not os.path.isfile(filepath):
+            filepath = self._over_time_filepath(dataset, result_var, idx)
+            if filepath is None:
                 html_list.append(_NO_DATA_HTML)
                 continue
             if is_rerun:
@@ -934,6 +948,21 @@ class BenchResultBase:
 
         return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
 
+    def _over_time_filepath(self, dataset: xr.Dataset, result_var, idx: int) -> str | None:
+        """Resolve the on-disk filepath for a file-backed result var at an over_time index.
+
+        Returns None when the entry is missing/unrecorded (per ``result_is_missing``)
+        or when the stored path does not point at an existing file.
+        """
+        ds_t = dataset.isel(over_time=idx)
+        value = self.zero_dim_da_to_val(ds_t[result_var.name])
+        if result_is_missing(result_var, value):
+            return None
+        filepath = str(value)
+        if not os.path.isfile(filepath):
+            return None
+        return filepath
+
     def _pane_over_time_grid(
         self,
         dataset: xr.Dataset,
@@ -953,9 +982,8 @@ class BenchResultBase:
 
         items = []
         for idx, label in enumerate(labels):
-            ds_t = dataset.isel(over_time=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if filepath == "NAN" or not os.path.isfile(filepath):
+            filepath = self._over_time_filepath(dataset, result_var, idx)
+            if filepath is None:
                 continue
             pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
             items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
@@ -1009,29 +1037,29 @@ class BenchResultBase:
         return val
 
     @staticmethod
-    def select_level(
+    def select_subsampling_divisions(
         dataset: xr.Dataset,
-        level: int,
+        subsampling_divisions: int,
         include_types: list[type] | None = None,
         exclude_names: list[str] | None = None,
     ) -> xr.Dataset:
-        """Given a dataset, return a reduced dataset that only contains data from a specified level.  By default all types of variables are filtered at the specified level.  If you only want to get a reduced level for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
+        """Given a dataset, return a reduced dataset that only contains data from a specified subsampling_divisions.  By default all types of variables are filtered at the specified subsampling_divisions.  If you only want to get a reduced subsampling_divisions for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
             dataset (xr.Dataset): dataset to filter
-            level (int): desired data resolution level
+            subsampling_divisions (int): desired data resolution subsampling_divisions
             include_types (list[type], optional): Only filter data of these types. Defaults to None.
             exclude_names (list[str], optional): Only filter data with these variable names. Defaults to None.
 
         Returns:
-            xr.Dataset: A reduced dataset at the specified level
+            xr.Dataset: A reduced dataset at the specified subsampling_divisions
 
         Example:  a dataset with float_var: [1,2,3,4,5] cat_var: [a,b,c,d,e]
 
-        select_level(ds,2) -> [1,5] [a,e]
-        select_level(ds,2,(float)) -> [1,5] [a,b,c,d,e]
-        select_level(ds,2,exclude_names=["cat_var]) -> [1,5] [a,b,c,d,e]
+        select_subsampling_divisions(ds,2) -> [1,5] [a,e]
+        select_subsampling_divisions(ds,2,(float)) -> [1,5] [a,b,c,d,e]
+        select_subsampling_divisions(ds,2,exclude_names=["cat_var]) -> [1,5] [a,b,c,d,e]
 
-        see test_bench_result_base.py -> test_select_level()
+        see test_bench_result_base.py -> test_select_subsampling_divisions()
         """
         coords_no_repeat = {}
         for c, v in dataset.coords.items():
@@ -1044,8 +1072,32 @@ class BenchResultBase:
                 if exclude_names is not None and c in listify(exclude_names):
                     include = False
                 if include:
-                    coords_no_repeat[c] = with_level(v.to_numpy(), level)
+                    coords_no_repeat[c] = with_subsampling_divisions(
+                        v.to_numpy(), subsampling_divisions
+                    )
         return dataset.sel(coords_no_repeat)
+
+    @staticmethod
+    def select_level(
+        dataset: xr.Dataset,
+        level: int,
+        include_types: list[type] | None = None,
+        exclude_names: list[str] | None = None,
+    ) -> xr.Dataset:
+        """Deprecated: use :meth:`select_subsampling_divisions` instead."""
+        import warnings
+
+        warnings.warn(
+            "'select_level' is deprecated; use 'select_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return BenchResultBase.select_subsampling_divisions(
+            dataset,
+            subsampling_divisions=level,
+            include_types=include_types,
+            exclude_names=exclude_names,
+        )
 
     # MAPPING TO LOWER LEVEL BENCHCFG functions so they are available at a top level.
     def to_sweep_summary(self, **kwargs):

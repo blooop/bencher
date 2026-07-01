@@ -1,6 +1,5 @@
 import unittest
 from hypothesis import given, strategies as st  # pylint: disable=unused-import
-import pytest
 from bencher.variables.inputs import IntSweep, EnumSweep, StringSweep, BoolSweep, FloatSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultFloat
@@ -37,51 +36,70 @@ class TestVarSweeps(unittest.TestCase):
 
     def test_int_sweep_level_10_with_values_(self):
         int_sweep = IntSweep(bounds=[0, 10])
-        self.assertListEqual(int_sweep.with_level(1).values(), [0])
-        self.assertListEqual(int_sweep.with_level(2).values(), [0, 10])
-        self.assertListEqual(int_sweep.with_level(3).values(), [0, 5, 10])
-        self.assertListEqual(int_sweep.with_level(4).values(), [0, 2, 5, 7, 10])
-        self.assertListEqual(int_sweep.with_level(5).values(), [0, 1, 2, 3, 5, 6, 7, 8, 10])
-        self.assertListEqual(int_sweep.with_level(6).values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(1).values(), [0])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(2).values(), [0, 10])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(3).values(), [0, 5, 10])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(4).values(), [0, 2, 5, 7, 10])
+        self.assertListEqual(
+            int_sweep.with_subsampling_divisions(5).values(), [0, 1, 2, 3, 5, 6, 7, 8, 10]
+        )
+        self.assertListEqual(
+            int_sweep.with_subsampling_divisions(6).values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        )
 
     def test_int_sweep_level_10_with_values_and_step(self):
         int_sweep = IntSweep(bounds=[0, 10], step=2, samples=4)
-        self.assertListEqual(int_sweep.with_level(1).values(), [0])
-        self.assertListEqual(int_sweep.with_level(2).values(), [0, 10])
-        self.assertListEqual(int_sweep.with_level(3).values(), [0, 5, 10])
-        self.assertListEqual(int_sweep.with_level(4).values(), [0, 2, 5, 7, 10])
-        self.assertListEqual(int_sweep.with_level(5).values(), [0, 1, 2, 3, 5, 6, 7, 8, 10])
-        self.assertListEqual(int_sweep.with_level(6).values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(1).values(), [0])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(2).values(), [0, 10])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(3).values(), [0, 5, 10])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(4).values(), [0, 2, 5, 7, 10])
+        self.assertListEqual(
+            int_sweep.with_subsampling_divisions(5).values(), [0, 1, 2, 3, 5, 6, 7, 8, 10]
+        )
+        self.assertListEqual(
+            int_sweep.with_subsampling_divisions(6).values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        )
 
     def test_int_sweep_level_1000_with_values_(self):
         int_sweep = IntSweep(default=100, bounds=[100, 1000])
-        self.assertListEqual(int_sweep.with_level(1).values(), [100])
-        self.assertListEqual(int_sweep.with_level(2).values(), [100, 1000])
-        self.assertListEqual(int_sweep.with_level(3).values(), [100, 550, 1000])
-        self.assertListEqual(int_sweep.with_level(4).values(), [100, 325, 550, 775, 1000])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(1).values(), [100])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(2).values(), [100, 1000])
+        self.assertListEqual(int_sweep.with_subsampling_divisions(3).values(), [100, 550, 1000])
         self.assertListEqual(
-            int_sweep.with_level(5).values(), [100, 212, 325, 437, 550, 662, 775, 887, 1000]
+            int_sweep.with_subsampling_divisions(4).values(), [100, 325, 550, 775, 1000]
         )
         self.assertListEqual(
-            int_sweep.with_level(6).values(),
+            int_sweep.with_subsampling_divisions(5).values(),
+            [100, 212, 325, 437, 550, 662, 775, 887, 1000],
+        )
+        self.assertListEqual(
+            int_sweep.with_subsampling_divisions(6).values(),
             [100, 156, 212, 268, 325, 381, 437, 493, 550, 606, 662, 718, 775, 831, 887, 943, 1000],
         )
 
     def test_float_sweep(self):
         float_sweep = FloatSweep(bounds=[0, 1])
 
-        self.assertListEqual(list(float_sweep.with_level(1).values()), [0.0])
-        self.assertListEqual(list(float_sweep.with_level(2).values()), [0.0, 1.0])
-        self.assertListEqual(list(float_sweep.with_level(3).values()), [0.0, 0.5, 1.0])
-        self.assertListEqual(list(float_sweep.with_level(4).values()), [0.0, 0.25, 0.5, 0.75, 1.0])
+        self.assertListEqual(list(float_sweep.with_subsampling_divisions(1).values()), [0.0])
+        self.assertListEqual(list(float_sweep.with_subsampling_divisions(2).values()), [0.0, 1.0])
+        self.assertListEqual(
+            list(float_sweep.with_subsampling_divisions(3).values()), [0.0, 0.5, 1.0]
+        )
+        self.assertListEqual(
+            list(float_sweep.with_subsampling_divisions(4).values()), [0.0, 0.25, 0.5, 0.75, 1.0]
+        )
 
     def test_float_sweep_with_step(self):
         float_sweep = FloatSweep(bounds=[0, 1], step=0.01)
 
-        self.assertListEqual(list(float_sweep.with_level(1).values()), [0.0])
-        self.assertListEqual(list(float_sweep.with_level(2).values()), [0.0, 1.0])
-        self.assertListEqual(list(float_sweep.with_level(3).values()), [0.0, 0.5, 1.0])
-        self.assertListEqual(list(float_sweep.with_level(4).values()), [0.0, 0.25, 0.5, 0.75, 1.0])
+        self.assertListEqual(list(float_sweep.with_subsampling_divisions(1).values()), [0.0])
+        self.assertListEqual(list(float_sweep.with_subsampling_divisions(2).values()), [0.0, 1.0])
+        self.assertListEqual(
+            list(float_sweep.with_subsampling_divisions(3).values()), [0.0, 0.5, 1.0]
+        )
+        self.assertListEqual(
+            list(float_sweep.with_subsampling_divisions(4).values()), [0.0, 0.25, 0.5, 0.75, 1.0]
+        )
 
     def test_float_step(self):
         float_sweep = FloatSweep(bounds=[0, 1], step=0.1)
@@ -128,18 +146,22 @@ class TestVarSweeps(unittest.TestCase):
 
         enum_sweep = EnumSweep(Enum1)
 
-        self.assertListEqual(enum_sweep.with_level(1).values(), [Enum1.VAL1])
-
-        self.assertListEqual(enum_sweep.with_level(2).values(), [Enum1.VAL1, Enum1.VAL4])
+        self.assertListEqual(enum_sweep.with_subsampling_divisions(1).values(), [Enum1.VAL1])
 
         self.assertListEqual(
-            enum_sweep.with_level(3).values(), [Enum1.VAL1, Enum1.VAL2, Enum1.VAL4]
+            enum_sweep.with_subsampling_divisions(2).values(), [Enum1.VAL1, Enum1.VAL4]
+        )
+
+        self.assertListEqual(
+            enum_sweep.with_subsampling_divisions(3).values(), [Enum1.VAL1, Enum1.VAL2, Enum1.VAL4]
         )
         self.assertListEqual(
-            enum_sweep.with_level(4).values(), [Enum1.VAL1, Enum1.VAL2, Enum1.VAL3, Enum1.VAL4]
+            enum_sweep.with_subsampling_divisions(4).values(),
+            [Enum1.VAL1, Enum1.VAL2, Enum1.VAL3, Enum1.VAL4],
         )
         self.assertListEqual(
-            enum_sweep.with_level(5).values(), [Enum1.VAL1, Enum1.VAL2, Enum1.VAL3, Enum1.VAL4]
+            enum_sweep.with_subsampling_divisions(5).values(),
+            [Enum1.VAL1, Enum1.VAL2, Enum1.VAL3, Enum1.VAL4],
         )
 
     def test_bool_default(self) -> None:
@@ -152,27 +174,26 @@ class TestVarSweeps(unittest.TestCase):
     def test_bool_sweep_level(self):
         bool_sweep = BoolSweep()
 
-        self.assertListEqual(bool_sweep.with_level(1).values(), [True])
-        self.assertListEqual(bool_sweep.with_level(2).values(), [True, False])
-        self.assertListEqual(bool_sweep.with_level(3).values(), [True, False])
+        self.assertListEqual(bool_sweep.with_subsampling_divisions(1).values(), [True])
+        self.assertListEqual(bool_sweep.with_subsampling_divisions(2).values(), [True, False])
+        self.assertListEqual(bool_sweep.with_subsampling_divisions(3).values(), [True, False])
 
     def test_string_sweep_level(self):
         string_sweep = StringSweep(["VAL1", "VAL2", "VAL3", "VAL4"])
-        self.assertListEqual(string_sweep.with_level(1).values(), ["VAL1"])
-        self.assertListEqual(string_sweep.with_level(2).values(), ["VAL1", "VAL4"])
-        self.assertListEqual(string_sweep.with_level(3).values(), ["VAL1", "VAL2", "VAL4"])
-        self.assertListEqual(string_sweep.with_level(4).values(), ["VAL1", "VAL2", "VAL3", "VAL4"])
-        self.assertListEqual(string_sweep.with_level(5).values(), ["VAL1", "VAL2", "VAL3", "VAL4"])
+        self.assertListEqual(string_sweep.with_subsampling_divisions(1).values(), ["VAL1"])
+        self.assertListEqual(string_sweep.with_subsampling_divisions(2).values(), ["VAL1", "VAL4"])
+        self.assertListEqual(
+            string_sweep.with_subsampling_divisions(3).values(), ["VAL1", "VAL2", "VAL4"]
+        )
+        self.assertListEqual(
+            string_sweep.with_subsampling_divisions(4).values(), ["VAL1", "VAL2", "VAL3", "VAL4"]
+        )
+        self.assertListEqual(
+            string_sweep.with_subsampling_divisions(5).values(), ["VAL1", "VAL2", "VAL3", "VAL4"]
+        )
 
     @given(st.integers(min_value=1, max_value=10))
     def test_int_sweep_samples(self, samples):
-        int_sweep = IntSweep(bounds=[0, 10], samples=samples)
-        self.assertEqual(int_sweep.default, 0)
-        self.assertEqual(len(int_sweep.values()), samples)
-
-    @pytest.mark.skip
-    @given(st.integers(min_value=1, max_value=10))
-    def test_int_sweep_samples_all(self, samples):
         int_sweep = IntSweep(bounds=[0, 10], samples=samples)
         self.assertEqual(int_sweep.default, 0)
         self.assertEqual(len(int_sweep.values()), samples)

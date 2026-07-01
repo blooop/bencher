@@ -36,4 +36,4 @@ def example_agg_list_1_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_agg_list_1_cat, level=4)
+    bn.run(example_agg_list_1_cat, subsampling_divisions=4)

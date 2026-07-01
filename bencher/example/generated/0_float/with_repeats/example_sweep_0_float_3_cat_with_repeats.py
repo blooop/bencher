@@ -35,4 +35,4 @@ def example_sweep_0_float_3_cat_with_repeats(run_cfg: bn.BenchRunCfg | None = No
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_0_float_3_cat_with_repeats, level=4, repeats=10)
+    bn.run(example_sweep_0_float_3_cat_with_repeats, subsampling_divisions=4, repeats=10)

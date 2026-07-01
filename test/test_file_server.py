@@ -1,5 +1,6 @@
 """Tests for bencher/file_server.py"""
 
+import socket
 import threading
 import time
 import tempfile
@@ -11,6 +12,18 @@ from pathlib import Path
 from bencher.file_server import create_server, run_file_server
 
 
+def wait_for_port(port: int, timeout: float = 5.0, step: float = 0.1) -> None:
+    """Poll until the server accepts TCP connections, instead of a fixed sleep."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=step):
+                return
+        except OSError:
+            time.sleep(step)
+    raise TimeoutError(f"Server on port {port} did not accept connections within {timeout}s")
+
+
 class TestFileServer(unittest.TestCase):
     def test_create_server(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -20,7 +33,7 @@ class TestFileServer(unittest.TestCase):
             server = create_server(tmpdir, port=0)
             threading.Thread(target=server.serve_forever, daemon=True).start()
             port = server.server_address[1]
-            time.sleep(0.3)
+            wait_for_port(port)
 
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/test.txt") as resp:
@@ -35,7 +48,7 @@ class TestFileServer(unittest.TestCase):
             server = create_server(tmpdir, port=0)
             threading.Thread(target=server.serve_forever, daemon=True).start()
             port = server.server_address[1]
-            time.sleep(0.3)
+            wait_for_port(port)
 
             try:
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
@@ -54,7 +67,7 @@ class TestFileServer(unittest.TestCase):
 
             server = run_file_server(directory=tmpdir, port=0)
             port = server.server_address[1]
-            time.sleep(0.3)
+            wait_for_port(port)
 
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/health.txt") as resp:

@@ -118,7 +118,7 @@ class MetaOptimization(MetaGeneratorBase):
                 "objective without worsening the other."
             )
 
-        level = 2 if self.input_dims >= 2 else 3
+        sd = 2 if self.input_dims >= 2 else 3
         self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
@@ -133,7 +133,7 @@ class MetaOptimization(MetaGeneratorBase):
             const_vars="dict(noise_scale=0.1)",
             description=description,
             post_description=post_description,
-            run_kwargs={"level": level, "repeats": 3, "optimise": 30},
+            run_kwargs={"subsampling_divisions": sd, "repeats": 3, "optimise": 30},
         )
 
 
@@ -199,7 +199,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
             ),
             body="\n".join(body_lines) + "\n",
             class_code=CLASS_CODE_OVERTIME,
-            run_kwargs={"level": 2, "optimise": 30, "over_time": True},
+            run_kwargs={"subsampling_divisions": 2, "optimise": 30, "over_time": True},
         )
 
 
@@ -257,7 +257,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 ),
                 body="\n".join(body_lines) + "\n",
                 class_code=CLASS_CODE_AGG,
-                run_kwargs={"level": 3, "optimise": 30, "over_time": True},
+                run_kwargs={"subsampling_divisions": 3, "optimise": 30, "over_time": True},
             )
         else:
             function_name = "example_optim_aggregated"
@@ -287,7 +287,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
                 result_vars='["loss"]',
                 description=description,
                 post_description=post_description,
-                run_kwargs={"level": 3, "repeats": 3, "optimise": 30},
+                run_kwargs={"subsampling_divisions": 3, "repeats": 3, "optimise": 30},
             )
 
 

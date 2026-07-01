@@ -41,7 +41,7 @@ Notice the three stages in the code above:
    `benchmark()` method
 2. **Sweep Definition** — `plot_sweep()` selects which parameters to vary and which
    results to collect
-3. **Run Definition** — `bn.run()` sets sampling density (`level`), `repeats`, and
+3. **Run Definition** — `bn.run()` sets sampling density (`subsampling_divisions`), `repeats`, and
    output options
 
 Every bencher example follows this pattern. See
@@ -92,29 +92,29 @@ Use `IntSweep(bounds=(0, N))` when 0 means "feature absent" and 1+ controls magn
 [Sampling Strategies gallery](reference/meta/sampling/index) for examples of how different
 sweep types produce different sample distributions.
 
-## The Level System
+## The Subsampling Divisions System
 
-Instead of specifying `samples` on each sweep variable, you can use the `level`
+Instead of specifying `samples` on each sweep variable, you can use the `subsampling_divisions`
 parameter to control sampling density globally with a single knob:
 
-| Level | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+| Subsampling Divisions | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 |---|---|---|---|---|---|---|---|
 | Samples per dimension | 1 | 2 | 3 | 5 | 9 | 17 | 33 |
 
-Higher levels reuse all lower-level samples (binary subdivision), so cached results
+Higher subsampling_divisions values reuse all lower samples (binary subdivision), so cached results
 carry over automatically. Start low for quick iteration, increase for publication
 quality:
 
 ```python
 # Quick check — 2 samples per dimension
-bn.run(example_benchmark, level=2)
+bn.run(example_benchmark, subsampling_divisions=2)
 
 # Publication quality — 9 samples per dimension
-bn.run(example_benchmark, level=5)
+bn.run(example_benchmark, subsampling_divisions=5)
 ```
 
-See [Concepts: The Level System](concepts.md#the-level-system) for the full formula
-and theory, and the [Level System gallery](reference/meta/levels/index) for an interactive
+See [Concepts: The Subsampling Divisions System](concepts.md#the-subsampling-divisions-system) for the full formula
+and theory, and the [Subsampling Divisions System gallery](reference/meta/levels/index) for an interactive
 demo.
 
 ## Result Types
@@ -172,7 +172,7 @@ bench.plot_sweep(
     input_vars=[
         "size",                                    # full range from bounds
         bn.sweep("method", ["fast", "accurate"]),  # explicit subset
-        bn.sweep("workers", max_level=3),           # auto-pick up to 3 values
+        bn.sweep("workers", max_subsampling_divisions=3),           # auto-pick up to 3 values
     ],
 )
 ```
@@ -198,7 +198,7 @@ slicing, comparing, and pinning parameters.
 
 | Parameter | Default | What it does |
 |---|---|---|
-| `level` | 0 | Sampling density per dimension (see Level System above) |
+| `subsampling_divisions` | 0 | Sampling density per dimension (see Subsampling Divisions System above) |
 | `repeats` | 1 | How many times to evaluate each combination |
 | `cache_samples` | False | Cache individual results across runs (resume interrupted sweeps) |
 | `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
@@ -217,7 +217,7 @@ def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     return bench
 
 if __name__ == "__main__":
-    bn.run(example_foo, level=4)    # level controls sweep detail depth
+    bn.run(example_foo, subsampling_divisions=4)    # subsampling_divisions controls sweep detail depth
 ```
 
 ## The benchmark() Method
@@ -293,6 +293,45 @@ bench.plot_sweep(
 - `aggregate=["var1", "var2"]` — collapse only the named dimensions
 
 See the [Aggregation gallery](reference/meta/aggregation/index) for examples of each mode.
+
+## Machine-Readable Results (Agents & CI)
+
+Bencher already computes per-metric verdicts, optimal values, and regression deltas during
+collection. To consume them programmatically — from an agent, a CI gate, or another script —
+export them as JSON instead of scraping the HTML report or logs.
+
+```python
+import bencher as bn
+
+res = bench.collect(input_vars=[...], result_vars=[...], run_cfg=run_cfg)
+
+# A single run -> result.json
+bn.result_to_dict(res)             # dict: schema_version, metrics, regressions, provenance
+bn.result_to_json(res, "result.json")
+
+# A/B between two independently collected results -> comparison.json
+cmp = bn.compare_results(baseline_res, candidate_res)   # per-metric verdict + summary counts
+bn.comparison_to_json(baseline_res, candidate_res, "comparison.json")
+```
+
+`compare_results` runs the same regression detector used by the over-time path (a percentage
+comparison by default), so each metric's `verdict` is one of `improved` / `regressed` /
+`unchanged` using identical direction/threshold semantics. Pass `run_cfg=` to choose a
+different `regression_method`.
+
+The same artifacts are available from the CLI on a saved result (see the collect/render split):
+
+```bash
+# render HTML and also emit result.json
+python -m bencher.render result.pkl out_dir --json result.json
+
+# diff two saved results
+python -m bencher.render compare baseline.pkl candidate.pkl --json comparison.json
+```
+
+`BenchReport.save(..., emit_json=True)` writes `result.json` next to the HTML for every
+contained result (opt-in; default off). All JSON output is strict — non-finite values (e.g. a
+zero-baseline percent change) are emitted as `null`.
 
 ## Common Mistakes
 

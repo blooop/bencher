@@ -40,7 +40,7 @@ class MetaContainerTabLayout(MetaGeneratorBase):
             run_cfg_lines=[
                 f"run_cfg.pane_layout = bn.PaneLayout.{layout}",
             ],
-            run_kwargs={"level": 2},
+            run_kwargs={"subsampling_divisions": 2},
         )
 
 

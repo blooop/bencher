@@ -17,4 +17,4 @@ def example_stats_distributions(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
 
 
 if __name__ == "__main__":
-    bn.run(example_stats_distributions, level=3, repeats=20)
+    bn.run(example_stats_distributions, subsampling_divisions=3, repeats=20)

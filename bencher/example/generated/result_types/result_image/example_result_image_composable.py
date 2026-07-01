@@ -70,4 +70,4 @@ def example_result_image_composable(run_cfg: bn.BenchRunCfg | None = None) -> bn
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_composable, level=2)
+    bn.run(example_result_image_composable, subsampling_divisions=2)

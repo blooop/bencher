@@ -28,6 +28,8 @@ IMPORTANT — hash_persistent() contract:
 
 from __future__ import annotations
 
+import math
+import numbers
 import warnings
 from enum import auto
 from typing import Callable, Any
@@ -110,12 +112,20 @@ class ResultFloat(Number):
         direction: OptDir = OptDir.minimize,
         share_axis=True,
         max_time_events=None,
+        default=float("nan"),
         **params,
     ):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
-        self.default = 0  # json is terrible and does not support nan values
+        # Defaults to NaN so an *unrecorded* sample (a run that aborts before
+        # measuring, or a result var the worker never sets) is treated as
+        # missing and dropped by the nan-aware reductions used for regression
+        # and aggregation, rather than masquerading as a real 0 measurement.
+        # This matches the storage layer, which initialises result arrays with
+        # NaN. Callers that want unrecorded samples to read as 0 opt out with
+        # ``default=0``.
+        self.default = default
         self.direction = direction
         self.share_axis = share_axis
         self.max_time_events = max_time_events
@@ -135,10 +145,38 @@ class ResultBool(ResultFloat):
     For continuous scalar metrics (time, distance, score), use ``ResultFloat`` instead.
     """
 
-    def __init__(self, units="ratio", direction: OptDir = OptDir.minimize, default=0, **params):
+    def __init__(
+        self, units="ratio", direction: OptDir = OptDir.minimize, default=float("nan"), **params
+    ):
         super().__init__(units=units, direction=direction, allow_None=True, **params)
+        # Defaults to NaN like ResultFloat (see ResultFloat.__init__): an
+        # *unrecorded* repeat is "missing", not a recorded failure, so it is
+        # dropped from the success proportion rather than counted as False. The
+        # binomial-std calc in bench_result_base divides p*(1-p) by the per-cell
+        # count of valid (non-NaN) repeats, so missing repeats don't understate
+        # the SE. A worker that wants a crash/abort to count as a failure must
+        # record False on its failure path; callers wanting the old False-fill
+        # opt out with ``default=0``.
         self.default = default
         self.bounds = (0, 1)  # bools are always between 0 and 1
+
+    def _validate_bounds(self, val, bounds, inclusive_bounds):
+        # NaN is the sentinel for an unrecorded ("missing") sample — see
+        # ResultFloat.__init__.  It lies outside the [0, 1] bounds, so param's
+        # bounds check would reject both ``default=float("nan")`` (re-validated
+        # whenever a subclass overrides the Parameter) and any NaN *value* set
+        # at runtime to mark a sample missing.  Treat NaN as always valid so a
+        # result bool can use the same missing sentinel as ResultFloat, while
+        # still rejecting genuinely out-of-range values.  Use math.isnan rather
+        # than ``isinstance(val, float)`` so numpy NaN scalars (e.g. np.float32)
+        # are also recognised; non-numeric values (None, str) raise here and
+        # fall through to the normal bounds check.
+        try:
+            if math.isnan(val):
+                return
+        except (TypeError, ValueError):
+            pass
+        super()._validate_bounds(val, bounds, inclusive_bounds)
 
 
 class ResultVec(param.List):
@@ -148,11 +186,19 @@ class ResultVec(param.List):
     _hash_exclude = ("max_time_events",)
 
     def __init__(
-        self, size, units="ul", direction: OptDir = OptDir.minimize, max_time_events=None, **params
+        self,
+        size,
+        units="ul",
+        direction: OptDir = OptDir.minimize,
+        max_time_events=None,
+        default=float("nan"),
+        **params,
     ):
         param.List.__init__(self, **params)
         self.units = units
-        self.default = 0  # json is terrible and does not support nan values
+        # See ResultFloat.__init__ — defaults to NaN so unrecorded samples are
+        # treated as missing; pass ``default=0`` to make them read as 0.
+        self.default = default
         self.direction = direction
         self.size = size
         self.max_time_events = max_time_events
@@ -436,6 +482,73 @@ ALL_RESULT_TYPES = (
     ResultReference,
     ResultVolume,
 )
+
+
+# --- Missing / unrecorded-sample representation ----------------------------
+#
+# Single source of truth for how a *missing* entry of a result variable is
+# stored in its typed backing array.  An entry is "missing" when a job never
+# wrote it (a run that aborts before measuring, or a result var the worker
+# never sets) or when an over_time entry is aged out past ``max_time_events``.
+#
+# The representation is dtype-specific because xarray/numpy arrays are typed —
+# there is no single value that is both storage-valid and reduction-aware
+# across every dtype:
+#   - numeric types (float/bool/vec, and any future numeric) -> NaN   (float)
+#   - index-backed reference types (reference/dataset)       -> -1    (int)
+#   - object/file/string types (path/video/image/string/...) -> "NAN" (object)
+#
+# Both dataset initialisation (``ResultCollector.setup_dataset``) and over_time
+# aging (``_null_old_entries``) build their arrays from ``result_missing_fill``,
+# and consumers test for missingness with ``result_is_missing`` instead of
+# hardcoding ``np.isnan`` / ``== "NAN"`` / ``== -1`` per call site.
+_REFERENCE_MISSING_TYPES = (ResultReference, ResultDataSet)
+_OBJECT_MISSING_TYPES = (
+    ResultPath,
+    ResultVideo,
+    ResultImage,
+    ResultString,
+    ResultContainer,
+    ResultRerun,
+)
+# Single-column result types that get a data variable in the dataset. ResultVec
+# is handled separately (it expands to one column per element); ResultHmap and
+# ResultVolume are stored out-of-band and intentionally get no data variable.
+DATA_VAR_RESULT_TYPES = SCALAR_RESULT_TYPES + _REFERENCE_MISSING_TYPES + _OBJECT_MISSING_TYPES
+
+
+def result_missing_fill(rv) -> tuple[Any, type]:
+    """Return the ``(fill_value, numpy_dtype)`` used for missing entries of *rv*."""
+    if isinstance(rv, _REFERENCE_MISSING_TYPES):
+        return -1, int
+    if isinstance(rv, _OBJECT_MISSING_TYPES):
+        return "NAN", object
+    # ResultFloat / ResultBool / ResultVec / ResultVolume and any future numeric.
+    return float("nan"), float
+
+
+def result_is_missing(rv, value) -> bool:
+    """True when *value* is the missing/unrecorded sentinel for *rv*'s storage.
+
+    For NaN-backed (numeric) types, both NaN and ``None`` count as missing — the
+    latter is treated as missing intentionally so a value that never reached the
+    typed array (e.g. an absent object-index entry) is not mistaken for real
+    data. Non-numeric values (strings, lists, …) are never missing for a
+    numeric type: they cannot be the NaN sentinel, so no float coercion is
+    attempted (the *string* ``"nan"`` is real data, not a missing marker). For
+    the ``-1`` / ``"NAN"`` sentinel types, missingness is exact equality with
+    the sentinel.
+    """
+    fill, _ = result_missing_fill(rv)
+    if isinstance(fill, float) and math.isnan(fill):
+        if value is None:
+            return True
+        # numbers.Real covers python ints/floats/bools and numpy scalars
+        # (numpy registers them with the numbers ABC tower).
+        if isinstance(value, numbers.Real):
+            return math.isnan(float(value))
+        return False
+    return value == fill
 
 
 class ResultVar(ResultFloat):

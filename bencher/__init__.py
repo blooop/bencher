@@ -5,9 +5,16 @@ warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=Us
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .bench_cfg import ShowMode
 from .bench_runner import BenchRunner
+from .render import render_report, save_result, load_result
+from .report_export import (
+    result_to_dict,
+    result_to_json,
+    compare_results,
+    comparison_to_json,
+)
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer
-from .variables.sweep_base import hash_sha1, LEVEL_SAMPLES
+from .variables.sweep_base import hash_sha1, SUBSAMPLING_DIVISIONS_SAMPLES
 from .variables.inputs import (
     IntSweep,
     FloatSweep,
@@ -19,7 +26,7 @@ from .variables.inputs import (
 )
 from .variables.time import TimeSnapshot
 
-from .variables.inputs import box, p, sweep
+from .variables.inputs import box, p, sweep, with_subsampling_divisions
 from .variables.results import (
     ResultFloat,
     ResultVar,
@@ -144,7 +151,9 @@ from .cache_management import (
 )
 from .results.bench_result import BenchResult
 from .results.optimize_result import OptimizeResult
-from .results.video_result import VideoResult
+from .results.pane_result import PaneResult
+
+VideoResult = PaneResult
 from .results.holoview_results.holoview_result import ReduceType, HoloviewResult
 from .bench_report import BenchReport, GithubPagesCfg, Publisher
 from .job import Executors
@@ -164,3 +173,23 @@ from .plugins import (
     register_plugin,
     unregister_plugin,
 )
+
+
+_DEPRECATED_ALIASES = {
+    "LEVEL_SAMPLES": "SUBSAMPLING_DIVISIONS_SAMPLES",
+    "with_level": "with_subsampling_divisions",
+}
+
+
+def __getattr__(name: str):
+    import sys
+
+    new_name = _DEPRECATED_ALIASES.get(name)
+    if new_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"'{name}' is deprecated; use '{new_name}' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return getattr(sys.modules[__name__], new_name)

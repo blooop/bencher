@@ -147,10 +147,17 @@ class TestSweepBase(unittest.TestCase):
         self.assertEqual(10, len(vals.values))
         self.assertEqual(dim.step, step)
 
-    def sweep_up_to(self, var, var_type, level=7):
-        res_old = var.with_level(1)
-        for i in range(2, level):
-            res = var.with_level(i)
+    def test_with_subsampling_divisions_invalid_raises(self):
+        sw = bn.FloatSweep(bounds=[0, 1])
+        with self.assertRaises(ValueError):
+            sw.with_subsampling_divisions(0)
+        with self.assertRaises(ValueError):
+            sw.with_subsampling_divisions(-1)
+
+    def sweep_up_to(self, var, var_type, subsampling_divisions=7):
+        res_old = var.with_subsampling_divisions(1)
+        for i in range(2, subsampling_divisions):
+            res = var.with_subsampling_divisions(i)
             new_vals = res.values()
             print(res_old.values(), new_vals)
             for i in res_old.values():
@@ -171,17 +178,21 @@ class TestSweepBase(unittest.TestCase):
         bench = bn.Bench("test_level_limits", asv)
         run_cfg = bn.BenchRunCfg()
 
-        run_cfg.level = 4
+        run_cfg.subsampling_divisions = 4
         res = bench.plot_sweep("asv", input_vars=[AllSweepVars.param.var_float], run_cfg=run_cfg)
         self.assertEqual(res.result_samples(), 5)
 
         res = bench.plot_sweep("asv", input_vars=[AllSweepVars.param.var_int_big], run_cfg=run_cfg)
         self.assertEqual(res.result_samples(), 5)
 
-        run_cfg.level = 4
+        run_cfg.subsampling_divisions = 4
         res = bench.plot_sweep(
             "asv",
-            input_vars=[AllSweepVars.param.var_float.with_level(level=run_cfg.level, max_level=3)],
+            input_vars=[
+                AllSweepVars.param.var_float.with_subsampling_divisions(
+                    subsampling_divisions=run_cfg.subsampling_divisions, max_subsampling_divisions=3
+                )
+            ],
             run_cfg=run_cfg,
         )
         self.assertEqual(res.result_samples(), 3, "the number of samples should be limited to 3")
@@ -189,7 +200,9 @@ class TestSweepBase(unittest.TestCase):
         res = bench.plot_sweep(
             "asv",
             input_vars=[
-                AllSweepVars.param.var_int_big.with_level(level=run_cfg.level, max_level=3)
+                AllSweepVars.param.var_int_big.with_subsampling_divisions(
+                    subsampling_divisions=run_cfg.subsampling_divisions, max_subsampling_divisions=3
+                )
             ],
             run_cfg=run_cfg,
         )
@@ -198,7 +211,7 @@ class TestSweepBase(unittest.TestCase):
     # @given(st.integers(min_value=0), st.integers(min_value=1,max_value=10))
     # def test_levels_int(self, start, var_range):
     #     var_int = bn.IntSweep(default=start, bounds=(start, start + var_range))
-    #     self.sweep_up_to(var_int, int, level=5)
+    #     self.sweep_up_to(var_int, int, subsampling_divisions=5)
 
     def test_callable_sweep_values(self):
         vals = AllSweepVars.param.var_float([0, 1, 5]).values()

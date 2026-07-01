@@ -79,4 +79,4 @@ def example_composable_video_right(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_composable_video_right, level=2)
+    bn.run(example_composable_video_right, subsampling_divisions=2)

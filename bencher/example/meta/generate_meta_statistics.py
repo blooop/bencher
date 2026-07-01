@@ -38,7 +38,7 @@ class MetaStatistics(MetaGeneratorBase):
             input_vars='["float1"]',
             result_vars='["distance", "sample_noise"]',
             const_vars="dict(noise_scale=0.3)",
-            run_kwargs={"level": 4, "repeats": 10},
+            run_kwargs={"subsampling_divisions": 4, "repeats": 10},
         )
 
     def _generate_distributions(self):
@@ -53,7 +53,7 @@ class MetaStatistics(MetaGeneratorBase):
             input_vars='["wave", "variant"]',
             result_vars='["distance", "sample_noise"]',
             const_vars="dict(noise_scale=0.3)",
-            run_kwargs={"level": 3, "repeats": 20},
+            run_kwargs={"subsampling_divisions": 3, "repeats": 20},
         )
 
     def _generate_repeats_comparison(self):
@@ -74,7 +74,7 @@ class MetaStatistics(MetaGeneratorBase):
             "for n_repeats in [1, 5, 20]:\n"
             "    noise = 0.3 if n_repeats > 1 else 0.0\n"
             "    sweep_cfg = bn.BenchRunCfg()\n"
-            "    sweep_cfg.level = 3\n"
+            "    sweep_cfg.subsampling_divisions = 3\n"
             "    sweep_cfg.repeats = n_repeats\n"
             "    bench.plot_sweep(\n"
             '        title=f"{n_repeats} repeat(s)",\n'

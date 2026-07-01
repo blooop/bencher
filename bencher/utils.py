@@ -12,7 +12,7 @@ from uuid import uuid4
 from functools import partial
 from typing import Callable, Any
 import logging
-import os
+import subprocess
 import tempfile
 import shutil
 
@@ -379,6 +379,15 @@ def resolve_aggregate(
     )
 
 
+AGG_FN_MAP: dict[str, Callable] = {
+    "mean": lambda vals: float(np.nanmean(vals)),
+    "sum": lambda vals: float(np.nansum(vals)),
+    "max": lambda vals: float(np.nanmax(vals)),
+    "min": lambda vals: float(np.nanmin(vals)),
+    "median": lambda vals: float(np.nanmedian(vals)),
+}
+
+
 def callable_name(any_callable: Callable[..., Any]) -> str:
     """Extract the name of a callable object, handling various callable types.
 
@@ -448,6 +457,20 @@ def params_to_str(param_list: list[param.Parameter]) -> list[str]:
     return [get_name(i) for i in param_list]
 
 
+def label_with_units(var: Any) -> str:
+    """Axis label for a variable: ``name [units]``, or just ``name`` if it has no units.
+
+    Args:
+        var (Any): A parameter-like object with a ``name`` and optional ``units`` attribute
+
+    Returns:
+        str: The axis label, e.g. ``"throughput [ops/s]"`` or ``"throughput"``
+    """
+    units = getattr(var, "units", "") or ""
+    # "ul" is the sweep-variable convention for unitless (see sweep_base.describe_variable)
+    return f"{var.name} [{units}]" if units and units != "ul" else var.name
+
+
 def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma: no cover
     """Publish a file to an orphan git branch:
 
@@ -472,17 +495,89 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma
         filepath_tmp = Path(temp_dir) / filename
 
         logging.info(f"created report at: {filepath_tmp.absolute()}")
-        cd_dir = f"cd {temp_dir} &&"
 
         # create a new git repo and add files to that.  Push the file to another arbitrary repo.  The aim of doing it this way is that no data needs to be downloaded.
 
-        # os.system(f"{cd_dir} git config init.defaultBranch {branch_name}")
-        os.system(f"{cd_dir} git init")
-        os.system(f"{cd_dir} git branch -m {branch_name}")
-        os.system(f"{cd_dir} git add {filename}")
-        os.system(f'{cd_dir} git commit -m "publish {branch_name}"')
-        os.system(f"{cd_dir} git remote add origin {remote}")
-        os.system(f"{cd_dir} git push --set-upstream origin {branch_name} -f")
+        def git(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=temp_dir, check=True)
+
+        git("init")
+        git("branch", "-m", branch_name)
+        git("add", filename)
+        git("commit", "-m", f"publish {branch_name}")
+        git("remote", "add", "origin", remote)
+        git("push", "--set-upstream", "origin", branch_name, "-f")
+
+
+class _Unset:
+    """Sentinel for distinguishing 'not provided' from 'explicitly passed the default'."""
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self):
+        return "<UNSET>"
+
+    def __bool__(self):
+        return False
+
+
+UNSET = _Unset()
+
+
+def normalize_subsampling_divisions_kwargs(
+    *,
+    subsampling_divisions: int | _Unset,
+    max_subsampling_divisions: int | None,
+    kwargs: dict[str, Any],
+    default_subsampling_divisions: int = 2,
+    stacklevel: int = 2,
+) -> tuple[int, int | None, bool]:
+    """Translate deprecated ``level``/``max_level`` kwargs to ``subsampling_divisions``/``max_subsampling_divisions``.
+
+    *subsampling_divisions* should be passed as ``UNSET`` when the caller did not provide it,
+    so that ``run(subsampling_divisions=2, level=3)`` correctly raises ``TypeError`` instead of
+    silently preferring ``level``.
+
+    Returns ``(subsampling_divisions, max_subsampling_divisions, subsampling_divisions_was_set)`` where *subsampling_divisions_was_set*
+    is ``True`` when the caller explicitly provided *subsampling_divisions* or *level*.
+
+    Raises ``TypeError`` when old and new names are both provided.
+    """
+    import warnings
+
+    subsampling_divisions_was_set = subsampling_divisions is not UNSET
+    if subsampling_divisions is UNSET:
+        subsampling_divisions = default_subsampling_divisions
+
+    if "level" in kwargs:
+        if subsampling_divisions_was_set:
+            raise TypeError(
+                "Cannot pass both 'level' and 'subsampling_divisions'; use 'subsampling_divisions' only."
+            )
+        warnings.warn(
+            "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=stacklevel,
+        )
+        subsampling_divisions = kwargs.pop("level")
+        subsampling_divisions_was_set = True
+    if "max_level" in kwargs:
+        if max_subsampling_divisions is not None:
+            raise TypeError(
+                "Cannot pass both 'max_level' and 'max_subsampling_divisions'; use 'max_subsampling_divisions' only."
+            )
+        warnings.warn(
+            "The 'max_level' parameter is deprecated; use 'max_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=stacklevel,
+        )
+        max_subsampling_divisions = kwargs.pop("max_level")
+    return subsampling_divisions, max_subsampling_divisions, subsampling_divisions_was_set
 
 
 def github_content(remote: str, branch_name: str, filename: str):  # pragma: no cover

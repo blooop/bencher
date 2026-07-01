@@ -5,6 +5,137 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.108.0] - 2026-06-21
+
+### Added
+- `bencher` console-script entry point (`[project.scripts]` → `bencher.render:main`), so the render/compare CLI can be invoked as `bencher <result.pkl> <out_dir> [--json PATH]` and `bencher compare <a.pkl> <b.pkl> --json PATH` instead of only `python -m bencher.render …`. **Non-breaking**: the existing `python -m bencher.render` invocation is unchanged and keeps working; this is purely an additional way to reach the same `main()`. Usage/`--help` text is now invocation-aware via a small `_prog()` helper — it shows `bencher` under the console script and `python -m bencher.render` from a source checkout — so the displayed command always matches how the tool was run. Coverage in `test/test_render.py`.
+
+## [1.107.0] - 2026-06-12
+
+### Changed
+- Centralised the representation of *missing*/unrecorded result-variable entries. The dtype-specific sentinels (`NaN` for numeric types, `-1` for `ResultReference`/`ResultDataSet`, `"NAN"` for object/file types) were duplicated across `ResultCollector.setup_dataset` (initial fill) and `_sentinel_for_result_var` (over_time aging), and consumers hardcoded the check per call site (`== "NAN"` for file panes). New helpers in `bencher.variables.results` — `result_missing_fill(rv)` and `result_is_missing(rv, value)` — are now the single source of truth; the two `isinstance` ladders collapse into one polymorphic call and the hardcoded `== "NAN"` file checks in `bench_result_base.py` use the shared predicate. **No behaviour change**: the stored fill values and dtypes are identical, so the on-disk cache format, `BenchCfg` hashes, and every reduction are unchanged (`CACHE_VERSION` stays at `4`). Direct coverage in `test/test_result_missing.py`.
+
+## [1.106.2] - 2026-06-12
+
+### Added
+- `catch` parameter on `Bench.optimize()`, forwarded to `optuna.Study.optimize()`: a trial whose worker raises one of the given exception types is recorded as `FAILED` and the study continues with the remaining trials, instead of one raising trial aborting the entire study. The default `()` mirrors Optuna's own default and preserves the existing fail-fast behaviour exactly. `ParametrizedSweep.to_optimize()` already forwards `**kwargs`, so it picks up `catch` with no change. A raising worker leaves no committed sample-cache entry (both the serial and parallel paths raise before `cache.set`), so `FAILED` trials cannot poison the cache. Coverage in `test/test_optimize.py::TestCatch`.
+
+## [1.106.1] - 2026-06-12
+
+### Changed
+- Version-only re-release of 1.106.0; no code changes.
+
+## [1.106.0] - 2026-06-12
+
+### Fixed
+- `Bench.optimize()` never passed `const_vars` to the worker: `_run_optuna_job` folded the constants into the **cache key** but submitted only the trial-suggested values as `job_args`, so every Optuna trial silently ran with the worker class's parameter *defaults* for all `const_vars`. Constants are now merged into the submitted `job_args` (mirroring the sweep path's `WorkerJob.setup_hashes`); trial-suggested values keep precedence since `_resolve_optimize_vars` already strips colliding const entries. Regression coverage in `test/test_optimize.py::TestConstVars` for both the plain and `aggregate`/`repeats>1` branches.
+- `CACHE_VERSION` bumped to `"4"`: because the old cache key already included the constants, any cached `optimize()` entries produced with non-default `const_vars` hold values actually computed with worker defaults — wrong data under a correct-looking key, indistinguishable on disk from good entries. The bump wipes the cache tree on first use of the new version so the fixed code can never warm-start from poisoned entries.
+
+## [1.105.0] - 2026-06-11
+
+### Changed
+- The default value for `ResultFloat`, `ResultVec`, and `ResultBool` is now `NaN` instead of `0`. An *unrecorded* sample — a run that aborts before measuring, or a result var the worker never sets — is now treated as missing and dropped by the nan-aware regression/aggregation reductions, instead of masquerading as a real `0`/`False` measurement and dragging means toward zero. This matches the storage layer, which already initialises result arrays with `NaN`. Callers who want unrecorded samples to read as `0` can opt out with `default=0`.
+- For `ResultBool`, this means **missing ≠ failure**: an unrecorded repeat is dropped from the success proportion rather than counted as `False`. A worker that wants a crash/abort to count as a failure must explicitly record `False` on its failure path. The binomial standard error already divides by the per-cell count of valid (non-NaN) repeats (see 1.104.2), so missing repeats no longer understate the SE.
+- `CACHE_VERSION` is **not** bumped: the result-var `default` is not part of `BenchCfg.hash_persistent()`, so existing benchmark and `over_time` history caches are preserved. The new `NaN` default only applies to cache *misses* (newly computed cells); already-cached cells keep whatever sentinel they were stored with, so a benchmark with missing samples may transiently hold a mix of `0` (old) and `NaN` (new) until those cells are recomputed.
+
+## [1.104.2] - 2026-06-10
+
+### Fixed
+- `ResultBool` rejected NaN as a default or value even though NaN is the documented "missing"/unrecorded sentinel for result variables (see `ResultFloat.__init__`). `ResultBool` locks its bounds to `[0, 1]`, and param validates a Parameter's default against its bounds whenever a subclass *overrides* it (and validates every value assignment). So `ResultBool(default=float("nan"))` raised `must be at most 1, not nan` the moment a subclass overrode the inherited Parameter, and assigning `float("nan")` at runtime to mark a sample missing raised the same — making the NaN "missing" sentinel that already works for `ResultFloat` unusable for `ResultBool`. `ResultBool._validate_bounds` now treats NaN as in-bounds, so result bools can use the same missing sentinel as `ResultFloat` while genuinely out-of-range values (e.g. `2.0`) are still rejected. Added coverage in `test/test_result_nan_default.py`.
+- The `ResultBool` binomial standard error (`REDUCE` path in `bench_result_base.py`) divided `p*(1-p)` by the full repeat-dimension size while computing `p` with a `skipna=True` mean. Now that NaN is a valid "missing" repeat for `ResultBool`, those diverged and the SE was understated whenever a repeat was missing. The SE now divides by the per-cell count of valid (non-NaN) repeats. Added coverage in `test/test_result_bool.py`.
+
+## [1.104.1] - 2026-06-09
+
+### Fixed
+- 30° x-axis label rotation (and `title`/`ylabel`) were silently dropped on plots that hvplot returns as a panel layout — specifically over_time time-series lines that pair `widget_location="bottom"` with an extra categorical `by` widget, which come back as a `pn.Column([HoloViews pane, WidgetBox])`. `HoloviewResult._apply_opts` only handled bare HoloViews elements (`.opts`) and `pn.pane.HoloViews` wrappers (`.object`); the layout container has neither, so the options never reached the nested pane and long x-axis labels (e.g. `over_time` datetime/`TimeEvent` ticks) rendered horizontally and unreadable. `_apply_opts` now recurses into panel layout containers to apply options to the nested pane. hv elements never expose `.objects`, so the new branch only catches panel layouts. Added unit coverage in `test/test_holoview_result.py` for all three input shapes (bare element, pane wrapper, layout container).
+
+## [1.104.0] - 2026-06-08
+
+### Changed
+- Sped up `import bencher` (~19s → ~4s warm) by lazy-loading two heavy plotting dependencies that were imported eagerly at module load but only needed when a plot is rendered. `holoview_result.py` no longer registers the holoviews plotly backend (`hv.extension("bokeh", "plotly")` → `hv.extension("bokeh")`) — nothing in bencher renders through it, since `SurfaceResult`/`VolumeResult` build `plotly.graph_objs` figures directly and wrap them in `pn.pane.Plotly`. The `optuna.visualization` imports (which pull in sklearn's fANOVA evaluator) were moved into the functions that use them (`param_importance()`, `collect_optuna_plots()`). No public API changes.
+
+## [1.103.1] - 2026-06-08
+
+### Fixed
+- Histograms rendered at hvplot's default 700×300 instead of the shared 600×600 used by every other plot type. `HoloviewResult.set_default_opts()` registered the default figure size for `Curve`, `Points`, `Bars`, `Scatter`, `BoxWhisker`, `Violin`, and `HeatMap`, but `Histogram` was missing so it escaped to hvplot's own default. Also registered `Area` and `ErrorBars` for consistency (`ErrorBars` would likewise escape when returned standalone from `to_error_bar()`; `Area` previously inherited the size only by virtue of being overlaid). The default-sized element list is now centralized in `HoloviewResult.DEFAULT_SIZED_ELEMENTS` and reused by both `set_default_opts()` and `test_default_opts_cover_all_element_types`, so the coverage guard stays in sync as new element types are added.
+
+## [1.102.0] - 2026-06-02
+
+### Added
+- Optional `default=` argument on `ResultFloat` and `ResultVec` (defaults to `0`, so no behaviour change). The hardcoded `0` default meant an *unrecorded* sample — a run that aborts before measuring, or a result var the worker never sets — was indistinguishable from a real `0` measurement, dragging nan-aware regression/aggregation means toward zero. Callers can now opt in with `default=float("nan")` so unrecorded samples are treated as missing and dropped by the existing `np.nanmean`/`np.nansum` reductions. `default` is not a hashed slot, so opting in does not invalidate `over_time` history for an otherwise-identical result var.
+- `test/test_result_nan_default.py`: backward-compat (default still `0`), NaN/explicit-default opt-in, hash stability, end-to-end unrecorded-sample handling, plus serialization coverage — a pickle `save_result`/`load_result` round-trip and a HoloViews→bokeh `render_report` HTML render both preserve/handle the NaN default.
+
+## [1.101.1] - 2026-06-01
+
+### Fixed
+- Pylint failures introduced by the `param` 2.4.0 / `panel` 1.9.2 dependency bumps: the deeper class hierarchy pushed several sweep classes (`BoolSweep`, `StringSweep`, `EnumSweep`, `YamlSweep`, `IntSweep`, time sweeps) over the `too-many-ancestors` threshold, so that check is now disabled alongside the other `too-many-*` checks.
+- Renamed the `IntSweep._validate_value` parameter from `val` to `value` to match param 2.x's signature and silence `arguments-renamed` (W0237).
+
+- Cleared the three pre-existing `ty` warnings: corrected the `_InputResult` namedtuple's first argument to match its variable name, explicitly imported `moviepy.video.VideoClip` for the `write_video_raw` annotation, and suppressed the `unsupported-base` false positive on `BenchResult`'s optional `RerunResult` base.
+
+### Changed
+- Raised the minimum `param` requirement from `>=1.13.0` to `>=2.0`. The validation override now matches param 2.x's `_validate_value(self, value, allow_None)` signature.
+- Dependency audit: raised upper bounds to the latest releases — `numpy` `<=2.4.6`, `xarray` `<=2026.4.0`, `pandas` `<=3.0.3`, `scikit-learn` `<=1.8.0`. Full test suite passes against all bumped versions.
+- Migrated panel widget construction from the deprecated `name=` to `label=` (`Button`, `DiscreteSlider`, and example sliders) ahead of its removal in panel 2.0, and raised the panel floor to `>=1.9.0` (the release that introduced `Widget.label`).
+
+## [1.101.0] - 2026-06-01
+
+### Added
+- Collect/render split for out-of-process report rendering. Building a report allocates large holoviews/panel/bokeh object graphs; when CPython's cyclic GC traverses them alongside foreign live C-extension state (e.g. ROS 2 `rclpy`/DDS), the process can segfault. The split lets rendering happen in a clean process that never imported the foreign extension:
+  - `plot_sweep(auto_plot=...)` — new parameter (defaults to `None`, deferring to `run_cfg.auto_plot`, itself `True`). When `False`, the sweep runs and regression detection is computed but no plotting objects are constructed.
+  - `Bench.collect(...)` — thin wrapper for `plot_sweep(auto_plot=False)`; returns a fully-populated, picklable `BenchResult` (dataset + regression report).
+  - `bencher.save_result()` / `load_result()` / `render_report()` (new `bencher.render` module) — persist a collected result and render the HTML report from it, optionally in a separate process via `python -m bencher.render <result> <out_dir>`.
+- Three test layers guarding the split against divergence from the normal `plot_sweep` path: parity tests (`collect()` computes the same dataset/regression as `plot_sweep()`), a breadth round-trip over every generated result type (save → load → render to HTML, plus a real-subprocess media test), and the `BENCHER_FORCE_SPLIT_RENDER=1` switch that reroutes every auto-plot report build through serialize/render-from-loaded so `pixi run test-split` re-runs the whole suite over the split pipeline (own parallel py313-only `ci-split` job).
+
+### Changed
+- `BenchReport.append_result()` gained an optional `render_from=` argument so a caller can register one result for identity-based tab routing while building the tab pane from another (used by the forced-split path).
+
+## [1.100.0] - 2026-05-15
+
+### Added
+- Overlay controls on each embedded rerun recording: a fullscreen button (⛶) that calls `iframe.requestFullscreen()` and an open-in-new-tab link (↗) that opens the same chromeless viewer in a new browser tab. Useful when comparing multiple recordings side-by-side and you want to expand one. Controls are positioned top-center to avoid the viewer's own corner UI.
+
+## [1.99.0] - 2026-05-15
+
+### Changed
+- Renamed `level` API to `subsampling_divisions` across the entire public interface (`BenchRunCfg.subsampling_divisions`, `subsampling_divisions_to_samples()`, `with_subsampling_divisions()`, `SUBSAMPLING_DIVISIONS_SAMPLES`, `max_subsampling_divisions`, `select_subsampling_divisions()`).
+- Added `UNSET` sentinel for default detection so that `run(subsampling_divisions=2, level=3)` correctly raises `TypeError`.
+- Extracted shared `normalize_subsampling_divisions_kwargs()` helper to centralize deprecation logic.
+- Bumped `rerun-sdk` and `rerun-notebook` from 0.31.3 to 0.32.0.
+- Updated fallback rerun version in `utils_rrd.py` to 0.32.0.
+
+### Deprecated
+- `level`, `max_level`, `min_level` parameters — use `subsampling_divisions`, `max_subsampling_divisions` instead. Old names still work with `DeprecationWarning`.
+- `LEVEL_SAMPLES` constant — use `SUBSAMPLING_DIVISIONS_SAMPLES`.
+- `with_level()` function — use `with_subsampling_divisions()`.
+- `level_to_samples()` method — use `subsampling_divisions_to_samples()`.
+- `select_level()` function — use `select_subsampling_divisions()`.
+
+## [1.98.0] - 2026-04-27
+
+### Added
+- `aggregate`, `agg_fn`, and `repeats` parameters for `optimize()`, matching the `plot_sweep()` API. Aggregated dimensions are looped inside the Optuna objective so the optimizer sees robust metrics (e.g. mean loss across seeds or repeated boolean outcomes).
+- `AGG_FN_MAP` in `bencher/utils.py` — NaN-safe numpy aggregation functions for objective-level aggregation.
+- Example `example_optimize_aggregate.py` demonstrating sweep-then-optimize with dimension aggregation and repeats.
+
+### Fixed
+- Missing `skipna=True` on `REDUCE` and `MINMAX` repeat aggregation in `bench_result_base.py`.
+- `np.mean` → `np.nanmean` in `optuna_result.py` aggregation to match xarray's NaN-safe behavior.
+
+## [1.97.0] - 2026-04-27
+
+### Fixed
+- `aggregate=True` no longer duplicates pane-type results (rerun, image, video). Pane results store file paths that cannot be numerically aggregated, so they now only render in the non-aggregated view.
+- Line plotter crash when aggregating: `plt_cnt_cfg` still referenced collapsed dimensions, causing holoviews `DataError` on missing dimension names. Swapped to post-aggregation config during `map_plot_panes` calls.
+- `remove_plots` no longer raises `ValueError` when combined with `numeric_only`.
+
+### Changed
+- Renamed `VideoResult` to `PaneResult` to reflect that it handles all pane types (rerun, image, video), not just video.
+
+### Added
+- Image and video aggregate examples (`example_result_image_aggregate`, `example_result_video_aggregate`) to exercise and demonstrate pane-result aggregation.
+- `omega_n` sweep added to `ControlSystemSweep` for multi-input rerun testing.
+
 ## [1.94.0] - 2026-04-25
 
 ### Fixed

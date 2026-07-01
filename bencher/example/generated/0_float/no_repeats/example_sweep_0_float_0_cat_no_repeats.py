@@ -26,4 +26,4 @@ def example_sweep_0_float_0_cat_no_repeats(run_cfg: bn.BenchRunCfg | None = None
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_0_float_0_cat_no_repeats, level=4)
+    bn.run(example_sweep_0_float_0_cat_no_repeats, subsampling_divisions=4)

@@ -35,7 +35,7 @@ def _get_rerun_version() -> str:
     try:
         return get_package_version("rerun-sdk")
     except PackageNotFoundError:
-        return "0.31.3"
+        return "0.32.0"
 
 
 def rrd_to_pane(
@@ -122,9 +122,12 @@ def rrd_file_to_pane(  # pragma: no cover
 
     # CDN viewer page is served from the same Panel origin — relative URL works.
     viewer_url = _cdn_viewer_url(relative, viewer_version)
-    return pn.pane.HTML(
+    iframe = (
         f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-        f' frameborder="0" allowfullscreen></iframe>',
+        f' frameborder="0" allowfullscreen></iframe>'
+    )
+    return pn.pane.HTML(
+        _wrap_viewer_controls(iframe, viewer_url, width, height),
         width=width,
         height=height,
     )
@@ -183,6 +186,41 @@ try {{
 }}
 </script></body></html>
 """
+
+
+def _wrap_viewer_controls(iframe_html: str, viewer_url: str, width: int, height: int) -> str:
+    """Wrap a rerun-viewer iframe with fullscreen and open-in-new-tab controls.
+
+    Controls float at the top-center (away from the viewer's own corner UI).
+    The anchor's ``href`` is set to *viewer_url* directly so middle-click,
+    Cmd/Ctrl-click, and the context-menu "Open in new tab" all see the right
+    target — not just plain left-click.  ``inline_rrd_iframes()`` rewrites
+    both the iframe ``src`` and the anchor ``href`` when a report is saved.
+    A real anchor (rather than ``window.open()``) avoids popup-blocker false
+    positives that silently swallow the click in some browsers.
+    """
+    # Shared style for both controls.  ``font: 14px/1`` (size/line-height) keeps
+    # the button and the anchor the same height — without that the anchor's
+    # default ``line-height`` differs and the two icons render at different
+    # sizes side-by-side.
+    btn = (
+        "background:rgba(0,0,0,0.55);color:white;border:0;"
+        "padding:2px 7px;cursor:pointer;border-radius:3px;font:14px/1 sans-serif"
+    )
+    link = btn + ";text-decoration:none;display:inline-block"
+    fs_js = "this.closest('.bencher-rrd-wrap').querySelector('iframe').requestFullscreen()"
+    return (
+        f'<div class="bencher-rrd-wrap"'
+        f' style="position:relative;display:inline-block;width:{width}px;height:{height}px">'
+        f"{iframe_html}"
+        f'<div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);'
+        f'display:flex;gap:4px;z-index:10">'
+        f'<button title="Fullscreen" style="{btn}" onclick="{fs_js}">⛶</button>'
+        f'<a title="Open in new tab" href="{viewer_url}" target="_blank" rel="noopener"'
+        f' style="{link}">↗</a>'
+        f"</div></div>"
+    )
+
 
 # Cache of written viewer page filenames, keyed by version (for /rrd_static/ URLs).
 _cdn_viewer_files: dict[str, str] = {}
@@ -261,9 +299,12 @@ def _portable_rrd_pane(
     viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_subdir)
 
     viewer_url = f"_rrd/{viewer_name}?url={quote(rrd_name)}"
-    return pn.pane.HTML(
+    iframe = (
         f'<iframe src="{viewer_url}" width="{width}" height="{height}"'
-        f' frameborder="0" allowfullscreen></iframe>',
+        f' frameborder="0" allowfullscreen></iframe>'
+    )
+    return pn.pane.HTML(
+        _wrap_viewer_controls(iframe, viewer_url, width, height),
         width=width,
         height=height,
     )
@@ -271,22 +312,20 @@ def _portable_rrd_pane(
 
 # --- Static .rrd support for saved reports ---
 
-# Regex matching rerun viewer iframes in Panel-saved HTML.
-# Panel's Bokeh serialization double-escapes: < → &amp;lt; " → &amp;quot;
-# Captures: (1) viewer version, (2) rrd file relative path, (3) width, (4) height.
+# Regex matching a quoted ``/rrd_static/viewer_<ver>.html?url=/rrd_static/<rrd>``
+# URL in Panel-saved HTML.  Panel's Bokeh serialization double-escapes: " → &amp;quot;
+# Captures: (1) viewer version, (2) rrd file relative path.
 #
-# FRAGILE: This pattern depends on Bokeh's exact double-entity-encoding behaviour
-# (tested with Bokeh 3.9 / Panel 1.6).  If Bokeh changes its serialization (attribute
-# order, quoting style, escaping depth), this regex will silently miss iframes.
-# inline_rrd_iframes() logs a warning when it detects /rrd_static/ references but
-# the regex finds no matches.
-_RRD_IFRAME_RE = re.compile(
-    r"&amp;lt;iframe src=&amp;quot;/rrd_static/viewer_([0-9A-Za-z._-]+)\.html"
+# Matches the URL wherever it appears as an attribute value — both the iframe
+# ``src`` and the open-in-new-tab anchor ``href`` written by
+# ``_wrap_viewer_controls`` — in a single ``re.sub`` pass.
+#
+# FRAGILE: depends on Bokeh's exact double-entity-encoding behaviour (tested
+# with Bokeh 3.9 / Panel 1.6).  inline_rrd_iframes() logs a warning when it
+# detects /rrd_static/ references but matches nothing.
+_RRD_URL_RE = re.compile(
+    r"&amp;quot;/rrd_static/viewer_([0-9A-Za-z._-]+)\.html"
     r"\?url=/rrd_static/([^&]+\.rrd)&amp;quot;"
-    r" width=&amp;quot;(\d+)&amp;quot;"
-    r" height=&amp;quot;(\d+)&amp;quot;"
-    r" frameborder=&amp;quot;0&amp;quot;"
-    r" allowfullscreen&amp;gt;&amp;lt;/iframe&amp;gt;"
 )
 
 
@@ -306,13 +345,16 @@ def _write_inline_viewer(rrd_path: Path, version: str, dest_dir: Path) -> str:
     return filename
 
 
-def inline_rrd_iframes(html_path: Path, rrd_base: Path | None = None) -> None:
+def inline_rrd_iframes(
+    html_path: Path,
+    rrd_base: Path | None = None,
+    portable: bool = False,
+) -> None:
     """Post-process a saved HTML report for static hosting.
 
     Scans the HTML file for rerun viewer iframes (those pointing at
-    ``/rrd_static/``), generates self-contained viewer pages with the
-    ``.rrd`` data inlined as base64, and rewrites the iframe ``src`` to
-    point to them.  The result works from ``file://`` without a server.
+    ``/rrd_static/``), copies the ``.rrd`` files next to the report, and
+    rewrites the iframe ``src`` to relative URLs.
 
     Parameters
     ----------
@@ -322,6 +364,13 @@ def inline_rrd_iframes(html_path: Path, rrd_base: Path | None = None) -> None:
         Directory where ``_rrd/`` should be created.  When ``None``
         (default), uses ``html_path.parent``.  Pass the top-level report
         directory for multi-tab saves so all tabs share one ``_rrd/``.
+    portable:
+        When ``True``, base64-encode the ``.rrd`` data directly into the
+        viewer HTML so the report works from ``file://`` without any
+        server.  This can be very slow for large recordings (hundreds of
+        MB or more).  When ``False`` (default), the ``.rrd`` is copied as
+        a sidecar file and loaded via a relative URL — the report must be
+        served over HTTP (any static server works).
 
     Called automatically by ``BenchReport.save()``.
     """
@@ -335,33 +384,39 @@ def inline_rrd_iframes(html_path: Path, rrd_base: Path | None = None) -> None:
     rrd_rel_prefix = os.path.relpath(rrd_dir, report_dir).replace("\\", "/")
 
     changed = False
+    # The same URL appears twice per recording — once in the iframe ``src``,
+    # once in the open-in-new-tab anchor ``href`` — so memoize the per-rrd
+    # work to avoid writing the viewer/.rrd file twice.
+    url_cache: dict[tuple[Path, str], str] = {}
 
     def _replace(m: re.Match) -> str:
         nonlocal changed
-        version, rrd_rel, width, height = m.group(1), m.group(2), m.group(3), m.group(4)
+        version, rrd_rel = m.group(1), m.group(2)
         rrd_path = cache_root / rrd_rel
         if not rrd_path.is_file():
             logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
             return m.group(0)
 
-        viewer_name = _write_inline_viewer(rrd_path, version, rrd_dir)
+        key = (rrd_path, version)
+        relative_url = url_cache.get(key)
+        if relative_url is None:
+            if portable:
+                viewer_name = _write_inline_viewer(rrd_path, version, rrd_dir)
+                relative_url = f"{rrd_rel_prefix}/{viewer_name}"
+            else:
+                viewer_name, rrd_name = _write_rrd_sidecar(rrd_path, version, rrd_dir)
+                relative_url = f"{rrd_rel_prefix}/{viewer_name}?url={quote(rrd_name)}"
+            url_cache[key] = relative_url
 
-        relative_url = f"{rrd_rel_prefix}/{viewer_name}"
         changed = True
-        return (
-            f"&amp;lt;iframe src=&amp;quot;{relative_url}&amp;quot;"
-            f" width=&amp;quot;{width}&amp;quot;"
-            f" height=&amp;quot;{height}&amp;quot;"
-            f" frameborder=&amp;quot;0&amp;quot;"
-            f" allowfullscreen&amp;gt;&amp;lt;/iframe&amp;gt;"
-        )
+        return f"&amp;quot;{relative_url}&amp;quot;"
 
-    new_html = _RRD_IFRAME_RE.sub(_replace, html)
+    new_html = _RRD_URL_RE.sub(_replace, html)
     if changed:
         html_path.write_text(new_html, encoding="utf-8")
     elif "/rrd_static/" in html:
         logging.warning(
-            "inline_rrd_iframes: %s contains /rrd_static/ references but the iframe "
-            "regex matched nothing — Bokeh's HTML encoding may have changed",
+            "inline_rrd_iframes: %s contains /rrd_static/ references but the "
+            "URL regex matched nothing — Bokeh's HTML encoding may have changed",
             html_path,
         )
