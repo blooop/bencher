@@ -1,7 +1,9 @@
-/* Force RTD content area to full width with a single scrollbar. */
+/* Force RTD content area to full width. Note: no overflow rules here — an
+   overflow scroll container on this ancestor would break position:sticky for
+   the .bencher-hscroll proxy scrollbar. Wide report content is handled
+   per-report by .bencher-report-wrap. */
 .wy-nav-content {
     max-width: none !important;
-    overflow-x: auto !important;
 }
 
 /* --- Gallery overview page --- */
@@ -73,13 +75,35 @@ iframe.bencher-report {
     display: block;
 }
 
-/* Wide reports keep their natural scale; this wrapper provides the
-   horizontal scrollbar. overflow-y stays hidden so the page keeps a single
-   vertical scrollbar. */
+/* Wide reports keep their natural scale; this wrapper scrolls horizontally.
+   Its native scrollbar is hidden — scrolling is driven by the sticky
+   .bencher-hscroll proxy below, which stays visible at the viewport bottom
+   while a tall report is on screen. overflow-y stays hidden so the page
+   keeps a single vertical scrollbar. */
 .bencher-report-wrap {
     overflow-x: auto;
     overflow-y: hidden;
     width: 100%;
+    scrollbar-width: none;
+}
+
+.bencher-report-wrap::-webkit-scrollbar {
+    display: none;
+}
+
+/* Sticky proxy scrollbar (synced with .bencher-report-wrap by
+   bencher-embed.js). Hidden unless the report is wider than the page. */
+.bencher-hscroll {
+    position: sticky;
+    bottom: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: none;
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.bencher-hscroll-inner {
+    height: 1px;
 }
 
 /* Escape hatch above each embedded report (useful when wide reports are

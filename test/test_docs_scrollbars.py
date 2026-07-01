@@ -259,6 +259,56 @@ def test_xwide_page_natural_scale_with_horizontal_scroll(page, base_url):
     assert m["wrapScrollW"] > m["wrapW"], f"xwide: wrapper is not horizontally scrollable ({m})"
 
 
+def test_xwide_page_sticky_proxy_scrollbar(page, base_url):
+    """The horizontal scrollbar stays pinned to the viewport bottom while a
+    tall wide report is on screen, and scrolling it moves the report."""
+    _goto(page, base_url, PAGE_XWIDE)
+    # Scroll partway into the (taller than viewport) report region.
+    page.evaluate(
+        "() => document.querySelector('.bencher-report-region').scrollIntoView({block: 'start'})"
+    )
+    page.evaluate("() => window.scrollBy(0, 300)")
+    page.wait_for_timeout(200)
+    state = page.evaluate(
+        """() => {
+          const proxy = document.querySelector('.bencher-hscroll');
+          const wrap = document.querySelector('.bencher-report-wrap');
+          const r = proxy.getBoundingClientRect();
+          return {
+            display: getComputedStyle(proxy).display,
+            innerW: proxy.querySelector('.bencher-hscroll-inner').clientWidth,
+            bottom: r.bottom,
+            viewportH: window.innerHeight,
+            wrapBottom: wrap.getBoundingClientRect().bottom,
+          };
+        }"""
+    )
+    assert state["display"] != "none", "xwide: sticky proxy scrollbar is hidden"
+    assert state["innerW"] > 1280, f"xwide: proxy not sized to content ({state})"
+    # The report extends past the viewport, yet the proxy is pinned inside it.
+    assert state["wrapBottom"] > state["viewportH"], f"xwide: report not taller than view ({state})"
+    assert state["bottom"] <= state["viewportH"] + 1, f"xwide: proxy not sticky ({state})"
+    # Dragging the proxy scrolls the report.
+    wrap_left = page.evaluate(
+        """() => {
+          document.querySelector('.bencher-hscroll').scrollLeft = 500;
+          return new Promise((res) => requestAnimationFrame(() =>
+            requestAnimationFrame(() =>
+              res(document.querySelector('.bencher-report-wrap').scrollLeft))));
+        }"""
+    )
+    assert wrap_left > 400, f"xwide: proxy scroll did not move the report (got {wrap_left})"
+
+
+def test_simple_page_proxy_scrollbar_hidden(page, base_url):
+    """Reports that fit the page must not show the horizontal proxy."""
+    _goto(page, base_url, PAGE_SIMPLE)
+    display = page.evaluate(
+        "() => getComputedStyle(document.querySelector('.bencher-hscroll')).display"
+    )
+    assert display == "none", f"simple: proxy scrollbar should be hidden (display={display})"
+
+
 def test_multitab_page_single_scrollbar_across_tabs(page, base_url):
     _goto(page, base_url, PAGE_MULTITAB)
     _assert_page_ok(page, "multitab")
