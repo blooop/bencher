@@ -273,6 +273,36 @@ class TestGlobalRegistration(unittest.TestCase):
         register_plugin(_smoke)
         self.assertIs(get_registry().get("global.smoke"), _smoke)
 
+    def test_default_match_is_always_eligible(self) -> None:
+        """A plugin declared without a match rule must be selectable for any sweep
+        shape — PlotFilter()'s empty default ranges would silently hide it forever."""
+        reg = PluginRegistry()
+        reg.mark_entry_points_loaded()
+
+        @plot_plugin(name="global.smoke", register=False)
+        def _smoke(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("smoke")
+
+        reg.register(_smoke)
+        for n_floats in (0, 1, 3):
+            selected = reg.select(_data_with_floats(n_floats))
+            self.assertEqual([p.name for p in selected], ["global.smoke"])
+
+
+class TestPlotFilterMatchAll(unittest.TestCase):
+    def test_match_all_matches_various_shapes(self) -> None:
+        f = PlotFilter.match_all()
+        for cfg in (
+            PltCntCfg(),
+            PltCntCfg(float_cnt=3, cat_cnt=2, repeats=5, inputs_cnt=5),
+            PltCntCfg(panel_cnt=2, vector_len=4, result_vars=3),
+        ):
+            self.assertTrue(f.matches_result(cfg, "match_all", override=False).overall)
+
+    def test_default_plot_filter_matches_nothing(self) -> None:
+        # Documents the existing default: PlotFilter() is restrictive by design.
+        self.assertFalse(PlotFilter().matches_result(PltCntCfg(), "default", False).overall)
+
 
 class TestEntryPointDiscovery(unittest.TestCase):
     """Verify the entry-point loader is lazy and tolerant of failures."""
