@@ -39,6 +39,13 @@ class BenchData:
     optimizer_study: Optional[Any] = None
     baseline_runs: tuple["BenchData", ...] = ()
     cache: Optional[CacheHandle] = None
+    # Transitional fields for the built-in renderer migration (A1 Phase 2). The wrapped
+    # built-ins still render through BenchResult methods that read self.bench_cfg, so the
+    # live result object and the to_auto kwargs ride along until the renderers consume
+    # BenchData directly (A3 Phase D5). NOT part of the stable plugin contract — plugins
+    # gate on them via requires={"legacy_result"} and must expect them to disappear.
+    legacy_result: Optional[Any] = None
+    render_kwargs: dict = field(default_factory=dict)
 
     def has(self, capability: str) -> bool:
         """True when an optional context field is populated.
@@ -50,6 +57,8 @@ class BenchData:
             return len(self.baseline_runs) > 0
         if capability == "cache":
             return self.cache is not None
+        if capability == "legacy_result":
+            return self.legacy_result is not None
         return False
 
     def with_changes(self, **kwargs) -> "BenchData":
