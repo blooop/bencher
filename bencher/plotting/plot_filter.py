@@ -75,6 +75,24 @@ class PlotFilter:
     repeats_range: VarRange = field(default_factory=lambda: VarRange(1, None))
     input_range: VarRange = field(default_factory=lambda: VarRange(1, None))
 
+    @classmethod
+    def match_all(cls) -> PlotFilter:
+        """A filter that matches every sweep shape.
+
+        The default ``PlotFilter()`` ranges are restrictive (``VarRange()`` matches
+        nothing), which suits plots that opt in to specific shapes. Plugins that do
+        their own internal shape handling should use this instead."""
+        anything = lambda: VarRange(0, None)  # noqa: E731
+        return cls(
+            float_range=anything(),
+            cat_range=anything(),
+            vector_len=anything(),
+            result_vars=anything(),
+            panel_range=anything(),
+            repeats_range=anything(),
+            input_range=anything(),
+        )
+
     def matches_result(
         self, plt_cnt_cfg: PltCntCfg, plot_name: str, override: bool
     ) -> PlotMatchesResult:
