@@ -25,7 +25,9 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("playwright.sync_api")
-from playwright.sync_api import sync_playwright  # pylint: disable=wrong-import-position
+from playwright.sync_api import (  # pylint: disable=wrong-import-position,import-error
+    sync_playwright,
+)
 
 BUILTDOCS = Path(__file__).resolve().parent.parent / "docs" / "builtdocs"
 
