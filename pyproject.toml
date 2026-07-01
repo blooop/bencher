@@ -189,7 +189,11 @@ docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs"
 # Quick docs rebuild (skip example generation) + local server for debugging
 docs-quick = "rm -rf docs/builtdocs && python -m sphinx -b html docs docs/builtdocs"
 docs-serve = { cmd = "python -m http.server 8000 -d docs/builtdocs", depends-on = ["docs-quick"] }
-# NOTE: docs, docs-quick, and docs-serve require the 'docs' environment:
+# Regenerate only the representative examples used by the scrollbar checks (fast)
+docs-subset = "python bencher/example/meta/generate_examples.py --only example_sweep_1_float_0_cat_no_repeats,example_stats_repeats_comparison,example_sweep_0_float_0_cat_over_time,example_plot_heatmap --skip-thumbnails"
+# Verify built docs pages show a single scrollbar (requires docs/builtdocs)
+docs-check = "pytest test/test_docs_scrollbars.py -v"
+# NOTE: docs, docs-quick, docs-serve, docs-subset, and docs-check require the 'docs' environment:
 #   pixi run -e docs docs-serve
 
 

@@ -265,8 +265,12 @@ def run_example_and_save(
 
    </details>
 
+   <a class="bencher-report-link"
+      href="_reports/{stem}/{bench.bench_name}.html"
+      target="_blank">Open report in new tab &#8599;</a>
    <iframe class="bencher-report"
            src="_reports/{stem}/{bench.bench_name}.html"
+           scrolling="no" allowfullscreen
            style="width:100%; min-height:400px; border:none; overflow:hidden;">
    </iframe>
 """
@@ -566,17 +570,26 @@ def _print_timing_summary(examples_metadata: list[dict]) -> None:
     print(f"{'=' * 70}\n")
 
 
-def generate_all() -> list[Path]:
-    """Generate Python examples, run them, save HTML reports, generate RST for docs."""
-    t_all_start = time.perf_counter()
-    # Clean output directories
-    if META_DOCS_DIR.exists():
-        shutil.rmtree(META_DOCS_DIR)
-    META_DOCS_DIR.mkdir(parents=True, exist_ok=True)
+def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = False) -> list[Path]:
+    """Generate Python examples, run them, save HTML reports, generate RST for docs.
 
-    if REPORTS_EXTRA_DIR.exists():
-        shutil.rmtree(REPORTS_EXTRA_DIR)
-    REPORTS_EXTRA_DIR.mkdir(parents=True, exist_ok=True)
+    Args:
+        only: optional list of example stems (substring match). When set, only
+            matching examples are regenerated in place — output directories are
+            not cleaned and section/gallery index pages are left untouched.
+        force_skip_thumbnails: skip thumbnail screenshots even if a browser is
+            available.
+    """
+    t_all_start = time.perf_counter()
+    # Clean output directories (full regeneration only)
+    if not only:
+        if META_DOCS_DIR.exists():
+            shutil.rmtree(META_DOCS_DIR)
+        META_DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+        if REPORTS_EXTRA_DIR.exists():
+            shutil.rmtree(REPORTS_EXTRA_DIR)
+        REPORTS_EXTRA_DIR.mkdir(parents=True, exist_ok=True)
 
     # Phase 1: Generate Python example files
     generate_python_files()
@@ -584,22 +597,26 @@ def generate_all() -> list[Path]:
     # Phase 2: Run each Python file, save HTML report, generate RST
     examples_metadata = []
     py_files = sorted(GENERATED_DIR.rglob("*.py"))
+    if only:
+        py_files = [f for f in py_files if any(pat in f.stem for pat in only)]
+        print(f"--only matched {len(py_files)} example(s): {[f.stem for f in py_files]}")
 
     # Create a shared playwright browser for thumbnail screenshots
-    skip_thumbnails = False
+    skip_thumbnails = force_skip_thumbnails
     pw_context = None
     browser = None
     page = None
-    try:
-        from playwright.sync_api import sync_playwright  # pylint: disable=import-error
+    if not skip_thumbnails:
+        try:
+            from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
-        pw_context = sync_playwright().start()
-        browser = pw_context.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 1200, "height": 900})
-        print("Started headless Chromium for thumbnail screenshots")
-    except Exception as e:  # pylint: disable=broad-except
-        skip_thumbnails = True
-        print(f"WARNING: Could not start browser for thumbnails: {e}")
+            pw_context = sync_playwright().start()
+            browser = pw_context.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1200, "height": 900})
+            print("Started headless Chromium for thumbnail screenshots")
+        except Exception as e:  # pylint: disable=broad-except
+            skip_thumbnails = True
+            print(f"WARNING: Could not start browser for thumbnails: {e}")
 
     try:
         for py_file in py_files:
@@ -620,6 +637,12 @@ def generate_all() -> list[Path]:
         if pw_context is not None:
             pw_context.stop()
             print("Closed headless Chromium")
+
+    if only:
+        # Subset regeneration: leave existing section/gallery index pages alone.
+        _print_timing_summary(examples_metadata)
+        print(f"Total generate_all() time: {time.perf_counter() - t_all_start:.1f}s")
+        return sorted(META_DOCS_DIR.rglob("*.rst"))
 
     # Phase 3: Generate section index files
     meta_by_section = {}
@@ -740,4 +763,22 @@ def generate_all() -> list[Path]:
 
 
 if __name__ == "__main__":
-    generate_all()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate example docs pages and reports")
+    parser.add_argument(
+        "--only",
+        type=str,
+        default=None,
+        help="Comma-separated example stems (substring match) to regenerate in place",
+    )
+    parser.add_argument(
+        "--skip-thumbnails",
+        action="store_true",
+        help="Skip thumbnail screenshots",
+    )
+    cli_args = parser.parse_args()
+    generate_all(
+        only=[s.strip() for s in cli_args.only.split(",")] if cli_args.only else None,
+        force_skip_thumbnails=cli_args.skip_thumbnails,
+    )

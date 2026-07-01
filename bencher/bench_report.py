@@ -38,6 +38,86 @@ def _inline_rrd(
         logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
 
+# Injected into every saved report so that, when embedded in an iframe, the
+# document measures itself and posts its height to the parent. The parent
+# (docs page or multi-tab index) just sets the iframe height it receives, so
+# the page keeps a single scrollbar. Standalone viewing is untouched.
+_EMBED_HEIGHT_SCRIPT = """
+<script>
+/* bencher:height embed reporter */
+(function () {
+  "use strict";
+  if (window.parent === window) return; /* standalone page: leave it alone */
+  var MIN_ZOOM = 0.5;
+  var curZoom = 1;
+  function report() {
+    var de = document.documentElement;
+    var body = document.body;
+    if (!body) return;
+    /* Shrink content that is wider than the iframe. zoom participates in
+       layout (unlike transform), so the height we post stays accurate. */
+    var availW = window.innerWidth;
+    var naturalW = Math.max(de.scrollWidth, body.scrollWidth) / curZoom;
+    var target = availW > 0 && naturalW > availW ? Math.max(MIN_ZOOM, availW / naturalW) : 1;
+    if (Math.abs(target - curZoom) > 0.02) {
+      curZoom = target;
+      body.style.zoom = String(target);
+    }
+    requestAnimationFrame(function () {
+      var h = Math.max(de.scrollHeight, body.scrollHeight);
+      if (h > 0) {
+        window.parent.postMessage({ type: "bencher:height", height: h }, "*");
+      }
+    });
+  }
+  function init() {
+    var de = document.documentElement;
+    var body = document.body;
+    /* Panel pins html/body to height:100%, which hides content growth from
+       ResizeObserver; un-pin so the document takes its natural height. */
+    de.style.height = "auto";
+    body.style.height = "auto";
+    de.style.overflowY = "hidden";
+    body.style.overflowY = "hidden";
+    new ResizeObserver(report).observe(body);
+    new ResizeObserver(report).observe(de);
+    report();
+    /* Fallbacks for content that changes size without resizing body
+       (absolutely positioned overlays). */
+    setTimeout(report, 1000);
+    setTimeout(report, 3000);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+  window.addEventListener("load", report);
+})();
+</script>
+"""
+
+
+def _inject_embed_script(html_path: Path) -> None:
+    """Append the self-measuring embed script to a saved report HTML file.
+
+    Idempotent: skips files that already contain the reporter.
+    """
+    try:
+        content = html_path.read_text(encoding="utf-8")
+        if "bencher:height embed reporter" in content:
+            return
+        for anchor in ("</body>", "</html>"):
+            if anchor in content:
+                content = content.replace(anchor, _EMBED_HEIGHT_SCRIPT + anchor, 1)
+                break
+        else:
+            content += _EMBED_HEIGHT_SCRIPT
+        html_path.write_text(content, encoding="utf-8")
+    except Exception:  # pylint: disable=broad-except
+        logging.warning("inject_embed_script failed for %s", html_path, exc_info=True)
+
+
 @runtime_checkable
 class Publisher(Protocol):
     """Generic publisher protocol for benchmark reports.
@@ -225,6 +305,7 @@ class BenchReport(BenchPlotServer):
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
                 content.save(filename=index_path, progress=True, embed=True, **kwargs)
                 _inline_rrd(index_path, portable=portable)
+                _inject_embed_script(index_path)
                 return index_path
 
             # Save each tab to its own HTML so HoloMap sliders don't collide.
@@ -243,6 +324,7 @@ class BenchReport(BenchPlotServer):
                 logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
                 pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
                 _inline_rrd(tab_path, rrd_base=base_path, portable=portable)
+                _inject_embed_script(tab_path)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 
             # Generate an index page with tab buttons and an iframe.
@@ -292,6 +374,11 @@ class BenchReport(BenchPlotServer):
                 f"onclick=\"switchTab(this, '{path}')\">{escaped_name}</button>\n"
             )
         first_src = tab_files[last_idx][1] if tab_files else ""
+        # Each tab document carries the bencher:height reporter (see
+        # _inject_embed_script) and posts its height here; this index sizes the
+        # inner iframe to match and, when itself embedded, relays the total
+        # height (tab bar + content) to its own parent. Opened standalone, the
+        # page scrolls natively and the sticky tab bar stays visible.
         page = f"""\
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Report</title>
@@ -302,59 +389,33 @@ body {{ margin:0; font-family:sans-serif; }}
 .tab-btn:hover {{ background:rgba(255,255,255,0.3); }}
 .tab-btn:focus-visible {{ background:rgba(255,255,255,0.3); outline:2px solid #fff; outline-offset:2px; }}
 .tab-btn.active {{ background:rgba(255,255,255,0.9); color:#000; font-weight:bold; }}
-iframe {{ width:100%; border:none; }}
+iframe {{ width:100%; border:none; display:block; min-height:400px; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>
-<iframe id="content" src="{first_src}"
-        style="overflow:hidden;"></iframe>
+<iframe id="content" src="{first_src}" scrolling="no" allowfullscreen></iframe>
 <script>
+var _content = document.getElementById('content');
+var _embedded = window.parent !== window;
 function switchTab(btn, src) {{
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('content').src = src;
+  _content.style.height = '';  /* drop stale height; new tab re-posts on load */
+  _content.src = src;
 }}
-var _lastH = 0;
-function resizeInner() {{
-  var f = document.getElementById('content');
-  try {{
-    var doc = f.contentDocument || f.contentWindow.document;
-    if (doc && doc.body) {{
-      doc.documentElement.style.overflowY = 'hidden';
-      doc.body.style.overflowY = 'hidden';
-      var availW = f.clientWidth;
-      var contentW = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth);
-      var MIN_ZOOM = 0.5;
-      if (availW > 0 && contentW > availW) {{
-        doc.body.style.zoom = Math.max(MIN_ZOOM, availW / contentW).toString();
-      }} else {{
-        doc.body.style.zoom = '1';
-      }}
-      var h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
-      if (h > 0 && h !== _lastH) {{ _lastH = h; f.style.height = h + 'px'; }}
-    }}
-  }} catch(e) {{}}
-}}
-var _resizeTimer = null;
-function debouncedResize() {{
-  if (_resizeTimer) return;
-  _resizeTimer = setTimeout(function() {{ _resizeTimer = null; resizeInner(); }}, 100);
-}}
-function setupObserver() {{
-  var f = document.getElementById('content');
-  try {{
-    var doc = f.contentDocument || f.contentWindow.document;
-    if (doc && doc.body) {{
-      new ResizeObserver(debouncedResize).observe(doc.body);
-    }}
-  }} catch(e) {{}}
-}}
-window.addEventListener('resize', resizeInner);
-document.getElementById('content').addEventListener('load', function() {{
-  resizeInner(); setupObserver();
-  setTimeout(resizeInner, 500);
-  setTimeout(resizeInner, 1500);
+window.addEventListener('message', function (e) {{
+  if (!e.data || e.data.type !== 'bencher:height') return;
+  if (e.source !== _content.contentWindow) return;
+  _content.style.height = e.data.height + 'px';
+  if (_embedded) {{
+    var bar = document.querySelector('.tab-bar');
+    window.parent.postMessage(
+      {{ type: 'bencher:height', height: e.data.height + (bar ? bar.offsetHeight : 0) }}, '*');
+  }}
 }});
-resizeInner();
+if (_embedded) {{
+  document.documentElement.style.overflowY = 'hidden';
+  document.body.style.overflowY = 'hidden';
+}}
 </script></body></html>"""
         with open(index_path, "w", encoding="utf-8") as f:
             f.write(page)

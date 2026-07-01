@@ -63,12 +63,22 @@
     padding: 10px 8px;
 }
 
-/* --- Bencher report iframes (auto-resized by iframe-resize.js) --- */
+/* --- Bencher report iframes (sized by bencher-embed.js from heights the
+       reports post themselves) --- */
 iframe.bencher-report {
     min-height: 400px;
     width: 100%;
     border: none;
     overflow: hidden;
+}
+
+/* Escape hatch above each embedded report (useful when wide reports are
+   scaled down to fit) */
+.bencher-report-link {
+    display: block;
+    text-align: right;
+    font-size: 0.85em;
+    margin: 4px 0;
 }
 
 /* --- Line wrapping for code blocks --- */
