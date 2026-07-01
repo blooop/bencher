@@ -65,8 +65,8 @@ The current code's pain points the design has to address:
 | Plugin contract | `(name, backend, match, priority, requires, render(BenchData)→Viewable)` | One contract, frozen public surface, function/class form via decorator |
 | `BenchData` | Frozen value type, fat (chart + meta-view fields) | One mental model; meta-views gate via `requires` instead of plugin kinds |
 | Discovery | Hybrid: entry points + `register_plugin(...)`, lazy | Entry points handle distributed plugins; explicit registration handles in-script plugins |
-| Selection | Run all matching, ordered by priority | Matches today's `to_auto_plots()` behaviour; `include`/`exclude`/`backend`/`only` for filtering |
-| Override | By name — user plugin replaces built-in if name matches | No flags, no monkey-patching |
+| Selection | One implementation per matching chart type, ordered by priority; `backend` = preference | Same plotters, swappable rendering library — `include`/`exclude`/`only` for filtering |
+| Override | By (name, backend) — same pair replaces; other backends of the same name coexist as alternatives | No flags, no monkey-patching |
 | Built-in chart types | Migrate onto the same plugin mechanism | Bencher itself is a consumer of the public API; contract is forced to be good |
 | Loading | Lazy module imports | `import bencher` no longer pulls Plotly/Holoviews/Rerun |
 | Missing deps | Skip with logged warning | Other plugins continue working |
@@ -499,19 +499,27 @@ etc.).
 
 ```python
 plugins = registry.select(data,
-                          include=None,        # whitelist by name
-                          exclude=None,        # blacklist by name
-                          backend=None,        # restrict to one namespace
-                          only=None)           # short-circuit to a single plugin
+                          include=None,        # whitelist by chart-type name
+                          exclude=None,        # blacklist by chart-type name
+                          backend=None,        # PREFERRED backend (not a hard filter)
+                          only=None)           # short-circuit to a single chart type
 ```
 
 - `only` short-circuits the match filter (explicit by-name selection
   bypasses dimension-shape checking — the user said they want this one).
-- Otherwise, candidates are filtered by `include`/`exclude`/`backend`,
+- Otherwise, candidates are filtered by `include`/`exclude`,
   capability-gated (every name in `plugin.requires` must satisfy
   `data.has(name)`), and matched against `data.plt_cnt_cfg` via the
   existing `PlotFilter.matches_result(...)` rule.
-- Matched plugins sorted by `(-priority, name)`. Higher priority first;
+- **Backend resolution**: matched plugins are grouped by chart-type name and
+  each group resolves to ONE implementation — the `backend` param's when it
+  provides one, otherwise the highest-priority. A chart type the preferred
+  backend does not implement still renders through its best other backend.
+  This is the mechanism that swaps the rendering library under an unchanged
+  set of plotters: `select(data, backend="holoviews")` and
+  `select(data, backend="rerun")` return the same chart types, differently
+  implemented.
+- Chosen plugins sorted by `(-priority, name)`. Higher priority first;
   alphabetical tiebreak.
 
 ### Render
@@ -530,10 +538,12 @@ panes = registry.render(data, ..., strict=False)
 
 ### Override semantics
 
-`registry.register(plugin)` is idempotent on `name`. Re-registering with
-the same name replaces the prior entry. This is the documented override
-mechanism — a user-supplied plugin replaces a built-in by sharing its
-name. No flags, no monkey-patching.
+The registry is keyed by `(name, backend)`. Re-registering the same pair
+replaces the prior entry — a user-supplied plugin replaces a built-in by
+sharing its name and backend. Registering the same chart-type name under a
+*different* backend coexists instead: it becomes an alternative
+implementation, reachable via priority, the `backend` preference, or
+`get(name, backend)`. No flags, no monkey-patching.
 
 ## Migration plan
 

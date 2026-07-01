@@ -22,24 +22,35 @@ def _render_error_pane(plugin_name: str, exc: BaseException) -> pn.viewable.View
 
 
 class PluginRegistry:
-    """In-process registry of plot plugins.
+    """In-process registry of plot plugins, keyed by (name, backend).
 
-    Built-in chart types and third-party plugins go through the same path. Registration
-    by `name` is idempotent — re-registering with the same name replaces the prior entry,
-    which is the documented override mechanism (a user-supplied plugin replaces a built-in
-    by sharing its name)."""
+    `name` is the chart type ("line", "heatmap", ...); `backend` is the rendering
+    library namespace ("holoviews", "rerun", ...). Several backends may implement the
+    same chart type; selection resolves each chart type to one implementation — the
+    preferred backend when given, otherwise the highest-priority one. Registering an
+    existing (name, backend) pair replaces it, which is the documented override
+    mechanism (a user plugin replaces a built-in by sharing its name and backend, or
+    outranks it from a different backend via priority/preference)."""
 
     def __init__(self) -> None:
-        self._plugins: dict[str, PlotPlugin] = {}
+        self._plugins: dict[tuple[str, str], PlotPlugin] = {}
         self._entry_points_loaded = False
 
     def register(self, plugin: PlotPlugin) -> None:
         if not isinstance(plugin.name, str) or not plugin.name:
             raise ValueError("Plugin must have a non-empty string name")
-        self._plugins[plugin.name] = plugin
+        if not isinstance(plugin.backend, str) or not plugin.backend:
+            raise ValueError("Plugin must have a non-empty string backend")
+        self._plugins[(plugin.name, plugin.backend)] = plugin
 
-    def unregister(self, name: str) -> None:
-        self._plugins.pop(name, None)
+    def unregister(self, name: str, backend: Optional[str] = None) -> None:
+        """Remove a plugin. With no backend, removes every backend's implementation
+        of that chart type."""
+        if backend is not None:
+            self._plugins.pop((name, backend), None)
+            return
+        for key in [k for k in self._plugins if k[0] == name]:
+            self._plugins.pop(key, None)
 
     def clear(self) -> None:
         self._plugins.clear()
@@ -49,9 +60,26 @@ class PluginRegistry:
         """Skip the entry-point scan on next lookup. Test-only helper."""
         self._entry_points_loaded = True
 
-    def get(self, name: str) -> Optional[PlotPlugin]:
+    def get(self, name: str, backend: Optional[str] = None) -> Optional[PlotPlugin]:
+        """Resolve a chart type to one implementation.
+
+        With a backend, exact lookup. Without, the preferred implementation:
+        highest priority among all backends providing `name` (ties broken by
+        backend string for determinism)."""
         self._ensure_entry_points_loaded()
-        return self._plugins.get(name)
+        if backend is not None:
+            return self._plugins.get((name, backend))
+        impls = [p for (n, _b), p in self._plugins.items() if n == name]
+        if not impls:
+            return None
+        return max(impls, key=lambda p: (p.priority, p.backend))
+
+    def implementations(self, name: str) -> tuple[PlotPlugin, ...]:
+        """Every backend's implementation of a chart type, highest priority first."""
+        self._ensure_entry_points_loaded()
+        impls = [p for (n, _b), p in self._plugins.items() if n == name]
+        impls.sort(key=lambda p: (-p.priority, p.backend))
+        return tuple(impls)
 
     def all(self) -> tuple[PlotPlugin, ...]:
         self._ensure_entry_points_loaded()
@@ -111,15 +139,19 @@ class PluginRegistry:
         backend: Optional[str] = None,
         only: Optional[str] = None,
     ) -> tuple[PlotPlugin, ...]:
-        """Return plugins matching `data`, ordered by descending priority then name.
+        """Return one matching implementation per chart type, by descending priority.
 
-        - `only` short-circuits to a single named plugin (no match-filter check; explicit
-          opt-in by name implies the user knows what they want).
-        - `include` / `exclude` filter the candidate set by name.
-        - `backend` restricts to plugins in a single namespace.
+        - `only` short-circuits to a single named chart type (no match-filter check;
+          explicit opt-in by name implies the user knows what they want).
+        - `include` / `exclude` filter the candidate set by chart-type name.
+        - `backend` states the *preferred* backend: where a chart type is implemented
+          by several backends, the preferred one is chosen when it matches; chart
+          types the preferred backend does not provide still render through their
+          best other implementation. This is what lets a config flag swap the
+          rendering library under the same set of plotters.
         """
         if only is not None:
-            picked = self.get(only)
+            picked = self.get(only, backend) or self.get(only)
             return (picked,) if picked is not None else ()
 
         candidates = list(self.all())
@@ -129,8 +161,6 @@ class PluginRegistry:
         if exclude is not None:
             exc = set(exclude)
             candidates = [p for p in candidates if p.name not in exc]
-        if backend is not None:
-            candidates = [p for p in candidates if p.backend == backend]
 
         matched: list[PlotPlugin] = []
         for plugin in candidates:
@@ -142,8 +172,18 @@ class PluginRegistry:
             if result.overall:
                 matched.append(plugin)
 
-        matched.sort(key=lambda p: (-p.priority, p.name))
-        return tuple(matched)
+        # Resolve each chart type to one implementation.
+        by_name: dict[str, list[PlotPlugin]] = {}
+        for plugin in matched:
+            by_name.setdefault(plugin.name, []).append(plugin)
+        chosen: list[PlotPlugin] = []
+        for impls in by_name.values():
+            preferred = [p for p in impls if p.backend == backend] if backend else []
+            pool = preferred or impls
+            chosen.append(max(pool, key=lambda p: (p.priority, p.backend)))
+
+        chosen.sort(key=lambda p: (-p.priority, p.name))
+        return tuple(chosen)
 
     def render(
         self,
@@ -187,5 +227,5 @@ def register_plugin(plugin: PlotPlugin) -> PlotPlugin:
     return plugin
 
 
-def unregister_plugin(name: str) -> None:
-    _REGISTRY.unregister(name)
+def unregister_plugin(name: str, backend: Optional[str] = None) -> None:
+    _REGISTRY.unregister(name, backend)
