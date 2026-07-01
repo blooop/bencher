@@ -81,19 +81,38 @@ class TestRegistry(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.reg.register(_stub)
 
-    def test_override_by_name(self) -> None:
+    def test_override_same_name_and_backend_replaces(self) -> None:
         @plot_plugin(name="dup", backend="a", register=False)
+        def _a1(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("a1")
+
+        @plot_plugin(name="dup", backend="a", register=False)
+        def _a2(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("a2")
+
+        self.reg.register(_a1)
+        self.reg.register(_a2)
+        self.assertIs(self.reg.get("dup"), _a2)
+        self.assertEqual(len(self.reg.all()), 1)
+
+    def test_same_name_different_backends_coexist(self) -> None:
+        """The same chart type can be implemented by several backends; get(name)
+        resolves to the highest-priority implementation, get(name, backend) is exact."""
+
+        @plot_plugin(name="dup", backend="a", priority=10, register=False)
         def _a(_: BenchData) -> pn.viewable.Viewable:
             return _make_pane("a")
 
-        @plot_plugin(name="dup", backend="b", register=False)
+        @plot_plugin(name="dup", backend="b", priority=5, register=False)
         def _b(_: BenchData) -> pn.viewable.Viewable:
             return _make_pane("b")
 
         self.reg.register(_a)
         self.reg.register(_b)
-        self.assertIs(self.reg.get("dup"), _b)
-        self.assertEqual(len(self.reg.all()), 1)
+        self.assertEqual(len(self.reg.all()), 2)
+        self.assertIs(self.reg.get("dup"), _a)
+        self.assertIs(self.reg.get("dup", backend="b"), _b)
+        self.assertEqual(self.reg.implementations("dup"), (_a, _b))
 
     def test_unregister(self) -> None:
         @plot_plugin(name="t.foo", register=False)
@@ -101,6 +120,23 @@ class TestRegistry(unittest.TestCase):
             return _make_pane("foo")
 
         self.reg.register(_foo)
+        self.reg.unregister("t.foo")
+        self.assertIsNone(self.reg.get("t.foo"))
+
+    def test_unregister_single_backend(self) -> None:
+        @plot_plugin(name="t.foo", backend="a", register=False)
+        def _a(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("a")
+
+        @plot_plugin(name="t.foo", backend="b", register=False)
+        def _b(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("b")
+
+        self.reg.register(_a)
+        self.reg.register(_b)
+        self.reg.unregister("t.foo", backend="a")
+        self.assertIs(self.reg.get("t.foo"), _b)
+        # No backend given removes every remaining implementation.
         self.reg.unregister("t.foo")
         self.assertIsNone(self.reg.get("t.foo"))
 
@@ -150,10 +186,52 @@ class TestSelection(unittest.TestCase):
         names = [p.name for p in self.reg.select(data)]
         self.assertEqual(names, ["alpha", "beta"])  # gamma's filter excludes it
 
-    def test_backend_filter(self) -> None:
+    def test_backend_preference_swaps_implementation(self) -> None:
+        """`backend` states a preference: chart types the preferred backend implements
+        swap to it; chart types it does not implement keep their best other backend.
+        This is what lets one flag change the rendering library under the same plotters."""
+
+        @plot_plugin(
+            name="alpha",
+            backend="plotly",
+            match=self.permissive_filter,
+            priority=1,
+            register=False,
+        )
+        def _alpha_plotly(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("alpha-plotly")
+
+        self.reg.register(_alpha_plotly)
         data = _data_with_floats(1)
-        names = [p.name for p in self.reg.select(data, backend="plotly")]
-        self.assertEqual(names, ["beta"])
+
+        # No preference: highest-priority implementation per chart type.
+        chosen = {p.name: p.backend for p in self.reg.select(data)}
+        self.assertEqual(chosen, {"alpha": "hv", "beta": "plotly"})
+
+        # Preferring plotly swaps alpha's implementation; beta already plotly.
+        chosen = {p.name: p.backend for p in self.reg.select(data, backend="plotly")}
+        self.assertEqual(chosen, {"alpha": "plotly", "beta": "plotly"})
+
+        # Preferring hv keeps beta (only implemented in plotly) available.
+        chosen = {p.name: p.backend for p in self.reg.select(data, backend="hv")}
+        self.assertEqual(chosen, {"alpha": "hv", "beta": "plotly"})
+
+    def test_select_dedupes_chart_types(self) -> None:
+        """select() returns one implementation per chart type, not one per backend."""
+
+        @plot_plugin(
+            name="alpha",
+            backend="plotly",
+            match=self.permissive_filter,
+            priority=1,
+            register=False,
+        )
+        def _alpha_plotly(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("alpha-plotly")
+
+        self.reg.register(_alpha_plotly)
+        names = [p.name for p in self.reg.select(_data_with_floats(1))]
+        self.assertEqual(sorted(names), ["alpha", "beta"])
 
     def test_include_exclude(self) -> None:
         data = _data_with_floats(1)
