@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable, Optional
 
 import panel as pn
@@ -42,10 +43,21 @@ class LegacyResultPlugin:
         # to_auto always rides `override` (+ plot-size kwargs) along; renderers with a
         # fixed signature (no **kwargs, e.g. RerunResult.to_rerun) only get the ones
         # they declare.
-        params = inspect.signature(self.callback).parameters
-        if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
-            kwargs = {k: v for k, v in kwargs.items() if k in params}
+        declared = _declared_kwargs(self.callback)
+        if declared is not None:
+            kwargs = {k: v for k, v in kwargs.items() if k in declared}
         return self.callback(data.legacy_result, **kwargs)
+
+
+@lru_cache(maxsize=None)
+def _declared_kwargs(callback: Callable) -> Optional[frozenset[str]]:
+    """The keyword names a fixed-signature callback accepts, or None when it takes
+    **kwargs (no filtering needed). Cached because render can run in tight loops and
+    a callback's signature never changes."""
+    params = inspect.signature(callback).parameters
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return None
+    return frozenset(params)
 
 
 def _builtin_specs() -> list[tuple[str, str, Callable]]:

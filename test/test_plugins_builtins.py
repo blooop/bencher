@@ -342,6 +342,29 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         self.assertIs(calls["result"], marker)
         self.assertEqual(calls["width"], 600)
 
+    def test_kwargs_callback_gets_full_render_kwargs(self):
+        """Companion to the fixed-signature test: renderers WITH **kwargs must receive
+        the render_kwargs dict unfiltered, including names they don't declare."""
+        calls = {}
+
+        def kwargs_callback(result, **kwargs):  # pylint: disable=unused-argument
+            calls["kwargs"] = kwargs
+            return pn.pane.Markdown("kwargs")
+
+        plugin = LegacyResultPlugin(
+            name="kwargs",
+            backend="test",
+            match=PlotFilter.match_all(),
+            priority=0,
+            requires=frozenset({"legacy_result"}),
+            callback=kwargs_callback,
+        )
+        render_kwargs = {"override": False, "width": 600, "not_a_declared_name": 1}
+        data = BenchData.fake().with_changes(legacy_result=object(), render_kwargs=render_kwargs)
+        pane = plugin.render(data)
+        self.assertEqual(pane.object, "kwargs")
+        self.assertEqual(calls["kwargs"], render_kwargs)
+
 
 class TestToBenchData(unittest.TestCase):
     @classmethod
