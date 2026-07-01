@@ -249,6 +249,44 @@ class TestSelection(unittest.TestCase):
         data = _data_with_floats(1)
         self.assertEqual(self.reg.select(data, only="nope"), ())
 
+    def test_named_only_plugin_requires_explicit_naming(self) -> None:
+        """auto=False plugins never appear in automatic selection, but naming them
+        via include or only selects them."""
+
+        @plot_plugin(
+            name="delta",
+            backend="hv",
+            match=self.permissive_filter,
+            priority=20,
+            register=False,
+            auto=False,
+        )
+        def _delta(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("delta")
+
+        self.reg.register(_delta)
+        data = _data_with_floats(1)
+        self.assertNotIn("delta", [p.name for p in self.reg.select(data)])
+        self.assertEqual([p.name for p in self.reg.select(data, include=["delta"])], ["delta"])
+        self.assertEqual([p.name for p in self.reg.select(data, only="delta")], ["delta"])
+
+    def test_plugin_without_auto_attribute_is_automatic(self) -> None:
+        """Plugins predating the `auto` attribute must keep appearing automatically."""
+        permissive = self.permissive_filter
+
+        class NoAutoAttr:
+            name = "epsilon"
+            backend = "hv"
+            match = permissive
+            priority = 1
+            requires = frozenset()
+
+            def render(self, _: BenchData) -> pn.viewable.Viewable:
+                return _make_pane("epsilon")
+
+        self.reg.register(NoAutoAttr())
+        self.assertIn("epsilon", [p.name for p in self.reg.select(_data_with_floats(1))])
+
     def test_requires_capability_gating(self) -> None:
         @plot_plugin(
             name="needs_optimizer",

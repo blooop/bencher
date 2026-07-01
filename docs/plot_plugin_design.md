@@ -65,7 +65,7 @@ The current code's pain points the design has to address:
 | Plugin contract | `(name, backend, match, priority, requires, render(BenchData)→Viewable)` | One contract, frozen public surface, function/class form via decorator |
 | `BenchData` | Frozen value type, fat (chart + meta-view fields) | One mental model; meta-views gate via `requires` instead of plugin kinds |
 | Discovery | Hybrid: entry points + `register_plugin(...)`, lazy | Entry points handle distributed plugins; explicit registration handles in-script plugins |
-| Selection | One implementation per matching chart type, ordered by priority; `backend` = preference | Same plotters, swappable rendering library — `include`/`exclude`/`only` for filtering |
+| Selection | One implementation per matching chart type, ordered by priority; `backend` = preference; `auto=False` = named-only | Same plotters, swappable rendering library — `include`/`exclude`/`only` for filtering; every result type addressable by name without changing default output |
 | Override | By (name, backend) — same pair replaces; other backends of the same name coexist as alternatives | No flags, no monkey-patching |
 | Built-in chart types | Migrate onto the same plugin mechanism | Bencher itself is a consumer of the public API; contract is forced to be good |
 | Loading | Lazy module imports | `import bencher` no longer pulls Plotly/Holoviews/Rerun |
@@ -444,6 +444,12 @@ class PlotPlugin(Protocol):
     def render(self, data: BenchData) -> pn.viewable.Viewable: ...
 ```
 
+An optional `auto: bool` attribute (read with `getattr(plugin, "auto", True)`,
+so plugins that predate it stay valid — it is deliberately not declared on the
+Protocol) marks a plugin **named-only** when `False`: it never appears in
+automatic selection, only when explicitly requested by name via
+`include`/`plot_list`/`only`.
+
 Function form via decorator (sugar — synthesises a `_FunctionPlugin`
 internally):
 
@@ -451,7 +457,8 @@ internally):
 @bencher.plot_plugin(name="my.line", backend="user",
                      match=PlotFilter(float_range=VarRange(1, 1)),
                      priority=10,
-                     requires={"optimizer_study"})  # optional
+                     requires={"optimizer_study"},  # optional
+                     auto=True)                     # False = named-only
 def my_line(data: BenchData) -> pn.viewable.Viewable:
     ...
 ```
@@ -511,6 +518,12 @@ plugins = registry.select(data,
   capability-gated (every name in `plugin.requires` must satisfy
   `data.has(name)`), and matched against `data.plt_cnt_cfg` via the
   existing `PlotFilter.matches_result(...)` rule.
+- **Named-only plugins** (`auto=False`) are dropped from the candidate set
+  when `include is None` — they exist in the registry (addressable, listable,
+  overridable) but never render in a default report. Naming them via
+  `include` or `only` selects them like any other plugin. The non-default
+  built-ins (violin, scatter, surface, table, rerun, ...) register this way,
+  so every result type is reachable by name without changing default output.
 - **Backend resolution**: matched plugins are grouped by chart-type name and
   each group resolves to ONE implementation — the `backend` param's when it
   provides one, otherwise the highest-priority. A chart type the preferred

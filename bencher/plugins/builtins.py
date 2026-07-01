@@ -14,7 +14,9 @@ render plots in exactly the same order as before.
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable, Optional
 
 import panel as pn
@@ -34,9 +36,28 @@ class LegacyResultPlugin:
     priority: int
     requires: frozenset[str]
     callback: Callable
+    auto: bool = True
 
     def render(self, data: BenchData) -> Optional[pn.viewable.Viewable]:
-        return self.callback(data.legacy_result, **data.render_kwargs)
+        kwargs = data.render_kwargs
+        # to_auto always rides `override` (+ plot-size kwargs) along; renderers with a
+        # fixed signature (no **kwargs, e.g. RerunResult.to_rerun) only get the ones
+        # they declare.
+        declared = _declared_kwargs(self.callback)
+        if declared is not None:
+            kwargs = {k: v for k, v in kwargs.items() if k in declared}
+        return self.callback(data.legacy_result, **kwargs)
+
+
+@lru_cache(maxsize=None)
+def _declared_kwargs(callback: Callable) -> Optional[frozenset[str]]:
+    """The keyword names a fixed-signature callback accepts, or None when it takes
+    **kwargs (no filtering needed). Cached because render can run in tight loops and
+    a callback's signature never changes."""
+    params = inspect.signature(callback).parameters
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return None
+    return frozenset(params)
 
 
 def _builtin_specs() -> list[tuple[str, str, Callable]]:
@@ -66,6 +87,39 @@ def _builtin_specs() -> list[tuple[str, str, Callable]]:
     ]
 
 
+def _named_only_specs() -> list[tuple[str, str, Callable]]:
+    """(name, backend, callback) for chart types that are never auto-selected but can
+    be requested by name in ``plot_list`` (A1 Phase 3). Plotly appears only where a
+    plot already required it (surface, like volume above); rerun is its own backend
+    and imports the rerun SDK lazily inside the renderer, so registration is safe
+    without the package installed."""
+    from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
+    from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
+        ScatterJitterResult,
+    )
+    from bencher.results.holoview_results.scatter_result import ScatterResult
+    from bencher.results.holoview_results.band_result import BandResult
+    from bencher.results.holoview_results.surface_result import SurfaceResult
+    from bencher.results.holoview_results.table_result import TableResult
+    from bencher.results.holoview_results.tabulator_result import TabulatorResult
+    from bencher.results.dataset_result import DataSetResult
+    from bencher.results.video_summary import VideoSummaryResult
+    from bencher.results.rerun_result import RerunResult
+
+    return [
+        ("violin", "holoviews", ViolinResult.to_plot),
+        ("scatter_jitter", "holoviews", ScatterJitterResult.to_plot),
+        ("scatter", "holoviews", ScatterResult.to_plot),
+        ("band", "holoviews", BandResult.to_plot),
+        ("surface", "plotly", SurfaceResult.to_plot),
+        ("table", "holoviews", TableResult.to_plot),
+        ("tabulator", "panel", TabulatorResult.to_plot),
+        ("dataset", "panel", DataSetResult.to_plot),
+        ("video_summary", "panel", VideoSummaryResult.to_video_summary),
+        ("rerun", "rerun", RerunResult.to_rerun),
+    ]
+
+
 # Name of the plugin that renders pane-type results (images, videos, rerun, ...);
 # excluded by to_auto(numeric_only=True).
 PANES_PLUGIN_NAME = "panes"
@@ -87,6 +141,20 @@ def register_builtin_plugins() -> None:
                 priority=priority,
                 requires=frozenset({"legacy_result"}),
                 callback=callback,
+            )
+        )
+        CALLBACK_TO_PLUGIN[callback] = name
+        priority -= 5
+    for name, backend, callback in _named_only_specs():
+        register_plugin(
+            LegacyResultPlugin(
+                name=name,
+                backend=backend,
+                match=PlotFilter.match_all(),
+                priority=priority,
+                requires=frozenset({"legacy_result"}),
+                callback=callback,
+                auto=False,
             )
         )
         CALLBACK_TO_PLUGIN[callback] = name

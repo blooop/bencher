@@ -144,6 +144,8 @@ class PluginRegistry:
         - `only` short-circuits to a single named chart type (no match-filter check;
           explicit opt-in by name implies the user knows what they want).
         - `include` / `exclude` filter the candidate set by chart-type name.
+        - Named-only plugins (``auto=False``) are skipped during automatic selection
+          (`include is None`); naming them via `include` or `only` selects them.
         - `backend` states the *preferred* backend: where a chart type is implemented
           by several backends, the preferred one is chosen when it matches; chart
           types the preferred backend does not provide still render through their
@@ -158,6 +160,8 @@ class PluginRegistry:
         if include is not None:
             inc = set(include)
             candidates = [p for p in candidates if p.name in inc]
+        else:
+            candidates = [p for p in candidates if getattr(p, "auto", True)]
         if exclude is not None:
             exc = set(exclude)
             candidates = [p for p in candidates if p.name not in exc]
