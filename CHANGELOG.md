@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.110.0] - 2026-07-01
+
+### Added
+- **Plot plugin infrastructure (tier 0, purely additive)** — the first piece of the plan to replace the inheritance-based rendering system in `bencher/results/` with a plugin registry (see `plans/architecture/A1-rendering-backend-unification.md` and `docs/plot_plugin_design.md`). New `bencher.plugins` package exposing, at the top level: `BenchData` (frozen value type: dataset, input/result vars, `plt_cnt_cfg`, `RunMeta`, optional `optimizer_study`/`baseline_runs`/`cache`), the `PlotPlugin` protocol and `@plot_plugin` decorator, and `PluginRegistry` with `get_registry()`/`register_plugin()`/`unregister_plugin()`. Plugins are `(chart-type × backend)` pairs with a `PlotFilter` match rule, priority, capability gating via `requires`, lazy entry-point discovery (`bencher.plot_plugins` group), and error-pane substitution on render failure (`strict=True` re-raises). **No existing code path queries the registry yet**; built-in chart types migrate onto it in subsequent PRs. Coverage in `test/test_plugins.py`.
+
 ## [1.108.0] - 2026-06-21
 
 ### Added
