@@ -29,7 +29,8 @@ MUTABLE_PARAM_TYPES = (param.List, param.Dict, param.ClassSelector, param.Tuple)
 # values, and each field's class-level default is None so no container is ever
 # shared between instances via the param default.
 REVIEWED_MUTABLE_FIELDS = {
-    "regression_guards",  # dict[str, float]; see test_regression_guards_dict_is_isolated_by_copy
+    # dict[str, float | dict[str, float]]; see test_regression_overrides_dict_is_isolated_by_copy
+    "regression_overrides",
 }
 
 
@@ -164,16 +165,25 @@ class TestCopyStrategyGuards(unittest.TestCase):
         for name in REVIEWED_MUTABLE_FIELDS:
             self.assertIsNone(params[name].default, f"BenchRunCfg.{name} default must be None")
 
-    def test_regression_guards_dict_is_isolated_by_copy(self):
-        """The guards dict must not be shared between an input cfg and its copies."""
-        original = bn.BenchRunCfg(regression_guards={"success": 1.0})
+    def test_regression_overrides_dict_is_isolated_by_copy(self):
+        """The overrides dict — including nested specs — must not be shared
+        between an input cfg and its copies."""
+        original = bn.BenchRunCfg(
+            regression_overrides={"success": 1.0, "latency": {"percentage": 20.0}}
+        )
 
         copied = BenchRunner.setup_run_cfg(original, subsampling_divisions=2)
-        self.assertIsNot(copied.regression_guards, original.regression_guards)
+        self.assertIsNot(copied.regression_overrides, original.regression_overrides)
+        self.assertIsNot(
+            copied.regression_overrides["latency"], original.regression_overrides["latency"]
+        )
 
-        copied.regression_guards["success"] = 0.0
-        copied.regression_guards["extra"] = 2.0
-        self.assertEqual(original.regression_guards, {"success": 1.0})
+        copied.regression_overrides["success"] = 0.0
+        copied.regression_overrides["latency"]["percentage"] = 99.0
+        copied.regression_overrides["extra"] = 2.0
+        self.assertEqual(
+            original.regression_overrides, {"success": 1.0, "latency": {"percentage": 20.0}}
+        )
 
 
 class TestCopyElimination(unittest.TestCase):

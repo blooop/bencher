@@ -451,21 +451,26 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "is not 'absolute'.",
     )
 
-    regression_guards: dict = param.Dict(
+    regression_overrides: dict = param.Dict(
         default=None,
         allow_None=True,
-        doc="Per-variable hard limits checked in addition to the primary "
-        "regression_method whenever regression detection runs. Maps result "
-        "variable name -> absolute limit, enforced in the direction of that "
-        "variable's OptDir (minimize: ceiling; maximize: floor) via the same "
-        "check as regression_method='absolute'. Needs no history — a guard "
-        "fires from the very first recording. Variables not listed are "
-        "unaffected and the primary method still runs for every variable, so "
-        "guards can hold hard floors (e.g. a success rate that must stay at "
-        "1.0) while a history-based method tracks trends on the same "
-        "benchmark. Guard names that match no scalar result variable are "
-        "silently skipped, so one guard map can be shared across benchmarks "
-        "with different result_vars.",
+        doc="Per-variable regression check overrides. Maps result variable name "
+        "to either a bare number — shorthand for {'absolute': value}, a hard "
+        "directional limit (minimize: ceiling; maximize: floor) — or a dict of "
+        "{method: threshold} drawn from 'percentage', 'adaptive', 'delta' and "
+        "'absolute'. A listed variable is checked by exactly the methods in "
+        "its spec instead of the benchmark-wide regression_method, so a "
+        "threshold can be loosened or tightened per variable; multiple "
+        "entries run as independent checks (e.g. {'percentage': 15.0, "
+        "'absolute': 1.0} tracks the trend and holds a hard floor). An empty "
+        "dict opts the variable out of regression detection entirely. "
+        "'absolute' checks need no history and fire from the very first "
+        "recording; the other methods skip until history exists. An adaptive "
+        "override's threshold is its MAD limit; the dual-band percent gate "
+        "still comes from regression_percentage. Variables not listed keep "
+        "the benchmark-wide method, and override names matching no scalar "
+        "result variable are silently skipped, so one override map can be "
+        "shared across benchmarks with different result_vars.",
     )
 
     regression_fail: bool = param.Boolean(
