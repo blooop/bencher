@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.112.0] - 2026-07-02
+
+### Added
+- **`BenchRunCfg.regression_guards`** — per-variable absolute limits evaluated *in addition to* the primary `regression_method` whenever regression detection runs. Maps result-variable name → hard limit, enforced in the direction of that variable's `OptDir` (minimize: ceiling; maximize: floor) via the same check as `regression_method='absolute'`. Guards need no history (they fire from the very first recording, surviving the sparse-history and missing-threshold early-returns that silence every history-based method) and are purely additive: unlisted variables are untouched, the primary method still runs for every variable, and one variable can carry both a trend result and a guard result in the same `RegressionReport`. Guard names matching no scalar result variable are silently skipped, so a single guard map can be shared across benchmarks with different `result_vars`. Motivating use case: CI tracking of flat health metrics (a success rate that must hold 1.0, an orphan-process count that must hold 0) alongside percentage/adaptive trend detection on the same benchmark — previously impossible because `regression_absolute` is one limit for the whole benchmark and hijacks `regression_method`. Guard breaches flow through the existing machinery unchanged: `has_regressions`, `regression_fail`/`RegressionError`, report markdown (`method_cells` renders the ≥ floor / ≤ ceiling row), `result_to_dict` JSON, and `render_png`. This is the first mutable (`param.Dict`) field on `BenchRunCfg`; the BenchRunner copy strategy was reviewed for it (every copy point deepcopies, and the class-level default is None so no dict is ever shared through the param default) — the copy-guard test now carries a `REVIEWED_MUTABLE_FIELDS` allowlist plus dedicated isolation tests. Coverage in `test/test_regression.py` (`TestRegressionGuards` + an end-to-end first-recording test) and `test/test_bench_runner_copy.py`.
+
 ## [1.111.0] - 2026-07-01
 
 ### Changed

@@ -766,6 +766,7 @@ class TestDetectRegressions:
         regression_percentage=None,
         regression_delta=None,
         regression_absolute=None,
+        regression_guards=None,
     ):
         """Create minimal bench_cfg and run_cfg mocks."""
 
@@ -781,12 +782,14 @@ class TestDetectRegressions:
                 regression_percentage,
                 regression_delta,
                 regression_absolute,
+                regression_guards,
             ):
                 self.regression_method = method
                 self.regression_mad = regression_mad
                 self.regression_percentage = regression_percentage
                 self.regression_delta = regression_delta
                 self.regression_absolute = regression_absolute
+                self.regression_guards = regression_guards
 
         return (
             FakeBenchCfg(result_vars),
@@ -796,6 +799,7 @@ class TestDetectRegressions:
                 regression_percentage,
                 regression_delta,
                 regression_absolute,
+                regression_guards,
             ),
         )
 
@@ -1139,6 +1143,142 @@ class TestDetectRegressions:
 # ── RegressionError ────────────────────────────────────────────────────────
 
 
+# ── regression guards ──────────────────────────────────────────────────────
+
+
+class TestRegressionGuards:
+    """Per-variable absolute guards (run_cfg.regression_guards).
+
+    Guards are additive hard limits evaluated alongside the primary method:
+    they need no history, fire from the first recording, and only ever touch
+    the variables they name.
+    """
+
+    @staticmethod
+    def _rv(name, direction):
+        from bencher.variables.results import ResultFloat
+
+        rv = ResultFloat(units="ul", direction=direction)
+        rv.name = name
+        return rv
+
+    @staticmethod
+    def _two_var_dataset(success_vals, orphan_vals):
+        values = {"success": success_vals, "orphans": orphan_vals}
+        return xr.Dataset(
+            {k: (["over_time", "repeat"], np.asarray(v, dtype=float)) for k, v in values.items()},
+            coords={
+                "over_time": np.arange(len(success_vals)),
+                "repeat": np.arange(len(success_vals[0])),
+            },
+        )
+
+    @staticmethod
+    def _cfg(result_vars, method="percentage", regression_percentage=None, regression_guards=None):
+        """Create minimal bench_cfg and run_cfg stand-ins."""
+        from types import SimpleNamespace
+
+        bench_cfg = SimpleNamespace(result_vars=result_vars)
+        run_cfg = SimpleNamespace(
+            regression_method=method,
+            regression_mad=None,
+            regression_percentage=regression_percentage,
+            regression_delta=None,
+            regression_absolute=None,
+            regression_guards=regression_guards,
+        )
+        return bench_cfg, run_cfg
+
+    def test_guard_floor_breach_maximize(self):
+        ds = self._two_var_dataset([[1.0, 1.0], [1.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
+        bench_cfg, run_cfg = self._cfg(rvs, regression_guards={"success": 1.0})
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        guard = [r for r in report.results if r.method == "absolute"]
+        assert len(guard) == 1
+        assert guard[0].variable == "success"
+        assert guard[0].regressed  # current mean 0.5 < floor 1.0
+        assert guard[0].threshold == 1.0
+
+    def test_guard_ceiling_breach_minimize(self):
+        ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [1.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
+        bench_cfg, run_cfg = self._cfg(rvs, regression_guards={"orphans": 0.0})
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        guard = [r for r in report.results if r.method == "absolute"]
+        assert len(guard) == 1
+        assert guard[0].variable == "orphans"
+        assert guard[0].regressed  # current mean 0.5 > ceiling 0.0
+
+    def test_guard_at_limit_passes(self):
+        ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
+        bench_cfg, run_cfg = self._cfg(rvs, regression_guards={"success": 1.0, "orphans": 0.0})
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        guard = [r for r in report.results if r.method == "absolute"]
+        assert len(guard) == 2
+        assert not any(r.regressed for r in guard)
+
+    def test_guards_run_without_history(self):
+        """A guard fires on the very first recording, where the primary method
+        (percentage, needs history) is skipped entirely."""
+        ds = self._two_var_dataset([[0.5, 0.5]], [[0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize)]
+        bench_cfg, run_cfg = self._cfg(
+            rvs, method="percentage", regression_percentage=5.0, regression_guards={"success": 1.0}
+        )
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.has_regressions
+        assert len(report.results) == 1
+        assert report.results[0].method == "absolute"
+
+    def test_guard_additive_with_primary_method(self):
+        """The same variable can carry both a primary trend result and a guard result."""
+        ds = self._two_var_dataset(
+            [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0], [0.5, 0.5]],
+            [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
+        )
+        rvs = [self._rv("success", OptDir.maximize)]
+        bench_cfg, run_cfg = self._cfg(
+            rvs, method="percentage", regression_percentage=5.0, regression_guards={"success": 1.0}
+        )
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        methods = sorted(r.method for r in report.results if r.variable == "success")
+        assert methods == ["absolute", "percentage"]
+        assert all(r.regressed for r in report.results if r.variable == "success")
+
+    def test_guard_unknown_variable_skipped(self):
+        """A guard naming no known variable is silently ignored (shared guard maps)."""
+        ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize)]
+        bench_cfg, run_cfg = self._cfg(rvs, regression_guards={"no_such_metric": 1.0})
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert not any(r.method == "absolute" for r in report.results)
+
+    def test_guard_direction_none_skipped(self):
+        ds = self._two_var_dataset([[0.5, 0.5], [0.5, 0.5]], [[0.0, 0.0], [0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.none)]
+        bench_cfg, run_cfg = self._cfg(rvs, regression_guards={"success": 1.0})
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert not any(r.method == "absolute" for r in report.results)
+
+    def test_guard_nan_current_skipped(self):
+        """No valid current samples = missing data, not a breach."""
+        ds = self._two_var_dataset([[1.0, 1.0], [np.nan, np.nan]], [[0.0, 0.0], [0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
+        bench_cfg, run_cfg = self._cfg(rvs, regression_guards={"success": 1.0, "orphans": 0.0})
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        guard_vars = [r.variable for r in report.results if r.method == "absolute"]
+        assert guard_vars == ["orphans"]
+
+    def test_no_guards_is_noop(self):
+        ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize)]
+        bench_cfg, run_cfg = self._cfg(rvs, regression_guards=None)
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert not any(r.method == "absolute" for r in report.results)
+
+
 class TestRegressionError:
     def test_can_raise(self):
         with pytest.raises(RegressionError, match="test"):
@@ -1166,6 +1306,13 @@ class _DegradingBench(bn.ParametrizedSweep):
         self.out_val = float(_degrade_state["counter"]) * 100.0
 
 
+class _GuardedBench(bn.ParametrizedSweep):
+    success = bn.ResultFloat(units="ul", direction=bn.OptDir.maximize)
+
+    def benchmark(self):
+        self.success = 0.5
+
+
 class TestEndToEnd:
     def test_plot_sweep_with_regression_detection(self):
         """Full end-to-end test: run plot_sweep with over_time and regression_detection."""
@@ -1186,6 +1333,33 @@ class TestEndToEnd:
 
         assert res2.regression_report is not None
         assert not res2.regression_report.has_regressions
+
+    def test_guard_fires_on_first_recording(self):
+        """A regression_guards breach is reported on the very first run — no
+        history, where every history-based method is silent."""
+        run_cfg = bn.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 2
+        run_cfg.regression_detection = True
+        run_cfg.regression_method = "percentage"
+        run_cfg.regression_guards = {"success": 1.0}
+        run_cfg.regression_fail = False
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+
+        bench = bn.Bench("test_regression_guard_e2e", _GuardedBench(), run_cfg=run_cfg)
+        res = bench.plot_sweep(plot_callbacks=False)
+
+        assert res.regression_report is not None
+        assert res.regression_report.has_regressions
+        guard = [
+            r
+            for r in res.regression_report.results
+            if r.method == "absolute" and r.variable == "success"
+        ]
+        assert len(guard) == 1
+        assert guard[0].regressed  # success 0.5 < guard floor 1.0
+        assert guard[0].threshold == 1.0
 
     def test_detection_disabled_leaves_report_none(self):
         """When regression_detection=False, regression_report should stay None."""

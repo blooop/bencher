@@ -451,6 +451,23 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "is not 'absolute'.",
     )
 
+    regression_guards: dict = param.Dict(
+        default=None,
+        allow_None=True,
+        doc="Per-variable hard limits checked in addition to the primary "
+        "regression_method whenever regression detection runs. Maps result "
+        "variable name -> absolute limit, enforced in the direction of that "
+        "variable's OptDir (minimize: ceiling; maximize: floor) via the same "
+        "check as regression_method='absolute'. Needs no history — a guard "
+        "fires from the very first recording. Variables not listed are "
+        "unaffected and the primary method still runs for every variable, so "
+        "guards can hold hard floors (e.g. a success rate that must stay at "
+        "1.0) while a history-based method tracks trends on the same "
+        "benchmark. Guard names that match no scalar result variable are "
+        "silently skipped, so one guard map can be shared across benchmarks "
+        "with different result_vars.",
+    )
+
     regression_fail: bool = param.Boolean(
         False,
         doc="If True, raise RegressionError when a regression is detected. "

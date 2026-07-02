@@ -1304,6 +1304,54 @@ def _attach_plot_metadata(
         result.historical_all_x = hist_x_flat[mask]
 
 
+def _detect_guards(dataset: xr.Dataset, bench_cfg, run_cfg, report: RegressionReport) -> None:
+    """Evaluate per-variable absolute guards (``run_cfg.regression_guards``) into *report*.
+
+    Guards are additive hard limits that run alongside whatever primary
+    ``regression_method`` is configured: each is a directional
+    :func:`detect_absolute` check of the current (latest over_time) mean
+    against the mapped limit, so they need no history and fire from the very
+    first recording. Guard names that match no scalar result variable are
+    silently skipped, so one guard map can be shared across benchmarks with
+    different ``result_vars``. A variable with no valid (non-NaN) current
+    samples is skipped — an unrecorded metric is missing data, not a breach.
+    """
+    guards = getattr(run_cfg, "regression_guards", None)
+    if not guards:
+        return
+
+    time_coord = dataset["over_time"].values
+    for rv in bench_cfg.result_vars:
+        if not isinstance(rv, SCALAR_RESULT_TYPES):
+            continue
+        var_name = rv.name
+        limit = guards.get(var_name)
+        if limit is None or var_name not in dataset:
+            continue
+        direction = rv.direction if hasattr(rv, "direction") else OptDir.none
+        if direction == OptDir.none:
+            logging.warning(
+                f"regression guard skipped for '{var_name}': OptDir.none has no direction"
+            )
+            continue
+
+        da = dataset[var_name]
+        current_clean = _clean_1d(da.isel(over_time=-1).values)
+        if len(current_clean) == 0:
+            continue
+        current_mean_scalar = np.array([float(da.isel(over_time=-1).mean(skipna=True).values)])
+        result = detect_absolute(var_name, current_mean_scalar, limit=limit, direction=direction)
+        _attach_plot_metadata(
+            result,
+            time_coord=time_coord,
+            current_samples=current_clean,
+            time_means=None,
+            hist_samples_flat=None,
+            hist_x_flat=None,
+        )
+        report.results.append(result)
+
+
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
@@ -1312,6 +1360,12 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     ``absolute``). ``absolute`` runs even with a single over_time point since
     it needs no baseline; every other method requires history.
 
+    Additionally, every variable named in ``run_cfg.regression_guards`` is
+    checked against its mapped absolute limit (see :func:`_detect_guards`).
+    Guards run regardless of the primary method and, like ``absolute``, need
+    no history — so one report can carry both a history-based trend result
+    and a hard-limit guard result for the same benchmark.
+
     Args:
         dataset: xarray Dataset with an over_time dimension.
         bench_cfg: BenchCfg with ``result_vars`` list.
@@ -1319,7 +1373,8 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             method-specific threshold: ``regression_percentage`` for
             ``percentage``; ``regression_mad`` (plus ``regression_percentage``
             as a dual-band gate) for ``adaptive``; ``regression_delta`` for
-            ``delta``; ``regression_absolute`` for ``absolute``.
+            ``delta``; ``regression_absolute`` for ``absolute``. Also reads
+            ``regression_guards`` for per-variable hard limits.
 
     Returns:
         RegressionReport with one result per variable per fired detector/guard.
@@ -1328,6 +1383,10 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
 
     if "over_time" not in dataset.dims:
         return report
+
+    # Guards first: they need no history, so they must survive the primary
+    # method's early returns below (sparse history, missing thresholds).
+    _detect_guards(dataset, bench_cfg, run_cfg, report)
 
     method = run_cfg.regression_method
     n_times = dataset.sizes["over_time"]

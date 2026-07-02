@@ -23,6 +23,15 @@ from bencher.example.benchmark_data import SimpleBenchClassFloat
 # These param types hold mutable containers that require deepcopy for isolation
 MUTABLE_PARAM_TYPES = (param.List, param.Dict, param.ClassSelector, param.Tuple)
 
+# Mutable param fields whose copy behaviour has been reviewed and is covered by
+# an isolation test in this file. Every copy point in BenchRunner (setup_run_cfg
+# and both copies in run()) uses deepcopy, which recursively copies container
+# values, and each field's class-level default is None so no container is ever
+# shared between instances via the param default.
+REVIEWED_MUTABLE_FIELDS = {
+    "regression_guards",  # dict[str, float]; see test_regression_guards_dict_is_isolated_by_copy
+}
+
 
 def _simple_benchmark(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
     bench = bn.Bench("copy_test", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
@@ -129,17 +138,42 @@ class TestCopyStrategyGuards(unittest.TestCase):
         If this test fails, a mutable param field was added to BenchRunCfg.
         The BenchRunner.run() copy strategy assumes all fields are primitive.
         Adding a mutable field (List, Dict, etc.) requires reviewing the copy
-        strategy in BenchRunner.run() and setup_run_cfg().
+        strategy in BenchRunner.run() and setup_run_cfg(), then recording the
+        review in REVIEWED_MUTABLE_FIELDS with an isolation test.
         """
         for name, p in bn.BenchRunCfg.param.objects().items():
             if name == "name":
                 continue  # built-in param.Parameterized attribute
+            if name in REVIEWED_MUTABLE_FIELDS:
+                continue  # copy behaviour reviewed + isolation-tested (see above)
             self.assertNotIsInstance(
                 p,
                 MUTABLE_PARAM_TYPES,
                 f"BenchRunCfg.{name} is {type(p).__name__}, a mutable param type. "
                 f"Review the copy strategy in BenchRunner.run() before proceeding.",
             )
+
+    def test_reviewed_mutable_fields_have_immutable_defaults(self):
+        """Guard: reviewed mutable fields must default to None.
+
+        deepcopy protects instance values at every BenchRunner copy point, but
+        a mutable class-level *default* would still be shared by every
+        BenchRunCfg that never assigns the field.
+        """
+        params = bn.BenchRunCfg.param.objects()
+        for name in REVIEWED_MUTABLE_FIELDS:
+            self.assertIsNone(params[name].default, f"BenchRunCfg.{name} default must be None")
+
+    def test_regression_guards_dict_is_isolated_by_copy(self):
+        """The guards dict must not be shared between an input cfg and its copies."""
+        original = bn.BenchRunCfg(regression_guards={"success": 1.0})
+
+        copied = BenchRunner.setup_run_cfg(original, subsampling_divisions=2)
+        self.assertIsNot(copied.regression_guards, original.regression_guards)
+
+        copied.regression_guards["success"] = 0.0
+        copied.regression_guards["extra"] = 2.0
+        self.assertEqual(original.regression_guards, {"success": 1.0})
 
 
 class TestCopyElimination(unittest.TestCase):
