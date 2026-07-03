@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.112.0] - 2026-07-02
+
+### Added
+- **`BenchRunCfg.regression_overrides`** — per-variable regression specs. Maps result-variable name → a `{method: threshold}` dict drawn from `percentage` / `adaptive` / `delta` / `absolute`, or a bare number as shorthand for `{'absolute': value}` (a hard directional limit: minimize = ceiling, maximize = floor).
+  - A listed variable is checked by exactly the methods in its spec **instead of** the benchmark-wide `regression_method`, so a threshold can be loosened *or* tightened per variable; an explicit `{}` opts a variable out of detection. Unlisted variables keep the benchmark-wide method, and names matching no result variable are skipped, so one override map can be shared across benchmarks.
+  - Multiple entries run as independent checks — `{'percentage': 15.0, 'absolute': 1.0}` tracks the trend and holds a hard floor. `absolute` checks need no history and fire from the very first recording; the other methods skip until history exists.
+  - Adaptive overrides: the threshold is the MAD limit (the dual-band percent gate still comes from `regression_percentage`); while history is too sparse for MAD the check skips instead of falling back to a percentage check, so a listed variable is never judged by a knob outside its spec.
+  - Malformed specs never crash a run: unknown method keys and non-finite/bool thresholds are dropped with a warning, and a spec left with no valid checks keeps the benchmark-wide method (a typo can't silently disable detection). Bare-number shorthand accepts numpy scalars.
+  - Motivating use case: CI tracking of flat health metrics (a success rate that must hold 1.0, an orphan-process count that must hold 0) next to per-metric trend thresholds on the same benchmark. Breaches flow through the existing machinery unchanged (`has_regressions`, `regression_fail`/`RegressionError`, report markdown, JSON, `render_png`).
+  - First mutable (`param.Dict`) field on `BenchRunCfg`: every `BenchRunner` copy point deepcopies and the default is `None`; recorded in the copy-guard test's `REVIEWED_MUTABLE_FIELDS` allowlist with nested-dict isolation tests.
+
+### Changed
+- `detect_absolute` with `OptDir.none` now warns and returns `None` instead of recording a non-regressed "checked" result — a guard with no direction never ran, so it no longer appears to have passed.
+
+## [1.111.0] - 2026-07-01
+
+### Changed
+- **`to_auto` dispatches through the plot plugin registry** (A1 Phase 2). The built-in chart types (bar, box_whisker, curve, line, heatmap, histogram, volume, panes) are registered as thin wrappers (`bencher/plugins/builtins.py`) that delegate to the existing renderer methods — renderer logic and report output are unchanged (priorities encode the legacy callback order; parity covered in `test/test_plugins_builtins.py`). What changes: user plugins registered with `@bencher.plot_plugin` / `bencher.register_plugin` or shipped via the `bencher.plot_plugins` entry-point group now appear in reports automatically; built-ins can be overridden by registering the same (name, backend); `plot_list`/`remove_plots` accept plugin names (`"line"`, `"heatmap"`, ...) alongside the legacy callables (which keep working, unknown callables via direct call); and `to_auto(backend=...)` states a preferred rendering backend — chart types the preferred backend implements swap to it, the rest keep their best other implementation.
+- New `BenchResult.to_bench_data()` builds the frozen `BenchData` contract from a live result (first step of the A3 data-contract migration). Transitional `BenchData.legacy_result`/`render_kwargs` fields carry the live result and plot kwargs for the wrapped built-ins; they are not part of the stable plugin contract and disappear when renderers consume `BenchData` directly.
+
 ## [1.110.0] - 2026-07-01
 
 ### Added

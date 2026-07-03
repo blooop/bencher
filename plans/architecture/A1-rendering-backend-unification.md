@@ -1,6 +1,10 @@
 # A1 — Rendering Backend Unification (resolving #830 vs #932)
 
-**Status:** Proposal — needs owner sign-off on the target architecture before any code.
+**Status:** Superseded in part by owner decisions (2026-07-01) — see the addendum at the
+end. Phases 0–2 are in flight (#932 + `feature/plugin-builtins`); Phases 3–4 (Plotly
+port, default flip) are **dropped**: HoloViews/Bokeh remains the primary backend,
+Plotly stays only for the existing 3D plots (surface/volume), and the #830 fast-save
+path is not needed (save speed is no longer a problem).
 **Scope:** How plots are *produced and saved*. Plot *selection* is A2; the data contract
 both depend on is A3. Read A3 first — `BenchData` is the keystone.
 
@@ -130,3 +134,27 @@ later still, delete. Each step is a one-line revert if users object.
 - **Performance regression guard**: the Performance Tracking CI job should gain a
   `report.save()` timing benchmark before Phase 3, so the 120x claim is continuously
   measured rather than asserted.
+
+---
+
+## Addendum — owner decisions, 2026-07-01
+
+Recorded while executing the migration; these override the corresponding sections
+above:
+
+1. **No Plotly port.** #830 was opened because saving was too slow; saving speed is no
+   longer a problem. The owner uses **HoloViews/Bokeh and Rerun**, not Plotly, so
+   Phase 3 (port renderers to Plotly) and Phase 4 (flip the default backend) are
+   dropped. Plotly remains only where already used: the existing 3D plots
+   (`SurfaceResult`, `VolumeResult`). The #830 fast static save path was prototyped and
+   explicitly rejected — the goal is architecture cleanup, not save-time optimization.
+2. **Backends over plotters.** The goal restated: *change the backend that supports
+   existing plotters rather than change the plotter*. The registry is therefore keyed
+   by `(name, backend)`; `select(backend=...)` is a preference that swaps
+   implementations under an unchanged set of chart types. Rerun becomes a first-class
+   backend in the revised Phase 3: register the remaining result types (incl.
+   `RerunResult`) as named plugins.
+3. **Phase 0 and Phase 2 landed as planned** — #932 merged main + contract fixes
+   (`PlotFilter.match_all()` decorator default, `(name, backend)` keying);
+   `feature/plugin-builtins` wraps the built-in chart set and routes `to_auto` through
+   `registry.select()` with output parity verified against the legacy callback loop.
