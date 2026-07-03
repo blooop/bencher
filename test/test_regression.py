@@ -1396,7 +1396,7 @@ class TestRegressionOverrides:
             rvs,
             method="percentage",
             regression_percentage=5.0,
-            regression_overrides={"success": {"absoulte": 1.0}},  # typo for 'absolute'
+            regression_overrides={"success": {"absolute": 1.0}},  # typo for 'absolute'
         )
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert [r.method for r in report.results] == ["percentage"]
