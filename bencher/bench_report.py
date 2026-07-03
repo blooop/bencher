@@ -38,6 +38,78 @@ def _inline_rrd(
         logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
 
+# Injected into every saved report so that, when embedded in an iframe, the
+# document measures itself and posts its height to the parent. The parent
+# (docs page or multi-tab index) just sets the iframe height it receives, so
+# the page keeps a single scrollbar. Standalone viewing is untouched.
+_EMBED_HEIGHT_SCRIPT = """
+<script>
+/* bencher:height embed reporter */
+(function () {
+  "use strict";
+  if (window.parent === window) return; /* standalone page: leave it alone */
+  function report() {
+    var de = document.documentElement;
+    var body = document.body;
+    if (!body) return;
+    /* Content keeps its natural scale; the embedder is told the full size and
+       provides horizontal scrolling when the content is wider than the page. */
+    var h = Math.max(de.scrollHeight, body.scrollHeight);
+    var w = Math.max(de.scrollWidth, body.scrollWidth);
+    if (h > 0) {
+      window.parent.postMessage({ type: "bencher:height", height: h, width: w }, "*");
+    }
+  }
+  function init() {
+    var de = document.documentElement;
+    var body = document.body;
+    /* Panel pins html/body to height:100%, which hides content growth from
+       ResizeObserver; un-pin so the document takes its natural height. */
+    de.style.height = "auto";
+    body.style.height = "auto";
+    /* The embedder sizes the iframe to the posted width/height, so this
+       document never needs its own scrollbars. */
+    de.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    new ResizeObserver(report).observe(body);
+    new ResizeObserver(report).observe(de);
+    report();
+    /* Fallbacks for content that changes size without resizing body
+       (absolutely positioned overlays). */
+    setTimeout(report, 1000);
+    setTimeout(report, 3000);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+  window.addEventListener("load", report);
+})();
+</script>
+"""
+
+
+def _inject_embed_script(html_path: Path) -> None:
+    """Append the self-measuring embed script to a saved report HTML file.
+
+    Idempotent: skips files that already contain the reporter.
+    """
+    try:
+        content = html_path.read_text(encoding="utf-8")
+        if "bencher:height embed reporter" in content:
+            return
+        for anchor in ("</body>", "</html>"):
+            if anchor in content:
+                content = content.replace(anchor, _EMBED_HEIGHT_SCRIPT + anchor, 1)
+                break
+        else:
+            content += _EMBED_HEIGHT_SCRIPT
+        html_path.write_text(content, encoding="utf-8")
+    except Exception:  # pylint: disable=broad-except
+        logging.warning("inject_embed_script failed for %s", html_path, exc_info=True)
+
+
 @runtime_checkable
 class Publisher(Protocol):
     """Generic publisher protocol for benchmark reports.
@@ -225,6 +297,7 @@ class BenchReport(BenchPlotServer):
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
                 content.save(filename=index_path, progress=True, embed=True, **kwargs)
                 _inline_rrd(index_path, portable=portable)
+                _inject_embed_script(index_path)
                 return index_path
 
             # Save each tab to its own HTML so HoloMap sliders don't collide.
@@ -243,6 +316,7 @@ class BenchReport(BenchPlotServer):
                 logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
                 pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
                 _inline_rrd(tab_path, rrd_base=base_path, portable=portable)
+                _inject_embed_script(tab_path)
                 tab_files.append((tab_name, f"_tabs/{tab_file}"))
 
             # Generate an index page with tab buttons and an iframe.
@@ -292,6 +366,11 @@ class BenchReport(BenchPlotServer):
                 f"onclick=\"switchTab(this, '{path}')\">{escaped_name}</button>\n"
             )
         first_src = tab_files[last_idx][1] if tab_files else ""
+        # Each tab document carries the bencher:height reporter (see
+        # _inject_embed_script) and posts its height here; this index sizes the
+        # inner iframe to match and, when itself embedded, relays the total
+        # height (tab bar + content) to its own parent. Opened standalone, the
+        # page scrolls natively and the sticky tab bar stays visible.
         page = f"""\
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Report</title>
@@ -302,23 +381,39 @@ body {{ margin:0; font-family:sans-serif; }}
 .tab-btn:hover {{ background:rgba(255,255,255,0.3); }}
 .tab-btn:focus-visible {{ background:rgba(255,255,255,0.3); outline:2px solid #fff; outline-offset:2px; }}
 .tab-btn.active {{ background:rgba(255,255,255,0.9); color:#000; font-weight:bold; }}
-iframe {{ width:100%; border:none; }}
+iframe {{ width:100%; border:none; display:block; min-height:400px; }}
 </style></head><body>
 <div class="tab-bar">{buttons}</div>
-<iframe id="content" src="{first_src}"></iframe>
+<iframe id="content" src="{first_src}" scrolling="no" allowfullscreen></iframe>
 <script>
+var _content = document.getElementById('content');
+var _embedded = window.parent !== window;
 function switchTab(btn, src) {{
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('content').src = src;
+  _content.style.height = '';  /* drop stale height; new tab re-posts on load */
+  _content.src = src;
 }}
-function resizeIframe() {{
-  var f = document.getElementById('content');
-  f.style.height = (window.innerHeight - f.getBoundingClientRect().top) + 'px';
+window.addEventListener('message', function (e) {{
+  if (!e.data || e.data.type !== 'bencher:height') return;
+  if (e.source !== _content.contentWindow) return;
+  _content.style.height = e.data.height + 'px';
+  var w = Number(e.data.width) || 0;
+  /* Keep natural scale: grow the inner iframe to the content's full width and
+     let the embedder (or this page when standalone) scroll horizontally. */
+  _content.style.width = w > document.documentElement.clientWidth ? w + 'px' : '';
+  if (_embedded) {{
+    var bar = document.querySelector('.tab-bar');
+    window.parent.postMessage(
+      {{ type: 'bencher:height',
+         height: e.data.height + (bar ? bar.offsetHeight : 0),
+         width: w }}, '*');
+  }}
+}});
+if (_embedded) {{
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
 }}
-window.addEventListener('resize', resizeIframe);
-document.getElementById('content').addEventListener('load', resizeIframe);
-resizeIframe();
 </script></body></html>"""
         with open(index_path, "w", encoding="utf-8") as f:
             f.write(page)
