@@ -9,6 +9,8 @@ suppression.
 from __future__ import annotations
 
 import logging
+import math
+import numbers
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1004,7 +1006,8 @@ def detect_adaptive(
     direction: OptDir = OptDir.minimize,
     historical_samples: np.ndarray | None = None,
     regression_percentage: float | None = None,
-) -> RegressionResult:
+    sparse_fallback: bool = True,
+) -> RegressionResult | None:
     """Robust regression detection combining step and drift tests.
 
     The method estimates the metric's inherent noise from history using a
@@ -1041,6 +1044,11 @@ def detect_adaptive(
             regression fires only when BOTH the MAD test and the percent
             change exceed their thresholds. Suppresses noise-floor false
             positives on metrics with few repeats or very tight history.
+        sparse_fallback: When history is too sparse for a robust MAD scale
+            (fewer than 4 points), fall back to a percentage check at
+            ``regression_percentage``. Override checks pass ``False`` so a
+            listed variable is never judged by a threshold outside its spec;
+            the check then returns ``None`` until history accumulates.
     """
     if drift_threshold is None:
         drift_threshold = _DRIFT_FRAC * regression_mad
@@ -1053,6 +1061,8 @@ def detect_adaptive(
     # check. Use the full per-sample history when available so the fallback
     # behaves like a direct call to detect_percentage.
     if len(hist_clean) < 4:
+        if not sparse_fallback:
+            return None
         fallback_hist = (
             _clean_1d(historical_samples) if historical_samples is not None else hist_clean
         )
@@ -1214,13 +1224,14 @@ def detect_absolute(
     current: np.ndarray,
     limit: float,
     direction: OptDir = OptDir.minimize,
-) -> RegressionResult:
+) -> RegressionResult | None:
     """Fail when current mean violates an absolute limit in the direction of OptDir.
 
     Simple escape hatch: one directional rule against a fixed limit — no
     historical data required. For ``OptDir.minimize`` ``limit`` is a ceiling;
-    for ``OptDir.maximize`` it's a floor; ``OptDir.none`` records a
-    non-regressed result and leaves it to the caller to log. Same shape as
+    for ``OptDir.maximize`` it's a floor; ``OptDir.none`` has no direction to
+    check against, so the guard warns and returns ``None`` rather than
+    reporting a check that never ran. Same shape as
     :func:`detect_percentage` and :func:`detect_delta`; contrast with
     :func:`detect_adaptive` which needs history to estimate noise.
     """
@@ -1234,8 +1245,10 @@ def detect_absolute(
         regressed = curr_mean < limit
         detail = f"current={curr_mean:.4g} vs floor {limit}"
     else:
-        regressed = False
-        detail = f"OptDir.none: absolute guard skipped (current={curr_mean:.4g})"
+        logging.warning(
+            f"absolute regression check skipped for '{variable}': OptDir.none has no direction"
+        )
+        return None
 
     return RegressionResult(
         variable=variable,
@@ -1304,39 +1317,78 @@ def _attach_plot_metadata(
         result.historical_all_x = hist_x_flat[mask]
 
 
-# Methods accepted as keys in a regression_overrides per-variable spec.
-_OVERRIDE_METHODS = ("percentage", "adaptive", "delta", "absolute")
+# Single source of truth for the regression check methods: each method's
+# benchmark-wide threshold attribute on run_cfg, used both to resolve the
+# primary method into a {method: threshold} spec and to validate override
+# specs. Methods in _HISTORY_FREE_METHODS run from the very first recording;
+# all others skip until over_time history exists.
+_METHOD_THRESHOLD_ATTR = {
+    "percentage": "regression_percentage",
+    "adaptive": "regression_mad",
+    "delta": "regression_delta",
+    "absolute": "regression_absolute",
+}
+_HISTORY_FREE_METHODS = frozenset({"absolute"})
+
+
+def _valid_threshold(value) -> float | None:
+    """Return ``value`` as a finite float, or ``None`` if it isn't one.
+
+    Rejects bools (``True`` would silently become 1.0) and non-finite numbers
+    (a NaN threshold makes every comparison False, so the check would look
+    configured but could never fire). Accepts any real number, including
+    numpy scalars.
+    """
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return None
+    value = float(value)
+    return value if math.isfinite(value) else None
 
 
 def _normalize_overrides(overrides) -> dict:
     """Validate ``run_cfg.regression_overrides`` into ``{var: {method: threshold}}``.
 
-    A bare number is shorthand for ``{"absolute": value}``. Unknown method
-    keys are dropped with a warning; the remaining valid entries are kept —
-    including an empty spec, which deliberately opts the variable out of
-    detection (the variable was explicitly listed, so falling back to the
-    benchmark-wide method would contradict the override).
+    A bare number is shorthand for ``{"absolute": value}``. Malformed entries
+    are dropped with a warning, never raised: an unknown method key or a bad
+    threshold loses that one check, and a spec left with no valid checks
+    falls back to the benchmark-wide method (so a typo'd key can't silently
+    disable detection). Only a literal empty spec opts the variable out of
+    detection — the variable was explicitly listed with no checks.
     """
     normalized: dict = {}
     if not overrides:
         return normalized
     for var_name, spec in overrides.items():
-        if isinstance(spec, (int, float)) and not isinstance(spec, bool):
-            normalized[var_name] = {"absolute": float(spec)}
+        shorthand = _valid_threshold(spec)
+        if shorthand is not None:
+            normalized[var_name] = {"absolute": shorthand}
         elif isinstance(spec, dict):
             valid = {}
             for method, threshold in spec.items():
-                if method not in _OVERRIDE_METHODS:
+                if method not in _METHOD_THRESHOLD_ATTR:
                     logging.warning(
                         f"regression_overrides['{var_name}']: unknown method '{method}' ignored"
                     )
                     continue
-                valid[method] = float(threshold)
-            normalized[var_name] = valid
+                valid_threshold = _valid_threshold(threshold)
+                if valid_threshold is None:
+                    logging.warning(
+                        f"regression_overrides['{var_name}']: '{method}' threshold must be "
+                        f"a finite number, got {threshold!r}; check ignored"
+                    )
+                    continue
+                valid[method] = valid_threshold
+            if valid or not spec:
+                normalized[var_name] = valid
+            else:
+                logging.warning(
+                    f"regression_overrides['{var_name}']: no valid checks in spec; "
+                    "keeping the benchmark-wide method"
+                )
         else:
             logging.warning(
-                f"regression_overrides['{var_name}']: expected a number or "
-                f"{{method: threshold}} dict, got {type(spec).__name__}; ignored"
+                f"regression_overrides['{var_name}']: expected a finite number or "
+                f"{{method: threshold}} dict, got {spec!r}; ignored"
             )
     return normalized
 
@@ -1351,14 +1403,19 @@ def _run_check(
     time_means_arr: np.ndarray | None,
     historical_clean: np.ndarray,
     dual_band_percentage: float,
+    allow_sparse_fallback: bool,
 ) -> RegressionResult | None:
     """Dispatch one (method, threshold) check for a single variable.
 
     Shared by the benchmark-wide method and per-variable overrides so both
     paths stay in lockstep. ``dual_band_percentage`` is the adaptive method's
     percent gate (always the benchmark-wide ``regression_percentage``; an
-    adaptive override's threshold is its MAD limit). Callers must ensure
-    history exists for every method except ``absolute``.
+    adaptive override's threshold is its MAD limit). ``allow_sparse_fallback``
+    is False for override checks: with sparse history the adaptive detector
+    would otherwise degrade to a percentage check at the benchmark-wide
+    threshold, contradicting the contract that a listed variable is checked
+    only by its spec. Callers must ensure history exists for every method
+    outside ``_HISTORY_FREE_METHODS``.
     """
     if check_method == "percentage":
         return detect_percentage(
@@ -1373,17 +1430,13 @@ def _run_check(
             direction=direction,
             historical_samples=historical_clean,
             regression_percentage=dual_band_percentage,
+            sparse_fallback=allow_sparse_fallback,
         )
     if check_method == "delta":
         return detect_delta(
             var_name, time_means_arr, current_mean_scalar, max_delta=threshold, direction=direction
         )
     if check_method == "absolute":
-        if direction == OptDir.none:
-            logging.warning(
-                f"absolute regression check skipped for '{var_name}': OptDir.none has no direction"
-            )
-            return None
         return detect_absolute(var_name, current_mean_scalar, limit=threshold, direction=direction)
     raise ValueError(f"Unknown regression check method '{check_method}'")
 
@@ -1400,8 +1453,9 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     exactly the methods in their spec (``{method: threshold}``, or a bare
     number as shorthand for an absolute limit), so thresholds — and methods —
     can differ per variable, including multiple independent checks on one
-    variable. History-needing override checks skip until history exists;
-    ``absolute`` checks fire from the first recording.
+    variable. History-needing override checks skip until history exists
+    (including adaptive overrides, which never fall back to a percentage
+    check); ``absolute`` checks fire from the first recording.
 
     Args:
         dataset: xarray Dataset with an over_time dimension.
@@ -1424,43 +1478,37 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     overrides = _normalize_overrides(getattr(run_cfg, "regression_overrides", None))
     method = run_cfg.regression_method
 
-    regression_mad = getattr(run_cfg, "regression_mad", None)
-    if regression_mad is None:
-        regression_mad = _METHOD_DEFAULTS["adaptive"]
     regression_percentage = getattr(run_cfg, "regression_percentage", None)
     if regression_percentage is None:
         regression_percentage = _METHOD_DEFAULTS["percentage"]
-    regression_delta = getattr(run_cfg, "regression_delta", None)
-    regression_absolute = getattr(run_cfg, "regression_absolute", None)
+
+    if method not in _METHOD_THRESHOLD_ATTR:
+        logging.warning(f"Unknown regression method '{method}', falling back to percentage")
+        method = "percentage"
 
     # Resolve the benchmark-wide method into the same {method: threshold} spec
     # shape as an override, so the loop below treats both paths identically. A
-    # method whose threshold is unset disables benchmark-wide detection (with a
-    # warning) but never the overrides, which carry their own thresholds.
-    if method == "percentage":
-        primary_checks = {"percentage": regression_percentage}
-    elif method == "adaptive":
-        primary_checks = {"adaptive": regression_mad}
-    elif method == "delta":
+    # method whose threshold is unset (and has no default) disables benchmark-
+    # wide detection with a warning — but never the overrides, which carry
+    # their own thresholds.
+    threshold_attr = _METHOD_THRESHOLD_ATTR[method]
+    primary_threshold = getattr(run_cfg, threshold_attr, None)
+    if primary_threshold is None:
+        primary_threshold = _METHOD_DEFAULTS.get(method)
+    if primary_threshold is None:
+        logging.warning(
+            f"regression_method='{method}' requires {threshold_attr} to be set; skipping detection"
+        )
         primary_checks = {}
-        if regression_delta is None:
-            logging.warning(
-                "regression_method='delta' requires regression_delta to be set; skipping detection"
-            )
-        else:
-            primary_checks = {"delta": regression_delta}
-    elif method == "absolute":
-        primary_checks = {}
-        if regression_absolute is None:
-            logging.warning(
-                "regression_method='absolute' requires regression_absolute to be set; "
-                "skipping detection"
-            )
-        else:
-            primary_checks = {"absolute": regression_absolute}
     else:
-        logging.warning(f"Unknown regression method '{method}', falling back to percentage")
-        primary_checks = {"percentage": regression_percentage}
+        primary_checks = {method: primary_threshold}
+
+    # With no history yet, only history-free checks can possibly run — skip
+    # the per-variable work entirely when no spec contains one.
+    if dataset.sizes["over_time"] < 2:
+        specs = [primary_checks, *overrides.values()]
+        if not any(m in _HISTORY_FREE_METHODS for spec in specs for m in spec):
+            return report
 
     time_coord = dataset["over_time"].values
 
@@ -1475,24 +1523,33 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         checks = overrides.get(var_name, primary_checks)
         if not checks:
             continue
+        is_override = var_name in overrides
 
         da = dataset[var_name]
         direction = rv.direction if hasattr(rv, "direction") else OptDir.none
 
         # Split: historical = all but last, current = last
         current_clean = _clean_1d(da.isel(over_time=-1).values)
-        historical_clean = _clean_1d(da.isel(over_time=slice(None, -1)).values)
-
         if len(current_clean) == 0:
             continue
 
         current_mean_scalar = np.array([float(da.isel(over_time=-1).mean(skipna=True).values)])
-        time_means_arr, hist_samples_flat, hist_x_flat = _compute_history_arrays(da)
-        history_available = time_means_arr is not None and len(historical_clean) > 0
+
+        # History arrays are only needed by history-based checks; a spec of
+        # hard limits alone skips the (growing) history aggregation.
+        if any(m not in _HISTORY_FREE_METHODS for m in checks):
+            historical_clean = _clean_1d(da.isel(over_time=slice(None, -1)).values)
+            time_means_arr, hist_samples_flat, hist_x_flat = _compute_history_arrays(da)
+            history_available = time_means_arr is not None and len(historical_clean) > 0
+        else:
+            historical_clean = np.array([])
+            time_means_arr = hist_samples_flat = hist_x_flat = None
+            history_available = False
 
         for check_method, threshold in checks.items():
-            # 'absolute' runs with or without history; every other method needs a baseline.
-            if check_method != "absolute" and not history_available:
+            with_history = check_method not in _HISTORY_FREE_METHODS
+            # History-free checks run from the first recording; the rest need a baseline.
+            if with_history and not history_available:
                 continue
             result = _run_check(
                 check_method,
@@ -1503,6 +1560,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                 time_means_arr=time_means_arr,
                 historical_clean=historical_clean,
                 dual_band_percentage=regression_percentage,
+                allow_sparse_fallback=not is_override,
             )
             if result is None:
                 continue
@@ -1510,9 +1568,9 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
                 result,
                 time_coord=time_coord,
                 current_samples=current_clean,
-                time_means=time_means_arr if check_method != "absolute" else None,
-                hist_samples_flat=hist_samples_flat if check_method != "absolute" else None,
-                hist_x_flat=hist_x_flat if check_method != "absolute" else None,
+                time_means=time_means_arr if with_history else None,
+                hist_samples_flat=hist_samples_flat if with_history else None,
+                hist_x_flat=hist_x_flat if with_history else None,
             )
             report.results.append(result)
 

@@ -402,10 +402,15 @@ class TestDetectAbsolute:
         result = detect_absolute("x", np.array([80.0]), limit=100.0, direction=OptDir.maximize)
         assert result.regressed
 
-    def test_direction_none_not_regression(self):
-        result = detect_absolute("x", np.array([1000.0]), limit=50.0, direction=OptDir.none)
-        assert not result.regressed
-        assert "skipped" in result.details
+    def test_direction_none_returns_none(self, caplog):
+        """OptDir.none has no direction to check against — the guard warns and
+        returns None instead of reporting a check that never ran."""
+        import logging as _logging
+
+        with caplog.at_level(_logging.WARNING):
+            result = detect_absolute("x", np.array([1000.0]), limit=50.0, direction=OptDir.none)
+        assert result is None
+        assert any("OptDir.none" in rec.message for rec in caplog.records)
 
     def test_nan_only_current(self):
         result = detect_absolute("x", np.array([np.nan]), limit=50.0, direction=OptDir.minimize)
@@ -743,6 +748,51 @@ class TestMethodCellsPublic:
 # ── detect_regressions integration ────────────────────────────────────────
 
 
+def _make_cfg(
+    result_vars,
+    method="percentage",
+    regression_mad=None,
+    regression_percentage=None,
+    regression_delta=None,
+    regression_absolute=None,
+    regression_overrides=None,
+):
+    """Create minimal bench_cfg and run_cfg mocks for detect_regressions tests."""
+
+    class FakeBenchCfg:
+        def __init__(self, result_vars):
+            self.result_vars = result_vars
+
+    class FakeRunCfg:
+        def __init__(
+            self,
+            method,
+            regression_mad,
+            regression_percentage,
+            regression_delta,
+            regression_absolute,
+            regression_overrides,
+        ):
+            self.regression_method = method
+            self.regression_mad = regression_mad
+            self.regression_percentage = regression_percentage
+            self.regression_delta = regression_delta
+            self.regression_absolute = regression_absolute
+            self.regression_overrides = regression_overrides
+
+    return (
+        FakeBenchCfg(result_vars),
+        FakeRunCfg(
+            method,
+            regression_mad,
+            regression_percentage,
+            regression_delta,
+            regression_absolute,
+            regression_overrides,
+        ),
+    )
+
+
 class TestDetectRegressions:
     @staticmethod
     def _make_dataset(n_times=3, n_repeats=2, values=None):
@@ -757,51 +807,6 @@ class TestDetectRegressions:
             },
         )
         return ds
-
-    @staticmethod
-    def _make_cfg(
-        result_vars,
-        method="percentage",
-        regression_mad=None,
-        regression_percentage=None,
-        regression_delta=None,
-        regression_absolute=None,
-        regression_overrides=None,
-    ):
-        """Create minimal bench_cfg and run_cfg mocks."""
-
-        class FakeBenchCfg:
-            def __init__(self, result_vars):
-                self.result_vars = result_vars
-
-        class FakeRunCfg:
-            def __init__(
-                self,
-                method,
-                regression_mad,
-                regression_percentage,
-                regression_delta,
-                regression_absolute,
-                regression_overrides,
-            ):
-                self.regression_method = method
-                self.regression_mad = regression_mad
-                self.regression_percentage = regression_percentage
-                self.regression_delta = regression_delta
-                self.regression_absolute = regression_absolute
-                self.regression_overrides = regression_overrides
-
-        return (
-            FakeBenchCfg(result_vars),
-            FakeRunCfg(
-                method,
-                regression_mad,
-                regression_percentage,
-                regression_delta,
-                regression_absolute,
-                regression_overrides,
-            ),
-        )
 
     def test_no_over_time_dim(self):
         ds = xr.Dataset({"x": (["repeat"], [1.0, 2.0])})
@@ -822,7 +827,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv])
+        bench_cfg, run_cfg = _make_cfg([rv])
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions
 
@@ -841,7 +846,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert report.results[0].variable == "metric"
@@ -861,7 +866,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="percentage", regression_percentage=5.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions
 
@@ -874,7 +879,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
+        bench_cfg, run_cfg = _make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions, report.summary()
 
@@ -889,7 +894,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
+        bench_cfg, run_cfg = _make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert "step" in report.results[0].details
@@ -905,11 +910,11 @@ class TestDetectRegressions:
         rv = ResultFloat(units="s", direction=OptDir.maximize)
         rv.name = "metric"
 
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
+        bench_cfg, run_cfg = _make_cfg([rv], method="adaptive", regression_mad=3.5)
         without_pct = detect_regressions(ds, bench_cfg, run_cfg)
         assert without_pct.has_regressions
 
-        bench_cfg, run_cfg = self._make_cfg(
+        bench_cfg, run_cfg = _make_cfg(
             [rv], method="adaptive", regression_mad=3.5, regression_percentage=40.0
         )
         with_pct = detect_regressions(ds, bench_cfg, run_cfg)
@@ -928,7 +933,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="adaptive", regression_mad=3.5)
+        bench_cfg, run_cfg = _make_cfg([rv], method="adaptive", regression_mad=3.5)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert "drift" in report.results[0].details
@@ -940,7 +945,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv])
+        bench_cfg, run_cfg = _make_cfg([rv])
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not report.has_regressions
 
@@ -961,9 +966,7 @@ class TestDetectRegressions:
         rv_a.name = "metric_a"
         rv_b = ResultFloat(units="s", direction=OptDir.minimize)
         rv_b.name = "metric_b"
-        bench_cfg, run_cfg = self._make_cfg(
-            [rv_a, rv_b], method="percentage", regression_percentage=5.0
-        )
+        bench_cfg, run_cfg = _make_cfg([rv_a, rv_b], method="percentage", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 2
         assert report.has_regressions
@@ -979,7 +982,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="bogus", regression_percentage=5.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="bogus", regression_percentage=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.has_regressions
         assert report.results[0].method == "percentage"
@@ -992,7 +995,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "nonexistent"
-        bench_cfg, run_cfg = self._make_cfg([rv])
+        bench_cfg, run_cfg = _make_cfg([rv])
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 0
 
@@ -1004,7 +1007,7 @@ class TestDetectRegressions:
 
         rv = ResultImage(doc="test image")
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv])
+        bench_cfg, run_cfg = _make_cfg([rv])
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 0
 
@@ -1018,13 +1021,13 @@ class TestDetectRegressions:
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
 
-        bench_cfg_strict, run_cfg_strict = self._make_cfg(
+        bench_cfg_strict, run_cfg_strict = _make_cfg(
             [rv], method="percentage", regression_percentage=5.0
         )
         report_strict = detect_regressions(ds, bench_cfg_strict, run_cfg_strict)
         assert report_strict.has_regressions
 
-        bench_cfg_loose, run_cfg_loose = self._make_cfg(
+        bench_cfg_loose, run_cfg_loose = _make_cfg(
             [rv], method="percentage", regression_percentage=15.0
         )
         report_loose = detect_regressions(ds, bench_cfg_loose, run_cfg_loose)
@@ -1043,7 +1046,7 @@ class TestDetectRegressions:
 
         rv = ResultBool(units="ratio", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv])
+        bench_cfg, run_cfg = _make_cfg([rv])
 
         report = detect_regressions(ds, bench_cfg, run_cfg)
 
@@ -1063,7 +1066,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=5.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="delta", regression_delta=5.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 1
         assert report.results[0].method == "delta"
@@ -1076,7 +1079,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=11.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="absolute", regression_absolute=11.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 1
         assert report.results[0].method == "absolute"
@@ -1091,7 +1094,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=50.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="absolute", regression_absolute=50.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert len(report.results) == 1
         assert report.results[0].method == "absolute"
@@ -1106,7 +1109,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=None)
+        bench_cfg, run_cfg = _make_cfg([rv], method="delta", regression_delta=None)
         with caplog.at_level(_logging.WARNING):
             report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.results == []
@@ -1121,7 +1124,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.none)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="absolute", regression_absolute=5.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="absolute", regression_absolute=5.0)
         with caplog.at_level(_logging.WARNING):
             report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.results == []
@@ -1135,7 +1138,7 @@ class TestDetectRegressions:
 
         rv = ResultFloat(units="s", direction=OptDir.minimize)
         rv.name = "metric"
-        bench_cfg, run_cfg = self._make_cfg([rv], method="delta", regression_delta=1.0)
+        bench_cfg, run_cfg = _make_cfg([rv], method="delta", regression_delta=1.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.results == []
 
@@ -1175,28 +1178,10 @@ class TestRegressionOverrides:
             },
         )
 
-    @staticmethod
-    def _cfg(
-        result_vars, method="percentage", regression_percentage=None, regression_overrides=None
-    ):
-        """Create minimal bench_cfg and run_cfg stand-ins."""
-        from types import SimpleNamespace
-
-        bench_cfg = SimpleNamespace(result_vars=result_vars)
-        run_cfg = SimpleNamespace(
-            regression_method=method,
-            regression_mad=None,
-            regression_percentage=regression_percentage,
-            regression_delta=None,
-            regression_absolute=None,
-            regression_overrides=regression_overrides,
-        )
-        return bench_cfg, run_cfg
-
     def test_shorthand_float_is_absolute_floor(self):
         ds = self._two_var_dataset([[1.0, 1.0], [1.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
-        bench_cfg, run_cfg = self._cfg(rvs, regression_overrides={"success": 1.0})
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides={"success": 1.0})
         report = detect_regressions(ds, bench_cfg, run_cfg)
         guard = [r for r in report.results if r.method == "absolute"]
         assert len(guard) == 1
@@ -1207,7 +1192,7 @@ class TestRegressionOverrides:
     def test_shorthand_float_is_absolute_ceiling(self):
         ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [1.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
-        bench_cfg, run_cfg = self._cfg(rvs, regression_overrides={"orphans": 0.0})
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides={"orphans": 0.0})
         report = detect_regressions(ds, bench_cfg, run_cfg)
         guard = [r for r in report.results if r.method == "absolute"]
         assert len(guard) == 1
@@ -1217,7 +1202,7 @@ class TestRegressionOverrides:
     def test_absolute_at_limit_passes(self):
         ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [0.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
-        bench_cfg, run_cfg = self._cfg(rvs, regression_overrides={"success": 1.0, "orphans": 0.0})
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides={"success": 1.0, "orphans": 0.0})
         report = detect_regressions(ds, bench_cfg, run_cfg)
         guard = [r for r in report.results if r.method == "absolute"]
         assert len(guard) == 2
@@ -1228,7 +1213,7 @@ class TestRegressionOverrides:
         history-needing check in the same spec is skipped."""
         ds = self._two_var_dataset([[0.5, 0.5]], [[0.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize)]
-        bench_cfg, run_cfg = self._cfg(
+        bench_cfg, run_cfg = _make_cfg(
             rvs,
             method="percentage",
             regression_percentage=5.0,
@@ -1248,7 +1233,7 @@ class TestRegressionOverrides:
             [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0], [2.0, 2.0]],
         )
         rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
-        bench_cfg, run_cfg = self._cfg(
+        bench_cfg, run_cfg = _make_cfg(
             rvs,
             method="percentage",
             regression_percentage=5.0,
@@ -1269,7 +1254,7 @@ class TestRegressionOverrides:
             [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         )
         rvs = [self._rv("success", OptDir.maximize)]
-        bench_cfg, run_cfg = self._cfg(
+        bench_cfg, run_cfg = _make_cfg(
             rvs,
             method="percentage",
             regression_percentage=5.0,
@@ -1288,7 +1273,7 @@ class TestRegressionOverrides:
             [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         )
         rvs = [self._rv("success", OptDir.maximize)]
-        bench_cfg, run_cfg = self._cfg(
+        bench_cfg, run_cfg = _make_cfg(
             rvs,
             regression_overrides={"success": {"percentage": 5.0, "absolute": 1.0}},
         )
@@ -1304,7 +1289,7 @@ class TestRegressionOverrides:
             [[1.0, 1.0], [1.1, 0.9], [1.0, 1.0], [0.9, 1.1], [5.0, 5.0]],
         )
         rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
-        bench_cfg, run_cfg = self._cfg(
+        bench_cfg, run_cfg = _make_cfg(
             rvs,
             regression_overrides={"success": {"adaptive": 3.5}, "orphans": {"delta": 0.5}},
         )
@@ -1322,7 +1307,7 @@ class TestRegressionOverrides:
             [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         )
         rvs = [self._rv("success", OptDir.maximize)]
-        bench_cfg, run_cfg = self._cfg(
+        bench_cfg, run_cfg = _make_cfg(
             rvs,
             method="percentage",
             regression_percentage=5.0,
@@ -1335,7 +1320,7 @@ class TestRegressionOverrides:
         """Unknown method keys are dropped with a warning; valid siblings survive."""
         ds = self._two_var_dataset([[1.0, 1.0], [0.5, 0.5]], [[0.0, 0.0], [0.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize)]
-        bench_cfg, run_cfg = self._cfg(
+        bench_cfg, run_cfg = _make_cfg(
             rvs,
             regression_overrides={"success": {"bogus": 3.0, "absolute": 1.0}},
         )
@@ -1347,14 +1332,14 @@ class TestRegressionOverrides:
         """An override naming no known variable is silently ignored (shared maps)."""
         ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [0.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize)]
-        bench_cfg, run_cfg = self._cfg(rvs, regression_overrides={"no_such_metric": 1.0})
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides={"no_such_metric": 1.0})
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not any(r.method == "absolute" for r in report.results)
 
     def test_absolute_direction_none_skipped(self):
         ds = self._two_var_dataset([[0.5, 0.5], [0.5, 0.5]], [[0.0, 0.0], [0.0, 0.0]])
         rvs = [self._rv("success", OptDir.none)]
-        bench_cfg, run_cfg = self._cfg(rvs, regression_overrides={"success": 1.0})
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides={"success": 1.0})
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not any(r.method == "absolute" for r in report.results)
 
@@ -1362,7 +1347,7 @@ class TestRegressionOverrides:
         """No valid current samples = missing data, not a breach."""
         ds = self._two_var_dataset([[1.0, 1.0], [np.nan, np.nan]], [[0.0, 0.0], [0.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
-        bench_cfg, run_cfg = self._cfg(rvs, regression_overrides={"success": 1.0, "orphans": 0.0})
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides={"success": 1.0, "orphans": 0.0})
         report = detect_regressions(ds, bench_cfg, run_cfg)
         guard_vars = [r.variable for r in report.results if r.method == "absolute"]
         assert guard_vars == ["orphans"]
@@ -1370,9 +1355,115 @@ class TestRegressionOverrides:
     def test_no_overrides_is_noop(self):
         ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [0.0, 0.0]])
         rvs = [self._rv("success", OptDir.maximize)]
-        bench_cfg, run_cfg = self._cfg(rvs, regression_overrides=None)
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides=None)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert not any(r.method == "absolute" for r in report.results)
+
+    def test_malformed_threshold_dropped_not_crash(self, caplog):
+        """A bad threshold value (None, string, ...) is warned and dropped like
+        every other malformed input — it must never crash the sweep."""
+        import logging as _logging
+
+        # success regresses hard under the benchmark-wide 5% check.
+        ds = self._two_var_dataset(
+            [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0], [0.5, 0.5]],
+            [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
+        )
+        rvs = [self._rv("success", OptDir.maximize)]
+        bench_cfg, run_cfg = _make_cfg(
+            rvs,
+            method="percentage",
+            regression_percentage=5.0,
+            regression_overrides={"success": {"absolute": None}},
+        )
+        with caplog.at_level(_logging.WARNING):
+            report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert any("finite number" in rec.message for rec in caplog.records)
+        # The spec lost its only check, so the benchmark-wide method still applies.
+        assert [r.method for r in report.results] == ["percentage"]
+        assert report.has_regressions
+
+    def test_all_invalid_spec_keeps_primary_method(self):
+        """A typo'd method key must not silently disable detection: a spec left
+        with no valid checks falls back to the benchmark-wide method (only a
+        literal {} opts out)."""
+        ds = self._two_var_dataset(
+            [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0], [0.5, 0.5]],
+            [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
+        )
+        rvs = [self._rv("success", OptDir.maximize)]
+        bench_cfg, run_cfg = _make_cfg(
+            rvs,
+            method="percentage",
+            regression_percentage=5.0,
+            regression_overrides={"success": {"absoulte": 1.0}},  # typo for 'absolute'
+        )
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert [r.method for r in report.results] == ["percentage"]
+        assert report.has_regressions
+
+    def test_numpy_scalar_shorthand_accepted(self):
+        """Limits computed from data are numpy scalars; np.int64 is not a
+        Python int and must still work as shorthand."""
+        ds = self._two_var_dataset([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [1.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
+        bench_cfg, run_cfg = _make_cfg(rvs, regression_overrides={"orphans": np.int64(0)})
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        guard = [r for r in report.results if r.method == "absolute"]
+        assert len(guard) == 1
+        assert guard[0].regressed  # current mean 0.5 > ceiling 0
+        assert guard[0].threshold == 0.0
+
+    def test_bool_and_nan_thresholds_rejected(self, caplog):
+        """float(True) == 1.0 and NaN compare False against everything — both
+        would silently misconfigure a check, so both are dropped."""
+        import logging as _logging
+
+        ds = self._two_var_dataset([[1.0, 1.0], [0.5, 0.5]], [[0.0, 0.0], [0.0, 0.0]])
+        rvs = [self._rv("success", OptDir.maximize), self._rv("orphans", OptDir.minimize)]
+        bench_cfg, run_cfg = _make_cfg(
+            rvs,
+            regression_overrides={
+                "success": {"absolute": True},
+                "orphans": {"absolute": float("nan")},
+            },
+        )
+        with caplog.at_level(_logging.WARNING):
+            report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert not any(r.method == "absolute" for r in report.results)
+        assert sum("finite number" in rec.message for rec in caplog.records) == 2
+
+    def test_adaptive_override_skips_sparse_history(self):
+        """With history too sparse for MAD, an adaptive override skips instead
+        of falling back to a percentage check at the benchmark-wide threshold —
+        a listed variable is never judged by a knob outside its spec."""
+        # success drops 20% on the second recording: the benchmark-wide 5%
+        # percentage check would fire, and so would the old sparse fallback.
+        ds = self._two_var_dataset(
+            [[1.0, 1.0], [0.8, 0.8]],
+            [[0.0, 0.0], [0.0, 0.0]],
+        )
+        rvs = [self._rv("success", OptDir.maximize)]
+        bench_cfg, run_cfg = _make_cfg(
+            rvs,
+            method="percentage",
+            regression_percentage=5.0,
+            regression_overrides={"success": {"adaptive": 10.0}},
+        )
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.results == []
+
+    def test_method_registry_matches_benchruncfg(self):
+        """The method registry in regression.py is the single source of truth
+        for override validation and must stay in sync with the
+        regression_method Selector and the threshold params on BenchRunCfg."""
+        from bencher.regression import _METHOD_THRESHOLD_ATTR
+
+        selector_methods = set(bn.BenchRunCfg.param.regression_method.objects)
+        assert set(_METHOD_THRESHOLD_ATTR) == selector_methods
+        cfg_params = bn.BenchRunCfg.param.objects()
+        for attr in _METHOD_THRESHOLD_ATTR.values():
+            assert attr in cfg_params, f"BenchRunCfg has no param '{attr}'"
 
 
 class TestRegressionError:

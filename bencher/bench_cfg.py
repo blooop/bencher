@@ -467,10 +467,14 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "'absolute' checks need no history and fire from the very first "
         "recording; the other methods skip until history exists. An adaptive "
         "override's threshold is its MAD limit; the dual-band percent gate "
-        "still comes from regression_percentage. Variables not listed keep "
-        "the benchmark-wide method, and override names matching no scalar "
-        "result variable are silently skipped, so one override map can be "
-        "shared across benchmarks with different result_vars.",
+        "still comes from regression_percentage, and while history is too "
+        "sparse for MAD the check skips rather than falling back to a "
+        "percentage check. Malformed entries are dropped with a warning, "
+        "never raised; a spec left with no valid checks keeps the "
+        "benchmark-wide method. Variables not listed keep the benchmark-wide "
+        "method, and override names matching no scalar result variable are "
+        "silently skipped, so one override map can be shared across "
+        "benchmarks with different result_vars.",
     )
 
     regression_fail: bool = param.Boolean(
