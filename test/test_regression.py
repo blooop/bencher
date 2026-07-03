@@ -1384,9 +1384,9 @@ class TestRegressionOverrides:
         assert report.has_regressions
 
     def test_all_invalid_spec_keeps_primary_method(self):
-        """A typo'd method key must not silently disable detection: a spec left
-        with no valid checks falls back to the benchmark-wide method (only a
-        literal {} opts out)."""
+        """An unknown method key must not silently disable detection: a spec
+        left with no valid checks falls back to the benchmark-wide method (only
+        a literal {} opts out). A user typo like 'absoulte' lands here."""
         ds = self._two_var_dataset(
             [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0], [0.5, 0.5]],
             [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
@@ -1396,7 +1396,7 @@ class TestRegressionOverrides:
             rvs,
             method="percentage",
             regression_percentage=5.0,
-            regression_overrides={"success": {"absoulte": 1.0}},  # typo for 'absolute'
+            regression_overrides={"success": {"not_a_method": 1.0}},  # unknown method key
         )
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert [r.method for r in report.results] == ["percentage"]
