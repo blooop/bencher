@@ -43,6 +43,19 @@ META_DOCS_DIR = Path("docs/reference/meta")
 # Reports go under docs/_extra/ so html_extra_path copies them to match the built output structure
 REPORTS_EXTRA_DIR = Path("docs/_extra/reference/meta")
 THUMBS_EXTRA_DIR = REPORTS_EXTRA_DIR / "_thumbs"
+# The scorecard example is a standalone HTML page (not a Bench report), rendered
+# into _extra/ so the docs/scorecard.md page can iframe it.
+SCORECARD_EXTRA_DIR = Path("docs/_extra/scorecard_example")
+
+
+def generate_scorecard_example():
+    """Render the standalone scorecard example into _extra for docs/scorecard.md."""
+    from bencher.example.example_scorecard import example_scorecard
+
+    if SCORECARD_EXTRA_DIR.exists():
+        shutil.rmtree(SCORECARD_EXTRA_DIR)
+    out = example_scorecard(SCORECARD_EXTRA_DIR)
+    print(f"  Generated scorecard example: {out}")
 
 
 def _resize_and_save_png(png_data: bytes, thumb_path: Path, thumb_width: int = 480) -> None:
@@ -730,6 +743,9 @@ def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = Fa
 
     # Phase 4: Generate gallery overview page
     generate_gallery_page(examples_metadata, META_DOCS_DIR)
+
+    # Standalone scorecard example (embedded by docs/scorecard.md).
+    generate_scorecard_example()
 
     # Generate top-level meta index with hierarchy
     meta_index_entries = []

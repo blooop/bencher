@@ -5,6 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+import xarray as xr
+
 from bencher import (
     Bench,
     BenchRunCfg,
@@ -12,6 +15,7 @@ from bencher import (
     comparison_to_json,
     result_to_dict,
     result_to_json,
+    series_for_var,
 )
 from bencher.regression import RegressionReport, RegressionResult
 from bencher.example.benchmark_data import ExampleBenchCfg
@@ -171,6 +175,92 @@ class TestCompareResults(unittest.TestCase):
             loaded = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(loaded["schema_version"], 1)
             self.assertIn("summary", loaded)
+
+
+def _over_time_ds(rows, labels) -> xr.Dataset:
+    """Build a synthetic (over_time, repeat) dataset for one metric."""
+    return xr.Dataset(
+        {"m": (("over_time", "repeat"), np.array(rows, dtype=float))},
+        coords={"over_time": labels, "repeat": list(range(len(rows[0])))},
+    )
+
+
+class TestSeriesForVar(unittest.TestCase):
+    def test_mean_std_n_per_event(self):
+        ds = _over_time_ds([[1.0, 1.0], [2.0, 4.0]], ["t0", "t1"])
+        series = series_for_var(ds, "m")
+        self.assertEqual([p["time_event"] for p in series], ["t0", "t1"])
+        self.assertEqual([p["mean"] for p in series], [1.0, 3.0])
+        self.assertEqual(series[0]["std"], 0.0)  # [1,1]
+        self.assertEqual(series[1]["std"], 1.0)  # population std of [2,4]
+        self.assertEqual([p["n"] for p in series], [2, 2])
+
+    def test_strips_embedded_newlines_from_labels(self):
+        ds = _over_time_ds([[1.0, 1.0]], ["2026-06-10\n09:00 abc"])
+        self.assertEqual(series_for_var(ds, "m")[0]["time_event"], "2026-06-10 09:00 abc")
+
+    def test_all_nan_event_is_none_with_zero_n(self):
+        ds = _over_time_ds([[np.nan, np.nan], [2.0, 4.0]], ["t0", "t1"])
+        series = series_for_var(ds, "m")
+        self.assertIsNone(series[0]["mean"])
+        self.assertIsNone(series[0]["std"])
+        self.assertEqual(series[0]["n"], 0)
+        self.assertEqual(series[1]["mean"], 3.0)
+
+    def test_single_event(self):
+        ds = _over_time_ds([[5.0, 5.0]], ["only"])
+        series = series_for_var(ds, "m")
+        self.assertEqual(len(series), 1)
+        self.assertEqual(series[0]["mean"], 5.0)
+
+    def test_series_is_strict_json(self):
+        ds = _over_time_ds([[np.nan, np.nan], [2.0, 4.0]], ["t0", "t1"])
+        self.assertTrue(_is_jsonable(series_for_var(ds, "m")))
+
+
+class TestResultToDictSeries(unittest.TestCase):
+    def _collect_over_time(self):
+        run_cfg = BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 2
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+        bench = Bench("test_series_e2e", ExampleBenchCfg(), run_cfg=run_cfg)
+        kwargs = dict(
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=[ExampleBenchCfg.param.out_sin],
+            plot_callbacks=False,
+        )
+        bench.plot_sweep(**kwargs)
+        bench.sample_cache = None
+        return bench.plot_sweep(**kwargs)
+
+    def test_include_series_attaches_series(self):
+        res = self._collect_over_time()
+        data = result_to_dict(res, include_series=True)
+        out_sin = next(m for m in data["metrics"] if m["variable"] == "out_sin")
+        self.assertIn("series", out_sin)
+        self.assertGreaterEqual(len(out_sin["series"]), 1)
+        self.assertEqual(set(out_sin["series"][0]), {"time_event", "mean", "std", "n"})
+        self.assertTrue(_is_jsonable(data))
+
+    def test_default_omits_series(self):
+        # A non-over_time result: include_series is a graceful no-op, and the
+        # default keeps the base contract free of a series key.
+        res = _collect(offset=0.0)
+        self.assertNotIn("series", result_to_dict(res)["metrics"][0])
+        self.assertNotIn("series", result_to_dict(res, include_series=True)["metrics"][0])
+
+    def test_result_to_json_include_series_strict_json(self):
+        # The include_series flag must wire through result_to_json to
+        # result_to_dict, and the file it writes must be strict JSON (no
+        # NaN/Inf) that reads back with a series on at least one metric.
+        res = self._collect_over_time()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = result_to_json(res, Path(tmp) / "result.json", include_series=True)
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertTrue(_is_jsonable(loaded))
+        self.assertTrue(any("series" in m for m in loaded["metrics"]))
 
 
 if __name__ == "__main__":

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.113.0] - 2026-07-04
+
+### Added
+- **Benchmark health scorecard** (`bencher.scorecard`) — renders a set of benchmark result summaries into a single grouped HTML page where every scalar metric shows a regression verdict and a noise sparkline, so run-to-run trends are visible without opening each benchmark's full report.
+  - `generate_scorecard(reports_dir, config, *, chrome, output_name)` walks `<reports_dir>/<layout.root>/<tag>/*.summary.json`, groups benchmarks by category, builds one row per benchmark and one column per (aliased) scalar metric, and writes the page. Benchmarks with only image reports are listed as plain links so they stay reachable.
+  - Everything project-specific is injected via `ScorecardConfig`: the `tag -> (category, name, description)` registry, metric-name `aliases` (so equivalent metrics from different benchmarks share a column), `percent_metrics` (0..1 fractions shown as percentages), and the on-disk `ReportLayout`. Every field defaults, so the zero-config path still renders. Optional `Chrome` supplies page title, provenance, and CI nav links.
+  - Cell verdicts reuse the core 3-state regression verdict and add a presentation-level split: a gated metric that didn't move renders `passed`, an ungated metric renders `trend` (uncolored, with a self-computed latest-vs-previous delta). Each cell also shows the μ mean of its series.
+- **`sparkline_svg(means, stds)`** (`bencher.sparkline`) — a responsive inline-SVG sparkline: a ±std noise band, a mean line, a node per run, and a right-margin distribution column (one alpha-blended dot per run collapsed onto the value axis, so run-to-run spread and bimodality the line hides read as density). Pure-numeric input (safe to embed unescaped); `preserveAspectRatio="none"` + non-scaling strokes let CSS stretch it to any width. Uncolored — the caller (e.g. a verdict-colored cell background) owns any color.
+- **`result_to_dict(bench_res, *, include_series=True)`** (and `result_to_json`, plus the new public `series_for_var`) — attaches a per-time-event `mean`/`std`/`n` series to each scalar metric when the result carries an `over_time` axis. Off by default, so the base contract stays byte-stable; this is the trend the scorecard sparklines render.
+- **Scorecard example + docs page** — `bencher.example.example_scorecard` fabricates benchmark summaries across distribution archetypes (stable, low/high noise, improving, regressing, ungated trend, step change, converging/expanding noise, outlier spike, first run) plus a config-options showcase (aliases, percent metrics, chrome), so the rendering can be evaluated in isolation. Rendered into the docs (`docs/scorecard.md`) with the live page embedded.
+
+### Dependencies
+- Added `jinja2` (already present transitively via panel/bokeh) — used to render the scorecard template shipped as package data.
+
 ## [1.112.0] - 2026-07-02
 
 ### Added

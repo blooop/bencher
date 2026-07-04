@@ -9,8 +9,16 @@ from .render import render_report, save_result, load_result
 from .report_export import (
     result_to_dict,
     result_to_json,
+    series_for_var,
     compare_results,
     comparison_to_json,
+)
+from .sparkline import sparkline_svg
+from .scorecard import (
+    Chrome,
+    ReportLayout,
+    ScorecardConfig,
+    generate_scorecard,
 )
 from .example.benchmark_data import ExampleBenchCfg
 from .bench_plot_server import BenchPlotServer

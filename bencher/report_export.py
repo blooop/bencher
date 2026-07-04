@@ -23,6 +23,7 @@ shape.
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -86,12 +87,49 @@ def _coord_scalar(values):
     return item
 
 
-def result_to_dict(bench_res: BenchResult) -> dict:
+def series_for_var(ds: xr.Dataset, var_name: str) -> list[dict]:
+    """Per-time-event mean/std/n for a scalar result var across the over_time axis.
+
+    Reduces over every dim except ``over_time`` (the sweep inputs + ``repeat``)
+    with NaN-aware reductions, mirroring the history reduction used elsewhere.
+    The ``over_time`` coordinate labels can carry embedded newlines (long labels
+    are wrapped in place), so strip them back to single-line strings.
+
+    Returns one ``{time_event, mean, std, n}`` record per over-time event, with
+    ``mean``/``std`` coerced finite-or-None so the output stays strict-JSON safe.
+    """
+    da = ds[var_name]
+    reduce_dims = [d for d in da.dims if d != "over_time"]
+    with warnings.catch_warnings():
+        # An all-NaN event (a metric never recorded that run) legitimately
+        # reduces to NaN -> None below; numpy's empty-slice warning is noise.
+        warnings.simplefilter("ignore", RuntimeWarning)
+        mean = da.mean(dim=reduce_dims, skipna=True).values
+        std = da.std(dim=reduce_dims, skipna=True).values
+    n = da.notnull().sum(dim=reduce_dims).values
+    labels = [str(t).replace("\n", " ") for t in ds["over_time"].values]
+    return [
+        {
+            "time_event": labels[i],
+            "mean": _finite_or_none(float(mean[i])),
+            "std": _finite_or_none(float(std[i])),
+            "n": int(n[i]),
+        }
+        for i in range(len(labels))
+    ]
+
+
+def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> dict:
     """Build the stable, JSON-serializable contract for a single result.
 
     Args:
         bench_res: A collected :class:`BenchResult` (e.g. from
             ``plot_sweep(auto_plot=False)`` / :meth:`Bench.collect`).
+        include_series: When True and the result carries an ``over_time`` axis,
+            attach a per-time-event ``series`` (:func:`series_for_var`) to each
+            scalar metric — the trend behind the regression verdict, for callers
+            that render sparklines. Off by default so the base contract stays
+            byte-stable.
 
     Returns:
         A dict with ``schema_version``, ``bench_name``, ``provenance``,
@@ -106,6 +144,14 @@ def result_to_dict(bench_res: BenchResult) -> dict:
         else {"has_regressions": False, "results": []}
     )
 
+    metrics = [_metric_entry(bench_res, rv) for rv in scalar_vars]
+    if include_series:
+        ds = getattr(bench_res, "ds", None)
+        if ds is not None and "over_time" in getattr(ds, "dims", ()):
+            for metric in metrics:
+                if metric["variable"] in ds:
+                    metric["series"] = series_for_var(ds, metric["variable"])
+
     return {
         "schema_version": SCHEMA_VERSION,
         "bench_name": cfg.bench_name,
@@ -114,16 +160,21 @@ def result_to_dict(bench_res: BenchResult) -> dict:
             {"name": iv.name, "units": getattr(iv, "units", None)} for iv in cfg.input_vars
         ],
         "over_time": bool(getattr(cfg, "over_time", False)),
-        "metrics": [_metric_entry(bench_res, rv) for rv in scalar_vars],
+        "metrics": metrics,
         "regressions": regressions,
     }
 
 
-def result_to_json(bench_res: BenchResult, path: str | Path, *, indent: int = 2) -> Path:
+def result_to_json(
+    bench_res: BenchResult, path: str | Path, *, indent: int = 2, include_series: bool = False
+) -> Path:
     """Write :func:`result_to_dict` for *bench_res* to *path* as JSON."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(result_to_dict(bench_res), indent=indent), encoding="utf-8")
+    path.write_text(
+        json.dumps(result_to_dict(bench_res, include_series=include_series), indent=indent),
+        encoding="utf-8",
+    )
     return path
 
 
