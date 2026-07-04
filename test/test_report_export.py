@@ -241,9 +241,7 @@ class TestResultToDictSeries(unittest.TestCase):
         out_sin = next(m for m in data["metrics"] if m["variable"] == "out_sin")
         self.assertIn("series", out_sin)
         self.assertGreaterEqual(len(out_sin["series"]), 1)
-        self.assertEqual(
-            set(out_sin["series"][0]), {"time_event", "mean", "std", "n"}
-        )
+        self.assertEqual(set(out_sin["series"][0]), {"time_event", "mean", "std", "n"})
         self.assertTrue(_is_jsonable(data))
 
     def test_default_omits_series(self):
