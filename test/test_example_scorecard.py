@@ -24,12 +24,14 @@ def test_example_covers_distribution_archetypes(tmp_path: Path):
     for name in (
         "Rock Solid",
         "High Noise",
+        "Very Noisy",
         "Improving",
         "Regressing",
         "Ungated Trend",
         "Step Change",
         "Converging Noise",
         "Expanding Noise",
+        "Sawtooth Flip",
         "Outlier Spike",
         "First Run",
     ):

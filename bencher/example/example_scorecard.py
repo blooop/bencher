@@ -6,10 +6,11 @@ scorecard's rendering (sparklines, verdict colors, ±std bands, category groupin
 and every :class:`~bencher.scorecard.ScorecardConfig` option can be evaluated and
 iterated on in isolation, independent of any real benchmark.
 
-Run it directly to write a self-contained ``index.html`` you can open and refine
-the design against::
+Run it directly to write a self-contained ``index.html`` and open it in the
+browser (like the other examples pop up a window). To keep the working tree
+clean it writes to a temp directory by default; pass a path to write elsewhere::
 
-    python -m bencher.example.example_scorecard            # writes to ./scorecard_example/
+    python -m bencher.example.example_scorecard            # temp dir, then opens in browser
     python -m bencher.example.example_scorecard /tmp/out    # or a directory you pick
 
 The catalog below is the point of the example: one row per distribution shape, so
@@ -20,8 +21,11 @@ side in the same column for direct visual comparison.
 from __future__ import annotations
 
 import json
+import logging
 import random
 import sys
+import tempfile
+import webbrowser
 from pathlib import Path
 
 from bencher.scorecard import Chrome, ReportLayout, ScorecardConfig, generate_scorecard
@@ -36,14 +40,14 @@ def _labels(n: int) -> list[str]:
     return [f"2026-06-{10 + i:02d} {8 + i:02d}:00 {i:07d}" for i in range(n)]
 
 
-def _series(means: list[float], stds: list[float]) -> list[dict]:
+def _series(means: list[float], stds: list[float], *, n: int = _REPEATS) -> list[dict]:
     labels = _labels(len(means))
     return [
         {
             "time_event": labels[i],
             "mean": round(means[i], 4),
             "std": round(abs(stds[i]), 4),
-            "n": _REPEATS,
+            "n": n,
         }
         for i in range(len(means))
     ]
@@ -57,31 +61,58 @@ def _traj(
     *,
     n: int = _N_EVENTS,
     noise_end: float | None = None,
+    wobble: float = 0.35,
 ) -> tuple[list[float], list[float]]:
     """A mean trajectory from *start* to *end* with per-event wobble and a ±std band.
 
     ``noise`` is the band half-width; set ``noise_end`` to ramp it (converging or
-    expanding noise). The mean gets a small deterministic wobble so the line reads
-    as real run-to-run data rather than a clean ramp.
+    expanding noise). The mean gets per-event wobble so the line reads as real
+    run-to-run data rather than a clean ramp; ``wobble`` scales that jitter as a
+    fraction of the band (raise it for a genuinely chaotic, high-noise line).
     """
     means, stds = [], []
     for i in range(n):
         f = i / (n - 1) if n > 1 else 1.0
         base = start + (end - start) * f
         band = noise if noise_end is None else noise + (noise_end - noise) * f
-        means.append(base + rng.uniform(-1.0, 1.0) * max(band, 1e-6) * 0.35)
+        means.append(base + rng.uniform(-1.0, 1.0) * max(band, 1e-6) * wobble)
         stds.append(band)
     return means, stds
 
 
-def _metric(variable, direction, units, means, stds, optimal=None) -> dict:
+def _noisy(
+    rng: random.Random, base: float, jitter: float, *, trend: float = 0.0
+) -> tuple[list[float], list[float]]:
+    """A single-repeat series: one measurement per event, so there is *no* ±std
+    band — the value itself jumps around run-to-run (optionally drifting by
+    *trend* from first to last event). This is what a real single-repeat
+    benchmark looks like: a bare, jittery line rather than a mean±band ribbon.
+    """
+    means, stds = [], []
+    for i in range(_N_EVENTS):
+        f = i / (_N_EVENTS - 1)
+        means.append(base + trend * f + rng.uniform(-1.0, 1.0) * jitter)
+        stds.append(0.0)  # single repeat -> no std to draw
+    return means, stds
+
+
+def _flip(low: float, high: float) -> tuple[list[float], list[float]]:
+    """A single-repeat sawtooth: the value flips between *low* and *high* every
+    event. One run per event means no ±std band — just the bare zig-zag line.
+    """
+    means = [high if i % 2 == 0 else low for i in range(_N_EVENTS)]
+    stds = [0.0] * _N_EVENTS
+    return means, stds
+
+
+def _metric(variable, direction, units, means, stds, optimal=None, *, repeats=_REPEATS) -> dict:
     return {
         "variable": variable,
         "units": units,
         "direction": direction,
         "optimal_value": optimal,
         "optimal_inputs": {},
-        "series": _series(means, stds),
+        "series": _series(means, stds, n=repeats),
     }
 
 
@@ -109,8 +140,8 @@ def _distribution_benches(rng: random.Random) -> list[dict]:
     """
     benches: list[dict] = []
 
-    def add(tag, name, direction, means, stds, *, regressed=None, threshold=15.0):
-        metric = _metric("value", direction, "", means, stds)
+    def add(tag, name, direction, means, stds, *, regressed=None, threshold=15.0, repeats=_REPEATS):
+        metric = _metric("value", direction, "", means, stds, repeats=repeats)
         regs = []
         if regressed is not None:
             regs = [_reg("value", direction, regressed, means, threshold)]
@@ -130,8 +161,13 @@ def _distribution_benches(rng: random.Random) -> list[dict]:
     m, s = _traj(rng, 0.95, 0.95, 0.02)
     add("bench_low_noise", "Low Noise", "maximize", m, s, regressed=False)
 
-    m, s = _traj(rng, 0.9, 0.9, 0.18)
+    m, s = _traj(rng, 0.9, 0.9, 0.18, wobble=0.7)
     add("bench_high_noise", "High Noise", "maximize", m, s, regressed=False)
+
+    # Single repeat, so no band — just a bare line whose value jumps around a lot
+    # from event to event (a genuinely noisy metric measured once per run).
+    m, s = _noisy(rng, 0.9, 0.22)
+    add("bench_very_noisy", "Very Noisy", "maximize", m, s, regressed=False, repeats=1)
 
     m, s = _traj(rng, 5.0, 3.0, 0.15)
     add("bench_improving", "Improving", "minimize", m, s, regressed=False)
@@ -152,6 +188,10 @@ def _distribution_benches(rng: random.Random) -> list[dict]:
 
     m, s = _traj(rng, 3.0, 3.0, 0.05, noise_end=0.5)
     add("bench_expanding", "Expanding Noise", "maximize", m, s, regressed=False)
+
+    # Sawtooth: single repeat flipping between two levels every event (no band).
+    m, s = _flip(0.5, 1.0)
+    add("bench_sawtooth", "Sawtooth Flip", "maximize", m, s, regressed=False, repeats=1)
 
     m, s = _traj(rng, 1.0, 1.0, 0.03)
     m[7] += 0.5
@@ -247,13 +287,20 @@ def example_scorecard(output_dir: str | Path | None = None) -> Path:
 
     Args:
         output_dir: where to write the summaries and the ``index.html`` page.
-            Defaults to ``./scorecard_example``.
+            Defaults to a fresh temp directory so running the example never
+            pollutes the working tree.
 
     Returns:
         Path to the rendered scorecard HTML.
     """
-    reports_dir = Path(output_dir) if output_dir is not None else Path("scorecard_example")
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    if output_dir is not None:
+        reports_dir = Path(output_dir)
+        reports_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        # A *fresh* directory per run: reusing a fixed path makes the auto-opened
+        # browser re-focus the already-open tab without reloading, so edits to
+        # the example would silently show the previous render.
+        reports_dir = Path(tempfile.mkdtemp(prefix="bencher_scorecard_"))
 
     rng = random.Random(_SEED)
     benches = _distribution_benches(rng) + _config_option_benches(rng)
@@ -275,3 +322,10 @@ if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else None
     path = example_scorecard(out)
     print(f"Wrote scorecard example to {path}")
+    # Open the rendered page in the browser, like the other examples pop up a
+    # window. The scorecard is a self-contained HTML file, so the file:// URI
+    # opens directly with no server needed (mirrors bencher's ShowMode.HTML path).
+    try:
+        webbrowser.open(path.resolve().as_uri())
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        logging.exception("Failed to open browser for %s", path)
