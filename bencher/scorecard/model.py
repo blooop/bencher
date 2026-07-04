@@ -110,6 +110,7 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
     finite = [m for m in means if m is not None and math.isfinite(m)]
     latest = finite[-1] if finite else metric.get("optimal_value")
     prev = finite[-2] if len(finite) >= 2 else None
+    mean_val = sum(finite) / len(finite) if finite else None
     reg = rec["regressions"].get(var)
 
     verdict = cell_verdict(reg)
@@ -127,17 +128,21 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
             baseline_str = fmt_value(prev, units, as_percent=as_percent)
             change_str = fmt_change((latest - prev) / abs(prev) * 100.0)
 
+    mean_str = fmt_value(mean_val, units, as_percent=as_percent)
     tooltip_parts = []
     if metric.get("source_variable"):
         tooltip_parts.append(f"variable: {metric['source_variable']}")
+    if mean_val is not None and math.isfinite(mean_val):
+        tooltip_parts.append(f"μ {mean_str}")
     if baseline_str:
         tooltip_parts.append(f"baseline {baseline_str} · {len(finite)} runs")
     return {
         "verdict": verdict,
         "latest_str": fmt_value(latest, units, as_percent=as_percent),
+        "mean_str": mean_str,
         "change_str": change_str,
         "baseline_str": baseline_str,
         "n_events": len(finite),
         "tooltip": " · ".join(tooltip_parts),
-        "svg": sparkline_svg(means, stds, accent=config.palette.get(verdict)),
+        "svg": sparkline_svg(means, stds),
     }

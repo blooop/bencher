@@ -1,8 +1,6 @@
 """Tests for bencher.sparkline."""
 
-import pytest
-
-from bencher.sparkline import DEFAULT_ACCENT, sparkline_svg
+from bencher.sparkline import sparkline_svg
 
 
 class TestSparkline:
@@ -19,8 +17,8 @@ class TestSparkline:
         assert svg.startswith("<svg")
         assert "<polygon" in svg
         assert "<polyline" in svg
-        # Latest-point marker is a round dot: a zero-length <line> with a round
-        # cap (a <circle> would deform into an ellipse when stretched).
+        # Per-run nodes are round dots: zero-length <line>s with a round cap (a
+        # <circle> would deform into an ellipse when stretched).
         assert "<line" in svg
         assert 'stroke-linecap="round"' in svg
 
@@ -39,39 +37,51 @@ class TestSparkline:
         svg = sparkline_svg([1.0, 2.0, 1.5], [None, None, None])
         assert "<polyline" in svg
 
-    def test_two_points_has_both_ticks(self):
-        # Two finite points -> previous dot + latest dot on the polyline.
+    def test_line_has_one_node_per_run(self):
+        # One small node marks each event on the line; the right-margin
+        # distribution column adds its own dots after, so count only the nodes
+        # before that column.
         svg = sparkline_svg([1.0, 2.0], [0.1, 0.1])
         assert "<polyline" in svg
-        assert svg.count("<line") == 2
+        on_line = svg.split('<g class="dist"')[0]
+        assert on_line.count("<line") == 2
 
     def test_more_means_than_stds_keeps_all_points(self):
         # A short stds list must not silently truncate trailing means: all three
-        # means are plotted, with the missing std treated as a zero-width band.
+        # means are plotted (missing std -> zero-width band), so three nodes sit
+        # on the line before the distribution column.
         svg = sparkline_svg([1.0, 2.0, 3.0], [0.1])
         assert "<polyline" in svg
-        # prev + latest dots -> both markers present, so the last point survived.
-        assert svg.count("<line") == 2
+        on_line = svg.split('<g class="dist"')[0]
+        assert on_line.count("<line") == 3
 
     def test_more_stds_than_means_ignores_surplus(self):
-        # A surplus std with no matching mean is dropped rather than raising.
+        # A surplus std with no matching mean is dropped rather than raising; only
+        # the two real points are plotted.
         svg = sparkline_svg([1.0, 2.0], [0.1, 0.1, 0.1, 0.1])
         assert "<polyline" in svg
-        assert svg.count("<line") == 2
+        on_line = svg.split('<g class="dist"')[0]
+        assert on_line.count("<line") == 2
 
-    @pytest.mark.parametrize("accent", ["#dc2626", "#16a34a", "#475569"])
-    def test_latest_tick_uses_accent(self, accent):
-        # The latest dot (rightmost <line>) is drawn in the caller's accent.
-        svg = sparkline_svg([1.0, 2.0, 1.5], [0.1, 0.2, 0.1], accent=accent)
-        assert f'stroke="{accent}"' in svg
+    def test_multi_point_has_distribution_column(self):
+        # >1 point -> a right-margin column with one faint alpha dot per run and
+        # nothing else (no mean tick, no specially-drawn latest dot).
+        svg = sparkline_svg([1.0, 2.0, 1.5, 1.8], [0.1, 0.1, 0.1, 0.1])
+        assert 'class="dist"' in svg
+        assert 'stroke-opacity="0.32"' in svg  # faint density dots
+        col = svg.split('class="dist"', 1)[1]
+        assert col.count("<line") == 4
 
-    def test_previous_tick_is_slate_regardless_of_accent(self):
-        # Previous dot stays slate; only the latest event carries the accent.
-        svg = sparkline_svg([1.0, 2.0, 1.5], [0.1, 0.2, 0.1], accent="#dc2626")
-        assert 'stroke="#475569"' in svg  # prev dot
-        assert 'stroke="#dc2626"' in svg  # latest dot
+    def test_single_point_has_no_distribution_column(self):
+        # One run has no spread to show; keep just the single node marker.
+        svg = sparkline_svg([1.0], [0.1])
+        assert 'class="dist"' not in svg
 
-    def test_default_accent_when_none(self):
-        # No accent -> neutral near-black latest dot.
+    def test_sparkline_is_uncolored(self):
+        # Nodes and distribution dots are uniform; the cell background carries
+        # the regression verdict, so the SVG emits no verdict color and no
+        # oversized latest-dot stroke.
         svg = sparkline_svg([1.0, 2.0, 1.5], [0.1, 0.2, 0.1])
-        assert f'stroke="{DEFAULT_ACCENT}"' in svg
+        assert "#dc2626" not in svg  # regressed red
+        assert "#16a34a" not in svg  # improved green
+        assert 'stroke-width="5"' not in svg and 'stroke-width="6"' not in svg

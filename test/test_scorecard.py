@@ -348,6 +348,24 @@ class TestBuildCell:
         assert cell["verdict"] == "trend"
         assert cell["change_str"] == ""
 
+    def test_cell_reports_mean_of_series(self):
+        # μ is the mean of the finite per-run means (0.2, 0.4, 0.6 -> 0.4) and is
+        # also surfaced in the tooltip.
+        rec = {
+            "metrics": {
+                "task_duration": _metric(
+                    "task_duration",
+                    "minimize",
+                    "s",
+                    [_pt("a", 0.2, 0.0), _pt("b", 0.4, 0.0), _pt("c", 0.6, 0.0)],
+                )
+            },
+            "regressions": {},
+        }
+        cell = build_cell(rec, "task_duration", CONFIG)
+        assert cell["mean_str"] == "0.4 s"
+        assert "μ 0.4 s" in cell["tooltip"]
+
     def test_aliased_cell_carries_source_variable(self, mock_reports: Path):
         rec = next(
             r for r in discover_summaries(mock_reports, CONFIG) if r["tag"] == "test_bench_startup"

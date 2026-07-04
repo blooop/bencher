@@ -6,9 +6,10 @@ HTML page. Every scalar metric shows, at a glance:
 - a **verdict** — the latest value, its Δ, and a color from the regression report
   (`regressed` / `improved` / `passed`, or an uncolored `trend` when a metric has
   no regression gate yet); and
-- a **noise sparkline** — the per-time-event mean with a ±std band, so run-to-run
-  noise and the latest movement are visible without opening each benchmark's full
-  report.
+- a **noise sparkline** — the per-time-event mean with a ±std band and a node per
+  run, plus a right-margin distribution column (one alpha-blended dot per run) and
+  the μ mean, so both the trend and the spread of a jittering metric are visible
+  without opening each benchmark's full report.
 
 It reads the machine-readable `*.summary.json` written by
 {func}`bencher.result_to_json` (with `include_series=True`) for every benchmark
@@ -53,7 +54,6 @@ generate_scorecard("reports", config, chrome=Chrome(title="My Health Page"))
 | `aliases` | `raw -> canonical` metric names so equivalent metrics from different benchmarks share a column |
 | `percent_metrics` | metric names whose `0..1` value renders as a percentage |
 | `layout` | on-disk {class}`~bencher.scorecard.ReportLayout` (root subdir + link pattern) |
-| `palette` | verdict → accent color for the sparkline dot and cell |
 
 ## Live example
 

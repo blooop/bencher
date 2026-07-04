@@ -64,6 +64,14 @@
   .spark svg { display: block; width: 100%; height: 30px; }
   .cval { font-weight: 600; color: #1f2937; }
   .cdelta { font-size: 0.72rem; color: #6b7280; }
+  /* Latest value + Δ on the left (under the sparkline body); μ on the right,
+     under the distribution column it summarises. */
+  .cfoot { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+  .cstat { text-align: left; }
+  .cmean {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem; color: #6b7280; white-space: nowrap;
+  }
   .cempty { color: #d1d5db; }
   td.v-regressed { background: #fee2e2; }
   td.v-regressed .cdelta { color: #b91c1c; font-weight: 600; }
@@ -128,7 +136,7 @@
     <span><span class="swatch sw-passed"></span> passed</span>
     <span><span class="swatch sw-improved"></span> improved</span>
     <span><span class="swatch sw-none"></span> trend only (no regression check yet)</span>
-    <span>sparkline = mean over time with ±std band; dots mark previous + latest runs</span>
+    <span>sparkline = mean-over-time line + ±std band with a node per run; right-edge dots = per-run distribution; μ = mean</span>
   </div>
   {% for section in sections %}
   <section class="category">
@@ -154,8 +162,13 @@
             {% if cell %}
             <td class="cell v-{{ cell.verdict }}"{% if cell.tooltip %} title="{{ cell.tooltip }}"{% endif %}>
               <div class="spark">{{ cell.svg|safe }}</div>
-              <div class="cval">{{ cell.latest_str }}</div>
-              {% if cell.change_str %}<div class="cdelta">{{ cell.change_str }}</div>{% endif %}
+              <div class="cfoot">
+                <div class="cstat">
+                  <div class="cval">{{ cell.latest_str }}</div>
+                  {% if cell.change_str %}<div class="cdelta">{{ cell.change_str }}</div>{% endif %}
+                </div>
+                {% if cell.mean_str and cell.mean_str != "—" %}<div class="cmean" title="mean of {{ cell.n_events }} runs">μ {{ cell.mean_str }}</div>{% endif %}
+              </div>
             </td>
             {% else %}
             <td class="cell v-none"><span class="cempty">—</span></td>
