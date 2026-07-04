@@ -241,6 +241,50 @@ def _config_option_benches(rng: random.Random) -> list[dict]:
     return [pipeline, latency]
 
 
+# A deliberately wide metric set (10 columns) so the scorecard renders a
+# many-column table. (variable, direction, units, start, end, noise).
+_FLEET_METRICS = [
+    ("cpu", "minimize", "%", 55.0, 52.0, 2.0),
+    ("memory", "minimize", "MB", 480.0, 505.0, 8.0),
+    ("latency_p50", "minimize", "ms", 12.0, 11.4, 0.4),
+    ("latency_p99", "minimize", "ms", 48.0, 52.0, 3.0),
+    ("throughput", "maximize", "rps", 8200.0, 8600.0, 120.0),
+    ("error_rate", "minimize", "ratio", 0.012, 0.009, 0.002),
+    ("cache_hit", "maximize", "ratio", 0.86, 0.9, 0.01),
+    ("disk_read", "minimize", "MB", 32.0, 30.0, 1.5),
+    ("startup", "minimize", "ms", 640.0, 610.0, 20.0),
+    ("success_rate", "maximize", "ratio", 0.995, 0.998, 0.001),
+]
+
+
+def _fleet_benches(rng: random.Random) -> list[dict]:
+    """A wide category: several services each reporting the same ~10 metrics, so
+    the scorecard renders a many-column table (and exercises horizontal scroll).
+    """
+    benches: list[dict] = []
+    for tag, name in (
+        ("bench_api", "API"),
+        ("bench_worker", "Worker"),
+        ("bench_gateway", "Gateway"),
+    ):
+        metrics, regs = [], []
+        for var, direction, units, start, end, noise in _FLEET_METRICS:
+            scale = 1.0 + rng.uniform(-0.06, 0.06)  # per-service variation
+            m, s = _traj(rng, start * scale, end * scale, noise)
+            metrics.append(_metric(var, direction, units, m, s))
+            regs.append(_reg(var, direction, False, m))
+        benches.append(
+            {
+                "tag": tag,
+                "category": "Service Fleet",
+                "name": name,
+                "metrics": metrics,
+                "regressions": regs,
+            }
+        )
+    return benches
+
+
 def _write_summaries(reports_dir: Path, benches: list[dict]) -> None:
     root = reports_dir / "benchmarks"
     for b in benches:
@@ -277,7 +321,7 @@ def _config(benches: list[dict]) -> ScorecardConfig:
     return ScorecardConfig(
         registry=registry,
         aliases={"wall_time": "duration"},
-        percent_metrics=frozenset({"completion"}),
+        percent_metrics=frozenset({"completion", "error_rate", "cache_hit", "success_rate"}),
         layout=ReportLayout(root="benchmarks"),
     )
 
@@ -303,7 +347,7 @@ def example_scorecard(output_dir: str | Path | None = None) -> Path:
         reports_dir = Path(tempfile.mkdtemp(prefix="bencher_scorecard_"))
 
     rng = random.Random(_SEED)
-    benches = _distribution_benches(rng) + _config_option_benches(rng)
+    benches = _distribution_benches(rng) + _fleet_benches(rng) + _config_option_benches(rng)
     _write_summaries(reports_dir, benches)
 
     chrome = Chrome(

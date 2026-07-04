@@ -111,6 +111,9 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
     latest = finite[-1] if finite else metric.get("optimal_value")
     prev = finite[-2] if len(finite) >= 2 else None
     mean_val = sum(finite) / len(finite) if finite else None
+    # σ over the per-event means: the spread of the dots in the distribution
+    # column that μ summarises (population std, so a lone run reads 0).
+    std_val = math.sqrt(sum((x - mean_val) ** 2 for x in finite) / len(finite)) if finite else None
     reg = rec["regressions"].get(var)
 
     verdict = cell_verdict(reg)
@@ -129,17 +132,19 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
             change_str = fmt_change((latest - prev) / abs(prev) * 100.0)
 
     mean_str = fmt_value(mean_val, units, as_percent=as_percent)
+    std_str = fmt_value(std_val, units, as_percent=as_percent)
     tooltip_parts = []
     if metric.get("source_variable"):
         tooltip_parts.append(f"variable: {metric['source_variable']}")
     if mean_val is not None and math.isfinite(mean_val):
-        tooltip_parts.append(f"μ {mean_str}")
+        tooltip_parts.append(f"μ {mean_str} · σ {std_str}")
     if baseline_str:
         tooltip_parts.append(f"baseline {baseline_str} · {len(finite)} runs")
     return {
         "verdict": verdict,
         "latest_str": fmt_value(latest, units, as_percent=as_percent),
         "mean_str": mean_str,
+        "std_str": std_str,
         "change_str": change_str,
         "baseline_str": baseline_str,
         "n_events": len(finite),

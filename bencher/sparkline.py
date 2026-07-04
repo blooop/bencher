@@ -65,14 +65,14 @@ def sparkline_svg(
     hi = max(m + s for _, m, s in pts)
     span = (hi - lo) or 1.0
 
-    # With >1 point, reserve a narrow band at the right edge for the distribution
-    # column (one dot per run); the trend line/band compress into the remaining
-    # width. A lone point has no spread to show, so it keeps the full width and
-    # draws no column.
+    # With >1 point, a distribution column (one dot per run) hugs the right edge
+    # just past the trend, separated by a small gap so the two read as one unit
+    # rather than being split by dead space. A lone point has no spread to show,
+    # so it keeps the full width and draws no column.
     has_col = len(pts) > 1
-    col_w = 16
-    plot_right = (width - pad - col_w) if has_col else (width - pad)
-    col_x = width - pad - col_w / 2
+    col_gap = 4
+    col_x = width - pad - 2
+    plot_right = (col_x - col_gap) if has_col else (width - pad)
 
     def x_of(i: int) -> float:
         return pad + (i / max(n - 1, 1)) * (plot_right - pad)
@@ -104,7 +104,7 @@ def sparkline_svg(
         'vector-effect="non-scaling-stroke"/>'
         for i, m, _ in pts
     )
-    parts.append(f'<g stroke="#334155" stroke-width="1.5" stroke-linecap="round">{nodes}</g>')
+    parts.append(f'<g stroke="#334155" stroke-width="2.4" stroke-linecap="round">{nodes}</g>')
 
     if has_col:
         # Every run's mean collapsed onto the value axis at a fixed x, all dots

@@ -64,11 +64,13 @@
   .spark svg { display: block; width: 100%; height: 30px; }
   .cval { font-weight: 600; color: #1f2937; }
   .cdelta { font-size: 0.72rem; color: #6b7280; }
-  /* Latest value + Δ on the left (under the sparkline body); μ on the right,
-     under the distribution column it summarises. */
-  .cfoot { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-  .cstat { text-align: left; }
-  .cmean {
+  /* Latest value + Δ centered under the sparkline body (the "scatter"); μ/σ
+     centered under the distribution column they summarise. The .cdist basis
+     matches the sparkline's right-margin column (col_w 16 of viewBox 120). */
+  .cfoot { display: flex; align-items: center; gap: 6px; }
+  .cstat { flex: 1 1 auto; min-width: 0; text-align: center; }
+  .cdist { flex: 0 0 auto; text-align: center; }
+  .cmean, .csigma {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.72rem; color: #6b7280; white-space: nowrap;
   }
@@ -167,7 +169,12 @@
                   <div class="cval">{{ cell.latest_str }}</div>
                   {% if cell.change_str %}<div class="cdelta">{{ cell.change_str }}</div>{% endif %}
                 </div>
-                {% if cell.mean_str and cell.mean_str != "—" %}<div class="cmean" title="mean of {{ cell.n_events }} runs">μ {{ cell.mean_str }}</div>{% endif %}
+                {% if cell.mean_str and cell.mean_str != "—" %}
+                <div class="cdist" title="mean ± std of {{ cell.n_events }} runs">
+                  <div class="cmean">μ {{ cell.mean_str }}</div>
+                  {% if cell.std_str and cell.std_str != "—" %}<div class="csigma">σ {{ cell.std_str }}</div>{% endif %}
+                </div>
+                {% endif %}
               </div>
             </td>
             {% else %}
