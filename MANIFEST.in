@@ -1,2 +1,3 @@
 recursive-include bencher/ *.py
 recursive-include bencher/ *.yaml
+recursive-include bencher/ *.html
