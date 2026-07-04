@@ -45,6 +45,20 @@ class TestSparkline:
         assert "<polyline" in svg
         assert svg.count("<line") == 2
 
+    def test_more_means_than_stds_keeps_all_points(self):
+        # A short stds list must not silently truncate trailing means: all three
+        # means are plotted, with the missing std treated as a zero-width band.
+        svg = sparkline_svg([1.0, 2.0, 3.0], [0.1])
+        assert "<polyline" in svg
+        # prev + latest dots -> both markers present, so the last point survived.
+        assert svg.count("<line") == 2
+
+    def test_more_stds_than_means_ignores_surplus(self):
+        # A surplus std with no matching mean is dropped rather than raising.
+        svg = sparkline_svg([1.0, 2.0], [0.1, 0.1, 0.1, 0.1])
+        assert "<polyline" in svg
+        assert svg.count("<line") == 2
+
     @pytest.mark.parametrize("accent", ["#dc2626", "#16a34a", "#475569"])
     def test_latest_tick_uses_accent(self, accent):
         # The latest dot (rightmost <line>) is drawn in the caller's accent.

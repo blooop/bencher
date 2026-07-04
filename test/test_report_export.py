@@ -251,6 +251,17 @@ class TestResultToDictSeries(unittest.TestCase):
         self.assertNotIn("series", result_to_dict(res)["metrics"][0])
         self.assertNotIn("series", result_to_dict(res, include_series=True)["metrics"][0])
 
+    def test_result_to_json_include_series_strict_json(self):
+        # The include_series flag must wire through result_to_json to
+        # result_to_dict, and the file it writes must be strict JSON (no
+        # NaN/Inf) that reads back with a series on at least one metric.
+        res = self._collect_over_time()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = result_to_json(res, Path(tmp) / "result.json", include_series=True)
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertTrue(_is_jsonable(loaded))
+        self.assertTrue(any("series" in m for m in loaded["metrics"]))
+
 
 if __name__ == "__main__":
     unittest.main()

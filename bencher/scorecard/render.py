@@ -20,14 +20,29 @@ from bencher.scorecard.discover import discover_report_links, discover_summaries
 from bencher.scorecard.model import build_cell, metric_columns
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
-_SAFE_URL_RE = re.compile(r"^https?://")
+# A well-formed http(s) URL: scheme, then at least one non-whitespace char to the
+# end. The `\S+$` anchor rejects any embedded whitespace outright.
+_SAFE_URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
+# ASCII control chars (incl. NUL, tab, newline) that must never reach an href.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def _sanitize_url(url: str) -> str:
-    """Return url only if it uses http(s), otherwise return empty string."""
-    if url and _SAFE_URL_RE.match(url):
-        return url
-    return ""
+    """Return *url* only if it is a clean http(s) link, else an empty string.
+
+    Chrome links may originate from CI environment variables, so treat them as
+    untrusted: strip surrounding whitespace, reject any embedded control
+    characters (which could smuggle a second scheme or break out of the href),
+    and require an ``http(s)://`` scheme with no internal whitespace.
+    """
+    if not url:
+        return ""
+    url = url.strip()
+    if _CONTROL_CHARS_RE.search(url):
+        return ""
+    if not _SAFE_URL_RE.match(url):
+        return ""
+    return url
 
 
 def generate_scorecard(

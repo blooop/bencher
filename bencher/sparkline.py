@@ -10,6 +10,7 @@ report. The output is pure numeric geometry — no caller strings are interpolat
 from __future__ import annotations
 
 import math
+from itertools import zip_longest
 
 # Neutral latest-point accent when the caller passes no verdict color.
 DEFAULT_ACCENT = "#1f2937"
@@ -41,10 +42,16 @@ def sparkline_svg(
     precisely where the last comparison sits. The latest dot is drawn in
     ``accent`` (e.g. a verdict color the caller resolved); the previous dot stays
     slate. ``accent`` defaults to a neutral near-black.
+
+    ``means`` is the trend and drives the x-axis; ``stds`` is the noise band and
+    is paired positionally. The two are zipped with :func:`itertools.zip_longest`
+    so a length mismatch degrades gracefully rather than silently dropping
+    trailing points: a missing std collapses that point's band to zero, and a
+    surplus std (no matching mean) is ignored.
     """
     pts = [
         (i, m, (s if (s is not None and math.isfinite(s)) else 0.0))
-        for i, (m, s) in enumerate(zip(means, stds))
+        for i, (m, s) in enumerate(zip_longest(means, stds))
         if m is not None and math.isfinite(m)
     ]
     svg_open = (

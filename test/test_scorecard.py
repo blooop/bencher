@@ -1,5 +1,7 @@
 """Tests for bencher.scorecard."""
 
+# pylint: disable=redefined-outer-name  # pytest fixtures are injected by name
+
 from __future__ import annotations
 
 import json
@@ -215,6 +217,28 @@ class TestDiscover:
     def test_empty_when_no_dir(self, tmp_path: Path):
         assert discover_summaries(tmp_path, CONFIG) == []
 
+    def test_malformed_and_incomplete_summaries_are_skipped(self, mock_reports: Path):
+        # A summary tree can hold a truncated/corrupt file or one missing its
+        # metrics; discovery must skip both without raising, leaving the valid
+        # records untouched.
+        bench_root = mock_reports / "benchmarks"
+        bad_dir = bench_root / "test_bench_bad_json"
+        bad_dir.mkdir(parents=True, exist_ok=True)
+        (bad_dir / "bad.summary.json").write_text("{ this is not valid json }")
+
+        incomplete_dir = bench_root / "test_bench_incomplete"
+        incomplete_dir.mkdir(parents=True, exist_ok=True)
+        (incomplete_dir / "incomplete.summary.json").write_text(
+            json.dumps({"schema_version": 1, "bench_name": "Incomplete"})
+        )
+
+        records = discover_summaries(mock_reports, CONFIG)
+        tags = {r["tag"] for r in records}
+        assert "test_bench_bad_json" not in tags
+        assert "test_bench_incomplete" not in tags
+        # The valid benchmarks are still discovered alongside the broken ones.
+        assert {"test_bench_latency", "test_bench_throughput"} <= tags
+
 
 class TestDiscoverReportLinks:
     def _links(self, reports_dir: Path) -> list[dict]:
@@ -405,6 +429,34 @@ class TestGenerateScorecard:
         generate_scorecard(mock_reports, CONFIG, chrome=Chrome(run_url="javascript:alert(1)"))
         html = (mock_reports / "index.html").read_text()
         assert "javascript:" not in html
+
+    def test_urls_with_control_chars_or_whitespace_stripped(self, mock_reports: Path):
+        from bencher.scorecard import Chrome
+
+        # A scheme smuggled in behind whitespace/control chars, and a valid
+        # scheme followed by an embedded newline, must both be rejected rather
+        # than reaching an href.
+        generate_scorecard(
+            mock_reports,
+            CONFIG,
+            chrome=Chrome(
+                run_url="  javascript:alert(1)  ",
+                repo_url="https://ok\n javascript:alert(2)",
+            ),
+        )
+        html = (mock_reports / "index.html").read_text()
+        assert "javascript:" not in html
+
+    def test_clean_http_url_survives_sanitizer(self, mock_reports: Path):
+        from bencher.scorecard import Chrome
+
+        # A surrounding-whitespace-padded but otherwise clean https URL is
+        # normalized and kept, so legitimate CI links still render.
+        generate_scorecard(
+            mock_reports, CONFIG, chrome=Chrome(run_url="  https://ci.example/run/1  ")
+        )
+        html = (mock_reports / "index.html").read_text()
+        assert "https://ci.example/run/1" in html
 
     def test_empty_reports_dir(self, tmp_path: Path):
         out = generate_scorecard(tmp_path, CONFIG)
