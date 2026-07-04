@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.113.0] - 2026-07-04
+
 ### Added
 - **Benchmark health scorecard** (`bencher.scorecard`) — renders a set of benchmark result summaries into a single grouped HTML page where every scalar metric shows a regression verdict and a noise sparkline, so run-to-run trends are visible without opening each benchmark's full report.
   - `generate_scorecard(reports_dir, config, *, chrome, output_name)` walks `<reports_dir>/<layout.root>/<tag>/*.summary.json`, groups benchmarks by category, builds one row per benchmark and one column per (aliased) scalar metric, and writes the page. Benchmarks with only image reports are listed as plain links so they stay reachable.
