@@ -1,20 +1,15 @@
 """Inline-SVG sparklines for benchmark trend series.
 
 A sparkline compresses a metric's over-time :func:`~bencher.report_export.series_for_var`
-(per-event mean with a ±std noise band) into a tiny inline SVG, so run-to-run
-noise and the latest movement are visible at a glance without opening a full
-report. The output is pure numeric geometry — no caller strings are interpolated
-— so it is safe to embed unescaped.
+(per-event mean with a ±std noise band) into a tiny inline SVG, so both the trend
+and the run-to-run spread are visible at a glance without opening a full report.
+The output is pure numeric geometry — no caller strings are interpolated — so it
+is safe to embed unescaped.
 """
 
 from __future__ import annotations
 
 import math
-
-# Neutral latest-point accent when the caller passes no verdict color.
-DEFAULT_ACCENT = "#1f2937"
-# Previous-event marker: always slate, so only the latest dot carries the accent.
-_PREV_STROKE = "#475569"
 
 
 def sparkline_svg(
@@ -24,23 +19,27 @@ def sparkline_svg(
     width: int = 120,
     height: int = 28,
     pad: int = 3,
-    accent: str | None = None,
 ) -> str:
-    """Return an inline SVG sparkline: ±std band, mean line, previous + latest dots.
+    """Return an inline SVG sparkline: ±std band, mean line, a node per run.
 
     Pure-numeric input (no caller strings interpolated), so the output is safe to
     render unescaped. Auto-scales to the band extent; degenerates gracefully to a
-    single dot when only one finite point exists, and to an empty ``<svg>`` when
+    single node when only one finite point exists, and to an empty ``<svg>`` when
     none do.
 
     The SVG carries a viewBox and ``preserveAspectRatio="none"`` so CSS can
     stretch it to whatever width its container ends up at. ``vector-effect``
     keeps the line/band stroke crisp under that non-uniform scaling.
 
-    Two dots mark the previous and latest events on the line so the eye can see
-    precisely where the last comparison sits. The latest dot is drawn in
-    ``accent`` (e.g. a verdict color the caller resolved); the previous dot stays
-    slate. ``accent`` defaults to a neutral near-black.
+    A small node marks every event on the line so the eye can see where the
+    individual runs sit; nodes are drawn identically (the latest is simply the
+    rightmost) and the sparkline itself stays uncolored — the caller (e.g. a cell
+    background) owns any verdict color.
+
+    With more than one point, a narrow right-margin column collapses every run's
+    mean onto the (shared) value axis as identical alpha-blended dots, so value
+    regions where runs cluster read darker — surfacing the run-to-run spread, and
+    any bimodality, that the mean line alone hides.
     """
     pts = [
         (i, m, (s if (s is not None and math.isfinite(s)) else 0.0))
@@ -59,23 +58,20 @@ def sparkline_svg(
     hi = max(m + s for _, m, s in pts)
     span = (hi - lo) or 1.0
 
+    # With >1 point, reserve a narrow band at the right edge for the distribution
+    # column (one dot per run); the trend line/band compress into the remaining
+    # width. A lone point has no spread to show, so it keeps the full width and
+    # draws no column.
+    has_col = len(pts) > 1
+    col_w = 16
+    plot_right = (width - pad - col_w) if has_col else (width - pad)
+    col_x = width - pad - col_w / 2
+
     def x_of(i: int) -> float:
-        return pad + (i / max(n - 1, 1)) * (width - 2 * pad)
+        return pad + (i / max(n - 1, 1)) * (plot_right - pad)
 
     def y_of(v: float) -> float:
         return height - pad - ((v - lo) / span) * (height - 2 * pad)
-
-    accent_stroke = accent or DEFAULT_ACCENT
-
-    def dot(x: float, y: float, fill: str) -> str:
-        # Zero-length line + round cap + non-scaling-stroke renders a true circle
-        # at a constant pixel size; a <circle> would squash into an ellipse under
-        # the SVG's non-uniform stretch.
-        return (
-            f'<line x1="{x:.1f}" y1="{y:.1f}" x2="{x:.1f}" y2="{y:.1f}" '
-            f'stroke="{fill}" stroke-width="6" stroke-linecap="round" '
-            f'vector-effect="non-scaling-stroke"/>'
-        )
 
     parts = [svg_open]
     if len(pts) > 1:
@@ -88,11 +84,37 @@ def sparkline_svg(
             f'<polyline points="{line}" fill="none" stroke="#475569" '
             'stroke-width="1.2" vector-effect="non-scaling-stroke"/>'
         )
-        # Previous-event marker on the line so the comparison anchor is visible.
-        prev_i, prev_m, _ = pts[-2]
-        parts.append(dot(x_of(prev_i), y_of(prev_m), _PREV_STROKE))
-    # Latest-event marker, accent-colored.
-    last_i, last_m, _ = pts[-1]
-    parts.append(dot(x_of(last_i), y_of(last_m), accent_stroke))
+
+    # A small node at each run, all drawn alike (the rightmost is the latest).
+    # Kept close to the line's own weight in a slightly darker shade so the
+    # individual datapoints are visible without cluttering. A round-cap
+    # zero-length line renders a constant-size circle under the non-uniform
+    # stretch (a <circle> would squash into an ellipse); vector-effect does not
+    # inherit, so it is set per node.
+    nodes = "".join(
+        f'<line x1="{x_of(i):.1f}" y1="{y_of(m):.1f}" '
+        f'x2="{x_of(i):.1f}" y2="{y_of(m):.1f}" '
+        'vector-effect="non-scaling-stroke"/>'
+        for i, m, _ in pts
+    )
+    parts.append(f'<g stroke="#334155" stroke-width="1.5" stroke-linecap="round">{nodes}</g>')
+
+    if has_col:
+        # Every run's mean collapsed onto the value axis at a fixed x, all dots
+        # identical. Faint alpha dots pile up where runs cluster (darker =
+        # denser), sharing the sparkline's y-scale so a dot's height means the
+        # same value in both. Shared <g> style keeps each dot to coords +
+        # non-scaling-stroke (which does not inherit).
+        dots = "".join(
+            f'<line x1="{col_x:.1f}" y1="{y_of(m):.1f}" '
+            f'x2="{col_x:.1f}" y2="{y_of(m):.1f}" '
+            'vector-effect="non-scaling-stroke"/>'
+            for _, m, _ in pts
+        )
+        parts.append(
+            '<g class="dist" stroke="#64748b" stroke-width="3" '
+            f'stroke-opacity="0.32" stroke-linecap="round">{dots}</g>'
+        )
+
     parts.append("</svg>")
     return "".join(parts)

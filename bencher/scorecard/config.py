@@ -15,15 +15,6 @@ from typing import Mapping
 # Sentinel category for unregistered tags; sorts last in the display order.
 DEFAULT_OTHER_CATEGORY = "Other"
 
-# Verdict -> latest-point accent color. Color is reserved for moves the
-# regression gate classified as meaningful; "passed"/"trend" keep slate.
-DEFAULT_PALETTE: dict[str, str] = {
-    "regressed": "#dc2626",
-    "improved": "#16a34a",
-    "passed": "#475569",
-    "trend": "#475569",
-}
-
 
 @dataclass(frozen=True)
 class ReportLayout:
@@ -57,7 +48,6 @@ class ScorecardConfig:
             rendered as a percentage rather than a bare number.
         layout: on-disk report layout (see :class:`ReportLayout`).
         other_category: fallback category for unregistered tags.
-        palette: verdict -> accent color for sparklines and cell classes.
     """
 
     registry: Mapping[str, tuple[str, str, str]] = field(default_factory=dict)
@@ -65,7 +55,6 @@ class ScorecardConfig:
     percent_metrics: frozenset[str] = frozenset()
     layout: ReportLayout = field(default_factory=ReportLayout)
     other_category: str = DEFAULT_OTHER_CATEGORY
-    palette: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_PALETTE))
 
     def category_order(self) -> list[str]:
         """Category display order: first-appearance in the registry, Other last."""

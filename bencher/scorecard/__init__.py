@@ -10,7 +10,6 @@ tag registry, metric aliases, and report layout — are supplied via
 
 from bencher.scorecard.config import (
     DEFAULT_OTHER_CATEGORY,
-    DEFAULT_PALETTE,
     Chrome,
     ReportLayout,
     ScorecardConfig,
@@ -33,7 +32,6 @@ from bencher.scorecard.render import generate_scorecard
 __all__ = [
     "Chrome",
     "DEFAULT_OTHER_CATEGORY",
-    "DEFAULT_PALETTE",
     "ReportLayout",
     "ScorecardConfig",
     "build_cell",
