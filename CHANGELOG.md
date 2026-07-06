@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.114.0] - 2026-07-06
+
+### Added
+- **Every result type is now addressable by name in `to_auto`** (A1 Phase 3). New *named-only* plugin concept: plugins with `auto=False` never appear in automatic selection but are selected when explicitly named via `plot_list`/`include`/`only` (`@bencher.plot_plugin(..., auto=False)`; the attribute is optional on the `PlotPlugin` protocol, read with a `getattr` default, so existing plugins are unaffected). The non-default built-ins register this way: `violin`, `scatter_jitter`, `scatter`, `band`, `table` (holoviews); `tabulator`, `dataset`, `video_summary` (panel); `surface` (plotly — only where a plot already required it, like `volume`); and `rerun` as its own first-class backend (the rerun SDK is imported lazily inside the renderer, so registration is safe without it installed). **Default report output is unchanged** (parity tests unaffected); e.g. `res.to_auto(plot_list=["violin"])` now works by name.
+- `LegacyResultPlugin.render` filters the ride-along kwargs (`override`, plot size) to the callback's signature when the renderer has no `**kwargs` (e.g. `RerunResult.to_rerun`), instead of failing with a `TypeError`.
+- `TableResult` and `TabulatorResult` joined `BenchResult`'s base list: named-only callbacks are unbound methods invoked on the live `BenchResult`, and `TabulatorResult.to_plot` (via `self.to_tabulator`) crashed with `AttributeError` without it.
+
 ## [1.113.1] - 2026-07-06
 
 ### Dependencies
