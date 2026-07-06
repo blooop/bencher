@@ -6,16 +6,19 @@ override that. A1 covers how plots are produced; A3 covers the data they receive
 
 ---
 
-## 1. How selection works today (verified)
+## 1. How selection works today (verified; refreshed 2026-07-06 after A1 Phase 2 landed)
 
 1. `PltCntCfg` (`bencher/plotting/plt_cnt_cfg.py`, 83 lines) counts the sweep shape:
    `float_cnt`, `cat_cnt`, `vector_len`, `result_vars`, `panel_cnt`, `repeats`,
    `inputs_cnt`.
 2. Each result class declares a `PlotFilter` of `VarRange`s over those counts
    (`bencher/plotting/plot_filter.py:66-91`) and checks it inside its own `to_plot`.
-3. `BenchResult.to_auto()` (`bench_result.py:169-222`) iterates a **hard-coded list**
-   (`default_plot_callbacks()`: Bar, BoxWhisker, Curve, Line, Heatmap, Histogram,
-   Volume, Panes) and appends *every* callback that doesn't filter itself out or throw.
+3. `BenchResult.to_auto()` (`bench_result.py:196-260`) — since A1 Phase 2 landed
+   (#970) — dispatches through the plugin registry (`get_registry().select(...)`,
+   `bench_result.py:244`) and appends *every* selected plugin that doesn't filter
+   itself out or throw. The old hard-coded list (`default_plot_callbacks()`: Bar,
+   BoxWhisker, Curve, Line, Heatmap, Histogram, Volume, Panes) survives only as a
+   vestigial helper referenced by tests.
 4. User control is via `plot_callbacks` in `BenchCfg` — a list of **callables** — or
    `plot_list`/`remove_plots` kwargs, also callables.
 
@@ -30,10 +33,10 @@ diagnostics (`PlotMatchesResult.matches_info`) are a great debugging affordance.
 | # | Problem | Evidence |
 |---|---|---|
 | P1 | **No ranking — all matches render.** A 2-float/1-cat sweep with repeats can produce bar + box + curve + line + heatmap, mostly redundant. Reports are slow and noisy; users scroll. | `to_auto` loop appends every success |
-| P2 | **Selection knowledge is scattered.** Which plot handles which shape lives in 17 class bodies; the candidate list lives in `default_plot_callbacks()`; nothing can answer "what would render for this sweep?" without executing renderers. | `bench_result.py:132-145` |
+| P2 | **Selection knowledge is scattered.** Which plot handles which shape lives in 17 class bodies (the builtin plugins wrap them with permissive `match_all` filters, deferring shape checks to each `to_plot`); nothing can answer "what would render for this sweep?" without executing renderers. | `bencher/plugins/builtins.py`, `bench_result.py:244` |
 | P3 | **Plot choices aren't serializable.** `plot_callbacks` holds function objects — fragile for the collect/render split (pickled through `BenchResult`), impossible to express in the YAML sweep format, and unusable from a CLI. | `bench_cfg.py` plot_callbacks |
-| P4 | **Counts are too coarse a signature.** `float_cnt/cat_cnt` can't express "temporal axis present", "result is an image", "data is monotonic", "categorical with >20 levels (heatmap unreadable)". Hence special-case branches in `to_auto_plots` (over_time band plot, aggregation views are hand-wired, `bench_result.py:279-322`). | read of to_auto_plots |
-| P5 | **Failure = silent log line.** A plot that matched but threw is logged and dropped (`bench_result.py:216-217`); the user sees fewer plots with no explanation (registry error panes in #932 fix the rendering half; selection still can't say *why* something didn't appear). | |
+| P4 | **Counts are too coarse a signature.** `float_cnt/cat_cnt` can't express "temporal axis present", "result is an image", "data is monotonic", "categorical with >20 levels (heatmap unreadable)". Hence special-case branches in `to_auto_plots` (over_time band plot, aggregation views are hand-wired, `bench_result.py:305-408`). | read of to_auto_plots |
+| P5 | **Failure = silent log line.** A plot that matched but threw is logged and dropped (`logging.error` on both the plugin and legacy paths, `bench_result.py:249-255`); the user sees fewer plots with no explanation (registry error panes in #932 fix the rendering half; selection still can't say *why* something didn't appear). | |
 
 ## 2. Target design
 

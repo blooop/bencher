@@ -20,11 +20,11 @@ without additional context. **Read the whole plan before starting it.**
 
 | # | Plan | Risk | Effort | Do first? |
 |---|------|------|--------|-----------|
-| 01 | [Release & CI safety](01-release-safety.md) | Low | Small | **Yes — highest impact/effort ratio** |
-| 02 | [Inflight PR triage](02-pr-triage.md) | Low–Med | Medium | Yes — unblocks everything else |
+| 01 | [Release & CI safety](01-release-safety.md) | Low | Small | **DONE** — executed verbatim in PR #982 |
+| 02 | [Inflight PR triage](02-pr-triage.md) | Low–Med | Medium | Partially done — see status note in the plan |
 | 03 | [Repo hygiene](03-repo-hygiene.md) | Low | Small | Yes |
 | 04 | [Dependencies & import time](04-dependencies.md) | Medium | Medium | After 02 (depends on PR #760 decision) |
-| 05 | [Test coverage gaps](05-test-coverage.md) | Low | Large | Anytime |
+| 05 | [Test coverage gaps](05-test-coverage.md) | Low | Large | **Mostly done** — see status note in the plan |
 | 06 | [Docs & onboarding](06-docs-onboarding.md) | Low | Medium | Anytime |
 | 07 | [Low-risk core cleanup](07-core-cleanup.md) | Low | Small | Anytime |
 | 08 | [Larger core refactors](08-core-refactors.md) | Med–High | Large | Last — needs owner sign-off |
@@ -35,9 +35,10 @@ without additional context. **Read the whole plan before starting it.**
 | 13 | [Benchmark declaration bundle & run defaults](13-benchmark-declaration-and-run-defaults.md) | Low | Medium | Coordinate with 09 |
 | 14 | [Schema-evolving over_time history](14-history-schema-reconciliation.md) | — | — | **Implemented** (design record, v1.116.0) |
 
-Plans 01–03 are quick wins. Plan 02 contains decisions only the repo owner can make
-(notably the Plotly-vs-plugin-system direction for PRs #830/#932); those steps are
-clearly marked `OWNER DECISION`.
+Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
+Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on
+2026-07-01 (see the A1 addendum); its remaining steps are still live and the other
+`OWNER DECISION` markers still apply.
 
 ## Architecture plans (`plans/architecture/`)
 
@@ -47,15 +48,23 @@ before executing any phase. **A3 is the keystone — read it first.**
 
 | Doc | Subject | Resolves |
 |-----|---------|----------|
-| [A1 — Rendering backend unification](architecture/A1-rendering-backend-unification.md) | Plugin registry as the skeleton; Plotly renderers and the fast save path land as plugins; HoloViews deprecated gradually | The #830-vs-#932 conflict, the 17-class `BenchResult` MRO, 16s saves |
+| [A1 — Rendering backend unification](architecture/A1-rendering-backend-unification.md) | Plugin registry as the skeleton (Phases 0 and 2 landed); backends swap under stable plot names; the Plotly port and fast-save path were dropped per owner decision — see the addendum | The #830-vs-#932 conflict (resolved plugin-first), the 17-class `BenchResult` MRO |
 | [A2 — Plot selection redesign](architecture/A2-plot-selection-redesign.md) | Centralized, explainable, *ranked* selection; serializable plot specs instead of callables | Render-everything noise, scattered match logic, unpicklable `plot_callbacks` |
 | [A3 — BenchData contract](architecture/A3-benchdata-contract.md) | One frozen, pickle-free data type (netCDF + JSON manifest) used by rendering, the collect/render split, result cache, and history | Pickled god-object at four boundaries; load-time code execution |
 | [A4 — Caching architecture](architecture/A4-caching-architecture.md) | One storage interface (absorbs PR #760), one key module, worker source-code hashing, artifact manifests, netCDF history (absorbs PR #799) | Stale-results footgun, media orphans, pickle CVE class, scattered key logic |
 
-Sequencing: A1 Phase 0–1 and A4 Phase C1–C2 can start immediately; A3 Phase D2 gates
-A4 Phase C4 and A1's split-render convergence; A2's ranking phases come last.
+Sequencing: A1 Phases 0 and 2 have landed (#932, #970; Phase 1 is dropped and Phase 3
+is in flight as #973 — see the A1 addendum); A4 Phase C1–C2 can start immediately;
+A3 Phase D2 gates A4 Phase C4; A2's ranking phases come last.
 
 ## State of the repo (review summary, 2026-06-11)
+
+> **Update (2026-07-06):** the snapshot below is preserved as written. Since then:
+> plan 01 executed (PR #982); most of plan 05 executed (all listed result modules now
+> have dedicated tests; the suite is now ~101 files / ~1,500 tests); #830 closed while
+> #932, #953, and #850 merged (7 PRs remain open, including the #760 CVE fix); A1
+> Phases 0 and 2 landed, so A2 §1's description of `to_auto` predates the registry
+> dispatch that now exists.
 
 ### What is good
 

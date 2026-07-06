@@ -8,6 +8,12 @@ may have changed.
 Use `gh` for all PR operations. Never force-push someone else's branch without checking
 `gh pr view <N> --json author` first (all current PRs are by the repo owner, blooop).
 
+> **Status update (2026-07-06):** Step 0 is RESOLVED — the owner chose the plugin
+> direction: #830 closed unmerged, #932 merged 2026-07-01, and A1 Phase 3 continues
+> in PR #973 (see the plans/architecture/A1 addendum). Step 1 (#953) merged
+> 2026-06-13; Step 3 (#850) merged 2026-07-03. Steps 2 and 4–8 remain live; 7 PRs
+> are currently open.
+
 ---
 
 ## Step 0 — OWNER DECISION: Plotly port (#830) vs plugin system (#932)
