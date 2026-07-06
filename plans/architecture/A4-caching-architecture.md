@@ -13,8 +13,8 @@ Four layers, three diskcache databases plus loose media directories, all under `
 | Layer | Store | Key | Value | Flags |
 |---|---|---|---|---|
 | **A: sample cache** | `cachedir/sample_cache` via `FutureCache` (`job.py:184-366`) | `hash_sha1((sorted(fn_inputs), tag))` (`worker_job.py:63`) | pickled worker result dict | `cache_samples`, `clear_sample_cache`, `overwrite_sample_cache`, `only_hash_tag`, `cache_size` |
-| **B: result cache** | `cachedir/benchmark_inputs` (`result_collector.py:387-415`) | `bench_cfg.hash_persistent(include_repeats=True)` (`bench_cfg.py:731-777`) | pickled `BenchResult` | `cache_results`, `clear_cache` |
-| **C: over_time history** | `cachedir/history` (`result_collector.py:416-508`) | `hash_persistent(include_repeats=False)` | pickled `xr.Dataset` | `over_time`, `clear_history`, `max_time_events` |
+| **B: result cache** | `cachedir/benchmark_inputs` (`result_collector.py:387-415`) | `bench_cfg.hash_persistent(include_repeats=True)` (`bench_cfg.py:757-803`) | pickled `BenchResult` | `cache_results`, `clear_cache` |
+| **C: over_time history** | `cachedir/history` (`result_collector.py:399-491`) | the **same** `include_repeats=True` hash as Layer B — computed once at `bencher.py:678`, passed to `load_history_cache`; repeats are deliberately in the key so historical arrays keep their shape (`bench_cfg.py:773-775`) | pickled `xr.Dataset` | `over_time`, `clear_history`, `max_time_events` |
 | **D: media artifacts** | `cachedir/{img,vid,rrd,generic}/{name}/{job_key}/` (`cache_management.py`) | path convention keyed by job_key | raw files | cleaned by `cleanup_job_media` / `clean_orphaned_media` |
 
 The good parts, to preserve: the `hash_persistent()` contract is documented, test-
@@ -30,9 +30,9 @@ paths parallel-safe.
 | W1 | **Worker source code is not in the sample key** (`worker_job.py:63` hashes inputs+tag only) | Edit your benchmark function, rerun, silently get *old* results. The single worst footgun in the system — it undermines trust in every cached number. |
 | W2 | **Media orphaning**: `clear_tag` → `cache.evict(tag)` removes entries but not their media dirs (`job.py:332-344`); reconciliation is a manual `clean_orphaned_media()` walk | unbounded disk growth, stale images silently shown if paths collide |
 | W3 | **Pickle at every layer** (job.py:116, result_collector.py:408, bench_plot_server.py) | CVE-class load-time code execution (the diskcache CVE is one instance); cache format coupled to internal class layout, so refactors corrupt/invalidate Layer B |
-| W4 | **Key logic scattered** across `worker_job.py`, `bench_cfg.py`, `bencher.py:678-682` | nobody can answer "what invalidates what?"; the include_repeats=True/False subtlety between Layers B and C lives in two distant call sites |
-| W5 | **History concat fragility**: Layer C key excludes repeats; dtype-mismatch history is silently discarded (`result_collector.py:473-480`); NaN-vs-0 sentinel mixing after the v1.105 default flip | over_time data quietly disappears or mixes regimes |
-| W6 | **`only_hash_tag` cross-contamination is a global boolean** rather than a scoped, named decision | one flag flips the meaning of every key in the run |
+| W4 | **Key logic scattered** across `worker_job.py`, `bench_cfg.py`, `bencher.py:678-682` | nobody can answer "what invalidates what?" — worse: the `include_repeats=False` hash (`bencher.py:682`) is threaded into `WorkerJob.bench_cfg_sample_hash` and then read by **nothing** (the sample key is sorted-inputs+tag only, `worker_job.py:63`), while the stale comment at `worker_job.py:61` claims it is included |
+| W5 | **History concat fragility**: dtype-mismatch history is discarded with only a log warning (`result_collector.py:454-463`); NaN-vs-0 sentinel mixing after the v1.105 default flip; renamed vars concat into corrupt datasets (dead columns / phantom dims — see plans/09) | over_time data quietly disappears, mixes regimes, or gains fabricated points |
+| W6 | **`only_hash_tag` is a dead flag**: defined (`bench_cfg.py:246`) and set by `BenchRunner`, but read by nothing — the sample key is unconditionally tag-only (`worker_job.py:63`), so the cross-benchmark sharing the flag was meant to opt into is always-on, and its param doc describes removed behavior | unscoped cross-benchmark sample reuse with no opt-out; the flag silently does nothing |
 | W7 | **Storage engine hard-coded** to diskcache (4 import sites) | the CVE response (#760) had to touch every call site; no cloud/shared-cache option for CI |
 
 ## 3. Target architecture
@@ -54,7 +54,7 @@ class SampleKey:
     inputs_hash: str        # hash_sha1(sorted(fn_inputs))
     code_hash: str          # NEW — see below
     tag: str
-    scope: str              # "run" (default) | "tag-only" (replaces only_hash_tag)
+    scope: str              # "run" (default) | "tag-only" (restores the choice the dead only_hash_tag flag pretended to offer — see W6)
 
 @dataclass(frozen=True)
 class RunKey:

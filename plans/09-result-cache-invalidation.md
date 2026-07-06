@@ -36,8 +36,8 @@ which `plans/architecture/A4-caching-architecture.md` §5 says NOT to change. A4
 `title`) — that guidance stands; the ordering/naming behavior here is a genuine
 defect, not an intentional exclusion. Coordinate with A4: if A4 Phase C2 (the
 `bencher/caching/keys.py` key module) has landed, implement this fix there
-instead of in `bench_cfg.py`. Note also that A4's §2 W5 row says "Layer C key
-excludes repeats" — stale against current source (see §1); do not inherit it.
+instead of in `bench_cfg.py`. (A4's §1 Layer-C row and §2 W5 clause previously
+claimed the history key excludes repeats — both now corrected to match §1.)
 
 **Rules:**
 - Always use the pixi environment (`pixi run ...`, e.g. `pixi run pytest`). Never
@@ -69,11 +69,12 @@ hash, computed once as `bench_cfg.hash_persistent(True)` (`bencher/bencher.py:67
   "over_time")` (`result_collector.py:465`, xarray's default `join="outer"`).
   A missing key means "no history" → fresh series.
 
-(The `include_repeats=False` variant at `bencher.py:682` is vestigial: it is
-threaded into `WorkerJob.bench_cfg_sample_hash` but never read — the sample
-cache keys on concrete function inputs + tag only (`worker_job.py`). Repeats
-are intentionally in the history key so historical arrays have the same
-shape — see the comment at `bench_cfg.py:773-775`.)
+(The `include_repeats=False` variant at `bencher.py:689` keys nothing: it is
+threaded into `WorkerJob.bench_cfg_sample_hash` and never read — the sample
+cache is keyed by `hash_sha1((fn_inputs_sorted, tag))` alone (`worker_job.py:63`),
+and the comment at `worker_job.py:61` claiming the sweep hash is included is
+stale. Repeats are intentionally in the history key so historical arrays have
+the same shape — see the comment at `bench_cfg.py:813-815`.)
 
 Crucially, identity *inside* the stored dataset is by **name**: data variables
 are created under each result var's `.name` (`result_collector.py:229`), and
@@ -253,7 +254,7 @@ reset. Silent invalidation becomes observable without blocking legitimate resets
    where it lives (history cache vs alongside `CACHE_VERSION`).
 6. **Interaction with A4.** If A4 Phase C2 has introduced `bencher/caching/keys.py`,
    this fix belongs there. Otherwise implement in `bench_cfg.py` and leave a
-   pointer for A4 to absorb (and flag A4's stale W5 wording to its owner).
+   pointer for A4 to absorb.
 
 ## 4. Proposed direction (subject to the research above)
 
@@ -300,7 +301,10 @@ CHANGELOG (a one-time miss for everyone, same policy A4 uses for its `code_hash`
     load with a *reported* history reset — no dead column, no phantom dim (D2/D3);
   - `on_history_reset`: `"warn"` (default) emits a WARNING naming the change and
     the orphaned-event count; `"error"` raises; `"ignore"` stays quiet (D3).
-- The existing `hash_persistent` determinism-contract tests still pass.
+- The existing `hash_persistent` determinism-contract tests still pass. The
+  byte-exact golden hashes pinned in `test/test_hash_persistent.py`
+  (`GOLDEN_BENCH_CFG_HASH_*`) WILL fail on any key change — update them together
+  with the `CACHE_VERSION` bump, following the procedure in that test's docstring.
 - `CACHE_VERSION` bumped; CHANGELOG entry added.
 - `pixi run ci` (and `pixi run test-split` if present) green.
 

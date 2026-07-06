@@ -39,7 +39,7 @@ dataset is *absolute against the collect process's CWD*. Wrappers:
 `gen_video_path` (`utils.py:282`), `gen_image_path` (`utils.py:295`),
 `gen_rerun_data_path` (`utils.py:308`). Callers include `VideoWriter`
 (`bencher/video_writer.py:15`), regression plots (`bencher/regression.py:871`),
-and rerun capture (`bencher/utils_rerun.py:25`).
+and rerun capture (`bencher/utils_rerun.py:45`).
 
 ### 1.2 The rrd pipeline re-relativizes against a CWD-relative constant
 
@@ -144,8 +144,8 @@ compatible with today. Export `set_cache_dir` / `get_cache_dir` from
 `job.py:225`, `ensure_cache_version`, all `cache_management.py` defaults
 (`cachedir: str | Path | None = None` → resolve in body), `bench_plot_server.py:95`
 and `:190`, `file_server.py:46`, and `BenchReport.save`'s default directory.
-(Leave `manim_cartesian/cartesian_product_scene.py:600` for a follow-up; it is a
-leaf default, not on the render path.)
+(Leave `results/manim_cartesian/cartesian_product_scene.py:600` for a follow-up;
+it is a leaf default, not on the render path.)
 
 With every stage resolving the same root, D2's same-machine case is fixed without
 touching the stored-path format: with `BENCHER_CACHE_DIR=/data/b`, collect,
