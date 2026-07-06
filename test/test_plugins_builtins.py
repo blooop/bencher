@@ -308,6 +308,23 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         self.assertEqual(len(panes), 1)
         self.assertNotIsInstance(panes[0], pn.pane.Markdown)
 
+    def test_tabulator_by_name_renders(self):
+        panes = self.res.to_auto(plot_list=["tabulator"])
+        self.assertEqual(len(panes), 1)
+        self.assertNotIsInstance(panes[0], pn.pane.Markdown)
+
+    def test_named_only_callbacks_invokable_on_bench_result(self):
+        """Every named-only callback is an unbound method invoked on the live
+        BenchResult, so its defining class must be in BenchResult's MRO — otherwise
+        the plugin registers fine but raises AttributeError at render time (the
+        tabulator bug)."""
+        from bencher.plugins.builtins import _named_only_specs
+
+        mro_names = {c.__name__ for c in BenchResult.__mro__}
+        for name, _backend, callback in _named_only_specs():
+            owner = callback.__qualname__.split(".")[0]
+            self.assertIn(owner, mro_names, f"{name}: {owner} not in BenchResult MRO")
+
     def test_named_only_composes_with_auto_set(self):
         default = self.res.to_auto()
         with_violin = self.res.to_auto(
@@ -364,6 +381,30 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         pane = plugin.render(data)
         self.assertEqual(pane.object, "kwargs")
         self.assertEqual(calls["kwargs"], render_kwargs)
+
+    def test_non_introspectable_callback_called_unfiltered(self):
+        """Callables whose signature inspect.signature cannot retrieve (C builtins,
+        unhashable callables) must be invoked without filtering, not crash."""
+        from bencher.plugins.builtins import _declared_kwargs
+
+        self.assertIsNone(_declared_kwargs(max))  # ValueError: no signature
+
+        class UnhashableCallable:
+            __hash__ = None
+
+            def __call__(self, result, **kwargs):
+                return pn.pane.Markdown("unhashable")
+
+        plugin = LegacyResultPlugin(
+            name="unhashable",
+            backend="test",
+            match=PlotFilter.match_all(),
+            priority=0,
+            requires=frozenset({"legacy_result"}),
+            callback=UnhashableCallable(),
+        )
+        data = BenchData.fake().with_changes(legacy_result=object(), render_kwargs={"width": 1})
+        self.assertEqual(plugin.render(data).object, "unhashable")
 
 
 class TestToBenchData(unittest.TestCase):

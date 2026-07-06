@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Callable, Optional
 
 import panel as pn
@@ -49,12 +48,16 @@ class LegacyResultPlugin:
         return self.callback(data.legacy_result, **kwargs)
 
 
-@lru_cache(maxsize=None)
 def _declared_kwargs(callback: Callable) -> Optional[frozenset[str]]:
     """The keyword names a fixed-signature callback accepts, or None when it takes
-    **kwargs (no filtering needed). Cached because render can run in tight loops and
-    a callback's signature never changes."""
-    params = inspect.signature(callback).parameters
+    **kwargs or its signature cannot be introspected (no filtering in either case).
+    Deliberately uncached: an lru_cache here would pin every callback — including
+    per-run closures and bound methods with their captured data — for process
+    lifetime, and would crash on unhashable callables."""
+    try:
+        params = inspect.signature(callback).parameters
+    except (TypeError, ValueError):  # C-extension/builtin callables, odd wrappers
+        return None
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
         return None
     return frozenset(params)
