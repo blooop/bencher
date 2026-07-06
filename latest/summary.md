@@ -1,8 +1,8 @@
 | Metric | Value |
 |--------|-------|
 | Total tests | 1824 |
-| Total time | 120.12s |
-| Mean | 0.0659s |
+| Total time | 134.66s |
+| Mean | 0.0738s |
 | Median | 0.0020s |
 
 <details>
@@ -10,15 +10,15 @@
 
 | Test | Time (s) |
 |------|----------|
-| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 16.292 |
-| `test.test_generated_examples::test_generated_example[regression/example_regression_tuning_drift.py]` | 4.332 |
-| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 3.970 |
-| `test.test_generated_examples::test_generated_example[cartesian_animation/example_cartesian_animation.py]` | 3.080 |
-| `test.test_split_render_examples::test_split_render_subprocess_media` | 3.001 |
-| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 2.878 |
-| `test.test_generated_examples::test_generated_example[result_types/result_image/example_result_image_to_video.py]` | 2.664 |
-| `test.test_split_render_examples::test_split_render_roundtrip[result_image/example_result_image_to_video.py]` | 2.632 |
-| `test.test_generated_examples::test_generated_example[regression/example_regression_tuning_noise.py]` | 2.468 |
-| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.256 |
+| `test.test_bench_examples.TestBenchExamples::test_example_meta` | 18.202 |
+| `test.test_split_render_examples::test_split_render_subprocess_media` | 6.407 |
+| `test.test_hash_persistent.TestCrossProcessDeterminism::test_hash_stable_across_two_processes[ResultBool]` | 6.094 |
+| `test.test_generated_examples::test_generated_example[regression/example_regression_tuning_drift.py]` | 4.874 |
+| `test.test_over_time_save_perf::test_save_faster_without_aggregated_tab` | 4.079 |
+| `test.test_split_render_examples::test_split_render_roundtrip[result_image/example_result_image_to_video.py]` | 3.184 |
+| `test.test_generated_examples::test_generated_example[cartesian_animation/example_cartesian_animation.py]` | 3.069 |
+| `test.test_generated_examples::test_generated_example[regression/example_regression_tuning_noise.py]` | 3.003 |
+| `test.test_over_time_repeats.TestMaxSliderPoints::test_default_subsampling_caps_at_max` | 2.923 |
+| `test.test_generated_examples::test_generated_example[result_types/result_image/example_result_image_to_video.py]` | 2.784 |
 
 </details>
