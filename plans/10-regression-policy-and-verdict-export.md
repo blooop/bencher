@@ -26,6 +26,11 @@ landed, the same symbols simply live in two files; the changes below are unaffec
   this is a hard requirement, enforced by the slot-coverage contract).
 - If a step fails in a way this plan does not cover, stop and report rather than
   improvising.
+- **Line numbers are as-of the current `main` (CHANGELOG ≤ 1.113.0) and will
+  rot** — the durable reference is always the named symbol (`detect_regressions`,
+  `_normalize_overrides`, `RegressionResult.to_dict`, `_hash_exclude`, …). If a
+  cited line has moved, grep the symbol; the responsibility, not the address, is
+  what the plan depends on.
 
 ---
 
@@ -152,6 +157,34 @@ anything smarter than "report published at URL".
    concrete need.
 
 ## 4. Proposed design (refine against §3)
+
+**4.0 Semantics at a glance (single source of truth).** The rest of §4 elaborates;
+this is the authoritative statement of precedence and severity.
+
+*Precedence* — resolved once per variable inside `detect_regressions`, highest wins:
+
+1. run-level `regression_overrides[var]` — including `{}`, which opts the variable
+   **out** of detection entirely (`bench_cfg.py:466`);
+2. class-level `rv.regression` (`RegressionSpec`);
+3. benchmark-wide `regression_method` + thresholds.
+
+Resolution is **replacement, not merge**: the winning layer supplies that
+variable's complete check set (matching today's override behavior at
+`regression.py:1523`), and a variable resolved from layer 1 or 2 disables the
+adaptive sparse-history fallback (`allow_sparse_fallback=False`, `:1563`).
+
+*Severity* — a property of each **check** (default `gate`, so existing behavior is
+unchanged); a variable with multiple checks may mix them:
+
+| severity | in `has_regressions` | in `has_gate_regressions` | `regression_fail=True` raises? | log level |
+|----------|:---:|:---:|:---:|---------|
+| `gate`   | yes | yes | **yes** | warning |
+| `notify` | yes | no  | no      | warning |
+| `info`   | yes | no  | no      | info    |
+
+Each check is judged independently, so a `{percentage: notify, absolute: gate}`
+variable raises iff its *gate* check regresses while still reporting the notify
+movement. `has_regressions` keeps its current meaning ("any check regressed").
 
 **4.1 `RegressionSpec` + class-level declaration.**
 ```python
