@@ -6,6 +6,7 @@
 how_to_use_bencher
 intro
 concepts
+scorecard
 reference/meta/gallery
 reference/index
 ```

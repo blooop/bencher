@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.112.0"
+version = "1.114.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -10,8 +10,8 @@ license = "MIT"
 requires-python = ">=3.10,<3.14"
 
 dependencies = [
-    "holoviews>=1.15,<=1.23.0",
-    "numpy>=1.0,<=2.4.6",
+    "holoviews>=1.15,<=1.23.1",
+    "numpy>=1.0,<=2.5.1",
     "param>=2.0,<=2.4.1",
     "hvplot>=0.12.0,<=0.12.2",
     "panel>=1.9.0,<=1.9.3",
@@ -21,9 +21,10 @@ dependencies = [
     "plotly>=5.15,<=6.8.0",
     "pandas>=2.0,<=3.0.3",
     "strenum>=0.4.0,<=0.4.15",
-    "scikit-learn>=1.2,<=1.8.0",
+    "scikit-learn>=1.2,<=1.9.0",
     "moviepy>=2.1.2,<=2.2.1",
-    "matplotlib>=3.7,<=3.10.9",
+    "matplotlib>=3.7,<=3.11.0",
+    "jinja2>=3.0,<=3.1.6",
 ]
 
 [project.urls]
@@ -71,16 +72,27 @@ test = [
     "pylint>=3.2.5,<=4.0.6",
     "pytest-cov>=4.1,<=7.1.0",
     "pytest>=7.4,<=9.1.1",
-    "hypothesis>=6.104.2,<=6.155.7",
+    "hypothesis>=6.104.2,<=6.156.1",
     "ruff>=0.5.0,<=0.15.20",
     "sphinxcontrib-mermaid>=1.0,<3.0",
-    "coverage>=7.5.4,<=7.14.3",
+    "coverage>=7.5.4,<=7.15.0",
     "prek>=0.2.28,<0.5.0",
-    "ty>=0.0.13,<=0.0.55",
+    "ty>=0.0.13,<=0.0.56",
+]
+
+docs = [
+    "sphinx>=7.0,<=9.1.0",
+    "myst-parser",
+    "sphinxcontrib-napoleon",
+    "sphinx-rtd-theme",
+    "sphinx-autoapi",
+    "sphinx-copybutton",
+    "playwright",
+    "Pillow",
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.32.0,<=0.33.1", "rerun-notebook>=0.32.0,<=0.33.1"]
+rerun = ["rerun-sdk>=0.32.0,<=0.34.0", "rerun-notebook>=0.32.0,<=0.34.0"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
@@ -95,6 +107,7 @@ include = ["bencher", "CHANGELOG.md"]
 # Environments
 [tool.pixi.environments]
 default = { features = ["test", "rerun"], solve-group = "default" }
+docs = { features = ["test", "rerun", "docs"], solve-group = "default" }
 py310 = ["py310", "test", "rerun"]
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
@@ -174,6 +187,15 @@ generate-docs = "python bencher/example/meta/generate_examples.py"
 docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = [
     "generate-docs",
 ] }
+# Quick docs rebuild (skip example generation) + local server for debugging
+docs-quick = "rm -rf docs/builtdocs && python -m sphinx -b html docs docs/builtdocs"
+docs-serve = { cmd = "python -m http.server 8000 -d docs/builtdocs", depends-on = ["docs-quick"] }
+# Regenerate only the representative examples used by the scrollbar checks (fast)
+docs-subset = "python bencher/example/meta/generate_examples.py --only example_sweep_1_float_0_cat_no_repeats,example_stats_repeats_comparison,example_sweep_0_float_0_cat_over_time,example_plot_heatmap,example_sweep_3_float_2_cat_with_repeats --skip-thumbnails"
+# Verify built docs pages show a single scrollbar (requires docs/builtdocs)
+docs-check = "pytest test/test_docs_scrollbars.py -v"
+# NOTE: docs, docs-quick, docs-serve, docs-subset, and docs-check require the 'docs' environment:
+#   pixi run -e docs docs-serve
 
 
 #cache management
@@ -206,6 +228,7 @@ enable = "no-else-return,consider-using-in"
 omit = ["*/test/*", "__init__.py"]
 
 [tool.coverage.report]
+fail_under = 85
 exclude_also = [
     "def __repr__",
     "if False:",

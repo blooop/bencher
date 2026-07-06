@@ -5,11 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.112.0] - 2026-07-01
+## [Unreleased]
+
+## [1.114.0] - 2026-07-06
 
 ### Added
 - **Every result type is now addressable by name in `to_auto`** (A1 Phase 3). New *named-only* plugin concept: plugins with `auto=False` never appear in automatic selection but are selected when explicitly named via `plot_list`/`include`/`only` (`@bencher.plot_plugin(..., auto=False)`; the attribute is optional on the `PlotPlugin` protocol, read with a `getattr` default, so existing plugins are unaffected). The non-default built-ins register this way: `violin`, `scatter_jitter`, `scatter`, `band`, `table` (holoviews); `tabulator`, `dataset`, `video_summary` (panel); `surface` (plotly — only where a plot already required it, like `volume`); and `rerun` as its own first-class backend (the rerun SDK is imported lazily inside the renderer, so registration is safe without it installed). **Default report output is unchanged** (parity tests unaffected); e.g. `res.to_auto(plot_list=["violin"])` now works by name.
 - `LegacyResultPlugin.render` filters the ride-along kwargs (`override`, plot size) to the callback's signature when the renderer has no `**kwargs` (e.g. `RerunResult.to_rerun`), instead of failing with a `TypeError`.
+- `TableResult` and `TabulatorResult` joined `BenchResult`'s base list: named-only callbacks are unbound methods invoked on the live `BenchResult`, and `TabulatorResult.to_plot` (via `self.to_tabulator`) crashed with `AttributeError` without it.
+
+## [1.113.1] - 2026-07-06
+
+### Dependencies
+- Bumped `rerun-sdk` and `rerun-notebook` upper bounds to `0.34.0`.
+- Bumped upper bounds on `holoviews` (`1.23.1`), `numpy` (`2.5.1`), `scikit-learn` (`1.9.0`), and `matplotlib` (`3.11.0`).
+- Bumped dev/test upper bounds on `hypothesis` (`6.156.1`), `coverage` (`7.15.0`), and `ty` (`0.0.56`).
+
+## [1.113.0] - 2026-07-04
+
+### Added
+- **Benchmark health scorecard** (`bencher.scorecard`) — renders a set of benchmark result summaries into a single grouped HTML page where every scalar metric shows a regression verdict and a noise sparkline, so run-to-run trends are visible without opening each benchmark's full report.
+  - `generate_scorecard(reports_dir, config, *, chrome, output_name)` walks `<reports_dir>/<layout.root>/<tag>/*.summary.json`, groups benchmarks by category, builds one row per benchmark and one column per (aliased) scalar metric, and writes the page. Benchmarks with only image reports are listed as plain links so they stay reachable.
+  - Everything project-specific is injected via `ScorecardConfig`: the `tag -> (category, name, description)` registry, metric-name `aliases` (so equivalent metrics from different benchmarks share a column), `percent_metrics` (0..1 fractions shown as percentages), and the on-disk `ReportLayout`. Every field defaults, so the zero-config path still renders. Optional `Chrome` supplies page title, provenance, and CI nav links.
+  - Cell verdicts reuse the core 3-state regression verdict and add a presentation-level split: a gated metric that didn't move renders `passed`, an ungated metric renders `trend` (uncolored, with a self-computed latest-vs-previous delta). Each cell also shows the μ mean of its series.
+- **`sparkline_svg(means, stds)`** (`bencher.sparkline`) — a responsive inline-SVG sparkline: a ±std noise band, a mean line, a node per run, and a right-margin distribution column (one alpha-blended dot per run collapsed onto the value axis, so run-to-run spread and bimodality the line hides read as density). Pure-numeric input (safe to embed unescaped); `preserveAspectRatio="none"` + non-scaling strokes let CSS stretch it to any width. Uncolored — the caller (e.g. a verdict-colored cell background) owns any color.
+- **`result_to_dict(bench_res, *, include_series=True)`** (and `result_to_json`, plus the new public `series_for_var`) — attaches a per-time-event `mean`/`std`/`n` series to each scalar metric when the result carries an `over_time` axis. Off by default, so the base contract stays byte-stable; this is the trend the scorecard sparklines render.
+- **Scorecard example + docs page** — `bencher.example.example_scorecard` fabricates benchmark summaries across distribution archetypes (stable, low/high noise, improving, regressing, ungated trend, step change, converging/expanding noise, outlier spike, first run) plus a config-options showcase (aliases, percent metrics, chrome), so the rendering can be evaluated in isolation. Rendered into the docs (`docs/scorecard.md`) with the live page embedded.
+
+### Dependencies
+- Added `jinja2` (already present transitively via panel/bokeh) — used to render the scorecard template shipped as package data.
+
+## [1.112.0] - 2026-07-02
+
+### Added
+- **`BenchRunCfg.regression_overrides`** — per-variable regression specs. Maps result-variable name → a `{method: threshold}` dict drawn from `percentage` / `adaptive` / `delta` / `absolute`, or a bare number as shorthand for `{'absolute': value}` (a hard directional limit: minimize = ceiling, maximize = floor).
+  - A listed variable is checked by exactly the methods in its spec **instead of** the benchmark-wide `regression_method`, so a threshold can be loosened *or* tightened per variable; an explicit `{}` opts a variable out of detection. Unlisted variables keep the benchmark-wide method, and names matching no result variable are skipped, so one override map can be shared across benchmarks.
+  - Multiple entries run as independent checks — `{'percentage': 15.0, 'absolute': 1.0}` tracks the trend and holds a hard floor. `absolute` checks need no history and fire from the very first recording; the other methods skip until history exists.
+  - Adaptive overrides: the threshold is the MAD limit (the dual-band percent gate still comes from `regression_percentage`); while history is too sparse for MAD the check skips instead of falling back to a percentage check, so a listed variable is never judged by a knob outside its spec.
+  - Malformed specs never crash a run: unknown method keys and non-finite/bool thresholds are dropped with a warning, and a spec left with no valid checks keeps the benchmark-wide method (a typo can't silently disable detection). Bare-number shorthand accepts numpy scalars.
+  - Motivating use case: CI tracking of flat health metrics (a success rate that must hold 1.0, an orphan-process count that must hold 0) next to per-metric trend thresholds on the same benchmark. Breaches flow through the existing machinery unchanged (`has_regressions`, `regression_fail`/`RegressionError`, report markdown, JSON, `render_png`).
+  - First mutable (`param.Dict`) field on `BenchRunCfg`: every `BenchRunner` copy point deepcopies and the default is `None`; recorded in the copy-guard test's `REVIEWED_MUTABLE_FIELDS` allowlist with nested-dict isolation tests.
+
+### Changed
+- `detect_absolute` with `OptDir.none` now warns and returns `None` instead of recording a non-regressed "checked" result — a guard with no direction never ran, so it no longer appears to have passed.
 
 ## [1.111.0] - 2026-07-01
 
