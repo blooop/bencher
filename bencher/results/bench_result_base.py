@@ -169,7 +169,7 @@ class BenchResultBase:
         return bench_cfg
 
     def post_setup(self):
-        self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg)
+        self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg, self.ds)
         self.bench_cfg = self.wrap_long_time_labels(self.bench_cfg)
         self.ds = convert_dataset_bool_dims_to_str(self.ds)
         self._to_dataset_cache.clear()
