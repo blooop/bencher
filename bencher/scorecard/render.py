@@ -1,10 +1,13 @@
 """Render the benchmark health scorecard to a single HTML page.
 
 Discovers every ``*.summary.json`` under the reports directory, groups them by
-category, builds one row per benchmark and one column per (aliased) scalar
-metric, and renders a bundled Jinja template. Each cell shows a verdict-colored
-value, a Δ, and a noise sparkline; benchmarks with only image reports are listed
-as plain links so they stay reachable from this page.
+category, and builds a benchmark-by-metric cell matrix per category, rendered by
+a bundled Jinja template. Each cell shows a verdict-colored value, a Δ, and a
+noise sparkline. The template lays the matrix out two ways — one column per
+metric (compare a metric across benchmarks) or one column per benchmark (stack a
+benchmark's metrics on a shared time axis) — and a client-side control toggles
+between them. Benchmarks with only image reports are listed as plain links so
+they stay reachable from this page.
 """
 
 from __future__ import annotations
@@ -71,24 +74,32 @@ def generate_scorecard(
 
     records = discover_summaries(reports_dir, config)
 
-    # Group by category; each category gets its own union of columns so only the
+    # Group by category; each category gets its own union of metrics so only the
     # metrics present in that category are shown. Categories render in the
     # registry's display order (records are already sorted that way).
+    #
+    # Each section carries a benchmark-by-metric cell ``matrix`` plus the two
+    # label axes, so the template can lay the same cells out either way — one
+    # column per metric (compare a metric across benchmarks) or one column per
+    # benchmark (stack a benchmark's metrics on a shared time axis). The view is
+    # toggled client-side, so both orientations are rendered from this one model.
     sections: list[dict] = []
     for category in dict.fromkeys(r["category"] for r in records):
         cat_records = [r for r in records if r["category"] == category]
-        columns = metric_columns(cat_records)
-        rows = [
+        metrics = metric_columns(cat_records)
+        benchmarks = [
             {
                 "name": rec["name"],
                 "tag": rec["tag"],
                 "link": rec["link"],
                 "time_event": rec["time_event"],
-                "cells": [build_cell(rec, var, config) for var in columns],
             }
             for rec in cat_records
         ]
-        sections.append({"category": category, "columns": columns, "rows": rows})
+        matrix = [[build_cell(rec, var, config) for var in metrics] for rec in cat_records]
+        sections.append(
+            {"category": category, "metrics": metrics, "benchmarks": benchmarks, "matrix": matrix}
+        )
 
     link_sections = discover_report_links(reports_dir, config, {r["tag"] for r in records})
 
