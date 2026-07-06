@@ -28,6 +28,7 @@ without additional context. **Read the whole plan before starting it.**
 | 06 | [Docs & onboarding](06-docs-onboarding.md) | Low | Medium | Anytime |
 | 07 | [Low-risk core cleanup](07-core-cleanup.md) | Low | Small | Anytime |
 | 08 | [Larger core refactors](08-core-refactors.md) | Med–High | Large | Last — needs owner sign-off |
+| 13 | [Benchmark declaration bundle & run defaults](13-benchmark-declaration-and-run-defaults.md) | Low | Medium | Coordinate with 09 |
 
 Plans 01–03 are quick wins. Plan 02 contains decisions only the repo owner can make
 (notably the Plotly-vs-plugin-system direction for PRs #830/#932); those steps are
