@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.113.0"
+version = "1.113.1"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -10,8 +10,8 @@ license = "MIT"
 requires-python = ">=3.10,<3.14"
 
 dependencies = [
-    "holoviews>=1.15,<=1.23.0",
-    "numpy>=1.0,<=2.4.6",
+    "holoviews>=1.15,<=1.23.1",
+    "numpy>=1.0,<=2.5.1",
     "param>=2.0,<=2.4.1",
     "hvplot>=0.12.0,<=0.12.2",
     "panel>=1.9.0,<=1.9.3",
@@ -21,9 +21,9 @@ dependencies = [
     "plotly>=5.15,<=6.8.0",
     "pandas>=2.0,<=3.0.3",
     "strenum>=0.4.0,<=0.4.15",
-    "scikit-learn>=1.2,<=1.8.0",
+    "scikit-learn>=1.2,<=1.9.0",
     "moviepy>=2.1.2,<=2.2.1",
-    "matplotlib>=3.7,<=3.10.9",
+    "matplotlib>=3.7,<=3.11.0",
     "jinja2>=3.0,<=3.1.6",
 ]
 
@@ -72,12 +72,12 @@ test = [
     "pylint>=3.2.5,<=4.0.6",
     "pytest-cov>=4.1,<=7.1.0",
     "pytest>=7.4,<=9.1.1",
-    "hypothesis>=6.104.2,<=6.155.7",
+    "hypothesis>=6.104.2,<=6.156.1",
     "ruff>=0.5.0,<=0.15.20",
     "sphinxcontrib-mermaid>=1.0,<3.0",
-    "coverage>=7.5.4,<=7.14.3",
+    "coverage>=7.5.4,<=7.15.0",
     "prek>=0.2.28,<0.5.0",
-    "ty>=0.0.13,<=0.0.55",
+    "ty>=0.0.13,<=0.0.56",
 ]
 
 docs = [
@@ -92,7 +92,7 @@ docs = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.32.0,<=0.33.1", "rerun-notebook>=0.32.0,<=0.33.1"]
+rerun = ["rerun-sdk>=0.32.0,<=0.34.0", "rerun-notebook>=0.32.0,<=0.34.0"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]

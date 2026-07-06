@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.113.1] - 2026-07-06
+
+### Dependencies
+- Bumped `rerun-sdk` and `rerun-notebook` upper bounds to `0.34.0`.
+- Bumped upper bounds on `holoviews` (`1.23.1`), `numpy` (`2.5.1`), `scikit-learn` (`1.9.0`), and `matplotlib` (`3.11.0`).
+- Bumped dev/test upper bounds on `hypothesis` (`6.156.1`), `coverage` (`7.15.0`), and `ty` (`0.0.56`).
+
 ## [1.113.0] - 2026-07-04
 
 ### Added
