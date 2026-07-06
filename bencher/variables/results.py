@@ -58,6 +58,11 @@ def _hash_slots(instance):
     The class name is always included in the hash to prevent collisions between different
     Result* classes that share the same slot layout and values (e.g. ResultPath,
     ResultVideo, and ResultImage all have __slots__ = ["units"] with default units="path").
+
+    The Parameter *name* is also included: history columns and regression baselines are
+    keyed by name, so two same-typed result vars with different names are different
+    measurements and must not share a cache identity. Unbound instances hash name=None,
+    which is deterministic.
     """
     cls = type(instance)
 
@@ -83,7 +88,7 @@ def _hash_slots(instance):
                 all_slots.append(slot)
 
     values = tuple(getattr(instance, slot) for slot in all_slots)
-    return hash_sha1((cls.__name__,) + values)
+    return hash_sha1((cls.__name__, instance.name) + values)
 
 
 class OptDir(StrEnum):
@@ -99,7 +104,7 @@ class ResultFloat(Number):
     bounds to [0, 1] and produces correct boolean-style plots.
     """
 
-    __slots__ = ["units", "direction", "share_axis", "max_time_events"]
+    __slots__ = ["units", "direction", "share_axis", "max_time_events", "meaning_version"]
     # ``direction`` is excluded because flipping minimize<->maximize does not
     # change the recorded numeric values, only their interpretation for
     # Pareto/optimizer plots.  Keeping it in the hash would needlessly wipe
@@ -113,11 +118,21 @@ class ResultFloat(Number):
         share_axis=True,
         max_time_events=None,
         default=float("nan"),
+        meaning_version=1,
         **params,
     ):
         Number.__init__(self, **params)
         assert isinstance(units, str)
         self.units = units
+        # The sanctioned way to declare "same name, new semantics": bump
+        # meaning_version when the quantity this metric measures changes
+        # (e.g. success redefined from reported to physically verified).
+        # It is part of the column identity, so the bump cleanly restarts
+        # this column's over_time history and regression baseline while
+        # every other column's history continues. Without a bump, a
+        # redefinition would silently splice two different quantities into
+        # one trend line.
+        self.meaning_version = meaning_version
         # Defaults to NaN so an *unrecorded* sample (a run that aborts before
         # measuring, or a result var the worker never sets) is treated as
         # missing and dropped by the nan-aware reductions used for regression

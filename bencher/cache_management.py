@@ -35,7 +35,10 @@ logger = logging.getLogger(__name__)
 # ``BenchCfg.hash_persistent``) so bumping here atomically invalidates every
 # benchmark-level and over_time history key in addition to wiping the on-disk
 # tree via ``ensure_cache_version()``.
-CACHE_VERSION = "4"
+# v5: hash composition changed (variable names in per-var identity, unordered
+# result/const var sets) and the history cache switched to schema-evolving
+# records (see bencher/history.py).
+CACHE_VERSION = "5"
 
 # Default cache size for benchmark results (100 GB).
 # Used by ResultCollector, SweepExecutor, and Bench.

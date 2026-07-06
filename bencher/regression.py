@@ -18,6 +18,7 @@ import numpy as np
 import xarray as xr
 
 from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
+from bencher.history import BIRTH_ATTR
 
 # Default thresholds per method — used when the user hasn't explicitly set a threshold.
 _METHOD_DEFAULTS = {
@@ -70,6 +71,10 @@ class RegressionResult:
     # ``over_time`` datetimes). Optional: falls back to integer indices.
     historical_x: np.ndarray | None = None
     current_x: np.ndarray | None = None
+    # True when the variable's baseline is younger than regression_min_history
+    # (freshly added column, or restarted by a meaning_version bump). Young
+    # regressions are reported but never trigger regression_fail.
+    young_baseline: bool = False
 
     def render_png(
         self,
@@ -115,6 +120,9 @@ class RegressionResult:
             value = getattr(self, band)
             if value is not None:
                 out[band] = _finite_or_none(value)
+        # Emitted only when set so the base JSON contract stays byte-stable.
+        if self.young_baseline:
+            out["young_baseline"] = True
         return out
 
 
@@ -129,6 +137,15 @@ class RegressionReport:
         return any(r.regressed for r in self.results)
 
     @property
+    def has_blocking_regressions(self) -> bool:
+        """True when any regression has a mature baseline and may fail the run.
+
+        Regressions on young baselines (see ``regression_min_history``) are
+        notify-only: reported in the summary/export but never blocking.
+        """
+        return any(r.regressed and not r.young_baseline for r in self.results)
+
+    @property
     def regressed_variables(self) -> list[RegressionResult]:
         return [r for r in self.results if r.regressed]
 
@@ -140,7 +157,10 @@ class RegressionReport:
         else:
             lines.append(f"Regressions detected in {len(regressed)} variable(s):")
             for r in regressed:
-                lines.append(_format_summary_line(r))
+                line = _format_summary_line(r)
+                if r.young_baseline:
+                    line += " [young baseline - notify only]"
+                lines.append(line)
         return "\n".join(lines)
 
     def to_markdown(self) -> str:
@@ -1345,7 +1365,7 @@ def _valid_threshold(value) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def _normalize_overrides(overrides) -> dict:
+def _normalize_overrides(overrides) -> tuple[dict, dict]:
     """Validate ``run_cfg.regression_overrides`` into ``{var: {method: threshold}}``.
 
     A bare number is shorthand for ``{"absolute": value}``. Malformed entries
@@ -1354,17 +1374,38 @@ def _normalize_overrides(overrides) -> dict:
     falls back to the benchmark-wide method (so a typo'd key can't silently
     disable detection). Only a literal empty spec opts the variable out of
     detection — the variable was explicitly listed with no checks.
+
+    A ``min_history`` key inside a spec is not a check: it is the per-variable
+    override of ``regression_min_history`` and is returned separately as the
+    second element ``{var: min_history}``. A spec containing only
+    ``min_history`` keeps the benchmark-wide method.
     """
     normalized: dict = {}
+    min_history: dict = {}
     if not overrides:
-        return normalized
+        return normalized, min_history
     for var_name, spec in overrides.items():
         shorthand = _valid_threshold(spec)
         if shorthand is not None:
             normalized[var_name] = {"absolute": shorthand}
         elif isinstance(spec, dict):
             valid = {}
+            has_min_history = False
             for method, threshold in spec.items():
+                if method == "min_history":
+                    if (
+                        isinstance(threshold, int)
+                        and not isinstance(threshold, bool)
+                        and (threshold >= 1)
+                    ):
+                        min_history[var_name] = threshold
+                        has_min_history = True
+                    else:
+                        logging.warning(
+                            f"regression_overrides['{var_name}']: 'min_history' must be "
+                            f"an int >= 1, got {threshold!r}; ignored"
+                        )
+                    continue
                 if method not in _METHOD_THRESHOLD_ATTR:
                     logging.warning(
                         f"regression_overrides['{var_name}']: unknown method '{method}' ignored"
@@ -1378,9 +1419,9 @@ def _normalize_overrides(overrides) -> dict:
                     )
                     continue
                 valid[method] = valid_threshold
-            if valid or not spec:
+            if valid or (not spec and not has_min_history):
                 normalized[var_name] = valid
-            else:
+            elif not has_min_history:
                 logging.warning(
                     f"regression_overrides['{var_name}']: no valid checks in spec; "
                     "keeping the benchmark-wide method"
@@ -1390,7 +1431,7 @@ def _normalize_overrides(overrides) -> dict:
                 f"regression_overrides['{var_name}']: expected a finite number or "
                 f"{{method: threshold}} dict, got {spec!r}; ignored"
             )
-    return normalized
+    return normalized, min_history
 
 
 def _run_check(
@@ -1441,6 +1482,26 @@ def _run_check(
     raise ValueError(f"Unknown regression check method '{check_method}'")
 
 
+def _history_points_since_birth(dataset: xr.Dataset, da: xr.DataArray) -> int:
+    """Historical over_time points available for *da*, excluding the current run.
+
+    Counts from the column's birth coordinate (stamped by history
+    reconciliation on freshly added or meaning_version-restarted columns) so
+    NaN backfill before the column existed does not inflate its baseline age.
+    Columns without a birth marker — as old as the history itself, or a
+    dataset without over_time coordinates — count the full window. A birth
+    value no longer present in the coordinates means the birth has aged out
+    past max_time_events, so the whole (trimmed) window is real history.
+    """
+    n_time = int(dataset.sizes.get("over_time", 0))
+    birth = da.attrs.get(BIRTH_ATTR)
+    if birth is None or "over_time" not in dataset.coords:
+        return max(n_time - 1, 0)
+    matches = np.nonzero(dataset["over_time"].values == birth)[0]
+    start = int(matches[0]) if len(matches) else 0
+    return max(n_time - start - 1, 0)
+
+
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
@@ -1475,7 +1536,10 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     if "over_time" not in dataset.dims:
         return report
 
-    overrides = _normalize_overrides(getattr(run_cfg, "regression_overrides", None))
+    overrides, min_history_overrides = _normalize_overrides(
+        getattr(run_cfg, "regression_overrides", None)
+    )
+    default_min_history = getattr(run_cfg, "regression_min_history", 1) or 1
     method = run_cfg.regression_method
 
     regression_percentage = getattr(run_cfg, "regression_percentage", None)
@@ -1528,6 +1592,13 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         da = dataset[var_name]
         direction = rv.direction if hasattr(rv, "direction") else OptDir.none
 
+        # Points since the column's birth (history reconciliation stamps the
+        # birth coordinate on freshly added / meaning_version-restarted
+        # columns). A baseline younger than min_history downgrades this
+        # variable's history-based regressions to notify-only.
+        min_history = min_history_overrides.get(var_name, default_min_history)
+        history_points = _history_points_since_birth(dataset, da)
+
         # Split: historical = all but last, current = last
         current_clean = _clean_1d(da.isel(over_time=-1).values)
         if len(current_clean) == 0:
@@ -1564,6 +1635,8 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
             )
             if result is None:
                 continue
+            # History-free checks (hard limits) gate regardless of baseline age.
+            result.young_baseline = with_history and history_points < min_history
             _attach_plot_metadata(
                 result,
                 time_coord=time_coord,
