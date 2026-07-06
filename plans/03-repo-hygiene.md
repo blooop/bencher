@@ -18,7 +18,7 @@ document for past or deferred work; none describes current behavior accurately.
 |------|--------------|--------------------------------------------------------|
 | `PLAN.md` | Marked "Status: IMPLEMENTED" — the `benchmark()` method shipped | `> ARCHIVED: implemented in v1.10x. Kept for historical reference.` |
 | `RENAME_PLAN.md` | Both plans explicitly shelved/deferred | `> ARCHIVED: deferred indefinitely. The PyPI name remains 'holobench' (import name 'bencher') — this is intentional.` |
-| `PERFORMANCE_PLAN.md` | ~1300 lines of aspirations from the v1.71 era, partially superseded | `> ARCHIVED: snapshot from the v1.71 save-performance investigation. Partially addressed since; see PR #830 for the active direction.` |
+| `PERFORMANCE_PLAN.md` | 802 lines of aspirations from the v1.71 era, partially superseded | `> ARCHIVED: snapshot from the v1.71 save-performance investigation. Partially addressed since; see PR #830 for the active direction.` |
 | `SAVE_PERFORMANCE_REPORT.md` | Auto-generated benchmark output from 2026-03-23 | `> ARCHIVED: point-in-time output of scripts/benchmark_save.py (2026-03-23). Regenerate rather than read.` |
 
 Commands (repeat per file):
@@ -38,7 +38,8 @@ Check first whether anything references it: `grep -rn "PROMPT.md" --include="*.y
 
 `setup.py`, `setup.cfg`, and `MANIFEST.in` are leftovers from a ROS-era layout. The
 build is hatchling via `pyproject.toml`; `setup.py` even declares the wrong package
-name (`bencher` instead of `holobench`).
+name (`bencher` instead of `holobench`) and lists a `package.xml` in `data_files`
+that does not exist in the repo.
 
 1. `git rm setup.py setup.cfg MANIFEST.in`
 2. Verify the package still builds and imports:
@@ -51,14 +52,15 @@ name (`bencher` instead of `holobench`).
 3. Check nothing references the removed files:
    `grep -rn "setup.py\|setup.cfg\|MANIFEST.in" pyproject.toml .github/ scripts/ docs/ 2>/dev/null`
    — fix or report any hit. (Hits inside `pixi.lock` or archived plans can be ignored.)
-4. Check whether `resource/` and `package.xml` exist and are only referenced by the
-  deleted `setup.py` — if so, list them in your report as candidates for removal but
-  do NOT delete them in this plan (ROS consumers might still need them; `OWNER DECISION`).
+4. `package.xml` does not exist (setup.py references it anyway — further evidence it
+  is dead). Check whether `resource/` is only referenced by the deleted `setup.py` —
+  if so, list it in your report as a removal candidate but do NOT delete it in this
+  plan (ROS consumers might still need it; `OWNER DECISION`).
 
 ## Task 3: Document the remaining unexplained root files
 
-Add a short "Repository layout" section to `CLAUDE.md` (and the `AGENTS.md` symlink picks
-it up automatically) explaining:
+Add a short "Repository layout" section to `AGENTS.md` (`CLAUDE.md` is a symlink to
+it, so both names pick it up) explaining:
 
 - `ralph.yml` — config for the Ralph agent orchestrator (used with `pixi run agent-iterate` flows).
 - `rockerc.yaml` — rocker/docker dev-container configuration.

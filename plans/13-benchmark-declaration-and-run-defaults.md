@@ -121,7 +121,8 @@ def bench_pathfinding(run_cfg, report) -> bn.Bench: ...
 - To distinguish "caller passed `repeats=1`" from "default", the
   declaration-overridable kwargs of `bn.run`/`BenchRunner.run` switch to the
   `UNSET` sentinel (`bencher/utils.py:529`, already the pattern for
-  `subsampling_divisions`, `bencher/run.py:67`); effective fallbacks unchanged.
+  `subsampling_divisions` in both `bencher/run.py:67` and
+  `bencher/bench_runner.py:299`); effective fallbacks unchanged.
 
 ### D2 — Env overrides in `bn.run`
 
@@ -153,7 +154,9 @@ command — is a no-op rather than an error. Bools accept `1/0/true/false/yes/no
 `target.__name__` > legacy `""`. It is written into `run_cfg.run_tag` only when
 `run_tag` is still empty (never clobbers an explicit one), flowing into cache
 identity via `bencher/bencher.py:524` and replacing the date suffix at
-`bencher/bench_runner.py:449-453`. The `__name__` fallback is gated on the
+`bencher/bench_runner.py:449-453`. (There is a second `run_cfg.run_tag + tag`
+composition on the `optimize()` path, `bencher/bencher.py:1196` — the tag rule
+must cover both sites.) The `__name__` fallback is gated on the
 decorator because the tag is hashed (`bencher/bench_cfg.py:793`): auto-tagging
 *undecorated* benchmarks would silently re-key every existing cache/history,
 while decorated ones are a new opt-in surface with no history to break.
