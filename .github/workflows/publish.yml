@@ -1,14 +1,21 @@
 name: Auto-publish
 
-on: [push, workflow_dispatch]
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  # Auto-publish when version is increased
+  # Auto-publish when version is increased, but only after CI succeeds on main
   publish-job:
-    # Only publish on `main` branch
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
-    permissions:  # Don't forget permissions
+    permissions:
       contents: write
     steps:
     - uses: etils-actions/pypi-auto-publish@v1

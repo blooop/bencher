@@ -228,6 +228,7 @@ enable = "no-else-return,consider-using-in"
 omit = ["*/test/*", "__init__.py"]
 
 [tool.coverage.report]
+fail_under = 85
 exclude_also = [
     "def __repr__",
     "if False:",
