@@ -199,12 +199,25 @@ history cache holding the last-seen `hash_persistent` key plus a compact identit
 summary — ordered `(kind, name, class, units)` tuples for input/result/const
 vars. (Prior art: Layer B stores a `bench_name`-keyed hash list alongside its
 hash-keyed entries, `result_collector.py:396-397`.) On a key mismatch where
-prior history exists, emit a prominent **WARNING** naming what likely changed
-(var added/removed/renamed/reordered/re-unitted, diffed from the summary) and
-how many historical `over_time` events are orphaned under the old key. Add an
-escape hatch on `BenchRunCfg` (`bench_cfg.py:98`, next to `clear_history` at
-`:348`): `on_history_reset = "warn" | "error" | "ignore"`, default `"warn"` —
-silent invalidation becomes observable without blocking legitimate resets.
+prior history exists, surface it — once per benchmark, at history-load time —
+through **all three** of these, so it is visible whether the user watches a
+console, a CI log, or only the rendered report:
+
+1. **A `logging.WARNING`** (module logger, not the current `INFO`/`DEBUG` at
+   `result_collector.py:431,435`) naming what likely changed (var
+   added/removed/renamed/reordered/re-unitted, diffed from the stored summary)
+   and how many historical `over_time` events are orphaned under the old key.
+2. **A note in the rendered report's over-time/history section** (the surfacing
+   A4 §3.5 / W5 already call for) so a reset is not invisible to someone who only
+   opens the HTML.
+3. **The `on_history_reset` policy knob** below, which decides whether the
+   mismatch is tolerated or fatal.
+
+Add the escape hatch on `BenchRunCfg` (`bench_cfg.py:98`, next to `clear_history`
+at `:348`): `on_history_reset = "warn" | "error" | "ignore"`, default `"warn"`
+(emit 1+2). `"error"` raises a `HistoryResetError` naming the diff — for CI that
+must never silently lose a baseline; `"ignore"` suppresses 1+2 for a deliberate
+reset. Silent invalidation becomes observable without blocking legitimate resets.
 
 ## 3. Research questions (resolve before implementing)
 
@@ -241,9 +254,21 @@ Treat the benchmark identity as an unordered set of *named* variables:
   and each const's as `hash_sha1((cv.name, cv.hash_persistent(), hash_sha1(value)))`
   — name included fixes D2; value retained (a different constant is a different
   experiment).
-- Combine result-var and const-var identities **order-independently** — e.g. fold
-  the *sorted* tuple of per-var identity hashes — so any permutation collapses to
-  one key (fixes D1).
+- Combine result-var and const-var identities **order-independently** (fixes D1).
+  Two candidate combiners, with the tradeoff spelled out so an implementer need
+  not re-derive it:
+  - **Sorted-tuple hash (recommended):** `hash_sha1(tuple(sorted(per_var_hashes)))`
+    — sort the per-variable digests, then hash the tuple. Deterministic, preserves
+    multiplicity (two vars sharing an identity stay two entries), trivially
+    auditable, and reuses the existing `hash_sha1` primitive.
+  - **Commutative/multiset hash:** an order-free operator (XOR or modular sum of
+    the per-var digests). No sort, but XOR *cancels* duplicates (two identical
+    identities collapse to 0) and additive sum is a weaker mixer with higher
+    collision risk.
+
+  Use the sorted-tuple hash: the sort cost is negligible (a handful of vars) and
+  it has no cancellation failure mode — important because same-type vars already
+  share an identity (§2), so a commutative combiner could silently zero them out.
 - Keep `input_vars` folded in order, but include each var's name (pending
   research question 3).
 - On history load, compare the stored dataset's data-variable *and dim* name sets
