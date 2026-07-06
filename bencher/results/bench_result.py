@@ -33,6 +33,8 @@ from bencher.results.holoview_results.curve_result import CurveResult
 from bencher.results.holoview_results.band_result import BandResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
+from bencher.results.holoview_results.table_result import TableResult
+from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.histogram_result import HistogramResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.dataset_result import DataSetResult
@@ -63,6 +65,12 @@ class BenchResult(
     BandResult,
     SurfaceResult,
     HistogramResult,
+    # Late in the base list (but before their base HoloviewResult) so they never
+    # shadow the earlier renderers; BenchResult must inherit them for the named-only
+    # plugin callbacks (TabulatorResult.to_plot -> self.to_tabulator) to be callable
+    # unbound on a BenchResult.
+    TableResult,
+    TabulatorResult,
     HoloviewResult,
     VideoSummaryResult,
     DataSetResult,
