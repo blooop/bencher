@@ -67,7 +67,7 @@ class BenchResult(
     HistogramResult,
     # Late in the base list (but before their base HoloviewResult) so they never
     # shadow the earlier renderers; BenchResult must inherit them for the named-only
-    # plugin callbacks (TabulatorResult.to_plot -> self.to_tabulator) to be invokable
+    # plugin callbacks (TabulatorResult.to_plot -> self.to_tabulator) to be callable
     # unbound on a BenchResult.
     TableResult,
     TabulatorResult,
