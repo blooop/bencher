@@ -18,7 +18,9 @@ from bencher.plugins.bench_data import BenchData, CacheHandle, RunMeta
 from bencher.plugins.plugin import PlotPlugin, plot_plugin
 from bencher.plugins.registry import (
     ENTRY_POINT_GROUP,
+    PluginDecision,
     PluginRegistry,
+    decisions_to_table,
     get_registry,
     register_plugin,
     unregister_plugin,
@@ -30,7 +32,9 @@ __all__ = [
     "ENTRY_POINT_GROUP",
     "PlotFilter",
     "PlotPlugin",
+    "PluginDecision",
     "PluginRegistry",
+    "decisions_to_table",
     "RunMeta",
     "VarRange",
     "get_registry",

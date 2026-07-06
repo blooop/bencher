@@ -39,7 +39,7 @@ from bencher.results.histogram_result import HistogramResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.dataset_result import DataSetResult
 from bencher.plugins.bench_data import BenchData, RunMeta
-from bencher.plugins.registry import get_registry
+from bencher.plugins.registry import get_registry, decisions_to_table
 from bencher.plugins.builtins import (
     CALLBACK_TO_PLUGIN,
     PANES_PLUGIN_NAME,
@@ -266,6 +266,33 @@ class BenchResult(
         if len(row.pane) == 0:
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
+
+    def explain_selection(
+        self,
+        plot_list: list[callable | str] | None = None,
+        remove_plots: list[callable | str] | None = None,
+        numeric_only: bool = False,
+        backend: str | None = None,
+    ) -> str:
+        """Why each registered plugin would or wouldn't render for this result.
+
+        Runs the same selection `to_auto` uses (same plot_list/remove_plots
+        normalization) and renders the full decision table — chosen plugins first,
+        each rejected one with the first gate that dropped it (named-only, missing
+        capability, shape-filter mismatch, superseded backend, ...).
+
+        Returns:
+            str: A text table, one row per registered plugin.
+        """
+        include_names, _ = self._normalize_plot_list(listify(plot_list))
+        exclude_names, _ = self._plot_exclusions(listify(remove_plots), [], numeric_only)
+        decisions = get_registry().explain(
+            self.to_bench_data(),
+            include=include_names,
+            exclude=exclude_names or None,
+            backend=backend,
+        )
+        return decisions_to_table(decisions)
 
     @staticmethod
     def _normalize_plot_list(
