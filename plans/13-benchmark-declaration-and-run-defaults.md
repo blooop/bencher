@@ -138,8 +138,11 @@ Resolved once, at the top of `bn.run` (the canonical unattended entry point).
 
 Parsing is **strict**: a set-but-unparsable value raises `ValueError` naming
 the variable and its accepted values — a silently ignored override in CI
-produces wrong data, worse than a crash. Empty string means unset (supports
-`BENCHER_REPEATS= cmd`); bools accept `1/0/true/false/yes/no`
+produces wrong data, worse than a crash. An empty value counts as **unset**
+(falls back to the declared/library default), so a per-invocation assignment
+prefix such as `BENCHER_REPEATS= python -m my_benchmarks` — a POSIX var-assignment
+prefix, no space after the `=`, setting the variable to empty for that one
+command — is a no-op rather than an error. Bools accept `1/0/true/false/yes/no`
 (case-insensitive); `BENCHER_SHOW` goes through `normalize_show`
 (`bencher/bench_cfg.py:44`) plus the bool spellings. No lenient mode.
 
