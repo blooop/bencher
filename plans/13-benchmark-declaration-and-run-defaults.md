@@ -26,7 +26,7 @@ defaults. Every entry point re-specifies them:
   `sampling_context`, `over_time`, `publisher`, … per call (`bencher/run.py:64-83`).
 - `BenchRunner.run` repeats the same parameter list with its own `repeats=1`
   default (`bencher/bench_runner.py:296-317`).
-- `from_cmd_line` re-declares `--repeats` a third time (`bencher/bench_cfg.py:542-547`).
+- `from_cmd_line` redeclares `--repeats` a third time (`bencher/bench_cfg.py:542-547`).
 
 So across dozens of modules, the `__main__` block and the test-harness call
 inevitably drift (repeat counts diverge; one passes a `publisher`, the other
