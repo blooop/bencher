@@ -33,12 +33,12 @@ def decisions_to_table(decisions: Iterable[PluginDecision]) -> str:
     text table, chosen rows first."""
     rows = [("chart type", "backend", "chosen", "reason")]
     rows += [(d.name, d.backend, "yes" if d.chosen else "no", d.reason) for d in decisions]
-    widths = [max(len(r[i]) for r in rows) for i in range(3)]
+    widths = [max(len(r[i]) for r in rows) for i in range(4)]
     lines = [
-        f"| {r[0]:<{widths[0]}} | {r[1]:<{widths[1]}} | {r[2]:<{widths[2]}} | {r[3]} |"
+        f"| {r[0]:<{widths[0]}} | {r[1]:<{widths[1]}} | {r[2]:<{widths[2]}} | {r[3]:<{widths[3]}} |"
         for r in rows
     ]
-    lines.insert(1, "|" + "|".join("-" * (w + 2) for w in widths) + "|" + "-" * 8 + "|")
+    lines.insert(1, "|" + "|".join("-" * (w + 2) for w in widths) + "|")
     return "\n".join(lines)
 
 
@@ -265,13 +265,16 @@ class PluginRegistry:
             winner = max(pool, key=lambda p: (p.priority, p.backend))
             picked_plugins.append(winner)
             for plugin in impls:
-                if plugin is not winner:
+                if plugin is winner:
+                    continue
+                if backend and winner.backend == backend and plugin.backend != backend:
+                    why = f"backend {backend!r} preferred over {plugin.backend!r}"
+                else:
                     why = (
-                        f"backend {winner.backend!r} preferred"
-                        if backend == winner.backend and plugin.backend != backend
-                        else f"lower priority than {winner.backend!r} implementation"
+                        f"lower priority ({plugin.priority}) than {winner.backend!r} "
+                        f"implementation (priority={winner.priority})"
                     )
-                    reject(plugin, f"superseded for chart type {plugin.name!r}: {why}")
+                reject(plugin, f"superseded for chart type {plugin.name!r}: {why}")
 
         picked_plugins.sort(key=lambda p: (-p.priority, p.name))
         chosen = [

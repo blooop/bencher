@@ -129,9 +129,20 @@ class TestExplainMatchesSelect(unittest.TestCase):
         reg = get_registry()
         data = self.results["1_float"].to_bench_data()
         decisions = reg.explain(data, only="table")
+
+        # chosen plugin still reports the "only" reason
         chosen = [d for d in decisions if d.chosen]
         self.assertEqual([d.name for d in chosen], ["table"])
         self.assertIn("only", chosen[0].reason)
+
+        # rejected plugins should report the "not requested (only=...)" message
+        rejected = [d for d in decisions if not d.chosen]
+        self.assertTrue(
+            rejected,
+            msg="Expected at least one rejected plugin when using only='table'",
+        )
+        for r in rejected:
+            self.assertIn("not requested (only=", r.reason)
 
 
 class TestExplainFacade(unittest.TestCase):
