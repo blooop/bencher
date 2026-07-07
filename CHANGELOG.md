@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`BenchResult.explain_selection()` / `PluginRegistry.explain()`** (A2 Phase S2): the full plot-selection decision table — one row per registered plugin, chosen entries first, each rejected entry carrying the first gate that dropped it (named-only, not in `plot_list`, excluded, missing capability, shape-filter mismatch, superseded backend resolution). `select()` is now exactly the chosen subset of `explain()`, so the table is the authoritative record of why a plot did or did not appear.
+
 ## [1.114.0] - 2026-07-06
 
 ### Added
