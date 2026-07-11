@@ -65,8 +65,8 @@ holoviews chain, pulled in at module level by `bencher/bencher.py` and
    `import optuna` inside each function that uses it (search `optuna\.` within the file).
    Mirror the existing lazy-import style used for plotly (see commit 37b28808 and the
    comment style around it). (`optuna` also appears in a type annotation at
-   `bencher.py:1116` — fine under the file's existing `from __future__ import
-   annotations` — and in an in-body default at `:1221`.)
+   `bencher.py:1145` — fine under the file's existing `from __future__ import
+   annotations` — and in an in-body default at `:1250`.)
 3. Run the full suite after each library: `pixi run test`. Also run the split-render
    suite once at the end: `pixi run test-split` (slow).
 4. For `panel` in `bencher/bencher.py` / `bencher/bench_report.py`: this is harder

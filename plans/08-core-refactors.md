@@ -1,8 +1,8 @@
 # Plan 08 — Larger Core Refactors
 
-**Goal:** Reduce the three biggest structural debts: `bencher/bencher.py` (~1,529
-lines, 42 methods on `Bench`), `bencher/bench_cfg.py` (~1,086 lines, ~72 params across
-its three config classes), and `bencher/regression.py` (~1,577 lines mixing statistics
+**Goal:** Reduce the three biggest structural debts: `bencher/bencher.py` (~1,558
+lines, 42 methods on `Bench`), `bencher/bench_cfg.py` (~1,133 lines, ~73 params across
+its three config classes), and `bencher/regression.py` (~1,665 lines mixing statistics
 and rendering).
 
 **⚠️ Read first:** These are the highest-risk plans in the set. Each subsection is an

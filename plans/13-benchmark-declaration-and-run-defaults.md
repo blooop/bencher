@@ -155,7 +155,7 @@ command — is a no-op rather than an error. Bools accept `1/0/true/false/yes/no
 `run_tag` is still empty (never clobbers an explicit one), flowing into cache
 identity via `bencher/bencher.py:524` and replacing the date suffix at
 `bencher/bench_runner.py:449-453`. (There is a second `run_cfg.run_tag + tag`
-composition on the `optimize()` path, `bencher/bencher.py:1196` — the tag rule
+composition on the `optimize()` path, `bencher/bencher.py:1225` — the tag rule
 must cover both sites.) The `__name__` fallback is gated on the
 decorator because the tag is hashed (`bencher/bench_cfg.py:793`): auto-tagging
 *undecorated* benchmarks would silently re-key every existing cache/history,

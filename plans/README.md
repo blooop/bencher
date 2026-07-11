@@ -48,14 +48,14 @@ before executing any phase. **A3 is the keystone — read it first.**
 
 | Doc | Subject | Resolves |
 |-----|---------|----------|
-| [A1 — Rendering backend unification](architecture/A1-rendering-backend-unification.md) | Plugin registry as the skeleton (Phases 0 and 2 landed); backends swap under stable plot names; the Plotly port and fast-save path were dropped per owner decision — see the addendum | The #830-vs-#932 conflict (resolved plugin-first), the 17-class `BenchResult` MRO |
-| [A2 — Plot selection redesign](architecture/A2-plot-selection-redesign.md) | Centralized, explainable, *ranked* selection; serializable plot specs instead of callables | Render-everything noise, scattered match logic, unpicklable `plot_callbacks` |
+| [A1 — Rendering backend unification](architecture/A1-rendering-backend-unification.md) | Plugin registry as the skeleton (Phases 0, 2, and 3 landed); backends swap under stable plot names; the Plotly port and fast-save path were dropped per owner decision — see the addendum | The #830-vs-#932 conflict (resolved plugin-first), the 17-class `BenchResult` MRO |
+| [A2 — Plot selection redesign](architecture/A2-plot-selection-redesign.md) | Centralized, explainable, *ranked* selection (S1 signature enrichment landed via PR #983; S2's `explain_selection()` shipped in v1.115.0); serializable plot specs instead of callables | Render-everything noise, scattered match logic, unpicklable `plot_callbacks` |
 | [A3 — BenchData contract](architecture/A3-benchdata-contract.md) | One frozen, pickle-free data type (netCDF + JSON manifest) used by rendering, the collect/render split, result cache, and history | Pickled god-object at four boundaries; load-time code execution |
 | [A4 — Caching architecture](architecture/A4-caching-architecture.md) | One storage interface (absorbs PR #760), one key module, worker source-code hashing, artifact manifests, netCDF history (absorbs PR #799) | Stale-results footgun, media orphans, pickle CVE class, scattered key logic |
 
-Sequencing: A1 Phases 0 and 2 have landed (#932, #970; Phase 1 is dropped and Phase 3
-is in flight as #973 — see the A1 addendum); A4 Phase C1–C2 can start immediately;
-A3 Phase D2 gates A4 Phase C4; A2's ranking phases come last.
+Sequencing: A1 Phases 0, 2, and 3 have landed (#932, #970, #973/v1.114.0; Phase 1 is
+dropped — see the A1 addendum); A4 Phase C1–C2 can start immediately; A3 Phase D2
+gates A4 Phase C4; A2's ranking phases (S3–S4) come last.
 
 ## State of the repo (review summary, 2026-06-11)
 
@@ -63,8 +63,12 @@ A3 Phase D2 gates A4 Phase C4; A2's ranking phases come last.
 > plan 01 executed (PR #982); most of plan 05 executed (all listed result modules now
 > have dedicated tests; the suite is now ~101 files / ~1,500 tests); #830 closed while
 > #932, #953, and #850 merged (7 PRs remain open, including the #760 CVE fix); A1
-> Phases 0 and 2 landed, so A2 §1's description of `to_auto` predates the registry
-> dispatch that now exists.
+> Phases 0 and 2 landed.
+>
+> **Update (2026-07-11):** A1 Phase 3 landed (#973, v1.114.0); A2 Phase S2's
+> `explain_selection()` shipped in v1.115.0 and Phase S1 is in review as PR #983;
+> plans 09 and 14 were implemented in v1.116.0 (cache re-key, `CACHE_VERSION` 5),
+> so A4 §1's cache-layer table now describes the post-1.116 key split.
 
 ### What is good
 

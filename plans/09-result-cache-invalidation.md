@@ -37,7 +37,8 @@ which `plans/architecture/A4-caching-architecture.md` §5 says NOT to change. A4
 defect, not an intentional exclusion. Coordinate with A4: if A4 Phase C2 (the
 `bencher/caching/keys.py` key module) has landed, implement this fix there
 instead of in `bench_cfg.py`. (A4's §1 Layer-C row and §2 W5 clause previously
-claimed the history key excludes repeats — both now corrected to match §1.)
+claimed the history key excludes repeats — both since rewritten to describe the
+post-v1.116.0 state; this plan's §1 below describes the pre-fix source.)
 
 **Rules:**
 - Always use the pixi environment (`pixi run ...`, e.g. `pixi run pytest`). Never
@@ -69,12 +70,12 @@ hash, computed once as `bench_cfg.hash_persistent(True)` (`bencher/bencher.py:67
   "over_time")` (`result_collector.py:465`, xarray's default `join="outer"`).
   A missing key means "no history" → fresh series.
 
-(The `include_repeats=False` variant at `bencher.py:689` keys nothing: it is
+(The `include_repeats=False` variant at `bencher.py:682` keys nothing: it is
 threaded into `WorkerJob.bench_cfg_sample_hash` and never read — the sample
 cache is keyed by `hash_sha1((fn_inputs_sorted, tag))` alone (`worker_job.py:63`),
 and the comment at `worker_job.py:61` claiming the sweep hash is included is
 stale. Repeats are intentionally in the history key so historical arrays have
-the same shape — see the comment at `bench_cfg.py:813-815`.)
+the same shape — see the comment at `bench_cfg.py:773-775`.)
 
 Crucially, identity *inside* the stored dataset is by **name**: data variables
 are created under each result var's `.name` (`result_collector.py:229`), and

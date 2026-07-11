@@ -1,21 +1,27 @@
 # A2 — Plot Selection Redesign
 
-**Status:** Proposal. Depends on A1 phases 0–2 (registry in place, built-ins wrapped).
+**Status:** In progress. Phase S1 (signature enrichment) implemented in PR #983;
+Phase S2 is half-landed — `explain_selection()` shipped in v1.115.0, but per-plot
+shape checks still live inside each `to_plot` (built-ins register permissive
+`match_all` filters). Phases S3–S4 remain proposals. A1 phases 0–2 (registry in
+place, built-ins wrapped) have landed.
 **Scope:** How bencher decides *which* plots to show for a given sweep, and how users
 override that. A1 covers how plots are produced; A3 covers the data they receive.
 
 ---
 
-## 1. How selection works today (verified; refreshed 2026-07-06 after A1 Phase 2 landed)
+## 1. How selection works today (verified; refreshed 2026-07-11 after S1/S2 landed)
 
-1. `PltCntCfg` (`bencher/plotting/plt_cnt_cfg.py`, 83 lines) counts the sweep shape:
+1. `PltCntCfg` (`bencher/plotting/plt_cnt_cfg.py`, 188 lines) counts the sweep shape:
    `float_cnt`, `cat_cnt`, `vector_len`, `result_vars`, `panel_cnt`, `repeats`,
-   `inputs_cnt`.
+   `inputs_cnt` — plus, since Phase S1 (PR #983), the §2.2 signature fields
+   `has_time`/`time_steps`, `result_kinds`, `cat_levels`, and `samples_per_point`
+   (computed but not yet consumed by selection).
 2. Each result class declares a `PlotFilter` of `VarRange`s over those counts
    (`bencher/plotting/plot_filter.py:66-91`) and checks it inside its own `to_plot`.
-3. `BenchResult.to_auto()` (`bench_result.py:196-260`) — since A1 Phase 2 landed
+3. `BenchResult.to_auto()` (`bench_result.py:204-268`) — since A1 Phase 2 landed
    (#970) — dispatches through the plugin registry (`get_registry().select(...)`,
-   `bench_result.py:244`) and appends *every* selected plugin that doesn't filter
+   `bench_result.py:252`) and appends *every* selected plugin that doesn't filter
    itself out or throw. The old hard-coded list (`default_plot_callbacks()`: Bar,
    BoxWhisker, Curve, Line, Heatmap, Histogram, Volume, Panes) survives only as a
    vestigial helper referenced by tests.
@@ -33,10 +39,10 @@ diagnostics (`PlotMatchesResult.matches_info`) are a great debugging affordance.
 | # | Problem | Evidence |
 |---|---|---|
 | P1 | **No ranking — all matches render.** A 2-float/1-cat sweep with repeats can produce bar + box + curve + line + heatmap, mostly redundant. Reports are slow and noisy; users scroll. | `to_auto` loop appends every success |
-| P2 | **Selection knowledge is scattered.** Which plot handles which shape lives in 17 class bodies (the builtin plugins wrap them with permissive `match_all` filters, deferring shape checks to each `to_plot`); nothing can answer "what would render for this sweep?" without executing renderers. | `bencher/plugins/builtins.py`, `bench_result.py:244` |
+| P2 | **Selection knowledge is scattered.** Which plot handles which shape lives in 17 class bodies (the builtin plugins wrap them with permissive `match_all` filters, deferring shape checks to each `to_plot`); `explain_selection()` (v1.115.0) now answers the registry-gate half, but shape eligibility still can't be known without executing each renderer. | `bencher/plugins/builtins.py`, `bench_result.py:252` |
 | P3 | **Plot choices aren't serializable.** `plot_callbacks` holds function objects — fragile for the collect/render split (pickled through `BenchResult`), impossible to express in the YAML sweep format, and unusable from a CLI. | `bench_cfg.py` plot_callbacks |
-| P4 | **Counts are too coarse a signature.** `float_cnt/cat_cnt` can't express "temporal axis present", "result is an image", "data is monotonic", "categorical with >20 levels (heatmap unreadable)". Hence special-case branches in `to_auto_plots` (over_time band plot, aggregation views are hand-wired, `bench_result.py:305-408`). | read of to_auto_plots |
-| P5 | **Failure = silent log line.** A plot that matched but threw is logged and dropped (`logging.error` on both the plugin and legacy paths, `bench_result.py:249-255`); the user sees fewer plots with no explanation (registry error panes in #932 fix the rendering half; selection still can't say *why* something didn't appear). | |
+| P4 | **Counts are too coarse a signature.** `float_cnt/cat_cnt` can't express "temporal axis present", "result is an image", "data is monotonic", "categorical with >20 levels (heatmap unreadable)". Hence special-case branches in `to_auto_plots` (over_time band plot, aggregation views are hand-wired, `bench_result.py:340-444`). S1 added the richer fields to `PltCntCfg`; the special-case branches remain until filters consume them. | read of to_auto_plots |
+| P5 | **Failure = silent log line.** A plot that matched but threw is logged and dropped (`logging.error` on both the plugin and legacy paths, `bench_result.py:258-263`); the user sees fewer plots with no explanation (registry error panes in #932 fix the rendering half; `explain_selection()` in v1.115.0 fixed the *selection* half — the render-failure half remains). | |
 
 ## 2. Target design
 
@@ -104,14 +110,18 @@ bench.plot_sweep(..., plots=["heatmap", {"name": "curve", "agg_fn": "median"}])
 
 ## 3. Migration phases
 
-**Phase S1 — signature enrichment.** Extend `PltCntCfg` with the new fields (additive,
-computed in one place from the dataset). Verify: all existing `PlotFilter` matches are
-unchanged (`pixi run ci`); add unit tests asserting each new field on small synthetic
-sweeps.
+**Phase S1 — signature enrichment. [DONE — PR #983]** Extend `PltCntCfg` with the new
+fields (additive, computed in one place from the dataset). Verify: all existing
+`PlotFilter` matches are unchanged (`pixi run ci`); add unit tests asserting each new
+field on small synthetic sweeps.
 
-**Phase S2 — centralize matching.** Move the match check out of each `to_plot` into the
-registry-driven `to_auto` (A1 Phase 2 does most of this). Add `explain_selection()` and
-a test asserting its output for 3 canonical sweep shapes. Behavior must be identical.
+**Phase S2 — centralize matching. [PARTIALLY DONE]** Move the match check out of each
+`to_plot` into the registry-driven `to_auto` (A1 Phase 2 does most of this). Add
+`explain_selection()` and a test asserting its output for 3 canonical sweep shapes.
+Behavior must be identical. *Landed in v1.115.0:* `explain_selection()` /
+`PluginRegistry.explain()` with the full gate table. *Still open:* built-ins register
+`PlotFilter.match_all()` and keep their shape checks inside `to_plot`, so matching is
+not yet centralized.
 
 **Phase S3 — plot specs.** Implement name+kwargs specs, registry lookup by name,
 deprecation shim for callables. Update YAML sweep format and docs. Verify: round-trip
