@@ -8,6 +8,17 @@ through generated-example integration tests, so axis/label/layout bugs surface l
 **Branch name:** one branch per task group, e.g. `test/results-unit-tests`,
 `test/fix-file-server-flake`.
 
+> **Status update (2026-07-06):** Tasks 1, 3, and 4 are DONE on `main`: every module
+> in the Task 1 table has a dedicated test file; the file-server sleeps were replaced
+> with exactly the poll loop Task 3 prescribes; `test_combinations.py` was deleted,
+> `test_usability.py` migrated to `ResultFloat`, and the name-collision skip now
+> carries the self-describing reason. Two corrections to Task 4's test names: the
+> bare-skip test was `test_int_sweep_samples_all` (not `test_missing_default_value`;
+> since deleted), and the name-collision test is `test_unique_file_names` (not
+> `test_plot_all_permutations`). Task 2's modules also already have test files
+> (`test_bench_cfg.py`, `test_worker_job.py`, `test_video_writer_extended.py`) —
+> audit them against Task 2's specific assertions before adding more.
+
 **How to write tests here:** follow the style of the strongest existing test files —
 `test/test_render.py` (behavioral assertions on round-trips and object counts) and
 `test/test_regression.py` (per-method test classes with edge cases). Tests must assert

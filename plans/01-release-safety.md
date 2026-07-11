@@ -5,6 +5,10 @@ small CI hygiene gaps. All changes are config-only and low risk.
 
 **Branch name:** `ci/release-safety`
 
+> **Status: DONE (2026-07-06).** Executed verbatim in PR #982 (commit dd7cc77):
+> publish gating, `fail_under = 85`, codecov non-blocking, the `autofig/` gitignore
+> entry, and the filename-uniqueness test are all on `main`. Kept for reference.
+
 ---
 
 ## Task 1: Gate auto-publish on CI success (HIGHEST PRIORITY)

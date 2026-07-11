@@ -130,8 +130,13 @@ anything smarter than "report published at URL".
    and "notify on trend, gate on floor" is a real pattern. Recommendation: severity
    is a property of a *check*; `RegressionSpec` is one check and the class attribute
    accepts a list. For dict shorthand, a reserved `"severity"` key applies to all
-   checks in that dict (verify `_normalize_overrides` currently warns-and-drops
-   unknown keys, so reserving one is backward-safe).
+   checks in that dict (verified: `_normalize_overrides` warns-and-drops unknown
+   keys, so reserving one is backward-safe — with one subtlety: a spec left with
+   *no* valid checks after dropping falls back to the benchmark-wide method with a
+   warning (`regression.py:1431-1437`), so a severity-only dict is a fallback today,
+   not a no-op; the new normalizer must pop the reserved `severity` key **before**
+   the empty-spec check — exactly the pattern the v1.116.0 `min_history` reserved
+   key already follows in that function).
 3. **Precedence semantics.** Overrides today *replace* the benchmark-wide method
    wholesale. Should a run-level override replace the class-level spec the same way
    (recommended: yes, replacement — one rule everywhere), or field-merge with it?

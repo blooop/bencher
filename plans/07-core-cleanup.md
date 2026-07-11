@@ -16,7 +16,7 @@ Known locations (re-verify line numbers before editing — they drift):
 1. `bencher/bencher.py` — a fully commented-out `show()` method (~lines 821–843 region).
    Delete the whole commented block.
 2. `bencher/results/bench_result_base.py` — commented assignments
-   (`# self.width`, `# self.height`, `# self.reference_index`, ~lines 112–116).
+   (`# self.width`, `# self.height`, `# bench_res.reference_index`, ~lines 113–117).
 3. `bencher/variables/parametrised_sweep.py` — commented hash-debug lines (~46–47).
 4. `bencher/results/video_summary.py` — commented print (~line 207).
 
@@ -28,9 +28,10 @@ Verify: `pixi run ci`.
 
 ## Task 2: Replace print with logging in library code
 
-`bencher/results/bench_result.py` (~line 211) prints a callback name inside `to_pane()`.
-Replace with `logging.info(...)` (match the logging usage already present in the module;
-add `import logging` if missing). Do NOT touch prints in CLI entry points
+**DONE/moot (2026-07-06):** the print — which lived in `to_auto()`, not `to_pane()` —
+was removed by the plugin-registry rewrite (commit 95d1ebf); render failures now go
+through `logging.error`. If new prints appear, the rule stands: replace with logging,
+but do NOT touch prints in CLI entry points
 (`bencher/render.py` main path), `bencher/plotting/file_server.py` startup messages, or
 example files — those are intentional user-facing output.
 

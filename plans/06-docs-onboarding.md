@@ -14,7 +14,9 @@ against `docs/conf.py` (CLAUDE.md requires conf.py to include added docs).
 
 ## Task 1: README "Getting Started" section
 
-`README.md` currently states "More documentation is needed" and never links the gallery.
+`README.md` currently states "More documentation is needed" (~line 118). It already
+links the GitHub Pages gallery and lists the generated example categories — the real
+gap is the missing pitch and minimal runnable example at the top.
 
 1. Add, directly after the badges, a section:
    - One-paragraph pitch: bencher sweeps a function across the Cartesian product of typed
@@ -96,9 +98,9 @@ End with links to the generated galleries by category. Add to toctree + conf.py.
 
 ## Task 7: Missing public docstrings
 
-1. `BenchRunCfg` (in `bencher/bench_cfg.py`): the class has param docs per-field but
-   verify whether the class itself has a docstring; if not, add one summarizing what it
-   configures and pointing to docs/caching.md and docs/over_time.md.
+1. `BenchRunCfg` (in `bencher/bench_cfg.py`): the class already has a comprehensive
+   docstring (`bench_cfg.py:98`); extend it only with pointers to docs/caching.md and
+   docs/over_time.md once those pages exist.
 2. `Bench.optimize()` in `bencher/bencher.py`: extend the docstring to document the
    aggregation and multi-objective behavior — derive the description from the code and
    from `test/` files covering optimize, not from guesswork.

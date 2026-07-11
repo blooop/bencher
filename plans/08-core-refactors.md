@@ -1,8 +1,9 @@
 # Plan 08 — Larger Core Refactors
 
-**Goal:** Reduce the three biggest structural debts: `bencher/bencher.py` (1,516 lines,
-46 methods), `bencher/bench_cfg.py` (1,060 lines, 100+ params), and
-`bencher/regression.py` (1,448 lines mixing statistics and rendering).
+**Goal:** Reduce the three biggest structural debts: `bencher/bencher.py` (~1,558
+lines, 42 methods on `Bench`), `bencher/bench_cfg.py` (~1,133 lines, ~73 params across
+its three config classes), and `bencher/regression.py` (~1,665 lines mixing statistics
+and rendering).
 
 **⚠️ Read first:** These are the highest-risk plans in the set. Each subsection is an
 independent PR. Get owner sign-off on the approach **before** starting any of them —
@@ -94,8 +95,8 @@ history-cache loading, result storage) still lives in the 1,516-line class.
 
 ## Task 4 (proposal only): Trim the public API surface
 
-`bencher/__init__.py` exports ~165 names including internals (`PltCntCfg`,
-`hash_sha1`, `MethodCells`). Do NOT remove anything. Instead produce a written audit:
+`bencher/__init__.py` exports ~143 names including internals (`hash_sha1`,
+`MethodCells`). Do NOT remove anything. Instead produce a written audit:
 for each export, count usages outside the package
 (`grep -rn "bn\.<name>\|bencher\.<name>" docs/ bencher/example/ | wc -l`) and propose a
 keep/deprecate list in a markdown table for owner review. Deprecations, if approved,

@@ -20,10 +20,11 @@ directories you created yourself."
 
 ## Task 2: Fix the `numpy>=1.0` floor
 
-In `pyproject.toml` dependencies, `numpy>=1.0,<=2.4.6` would accept a 2006 release.
+In `pyproject.toml` dependencies, the `numpy>=1.0` floor would accept a 2006 release
+(the upper pin drifts with dependabot; `<=2.5.1` at last check).
 
-1. Change it to `numpy>=2.0,<=2.4.6` (2.0 is a reasonable tested floor given the
-   pandas>=2.0 / xarray>=2023.7 companions).
+1. Change the floor to `numpy>=2.0`, keeping the current upper pin unchanged (2.0 is
+   a reasonable tested floor given the pandas>=2.0 / xarray>=2023.7 companions).
 2. Run `pixi install` to refresh `pixi.lock`, then `pixi run test`. Commit both files.
 
 Do NOT change any other bounds in this task — the remaining upper pins follow the
@@ -45,9 +46,12 @@ Verify with `pixi run python -c "import bencher; help(bencher.load_result)"`.
 
 ## Task 4: Lazy-import heavy libraries in core modules
 
-**Context:** Plotly and `optuna.visualization` were already made lazy (commit 37b28808).
-Remaining eager imports that cost startup time: `panel`, `optuna`, and the holoviews
-chain, pulled in at module level by `bencher/bencher.py` and `bencher/bench_report.py`.
+**Context:** the holoviews plotly-backend registration and `optuna.visualization`
+were already made lazy (commit 37b28808) — but note `import plotly.graph_objs` itself
+is still eager via `volume_result.py`/`surface_result.py`, which `bencher/__init__.py`
+pulls in. Remaining eager imports that cost startup time: `panel`, `optuna`, and the
+holoviews chain, pulled in at module level by `bencher/bencher.py` and
+`bencher/bench_report.py`.
 
 **Approach — do this incrementally, one library per commit:**
 
@@ -60,7 +64,9 @@ chain, pulled in at module level by `bencher/bencher.py` and `bencher/bench_repo
 2. For `optuna` in `bencher/bencher.py`: remove the top-level `import optuna`, and add
    `import optuna` inside each function that uses it (search `optuna\.` within the file).
    Mirror the existing lazy-import style used for plotly (see commit 37b28808 and the
-   comment style around it).
+   comment style around it). (`optuna` also appears in a type annotation at
+   `bencher.py:1145` — fine under the file's existing `from __future__ import
+   annotations` — and in an in-body default at `:1250`.)
 3. Run the full suite after each library: `pixi run test`. Also run the split-render
    suite once at the end: `pixi run test-split` (slow).
 4. For `panel` in `bencher/bencher.py` / `bencher/bench_report.py`: this is harder
