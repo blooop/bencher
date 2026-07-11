@@ -120,14 +120,19 @@ class SweepBase(param.Parameter):
         will silently serve stale data for a reshaped sweep.
 
         The class name is included so that different Sweep subclasses with
-        the same identity tuple do not collide.
+        the same identity tuple do not collide.  The variable *name* is also
+        included: the stored history keys its dims/coords by name, so two
+        same-shaped sweeps with different names are different experiments —
+        without the name in the key, renaming an input var would silently
+        concat a fresh dataset against history whose dimension no longer
+        exists, broadcasting both dims and fabricating never-measured points.
 
         Note: the sample cache is keyed solely by concrete input values
         (see :class:`bencher.worker_job.WorkerJob`) and is unaffected by
         this hash, so widening a sweep range still reuses per-sample cache
         entries for overlapping inputs.
         """
-        return (type(self).__name__, self.units, self.samples)  # pylint: disable=no-member
+        return (type(self).__name__, self.name, self.units, self.samples)  # pylint: disable=no-member
 
     def hash_persistent(self) -> str:
         """Deterministic hash based on :meth:`_sweep_identity`.

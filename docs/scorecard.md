@@ -15,6 +15,16 @@ It reads the machine-readable `*.summary.json` written by
 {func}`bencher.result_to_json` (with `include_series=True`) for every benchmark
 under a reports directory and groups them by category.
 
+Within each category the same cells can be read two ways, switched by a control
+in the page header (the choice is remembered across visits):
+
+- **metric across benchmarks** (default) — one column per metric, one row per
+  benchmark. Read down a column to compare a single metric across benchmarks.
+- **metrics within benchmark** — the transpose: one column per benchmark, one
+  row per metric. Read down a column to compare a benchmark's metrics against
+  each other. Because every column is the same fixed width, the sparklines stack
+  with their time axes aligned.
+
 ## Producing the input
 
 Each benchmark writes its summary with the over-time series attached:

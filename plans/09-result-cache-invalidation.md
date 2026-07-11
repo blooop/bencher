@@ -1,5 +1,12 @@
 # Plan 09 — Result Cache & History Invalidation Correctness
 
+**Status: IMPLEMENTED** (v1.116.0, together with plan 14 — see
+`plans/14-history-schema-reconciliation.md` for the design record). D1 and D2
+landed as described (§4's sorted-tuple combiner, names in every per-var
+identity); D3's index + `on_history_reset` landed with plan 14's per-column
+events routed through the same policy. Kept for the analysis; line numbers
+reference the pre-fix source.
+
 **Goal:** Fix three correctness defects in how the benchmark-config hash
 (`BenchCfg.hash_persistent`) invalidates the result cache (Layer B) and the
 `over_time` history cache (Layer C):
@@ -62,9 +69,11 @@ hash, computed once as `bench_cfg.hash_persistent(True)` (`bencher/bencher.py:67
   "over_time")` (`result_collector.py:465`, xarray's default `join="outer"`).
   A missing key means "no history" → fresh series.
 
-(The `include_repeats=False` variant at `bencher.py:682` keys only the *sample*
-cache; repeats are intentionally in the history key so historical arrays have
-the same shape — see the comment at `bench_cfg.py:773-775`.)
+(The `include_repeats=False` variant at `bencher.py:682` is vestigial: it is
+threaded into `WorkerJob.bench_cfg_sample_hash` but never read — the sample
+cache keys on concrete function inputs + tag only (`worker_job.py`). Repeats
+are intentionally in the history key so historical arrays have the same
+shape — see the comment at `bench_cfg.py:773-775`.)
 
 Crucially, identity *inside* the stored dataset is by **name**: data variables
 are created under each result var's `.name` (`result_collector.py:229`), and

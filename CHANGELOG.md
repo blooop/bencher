@@ -10,6 +10,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Plot-selection signature enrichment** (A2 Phase S1): `PltCntCfg` gains additive, cheaply-computed facts alongside the existing counts — `has_time`/`time_steps` (temporal axis presence and length), `result_kinds` (result-variable name → coarse serializable kind), `cat_levels` (levels per categorical input), and `samples_per_point` (min non-NaN repeat count actually present, vs the configured `repeats`). `generate_plt_cnt_cfg` takes an optional dataset for the data-derived facts. No selection behavior changes.
 
+## [1.116.0] - 2026-07-11
+
+### Changed — cache-busting release (`CACHE_VERSION` 4 → 5)
+
+Every benchmark-level and `over_time` history cache key changes in this
+release: expect a one-time cache miss and a fresh history series per the
+standing cache policy (no migration of old entries). Implements plans 09 and
+14 (`plans/09-result-cache-invalidation.md`,
+`plans/14-history-schema-reconciliation.md`).
+
+- **`BenchCfg.hash_persistent` composition** (plan 09):
+  - `result_vars` and `const_vars` now contribute as an *unordered set* —
+    reordering either no longer resets caches or history (D1).
+  - Every per-variable identity (input, result, const) now includes the
+    variable's **name** — renaming a variable is a detected identity change
+    instead of a silent history split or phantom-dimension broadcast (D2).
+- **`over_time` history survives result-variable changes** (plan 14): the
+  history cache is keyed *without* result vars
+  (`hash_persistent(True, include_result_vars=False)`) and stores a superset
+  record of every column ever measured. At load time, columns are reconciled
+  per identity `(name, class, units, meaning_version)` — added columns are
+  NaN-backfilled and birth-stamped, removed columns go dormant (retained,
+  invisible, resumed on return), redefined columns are retired under a mangled
+  name and restart — and consumers receive a projection onto exactly the
+  current config's columns. The benchmark-level result cache stays strict.
+
+### Added
+
+- **`meaning_version`** on `ResultFloat`/`ResultBool` — bump it when a metric
+  keeps its name but changes meaning; that column's history and regression
+  baseline restart cleanly while every other column continues.
+- **`BenchRunCfg.on_history_reset`** (`"warn"` default / `"error"` /
+  `"ignore"`) — loss-y history events (full reset with a named diff and
+  orphaned-event count via a per-benchmark last-seen index, column dormant,
+  column retired, incompatible history discarded) are logged, raised
+  (`bencher.HistoryResetError`, before any state is persisted), or suppressed.
+  Pre-record (bare-dataset) history entries participate in the same lifecycle:
+  a column they carry that leaves the config is reported dormant, and it
+  resumes rather than restarts when it returns.
+- **`BenchRunCfg.regression_min_history`** (default 1 = previous behavior) —
+  regressions on a baseline younger than N points since the column's birth are
+  reported and exported (`young_baseline: true` in `result.json`,
+  `RegressionReport.has_blocking_regressions`) but never trigger
+  `regression_fail`; history-free `absolute` checks still gate. Per-variable
+  override via a `min_history` key in `regression_overrides`. Young rows are
+  marked notify-only (†) in the rendered regression report, the scorecard
+  shows them as uncolored trend cells, and the exported report JSON carries a
+  top-level `has_blocking_regressions`.
+
+## [1.115.0] - 2026-07-11
+
+### Added
+- **`BenchResult.explain_selection()` / `PluginRegistry.explain()`** (A2 Phase S2): the full plot-selection decision table — one row per registered plugin, chosen entries first, each rejected entry carrying the first gate that dropped it (named-only, not in `plot_list`, excluded, missing capability, shape-filter mismatch, superseded backend resolution). `select()` is now exactly the chosen subset of `explain()`, so the table is the authoritative record of why a plot did or did not appear.
+- **Scorecard orientation toggle** — each category's table can now be read two ways, switched by a control in the page header (the choice persists via `localStorage`). The default *metric across benchmarks* view is unchanged (one column per metric, one row per benchmark); the new *metrics within benchmark* view transposes it (one column per benchmark, one row per metric) so a benchmark's metrics stack with their sparkline time axes aligned. Both orientations are rendered from a single set of per-benchmark cells through one shared cell macro; the switch is pure show/hide of the pre-rendered tables, so it needs no data round-trip.
+
+## [1.114.0] - 2026-07-06
+
+### Added
+- **Every result type is now addressable by name in `to_auto`** (A1 Phase 3). New *named-only* plugin concept: plugins with `auto=False` never appear in automatic selection but are selected when explicitly named via `plot_list`/`include`/`only` (`@bencher.plot_plugin(..., auto=False)`; the attribute is optional on the `PlotPlugin` protocol, read with a `getattr` default, so existing plugins are unaffected). The non-default built-ins register this way: `violin`, `scatter_jitter`, `scatter`, `band`, `table` (holoviews); `tabulator`, `dataset`, `video_summary` (panel); `surface` (plotly — only where a plot already required it, like `volume`); and `rerun` as its own first-class backend (the rerun SDK is imported lazily inside the renderer, so registration is safe without it installed). **Default report output is unchanged** (parity tests unaffected); e.g. `res.to_auto(plot_list=["violin"])` now works by name.
+- `LegacyResultPlugin.render` filters the ride-along kwargs (`override`, plot size) to the callback's signature when the renderer has no `**kwargs` (e.g. `RerunResult.to_rerun`), instead of failing with a `TypeError`.
+- `TableResult` and `TabulatorResult` joined `BenchResult`'s base list: named-only callbacks are unbound methods invoked on the live `BenchResult`, and `TabulatorResult.to_plot` (via `self.to_tabulator`) crashed with `AttributeError` without it.
+
 ## [1.113.1] - 2026-07-06
 
 ### Dependencies

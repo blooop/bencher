@@ -141,7 +141,7 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
     regressions = (
         bench_res.regression_report.to_dict()
         if getattr(bench_res, "regression_report", None) is not None
-        else {"has_regressions": False, "results": []}
+        else {"has_regressions": False, "has_blocking_regressions": False, "results": []}
     )
 
     metrics = [_metric_entry(bench_res, rv) for rv in scalar_vars]

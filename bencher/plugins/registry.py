@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import traceback
+from dataclasses import dataclass, field
 from importlib import metadata
 from typing import Iterable, Optional
 
@@ -13,6 +14,32 @@ from bencher.plugins.plugin import PlotPlugin
 ENTRY_POINT_GROUP = "bencher.plot_plugins"
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class PluginDecision:
+    """One row of a selection decision table: whether a plugin was chosen for a
+    given BenchData, and the first gate that rejected it when it wasn't."""
+
+    name: str
+    backend: str
+    chosen: bool
+    reason: str
+    plugin: PlotPlugin = field(repr=False)
+
+
+def decisions_to_table(decisions: Iterable[PluginDecision]) -> str:
+    """Render a decision table (from ``PluginRegistry.explain``) as a markdown-ish
+    text table, chosen rows first."""
+    rows = [("chart type", "backend", "chosen", "reason")]
+    rows += [(d.name, d.backend, "yes" if d.chosen else "no", d.reason) for d in decisions]
+    widths = [max(len(r[i]) for r in rows) for i in range(4)]
+    lines = [
+        f"| {r[0]:<{widths[0]}} | {r[1]:<{widths[1]}} | {r[2]:<{widths[2]}} | {r[3]:<{widths[3]}} |"
+        for r in rows
+    ]
+    lines.insert(1, "|" + "|".join("-" * (w + 2) for w in widths) + "|")
+    return "\n".join(lines)
 
 
 def _render_error_pane(plugin_name: str, exc: BaseException) -> pn.viewable.Viewable:
@@ -144,46 +171,117 @@ class PluginRegistry:
         - `only` short-circuits to a single named chart type (no match-filter check;
           explicit opt-in by name implies the user knows what they want).
         - `include` / `exclude` filter the candidate set by chart-type name.
+        - Named-only plugins (``auto=False``) are skipped during automatic selection
+          (`include is None`); naming them via `include` or `only` selects them.
         - `backend` states the *preferred* backend: where a chart type is implemented
           by several backends, the preferred one is chosen when it matches; chart
           types the preferred backend does not provide still render through their
           best other implementation. This is what lets a config flag swap the
           rendering library under the same set of plotters.
         """
+        return tuple(
+            d.plugin
+            for d in self.explain(
+                data, include=include, exclude=exclude, backend=backend, only=only
+            )
+            if d.chosen
+        )
+
+    def explain(
+        self,
+        data: BenchData,
+        *,
+        include: Optional[Iterable[str]] = None,
+        exclude: Optional[Iterable[str]] = None,
+        backend: Optional[str] = None,
+        only: Optional[str] = None,
+    ) -> tuple[PluginDecision, ...]:
+        """The full selection decision table: one entry per registered plugin, chosen
+        entries first (in `select()` order — descending priority, then name), each
+        rejected entry carrying the first gate that dropped it. `select()` is exactly
+        the chosen subset, so this is the authoritative record of why a plot did or
+        did not appear (A2 Phase S2)."""
+        chosen: list[PluginDecision] = []
+        rejected: list[PluginDecision] = []
+
+        def reject(plugin: PlotPlugin, reason: str) -> None:
+            rejected.append(PluginDecision(plugin.name, plugin.backend, False, reason, plugin))
+
         if only is not None:
             picked = self.get(only, backend) or self.get(only)
-            return (picked,) if picked is not None else ()
+            for plugin in self.all():
+                if plugin is picked:
+                    chosen.append(
+                        PluginDecision(
+                            plugin.name,
+                            plugin.backend,
+                            True,
+                            f"explicitly requested (only={only!r}; filters bypassed)",
+                            plugin,
+                        )
+                    )
+                else:
+                    reject(plugin, f"not requested (only={only!r})")
+            return tuple(chosen + rejected)
 
-        candidates = list(self.all())
-        if include is not None:
-            inc = set(include)
-            candidates = [p for p in candidates if p.name in inc]
-        if exclude is not None:
-            exc = set(exclude)
-            candidates = [p for p in candidates if p.name not in exc]
+        inc = set(include) if include is not None else None
+        exc = set(exclude) if exclude is not None else set()
 
         matched: list[PlotPlugin] = []
-        for plugin in candidates:
-            if not all(data.has(cap) for cap in plugin.requires):
+        for plugin in self.all():
+            if inc is not None and plugin.name not in inc:
+                reject(plugin, "not named in include/plot_list")
+                continue
+            if inc is None and not getattr(plugin, "auto", True):
+                reject(plugin, "named-only (auto=False): request explicitly by name")
+                continue
+            if plugin.name in exc:
+                reject(plugin, "excluded by name")
+                continue
+            missing = [cap for cap in plugin.requires if not data.has(cap)]
+            if missing:
+                reject(plugin, f"missing capability: {', '.join(sorted(missing))}")
                 continue
             if data.plt_cnt_cfg is None:
+                reject(plugin, "no plot signature (plt_cnt_cfg missing)")
                 continue
             result = plugin.match.matches_result(data.plt_cnt_cfg, plugin.name, override=False)
-            if result.overall:
-                matched.append(plugin)
+            if not result.overall:
+                failed = "; ".join(
+                    line.strip() for line in result.matches_info.splitlines()[1:]
+                ).replace("\t", " ")
+                reject(plugin, f"shape filter mismatch: {failed}")
+                continue
+            matched.append(plugin)
 
         # Resolve each chart type to one implementation.
         by_name: dict[str, list[PlotPlugin]] = {}
         for plugin in matched:
             by_name.setdefault(plugin.name, []).append(plugin)
-        chosen: list[PlotPlugin] = []
+        picked_plugins: list[PlotPlugin] = []
         for impls in by_name.values():
             preferred = [p for p in impls if p.backend == backend] if backend else []
             pool = preferred or impls
-            chosen.append(max(pool, key=lambda p: (p.priority, p.backend)))
+            winner = max(pool, key=lambda p: (p.priority, p.backend))
+            picked_plugins.append(winner)
+            for plugin in impls:
+                if plugin is winner:
+                    continue
+                if backend and winner.backend == backend and plugin.backend != backend:
+                    why = f"backend {backend!r} preferred over {plugin.backend!r}"
+                else:
+                    why = (
+                        f"lower priority ({plugin.priority}) than {winner.backend!r} "
+                        f"implementation (priority={winner.priority})"
+                    )
+                reject(plugin, f"superseded for chart type {plugin.name!r}: {why}")
 
-        chosen.sort(key=lambda p: (-p.priority, p.name))
-        return tuple(chosen)
+        picked_plugins.sort(key=lambda p: (-p.priority, p.name))
+        chosen = [
+            PluginDecision(p.name, p.backend, True, f"chosen (priority={p.priority})", p)
+            for p in picked_plugins
+        ]
+        return tuple(chosen + rejected)
 
     def render(
         self,

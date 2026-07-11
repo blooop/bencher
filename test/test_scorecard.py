@@ -173,6 +173,13 @@ class TestCellVerdict:
     def test_regressed_overrides(self):
         assert cell_verdict(_reg("v", "maximize", True, 1.0, 0.75, -25.0)) == "regressed"
 
+    def test_young_baseline_regression_is_trend(self):
+        """A regressed cell on a young baseline is notify-only -> uncolored trend."""
+        reg = _reg("v", "maximize", True, 1.0, 0.75, -25.0)
+        assert cell_verdict(reg) == "regressed"
+        reg["young_baseline"] = True
+        assert cell_verdict(reg) == "trend"
+
     def test_improved_when_beneficial_over_threshold(self):
         assert cell_verdict(_reg("v", "maximize", False, 1.0, 1.2, 20.0)) == "improved"
         assert cell_verdict(_reg("v", "minimize", False, 1.0, 0.8, -20.0)) == "improved"
@@ -490,7 +497,12 @@ class TestGenerateScorecard:
     def test_charted_bench_not_duplicated_as_link(self, mock_reports: Path):
         generate_scorecard(mock_reports, CONFIG)
         html = (mock_reports / "index.html").read_text()
-        assert html.count("benchmarks/test_bench_startup/Startup.html") == 1
+        # The charted bench appears in the metric tables (once per rendered
+        # orientation) but must NOT also be listed in the metric-less
+        # "Reports without metrics" links.
+        _before, _sep, links_section = html.partition("Reports without metrics")
+        assert "benchmarks/test_bench_startup/Startup.html" in _before
+        assert "benchmarks/test_bench_startup/Startup.html" not in links_section
 
     def test_zero_config_default_still_renders(self, mock_reports: Path):
         # No config: benchmarks auto-name and fall into "Other"; still a page.
@@ -498,3 +510,43 @@ class TestGenerateScorecard:
         # Default layout root is "" so the "benchmarks/" tree is not discovered.
         assert out.exists()
         assert "No benchmark summaries found." in out.read_text()
+
+
+class TestOrientationToggle:
+    """The scorecard renders both orientations and a client-side switch."""
+
+    def test_both_orientation_tables_rendered(self, mock_reports: Path):
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        # Every category renders both a metric-per-column and a benchmark-per-column table.
+        n_categories = 3  # Performance, Startup, Other
+        assert html.count('data-orient="benchmark"') == n_categories
+        assert html.count('data-orient="metric"') == n_categories
+
+    def test_orientation_switch_present(self, mock_reports: Path):
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        assert 'class="orient-switch"' in html
+        assert 'data-mode="benchmark"' in html
+        assert 'data-mode="metric"' in html
+
+    def test_metric_is_a_row_header_in_transposed_table(self, mock_reports: Path):
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        # In the transposed view a metric name is a left-column row header.
+        _before, _sep, metric_table = html.partition('data-orient="metric"')
+        after_table = metric_table[: metric_table.index("</table>")]
+        assert '<td class="rowhead metric-head" title="success">success</td>' in after_table
+
+    def test_default_shows_metric_columns(self, mock_reports: Path):
+        # The metric-per-column table is the default; the transposed wrapper is
+        # hidden until the switch flips the body class.
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        assert ".table-wrap.orient-metric { display: none; }" in html
+        assert "body.show-metric .table-wrap.orient-benchmark { display: none; }" in html
+
+    def test_switch_absent_when_no_benchmarks(self, tmp_path: Path):
+        generate_scorecard(tmp_path, CONFIG)
+        html = (tmp_path / "index.html").read_text()
+        assert 'class="orient-switch"' not in html

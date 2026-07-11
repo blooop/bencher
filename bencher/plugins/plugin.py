@@ -23,6 +23,11 @@ class PlotPlugin(Protocol):
     priority: int
     requires: frozenset[str]
 
+    # Optional attribute (checked with getattr(plugin, "auto", True), so plugins
+    # predating it remain valid): auto=False makes a plugin *named-only* — never
+    # picked by automatic selection, only when explicitly requested by name.
+    # Not declared on the Protocol so isinstance() checks don't require it.
+
     def render(self, data: BenchData) -> pn.viewable.Viewable: ...
 
 
@@ -38,6 +43,7 @@ class _FunctionPlugin:
     priority: int
     requires: frozenset[str]
     _fn: Callable[[BenchData], pn.viewable.Viewable] = field(repr=False)
+    auto: bool = True
 
     def render(self, data: BenchData) -> pn.viewable.Viewable:
         return self._fn(data)
@@ -51,10 +57,15 @@ def plot_plugin(
     priority: int = 0,
     requires: Optional[frozenset[str] | set[str] | tuple[str, ...]] = None,
     register: bool = True,
+    auto: bool = True,
 ) -> Callable[[Callable[[BenchData], pn.viewable.Viewable]], _FunctionPlugin]:
     """Wrap a function as a plot plugin and (by default) register it with the global
     registry. Returns the plugin object so callers can also register manually with
-    register=False."""
+    register=False.
+
+    auto=False makes the plugin named-only: it never appears in automatic selection
+    (a default ``to_auto`` report) but is selected when requested by name via
+    ``plot_list``/``include``/``only``."""
 
     def decorator(fn: Callable[[BenchData], pn.viewable.Viewable]) -> _FunctionPlugin:
         # No match rule means "always eligible": PlotFilter() would match nothing
@@ -66,6 +77,7 @@ def plot_plugin(
             priority=priority,
             requires=frozenset(requires) if requires else frozenset(),
             _fn=fn,
+            auto=auto,
         )
         if register:
             from bencher.plugins.registry import register_plugin

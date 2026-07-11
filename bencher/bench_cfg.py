@@ -347,6 +347,20 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
+    on_history_reset: str = param.Selector(
+        default="warn",
+        objects=["warn", "error", "ignore"],
+        doc="Policy for history-affecting schema changes detected at history-load "
+        "time (a result column removed or redefined, or the whole history "
+        "orphaned by an input/const change). 'warn' (default): log a WARNING "
+        "naming the change and continue. 'error': raise HistoryResetError so a "
+        "CI run can never silently lose a baseline; use 'warn'/'ignore' for one "
+        "run (or clear_history) to acknowledge a deliberate change. 'ignore': "
+        "log at DEBUG only. Retained data is never deleted by any policy — "
+        "removed columns stay dormant in the stored history and resume if the "
+        "variable returns with the same identity.",
+    )
+
     max_time_events: int | None = param.Integer(
         None,
         bounds=[1, None],
@@ -411,6 +425,19 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "'delta': absolute-unit change vs historical mean (uses regression_delta). "
         "'absolute': hard directional threshold, no history required (uses "
         "regression_absolute).",
+    )
+
+    regression_min_history: int = param.Integer(
+        default=1,
+        bounds=[1, None],
+        doc="Minimum number of historical over_time points a result variable "
+        "needs before its regressions can *fail* the run. A variable with a "
+        "younger baseline (freshly added, or restarted by a meaning_version "
+        "bump) still runs detection and reports regressions, but they are "
+        "marked young_baseline and never trigger regression_fail — warn-only "
+        "until the baseline matures. The default of 1 preserves the previous "
+        "behavior (any history gates). Override per variable with a "
+        "'min_history' key in regression_overrides.",
     )
 
     regression_mad: float = param.Number(
@@ -754,7 +781,7 @@ class BenchCfg(BenchRunCfg):
         self.hmap_kdims = None
         self.iv_repeat = None
 
-    def hash_persistent(self, include_repeats: bool) -> str:
+    def hash_persistent(self, include_repeats: bool, include_result_vars: bool = True) -> str:
         """Generate a persistent hash for the benchmark configuration.
 
         Overrides the default hash function because the default hash function does not
@@ -762,9 +789,22 @@ class BenchCfg(BenchRunCfg):
         variables that are consistent across instances of BenchCfg with the same
         configuration.
 
+        ``input_vars`` are folded in list order because their order determines the
+        dimension layout of the result arrays. ``result_vars`` and ``const_vars``
+        contribute as an *unordered set* (their per-var digests are sorted before
+        hashing): result vars become name-keyed xarray data variables and const
+        order only affects the title string, so reordering either is a
+        presentation change that must not move the cache key.
+
         Args:
             include_repeats (bool): Whether to include repeats as part of the hash
                                    (True by default except when using the sample cache)
+            include_result_vars (bool): Whether result variables contribute to the
+                hash. True for the benchmark-level result cache, where a cached
+                result must match the exact result-var set. False for the
+                over_time history key, so the history survives result-var
+                changes and per-column reconciliation can retain, retire, or
+                backfill individual columns (see ``bencher.history``).
 
         Returns:
             str: A persistent hash value for the benchmark configuration
@@ -793,14 +833,21 @@ class BenchCfg(BenchRunCfg):
                 hash_sha1(self.tag),
             )
         )
-        all_vars = (self.input_vars or []) + (self.result_vars or [])
-        for v in all_vars:
+        for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 
-        for v in self.const_vars or []:
-            hash_val = hash_sha1((hash_val, v[0].hash_persistent(), hash_sha1(v[1])))
+        if include_result_vars:
+            result_hashes = tuple(sorted(v.hash_persistent() for v in self.result_vars or []))
+        else:
+            result_hashes = ()
 
-        return hash_val
+        const_hashes = tuple(
+            sorted(
+                hash_sha1((v[0].hash_persistent(), hash_sha1(v[1]))) for v in self.const_vars or []
+            )
+        )
+
+        return hash_sha1((hash_val, result_hashes, const_hashes))
 
     def inputs_as_str(self) -> list[str]:
         """Get a list of input variable names.
