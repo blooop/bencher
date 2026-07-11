@@ -5,12 +5,15 @@ is asserted on small synthetic sweeps; the existing counts must be unchanged.
 """
 
 import unittest
+from datetime import datetime
 
 import numpy as np
 import xarray as xr
 
 import bencher as bn
+from bencher.bench_cfg import BenchCfg
 from bencher.plotting.plt_cnt_cfg import PltCntCfg, result_kind, _samples_per_point
+from bencher.variables.time import TimeEvent, TimeSnapshot
 
 
 class CatFloat(bn.ParametrizedSweep):
@@ -74,11 +77,29 @@ class TestSignatureFields(unittest.TestCase):
     def test_no_dataset_defaults(self):
         res = run_sweep()
         cfg = PltCntCfg.generate_plt_cnt_cfg(res.bench_cfg)
+        self.assertFalse(cfg.has_time)
         self.assertEqual(cfg.time_steps, 0)
         self.assertEqual(cfg.samples_per_point, 0)
         # config-derived fields are still populated without a dataset
         self.assertEqual(cfg.cat_levels, {"kind": 3})
         self.assertEqual(cfg.result_kinds, {"value": "float", "ok": "bool"})
+
+    def test_time_inputs_without_over_time(self):
+        # TimeSnapshot/TimeEvent inputs are injected by the framework when over_time
+        # is set, so build the config directly to isolate the input-var path:
+        # has_time derives purely from the config, and time_steps stays 0 because
+        # there is no over_time axis (no dataset at all here).
+        for time_var in (TimeSnapshot(datetime(2026, 1, 1)), TimeEvent("v1.0")):
+            time_var.name = "time"
+            bench_cfg = BenchCfg(
+                input_vars=[time_var],
+                result_vars=[CatFloat.param.value],
+                over_time=False,
+            )
+            cfg = PltCntCfg.generate_plt_cnt_cfg(bench_cfg)
+            self.assertTrue(cfg.has_time)
+            self.assertEqual(cfg.time_steps, 0)
+            self.assertEqual(cfg.result_kinds, {"value": "float"})
 
 
 class TestSamplesPerPoint(unittest.TestCase):
@@ -94,6 +115,13 @@ class TestSamplesPerPoint(unittest.TestCase):
 
     def test_no_repeat_dim(self):
         ds = xr.Dataset({"value": (("x",), np.ones(3))})
+        self.assertEqual(_samples_per_point(ds), 1)
+
+    def test_repeat_dim_without_repeat_vars(self):
+        # a structural repeat axis whose data vars don't carry it behaves the same
+        # as no repeat axis at all: one sample per point, not "no samples"
+        ds = xr.Dataset({"value": (("x",), np.ones(3))}, coords={"repeat": [1, 2]})
+        self.assertIn("repeat", ds.dims)
         self.assertEqual(_samples_per_point(ds), 1)
 
     def test_empty_dataset(self):

@@ -158,19 +158,31 @@ class PltCntCfg(param.Parameterized):
         return plt_cnt_cfg
 
     def __str__(self):
-        return f"float_cnt: {self.float_cnt}\ncat_cnt: {self.cat_cnt} \npanel_cnt: {self.panel_cnt}\nvector_len: {self.vector_len}"
+        return (
+            f"float_cnt: {self.float_cnt}\n"
+            f"cat_cnt: {self.cat_cnt}\n"
+            f"panel_cnt: {self.panel_cnt}\n"
+            f"vector_len: {self.vector_len}\n"
+            f"has_time: {self.has_time}\n"
+            f"time_steps: {self.time_steps}\n"
+            f"result_kinds: {self.result_kinds}\n"
+            f"cat_levels: {self.cat_levels}\n"
+            f"samples_per_point: {self.samples_per_point}"
+        )
 
 
 def _samples_per_point(ds: xr.Dataset) -> int:
     """The number of repeat samples actually present at the sparsest sweep point:
     the minimum non-NaN count along the repeat dimension over all result variables
     that carry it. Differs from the configured `repeats` when runs are missing
-    (missing values are stored as NaN)."""
-    if "repeat" not in ds.dims:
-        return 1 if len(ds.data_vars) else 0
+    (missing values are stored as NaN). Result variables that don't carry the
+    repeat dimension count as one sample each, whether or not the dimension exists
+    structurally; 0 means the dataset holds no result data at all."""
     counts = [
         int(da.notnull().sum(dim="repeat").min())
         for da in ds.data_vars.values()
         if "repeat" in da.dims
     ]
-    return min(counts) if counts else 0
+    if counts:
+        return min(counts)
+    return 1 if len(ds.data_vars) else 0
