@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.115.0] - 2026-07-11
 
 ### Added
+- **`BenchResult.explain_selection()` / `PluginRegistry.explain()`** (A2 Phase S2): the full plot-selection decision table — one row per registered plugin, chosen entries first, each rejected entry carrying the first gate that dropped it (named-only, not in `plot_list`, excluded, missing capability, shape-filter mismatch, superseded backend resolution). `select()` is now exactly the chosen subset of `explain()`, so the table is the authoritative record of why a plot did or did not appear.
 - **Scorecard orientation toggle** — each category's table can now be read two ways, switched by a control in the page header (the choice persists via `localStorage`). The default *metric across benchmarks* view is unchanged (one column per metric, one row per benchmark); the new *metrics within benchmark* view transposes it (one column per benchmark, one row per metric) so a benchmark's metrics stack with their sparkline time axes aligned. Both orientations are rendered from a single set of per-benchmark cells through one shared cell macro; the switch is pure show/hide of the pre-rendered tables, so it needs no data round-trip.
 
 ## [1.114.0] - 2026-07-06
