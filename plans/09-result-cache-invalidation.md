@@ -1,6 +1,6 @@
 # Plan 09 — Result Cache & History Invalidation Correctness
 
-**Status: IMPLEMENTED** (v1.114.0, together with plan 14 — see
+**Status: IMPLEMENTED** (v1.116.0, together with plan 14 — see
 `plans/14-history-schema-reconciliation.md` for the design record). D1 and D2
 landed as described (§4's sorted-tuple combiner, names in every per-var
 identity); D3's index + `on_history_reset` landed with plan 14's per-column
