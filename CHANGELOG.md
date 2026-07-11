@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.115.0] - 2026-07-11
+
 ### Added
-- **Scorecard orientation toggle** — each category's table can now be read two ways, switched by a control in the page header (the choice persists via `localStorage`). The default *metric across benchmarks* view is unchanged (one column per metric, one row per benchmark); the new *metrics within benchmark* view transposes it (one column per benchmark, one row per metric) so a benchmark's metrics stack with their sparkline time axes aligned. Both orientations are rendered from a single benchmark-by-metric cell matrix through one shared cell macro; the switch is pure show/hide of the pre-rendered tables, so it needs no data round-trip.
+- **Scorecard orientation toggle** — each category's table can now be read two ways, switched by a control in the page header (the choice persists via `localStorage`). The default *metric across benchmarks* view is unchanged (one column per metric, one row per benchmark); the new *metrics within benchmark* view transposes it (one column per benchmark, one row per metric) so a benchmark's metrics stack with their sparkline time axes aligned. Both orientations are rendered from a single set of per-benchmark cells through one shared cell macro; the switch is pure show/hide of the pre-rendered tables, so it needs no data round-trip.
 
 ## [1.114.0] - 2026-07-06
 

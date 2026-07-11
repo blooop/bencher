@@ -1,13 +1,13 @@
 """Render the benchmark health scorecard to a single HTML page.
 
 Discovers every ``*.summary.json`` under the reports directory, groups them by
-category, and builds a benchmark-by-metric cell matrix per category, rendered by
-a bundled Jinja template. Each cell shows a verdict-colored value, a Δ, and a
-noise sparkline. The template lays the matrix out two ways — one column per
-metric (compare a metric across benchmarks) or one column per benchmark (stack a
-benchmark's metrics on a shared time axis) — and a client-side control toggles
-between them. Benchmarks with only image reports are listed as plain links so
-they stay reachable from this page.
+category, and builds one metric cell per (benchmark, metric) pair per category,
+rendered by a bundled Jinja template. Each cell shows a verdict-colored value, a
+Δ, and a noise sparkline. The template lays those cells out two ways — one column
+per metric (compare a metric across benchmarks) or one column per benchmark
+(stack a benchmark's metrics on a shared time axis) — and a client-side control
+toggles between them. Benchmarks with only image reports are listed as plain
+links so they stay reachable from this page.
 """
 
 from __future__ import annotations
@@ -78,9 +78,11 @@ def generate_scorecard(
     # metrics present in that category are shown. Categories render in the
     # registry's display order (records are already sorted that way).
     #
-    # Each section carries a benchmark-by-metric cell ``matrix`` plus the two
-    # label axes, so the template can lay the same cells out either way — one
-    # column per metric (compare a metric across benchmarks) or one column per
+    # Each section carries the two label axes (``metrics`` and ``benchmarks``),
+    # and every benchmark carries its ``cells`` in metric order. That single list
+    # feeds both orientations: the template reads a benchmark's ``cells`` straight
+    # across for one column per metric (compare a metric across benchmarks), or
+    # indexes ``bench.cells[metric_i]`` down a metric row for one column per
     # benchmark (stack a benchmark's metrics on a shared time axis). The view is
     # toggled client-side, so both orientations are rendered from this one model.
     sections: list[dict] = []
@@ -93,13 +95,11 @@ def generate_scorecard(
                 "tag": rec["tag"],
                 "link": rec["link"],
                 "time_event": rec["time_event"],
+                "cells": [build_cell(rec, var, config) for var in metrics],
             }
             for rec in cat_records
         ]
-        matrix = [[build_cell(rec, var, config) for var in metrics] for rec in cat_records]
-        sections.append(
-            {"category": category, "metrics": metrics, "benchmarks": benchmarks, "matrix": matrix}
-        )
+        sections.append({"category": category, "metrics": metrics, "benchmarks": benchmarks})
 
     link_sections = discover_report_links(reports_dir, config, {r["tag"] for r in records})
 

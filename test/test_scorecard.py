@@ -494,6 +494,7 @@ class TestGenerateScorecard:
         # orientation) but must NOT also be listed in the metric-less
         # "Reports without metrics" links.
         _before, _sep, links_section = html.partition("Reports without metrics")
+        assert "benchmarks/test_bench_startup/Startup.html" in _before
         assert "benchmarks/test_bench_startup/Startup.html" not in links_section
 
     def test_zero_config_default_still_renders(self, mock_reports: Path):

@@ -212,7 +212,7 @@
           {% for bench in section.benchmarks %}
           <tr>
             <td class="rowhead bench-head">{{ bench_label(bench) }}</td>
-            {% for cell in section.matrix[loop.index0] %}{{ data_cell(cell) }}{% endfor %}
+            {% for cell in bench.cells %}{{ data_cell(cell) }}{% endfor %}
           </tr>
           {% endfor %}
         </tbody>
@@ -232,10 +232,10 @@
         </thead>
         <tbody>
           {% for metric in section.metrics %}
-          {% set mi = loop.index0 %}
+          {% set metric_i = loop.index0 %}
           <tr>
             <td class="rowhead metric-head" title="{{ metric }}">{{ metric }}</td>
-            {% for bench in section.benchmarks %}{{ data_cell(section.matrix[loop.index0][mi]) }}{% endfor %}
+            {% for bench in section.benchmarks %}{{ data_cell(bench.cells[metric_i]) }}{% endfor %}
           </tr>
           {% endfor %}
         </tbody>
