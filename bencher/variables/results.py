@@ -498,6 +498,33 @@ ALL_RESULT_TYPES = (
     ResultVolume,
 )
 
+# Most-derived first: kind classification takes the first isinstance match
+# (ResultBool subclasses ResultFloat; ResultRerun subclasses ResultContainer).
+RESULT_KIND_ORDER = (
+    (ResultBool, "bool"),
+    (ResultFloat, "float"),
+    (ResultVec, "vec"),
+    (ResultImage, "image"),
+    (ResultVideo, "video"),
+    (ResultPath, "path"),
+    (ResultString, "string"),
+    (ResultDataSet, "dataset"),
+    (ResultRerun, "rerun"),
+    (ResultContainer, "container"),
+    (ResultHmap, "hmap"),
+    (ResultReference, "reference"),
+    (ResultVolume, "volume"),
+)
+
+
+def result_kind(result_var) -> str:
+    """Classify a result variable into a coarse, serializable kind name used by
+    plot-selection signatures (A2)."""
+    for cls, kind in RESULT_KIND_ORDER:
+        if isinstance(result_var, cls):
+            return kind
+    return "unknown"
+
 
 # --- Missing / unrecorded-sample representation ----------------------------
 #

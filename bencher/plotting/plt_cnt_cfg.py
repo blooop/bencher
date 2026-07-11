@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 import param
@@ -8,18 +9,8 @@ import xarray as xr
 from bencher.bench_cfg import BenchCfg
 from bencher.variables.results import (
     PANEL_TYPES,
-    ResultBool,
-    ResultContainer,
-    ResultDataSet,
-    ResultFloat,
-    ResultHmap,
-    ResultImage,
-    ResultPath,
-    ResultReference,
-    ResultString,
-    ResultVec,
-    ResultVideo,
-    ResultVolume,
+    result_kind,
+    result_missing_fill,
 )
 
 from bencher.variables.inputs import (
@@ -32,31 +23,11 @@ from bencher.variables.inputs import (
 )
 from bencher.variables.time import TimeSnapshot, TimeEvent
 
-# Most-derived first: kind classification takes the first isinstance match
-# (ResultBool subclasses ResultFloat; ResultRerun subclasses ResultContainer).
-_RESULT_KIND_ORDER = (
-    (ResultBool, "bool"),
-    (ResultFloat, "float"),
-    (ResultVec, "vec"),
-    (ResultImage, "image"),
-    (ResultVideo, "video"),
-    (ResultPath, "path"),
-    (ResultString, "string"),
-    (ResultDataSet, "dataset"),
-    (ResultContainer, "container"),
-    (ResultHmap, "hmap"),
-    (ResultReference, "reference"),
-    (ResultVolume, "volume"),
-)
+__all__ = ["PltCntCfg", "result_kind"]
 
-
-def result_kind(result_var) -> str:
-    """Classify a result variable into a coarse, serializable kind name used by
-    plot-selection signatures (A2)."""
-    for cls, kind in _RESULT_KIND_ORDER:
-        if isinstance(result_var, cls):
-            return kind
-    return "unknown"
+# Time-like sweep inputs: drives both their classification as float axes and
+# has_time, so the two facts can't drift apart.
+TIME_TYPES = (TimeSnapshot, TimeEvent)
 
 
 class PltCntCfg(param.Parameterized):
@@ -88,8 +59,9 @@ class PltCntCfg(param.Parameterized):
     )
     samples_per_point = param.Integer(
         0,
-        doc="Repeat samples actually present in the data (min non-NaN count over the repeat "
-        "dim), as opposed to the configured `repeats`; 0 when no dataset was provided",
+        doc="Repeat samples actually present in the data (min non-missing count over the "
+        "repeat dim at the latest time step), as opposed to the configured `repeats`; "
+        "0 when no dataset was provided",
     )
 
     print_debug = param.Boolean(
@@ -124,7 +96,7 @@ class PltCntCfg(param.Parameterized):
 
         for iv in bench_cfg.input_vars:
             type_allocated = False
-            if isinstance(iv, (IntSweep, FloatSweep, TimeSnapshot, TimeEvent)):
+            if isinstance(iv, (IntSweep, FloatSweep, *TIME_TYPES)):
                 # if "IntSweep" in typestr or "FloatSweep" in typestr:
                 plt_cnt_cfg.float_vars.append(iv)
                 type_allocated = True
@@ -147,14 +119,14 @@ class PltCntCfg(param.Parameterized):
         plt_cnt_cfg.inputs_cnt = len(bench_cfg.input_vars)
 
         plt_cnt_cfg.has_time = bool(bench_cfg.over_time) or any(
-            isinstance(iv, (TimeSnapshot, TimeEvent)) for iv in bench_cfg.input_vars
+            isinstance(iv, TIME_TYPES) for iv in bench_cfg.input_vars
         )
         plt_cnt_cfg.result_kinds = {rv.name: result_kind(rv) for rv in bench_cfg.result_vars}
         plt_cnt_cfg.cat_levels = {v.name: len(v.values()) for v in plt_cnt_cfg.cat_vars}
         if ds is not None:
             if "over_time" in ds.dims:
                 plt_cnt_cfg.time_steps = int(ds.sizes["over_time"])
-            plt_cnt_cfg.samples_per_point = _samples_per_point(ds)
+            plt_cnt_cfg.samples_per_point = _samples_per_point(ds, bench_cfg.result_vars)
         return plt_cnt_cfg
 
     def __str__(self):
@@ -171,18 +143,39 @@ class PltCntCfg(param.Parameterized):
         )
 
 
-def _samples_per_point(ds: xr.Dataset) -> int:
+def _missing_mask(da: xr.DataArray, rv) -> xr.DataArray:
+    """True where an entry holds *rv*'s missing-value sentinel (see
+    ``result_missing_fill``); plain NaN when the variable is unknown."""
+    if rv is not None:
+        fill, _ = result_missing_fill(rv)
+        if not (isinstance(fill, float) and math.isnan(fill)):
+            return da == fill
+    return da.isnull()
+
+
+def _samples_per_point(ds: xr.Dataset, result_vars=None) -> int:
     """The number of repeat samples actually present at the sparsest sweep point:
-    the minimum non-NaN count along the repeat dimension over all result variables
-    that carry it. Differs from the configured `repeats` when runs are missing
-    (missing values are stored as NaN). Result variables that don't carry the
-    repeat dimension count as one sample each, whether or not the dimension exists
-    structurally; 0 means the dataset holds no result data at all."""
-    counts = [
-        int(da.notnull().sum(dim="repeat").min())
-        for da in ds.data_vars.values()
-        if "repeat" in da.dims
-    ]
+    the minimum non-missing count along the repeat dimension over the result
+    variables that carry it. Differs from the configured `repeats` when runs are
+    missing. Missingness is each variable's storage sentinel (NaN / -1 / "NAN",
+    matched to `result_vars` by name) so object- and reference-backed misses
+    count too. Only the latest `over_time` step is inspected — older steps carry
+    structural padding when repeats or levels grew between runs. Variables
+    without the repeat dimension are ignored when another variable carries it
+    (a lone panel var must not mask real repeats); if none carries it, each
+    point holds one sample, or none at all for a dataset with no result data."""
+    rv_by_name = {rv.name: rv for rv in result_vars} if result_vars else {}
+    counts = []
+    for name, da in ds.data_vars.items():
+        if "repeat" not in da.dims:
+            continue
+        if "over_time" in da.dims:
+            if da.sizes["over_time"] == 0:
+                counts.append(0)
+                continue
+            da = da.isel(over_time=-1)
+        per_point = (~_missing_mask(da, rv_by_name.get(name))).sum(dim="repeat")
+        counts.append(int(per_point.min()) if per_point.size else 0)
     if counts:
         return min(counts)
     return 1 if len(ds.data_vars) else 0

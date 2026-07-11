@@ -14,6 +14,7 @@ import bencher as bn
 from bencher.bench_cfg import BenchCfg
 from bencher.plotting.plt_cnt_cfg import PltCntCfg, result_kind, _samples_per_point
 from bencher.variables.time import TimeEvent, TimeSnapshot
+from test.helpers import run_cfg_with
 
 
 class CatFloat(bn.ParametrizedSweep):
@@ -27,15 +28,14 @@ class CatFloat(bn.ParametrizedSweep):
         self.ok = self.value > 1.0
 
 
-def run_sweep(repeats: int = 1, over_time: bool = False, run_cfg_kwargs=None):
+def run_sweep(repeats: int = 1, over_time: bool = False):
     bench = bn.Bench("test_plt_cnt_cfg_signature", CatFloat())
+    # clear_history keeps over_time runs hermetic: exactly one snapshot per test run
     return bench.plot_sweep(
         "sweep",
         input_vars=[CatFloat.param.kind, CatFloat.param.x],
         result_vars=[CatFloat.param.value, CatFloat.param.ok],
-        run_cfg=bn.BenchRunCfg(
-            repeats=repeats, over_time=over_time, auto_plot=False, **(run_cfg_kwargs or {})
-        ),
+        run_cfg=run_cfg_with(repeats, over_time=over_time, clear_history=over_time),
     )
 
 
@@ -64,10 +64,9 @@ class TestSignatureFields(unittest.TestCase):
         res = run_sweep(over_time=True)
         cfg = res.plt_cnt_cfg
         self.assertTrue(cfg.has_time)
-        # over_time accumulates history across (cached) runs, so assert consistency
-        # with the dataset rather than an absolute count.
+        # clear_history=True makes this the first snapshot: exactly one time step
+        self.assertEqual(cfg.time_steps, 1)
         self.assertEqual(cfg.time_steps, res.ds.sizes["over_time"])
-        self.assertGreaterEqual(cfg.time_steps, 1)
 
     def test_samples_per_point_full(self):
         cfg = run_sweep(repeats=2).plt_cnt_cfg
@@ -124,6 +123,32 @@ class TestSamplesPerPoint(unittest.TestCase):
         self.assertIn("repeat", ds.dims)
         self.assertEqual(_samples_per_point(ds), 1)
 
+    def test_zero_size_dim(self):
+        # a zero-size sweep dim leaves no points to count: 0, not a ValueError
+        # from reducing an empty array
+        ds = xr.Dataset({"value": (("x", "repeat"), np.ones((0, 3)))})
+        self.assertEqual(_samples_per_point(ds), 0)
+
+    def test_sentinel_missing_counted(self):
+        # object-backed result types store misses as the "NAN" sentinel, which
+        # notnull() would count as present; the per-variable sentinel must not
+        img = bn.ResultImage()
+        img.name = "img"
+        data = np.array([["a.png", "b.png", "NAN"]], dtype=object)
+        ds = xr.Dataset({"img": (("x", "repeat"), data)})
+        self.assertEqual(_samples_per_point(ds, [img]), 2)
+        # without the result var to identify the sentinel, NaN is all we can test
+        self.assertEqual(_samples_per_point(ds), 3)
+
+    def test_over_time_history_padding_ignored(self):
+        # when repeats grow between over_time runs, historical steps are NaN-padded;
+        # only the latest step reflects the current run's samples
+        data = np.full((2, 2, 3), np.nan)
+        data[1] = 1.0  # latest step: full repeat coverage
+        data[0, :, 0] = 1.0  # historical step recorded with repeats=1
+        ds = xr.Dataset({"value": (("over_time", "x", "repeat"), data)})
+        self.assertEqual(_samples_per_point(ds), 3)
+
     def test_empty_dataset(self):
         self.assertEqual(_samples_per_point(xr.Dataset()), 0)
 
@@ -137,6 +162,11 @@ class TestResultKind(unittest.TestCase):
         self.assertEqual(result_kind(bn.ResultString()), "string")
         self.assertEqual(result_kind(bn.ResultContainer()), "container")
         self.assertEqual(result_kind(object()), "unknown")
+
+    def test_rerun_kind_before_container(self):
+        from bencher.variables.results import ResultRerun
+
+        self.assertEqual(result_kind(ResultRerun()), "rerun")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Plot-selection signature enrichment** (A2 Phase S1): `PltCntCfg` gains additive, cheaply-computed facts alongside the existing counts — `has_time`/`time_steps` (temporal axis presence and length), `result_kinds` (result-variable name → coarse serializable kind), `cat_levels` (levels per categorical input), and `samples_per_point` (min non-NaN repeat count actually present, vs the configured `repeats`). `generate_plt_cnt_cfg` takes an optional dataset for the data-derived facts. No selection behavior changes.
+- **Plot-selection signature enrichment** (A2 Phase S1): `PltCntCfg` gains additive, cheaply-computed facts alongside the existing counts — `has_time`/`time_steps` (temporal axis presence and length), `result_kinds` (result-variable name → coarse serializable kind, via the new `result_kind` / `RESULT_KIND_ORDER` in `bencher.variables.results`), `cat_levels` (levels per categorical input), and `samples_per_point` (min repeat count actually present at the latest time step, missing-sentinel-aware per result type, vs the configured `repeats`). `generate_plt_cnt_cfg` takes an optional dataset for the data-derived facts, `PltCntCfg.__str__` includes the new fields, and the aggregation plotting path carries them through. No selection behavior changes.
 
 ## [1.116.0] - 2026-07-11
 

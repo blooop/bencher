@@ -707,6 +707,17 @@ class BenchResultBase:
                 panel_cnt=self.plt_cnt_cfg.panel_cnt,
                 repeats=self.plt_cnt_cfg.repeats,
                 inputs_cnt=len(adj_float) + len(adj_cat),
+                # signature facts carry over; cat_levels drops the collapsed dims
+                # to stay consistent with adj_cat
+                has_time=self.plt_cnt_cfg.has_time,
+                time_steps=self.plt_cnt_cfg.time_steps,
+                result_kinds=dict(self.plt_cnt_cfg.result_kinds),
+                cat_levels={
+                    name: levels
+                    for name, levels in self.plt_cnt_cfg.cat_levels.items()
+                    if name not in agg_set
+                },
+                samples_per_point=self.plt_cnt_cfg.samples_per_point,
                 print_debug=self.plt_cnt_cfg.print_debug,
             )
         matches_res = plot_filter.matches_result(check_cfg, callable_name(plot_callback), override)
