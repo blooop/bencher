@@ -8,10 +8,12 @@ import pytest
 import xarray as xr
 
 import bencher as bn
+from bencher.history import BIRTH_ATTR
 from bencher.regression import (
     RegressionError,
     RegressionReport,
     RegressionResult,
+    _history_points_since_birth,
     build_regression_overlay,
     detect_absolute,
     detect_adaptive,
@@ -639,6 +641,65 @@ class TestRegressionReport:
         assert "No regressions" in text
         assert "latency" in md
 
+    def test_markdown_marks_young_baseline_row_only(self):
+        """Young regressions are flagged in the table; mature rows are untouched."""
+        mature = RegressionResult(
+            "mature_var", "percentage", True, 110.0, 100.0, 10.0, 5.0, "minimize", ""
+        )
+        young = RegressionResult(
+            "young_var",
+            "percentage",
+            True,
+            110.0,
+            100.0,
+            10.0,
+            5.0,
+            "minimize",
+            "",
+            young_baseline=True,
+        )
+        md = RegressionReport(results=[mature, young]).to_markdown()
+        assert "| young_var † |" in md
+        assert "| mature_var |" in md
+        # The marker must not leak onto the mature row.
+        assert "| mature_var † |" not in md
+        # A legend explains the marker when any young regression is present.
+        assert "young baseline" in md
+
+    def test_markdown_has_no_young_legend_without_young_rows(self):
+        """No legend line when every regression has a mature baseline."""
+        mature = RegressionResult(
+            "mature_var", "percentage", True, 110.0, 100.0, 10.0, 5.0, "minimize", ""
+        )
+        md = RegressionReport(results=[mature]).to_markdown()
+        assert "young baseline" not in md
+        assert "†" not in md
+
+    def test_to_dict_exports_has_blocking_regressions(self):
+        """Report dict distinguishes blocking from notify-only regressions."""
+        young = RegressionResult(
+            "young_var",
+            "percentage",
+            True,
+            110.0,
+            100.0,
+            10.0,
+            5.0,
+            "minimize",
+            "",
+            young_baseline=True,
+        )
+        d = RegressionReport(results=[young]).to_dict()
+        assert d["has_regressions"] is True
+        assert d["has_blocking_regressions"] is False
+
+        mature = RegressionResult(
+            "mature_var", "percentage", True, 110.0, 100.0, 10.0, 5.0, "minimize", ""
+        )
+        d2 = RegressionReport(results=[mature]).to_dict()
+        assert d2["has_regressions"] is True
+        assert d2["has_blocking_regressions"] is True
+
 
 # ── method_cells public helper ────────────────────────────────────────────
 
@@ -756,6 +817,7 @@ def _make_cfg(
     regression_delta=None,
     regression_absolute=None,
     regression_overrides=None,
+    regression_min_history=None,
 ):
     """Create minimal bench_cfg and run_cfg mocks for detect_regressions tests."""
 
@@ -772,6 +834,7 @@ def _make_cfg(
             regression_delta,
             regression_absolute,
             regression_overrides,
+            regression_min_history,
         ):
             self.regression_method = method
             self.regression_mad = regression_mad
@@ -779,6 +842,7 @@ def _make_cfg(
             self.regression_delta = regression_delta
             self.regression_absolute = regression_absolute
             self.regression_overrides = regression_overrides
+            self.regression_min_history = regression_min_history
 
     return (
         FakeBenchCfg(result_vars),
@@ -789,6 +853,7 @@ def _make_cfg(
             regression_delta,
             regression_absolute,
             regression_overrides,
+            regression_min_history,
         ),
     )
 
@@ -1141,6 +1206,54 @@ class TestDetectRegressions:
         bench_cfg, run_cfg = _make_cfg([rv], method="delta", regression_delta=1.0)
         report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.results == []
+
+
+class TestHistoryPointsSinceBirth:
+    """Baseline-age counting from the birth coordinate (duplicate labels)."""
+
+    @staticmethod
+    def _dataset(labels, values, birth):
+        vals = np.asarray(values, dtype=float).reshape(len(labels), 1)
+        ds = xr.Dataset(
+            {"m": (["over_time", "repeat"], vals)},
+            coords={"over_time": list(labels), "repeat": [0]},
+        )
+        ds["m"].attrs[BIRTH_ATTR] = birth
+        return ds
+
+    def test_duplicate_birth_label_counts_from_last_occurrence(self):
+        """A duplicated birth label counts from its LAST occurrence.
+
+        The first occurrence would over-count history (undoing the young
+        gate); the last occurrence errs toward fewer points ("younger").
+        """
+        ds = self._dataset(
+            ["r0", "r1", "r1", "r2", "r3"], [100.0, 100.0, 100.0, 100.0, 200.0], birth="r1"
+        )
+        # 5 total points, birth at index 2 (last "r1"), current excluded -> 2.
+        assert _history_points_since_birth(ds, ds["m"]) == 2
+
+    def test_column_born_on_second_duplicate_stays_young(self):
+        """A column born on the second duplicate must remain notify-only.
+
+        With min_history=3 the last-occurrence count (2) is below the gate, so
+        the regression is young/non-blocking. The first-occurrence count (3)
+        would have crossed the gate and turned this into a blocking failure.
+        """
+        from bencher.variables.results import ResultFloat
+
+        ds = self._dataset(
+            ["r0", "r1", "r1", "r2", "r3"], [100.0, 100.0, 100.0, 100.0, 200.0], birth="r1"
+        )
+        rv = ResultFloat(units="s", direction=OptDir.minimize)
+        rv.name = "m"
+        bench_cfg, run_cfg = _make_cfg(
+            [rv], method="percentage", regression_percentage=10.0, regression_min_history=3
+        )
+        report = detect_regressions(ds, bench_cfg, run_cfg)
+        assert report.has_regressions
+        assert not report.has_blocking_regressions
+        assert all(r.young_baseline for r in report.regressed_variables)
 
 
 # ── RegressionError ────────────────────────────────────────────────────────

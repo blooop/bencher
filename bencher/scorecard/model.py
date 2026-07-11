@@ -62,11 +62,17 @@ def cell_verdict(reg: dict | None) -> str:
     """4-way display verdict for a cell.
 
     ``None`` — no regression gate on this metric (or too little history) — maps
-    to the uncolored ``"trend"`` fallback. Otherwise defer to bencher's 3-state
-    core verdict and render its ``"unchanged"`` as ``"passed"`` (the gate ran and
-    did not flag). A gate with no threshold can only have "passed".
+    to the uncolored ``"trend"`` fallback. A gate on a *young baseline* maps
+    there too: the baseline is younger than ``regression_min_history``, so
+    bencher reports the regression but never blocks on it — colouring it like a
+    real regression would overstate a verdict its own gate treats as advisory.
+    Otherwise defer to bencher's 3-state core verdict and render its
+    ``"unchanged"`` as ``"passed"`` (the gate ran and did not flag). A gate with
+    no threshold can only have "passed".
     """
     if reg is None:
+        return "trend"
+    if reg.get("young_baseline"):
         return "trend"
     if bool(reg.get("regressed")):
         return "regressed"

@@ -35,6 +35,10 @@ _DRIFT_FRAC = 0.85
 # Hampel filter cutoff (in MAD units) used to drop outliers from the slope fit.
 _HAMPEL_K = 5.0
 
+# Marker appended to a young-baseline regression's Variable cell in the markdown
+# table (young regressions are reported but never block — see young_baseline).
+_YOUNG_MARKER = "†"
+
 
 class RegressionError(Exception):
     """Raised when regression detection finds regressions and regression_fail is True."""
@@ -175,6 +179,9 @@ class RegressionReport:
             lines.append("|----------|-------:|----------:|--------:|--------|----------:|")
             for r in regressed:
                 lines.append(_format_markdown_row(r))
+            if any(r.young_baseline for r in regressed):
+                lines.append("")
+                lines.append(f"*{_YOUNG_MARKER} young baseline — notify only, does not block*")
         else:
             lines.append("**No regressions detected**\n")
 
@@ -195,6 +202,7 @@ class RegressionReport:
         """
         return {
             "has_regressions": self.has_regressions,
+            "has_blocking_regressions": self.has_blocking_regressions,
             "results": [r.to_dict() for r in self.results],
         }
 
@@ -326,8 +334,9 @@ def _format_summary_line(r: RegressionResult) -> str:
 
 def _format_markdown_row(r: RegressionResult) -> str:
     cells = method_cells(r)
+    variable = f"{r.variable} {_YOUNG_MARKER}" if r.young_baseline else r.variable
     return (
-        f"| {r.variable} | {cells.change} | {cells.baseline} | "
+        f"| {variable} | {cells.change} | {cells.baseline} | "
         f"{r.current_value:.4g} | {r.method} | {cells.threshold} |"
     )
 
@@ -1492,13 +1501,19 @@ def _history_points_since_birth(dataset: xr.Dataset, da: xr.DataArray) -> int:
     dataset without over_time coordinates — count the full window. A birth
     value no longer present in the coordinates means the birth has aged out
     past max_time_events, so the whole (trimmed) window is real history.
+
+    When over_time labels are duplicated (a reused ``TimeEvent``), the birth
+    value can match more than one coordinate. We take the *last* occurrence:
+    if the column was truly born on the later duplicate this is exact, and if
+    it was born on an earlier one this undercounts history — erring toward
+    "younger", which is only ever notify-only and never a premature block.
     """
     n_time = int(dataset.sizes.get("over_time", 0))
     birth = da.attrs.get(BIRTH_ATTR)
     if birth is None or "over_time" not in dataset.coords:
         return max(n_time - 1, 0)
     matches = np.nonzero(dataset["over_time"].values == birth)[0]
-    start = int(matches[0]) if len(matches) else 0
+    start = int(matches[-1]) if len(matches) else 0
     return max(n_time - start - 1, 0)
 
 

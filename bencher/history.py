@@ -266,6 +266,22 @@ def reconcile(
                         column=name,
                     )
                 )
+        elif meta.get("identity") is None:
+            # Stub meta for a column from a record predating column tracking:
+            # its identity was never recorded, so adopt it in place rather than
+            # retiring (a retire would mangle real continuous history under a
+            # dormant stub identity). Birth stays None: data as old as tracking.
+            was_dormant = meta.get("dormant")
+            columns[name] = column_meta(rv, name, birth=None)
+            if was_dormant:
+                events.append(
+                    HistoryEvent(
+                        "column_resumed",
+                        f"result column '{name}' returned with the same identity; "
+                        f"its earlier history resumes",
+                        column=name,
+                    )
+                )
         elif meta.get("identity") != ident:
             taken = set(ds_old.data_vars) | set(retired)
             mangled = _mangled_name(name, meta, taken)
@@ -292,6 +308,32 @@ def reconcile(
                     column=name,
                 )
             )
+
+    # Data variables from a record predating column tracking carry no metadata.
+    # Any such column absent from the current config must still go dormant, so
+    # on_history_reset='error' fires and a later return resumes (via the
+    # identity-None branch above) instead of silently re-adopting. Retired
+    # mangled names are data_vars too and are skipped.
+    for name in ds_old.data_vars:
+        if name in columns or name in current_cols or name in retired:
+            continue
+        columns[name] = {
+            "identity": None,
+            "class": None,
+            "units": None,
+            "meaning_version": None,
+            "birth": None,
+            "dormant": True,
+        }
+        events.append(
+            HistoryEvent(
+                "column_dormant",
+                f"result column '{name}' from a record predating column tracking is "
+                f"absent from the config; {n_history} historical events retained "
+                f"(dormant) and will resume if it returns",
+                column=name,
+            )
+        )
 
     for name, meta in columns.items():
         if name not in current_cols and not meta.get("dormant"):

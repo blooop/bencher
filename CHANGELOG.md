@@ -43,12 +43,18 @@ standing cache policy (no migration of old entries). Implements plans 09 and
   orphaned-event count via a per-benchmark last-seen index, column dormant,
   column retired, incompatible history discarded) are logged, raised
   (`bencher.HistoryResetError`, before any state is persisted), or suppressed.
+  Pre-record (bare-dataset) history entries participate in the same lifecycle:
+  a column they carry that leaves the config is reported dormant, and it
+  resumes rather than restarts when it returns.
 - **`BenchRunCfg.regression_min_history`** (default 1 = previous behavior) —
   regressions on a baseline younger than N points since the column's birth are
   reported and exported (`young_baseline: true` in `result.json`,
   `RegressionReport.has_blocking_regressions`) but never trigger
   `regression_fail`; history-free `absolute` checks still gate. Per-variable
-  override via a `min_history` key in `regression_overrides`.
+  override via a `min_history` key in `regression_overrides`. Young rows are
+  marked notify-only (†) in the rendered regression report, the scorecard
+  shows them as uncolored trend cells, and the exported report JSON carries a
+  top-level `has_blocking_regressions`.
 
 ## [1.115.0] - 2026-07-11
 
