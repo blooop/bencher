@@ -173,6 +173,13 @@ class TestCellVerdict:
     def test_regressed_overrides(self):
         assert cell_verdict(_reg("v", "maximize", True, 1.0, 0.75, -25.0)) == "regressed"
 
+    def test_young_baseline_regression_is_trend(self):
+        """A regressed cell on a young baseline is notify-only -> uncolored trend."""
+        reg = _reg("v", "maximize", True, 1.0, 0.75, -25.0)
+        assert cell_verdict(reg) == "regressed"
+        reg["young_baseline"] = True
+        assert cell_verdict(reg) == "trend"
+
     def test_improved_when_beneficial_over_threshold(self):
         assert cell_verdict(_reg("v", "maximize", False, 1.0, 1.2, 20.0)) == "improved"
         assert cell_verdict(_reg("v", "minimize", False, 1.0, 0.8, -20.0)) == "improved"

@@ -39,6 +39,19 @@ from bencher.worker_job import WorkerJob
 from bencher.job import JobFuture
 
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
+from bencher.history import (
+    HISTORY_FORMAT,
+    HistoryEvent,
+    apply_policy,
+    column_meta,
+    current_time_value,
+    data_var_columns,
+    diff_summaries,
+    incompatible_reason,
+    last_seen_key,
+    project,
+    reconcile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -396,6 +409,40 @@ class ResultCollector:
         logger.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
         c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
 
+    def _load_history_record(self, cache: Cache, bench_cfg_hash: str) -> dict | None:
+        """Fetch and normalize one history record, or None when absent/unreadable.
+
+        Bare ``xr.Dataset`` values (hand-seeded or pre-record entries) are
+        wrapped into the record shape with no column metadata, which the
+        reconciler treats as adopt-in-place.
+        """
+        try:
+            record = cache[bench_cfg_hash]
+        except KeyError:
+            return None
+        except (AttributeError, TypeError, ModuleNotFoundError, ImportError) as exc:
+            logger.warning(
+                "Failed to deserialize cached history (%s: %s). "
+                "Discarding stale cache entry and continuing with fresh data.",
+                type(exc).__name__,
+                exc,
+            )
+            try:
+                del cache[bench_cfg_hash]
+            except (OSError, KeyError) as del_exc:
+                logger.debug("Could not remove stale cache entry: %s", del_exc)
+            return None
+        if isinstance(record, xr.Dataset):
+            return {"format": 0, "dataset": record, "columns": {}, "retired": {}}
+        if isinstance(record, dict) and isinstance(record.get("dataset"), xr.Dataset):
+            return record
+        logger.warning("Unrecognized history record shape; discarding stale entry")
+        try:
+            del cache[bench_cfg_hash]
+        except (OSError, KeyError) as del_exc:
+            logger.debug("Could not remove stale cache entry: %s", del_exc)
+        return None
+
     def load_history_cache(
         self,
         dataset: xr.Dataset,
@@ -403,83 +450,125 @@ class ResultCollector:
         clear_history: bool,
         max_time_events: int | None = None,
         result_vars: list | None = None,
+        *,
+        on_history_reset: str = "warn",
+        bench_name: str | None = None,
+        tag: str | None = None,
+        config_summary: dict | None = None,
     ) -> xr.Dataset:
-        """Load historical data from a cache if over_time is enabled.
+        """Load, reconcile, and persist historical benchmark data.
 
-        This method is used to retrieve and concatenate historical benchmark data from the cache
-        when tracking performance over time. If clear_history is True, it will clear any existing
-        historical data instead of loading it.
+        The history key excludes result variables, so the stored record is a
+        *superset* of every column ever measured under this benchmark's input
+        space; result-var differences are reconciled per column (retained,
+        retired, resumed, or born — see :mod:`bencher.history`) and consumers
+        receive a projection onto exactly the current ``result_vars`` columns.
+        If clear_history is True, existing history is ignored (a fresh series
+        starts and is written back).
 
         Args:
             dataset (xr.Dataset): Freshly calculated benchmark data for the current run
-            bench_cfg_hash (str): Hash of the input variables used to identify cached data
+            bench_cfg_hash (str): History key — the benchmark identity hash computed
+                with ``include_result_vars=False``
             clear_history (bool): If True, clears historical data instead of loading it
             max_time_events (int | None): Maximum number of over_time events to retain.
                 Oldest events are trimmed. None means unlimited.
-            result_vars (list | None): Result variable instances. When a variable has a
-                per-variable ``max_time_events`` smaller than the dataset's over_time
-                size, older entries are set to sentinel and media files are deleted.
+            result_vars (list | None): Result variable instances defining the served
+                columns. Also used for per-variable ``max_time_events`` aging. When
+                None, column reconciliation and projection are skipped entirely.
+            on_history_reset (str): Policy for loss-y schema events — "warn",
+                "error" (raise HistoryResetError before persisting), or "ignore".
+            bench_name (str | None): Benchmark name for the last-seen index; enables
+                full-reset detection when the history key moves.
+            tag (str | None): Benchmark tag for the last-seen index.
+            config_summary (dict | None): ``bencher.history.config_summary`` of the
+                current config, stored in the last-seen index and diffed on resets.
 
         Returns:
-            xr.Dataset: Combined dataset with both historical and current benchmark data,
-                or just the current data if no history exists or history is cleared
+            xr.Dataset: The current config's view of the accumulated history —
+                historical plus current data, projected onto the current columns.
         """
         c = self.get_history_cache()
+        current_cols = data_var_columns(result_vars)
+        events: list[HistoryEvent] = []
+        merged = dataset
+        birth_val = current_time_value(dataset)
+        columns_meta = {name: column_meta(rv, name, birth_val) for name, rv in current_cols.items()}
+        retired: dict = {}
+
         if clear_history:
             logger.info("clearing history")
         else:
             logger.info(f"checking historical key: {bench_cfg_hash}")
-            try:
-                ds_old = c[bench_cfg_hash]
-            except KeyError:
+            record = self._load_history_record(c, bench_cfg_hash)
+            if record is None:
                 logger.info("did not detect any historical data")
-            except (
-                AttributeError,
-                TypeError,
-                ModuleNotFoundError,
-                ImportError,
-            ) as exc:
-                logger.warning(
-                    "Failed to deserialize cached history (%s: %s). "
-                    "Discarding stale cache entry and continuing with fresh data.",
-                    type(exc).__name__,
-                    exc,
-                )
-                try:
-                    del c[bench_cfg_hash]
-                except (OSError, KeyError) as del_exc:
-                    logger.debug("Could not remove stale cache entry: %s", del_exc)
+                if bench_name is not None:
+                    last = c.get(last_seen_key(bench_name, tag))
+                    if last and last.get("key") != bench_cfg_hash:
+                        diff = diff_summaries(last.get("summary"), config_summary)
+                        detail = (
+                            f"over_time history reset for benchmark '{bench_name}' "
+                            f"(tag '{tag}'): the history key changed"
+                            + (": " + "; ".join(diff) if diff else "")
+                            + f"; {last.get('events', '?')} historical events are "
+                            f"orphaned under the old key"
+                        )
+                        events.append(HistoryEvent("full_reset", detail))
             else:
                 logger.info("loading historical data from cache")
-                if (
-                    "over_time" in ds_old.dims
-                    and "over_time" in dataset.dims
-                    and ds_old["over_time"].dtype != dataset["over_time"].dtype
-                ):
-                    logger.warning(
-                        "Discarding incompatible historical data "
-                        "(over_time dtype changed: "
-                        f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
+                ds_old = record["dataset"]
+                incompatible = incompatible_reason(ds_old, dataset)
+                if incompatible:
+                    events.append(
+                        HistoryEvent(
+                            "history_discarded",
+                            f"Discarding incompatible historical data ({incompatible})",
+                        )
                     )
+                elif current_cols:
+                    merged, columns_meta, retired, reconcile_events = reconcile(
+                        record, dataset, current_cols
+                    )
+                    events.extend(reconcile_events)
                 else:
-                    dataset = xr.concat([ds_old, dataset], "over_time")
+                    # No column information (result_vars not supplied): plain
+                    # append, preserving whatever metadata the record carries.
+                    merged = xr.concat([ds_old, dataset], "over_time")
+                    columns_meta = record.get("columns") or {}
+                    retired = record.get("retired") or {}
 
-        if max_time_events is not None and "over_time" in dataset.dims:
-            if dataset.sizes["over_time"] > max_time_events:
-                dataset = dataset.isel(over_time=slice(-max_time_events, None))
+        # Policy runs before anything is persisted so on_history_reset="error"
+        # leaves the stored history untouched for the next (acknowledged) run.
+        apply_policy(events, on_history_reset)
+
+        if max_time_events is not None and "over_time" in merged.dims:
+            if merged.sizes["over_time"] > max_time_events:
+                merged = merged.isel(over_time=slice(-max_time_events, None))
 
         # Per-variable max_time_events: null out older entries for variables
         # with a per-variable limit smaller than the dataset's over_time size.
         # File deletion is deferred until after the cache write succeeds.
         pending_deletes = []
-        if result_vars and "over_time" in dataset.dims:
+        if result_vars and "over_time" in merged.dims:
             for rv in result_vars:
                 var_limit = getattr(rv, "max_time_events", None)
                 if var_limit is not None:
-                    pending_deletes.extend(_null_old_entries(dataset, rv, var_limit))
+                    pending_deletes.extend(_null_old_entries(merged, rv, var_limit))
 
         logger.info("saving data to history cache")
-        c[bench_cfg_hash] = dataset
+        c[bench_cfg_hash] = {
+            "format": HISTORY_FORMAT,
+            "dataset": merged,
+            "columns": columns_meta,
+            "retired": retired,
+        }
+        if bench_name is not None:
+            c[last_seen_key(bench_name, tag)] = {
+                "key": bench_cfg_hash,
+                "summary": config_summary,
+                "events": int(merged.sizes.get("over_time", 0)),
+            }
 
         for fpath in pending_deletes:
             try:
@@ -488,7 +577,9 @@ class ResultCollector:
             except OSError as exc:
                 logger.warning("Failed to delete media file %s: %s", fpath, exc)
 
-        return dataset
+        if current_cols:
+            return project(merged, current_cols, columns_meta)
+        return merged
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: Any) -> None:
         """Add variable metadata to the xarray dataset for improved visualization.

@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.116.0] - 2026-07-11
+
+### Changed — cache-busting release (`CACHE_VERSION` 4 → 5)
+
+Every benchmark-level and `over_time` history cache key changes in this
+release: expect a one-time cache miss and a fresh history series per the
+standing cache policy (no migration of old entries). Implements plans 09 and
+14 (`plans/09-result-cache-invalidation.md`,
+`plans/14-history-schema-reconciliation.md`).
+
+- **`BenchCfg.hash_persistent` composition** (plan 09):
+  - `result_vars` and `const_vars` now contribute as an *unordered set* —
+    reordering either no longer resets caches or history (D1).
+  - Every per-variable identity (input, result, const) now includes the
+    variable's **name** — renaming a variable is a detected identity change
+    instead of a silent history split or phantom-dimension broadcast (D2).
+- **`over_time` history survives result-variable changes** (plan 14): the
+  history cache is keyed *without* result vars
+  (`hash_persistent(True, include_result_vars=False)`) and stores a superset
+  record of every column ever measured. At load time, columns are reconciled
+  per identity `(name, class, units, meaning_version)` — added columns are
+  NaN-backfilled and birth-stamped, removed columns go dormant (retained,
+  invisible, resumed on return), redefined columns are retired under a mangled
+  name and restart — and consumers receive a projection onto exactly the
+  current config's columns. The benchmark-level result cache stays strict.
+
+### Added
+
+- **`meaning_version`** on `ResultFloat`/`ResultBool` — bump it when a metric
+  keeps its name but changes meaning; that column's history and regression
+  baseline restart cleanly while every other column continues.
+- **`BenchRunCfg.on_history_reset`** (`"warn"` default / `"error"` /
+  `"ignore"`) — loss-y history events (full reset with a named diff and
+  orphaned-event count via a per-benchmark last-seen index, column dormant,
+  column retired, incompatible history discarded) are logged, raised
+  (`bencher.HistoryResetError`, before any state is persisted), or suppressed.
+  Pre-record (bare-dataset) history entries participate in the same lifecycle:
+  a column they carry that leaves the config is reported dormant, and it
+  resumes rather than restarts when it returns.
+- **`BenchRunCfg.regression_min_history`** (default 1 = previous behavior) —
+  regressions on a baseline younger than N points since the column's birth are
+  reported and exported (`young_baseline: true` in `result.json`,
+  `RegressionReport.has_blocking_regressions`) but never trigger
+  `regression_fail`; history-free `absolute` checks still gate. Per-variable
+  override via a `min_history` key in `regression_overrides`. Young rows are
+  marked notify-only (†) in the rendered regression report, the scorecard
+  shows them as uncolored trend cells, and the exported report JSON carries a
+  top-level `has_blocking_regressions`.
+
 ## [1.115.0] - 2026-07-11
 
 ### Added

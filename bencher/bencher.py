@@ -38,6 +38,7 @@ from bencher.job import Job, FutureCache, JobFuture, Executors
 from bencher.utils import params_to_str, resolve_aggregate, AGG_FN_MAP
 from bencher.sample_order import SampleOrder
 from bencher.regression import detect_regressions, RegressionError
+from bencher.history import config_summary as history_config_summary
 from bencher.sweep_timings import SweepTimings, phase_timer
 
 # Import helper classes
@@ -678,6 +679,12 @@ class Bench(BenchPlotServer):
         bench_cfg_hash = bench_cfg.hash_persistent(True)
         bench_cfg.hash_value = bench_cfg_hash
 
+        # The over_time history is keyed WITHOUT result vars so metric-set
+        # changes reconcile per column instead of orphaning the whole history
+        # (see bencher.history). The benchmark-level result cache above stays
+        # strict: a cached single result must match the exact result-var set.
+        bench_cfg_history_hash = bench_cfg.hash_persistent(True, include_result_vars=False)
+
         # does not include repeats in hash as sample_hash already includes repeat as part of the per sample hash
         bench_cfg_sample_hash = bench_cfg.hash_persistent(False)
 
@@ -724,10 +731,14 @@ class Bench(BenchPlotServer):
                 with phase_timer() as elapsed:
                     bench_res.ds = self.load_history_cache(
                         bench_res.ds,
-                        bench_cfg_hash,
+                        bench_cfg_history_hash,
                         run_cfg.clear_history,
                         run_cfg.max_time_events,
                         bench_cfg.result_vars,
+                        on_history_reset=run_cfg.on_history_reset,
+                        bench_name=bench_cfg.bench_name,
+                        tag=bench_cfg.tag,
+                        config_summary=history_config_summary(bench_cfg),
                     )
                     # sync the over_time meta variable with the actual accumulated values
                     if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
@@ -743,7 +754,12 @@ class Bench(BenchPlotServer):
                 bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
                 if bench_res.regression_report.has_regressions:
                     logging.warning(bench_res.regression_report.summary())
-                    if run_cfg.regression_fail:
+                    # young_baseline regressions (fewer than regression_min_history
+                    # points since the column's birth) warn but never fail the run.
+                    if (
+                        run_cfg.regression_fail
+                        and bench_res.regression_report.has_blocking_regressions
+                    ):
                         raise RegressionError(bench_res.regression_report.summary())
 
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
@@ -849,10 +865,23 @@ class Bench(BenchPlotServer):
         clear_history: bool,
         max_time_events: int | None = None,
         result_vars: list | None = None,
+        *,
+        on_history_reset: str = "warn",
+        bench_name: str | None = None,
+        tag: str | None = None,
+        config_summary: dict | None = None,
     ) -> xr.Dataset:
-        """Load and concatenate historical benchmark data from cache."""
+        """Load, reconcile, and persist historical benchmark data from cache."""
         return self._collector.load_history_cache(
-            dataset, bench_cfg_hash, clear_history, max_time_events, result_vars
+            dataset,
+            bench_cfg_hash,
+            clear_history,
+            max_time_events,
+            result_vars,
+            on_history_reset=on_history_reset,
+            bench_name=bench_name,
+            tag=tag,
+            config_summary=config_summary,
         )
 
     def setup_dataset(

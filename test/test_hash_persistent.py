@@ -736,8 +736,10 @@ class TestSweepSlotCoverage:
 # on-disk benchmark-level and over_time entry in the field.
 # ---------------------------------------------------------------------------
 
-GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "4fb6a177d55ff3ca67cbe851076f7606dbe3e364"
-GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "3b91a536f825054f4ec7712808699564014a023a"
+GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "6a2b022e6f72ac6c536a118c88065a30b788eca1"
+GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "5aa01b2f3c3ad8e1022c4c8cf027397a3204ba47"
+# The over_time history key: include_result_vars=False.
+GOLDEN_BENCH_CFG_HASH_HISTORY = "ec8e1d72fb6137e20156499c505547933e534ac0"
 
 
 def _build_golden_bench_cfg():
@@ -783,6 +785,13 @@ class TestGoldenBenchCfgHash:
         assert cfg.hash_persistent(include_repeats=False) == (
             GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS
         )
+
+    def test_golden_hash_history_key(self):
+        """The history key (include_result_vars=False) is a distinct golden value."""
+        cfg = _build_golden_bench_cfg()
+        history = cfg.hash_persistent(include_repeats=True, include_result_vars=False)
+        assert history == GOLDEN_BENCH_CFG_HASH_HISTORY
+        assert history != GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS
 
     def test_title_change_does_not_affect_golden_hash(self):
         cfg = _build_golden_bench_cfg()
