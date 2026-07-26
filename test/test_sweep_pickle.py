@@ -326,10 +326,8 @@ class TestPickleInContainer:
             container[name] = sw.with_subsampling_divisions(3)
 
         restored = _pickle_roundtrip(container)
-        for name in container:
-            assert restored[name].values() == container[name].values(), (
-                f"Pickle in dict failed for {name}"
-            )
+        for name, sweep in container.items():
+            assert restored[name].values() == sweep.values(), f"Pickle in dict failed for {name}"
 
     def test_list_of_mutated_sweeps(self):
         sweeps = [sw.with_subsampling_divisions(3) for sw in _build_sweeps().values()]

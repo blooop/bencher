@@ -420,7 +420,9 @@ class YamlSweep(SweepSelector):
 
         entries = self._load_yaml(path)
         if not isinstance(entries, Mapping):
-            raise ValueError(
+            # ValueError, not TypeError: this is the documented contract exercised by
+            # test_yaml_sweep_requires_mapping, and matches the other YamlSweep raises.
+            raise ValueError(  # noqa: TRY004
                 "YamlSweep requires the YAML file to contain a mapping at the top level"
             )
 
@@ -568,7 +570,9 @@ class IntSweep(Integer, SweepBase):
             return
 
         if not isinstance(value, (int, np.integer)):
-            raise ValueError(
+            # ValueError, not TypeError: mirrors param.Integer._validate_value so that
+            # IntSweep validation stays indistinguishable from the param base class.
+            raise ValueError(  # noqa: TRY004
                 f"Integer parameter {self.name!r} must be an integer, not type {type(value)!r}."
             )
 

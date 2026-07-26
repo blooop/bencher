@@ -115,7 +115,7 @@ class TestToAutoParity(unittest.TestCase):
             for cb in BenchResult.default_plot_callbacks():
                 try:
                     pane = cb(self.res, override=False, **plot_kwargs)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                     pane = None
                 if pane is not None:
                     panes.append(pane)
@@ -138,7 +138,7 @@ class TestToAutoParity(unittest.TestCase):
             for cb in BenchResult.default_plot_callbacks():
                 try:
                     pane = cb(res, override=False, **plot_kwargs)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                     pane = None
                 if pane is not None:
                     legacy.append(pane)

@@ -504,8 +504,7 @@ class BenchResultBase:
 
         if isinstance(dataset, xr.DataArray):
             tit = [dataset.name]
-            for d in dataset.dims:
-                tit.append(d)
+            tit.extend(dataset.dims)
         else:
             tit = [result_var.name]
             tit.extend(list(dataset.sizes))

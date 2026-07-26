@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import auto
+from typing import ClassVar
 
 import pytest
 
@@ -265,8 +266,8 @@ class OffsetSphere(bn.ParametrizedSweep):
 
     loss = bn.ResultFloat("ul", bn.OptDir.minimize)
 
-    observed_offsets: list[float] = []
-    observed_x: list[float] = []
+    observed_offsets: ClassVar[list[float]] = []
+    observed_x: ClassVar[list[float]] = []
 
     def benchmark(self):
         type(self).observed_offsets.append(float(self.offset))

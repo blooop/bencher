@@ -882,12 +882,10 @@ class BenchCfg(BenchRunCfg):
 
             cfg = from_bench_cfg(self)
             return render_animation(cfg, width=350, height=250)
-        except (ImportError, AttributeError, ValueError, RuntimeError, OSError) as e:
+        except (ImportError, AttributeError, ValueError, RuntimeError, OSError):
             # Log the exception so failures remain diagnosable while preserving
             # the existing graceful fallback behavior.
-            logging.getLogger(__name__).exception(
-                "Failed to render Cartesian animation for bench config %r: %s", self, e
-            )
+            logger.exception("Failed to render Cartesian animation for bench config %r", self)
             return None
 
     def describe_sweep(

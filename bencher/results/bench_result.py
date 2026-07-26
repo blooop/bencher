@@ -259,12 +259,12 @@ class BenchResult(
             try:
                 row.append(plugin.render(data))
             except Exception:  # pylint: disable=broad-except
-                logger.error("Plot plugin %s failed", plugin.name, exc_info=True)
+                logger.exception("Plot plugin %s failed", plugin.name)
         for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
             except Exception:  # pylint: disable=broad-except
-                logger.error("Plot callback %s failed", plot_callback.__name__, exc_info=True)
+                logger.exception("Plot callback %s failed", plot_callback.__name__)
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
@@ -380,9 +380,7 @@ class BenchResult(
                 try:
                     plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
                 except Exception:  # pylint: disable=broad-except
-                    logger.error(
-                        "Failed to render regression overlay for %s", r.variable, exc_info=True
-                    )
+                    logger.exception("Failed to render regression overlay for %s", r.variable)
 
         # --- Extra panels (user-injected) ---
         if extra_panels:
@@ -394,7 +392,7 @@ class BenchResult(
                         plot_cols.append(ep)
                 except Exception:  # pylint: disable=broad-except
                     name = getattr(ep, "__name__", repr(ep))
-                    logger.error("Extra panel %s failed", name, exc_info=True)
+                    logger.exception("Extra panel %s failed", name)
 
         # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:

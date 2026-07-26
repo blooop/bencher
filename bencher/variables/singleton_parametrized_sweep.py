@@ -29,7 +29,10 @@ Example (context-manager style — auto-resets on failure)::
             super().__init__()
 """
 
+from __future__ import annotations
+
 import threading
+from typing import ClassVar
 
 from .parametrised_sweep import ParametrizedSweep
 
@@ -74,8 +77,8 @@ class ParametrizedSweepSingleton(ParametrizedSweep):
     - Thread-safe: all shared state is protected by ``_lock``.
     """
 
-    _instances = {}
-    _seen = set()
+    _instances: ClassVar[dict[type, ParametrizedSweepSingleton]] = {}
+    _seen: ClassVar[set[type]] = set()
     _lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):

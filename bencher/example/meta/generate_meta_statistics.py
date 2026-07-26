@@ -37,7 +37,7 @@ class MetaStatistics(MetaGeneratorBase):
             benchable_module="bencher.example.meta.example_meta",
             input_vars='["float1"]',
             result_vars='["distance", "sample_noise"]',
-            const_vars="dict(noise_scale=0.3)",
+            const_vars='{"noise_scale": 0.3}',
             run_kwargs={"subsampling_divisions": 4, "repeats": 10},
         )
 
@@ -52,7 +52,7 @@ class MetaStatistics(MetaGeneratorBase):
             benchable_module="bencher.example.meta.example_meta",
             input_vars='["wave", "variant"]',
             result_vars='["distance", "sample_noise"]',
-            const_vars="dict(noise_scale=0.3)",
+            const_vars='{"noise_scale": 0.3}',
             run_kwargs={"subsampling_divisions": 3, "repeats": 20},
         )
 
@@ -77,7 +77,7 @@ class MetaStatistics(MetaGeneratorBase):
             '        title=f"{n_repeats} repeat(s)",\n'
             '        input_vars=["wave"],\n'
             '        result_vars=["distance"],\n'
-            "        const_vars=dict(noise_scale=noise),\n"
+            '        const_vars={"noise_scale": noise},\n'
             "        run_cfg=sweep_cfg,\n"
             "    )\n"
         )

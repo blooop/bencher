@@ -172,8 +172,14 @@ def generate_python_files():
     if not init.exists():
         init.touch()
 
-    # Format all generated files in a single pass
+    # Lint-fix and format all generated files in a single pass. The autofix pass keeps
+    # generated output in sync with ruff's rules (notably import sorting) so generators
+    # can emit imports in any order without leaving `pixi run lint` dirty.
     if shutil.which("ruff"):
+        subprocess.run(
+            ["ruff", "check", "--fix-only", "--quiet", str(GENERATED_DIR)],
+            check=False,
+        )
         subprocess.run(["ruff", "format", str(GENERATED_DIR)], check=False)
 
 
@@ -250,7 +256,7 @@ def run_example_and_save(
             _take_thumbnail(Path(report_path), thumb_path, page=page)
             thumb_elapsed = time.perf_counter() - t_thumb_start
             print(f"  Saved thumbnail to {thumb_path} ({thumb_elapsed:.1f}s)")
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
             thumb_elapsed = time.perf_counter() - t_thumb_start
             print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
@@ -632,7 +638,7 @@ def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = Fa
             browser = pw_context.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1200, "height": 900})
             print("Started headless Chromium for thumbnail screenshots")
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
             skip_thumbnails = True
             print(f"WARNING: Could not start browser for thumbnails: {e}")
 

@@ -1402,6 +1402,9 @@ class Bench(BenchPlotServer):
             try:
                 vals = list(iv.values())
             except Exception:  # pylint: disable=broad-except
+                # Not every sweep var can enumerate its values (e.g. dynamically
+                # populated selectors); skip it rather than aborting the whole grid.
+                logger.debug("Skipping input var %s: values() failed", iv.name, exc_info=True)
                 continue
             iv_grid_values.append(vals)
             iv_names.append(iv.name)

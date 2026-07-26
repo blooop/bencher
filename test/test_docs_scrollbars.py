@@ -146,7 +146,7 @@ def fixture_page():
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch(headless=True)
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
             pytest.skip(f"could not launch chromium: {e}")
         pg = browser.new_page(viewport={"width": 1280, "height": 900})
         yield pg

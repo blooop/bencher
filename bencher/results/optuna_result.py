@@ -253,15 +253,15 @@ class OptunaResult(BenchResultBase):
         try:
             self.studies = [self.bench_result_to_study(True)]
         except Exception as e:  # pylint: disable=broad-except
-            logger.exception(e)
+            logger.exception("Optuna study creation failed")
             return pn.Column(pn.pane.Markdown(f"**Optuna study creation failed**: {e}"))
         tab_names = ["Analysis"]
         if self.bench_cfg.repeats > 1:
             try:
                 self.studies.append(self.bench_result_to_study(False))
                 tab_names = ["With Repeats", "Without Repeats"]
-            except Exception as e:  # pylint: disable=broad-except
-                logger.exception(e)
+            except Exception:  # pylint: disable=broad-except
+                logger.exception("Optuna without-repeats study creation failed")
                 tab_names = ["Analysis (without-repeats study failed)"]
 
         plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600

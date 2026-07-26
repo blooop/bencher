@@ -198,7 +198,7 @@ def run(
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
                     except Exception as e:  # pylint: disable=broad-except
-                        logger.exception(e)
+                        logger.exception("Optuna plot generation failed")
                         bench.report.append(
                             _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
                         )

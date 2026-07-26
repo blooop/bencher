@@ -184,7 +184,9 @@ class ResultCollector:
             self._history_cache.close()
             self._history_cache = None
 
-    def __enter__(self) -> ResultCollector:
+    # typing.Self needs python 3.11 and the package floor is 3.10, so keep the
+    # concrete return type rather than take a typing_extensions dependency.
+    def __enter__(self) -> ResultCollector:  # noqa: PYI034
         return self
 
     def __exit__(self, *exc_info) -> None:
@@ -377,7 +379,7 @@ class ResultCollector:
                             )
 
                 else:
-                    raise RuntimeError("Unsupported result type")
+                    raise TypeError(f"Unsupported result type: {type(rv).__name__}")
             for rv in bench_res.result_hmaps:
                 bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
 

@@ -51,7 +51,8 @@ class TestBenchData(unittest.TestCase):
 
     def test_frozen(self) -> None:
         data = BenchData.fake()
-        with self.assertRaises(Exception):
+        # frozen dataclasses raise FrozenInstanceError, a subclass of AttributeError
+        with self.assertRaises(AttributeError):
             data.dataset = xr.Dataset()  # type: ignore[misc]
 
 

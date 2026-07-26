@@ -10,6 +10,13 @@ exclude = ["*.md"]
 ignore = [
     "E501", # Long line that exceeds maximum allowed length.
     "F841", # Local variable referenced before assignment, this is annoying during development.
+    # DTZ001/DTZ005: bencher's time axis is deliberately naive local wall-clock time.
+    # The `over_time` dimension is stored as a numpy datetime64 xarray coordinate, which
+    # has no timezone concept — passing tz-aware datetimes degrades the coordinate to
+    # `object` dtype and breaks over_time slicing, sorting and plotting. Naive and aware
+    # datetimes also cannot be compared, so a partial migration would be worse than none.
+    "DTZ001", # `datetime.datetime()` without tzinfo.
+    "DTZ005", # `datetime.datetime.now()` without tz.
 ]
 
 # Allow unused variables when underscore-prefixed.

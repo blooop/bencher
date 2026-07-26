@@ -125,7 +125,7 @@ class PluginRegistry:
         for ep in eps:
             try:
                 obj = ep.load()
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 log.warning("Skipping plugin entry-point %r: %s", ep.name, exc)
                 continue
             self._register_loaded(ep.name, obj)
@@ -136,7 +136,7 @@ class PluginRegistry:
         if callable(obj) and not hasattr(obj, "render"):
             try:
                 produced = obj()
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 log.warning("Plugin factory %r raised: %s", ep_name, exc)
                 return
             if isinstance(produced, PlotPlugin):

@@ -40,7 +40,7 @@ class MetaLevels(MetaGeneratorBase):
             '        bn.sweep("float_vars", [1, 2]),\n'
             '        bn.sweep("subsampling_divisions", [2, 3, 4, 5]),\n'
             "    ],\n"
-            "    const_vars=dict(categorical_vars=0),\n"
+            '    const_vars={"categorical_vars": 0},\n'
             f"    description={levels_desc!r},\n"
             f"    post_description={levels_post!r},\n"
             ")\n"

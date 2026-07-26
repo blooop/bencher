@@ -8,6 +8,7 @@ plus minimal sweep-driven structural checks not covered there.
 from __future__ import annotations
 
 import math
+from typing import ClassVar
 
 import optuna
 import pytest
@@ -144,7 +145,7 @@ class NanSphere(bn.ParametrizedSweep):
 
     x = bn.FloatSweep(default=0, bounds=[-5, 5], samples=5)
     loss = bn.ResultFloat("ul", bn.OptDir.minimize)
-    _counter = [0]
+    _counter: ClassVar[list[int]] = [0]
 
     def benchmark(self):
         i = self._counter[0]

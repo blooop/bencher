@@ -170,8 +170,8 @@ def _append_safe(row, plot_fn, *args, **kwargs):
     try:
         row.append(plot_fn(*args, **kwargs))
     except Exception as e:  # pylint: disable=broad-except
-        logger.exception(e)
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
+        logger.exception("Optuna plot %s failed", fn_name)
         row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))
 
 
@@ -183,6 +183,6 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
             fig.update_layout(width=width)
         row.append(fig)
     except Exception as e:  # pylint: disable=broad-except
-        logger.exception(e)
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
+        logger.exception("Optuna plot %s failed", fn_name)
         row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))

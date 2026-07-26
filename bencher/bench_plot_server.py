@@ -161,8 +161,8 @@ class BenchPlotServer:
         """
 
         # suppress verbose tornado and bokeh output
-        for logger in ["tornado", "bokeh"]:
-            logging.getLogger(logger).setLevel(logging.WARNING)
+        for noisy_logger in ["tornado", "bokeh"]:
+            logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
         extra = self._rrd_extra_patterns()
 

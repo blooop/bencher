@@ -4,6 +4,7 @@ import gc
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 from bencher import Bench, BenchRunCfg, load_result, render_report, save_result
@@ -130,7 +131,7 @@ class TestCollectParity(unittest.TestCase):
     defaults to False), so the two paths must produce byte-identical datasets.
     """
 
-    PARITY_KWARGS = {
+    PARITY_KWARGS: ClassVar[dict] = {
         "input_vars": [ExampleBenchCfg.param.theta],
         "result_vars": [ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
         "title": "collect_parity",

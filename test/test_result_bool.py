@@ -359,7 +359,7 @@ class TestScatterResult(unittest.TestCase):
         # ScatterResult.to_plot doesn't accept result_var, just call it
         try:
             res.to(ScatterResult)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
             self.fail(f"ScatterResult raised {type(e).__name__}: {e}")
 
 

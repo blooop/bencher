@@ -82,7 +82,7 @@ def _build_log_formatter_code():
             0: '["level"]',
             1: '["level", "verbosity"]',
         },
-        'class LogFormatter(bn.ParametrizedSweep):\n    """Formats a structured log report string."""\n\n    level = bn.StringSweep(["info", "warn", "error"], doc="Log severity level")\n    verbosity = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Output verbosity")\n\n    report = bn.ResultString(doc="Formatted log report")\n\n    def benchmark(self):\n        detail = int(math.ceil(self.verbosity * 5))\n        text = (\n            f"Level: {self.level}\\n"\n            f"\\tVerbosity: {self.verbosity:.2f}\\n"\n            f"\\tDetail depth: {detail}"\n        )\n        self.report = bn.tabs_in_markdown(text)',
+        'class LogFormatter(bn.ParametrizedSweep):\n    """Formats a structured log report string."""\n\n    level = bn.StringSweep(["info", "warn", "error"], doc="Log severity level")\n    verbosity = bn.FloatSweep(default=0.5, bounds=[0.0, 1.0], doc="Output verbosity")\n\n    report = bn.ResultString(doc="Formatted log report")\n\n    def benchmark(self):\n        detail = math.ceil(self.verbosity * 5)\n        text = (\n            f"Level: {self.level}\\n"\n            f"\\tVerbosity: {self.verbosity:.2f}\\n"\n            f"\\tDetail depth: {detail}"\n        )\n        self.report = bn.tabs_in_markdown(text)',
     )
 
 
@@ -96,7 +96,7 @@ def _build_report_exporter_code():
             0: '["format_type"]',
             1: '["format_type"]',
         },
-        'class ReportExporter(bn.ParametrizedSweep):\n    """Writes a text report file in the requested format."""\n\n    format_type = bn.StringSweep(["summary", "detailed", "raw"], doc="Report format")\n\n    file_result = bn.ResultPath(doc="Generated report file")\n\n    def benchmark(self):\n        filename = bn.gen_path(self.format_type, suffix=".txt")\n        line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]\n        with open(filename, "w", encoding="utf-8") as f:\n            for i in range(line_count):\n                f.write(f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\\n")\n        self.file_result = filename',
+        'class ReportExporter(bn.ParametrizedSweep):\n    """Writes a text report file in the requested format."""\n\n    format_type = bn.StringSweep(["summary", "detailed", "raw"], doc="Report format")\n\n    file_result = bn.ResultPath(doc="Generated report file")\n\n    def benchmark(self):\n        filename = bn.gen_path(self.format_type, suffix=".txt")\n        line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]\n        with open(filename, "w", encoding="utf-8") as f:\n            f.writelines(\n                f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\\n"\n                for i in range(line_count)\n            )\n        self.file_result = filename',
     )
 
 

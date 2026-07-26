@@ -1,6 +1,7 @@
 """Tests for bencher/results/histogram_result.py"""
 
 import unittest
+from typing import ClassVar
 
 import holoviews as hv
 import numpy as np
@@ -15,7 +16,7 @@ class DeterministicWorker(bn.ParametrizedSweep):
     """No-input worker producing values 0..N-1 across repeats (one value per call)."""
 
     value = bn.ResultFloat(units="m")
-    _counter = [0]
+    _counter: ClassVar[list[int]] = [0]
 
     def benchmark(self):
         self.value = float(self._counter[0])
@@ -26,7 +27,7 @@ class NanWorker(bn.ParametrizedSweep):
     """No-input worker that returns NaN for exactly one repeat."""
 
     value = bn.ResultFloat(units="m")
-    _counter = [0]
+    _counter: ClassVar[list[int]] = [0]
 
     def benchmark(self):
         i = self._counter[0]
