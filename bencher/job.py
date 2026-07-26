@@ -10,6 +10,8 @@ from strenum import StrEnum
 
 from .utils import hash_sha1
 
+logger = logging.getLogger(__name__)
+
 try:
     from scoop import futures as scoop_future_executor
 except ImportError as e:
@@ -175,7 +177,7 @@ class Executors(StrEnum):
             try:
                 return ProcessPoolExecutor()
             except (OSError, PermissionError) as exc:  # pragma: no cover - env specific
-                logging.warning(
+                logger.warning(
                     "Falling back to serial execution; multiprocessing unavailable: %s", exc
                 )
                 return None
@@ -226,7 +228,7 @@ class FutureCache:
         self.executor = None
         if cache_samples:
             self.cache = Cache(f"cachedir/{cache_name}", tag_index=tag_index, size_limit=size_limit)
-            logging.info(f"cache dir: {self.cache.directory}")
+            logger.info(f"cache dir: {self.cache.directory}")
         else:
             self.cache = None
 
@@ -271,14 +273,14 @@ class FutureCache:
         self.worker_wrapper_call_count += 1
 
         if prefetched is not None and job.job_key in prefetched:
-            logging.info(f"Found job: {job.job_id} in cache (prefetched)")
+            logger.info(f"Found job: {job.job_id} in cache (prefetched)")
             self.worker_cache_call_count += 1
             return JobFuture(job=job, res=prefetched[job.job_key])
 
         if self.cache is not None and not self.overwrite:
             cached = self.cache.get(job.job_key, _MISSING)
             if cached is not _MISSING:
-                logging.info(f"Found job: {job.job_id} in cache, loading...")
+                logger.info(f"Found job: {job.job_id} in cache, loading...")
                 self.worker_cache_call_count += 1
                 return JobFuture(job=job, res=cached)
 
@@ -292,11 +294,10 @@ class FutureCache:
             try:
                 cleanup_job_media(job.job_key)
             except OSError as exc:
-                logging.warning("Failed to clean up media for job %s: %s", job.job_key, exc)
+                logger.warning("Failed to clean up media for job %s: %s", job.job_key, exc)
 
-        if self.executor_type is not Executors.SERIAL:
-            if self.executor is None:
-                self.executor = Executors.factory(self.executor_type)
+        if self.executor_type is not Executors.SERIAL and self.executor is None:
+            self.executor = Executors.factory(self.executor_type)
         if self.executor is not None:
             self.overwrite_msg(job, " starting parallel job...")
             return JobFuture(
@@ -319,7 +320,7 @@ class FutureCache:
             suffix (str): Additional text to add to the log message
         """
         msg = "OVERWRITING" if self.overwrite else "NOT in"
-        logging.info(f"{job.job_id} {msg} cache{suffix}")
+        logger.info(f"{job.job_id} {msg} cache{suffix}")
 
     def clear_call_counts(self) -> None:
         """Clear the worker and cache call counts, to help debug and assert caching is happening properly."""
@@ -342,9 +343,9 @@ class FutureCache:
         Args:
             tag (str): The tag identifying entries to remove from the cache
         """
-        logging.info(f"clearing the sample cache for tag: {tag}")
+        logger.info(f"clearing the sample cache for tag: {tag}")
         removed_vals = self.cache.evict(tag)
-        logging.info(f"removed: {removed_vals} items from the cache")
+        logger.info(f"removed: {removed_vals} items from the cache")
 
     def close(self) -> None:
         """Close the cache and shutdown the executor if they exist."""
@@ -360,9 +361,9 @@ class FutureCache:
         Returns:
             str: A string with cache size information
         """
-        logging.info(f"job calls: {self.worker_wrapper_call_count}")
-        logging.info(f"cache calls: {self.worker_cache_call_count}")
-        logging.info(f"worker calls: {self.worker_fn_call_count}")
+        logger.info(f"job calls: {self.worker_wrapper_call_count}")
+        logger.info(f"cache calls: {self.worker_cache_call_count}")
+        logger.info(f"worker calls: {self.worker_fn_call_count}")
         if self.cache:
             return f"cache size :{int(self.cache.volume() / 1000000)}MB / {int(self.size_limit / 1000000)}MB"
         return ""

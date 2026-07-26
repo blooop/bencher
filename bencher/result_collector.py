@@ -367,12 +367,14 @@ class ResultCollector:
                     )
 
                 elif isinstance(rv, ResultVec):
-                    if isinstance(result_value, (list, np.ndarray)):
-                        if len(result_value) == rv.size:
-                            for i in range(rv.size):
-                                _set_result_value(
-                                    bench_res, rv_arrays, rv.index_name(i), idx, result_value[i]
-                                )
+                    if (
+                        isinstance(result_value, (list, np.ndarray))
+                        and len(result_value) == rv.size
+                    ):
+                        for i in range(rv.size):
+                            _set_result_value(
+                                bench_res, rv_arrays, rv.index_name(i), idx, result_value[i]
+                            )
 
                 else:
                     raise RuntimeError("Unsupported result type")
@@ -541,9 +543,12 @@ class ResultCollector:
         # leaves the stored history untouched for the next (acknowledged) run.
         apply_policy(events, on_history_reset)
 
-        if max_time_events is not None and "over_time" in merged.dims:
-            if merged.sizes["over_time"] > max_time_events:
-                merged = merged.isel(over_time=slice(-max_time_events, None))
+        if (
+            max_time_events is not None
+            and "over_time" in merged.dims
+            and merged.sizes["over_time"] > max_time_events
+        ):
+            merged = merged.isel(over_time=slice(-max_time_events, None))
 
         # Per-variable max_time_events: null out older entries for variables
         # with a per-variable limit smaller than the dataset's over_time size.

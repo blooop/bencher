@@ -15,6 +15,8 @@ from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from bencher.bench_report import GithubPagesCfg, Publisher
     from bencher.bencher import Bench
@@ -196,7 +198,7 @@ def run(
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
                     except Exception as e:  # pylint: disable=broad-except
-                        logging.exception(e)
+                        logger.exception(e)
                         bench.report.append(
                             _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
                         )
@@ -207,19 +209,19 @@ def run(
 
     # Case 1: Callable — wrap in BenchRunner
     br = BenchRunner(target, publisher=publisher)
-    _run_kwargs = dict(
-        subsampling_divisions=subsampling_divisions,
-        repeats=repeats,
-        max_subsampling_divisions=max_subsampling_divisions,
-        max_repeats=max_repeats,
-        run_cfg=run_cfg,
-        save=save,
-        publish=publish,
-        grouped=grouped,
-        cache_samples=cache_samples,
-        over_time=over_time,
-        backend=backend,
-    )
+    _run_kwargs = {
+        "subsampling_divisions": subsampling_divisions,
+        "repeats": repeats,
+        "max_subsampling_divisions": max_subsampling_divisions,
+        "max_repeats": max_repeats,
+        "run_cfg": run_cfg,
+        "save": save,
+        "publish": publish,
+        "grouped": grouped,
+        "cache_samples": cache_samples,
+        "over_time": over_time,
+        "backend": backend,
+    }
 
     try:
         if sampling_context is None:
@@ -239,7 +241,7 @@ def run(
             try:
                 bench_to_close.close()
             except Exception:  # pylint: disable=broad-exception-caught
-                logging.exception("Error closing bench")
+                logger.exception("Error closing bench")
 
     if show_mode is ShowMode.LIVE and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.

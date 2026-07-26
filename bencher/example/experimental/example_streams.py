@@ -21,7 +21,7 @@ def integral(limit, time):
     curve = hv.Curve((xs, function(xs, time)))[limit:]
     area = hv.Area((xs, function(xs, time)))[:limit]
     summed = area.dimension_values("y").sum() * 0.015  # Numeric approximation
-    return area * curve * hv.VLine(limit) * hv.Text(limit + 0.8, 2.0, "%.2f" % summed)
+    return area * curve * hv.VLine(limit) * hv.Text(limit + 0.8, 2.0, f"{summed:.2f}")
 
 
 integral_streams = [streams.Stream.define("Time", time=1.0)(), streams.PointerX().rename(x="limit")]

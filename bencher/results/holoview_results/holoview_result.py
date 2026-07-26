@@ -444,7 +444,7 @@ class HoloviewResult(PaneResult):
 
         input_vars = self.bench_cfg.input_vars
         num_inputs = self.plt_cnt_cfg.inputs_cnt
-        state = dict(x=None, y=None, update=False)
+        state = {"x": None, "y": None, "update": False}
 
         def _on_pointer(x, y):  # pragma: no cover
             x_nearest = get_nearest_coords1D(x, dataset.coords[input_vars[0].name].data)

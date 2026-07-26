@@ -747,14 +747,15 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c = self.collector.get_history_cache()
         c[unique_hash] = dataset
 
-        with mock.patch.object(
-            type(c),
-            "__getitem__",
-            side_effect=AttributeError("'List' object has no attribute 'class_'"),
-        ), self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-            result = self.collector.load_history_cache(
-                dataset, unique_hash, clear_history=False
-            )
+        with (
+            mock.patch.object(
+                type(c),
+                "__getitem__",
+                side_effect=AttributeError("'List' object has no attribute 'class_'"),
+            ),
+            self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs,
+        ):
+            result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
@@ -770,14 +771,15 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c = self.collector.get_history_cache()
         c[unique_hash] = dataset
 
-        with mock.patch.object(
-            type(c),
-            "__getitem__",
-            side_effect=ModuleNotFoundError("No module named 'old_dep'"),
-        ), self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-            result = self.collector.load_history_cache(
-                dataset, unique_hash, clear_history=False
-            )
+        with (
+            mock.patch.object(
+                type(c),
+                "__getitem__",
+                side_effect=ModuleNotFoundError("No module named 'old_dep'"),
+            ),
+            self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs,
+        ):
+            result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)

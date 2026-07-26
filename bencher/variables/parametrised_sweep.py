@@ -55,10 +55,9 @@ class ParametrizedSweep(Parameterized):
     def update_params_from_kwargs(self, **kwargs) -> None:
         """Given a dictionary of kwargs, set the parameters of the passed class 'self' to the values in the dictionary."""
         used_params = {}
-        for key in self.param.objects().keys():
-            if key in kwargs:
-                if key != "name":
-                    used_params[key] = kwargs[key]
+        for key in self.param.objects():
+            if key in kwargs and key != "name":
+                used_params[key] = kwargs[key]
 
         self.param.update(**used_params)
 

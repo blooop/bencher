@@ -49,6 +49,8 @@ from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.volume_result import VolumeResult
 from bencher.utils import listify, resolve_aggregate
 
+logger = logging.getLogger(__name__)
+
 
 class BenchResult(
     # RerunResult resolves to either the real class or a fallback stub via the
@@ -125,12 +127,12 @@ class BenchResult(
         result_instance.dataset_list = self.dataset_list
         result_instance.regression_report = self.regression_report
         # Build kwargs for the plot call, only include reduce if explicitly set
-        plot_kwargs = dict(
-            result_var=result_var,
-            override=override,
-            agg_over_dims=agg_over_dims,
-            agg_fn=agg_fn,
-        )
+        plot_kwargs = {
+            "result_var": result_var,
+            "override": override,
+            "agg_over_dims": agg_over_dims,
+            "agg_fn": agg_fn,
+        }
         if reduce is not None:
             plot_kwargs["reduce"] = reduce
         plot_kwargs.update(kwargs)
@@ -257,12 +259,12 @@ class BenchResult(
             try:
                 row.append(plugin.render(data))
             except Exception:  # pylint: disable=broad-except
-                logging.error("Plot plugin %s failed", plugin.name, exc_info=True)
+                logger.error("Plot plugin %s failed", plugin.name, exc_info=True)
         for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
             except Exception:  # pylint: disable=broad-except
-                logging.error("Plot callback %s failed", plot_callback.__name__, exc_info=True)
+                logger.error("Plot callback %s failed", plot_callback.__name__, exc_info=True)
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
@@ -378,7 +380,7 @@ class BenchResult(
                 try:
                     plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
                 except Exception:  # pylint: disable=broad-except
-                    logging.error(
+                    logger.error(
                         "Failed to render regression overlay for %s", r.variable, exc_info=True
                     )
 
@@ -392,7 +394,7 @@ class BenchResult(
                         plot_cols.append(ep)
                 except Exception:  # pylint: disable=broad-except
                     name = getattr(ep, "__name__", repr(ep))
-                    logging.error("Extra panel %s failed", name, exc_info=True)
+                    logger.error("Extra panel %s failed", name, exc_info=True)
 
         # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:

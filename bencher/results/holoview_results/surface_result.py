@@ -133,7 +133,7 @@ class SurfaceResult(HoloviewResult):
                     y=y_vals,
                     z=z_vals,
                     colorscale="Viridis",
-                    colorbar=dict(title=f"{result_var.name} [{result_var.units}]"),
+                    colorbar={"title": f"{result_var.name} [{result_var.units}]"},
                 )
             ]
 
@@ -159,15 +159,15 @@ class SurfaceResult(HoloviewResult):
                 title=f"{result_var.name} vs ({x.name} and {y.name})",
                 width=width,
                 height=height,
-                margin=dict(t=50, b=50, r=50, l=50),
-                scene=dict(
-                    xaxis_title=f"{x.name} [{x.units}]",
-                    yaxis_title=f"{y.name} [{y.units}]",
-                    zaxis_title=f"{result_var.name} [{result_var.units}]",
-                ),
+                margin={"t": 50, "b": 50, "r": 50, "l": 50},
+                scene={
+                    "xaxis_title": f"{x.name} [{x.units}]",
+                    "yaxis_title": f"{y.name} [{y.units}]",
+                    "zaxis_title": f"{result_var.name} [{result_var.units}]",
+                },
             )
 
-            fig = dict(data=data, layout=layout)
+            fig = {"data": data, "layout": layout}
             return pn.pane.Plotly(fig, name="surface_plotly")
 
         return matches_res.to_panel()

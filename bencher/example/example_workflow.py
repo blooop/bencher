@@ -70,7 +70,7 @@ def example_floats2D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = 
     res = bench.plot_sweep(
         input_vars=["x", "y"],
         result_vars=["total_dis", "p1_dis", "p2_dis"],
-        const_vars=dict(z=0),
+        const_vars={"z": 0},
         title="Float 2D Example",
         run_cfg=run_cfg,
     )

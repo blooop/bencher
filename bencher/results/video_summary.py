@@ -194,7 +194,7 @@ class VideoSummaryResult(BenchResultBase):
         **kwargs,
     ) -> pn.panel:
         num_dims = len(dataset.sizes)
-        dims = list(d for d in dataset.sizes)
+        dims = list(dataset.sizes)
         if reverse:
             dims = list(reversed(dims))
 

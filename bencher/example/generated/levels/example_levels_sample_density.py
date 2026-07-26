@@ -13,7 +13,7 @@ def example_levels_sample_density(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
             bn.sweep("float_vars", [1, 2]),
             bn.sweep("subsampling_divisions", [2, 3, 4, 5]),
         ],
-        const_vars=dict(categorical_vars=0),
+        const_vars={"categorical_vars": 0},
         description="Subsampling divisions let you perform parameter sweeps without having to decide how many samples to take when defining the class. If you perform a sweep at subsampling_divisions=2, all those points are reused when sampling at subsampling_divisions=3. Higher values reuse the points from lower ones to avoid recomputing potentially expensive samples. This enables a workflow where you quickly see results at low resolution to sense-check the code, then run at a high value for full detail. When calling a sweep at a high subsampling_divisions you can publish intermediate lower-resolution results as computation continues, letting you track progress and end the sweep early when you have sufficient resolution.",
         post_description="Each panel shows the benchmark sampled at a different subsampling_divisions value. Higher values produce more sample points. Notice how lower sample points are a subset of higher ones -- no work is wasted.",
     )

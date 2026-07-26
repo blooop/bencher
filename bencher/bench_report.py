@@ -20,6 +20,8 @@ from bencher.bench_cfg import BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.results.bench_result import BenchResult
 
+logger = logging.getLogger(__name__)
+
 
 def _inline_rrd(
     html_path: Path,
@@ -37,7 +39,7 @@ def _inline_rrd(
 
         inline_rrd_iframes(html_path, rrd_base=rrd_base, portable=portable)
     except Exception:  # pylint: disable=broad-except
-        logging.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
+        logger.warning("inline_rrd_iframes failed for %s", html_path, exc_info=True)
 
 
 # Injected into every saved report so that, when embedded in an iframe, the
@@ -109,7 +111,7 @@ def _inject_embed_script(html_path: Path) -> None:
             content += _EMBED_HEIGHT_SCRIPT
         html_path.write_text(content, encoding="utf-8")
     except Exception:  # pylint: disable=broad-except
-        logging.warning("inject_embed_script failed for %s", html_path, exc_info=True)
+        logger.warning("inject_embed_script failed for %s", html_path, exc_info=True)
 
 
 @runtime_checkable
@@ -285,7 +287,7 @@ class BenchReport(BenchPlotServer):
             if in_html_folder:
                 base_path /= "html"
 
-            logging.info(f"creating dir {base_path.absolute()}")
+            logger.info(f"creating dir {base_path.absolute()}")
             os.makedirs(base_path.absolute(), exist_ok=True)
 
             index_path = base_path / filename
@@ -294,7 +296,7 @@ class BenchReport(BenchPlotServer):
                 self._emit_json(base_path, emit_json)
 
             if len(self.pane) <= 1:
-                logging.info(f"saving html output to: {index_path.absolute()}")
+                logger.info(f"saving html output to: {index_path.absolute()}")
                 # Save inner content directly so the Tabs sidebar is not rendered
                 content = self.pane[0] if len(self.pane) == 1 else self.pane
                 content.save(filename=index_path, progress=True, embed=True, **kwargs)
@@ -315,7 +317,7 @@ class BenchReport(BenchPlotServer):
                 seen_names.add(safe_name)
                 tab_file = f"{safe_name}.html"
                 tab_path = tab_dir / tab_file
-                logging.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
+                logger.info(f"saving tab '{tab_name}' to: {tab_path.absolute()}")
                 pn.Column(tab).save(filename=tab_path, progress=True, embed=True, **kwargs)
                 _inline_rrd(tab_path, rrd_base=base_path, portable=portable)
                 _inject_embed_script(tab_path)
@@ -323,7 +325,7 @@ class BenchReport(BenchPlotServer):
 
             # Generate an index page with tab buttons and an iframe.
             self._write_iframe_index(index_path, tab_files)
-            logging.info(f"saving index to: {index_path.absolute()}")
+            logger.info(f"saving index to: {index_path.absolute()}")
             return index_path
         finally:
             self.last_save_ms = (time.perf_counter() - t0) * 1000.0
@@ -450,7 +452,7 @@ if (_embedded) {{
                 filename="index.html",
                 in_html_folder=False,
             )
-            logging.info(f"created report at: {report_path.absolute()}")
+            logger.info(f"created report at: {report_path.absolute()}")
 
             def git(*args: str) -> None:
                 subprocess.run(["git", *args], cwd=directory, check=True)
@@ -463,8 +465,8 @@ if (_embedded) {{
             git("remote", "add", "origin", remote)
             git("push", "--set-upstream", "origin", branch_name, "-f")
 
-        logging.info("Published report @")
-        logging.info(publish_url)
+        logger.info("Published report @")
+        logger.info(publish_url)
 
         return publish_url
 
@@ -497,7 +499,7 @@ if (_embedded) {{
         with tempfile.TemporaryDirectory() as td:
             directory = td
             report_path = self.save(directory, filename="index.html", in_html_folder=False)
-            logging.info(f"created report at: {report_path.absolute()}")
+            logger.info(f"created report at: {report_path.absolute()}")
 
             def git(*args: str) -> None:
                 subprocess.run(["git", *args], cwd=directory, check=True)
@@ -509,7 +511,7 @@ if (_embedded) {{
             git("remote", "add", "origin", remote)
             git("push", "--set-upstream", "origin", branch_name, "-f")
 
-        logging.info("Published report @")
-        logging.info(publish_url)
+        logger.info("Published report @")
+        logger.info(publish_url)
 
         return publish_url

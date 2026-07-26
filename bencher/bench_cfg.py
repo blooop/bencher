@@ -20,6 +20,8 @@ from bencher.variables.results import OptDir
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
 from bencher.variables.time import TimeEvent, TimeSnapshot
 
+logger = logging.getLogger(__name__)
+
 T = TypeVar("T")  # Generic type variable
 
 
@@ -1126,7 +1128,7 @@ class DimsCfg:
         self.dim_ranges_str: list[str] = [f"{s}\n" for s in self.dim_ranges]
         self.coords: dict[str, list[Any]] = dict(zip(self.dims_name, self.dim_ranges))
 
-        logging.debug(f"dims_name: {self.dims_name}")
-        logging.debug(f"dim_ranges {self.dim_ranges_str}")
-        logging.debug(f"dim_ranges_index {self.dim_ranges_index}")
-        logging.debug(f"coords: {self.coords}")
+        logger.debug(f"dims_name: {self.dims_name}")
+        logger.debug(f"dim_ranges {self.dim_ranges_str}")
+        logger.debug(f"dim_ranges_index {self.dim_ranges_index}")
+        logger.debug(f"coords: {self.coords}")

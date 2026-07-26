@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import warnings
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
@@ -12,6 +13,8 @@ import yaml
 from param import Integer, Number, Selector
 
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, SweepBase, shared_slots
+
+logger = logging.getLogger(__name__)
 
 
 # Sentinel value used to indicate that the actual selectable values for a SweepSelector
@@ -189,9 +192,7 @@ class SweepSelector(Selector, SweepBase):
         try:
             owner_param.update(**{self.name: candidate_default})
         except (ValueError, TypeError) as e:  # pragma: no cover - param validation edge case
-            import logging
-
-            logging.warning(
+            logger.warning(
                 "Failed to update param '%s' with value %r: %s", self.name, candidate_default, e
             )
 
@@ -568,13 +569,13 @@ class IntSweep(Integer, SweepBase):
 
         if not isinstance(value, (int, np.integer)):
             raise ValueError(
-                "Integer parameter %r must be an integer, not type %r." % (self.name, type(value))
+                f"Integer parameter {self.name!r} must be an integer, not type {type(value)!r}."
             )
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
     def _validate_step(self, val, step):
         if step is not None and not isinstance(step, (int, np.integer)):
-            raise ValueError("Step can only be None or an integer value, not type %r" % type(step))
+            raise ValueError(f"Step can only be None or an integer value, not type {type(step)!r}")
 
 
 class FloatSweep(Number, SweepBase):

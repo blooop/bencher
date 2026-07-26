@@ -20,6 +20,8 @@ import numpy as np
 import param
 import xarray as xr
 
+logger = logging.getLogger(__name__)
+
 
 def hmap_canonical_input(dic: dict) -> tuple:
     """From a dictionary of kwargs, return a hashable representation (tuple) that is always the same for the same inputs and retains the order of the input arguments.  e.g, {x=1,y=2} -> (1,2) and {y=2,x=1} -> (1,2).  This is used so that keywords arguments can be hashed and converted the the tuple keys that are used for holomaps
@@ -495,7 +497,7 @@ def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma
         filename = Path(filepath).name
         filepath_tmp = Path(temp_dir) / filename
 
-        logging.info(f"created report at: {filepath_tmp.absolute()}")
+        logger.info(f"created report at: {filepath_tmp.absolute()}")
 
         # create a new git repo and add files to that.  Push the file to another arbitrary repo.  The aim of doing it this way is that no data needs to be downloaded.
 

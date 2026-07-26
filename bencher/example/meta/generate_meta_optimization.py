@@ -9,73 +9,13 @@ from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
 OUTPUT_DIR = "optimization"
 
-CLASS_CODE = "\n".join(
-    [
-        "class ServerOptimizer(bn.ParametrizedSweep):",
-        '    """Optimizes server configuration for performance vs cost tradeoff."""',
-        "",
-        '    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
-        '    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
-        "",
-        '    performance = bn.ResultFloat("score", bn.OptDir.maximize, doc="Performance score (maximize)")',
-        '    cost = bn.ResultFloat("$/hr", bn.OptDir.minimize, doc="Hourly cost (minimize)")',
-        "",
-        '    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
-        "",
-        "    def benchmark(self):",
-        "        self.performance = math.log2(self.cpu_cores + 1) * math.sqrt(self.memory_gb) * 10",
-        "        self.cost = 0.05 * self.cpu_cores + 0.02 * self.memory_gb",
-        "        if self.noise_scale > 0:",
-        "            self.performance += random.gauss(0, self.noise_scale * 5)",
-        "            self.cost += random.gauss(0, self.noise_scale * 0.1)",
-    ]
-)
+CLASS_CODE = 'class ServerOptimizer(bn.ParametrizedSweep):\n    """Optimizes server configuration for performance vs cost tradeoff."""\n\n    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")\n    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")\n\n    performance = bn.ResultFloat("score", bn.OptDir.maximize, doc="Performance score (maximize)")\n    cost = bn.ResultFloat("$/hr", bn.OptDir.minimize, doc="Hourly cost (minimize)")\n\n    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")\n\n    def benchmark(self):\n        self.performance = math.log2(self.cpu_cores + 1) * math.sqrt(self.memory_gb) * 10\n        self.cost = 0.05 * self.cpu_cores + 0.02 * self.memory_gb\n        if self.noise_scale > 0:\n            self.performance += random.gauss(0, self.noise_scale * 5)\n            self.cost += random.gauss(0, self.noise_scale * 0.1)'
 
 # Class with a _drift field for over_time examples (performance degrades over time)
-CLASS_CODE_OVERTIME = "\n".join(
-    [
-        "class ServerOptimizer(bn.ParametrizedSweep):",
-        '    """Optimizes server config — performance drifts over time."""',
-        "",
-        '    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")',
-        '    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")',
-        "",
-        '    performance = bn.ResultFloat("score", bn.OptDir.maximize, doc="Performance score")',
-        "",
-        '    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")',
-        "",
-        "    _drift = 0.0",
-        "",
-        "    def benchmark(self):",
-        "        self.performance = math.log2(self.cpu_cores + 1) * math.sqrt(self.memory_gb) * 10",
-        "        self.performance *= (1.0 - self._drift * 0.15)  # degrade over time",
-        "        if self.noise_scale > 0:",
-        "            self.performance += random.gauss(0, self.noise_scale * 5)",
-    ]
-)
+CLASS_CODE_OVERTIME = 'class ServerOptimizer(bn.ParametrizedSweep):\n    """Optimizes server config — performance drifts over time."""\n\n    cpu_cores = bn.FloatSweep(default=4, bounds=[1, 32], doc="Number of CPU cores")\n    memory_gb = bn.FloatSweep(default=8, bounds=[1, 64], doc="Memory in GB")\n\n    performance = bn.ResultFloat("score", bn.OptDir.maximize, doc="Performance score")\n\n    noise_scale = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0], doc="Noise scale")\n\n    _drift = 0.0\n\n    def benchmark(self):\n        self.performance = math.log2(self.cpu_cores + 1) * math.sqrt(self.memory_gb) * 10\n        self.performance *= (1.0 - self._drift * 0.15)  # degrade over time\n        if self.noise_scale > 0:\n            self.performance += random.gauss(0, self.noise_scale * 5)'
 
 # Class with optimize=False on a categorical var for aggregation examples
-CLASS_CODE_AGG = "\n".join(
-    [
-        "class AlgorithmBench(bn.ParametrizedSweep):",
-        '    """Finds best learning rate across algorithms (aggregated)."""',
-        "",
-        "    algorithm = bn.StringSweep(",
-        '        ["gradient_descent", "adam", "rmsprop"],',
-        '        doc="Optimization algorithm",',
-        "        optimize=False,  # sweep but don't optimize — aggregate results",
-        "    )",
-        '    learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0], doc="Learning rate")',
-        "",
-        '    loss = bn.ResultFloat("loss", bn.OptDir.minimize, doc="Training loss (minimize)")',
-        "",
-        "    def benchmark(self):",
-        '        algo_sensitivity = {"gradient_descent": 1.0, "adam": 0.6, "rmsprop": 0.8}',
-        "        optimal_lr = 0.01 * algo_sensitivity[self.algorithm]",
-        "        self.loss = (math.log10(self.learning_rate) - math.log10(optimal_lr)) ** 2",
-        "        self.loss += random.gauss(0, 0.02)",
-    ]
-)
+CLASS_CODE_AGG = 'class AlgorithmBench(bn.ParametrizedSweep):\n    """Finds best learning rate across algorithms (aggregated)."""\n\n    algorithm = bn.StringSweep(\n        ["gradient_descent", "adam", "rmsprop"],\n        doc="Optimization algorithm",\n        optimize=False,  # sweep but don\'t optimize — aggregate results\n    )\n    learning_rate = bn.FloatSweep(default=0.01, bounds=[0.001, 1.0], doc="Learning rate")\n\n    loss = bn.ResultFloat("loss", bn.OptDir.minimize, doc="Training loss (minimize)")\n\n    def benchmark(self):\n        algo_sensitivity = {"gradient_descent": 1.0, "adam": 0.6, "rmsprop": 0.8}\n        optimal_lr = 0.01 * algo_sensitivity[self.algorithm]\n        self.loss = (math.log10(self.learning_rate) - math.log10(optimal_lr)) ** 2\n        self.loss += random.gauss(0, 0.02)'
 
 
 class MetaOptimization(MetaGeneratorBase):

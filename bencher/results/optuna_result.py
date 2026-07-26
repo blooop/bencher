@@ -26,6 +26,8 @@ from bencher.utils import hmap_canonical_input
 from bencher.variables.inputs import BoolSweep
 from bencher.variables.time import TimeEvent, TimeSnapshot
 
+logger = logging.getLogger(__name__)
+
 
 def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
     """Evaluate worker across all combinations of non-optimized vars and return mean results."""
@@ -158,7 +160,7 @@ class OptunaResult(BenchResultBase):
         df.dropna(inplace=True)
         rows_after = len(df)
         if rows_after == 0 and rows_before > 0:
-            logging.warning(
+            logger.warning(
                 "All %d rows dropped due to NaN values — optuna study will have no trials",
                 rows_before,
             )
@@ -251,7 +253,7 @@ class OptunaResult(BenchResultBase):
         try:
             self.studies = [self.bench_result_to_study(True)]
         except Exception as e:  # pylint: disable=broad-except
-            logging.exception(e)
+            logger.exception(e)
             return pn.Column(pn.pane.Markdown(f"**Optuna study creation failed**: {e}"))
         tab_names = ["Analysis"]
         if self.bench_cfg.repeats > 1:
@@ -259,7 +261,7 @@ class OptunaResult(BenchResultBase):
                 self.studies.append(self.bench_result_to_study(False))
                 tab_names = ["With Repeats", "Without Repeats"]
             except Exception as e:  # pylint: disable=broad-except
-                logging.exception(e)
+                logger.exception(e)
                 tab_names = ["Analysis (without-repeats study failed)"]
 
         plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600

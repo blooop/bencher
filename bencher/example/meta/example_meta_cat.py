@@ -11,7 +11,7 @@ def example_meta_cat(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
             bn.sweep("categorical_vars", [1, 2, 3]),
             bn.sweep("sample_with_repeats", [1, 2]),
         ],
-        const_vars=dict(float_vars=0),
+        const_vars={"float_vars": 0},
     )
 
     return bench

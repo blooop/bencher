@@ -137,7 +137,7 @@ class BenchMeta(bn.ParametrizedSweep):
                     "over_time",
                     input_vars=input_vars,
                     result_vars=["distance"],
-                    const_vars=dict(noise_scale=noise),
+                    const_vars={"noise_scale": noise},
                     plot_callbacks=False,
                     run_cfg=run_cfg,
                     time_src=base_time + timedelta(seconds=i),
@@ -147,7 +147,7 @@ class BenchMeta(bn.ParametrizedSweep):
                 "test",
                 input_vars=input_vars,
                 result_vars=["distance"],
-                const_vars=dict(noise_scale=noise),
+                const_vars={"noise_scale": noise},
                 plot_callbacks=False,
             )
 
@@ -174,7 +174,7 @@ the default float point (0,0,0).""",
             bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
-        const_vars=dict(float_vars=0),
+        const_vars={"float_vars": 0},
     )
 
     bench.plot_sweep(
@@ -187,7 +187,7 @@ curves.""",
             bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
-        const_vars=dict(float_vars=1),
+        const_vars={"float_vars": 1},
     )
 
     bench.plot_sweep(
@@ -199,7 +199,7 @@ The unified function creates interesting 2D patterns that vary with category sel
             bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
-        const_vars=dict(float_vars=2),
+        const_vars={"float_vars": 2},
     )
 
     bench.plot_sweep(
@@ -211,7 +211,7 @@ The full 3D function with all cross-coupling terms active.""",
             bn.sweep("sample_with_repeats", sample_repeats_values),
             "sample_over_time",
         ],
-        const_vars=dict(float_vars=3),
+        const_vars={"float_vars": 3},
     )
 
     return bench

@@ -519,8 +519,10 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         "Gallery Overview",
         "================",
         "",
-        "All examples at a glance. Click any card to see the full example"
-        " with source code and interactive report.",
+        (
+            "All examples at a glance. Click any card to see the full example"
+            " with source code and interactive report."
+        ),
         "",
         ".. raw:: html",
         "",

@@ -43,6 +43,8 @@ from bencher.variables.results import (
     result_is_missing,
 )
 
+logger = logging.getLogger(__name__)
+
 # todo add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
 # https://kaleidoescape.github.io/decorated-plugins/
@@ -341,7 +343,7 @@ class BenchResultBase:
                 # If some requested dims are missing, log an info for visibility
                 missing = [d for d in agg_over_dims if d not in dims_present]
                 if missing:
-                    logging.info(
+                    logger.info(
                         "Aggregation requested for dims %s but only found %s in dataset dims %s",
                         agg_over_dims,
                         dims_present,
@@ -377,7 +379,7 @@ class BenchResultBase:
                     # Fall back to mean if unknown string provided
                     ds_out = ds_out.mean(dim=dims_present, skipna=True)
             else:
-                logging.warning(
+                logger.warning(
                     "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
                     agg_over_dims,
                     list(ds_out.dims),
@@ -416,9 +418,9 @@ class BenchResultBase:
                 # use [()] to convert from a 0d numpy array to a scalar
                 output.append(da.coords[iv.name].values[()])
             else:
-                logging.warning(f"values size: {da.coords[iv.name].values.size}")
+                logger.warning(f"values size: {da.coords[iv.name].values.size}")
                 output.append(max(da.coords[iv.name].values[()]))
-            logging.info(f"Maximum value of {iv.name}: {output[-1]}")
+            logger.info(f"Maximum value of {iv.name}: {output[-1]}")
         return output
 
     def get_optimal_value_indices(self, result_var: ParametrizedSweep) -> xr.DataArray:
@@ -436,7 +438,7 @@ class BenchResultBase:
         else:
             opt_val = result_da.min()
         indices = result_da.where(result_da == opt_val, drop=True).squeeze()
-        logging.info(f"optimal value of {result_var.name}: {opt_val.values}")
+        logger.info(f"optimal value of {result_var.name}: {opt_val.values}")
         return indices
 
     def get_optimal_inputs(
@@ -468,10 +470,10 @@ class BenchResultBase:
                 # use [()] to convert from a 0d numpy array to a scalar
                 output.append((iv, da.coords[iv.name].values[()]))
             else:
-                logging.warning(f"values size: {da.coords[iv.name].values.size}")
+                logger.warning(f"values size: {da.coords[iv.name].values.size}")
                 output.append((iv, max(da.coords[iv.name].values[()])))
 
-            logging.info(f"Maximum value of {iv.name}: {output[-1][1]}")
+            logger.info(f"Maximum value of {iv.name}: {output[-1][1]}")
         if as_dict:
             return dict(output)
         return output
@@ -807,7 +809,7 @@ class BenchResultBase:
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel:
-        dims = list(d for d in dataset.sizes)
+        dims = list(dataset.sizes)
 
         # over_time is handled by hvplot's groupby widget, not pane recursion
         if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
@@ -945,7 +947,7 @@ class BenchResultBase:
             title=f"over_time: {labels[default_idx]}",
         )
         callback = CustomJS(
-            args=dict(div=div, html_list=html_list, labels=labels, slider=bokeh_slider),
+            args={"div": div, "html_list": html_list, "labels": labels, "slider": bokeh_slider},
             code=(
                 "div.text = html_list[slider.value];"
                 " slider.title = 'over_time: ' + labels[slider.value];"
@@ -1003,12 +1005,12 @@ class BenchResultBase:
         # todo this is really horrible, need to improve
         dim = None
         if isinstance(da_ds, xr.Dataset):
-            dim = list(da_ds.keys())[0]
+            dim = next(iter(da_ds.keys()))
             da = da_ds[dim]
         else:
             da = da_ds
 
-        for k in da.coords.keys():
+        for k in da.coords:
             dim = k
             break
         if dim is None:

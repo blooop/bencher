@@ -13,6 +13,8 @@ from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep,
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.time import TimeEvent, TimeSnapshot
 
+logger = logging.getLogger(__name__)
+
 
 # BENCH_CFG
 def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> optuna.Study:
@@ -168,7 +170,7 @@ def _append_safe(row, plot_fn, *args, **kwargs):
     try:
         row.append(plot_fn(*args, **kwargs))
     except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
+        logger.exception(e)
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
         row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))
 
@@ -181,6 +183,6 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
             fig.update_layout(width=width)
         row.append(fig)
     except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
+        logger.exception(e)
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
         row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))

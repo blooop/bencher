@@ -12,7 +12,7 @@ def example_levels(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
             bn.sweep("float_vars", [1, 2]),
             bn.sweep("subsampling_divisions", [2, 3, 4, 5]),
         ],
-        const_vars=dict(categorical_vars=0),
+        const_vars={"categorical_vars": 0},
     )
     return bench
 

@@ -62,11 +62,8 @@ class MetaStatistics(MetaGeneratorBase):
         function_name = "example_stats_repeats_comparison"
         filename = function_name
 
-        imports = "\n".join(
-            [
-                "import bencher as bn",
-                "from bencher.example.meta.example_meta import BenchableObject",
-            ]
+        imports = (
+            "import bencher as bn\nfrom bencher.example.meta.example_meta import BenchableObject"
         )
 
         body = (

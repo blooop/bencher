@@ -24,6 +24,8 @@ import panel as pn
 
 from .utils import publish_file
 
+logger = logging.getLogger(__name__)
+
 # Root directory for cached .rrd files and viewer pages.
 _RRD_CACHE_DIR = Path("cachedir/rrd")
 
@@ -60,7 +62,7 @@ def publish_and_view_rrd(
 ):  # pragma: no cover
     publish_file(file_path, remote=remote, branch_name=branch_name)
     publish_path = content_callback(remote, branch_name, file_path)
-    logging.info(publish_path)
+    logger.info(publish_path)
     return rrd_to_pane(publish_path, version=version)
 
 
@@ -395,7 +397,7 @@ def inline_rrd_iframes(
         version, rrd_rel = m.group(1), m.group(2)
         rrd_path = cache_root / rrd_rel
         if not rrd_path.is_file():
-            logging.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
+            logger.warning("inline_rrd_iframes: %s not found, skipping", rrd_path)
             return m.group(0)
 
         key = (rrd_path, version)
@@ -416,7 +418,7 @@ def inline_rrd_iframes(
     if changed:
         html_path.write_text(new_html, encoding="utf-8")
     elif "/rrd_static/" in html:
-        logging.warning(
+        logger.warning(
             "inline_rrd_iframes: %s contains /rrd_static/ references but the "
             "URL regex matched nothing — Bokeh's HTML encoding may have changed",
             html_path,

@@ -438,12 +438,12 @@ class TestBinomialSEWithMissingRepeats(unittest.TestCase):
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         # Inject a known pattern with one missing (NaN) repeat into a cell so the
         # valid count (3) differs from the repeat-dim size (4).
-        res.ds["out"][dict(cat=0)] = np.array([1.0, 0.0, 1.0, np.nan])
+        res.ds["out"][{"cat": 0}] = np.array([1.0, 0.0, 1.0, np.nan])
         res._to_dataset_cache.clear()  # pylint: disable=protected-access
 
         ds = res.to_dataset(reduce=bn.ReduceType.REDUCE)
-        p = float(ds["out"][dict(cat=0)])
-        se = float(ds["out_std"][dict(cat=0)])
+        p = float(ds["out"][{"cat": 0}])
+        se = float(ds["out_std"][{"cat": 0}])
 
         self.assertAlmostEqual(p, 2.0 / 3.0)  # skipna mean over 3 valid samples
         n_valid = 3

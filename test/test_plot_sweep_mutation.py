@@ -137,12 +137,12 @@ class TestPlotSweepResultConsistency(unittest.TestCase):
 
     def test_plot_sweep_results_identical_across_calls(self):
         """Two calls with the same inputs should produce identical datasets."""
-        common_kwargs = dict(
-            title="consistency_test",
-            input_vars=[ExampleBenchCfg.param.theta],
-            result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=self.run_cfg,
-        )
+        common_kwargs = {
+            "title": "consistency_test",
+            "input_vars": [ExampleBenchCfg.param.theta],
+            "result_vars": [ExampleBenchCfg.param.out_sin],
+            "run_cfg": self.run_cfg,
+        }
 
         random.seed(42)
         result1 = self.bench.plot_sweep(**common_kwargs)

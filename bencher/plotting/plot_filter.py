@@ -7,6 +7,8 @@ import panel as pn
 
 from bencher.plotting.plt_cnt_cfg import PltCntCfg
 
+logger = logging.getLogger(__name__)
+
 
 class VarRange:
     """A VarRange represents the bounded and unbounded ranges of integers.  This class is used to define filters for various variable types.  For example by defining cat_var = VarRange(0,0), calling matches(0) will return true, but any other integer will not match.  You can also have unbounded ranges for example VarRange(2,None) will match to 2,3,4... up to infinity. for By default the lower and upper bounds are set to -1 so so that no matter what value is passed to matches() will return false.  Matches only takes 0 and positive integers."""
@@ -159,7 +161,7 @@ class PlotMatchesResult:
         self.plt_cnt_cfg: PltCntCfg = plt_cnt_cfg
 
         # if self.plt_cnt_cfg.print_debug:
-        logging.info(self.matches_info)
+        logger.info(self.matches_info)
 
     def to_panel(self, **kwargs) -> pn.pane.Markdown | None:
         """Convert match information to a Panel Markdown pane if debug mode is enabled.

@@ -226,11 +226,11 @@ class TestResultToDictSeries(unittest.TestCase):
         run_cfg.auto_plot = False
         run_cfg.headless = True
         bench = Bench("test_series_e2e", ExampleBenchCfg(), run_cfg=run_cfg)
-        kwargs = dict(
-            input_vars=[ExampleBenchCfg.param.theta],
-            result_vars=[ExampleBenchCfg.param.out_sin],
-            plot_callbacks=False,
-        )
+        kwargs = {
+            "input_vars": [ExampleBenchCfg.param.theta],
+            "result_vars": [ExampleBenchCfg.param.out_sin],
+            "plot_callbacks": False,
+        }
         bench.plot_sweep(**kwargs)
         bench.sample_cache = None
         return bench.plot_sweep(**kwargs)

@@ -24,9 +24,8 @@ class UnreliableClass(bn.ParametrizedSweep):
     )
 
     def crashy_fn(self, input_val: int = 0, **kwargs) -> float:  # pylint: disable=unused-argument
-        if self.trigger_crash:
-            if input_val > 1:
-                raise RuntimeError("I crashed for no good reason ;P")
+        if self.trigger_crash and input_val > 1:
+            raise RuntimeError("I crashed for no good reason ;P")
 
         return {"return_value": input_val, "trigger_crash": self.trigger_crash}
 

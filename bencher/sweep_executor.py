@@ -119,12 +119,11 @@ class SweepExecutor:
         Raises:
             TypeError: If the variable cannot be converted to a param.Parameter
         """
-        if isinstance(variable, (str, dict)):
-            if worker_class_instance is None:
-                raise TypeError(
-                    f"Cannot convert {var_type}_vars from string/dict without a worker class instance. "
-                    f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
-                )
+        if isinstance(variable, (str, dict)) and worker_class_instance is None:
+            raise TypeError(
+                f"Cannot convert {var_type}_vars from string/dict without a worker class instance. "
+                f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
+            )
         if isinstance(variable, str):
             variable = _resolve_param(variable, worker_class_instance, var_type)
         if isinstance(variable, dict):
@@ -137,11 +136,10 @@ class SweepExecutor:
                 param_var = param_var.with_bounds(b[0], b[1], variable.get("samples"))
             elif variable.get("samples"):
                 param_var = param_var.with_samples(variable["samples"])
-            if variable.get("max_subsampling_divisions"):
-                if run_cfg is not None:
-                    param_var = param_var.with_subsampling_divisions(
-                        run_cfg.subsampling_divisions, variable["max_subsampling_divisions"]
-                    )
+            if variable.get("max_subsampling_divisions") and run_cfg is not None:
+                param_var = param_var.with_subsampling_divisions(
+                    run_cfg.subsampling_divisions, variable["max_subsampling_divisions"]
+                )
             variable = param_var
         if not isinstance(variable, param.Parameter):
             raise TypeError(

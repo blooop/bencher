@@ -16,7 +16,10 @@ class ReportExporter(bn.ParametrizedSweep):
         filename = bn.gen_path(self.format_type, suffix=".txt")
         line_count = {"summary": 5, "detailed": 20, "raw": 50}[self.format_type]
         with open(filename, "w", encoding="utf-8") as f:
-            f.writelines(f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\n" for i in range(line_count))
+            f.writelines(
+                f"[{self.format_type}] line {i + 1}: value={math.sin(i):.4f}\n"
+                for i in range(line_count)
+            )
         self.file_result = filename
 
 

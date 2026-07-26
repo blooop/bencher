@@ -14,7 +14,7 @@ class LogFormatter(bn.ParametrizedSweep):
     report = bn.ResultString(doc="Formatted log report")
 
     def benchmark(self):
-        detail = int(math.ceil(self.verbosity * 5))
+        detail = math.ceil(self.verbosity * 5)
         text = f"Level: {self.level}\n\tVerbosity: {self.verbosity:.2f}\n\tDetail depth: {detail}"
         self.report = bn.tabs_in_markdown(text)
 

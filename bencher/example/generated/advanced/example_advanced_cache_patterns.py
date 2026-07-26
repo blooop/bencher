@@ -44,7 +44,7 @@ def example_advanced_cache_patterns(run_cfg: bn.BenchRunCfg | None = None) -> bn
     bench.plot_sweep(
         input_vars=["temperature"],
         result_vars=["reading"],
-        const_vars=dict(noise_scale=0.3),
+        const_vars={"noise_scale": 0.3},
         description="Demonstrates cache_samples and run_tag for reliable benchmarking. "
         "cache_samples=True stores every function call individually so data is not "
         "lost if the run crashes. run_tag partitions the cache between experiments.",

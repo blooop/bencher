@@ -15,6 +15,8 @@ from bencher.bencher import Bench
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
+logger = logging.getLogger(__name__)
+
 
 def _resolve_cache_samples(cache_samples, kwargs, stacklevel=2):
     """Handle deprecated ``cache_results`` kwarg, returning resolved *cache_samples*.
@@ -406,7 +408,7 @@ class BenchRunner:
                 or final_max_repeats > min_repeats
             )
             if is_progressive:
-                logging.info(
+                logger.info(
                     "Automatically enabling cache_samples for progressive run "
                     "(max_subsampling_divisions=%s, max_repeats=%s). Pass cache_samples=False to disable.",
                     final_max_subsampling_divisions,
@@ -432,7 +434,7 @@ class BenchRunner:
                     run_lvl = deepcopy(run_cfg)
                     run_lvl.subsampling_divisions = lvl
                     run_lvl.repeats = r
-                    logging.info(
+                    logger.info(
                         f"Running {bch_fn} at subsampling_divisions: {lvl} with repeats:{r}"
                     )
                     res, active_report = self._execute_bench_fn(bch_fn, run_lvl, report_level)
@@ -513,9 +515,9 @@ class BenchRunner:
                 try:
                     published_url = self.publisher.publish(report)
                     if published_url:
-                        logging.info("Benchmark report published at %s", published_url)
+                        logger.info("Benchmark report published at %s", published_url)
                 except Exception:  # pylint: disable=broad-except
-                    logging.exception("Publisher.publish() failed — continuing benchmark")
+                    logger.exception("Publisher.publish() failed — continuing benchmark")
             else:
                 published_url = report.publish(remote_callback=self.publisher, debug=debug)
 
@@ -526,15 +528,15 @@ class BenchRunner:
             try:
                 webbrowser.open(path.resolve().as_uri())
             except Exception:  # pylint: disable=broad-exception-caught
-                logging.exception("Failed to open browser for %s", path)
+                logger.exception("Failed to open browser for %s", path)
         elif show_mode is ShowMode.PUBLISHED:
             if published_url:
                 try:
                     webbrowser.open(published_url)
                 except Exception:  # pylint: disable=broad-exception-caught
-                    logging.exception("Failed to open %s", published_url)
+                    logger.exception("Failed to open %s", published_url)
             else:
-                logging.warning(
+                logger.warning(
                     "show='published' but no publish URL is available "
                     "(publish=False or the publisher returned None) — nothing to open"
                 )

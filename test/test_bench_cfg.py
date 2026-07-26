@@ -35,17 +35,17 @@ class SweepCfgNoOptDir(bn.ParametrizedSweep):
 
 def make_bench_cfg(**overrides) -> BenchCfg:
     """Build a fully-populated BenchCfg for describe/hash tests."""
-    params = dict(
-        input_vars=[SweepCfg.param.theta],
-        result_vars=[SweepCfg.param.out_sin],
-        const_vars=[(SweepCfg.param.offset, 0.5)],
-        meta_vars=[],
-        all_vars=[SweepCfg.param.theta],
-        bench_name="bench_cfg_test",
-        title="My Title",
-        description="A longer description of the benchmark",
-        post_description="Comments on the output",
-    )
+    params = {
+        "input_vars": [SweepCfg.param.theta],
+        "result_vars": [SweepCfg.param.out_sin],
+        "const_vars": [(SweepCfg.param.offset, 0.5)],
+        "meta_vars": [],
+        "all_vars": [SweepCfg.param.theta],
+        "bench_name": "bench_cfg_test",
+        "title": "My Title",
+        "description": "A longer description of the benchmark",
+        "post_description": "Comments on the output",
+    }
     params.update(overrides)
     return BenchCfg(**params)
 

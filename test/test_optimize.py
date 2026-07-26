@@ -285,7 +285,7 @@ class TestConstVars:
         bench = bn.Bench("test_opt_const_vars", cfg, run_cfg=_run_cfg())
         result = bench.optimize(
             input_vars=["x"],
-            const_vars=dict(offset=50.0),
+            const_vars={"offset": 50.0},
             n_trials=5,
             warm_start=False,
             plot=False,
@@ -305,7 +305,7 @@ class TestConstVars:
         bench = bn.Bench("test_opt_const_vars_rep", cfg, run_cfg=_run_cfg())
         result = bench.optimize(
             input_vars=["x"],
-            const_vars=dict(offset=50.0),
+            const_vars={"offset": 50.0},
             n_trials=3,
             repeats=2,
             agg_fn="mean",

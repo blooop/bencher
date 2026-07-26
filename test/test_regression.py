@@ -712,17 +712,17 @@ class TestMethodCellsPublic:
 
     @staticmethod
     def _result(method: str, direction: str, **overrides) -> RegressionResult:
-        defaults = dict(
-            variable="m",
-            method=method,
-            regressed=True,
-            current_value=110.0,
-            baseline_value=100.0,
-            change_percent=10.0,
-            threshold=5.0,
-            direction=direction,
-            details="test",
-        )
+        defaults = {
+            "variable": "m",
+            "method": method,
+            "regressed": True,
+            "current_value": 110.0,
+            "baseline_value": 100.0,
+            "change_percent": 10.0,
+            "threshold": 5.0,
+            "direction": direction,
+            "details": "test",
+        }
         defaults.update(overrides)
         return RegressionResult(**defaults)
 

@@ -15,6 +15,8 @@ from bencher.variables.results import (
     ResultVideo,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class RerunResult(BenchResultBase):
     """Result class that renders N-dimensional benchmark data into a rerun viewer.
@@ -308,7 +310,7 @@ def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, fl
             if val is not None and not (isinstance(val, float) and np.isnan(val)):
                 recording.log(path, rr.Scalars(float(val)))
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log line graph for %s: %s", rv_name, e)
+        logger.debug("Could not log line graph for %s: %s", rv_name, e)
 
 
 def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat_dim: str):
@@ -321,7 +323,7 @@ def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat
             values.append(float(val) if val is not None else 0.0)
         recording.log(path, rr.BarChart(values))
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log bar chart for %s: %s", rv_name, e)
+        logger.debug("Could not log bar chart for %s: %s", rv_name, e)
 
 
 def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: list[str]):
@@ -339,7 +341,7 @@ def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: 
             vmax = vmin + 1.0
         recording.log(path, rr.Tensor(arr, dim_names=dims, value_range=[vmin, vmax]))
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log tensor for %s: %s", rv_name, e)
+        logger.debug("Could not log tensor for %s: %s", rv_name, e)
 
 
 def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
@@ -371,7 +373,7 @@ def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
             recording.log(path, rr.Scalars(float(val)))
 
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log result var %s: %s", rv_name, e)
+        logger.debug("Could not log result var %s: %s", rv_name, e)
 
 
 def _build_blueprint(rrb, result_vars, float_dims, cat_dims, time_dim, dim_values):

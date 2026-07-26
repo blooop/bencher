@@ -130,11 +130,11 @@ class TestCollectParity(unittest.TestCase):
     defaults to False), so the two paths must produce byte-identical datasets.
     """
 
-    PARITY_KWARGS = dict(
-        input_vars=[ExampleBenchCfg.param.theta],
-        result_vars=[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
-        title="collect_parity",
-    )
+    PARITY_KWARGS = {
+        "input_vars": [ExampleBenchCfg.param.theta],
+        "result_vars": [ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
+        "title": "collect_parity",
+    }
 
     def test_collect_dataset_matches_plot_sweep(self):
         import xarray as xr

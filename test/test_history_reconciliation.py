@@ -196,11 +196,11 @@ class ReconcilerBase(unittest.TestCase):
         os.chdir(self._tmp)
         self.collector = ResultCollector()
         self.key = f"history-{uuid.uuid4()}"
-        self.kwargs = dict(
-            bench_name=f"bench-{uuid.uuid4()}",
-            tag="t",
-            config_summary={"inputs": [], "consts": [], "results": [], "repeats": 1},
-        )
+        self.kwargs = {
+            "bench_name": f"bench-{uuid.uuid4()}",
+            "tag": "t",
+            "config_summary": {"inputs": [], "consts": [], "results": [], "repeats": 1},
+        }
 
     def tearDown(self):
         self.collector.close_caches()
