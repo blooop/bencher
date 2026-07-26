@@ -8,14 +8,12 @@ import param
 
 # NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
 # import). It is only needed by param_importance(), so import it lazily there.
-
 from bencher.bench_cfg import BenchCfg
-
-
-from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
-from bencher.variables.time import TimeSnapshot, TimeEvent
-
+from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.time import TimeEvent, TimeSnapshot
+
+logger = logging.getLogger(__name__)
 
 
 # BENCH_CFG
@@ -172,8 +170,8 @@ def _append_safe(row, plot_fn, *args, **kwargs):
     try:
         row.append(plot_fn(*args, **kwargs))
     except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
+        logger.exception("Optuna plot %s failed", fn_name)
         row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))
 
 
@@ -185,6 +183,6 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
             fig.update_layout(width=width)
         row.append(fig)
     except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
+        logger.exception("Optuna plot %s failed", fn_name)
         row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))

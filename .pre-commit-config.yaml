@@ -42,7 +42,7 @@ repos:
 
   # Formatter for python
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.3
+    rev: v0.16.0
     hooks:
 
       # Run the formatter.

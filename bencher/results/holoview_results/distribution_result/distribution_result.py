@@ -1,15 +1,18 @@
 from __future__ import annotations
-from typing import Callable, Any
-import panel as pn
-import holoviews as hv
-from param import Parameter
-import xarray as xr
 
-from bencher.results.bench_result_base import ReduceType
+from collections.abc import Callable
+from typing import Any
+
+import holoviews as hv
+import panel as pn
+import xarray as xr
+from param import Parameter
+
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import ResultFloat
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.utils import params_to_str
+from bencher.variables.results import ResultFloat
 
 
 class DistributionResult(HoloviewResult):

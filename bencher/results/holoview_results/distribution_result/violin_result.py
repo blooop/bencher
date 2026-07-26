@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 from typing import Any
-import panel as pn
+
 import holoviews as hv
-from param import Parameter
+import panel as pn
 import xarray as xr
+from param import Parameter
 
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,

@@ -1,5 +1,5 @@
-import pytest
 import numpy as np
+import pytest
 import xarray as xr
 
 from bencher.results.composable_container.composable_container_base import ComposeType

@@ -1,6 +1,7 @@
 import warnings
 
 import pytest
+
 from bencher import p, sweep
 
 

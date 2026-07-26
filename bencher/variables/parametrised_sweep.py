@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import warnings
+from collections import namedtuple
+from copy import deepcopy
 from functools import partial
 from typing import Any
-from param import Parameter, Parameterized
+
 import holoviews as hv
 import panel as pn
-from copy import deepcopy
+from param import Parameter, Parameterized
 
-from collections import namedtuple
-
+from bencher.factories import create_bench, create_bench_runner
 from bencher.utils import hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
-from bencher.factories import create_bench, create_bench_runner
 
 _InputResult = namedtuple("_InputResult", ["inputs", "results"])
 _input_result_cache: dict[tuple, _InputResult] = {}
@@ -55,10 +55,9 @@ class ParametrizedSweep(Parameterized):
     def update_params_from_kwargs(self, **kwargs) -> None:
         """Given a dictionary of kwargs, set the parameters of the passed class 'self' to the values in the dictionary."""
         used_params = {}
-        for key in self.param.objects().keys():
-            if key in kwargs:
-                if key != "name":
-                    used_params[key] = kwargs[key]
+        for key in self.param.objects():
+            if key in kwargs and key != "name":
+                used_params[key] = kwargs[key]
 
         self.param.update(**used_params)
 

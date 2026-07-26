@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import pytest
+
 from bencher.results.laxtex_result import (
+    create_matrix_array,
+    format_values_list,
+    input_var_to_latex,
     latex_text,
     latex_value,
-    format_values_list,
-    create_matrix_array,
-    input_var_to_latex,
     result_var_to_latex,
     to_latex,
 )

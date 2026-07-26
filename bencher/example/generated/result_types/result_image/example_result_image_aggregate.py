@@ -1,9 +1,11 @@
 """Auto-generated example: ResultImage: Aggregate with Mixed Image and Scalar."""
 
-import bencher as bn
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):

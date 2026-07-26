@@ -16,7 +16,7 @@ def example_stats_repeats_comparison(run_cfg: bn.BenchRunCfg | None = None) -> b
             title=f"{n_repeats} repeat(s)",
             input_vars=["wave"],
             result_vars=["distance"],
-            const_vars=dict(noise_scale=noise),
+            const_vars={"noise_scale": noise},
             run_cfg=sweep_cfg,
         )
 

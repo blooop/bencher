@@ -1,9 +1,9 @@
 """Auto-generated example: Plot Type: Curve."""
 
-import bencher as bn
-
 import math
 import random
+
+import bencher as bn
 
 
 class LatencyNoisyProfile(bn.ParametrizedSweep):
@@ -24,7 +24,7 @@ def example_plot_curve(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Plot Type: Curve."""
     bench = LatencyNoisyProfile().to_bench(run_cfg)
     res = bench.plot_sweep(
-        input_vars=["load"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
+        input_vars=["load"], result_vars=["distance"], const_vars={"noise_scale": 0.15}
     )
     bench.report.append(res.to_curve())
 

@@ -18,26 +18,6 @@ import xarray as xr
 from diskcache import Cache
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
-from bencher.results.bench_result import BenchResult
-from bencher.variables.inputs import IntSweep
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.results import (
-    XARRAY_MULTIDIM_RESULT_TYPES,
-    DATA_VAR_RESULT_TYPES,
-    ResultFloat,
-    ResultVec,
-    ResultPath,
-    ResultVideo,
-    ResultImage,
-    ResultContainer,
-    ResultReference,
-    ResultDataSet,
-    ResultRerun,
-    result_missing_fill,
-)
-from bencher.worker_job import WorkerJob
-from bencher.job import JobFuture
-
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.history import (
     HISTORY_FORMAT,
@@ -52,6 +32,25 @@ from bencher.history import (
     project,
     reconcile,
 )
+from bencher.job import JobFuture
+from bencher.results.bench_result import BenchResult
+from bencher.variables.inputs import IntSweep
+from bencher.variables.results import (
+    DATA_VAR_RESULT_TYPES,
+    XARRAY_MULTIDIM_RESULT_TYPES,
+    ResultContainer,
+    ResultDataSet,
+    ResultFloat,
+    ResultImage,
+    ResultPath,
+    ResultReference,
+    ResultRerun,
+    ResultVec,
+    ResultVideo,
+    result_missing_fill,
+)
+from bencher.variables.time import TimeEvent, TimeSnapshot
+from bencher.worker_job import WorkerJob
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +128,7 @@ def set_xarray_multidim(
 
 
 def _set_result_value(
-    bench_res: "BenchResult",
+    bench_res: BenchResult,
     rv_arrays: dict[str, np.ndarray] | None,
     name: str,
     idx: tuple,
@@ -185,7 +184,9 @@ class ResultCollector:
             self._history_cache.close()
             self._history_cache = None
 
-    def __enter__(self) -> "ResultCollector":
+    # typing.Self needs python 3.11 and the package floor is 3.10, so keep the
+    # concrete return type rather than take a typing_extensions dependency.
+    def __enter__(self) -> ResultCollector:  # noqa: PYI034
         return self
 
     def __exit__(self, *exc_info) -> None:
@@ -368,15 +369,17 @@ class ResultCollector:
                     )
 
                 elif isinstance(rv, ResultVec):
-                    if isinstance(result_value, (list, np.ndarray)):
-                        if len(result_value) == rv.size:
-                            for i in range(rv.size):
-                                _set_result_value(
-                                    bench_res, rv_arrays, rv.index_name(i), idx, result_value[i]
-                                )
+                    if (
+                        isinstance(result_value, (list, np.ndarray))
+                        and len(result_value) == rv.size
+                    ):
+                        for i in range(rv.size):
+                            _set_result_value(
+                                bench_res, rv_arrays, rv.index_name(i), idx, result_value[i]
+                            )
 
                 else:
-                    raise RuntimeError("Unsupported result type")
+                    raise TypeError(f"Unsupported result type: {type(rv).__name__}")
             for rv in bench_res.result_hmaps:
                 bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
 
@@ -542,9 +545,12 @@ class ResultCollector:
         # leaves the stored history untouched for the next (acknowledged) run.
         apply_policy(events, on_history_reset)
 
-        if max_time_events is not None and "over_time" in merged.dims:
-            if merged.sizes["over_time"] > max_time_events:
-                merged = merged.isel(over_time=slice(-max_time_events, None))
+        if (
+            max_time_events is not None
+            and "over_time" in merged.dims
+            and merged.sizes["over_time"] > max_time_events
+        ):
+            merged = merged.isel(over_time=slice(-max_time_events, None))
 
         # Per-variable max_time_events: null out older entries for variables
         # with a per-variable limit smaller than the dataset's over_time size.

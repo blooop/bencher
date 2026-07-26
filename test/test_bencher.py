@@ -1,19 +1,21 @@
-import os
-import subprocess
-import pytest
-import unittest
-import random
-from shutil import rmtree
-from copy import deepcopy
 import logging
-
-from hypothesis import given, settings, strategies as st
-
+import os
+import random
+import subprocess
+import unittest
+from copy import deepcopy
 from datetime import datetime
-from diskcache import Cache
+from shutil import rmtree
 
-from bencher.example.benchmark_data import ExampleBenchCfg
+import pytest
+from diskcache import Cache
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from bencher import Bench, BenchCfg, BenchRunCfg
+from bencher.example.benchmark_data import ExampleBenchCfg
+
+logger = logging.getLogger(__name__)
 
 
 def get_hash_isolated_process() -> bytes:
@@ -34,7 +36,7 @@ def clear_autofig_folder() -> None:
     try:
         rmtree("autofig")
     except FileNotFoundError as e:
-        logging.debug(e)
+        logger.debug(e)
     os.mkdir("autofig")
 
 
@@ -250,11 +252,10 @@ class TestBencher(unittest.TestCase):
             bench_repr = bench_cfg.__repr__()
             plots = bench_cfg.to_auto_plots()
             for p in plots:
-                if p.name is not None:
-                    if p.name in name_cache:
-                        self.fail(
-                            f"this name already exists: \n\n\nA:{p.name}\n\n\nreprA:{bench_cfg.__repr__()}\n\n\nB:{name_cache[p.name]}",
-                        )
+                if p.name is not None and p.name in name_cache:
+                    self.fail(
+                        f"this name already exists: \n\n\nA:{p.name}\n\n\nreprA:{bench_cfg.__repr__()}\n\n\nB:{name_cache[p.name]}",
+                    )
                 name_cache[p.name] = bench_cfg.__repr__()
             name_cache[bench_repr] = True
 
@@ -317,7 +318,7 @@ class TestBencher(unittest.TestCase):
 
         ExampleBenchCfg.param.theta.samples = 5
 
-        logging.info(f"starting with const value noisy:{noisy}")
+        logger.info(f"starting with const value noisy:{noisy}")
 
         bench = self.create_bench()
 
@@ -336,7 +337,7 @@ class TestBencher(unittest.TestCase):
             ExampleBenchCfg.param.theta.samples,
             "no cache used so the function should sample again",
         )
-        logging.info("re-run and attempt to load from cache")
+        logger.info("re-run and attempt to load from cache")
 
         bench2 = self.create_bench()
         # run again without caching, the function should be called again

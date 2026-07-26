@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
+
 import panel as pn
 from panel.pane import LaTeX
-from typing import Any
 
 pn.extension("mathjax")
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import panel as pn
 from dataclasses import dataclass
+
+import panel as pn
 
 from bencher.results.composable_container.composable_container_base import (
     ComposableContainerBase,

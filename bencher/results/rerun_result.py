@@ -11,9 +11,11 @@ from param import Parameter
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.variables.results import (
     ResultImage,
-    ResultVideo,
     ResultString,
+    ResultVideo,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RerunResult(BenchResultBase):
@@ -140,7 +142,7 @@ class RerunResult(BenchResultBase):
             f.write(rrd_data)
         return rrd_file_to_pane(rrd_path, width=width, height=height)
 
-    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover  # noqa: F811
+    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover
         """Plot callback for the rerun backend — drop-in replacement for ``to_auto_plots``.
 
         Renders the sweep summary, the rerun viewer, and the post-description,
@@ -219,7 +221,7 @@ def _log_to_rerun(
                 rr=rr,
                 recording=recording,
                 dataset=sliced,
-                entity_path=f"{entity_path}/{dim}/{str(val)}",
+                entity_path=f"{entity_path}/{dim}/{val!s}",
                 result_vars=result_vars,
                 float_dims=float_dims,
                 cat_dims=remaining_cat,
@@ -238,7 +240,7 @@ def _log_to_rerun(
                 rr=rr,
                 recording=recording,
                 dataset=sliced,
-                entity_path=f"{entity_path}/{dim}/{str(val)}",
+                entity_path=f"{entity_path}/{dim}/{val!s}",
                 result_vars=result_vars,
                 float_dims=float_dims,
                 cat_dims=remaining_cat,
@@ -262,7 +264,7 @@ def _log_to_rerun(
                 rr=rr,
                 recording=recording,
                 dataset=sliced,
-                entity_path=f"{entity_path}/{dim}/{str(val)}",
+                entity_path=f"{entity_path}/{dim}/{val!s}",
                 result_vars=result_vars,
                 float_dims=remaining_float,
                 cat_dims=[],
@@ -308,7 +310,7 @@ def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, fl
             if val is not None and not (isinstance(val, float) and np.isnan(val)):
                 recording.log(path, rr.Scalars(float(val)))
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log line graph for %s: %s", rv_name, e)
+        logger.debug("Could not log line graph for %s: %s", rv_name, e)
 
 
 def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat_dim: str):
@@ -321,7 +323,7 @@ def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat
             values.append(float(val) if val is not None else 0.0)
         recording.log(path, rr.BarChart(values))
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log bar chart for %s: %s", rv_name, e)
+        logger.debug("Could not log bar chart for %s: %s", rv_name, e)
 
 
 def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: list[str]):
@@ -339,7 +341,7 @@ def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: 
             vmax = vmin + 1.0
         recording.log(path, rr.Tensor(arr, dim_names=dims, value_range=[vmin, vmax]))
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log tensor for %s: %s", rv_name, e)
+        logger.debug("Could not log tensor for %s: %s", rv_name, e)
 
 
 def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
@@ -371,7 +373,7 @@ def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
             recording.log(path, rr.Scalars(float(val)))
 
     except (KeyError, ValueError, TypeError) as e:
-        logging.debug("Could not log result var %s: %s", rv_name, e)
+        logger.debug("Could not log result var %s: %s", rv_name, e)
 
 
 def _build_blueprint(rrb, result_vars, float_dims, cat_dims, time_dim, dim_values):

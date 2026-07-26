@@ -1,7 +1,6 @@
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
-
 # Registry of inline class templates keyed by (float_count, cat_count).
 # Each entry defines a unique software/data-processing domain class.
 INLINE_CLASSES = {
@@ -342,7 +341,7 @@ def _build_class_code(info, _float_count, _cat_count, noise_val=0.0, time_offset
             cls_lines.append(f"        {line.format(noise=0)}")
 
     if time_offset:
-        result_name = list(info["result_vars"].keys())[0]
+        result_name = next(iter(info["result_vars"].keys()))
         cls_lines.append(f"        self.{result_name} += self._time_offset * 10")
 
     return "\n".join(cls_lines)
@@ -367,47 +366,63 @@ def _get_sweep_description(float_count, cat_count, variant):
 
     descs = {
         "no_repeats": (
-            f"A {dim_label} parameter sweep with a single sample per combination. "
-            "Bencher calculates the Cartesian product of all input variables and "
-            "evaluates the benchmark function at each point. With no repeats, each "
-            "combination appears exactly once -- useful for deterministic functions "
-            "or quick exploration before committing to longer runs.",
-            "Each tab shows a different view of the same data: interactive plots, "
-            "tabular summaries, and raw data. Use the tabs to explore the sweep "
-            "results from different angles.",
+            (
+                f"A {dim_label} parameter sweep with a single sample per combination. "
+                "Bencher calculates the Cartesian product of all input variables and "
+                "evaluates the benchmark function at each point. With no repeats, each "
+                "combination appears exactly once -- useful for deterministic functions "
+                "or quick exploration before committing to longer runs."
+            ),
+            (
+                "Each tab shows a different view of the same data: interactive plots, "
+                "tabular summaries, and raw data. Use the tabs to explore the sweep "
+                "results from different angles."
+            ),
         ),
         "with_repeats": (
-            f"A {dim_label} parameter sweep with multiple repeats per combination. "
-            "Repeating measurements reveals the noise structure of your benchmark. "
-            "If your function is deterministic, all repeats will be identical; if it "
-            "has stochastic components, repeats let you estimate confidence intervals "
-            "and distinguish signal from noise. The benchmark function must be pure -- "
-            "if past calls affect future calls through side effects, the statistics "
-            "will be invalid.",
-            "Swarm/violin plots show the distribution of repeated measurements. "
-            "If repeat has high variance, it suggests either measurement noise or "
-            "unintended side effects in the benchmark function.",
+            (
+                f"A {dim_label} parameter sweep with multiple repeats per combination. "
+                "Repeating measurements reveals the noise structure of your benchmark. "
+                "If your function is deterministic, all repeats will be identical; if it "
+                "has stochastic components, repeats let you estimate confidence intervals "
+                "and distinguish signal from noise. The benchmark function must be pure -- "
+                "if past calls affect future calls through side effects, the statistics "
+                "will be invalid."
+            ),
+            (
+                "Swarm/violin plots show the distribution of repeated measurements. "
+                "If repeat has high variance, it suggests either measurement noise or "
+                "unintended side effects in the benchmark function."
+            ),
         ),
         "over_time": (
-            f"A {dim_label} parameter sweep tracked over time. Setting over_time=True "
-            "records multiple time snapshots that can be scrubbed via a slider. Each "
-            "call to plot_sweep with a new time_src appends a snapshot to the history. "
-            "This is designed for nightly benchmarks or CI pipelines where you want to "
-            "track how metrics evolve across commits, releases, or environmental changes. "
-            "Use clear_history=True on the first snapshot to reset, and clear_cache=True "
-            "to force re-evaluation.",
-            "The time slider lets you scrub through snapshots. The 'All Time Points "
-            "(aggregated)' tab pools all snapshots into one view, smoothing out "
-            "per-snapshot noise to reveal long-term trends.",
+            (
+                f"A {dim_label} parameter sweep tracked over time. Setting over_time=True "
+                "records multiple time snapshots that can be scrubbed via a slider. Each "
+                "call to plot_sweep with a new time_src appends a snapshot to the history. "
+                "This is designed for nightly benchmarks or CI pipelines where you want to "
+                "track how metrics evolve across commits, releases, or environmental changes. "
+                "Use clear_history=True on the first snapshot to reset, and clear_cache=True "
+                "to force re-evaluation."
+            ),
+            (
+                "The time slider lets you scrub through snapshots. The 'All Time Points "
+                "(aggregated)' tab pools all snapshots into one view, smoothing out "
+                "per-snapshot noise to reveal long-term trends."
+            ),
         ),
         "over_time_repeats": (
-            f"A {dim_label} parameter sweep with both repeats and over_time tracking. "
-            "This combination is the most informative: repeats reveal per-measurement "
-            "noise at each time point, while over_time captures long-term drift. If "
-            "your nightly benchmark shows increasing variance, repeats help distinguish "
-            "whether the algorithm became noisier or the environment became less stable.",
-            "Compare the per-snapshot distributions (via the slider) with the aggregated "
-            "view. Growing spread over time suggests a real change, not just noise.",
+            (
+                f"A {dim_label} parameter sweep with both repeats and over_time tracking. "
+                "This combination is the most informative: repeats reveal per-measurement "
+                "noise at each time point, while over_time captures long-term drift. If "
+                "your nightly benchmark shows increasing variance, repeats help distinguish "
+                "whether the algorithm became noisier or the environment became less stable."
+            ),
+            (
+                "Compare the per-snapshot distributions (via the slider) with the aggregated "
+                "view. Growing spread over time suggests a real change, not just noise."
+            ),
         ),
     }
 
@@ -592,43 +607,43 @@ def example_meta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
         title="Single Sample (0-1 float vars)",
         description=sweep_desc,
         input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
-        const_vars=dict(sample_with_repeats=1, sample_over_time=False),
+        const_vars={"sample_with_repeats": 1, "sample_over_time": False},
     )
     bench.plot_sweep(
         title="Single Sample (2-3 float vars)",
         description=sweep_desc,
         input_vars=[bn.sweep("float_vars_count", [2, 3]), few_cats],
-        const_vars=dict(sample_with_repeats=1, sample_over_time=False),
+        const_vars={"sample_with_repeats": 1, "sample_over_time": False},
     )
     bench.plot_sweep(
         title="Repeated Samples (10x)",
         description=sweep_desc,
         input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
-        const_vars=dict(sample_with_repeats=10, sample_over_time=False),
+        const_vars={"sample_with_repeats": 10, "sample_over_time": False},
     )
     bench.plot_sweep(
         title="Repeated Samples (3x)",
         description=sweep_desc,
         input_vars=[bn.sweep("float_vars_count", [2, 3]), few_cats],
-        const_vars=dict(sample_with_repeats=3, sample_over_time=False),
+        const_vars={"sample_with_repeats": 3, "sample_over_time": False},
     )
     bench.plot_sweep(
         title="Over Time 0-1 float (3 Snapshots)",
         description=sweep_desc,
         input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
-        const_vars=dict(sample_with_repeats=1, sample_over_time=True),
+        const_vars={"sample_with_repeats": 1, "sample_over_time": True},
     )
     bench.plot_sweep(
         title="Over Time 2-3 float (3 Snapshots)",
         description=sweep_desc,
         input_vars=[bn.sweep("float_vars_count", [2, 3]), few_cats],
-        const_vars=dict(sample_with_repeats=1, sample_over_time=True),
+        const_vars={"sample_with_repeats": 1, "sample_over_time": True},
     )
     bench.plot_sweep(
         title="Over Time + Repeats 0-1 float (3 Snapshots, 3x repeats)",
         description=sweep_desc,
         input_vars=[bn.sweep("float_vars_count", [0, 1]), "categorical_vars_count"],
-        const_vars=dict(sample_with_repeats=3, sample_over_time=True),
+        const_vars={"sample_with_repeats": 3, "sample_over_time": True},
     )
 
     return bench

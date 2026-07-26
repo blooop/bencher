@@ -3,23 +3,24 @@ from __future__ import annotations
 import argparse
 import logging
 import warnings
+from copy import deepcopy
+from datetime import datetime
 from enum import auto
-from strenum import LowercaseStrEnum
-
 from typing import Any, TypeVar
 
-import param
 import panel as pn
-from datetime import datetime
-from copy import deepcopy
+import param
+from strenum import LowercaseStrEnum
 
-from bencher.variables.sweep_base import hash_sha1, describe_variable, SUBSAMPLING_DIVISIONS_SAMPLES
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.results import OptDir
-from bencher.results.composable_container.composable_container_base import PaneLayout
-from bencher.job import Executors
 from bencher.cache_management import CACHE_VERSION
+from bencher.job import Executors
+from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
+from bencher.variables.results import OptDir
+from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
+from bencher.variables.time import TimeEvent, TimeSnapshot
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")  # Generic type variable
 
@@ -881,12 +882,10 @@ class BenchCfg(BenchRunCfg):
 
             cfg = from_bench_cfg(self)
             return render_animation(cfg, width=350, height=250)
-        except (ImportError, AttributeError, ValueError, RuntimeError, OSError) as e:
+        except (ImportError, AttributeError, ValueError, RuntimeError, OSError):
             # Log the exception so failures remain diagnosable while preserving
             # the existing graceful fallback behavior.
-            logging.getLogger(__name__).exception(
-                "Failed to render Cartesian animation for bench config %r: %s", self, e
-            )
+            logger.exception("Failed to render Cartesian animation for bench config %r", self)
             return None
 
     def describe_sweep(
@@ -1127,7 +1126,7 @@ class DimsCfg:
         self.dim_ranges_str: list[str] = [f"{s}\n" for s in self.dim_ranges]
         self.coords: dict[str, list[Any]] = dict(zip(self.dims_name, self.dim_ranges))
 
-        logging.debug(f"dims_name: {self.dims_name}")
-        logging.debug(f"dim_ranges {self.dim_ranges_str}")
-        logging.debug(f"dim_ranges_index {self.dim_ranges_index}")
-        logging.debug(f"coords: {self.coords}")
+        logger.debug(f"dims_name: {self.dims_name}")
+        logger.debug(f"dim_ranges {self.dim_ranges_str}")
+        logger.debug(f"dim_ranges_index {self.dim_ranges_index}")
+        logger.debug(f"coords: {self.coords}")

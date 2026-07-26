@@ -15,8 +15,8 @@ render plots in exactly the same order as before.
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 import panel as pn
 
@@ -37,7 +37,7 @@ class LegacyResultPlugin:
     callback: Callable
     auto: bool = True
 
-    def render(self, data: BenchData) -> Optional[pn.viewable.Viewable]:
+    def render(self, data: BenchData) -> pn.viewable.Viewable | None:
         kwargs = data.render_kwargs
         # to_auto always rides `override` (+ plot-size kwargs) along; renderers with a
         # fixed signature (no **kwargs, e.g. RerunResult.to_rerun) only get the ones
@@ -48,7 +48,7 @@ class LegacyResultPlugin:
         return self.callback(data.legacy_result, **kwargs)
 
 
-def _declared_kwargs(callback: Callable) -> Optional[frozenset[str]]:
+def _declared_kwargs(callback: Callable) -> frozenset[str] | None:
     """The keyword names a fixed-signature callback accepts, or None when it takes
     **kwargs or its signature cannot be introspected (no filtering in either case).
     Deliberately uncached: an lru_cache here would pin every callback — including
@@ -67,16 +67,16 @@ def _builtin_specs() -> list[tuple[str, str, Callable]]:
     """(name, backend, callback) for the default chart set, in legacy order."""
     # Imported here (not module level) to avoid a circular import: the result
     # classes' module tree imports the plugin registry for to_auto dispatch.
+    from bencher.results.histogram_result import HistogramResult
     from bencher.results.holoview_results.bar_result import BarResult
+    from bencher.results.holoview_results.curve_result import CurveResult
     from bencher.results.holoview_results.distribution_result.box_whisker_result import (
         BoxWhiskerResult,
     )
-    from bencher.results.holoview_results.curve_result import CurveResult
-    from bencher.results.holoview_results.line_result import LineResult
     from bencher.results.holoview_results.heatmap_result import HeatmapResult
-    from bencher.results.histogram_result import HistogramResult
-    from bencher.results.volume_result import VolumeResult
+    from bencher.results.holoview_results.line_result import LineResult
     from bencher.results.pane_result import PaneResult
+    from bencher.results.volume_result import VolumeResult
 
     return [
         ("bar", "holoviews", BarResult.to_plot),
@@ -96,18 +96,18 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     plot already required it (surface, like volume above); rerun is its own backend
     and imports the rerun SDK lazily inside the renderer, so registration is safe
     without the package installed."""
-    from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
+    from bencher.results.dataset_result import DataSetResult
+    from bencher.results.holoview_results.band_result import BandResult
     from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
         ScatterJitterResult,
     )
+    from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
     from bencher.results.holoview_results.scatter_result import ScatterResult
-    from bencher.results.holoview_results.band_result import BandResult
     from bencher.results.holoview_results.surface_result import SurfaceResult
     from bencher.results.holoview_results.table_result import TableResult
     from bencher.results.holoview_results.tabulator_result import TabulatorResult
-    from bencher.results.dataset_result import DataSetResult
-    from bencher.results.video_summary import VideoSummaryResult
     from bencher.results.rerun_result import RerunResult
+    from bencher.results.video_summary import VideoSummaryResult
 
     return [
         ("violin", "holoviews", ViolinResult.to_plot),

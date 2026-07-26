@@ -1,21 +1,23 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 from copy import deepcopy
+
 import panel as pn
 import xarray as xr
 from param import Parameter
+
+from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
-from bencher.variables.results import ResultImage
-from bencher.plotting.plot_filter import VarRange, PlotFilter
-from bencher.utils import callable_name, int_to_col, color_tuple_to_255
-from bencher.video_writer import VideoWriter
-from bencher.results.video_controls import VideoControls
 from bencher.results.composable_container.composable_container_video import (
     ComposableContainerVideo,
     ComposeType,
     RenderCfg,
 )
+from bencher.results.video_controls import VideoControls
+from bencher.utils import callable_name, color_tuple_to_255, int_to_col
+from bencher.variables.results import ResultImage
+from bencher.video_writer import VideoWriter
 
 
 class VideoSummaryResult(BenchResultBase):
@@ -192,7 +194,7 @@ class VideoSummaryResult(BenchResultBase):
         **kwargs,
     ) -> pn.panel:
         num_dims = len(dataset.sizes)
-        dims = list(d for d in dataset.sizes)
+        dims = list(dataset.sizes)
         if reverse:
             dims = list(reversed(dims))
 

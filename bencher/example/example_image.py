@@ -1,14 +1,16 @@
-import bencher as bn
-import numpy as np
 import math
+
+import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def polygon_points(radius: float, sides: int, start_angle: float):
     points = []
     for ang in np.linspace(0, 360, sides + 1):
         angle = math.radians(start_angle + ang)
-        points.append(([math.sin(angle) * radius, math.cos(angle) * radius]))
+        points.append([math.sin(angle) * radius, math.cos(angle) * radius])
     return points
 
 

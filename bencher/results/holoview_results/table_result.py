@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import holoviews as hv
+
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 

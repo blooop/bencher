@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from enum import auto
+from typing import ClassVar
 
 import pytest
 
 import bencher as bn
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -266,8 +266,8 @@ class OffsetSphere(bn.ParametrizedSweep):
 
     loss = bn.ResultFloat("ul", bn.OptDir.minimize)
 
-    observed_offsets: list[float] = []
-    observed_x: list[float] = []
+    observed_offsets: ClassVar[list[float]] = []
+    observed_x: ClassVar[list[float]] = []
 
     def benchmark(self):
         type(self).observed_offsets.append(float(self.offset))
@@ -286,7 +286,7 @@ class TestConstVars:
         bench = bn.Bench("test_opt_const_vars", cfg, run_cfg=_run_cfg())
         result = bench.optimize(
             input_vars=["x"],
-            const_vars=dict(offset=50.0),
+            const_vars={"offset": 50.0},
             n_trials=5,
             warm_start=False,
             plot=False,
@@ -306,7 +306,7 @@ class TestConstVars:
         bench = bn.Bench("test_opt_const_vars_rep", cfg, run_cfg=_run_cfg())
         result = bench.optimize(
             input_vars=["x"],
-            const_vars=dict(offset=50.0),
+            const_vars={"offset": 50.0},
             n_trials=3,
             repeats=2,
             agg_fn="mean",

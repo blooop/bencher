@@ -1,10 +1,8 @@
 import bencher as bn
-
-from bencher.example.example_simple_float import example_simple_float
 from bencher.example.example_levels import example_levels
-from bencher.example.optuna.example_optuna import optuna_rastrigin
 from bencher.example.example_sample_cache import example_sample_cache
-
+from bencher.example.example_simple_float import example_simple_float
+from bencher.example.optuna.example_optuna import optuna_rastrigin
 
 if __name__ == "__main__":
     run_cfg = bn.BenchRunCfg()

@@ -1,24 +1,25 @@
 from __future__ import annotations
-import panel as pn
-import holoviews as hv
-import numpy as np
-from param import Parameter
+
 from functools import partial
 from itertools import product as iterproduct
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
+import holoviews as hv
+import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
+import numpy as np
+import panel as pn
+import xarray as xr
+from param import Parameter
+
+from bencher.results.bench_result_base import ReduceType
+from bencher.results.pane_result import PaneResult
 from bencher.utils import (
+    get_nearest_coords,
     get_nearest_coords1D,
     hmap_canonical_input,
-    get_nearest_coords,
     label_with_units,
     listify,
 )
-from bencher.results.pane_result import PaneResult
-from bencher.results.bench_result_base import ReduceType
-
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
 # NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders
@@ -443,7 +444,7 @@ class HoloviewResult(PaneResult):
 
         input_vars = self.bench_cfg.input_vars
         num_inputs = self.plt_cnt_cfg.inputs_cnt
-        state = dict(x=None, y=None, update=False)
+        state = {"x": None, "y": None, "update": False}
 
         def _on_pointer(x, y):  # pragma: no cover
             x_nearest = get_nearest_coords1D(x, dataset.coords[input_vars[0].name].data)

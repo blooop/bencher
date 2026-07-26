@@ -4,49 +4,48 @@ import logging
 import os
 import tempfile
 import warnings
-from datetime import datetime
-from pathlib import Path
+from collections.abc import Callable
 from concurrent.futures import as_completed
-from itertools import product, combinations
-
-from param import Parameter
-from typing import Callable, Any
-from copy import deepcopy
-import param
-import numpy as np
-import xarray as xr
 from contextlib import suppress
+from copy import deepcopy
+from datetime import datetime
 from functools import partial
-import panel as pn
+from itertools import combinations, product
+from pathlib import Path
+from typing import Any
 
+import numpy as np
 import optuna
-
-from bencher.worker_job import WorkerJob
-from bencher.results.optimize_result import OptimizeResult
-from bencher.optuna_conversions import sweep_var_to_suggest, sweep_var_to_optuna_dist
-from bencher.variables.sweep_base import hash_sha1
+import panel as pn
+import param
+import xarray as xr
+from param import Parameter
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
-
-from bencher.variables.inputs import IntSweep
-from bencher.variables.results import ResultHmap
-from bencher.results.bench_result import BenchResult
-from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str, resolve_aggregate, AGG_FN_MAP
-from bencher.sample_order import SampleOrder
-from bencher.regression import detect_regressions, RegressionError
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.history import config_summary as history_config_summary
+from bencher.job import Executors, FutureCache, Job, JobFuture
+from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
+from bencher.regression import RegressionError, detect_regressions
+from bencher.result_collector import ResultCollector
+from bencher.results.bench_result import BenchResult
+from bencher.results.optimize_result import OptimizeResult
+from bencher.sample_order import SampleOrder
+from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
+from bencher.utils import AGG_FN_MAP, params_to_str, resolve_aggregate
+from bencher.variables.inputs import IntSweep
+from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import ResultHmap
+from bencher.variables.sweep_base import hash_sha1
+from bencher.worker_job import WorkerJob
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
-from bencher.result_collector import ResultCollector
-from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
 
-from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
+logger = logging.getLogger(__name__)
 
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -349,7 +348,7 @@ class Bench(BenchPlotServer):
             if input_vars is not None:
                 input_vars_in = deepcopy(input_vars)
             else:
-                logging.info(
+                logger.info(
                     "No input variables passed, using all param variables in bench class as inputs"
                 )
                 if self.input_vars is None:
@@ -357,12 +356,12 @@ class Bench(BenchPlotServer):
                 else:
                     input_vars_in = deepcopy(self.input_vars)
                 for i in input_vars_in:
-                    logging.info(f"input var: {i.name}")
+                    logger.info(f"input var: {i.name}")
 
             if result_vars is not None:
                 result_vars_in = deepcopy(result_vars)
             else:
-                logging.info(
+                logger.info(
                     "No results variables passed, using all result variables in bench class:"
                 )
                 if self.result_vars is None:
@@ -385,10 +384,10 @@ class Bench(BenchPlotServer):
         if run_cfg is None:
             if self.run_cfg is None:
                 run_cfg = BenchRunCfg()
-                logging.info("Generate default run cfg")
+                logger.info("Generate default run cfg")
             else:
                 run_cfg = deepcopy(self.run_cfg)
-                logging.info("Copy run cfg from bench class")
+                logger.info("Copy run cfg from bench class")
 
         if run_cfg.only_plot:
             run_cfg.cache_results = True
@@ -432,7 +431,7 @@ class Bench(BenchPlotServer):
 
         for r in result_vars_in:
             r_name = getattr(r, "name", str(r))
-            logging.info("result var: %s", r_name)
+            logger.info("result var: %s", r_name)
 
         if isinstance(const_vars_in, dict):
             const_vars_in = list(const_vars_in.items())
@@ -459,19 +458,19 @@ class Bench(BenchPlotServer):
         if run_cfg.samples_per_var is not None:
             if len(input_vars_in) > 0:
                 input_vars_in = [i.with_samples(run_cfg.samples_per_var) for i in input_vars_in]
-                logging.info(
+                logger.info(
                     "samples_per_var=%d applied to %d input variable(s)",
                     run_cfg.samples_per_var,
                     len(input_vars_in),
                 )
         elif run_cfg.subsampling_divisions > 0:
             inputs = []
-            logging.debug("Input vars prior to subsampling_divisions adjustment: %s", input_vars_in)
+            logger.debug("Input vars prior to subsampling_divisions adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
                     inputs.append(i.with_subsampling_divisions(run_cfg.subsampling_divisions))
                 input_vars_in = inputs
-                logging.info(
+                logger.info(
                     "subsampling_divisions=%d → %d samples per variable",
                     run_cfg.subsampling_divisions,
                     BenchRunCfg.subsampling_divisions_to_samples(run_cfg.subsampling_divisions),
@@ -484,7 +483,7 @@ class Bench(BenchPlotServer):
                     # print(i.hash_persistent())
                     if i.name == c[0].name:
                         const_vars_in.remove(c)
-                        logging.info(f"removing {i.name} from constants")
+                        logger.info(f"removing {i.name} from constants")
 
         result_hmaps = []
         result_vars_only = []
@@ -541,7 +540,7 @@ class Bench(BenchPlotServer):
                 else:
                     summary_parts.append(f"  {iv.name}: 0 values")
             evals = total * run_cfg.repeats
-            logging.info(
+            logger.info(
                 "Dry run for '%s':\n%s\n  Total: %d combinations x %d repeats = %d evaluations",
                 title,
                 "\n".join(summary_parts) if summary_parts else "  (no input vars)",
@@ -662,14 +661,14 @@ class Bench(BenchPlotServer):
         )
 
         if missing_keys:
-            logging.warning(
+            logger.warning(
                 "Run configuration contains parameters that do not exist on "
                 "the bench configuration and were ignored: %s",
                 sorted(missing_keys),
             )
 
         if constant_keys:
-            logging.warning(
+            logger.warning(
                 "Attempted to override constant bench parameters from run "
                 "configuration; these were ignored: %s",
                 sorted(constant_keys),
@@ -700,18 +699,18 @@ class Bench(BenchPlotServer):
             c = self._collector.get_benchmark_cache()
             if run_cfg.clear_cache:
                 c.delete(bench_cfg_hash)
-                logging.info("cleared cache")
+                logger.info("cleared cache")
             elif run_cfg.cache_results:
-                logging.info(
+                logger.info(
                     f"checking for previously calculated results with key: {bench_cfg_hash}"
                 )
                 if bench_cfg_hash in c:
-                    logging.info(f"loading cached results from key: {bench_cfg_hash}")
+                    logger.info(f"loading cached results from key: {bench_cfg_hash}")
                     bench_res = c[bench_cfg_hash]
                     # if not over_time:  # if over time we always want to calculate results
                     calculate_results = False
                 else:
-                    logging.info("did not detect results in cache")
+                    logger.info("did not detect results in cache")
                     if run_cfg.only_plot:
                         raise FileNotFoundError("Was not able to load the results to plot!")
         timings.cache_check_ms = elapsed()
@@ -753,7 +752,7 @@ class Bench(BenchPlotServer):
             if run_cfg.over_time and run_cfg.regression_detection:
                 bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
                 if bench_res.regression_report.has_regressions:
-                    logging.warning(bench_res.regression_report.summary())
+                    logger.warning(bench_res.regression_report.summary())
                     # young_baseline regressions (fewer than regression_min_history
                     # points since the column's birth) warn but never fail the run.
                     if (
@@ -765,7 +764,7 @@ class Bench(BenchPlotServer):
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)
 
-        logging.info(self.sample_cache.stats())
+        logger.info(self.sample_cache.stats())
         self.sample_cache.close()
 
         with phase_timer() as elapsed:
@@ -805,7 +804,7 @@ class Bench(BenchPlotServer):
         """
         # Local import keeps render (and its holoviews/panel imports) out of the
         # hot path when the switch is off.
-        from bencher.render import save_result, load_result
+        from bencher.render import load_result, save_result
 
         with tempfile.TemporaryDirectory(prefix="bencher_force_split_") as tmp:
             path = save_result(bench_res, Path(tmp) / "result.pkl")
@@ -1236,7 +1235,7 @@ class Bench(BenchPlotServer):
         # --- determine optimisation directions --------------------------
         targets = bench_cfg.optuna_targets(as_var=True)
         if not targets:
-            logging.warning(
+            logger.warning(
                 "No result variables with an optimization direction found. "
                 "Skipping optimization. Set direction=OptDir.minimize or "
                 "OptDir.maximize on your ResultFloat to enable optimization."
@@ -1274,7 +1273,7 @@ class Bench(BenchPlotServer):
         study.optimize(objective, n_trials=n_trials, catch=catch)
 
         # --- clean up cache -------------------------------------------------
-        logging.info(self.sample_cache.stats())
+        logger.info(self.sample_cache.stats())
         self.sample_cache.close()
 
         result = OptimizeResult(
@@ -1379,7 +1378,7 @@ class Bench(BenchPlotServer):
                     study.add_trials(trials)
                     added += len(trials)
             except Exception:  # pylint: disable=broad-except
-                logging.debug("Failed to warm-start from result", exc_info=True)
+                logger.debug("Failed to warm-start from result", exc_info=True)
         return added
 
     def _warm_from_sample_cache(
@@ -1403,6 +1402,9 @@ class Bench(BenchPlotServer):
             try:
                 vals = list(iv.values())
             except Exception:  # pylint: disable=broad-except
+                # Not every sweep var can enumerate its values (e.g. dynamically
+                # populated selectors); skip it rather than aborting the whole grid.
+                logger.debug("Skipping input var %s: values() failed", iv.name, exc_info=True)
                 continue
             iv_grid_values.append(vals)
             iv_names.append(iv.name)
@@ -1444,7 +1446,7 @@ class Bench(BenchPlotServer):
                     study.add_trial(trial)
                     added += 1
                 except Exception:  # pylint: disable=broad-except
-                    logging.debug("Failed to warm-start trial from cache", exc_info=True)
+                    logger.debug("Failed to warm-start trial from cache", exc_info=True)
 
         return added
 

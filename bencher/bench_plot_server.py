@@ -16,6 +16,8 @@ from tornado.web import StaticFileHandler
 
 from bencher.bench_cfg import BenchCfg, BenchPlotSrvCfg, ShowMode, normalize_show
 
+logger = logging.getLogger(__name__)
+
 logging.basicConfig(level=logging.INFO)
 
 # IANA dynamic/private port range used by _find_free_port()
@@ -94,16 +96,16 @@ class BenchPlotServer:
 
         with Cache("cachedir/benchmark_inputs") as cache:
             if bench_name in cache:
-                logging.info(f"loading benchmarks: {bench_name}")
+                logger.info(f"loading benchmarks: {bench_name}")
                 # use the benchmark name to look up the hash of the results
                 bench_cfg_hashes = cache[bench_name]
                 plots_instance = None
                 for bench_cfg_hash in bench_cfg_hashes:
                     # load the results based on the hash retrieved from the benchmark name
                     if bench_cfg_hash in cache:
-                        logging.info(f"loading cached results from key: {bench_cfg_hash}")
+                        logger.info(f"loading cached results from key: {bench_cfg_hash}")
                         bench_res = cache[bench_cfg_hash]
-                        logging.info(f"loaded: {bench_res.bench_cfg.title}")
+                        logger.info(f"loaded: {bench_res.bench_cfg.title}")
 
                         plots_instance = bench_res.to_auto_plots()
                     else:
@@ -159,23 +161,23 @@ class BenchPlotServer:
         """
 
         # suppress verbose tornado and bokeh output
-        for logger in ["tornado", "bokeh"]:
-            logging.getLogger(logger).setLevel(logging.WARNING)
+        for noisy_logger in ["tornado", "bokeh"]:
+            logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
         extra = self._rrd_extra_patterns()
 
         if port is None:
             port = self._find_free_port()
 
-        serve_kwargs = dict(
-            title=bench_name,
-            threaded=True,
-            show=show,
-            address="0.0.0.0",
-            websocket_origin=["*"],
-            extra_patterns=extra,
-            port=port,
-        )
+        serve_kwargs = {
+            "title": bench_name,
+            "threaded": True,
+            "show": show,
+            "address": "0.0.0.0",
+            "websocket_origin": ["*"],
+            "extra_patterns": extra,
+            "port": port,
+        }
 
         return pn.serve(plots_instance, **serve_kwargs)
 

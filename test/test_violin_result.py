@@ -9,7 +9,8 @@ import panel as pn
 import bencher as bn
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
-from test.helpers import inner_element as _inner_element, run_dist_sweep
+from test.helpers import inner_element as _inner_element
+from test.helpers import run_dist_sweep
 
 
 class ViolinBench(bn.ParametrizedSweep):

@@ -26,20 +26,20 @@ import param
 import pytest
 
 import bencher.variables.results as results_module
+from bencher.bench_cfg import BenchCfg
 from bencher.variables.results import (
+    _PARAM_MODULES,
     ResultContainer,
     ResultDataSet,
+    ResultFloat,
     ResultImage,
     ResultPath,
     ResultReference,
     ResultString,
-    ResultFloat,
     ResultVec,
     ResultVideo,
     ResultVolume,
-    _PARAM_MODULES,
 )
-from bencher.bench_cfg import BenchCfg
 
 
 def _discover_all_result_classes():

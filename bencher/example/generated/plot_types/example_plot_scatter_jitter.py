@@ -1,11 +1,11 @@
 """Auto-generated example: Plot Type: Scatter Jitter."""
 
+import random
+
+import bencher as bn
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
-import bencher as bn
-
-import random
 
 
 class ScatterJitterDemo(bn.ParametrizedSweep):
@@ -27,7 +27,7 @@ def example_plot_scatter_jitter(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
     """Plot Type: Scatter Jitter."""
     bench = ScatterJitterDemo().to_bench(run_cfg)
     res = bench.plot_sweep(
-        input_vars=["backend"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
+        input_vars=["backend"], result_vars=["distance"], const_vars={"noise_scale": 0.15}
     )
     bench.report.append(res.to(ScatterJitterResult))
 

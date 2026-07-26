@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Callable
 from functools import partial
-from typing import Callable
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
@@ -105,7 +105,11 @@ class WorkerManager:
             logger.info("setting worker from bench class.__call__")
         else:
             if isinstance(worker, type):
-                raise RuntimeError("This should be a class instance, not a class")
+                # RuntimeError, not TypeError: existing contract asserted by
+                # test_set_worker_class_type_error and catchable by callers.
+                raise RuntimeError(  # noqa: TRY004
+                    "This should be a class instance, not a class"
+                )
             if worker_input_cfg is None:
                 self.worker = worker
             else:

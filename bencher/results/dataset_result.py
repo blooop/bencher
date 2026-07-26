@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from functools import partial
 
+import holoviews as hv
 import panel as pn
 from param import Parameter
-import holoviews as hv
 
-from bencher.variables.results import PANEL_TYPES
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
+from bencher.variables.results import PANEL_TYPES
 
 
 class DataSetResult(BenchResultBase):

@@ -10,9 +10,7 @@ def _run_git(args: list[str], repo_path: str | None = None) -> str:
     """Run a git subcommand and return its stripped stdout, or empty string on failure."""
     try:
         return (
-            subprocess.check_output(  # noqa: S603
-                ["git", *args], cwd=repo_path, stderr=subprocess.DEVNULL
-            )
+            subprocess.check_output(["git", *args], cwd=repo_path, stderr=subprocess.DEVNULL)
             .decode()
             .strip()
         )

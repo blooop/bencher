@@ -17,8 +17,10 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
 from bencher.history import BIRTH_ATTR
+from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
+
+logger = logging.getLogger(__name__)
 
 # Default thresholds per method — used when the user hasn't explicitly set a threshold.
 _METHOD_DEFAULTS = {
@@ -1274,7 +1276,7 @@ def detect_absolute(
         regressed = curr_mean < limit
         detail = f"current={curr_mean:.4g} vs floor {limit}"
     else:
-        logging.warning(
+        logger.warning(
             f"absolute regression check skipped for '{variable}': OptDir.none has no direction"
         )
         return None
@@ -1410,19 +1412,19 @@ def _normalize_overrides(overrides) -> tuple[dict, dict]:
                         min_history[var_name] = threshold
                         has_min_history = True
                     else:
-                        logging.warning(
+                        logger.warning(
                             f"regression_overrides['{var_name}']: 'min_history' must be "
                             f"an int >= 1, got {threshold!r}; ignored"
                         )
                     continue
                 if method not in _METHOD_THRESHOLD_ATTR:
-                    logging.warning(
+                    logger.warning(
                         f"regression_overrides['{var_name}']: unknown method '{method}' ignored"
                     )
                     continue
                 valid_threshold = _valid_threshold(threshold)
                 if valid_threshold is None:
-                    logging.warning(
+                    logger.warning(
                         f"regression_overrides['{var_name}']: '{method}' threshold must be "
                         f"a finite number, got {threshold!r}; check ignored"
                     )
@@ -1431,12 +1433,12 @@ def _normalize_overrides(overrides) -> tuple[dict, dict]:
             if valid or (not spec and not has_min_history):
                 normalized[var_name] = valid
             elif not has_min_history:
-                logging.warning(
+                logger.warning(
                     f"regression_overrides['{var_name}']: no valid checks in spec; "
                     "keeping the benchmark-wide method"
                 )
         else:
-            logging.warning(
+            logger.warning(
                 f"regression_overrides['{var_name}']: expected a finite number or "
                 f"{{method: threshold}} dict, got {spec!r}; ignored"
             )
@@ -1562,7 +1564,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         regression_percentage = _METHOD_DEFAULTS["percentage"]
 
     if method not in _METHOD_THRESHOLD_ATTR:
-        logging.warning(f"Unknown regression method '{method}', falling back to percentage")
+        logger.warning(f"Unknown regression method '{method}', falling back to percentage")
         method = "percentage"
 
     # Resolve the benchmark-wide method into the same {method: threshold} spec
@@ -1575,7 +1577,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     if primary_threshold is None:
         primary_threshold = _METHOD_DEFAULTS.get(method)
     if primary_threshold is None:
-        logging.warning(
+        logger.warning(
             f"regression_method='{method}' requires {threshold_attr} to be set; skipping detection"
         )
         primary_checks = {}

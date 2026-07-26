@@ -1,12 +1,12 @@
 """Tests for bencher/file_server.py"""
 
 import socket
+import tempfile
 import threading
 import time
-import tempfile
 import unittest
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 from bencher.file_server import create_server, run_file_server

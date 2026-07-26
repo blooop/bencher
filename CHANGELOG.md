@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Logging now goes through per-module loggers.** Every module logs via
+  `logging.getLogger(__name__)` instead of calling `logging.info()` and friends on the
+  root logger, so bencher's output can be configured and filtered per module (e.g.
+  `logging.getLogger("bencher.job").setLevel(logging.DEBUG)`) without touching root.
+  Records now carry their originating `bencher.*` logger name; anything that filtered
+  bencher output by root-handler side effects should key off the logger name instead.
+- **Dev toolchain: ruff 0.16.** Bumped the ruff pin to `<=0.16.0` (and the ruff-format
+  prek hook to `v0.16.0`), which expands ruff's default rule set from `E4/E7/E9/F` to
+  roughly 413 rules. Lint debt surfaced by the wider defaults is fixed; `DTZ001`/`DTZ005`
+  (naive datetimes) and `RUF023` (unsorted `__slots__`) are ignored in `ruff.toml` with
+  rationale — the `over_time` axis is a timezone-naive `datetime64` coordinate, and
+  `__slots__` order feeds `hash_persistent()`. The formatter is scoped away from markdown,
+  which 0.16 newly formats. Example generation now runs `ruff check --fix-only` alongside
+  `ruff format`, so regenerated examples stay lint-clean. No runtime behavior change.
+
 ### Added
 - **Plot-selection signature enrichment** (A2 Phase S1): `PltCntCfg` gains additive, cheaply-computed facts alongside the existing counts — `has_time`/`time_steps` (temporal axis presence and length), `result_kinds` (result-variable name → coarse serializable kind, via the new `result_kind` / `RESULT_KIND_ORDER` in `bencher.variables.results`), `cat_levels` (levels per categorical input), and `samples_per_point` (min repeat count actually present at the latest time step, missing-sentinel-aware per result type, vs the configured `repeats`). `generate_plt_cnt_cfg` takes an optional dataset for the data-derived facts, `PltCntCfg.__str__` includes the new fields, and the aggregation plotting path carries them through. No selection behavior changes.
 

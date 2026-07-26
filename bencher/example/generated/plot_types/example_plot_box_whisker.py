@@ -1,9 +1,9 @@
 """Auto-generated example: Plot Type: Box Whisker."""
 
-from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
-import bencher as bn
-
 import random
+
+import bencher as bn
+from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
 
 
 class JitterDemo(bn.ParametrizedSweep):
@@ -25,7 +25,7 @@ def example_plot_box_whisker(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Plot Type: Box Whisker."""
     bench = JitterDemo().to_bench(run_cfg)
     res = bench.plot_sweep(
-        input_vars=["backend"], result_vars=["distance"], const_vars=dict(noise_scale=0.15)
+        input_vars=["backend"], result_vars=["distance"], const_vars={"noise_scale": 0.15}
     )
     bench.report.append(res.to(BoxWhiskerResult))
 

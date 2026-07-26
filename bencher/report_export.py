@@ -34,7 +34,7 @@ from bencher.regression import (
     _finite_or_none,
     detect_regressions,
 )
-from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
+from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
 
 if TYPE_CHECKING:
     from bencher.results.bench_result import BenchResult

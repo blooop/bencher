@@ -10,8 +10,8 @@ class TimeseriesCollector(bn.ParametrizedSweep):
     result_ds = bn.ResultDataSet(doc="Collected time-series dataset")
 
     def benchmark(self):
-        import xarray as xr
         import numpy as np
+        import xarray as xr
 
         n = int(self.duration * 10)
         t = np.linspace(0, self.duration, n)

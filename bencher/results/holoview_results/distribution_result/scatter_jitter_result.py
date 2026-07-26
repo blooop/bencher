@@ -1,16 +1,17 @@
 from __future__ import annotations
-from typing import Any
-import panel as pn
-import holoviews as hv
-from param import Parameter
-import xarray as xr
 
+from typing import Any
+
+import holoviews as hv
+import panel as pn
+import xarray as xr
+from param import Parameter
+
+from bencher.plotting.plot_filter import VarRange
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )
-
-from bencher.results.bench_result_base import ReduceType
-from bencher.plotting.plot_filter import VarRange
 from bencher.variables.results import ResultFloat
 
 

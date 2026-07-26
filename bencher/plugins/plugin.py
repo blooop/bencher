@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import panel as pn
 
@@ -53,9 +54,9 @@ def plot_plugin(
     *,
     name: str,
     backend: str = "user",
-    match: Optional[PlotFilter] = None,
+    match: PlotFilter | None = None,
     priority: int = 0,
-    requires: Optional[frozenset[str] | set[str] | tuple[str, ...]] = None,
+    requires: frozenset[str] | set[str] | tuple[str, ...] | None = None,
     register: bool = True,
     auto: bool = True,
 ) -> Callable[[Callable[[BenchData], pn.viewable.Viewable]], _FunctionPlugin]:

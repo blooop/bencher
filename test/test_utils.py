@@ -1,18 +1,20 @@
-import bencher as bn
 import unittest
+from functools import partial
+
+import xarray as xr
+
+import bencher as bn
 from bencher.utils import (
-    get_nearest_coords,
-    capitalise_words,
-    int_to_col,
-    get_nearest_coords1D,
     callable_name,
+    capitalise_words,
+    get_nearest_coords,
+    get_nearest_coords1D,
+    int_to_col,
     lerp,
     listify,
-    tabs_in_markdown,
     mult_tuple,
+    tabs_in_markdown,
 )
-from functools import partial
-import xarray as xr
 
 
 class ExampleClass(bn.ParametrizedSweep):
@@ -157,7 +159,7 @@ class TestBencherUtils(unittest.TestCase):
         obj = "a"
         self.assertEqual([obj], listify(obj))
         self.assertEqual([obj], listify([obj]))
-        self.assertEqual([obj], listify((obj)))
+        self.assertEqual([obj], listify(obj))
         self.assertEqual(None, listify(None))
 
     def test_converts_single_tab_to_nbsp(self):

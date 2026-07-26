@@ -1,9 +1,10 @@
 """Auto-generated example: 2 Float, 0 Categorical (over time)."""
 
-import random
 import math
-import bencher as bn
+import random
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class CompressionBench(bn.ParametrizedSweep):

@@ -14,10 +14,10 @@ from bencher.cache_management import (
     CacheDirStats,
     CacheStats,
     cache_stats,
-    clear_all,
-    clear_media,
     clean_orphaned_media,
     cleanup_job_media,
+    clear_all,
+    clear_media,
     ensure_cache_version,
 )
 
@@ -269,7 +269,7 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
     def test_with_job_key_context(self):
         from unittest.mock import patch
 
-        from bencher.utils import gen_path, _current_job_key, _gen_path_counter
+        from bencher.utils import _current_job_key, _gen_path_counter, gen_path
 
         token = _current_job_key.set("test_key_123")
         counter_token = _gen_path_counter.set({})
@@ -292,7 +292,7 @@ class TestGenPathWithJobKey(_TempCacheMixin, unittest.TestCase):
         """Multiple gen_path calls with the same args should not collide."""
         from unittest.mock import patch
 
-        from bencher.utils import gen_path, _current_job_key, _gen_path_counter
+        from bencher.utils import _current_job_key, _gen_path_counter, gen_path
 
         token = _current_job_key.set("dup_key")
         counter_token = _gen_path_counter.set({})

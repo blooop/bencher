@@ -23,7 +23,7 @@ from strenum import StrEnum
 
 import bencher as bn
 from bencher.bench_cfg import BenchCfg
-from bencher.job import Job, run_job, FutureCache, Executors
+from bencher.job import Executors, FutureCache, Job, run_job
 from bencher.sweep_executor import worker_kwargs_wrapper
 from bencher.worker_job import WorkerJob
 
@@ -116,7 +116,7 @@ def _simple_worker(**kwargs) -> dict:
 
 def _run_job_in_subprocess(job_bytes: bytes) -> dict:
     """Unpickle a Job and run it inside a subprocess."""
-    job = pickle.loads(job_bytes)  # noqa: S301
+    job = pickle.loads(job_bytes)
     return run_job(job)
 
 

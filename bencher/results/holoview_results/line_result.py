@@ -1,16 +1,18 @@
 from __future__ import annotations
-import panel as pn
-from param import Parameter
-from functools import partial
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
-from bencher.results.bench_result_base import ReduceType
+from functools import partial
+
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
+import panel as pn
+import xarray as xr
+from param import Parameter
+
 from bencher.plotting.plot_filter import VarRange
-from bencher.utils import label_with_units
-from bencher.variables.results import SCALAR_RESULT_TYPES
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
+from bencher.utils import label_with_units
+from bencher.variables.results import SCALAR_RESULT_TYPES
 
 
 class LineResult(HoloviewResult):

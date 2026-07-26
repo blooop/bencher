@@ -1,6 +1,7 @@
-import bencher as bn
 import param
 import pytest
+
+import bencher as bn
 
 
 class DummyCfg(param.Parameterized):

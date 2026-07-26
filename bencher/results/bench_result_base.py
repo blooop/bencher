@@ -2,51 +2,48 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Literal, Callable
+from collections import defaultdict
+from collections.abc import Callable
+from copy import deepcopy
 from enum import Enum, auto
+from functools import partial
+from textwrap import wrap
+from typing import Any, Literal
+
+import holoviews as hv
 import numpy as np
+import pandas as pd
+import panel as pn
 import xarray as xr
 from param import Parameter
-import holoviews as hv
-from functools import partial
-import panel as pn
-from textwrap import wrap
 
-from bencher.utils import int_to_col, color_tuple_to_css, callable_name
-
-from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.variables.inputs import with_subsampling_divisions
-
-from bencher.variables.results import OptDir
-from copy import deepcopy
-from bencher.variables.results import ResultFloat, ResultBool
-from bencher.plotting.plot_filter import VarRange, PlotFilter
-from bencher.utils import listify
-
-from bencher.variables.results import (
-    ResultReference,
-    ResultDataSet,
-    ResultVideo,
-    ResultImage,
-    ResultRerun,
-    result_is_missing,
+from bencher.bench_cfg import BenchCfg
+from bencher.plotting.plot_filter import PlotFilter, VarRange
+from bencher.plotting.plt_cnt_cfg import PltCntCfg
+from bencher.results.composable_container.composable_container_base import (
+    ComposableContainerBase,
+    ComposeType,
+    PaneLayout,
 )
-
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
-from bencher.results.composable_container.composable_container_base import (
-    ComposeType,
-    ComposableContainerBase,
-    PaneLayout,
+from bencher.utils import callable_name, color_tuple_to_css, int_to_col, listify
+from bencher.variables.inputs import with_subsampling_divisions
+from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import (
+    OptDir,
+    ResultBool,
+    ResultDataSet,
+    ResultFloat,
+    ResultImage,
+    ResultReference,
+    ResultRerun,
+    ResultVideo,
+    result_is_missing,
 )
 
-from collections import defaultdict
-
-import pandas as pd
-
-from bencher.bench_cfg import BenchCfg
-from bencher.plotting.plt_cnt_cfg import PltCntCfg
+logger = logging.getLogger(__name__)
 
 # todo add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
@@ -346,7 +343,7 @@ class BenchResultBase:
                 # If some requested dims are missing, log an info for visibility
                 missing = [d for d in agg_over_dims if d not in dims_present]
                 if missing:
-                    logging.info(
+                    logger.info(
                         "Aggregation requested for dims %s but only found %s in dataset dims %s",
                         agg_over_dims,
                         dims_present,
@@ -382,7 +379,7 @@ class BenchResultBase:
                     # Fall back to mean if unknown string provided
                     ds_out = ds_out.mean(dim=dims_present, skipna=True)
             else:
-                logging.warning(
+                logger.warning(
                     "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
                     agg_over_dims,
                     list(ds_out.dims),
@@ -421,9 +418,9 @@ class BenchResultBase:
                 # use [()] to convert from a 0d numpy array to a scalar
                 output.append(da.coords[iv.name].values[()])
             else:
-                logging.warning(f"values size: {da.coords[iv.name].values.size}")
+                logger.warning(f"values size: {da.coords[iv.name].values.size}")
                 output.append(max(da.coords[iv.name].values[()]))
-            logging.info(f"Maximum value of {iv.name}: {output[-1]}")
+            logger.info(f"Maximum value of {iv.name}: {output[-1]}")
         return output
 
     def get_optimal_value_indices(self, result_var: ParametrizedSweep) -> xr.DataArray:
@@ -441,7 +438,7 @@ class BenchResultBase:
         else:
             opt_val = result_da.min()
         indices = result_da.where(result_da == opt_val, drop=True).squeeze()
-        logging.info(f"optimal value of {result_var.name}: {opt_val.values}")
+        logger.info(f"optimal value of {result_var.name}: {opt_val.values}")
         return indices
 
     def get_optimal_inputs(
@@ -473,10 +470,10 @@ class BenchResultBase:
                 # use [()] to convert from a 0d numpy array to a scalar
                 output.append((iv, da.coords[iv.name].values[()]))
             else:
-                logging.warning(f"values size: {da.coords[iv.name].values.size}")
+                logger.warning(f"values size: {da.coords[iv.name].values.size}")
                 output.append((iv, max(da.coords[iv.name].values[()])))
 
-            logging.info(f"Maximum value of {iv.name}: {output[-1][1]}")
+            logger.info(f"Maximum value of {iv.name}: {output[-1][1]}")
         if as_dict:
             return dict(output)
         return output
@@ -507,8 +504,7 @@ class BenchResultBase:
 
         if isinstance(dataset, xr.DataArray):
             tit = [dataset.name]
-            for d in dataset.dims:
-                tit.append(d)
+            tit.extend(dataset.dims)
         else:
             tit = [result_var.name]
             tit.extend(list(dataset.sizes))
@@ -551,7 +547,7 @@ class BenchResultBase:
         for a in zip(*panel_list):
             row = pn.Row(**container_args)
             row.append(a[0][0])
-            for a1 in range(0, len(a)):
+            for a1 in range(len(a)):
                 row.append(a[a1][1])
             out.append(row)
         return out
@@ -812,7 +808,7 @@ class BenchResultBase:
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel:
-        dims = list(d for d in dataset.sizes)
+        dims = list(dataset.sizes)
 
         # over_time is handled by hvplot's groupby widget, not pane recursion
         if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
@@ -897,6 +893,7 @@ class BenchResultBase:
         callback to avoid Panel's ImportedStyleSheet document-ownership errors.
         """
         import base64
+
         from bokeh.models import CustomJS, Div
         from bokeh.models.widgets import Slider as BokehSlider
 
@@ -949,7 +946,7 @@ class BenchResultBase:
             title=f"over_time: {labels[default_idx]}",
         )
         callback = CustomJS(
-            args=dict(div=div, html_list=html_list, labels=labels, slider=bokeh_slider),
+            args={"div": div, "html_list": html_list, "labels": labels, "slider": bokeh_slider},
             code=(
                 "div.text = html_list[slider.value];"
                 " slider.title = 'over_time: ' + labels[slider.value];"
@@ -1007,12 +1004,12 @@ class BenchResultBase:
         # todo this is really horrible, need to improve
         dim = None
         if isinstance(da_ds, xr.Dataset):
-            dim = list(da_ds.keys())[0]
+            dim = next(iter(da_ds.keys()))
             da = da_ds[dim]
         else:
             da = da_ds
 
-        for k in da.coords.keys():
+        for k in da.coords:
             dim = k
             break
         if dim is None:

@@ -1,9 +1,11 @@
 """Auto-generated example: ResultImage: Progressive Multi-Parameter Sweep."""
 
-import bencher as bn
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):

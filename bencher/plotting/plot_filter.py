@@ -1,8 +1,13 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from bencher.plotting.plt_cnt_cfg import PltCntCfg
+
 import logging
+from dataclasses import dataclass, field
+
 import panel as pn
+
+from bencher.plotting.plt_cnt_cfg import PltCntCfg
+
+logger = logging.getLogger(__name__)
 
 
 class VarRange:
@@ -82,7 +87,7 @@ class PlotFilter:
         The default ``PlotFilter()`` ranges are restrictive (``VarRange()`` matches
         nothing), which suits plots that opt in to specific shapes. Plugins that do
         their own internal shape handling should use this instead."""
-        anything = lambda: VarRange(0, None)  # noqa: E731
+        anything = lambda: VarRange(0, None)
         return cls(
             float_range=anything(),
             cat_range=anything(),
@@ -156,7 +161,7 @@ class PlotMatchesResult:
         self.plt_cnt_cfg: PltCntCfg = plt_cnt_cfg
 
         # if self.plt_cnt_cfg.print_debug:
-        logging.info(self.matches_info)
+        logger.info(self.matches_info)
 
     def to_panel(self, **kwargs) -> pn.pane.Markdown | None:
         """Convert match information to a Panel Markdown pane if debug mode is enabled.

@@ -1,27 +1,25 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import param
 import xarray as xr
 
 from bencher.bench_cfg import BenchCfg
+from bencher.variables.inputs import (
+    BoolSweep,
+    EnumSweep,
+    FloatSweep,
+    IntSweep,
+    StringSweep,
+    YamlSweep,
+)
 from bencher.variables.results import (
     PANEL_TYPES,
     result_kind,
     result_missing_fill,
 )
-
-from bencher.variables.inputs import (
-    IntSweep,
-    FloatSweep,
-    BoolSweep,
-    EnumSweep,
-    StringSweep,
-    YamlSweep,
-)
-from bencher.variables.time import TimeSnapshot, TimeEvent
+from bencher.variables.time import TimeEvent, TimeSnapshot
 
 __all__ = ["PltCntCfg", "result_kind"]
 
@@ -72,7 +70,7 @@ class PltCntCfg(param.Parameterized):
     @staticmethod
     def generate_plt_cnt_cfg(
         bench_cfg: BenchCfg,
-        ds: Optional[xr.Dataset] = None,
+        ds: xr.Dataset | None = None,
     ) -> PltCntCfg:
         """Given a BenchCfg work out how many float and cat variables there are and store in a PltCntCfg class
 

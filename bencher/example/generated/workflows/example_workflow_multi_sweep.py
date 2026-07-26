@@ -1,6 +1,7 @@
 """Auto-generated example: Multiple Sweeps — progressive report with tabs."""
 
 import math
+
 import bencher as bn
 
 
@@ -47,7 +48,7 @@ def example_workflow_multi_sweep(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
         title="Storage Backend Comparison",
         input_vars=["storage"],
         result_vars=["latency"],
-        const_vars=dict(batch_size=500, parallelism=4),
+        const_vars={"batch_size": 500, "parallelism": 4},
         description="Compare latency across storage backends at a fixed configuration. "
         "const_vars pins batch_size and parallelism so only storage varies.",
     )

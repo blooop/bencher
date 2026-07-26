@@ -2,6 +2,7 @@
 
 import math
 import os
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -23,7 +24,6 @@ from bencher.regression import (
     render_regression_png,
 )
 from bencher.variables.results import OptDir
-
 
 # ── detect_percentage ──────────────────────────────────────────────────────
 
@@ -713,17 +713,17 @@ class TestMethodCellsPublic:
 
     @staticmethod
     def _result(method: str, direction: str, **overrides) -> RegressionResult:
-        defaults = dict(
-            variable="m",
-            method=method,
-            regressed=True,
-            current_value=110.0,
-            baseline_value=100.0,
-            change_percent=10.0,
-            threshold=5.0,
-            direction=direction,
-            details="test",
-        )
+        defaults = {
+            "variable": "m",
+            "method": method,
+            "regressed": True,
+            "current_value": 110.0,
+            "baseline_value": 100.0,
+            "change_percent": 10.0,
+            "threshold": 5.0,
+            "direction": direction,
+            "details": "test",
+        }
         defaults.update(overrides)
         return RegressionResult(**defaults)
 
@@ -877,7 +877,7 @@ class TestDetectRegressions:
         ds = xr.Dataset({"x": (["repeat"], [1.0, 2.0])})
 
         class FakeCfg:
-            result_vars = []
+            result_vars: ClassVar[list] = []
 
         class FakeRun:
             regression_method = "percentage"
@@ -1856,7 +1856,7 @@ class _StringTimeBench(bn.ParametrizedSweep):
 
     endpoint = bn.StringSweep(["a", "b", "c"], doc="endpoint")
     latency = bn.ResultFloat(units="ms", direction=bn.OptDir.minimize)
-    _base = {"a": 10.0, "b": 20.0, "c": 30.0}
+    _base: ClassVar[dict[str, float]] = {"a": 10.0, "b": 20.0, "c": 30.0}
 
     def benchmark(self):
         import random

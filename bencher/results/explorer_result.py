@@ -1,13 +1,14 @@
 from __future__ import annotations
+
+import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
 
 from bencher.results.pane_result import PaneResult
 
 
 class ExplorerResult(PaneResult):
-    def to_plot(self, **kwargs) -> pn.pane.Pane:  # noqa pylint: disable=unused-argument
+    def to_plot(self, **kwargs) -> pn.pane.Pane:  # pylint: disable=unused-argument
         """Produces a hvplot explorer instance to explore the generated dataset
         see: https://hvplot.holoviz.org/getting_started/explorer.html
 

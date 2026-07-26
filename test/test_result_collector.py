@@ -9,11 +9,12 @@ from unittest import mock
 
 import numpy as np
 import xarray as xr
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
+from bencher.bench_cfg import BenchCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.result_collector import ResultCollector, set_xarray_multidim
-from bencher.bench_cfg import BenchCfg
 
 
 class TestResultCollector(unittest.TestCase):
@@ -521,6 +522,7 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
     def test_per_variable_deletes_media_files(self):
         """Nulling a media entry should delete the referenced file from disk."""
         import os
+
         from bencher.variables.results import ResultImage
 
         # Create real temp files
@@ -745,15 +747,15 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c = self.collector.get_history_cache()
         c[unique_hash] = dataset
 
-        with mock.patch.object(
-            type(c),
-            "__getitem__",
-            side_effect=AttributeError("'List' object has no attribute 'class_'"),
+        with (
+            mock.patch.object(
+                type(c),
+                "__getitem__",
+                side_effect=AttributeError("'List' object has no attribute 'class_'"),
+            ),
+            self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs,
         ):
-            with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-                result = self.collector.load_history_cache(
-                    dataset, unique_hash, clear_history=False
-                )
+            result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
@@ -769,15 +771,15 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c = self.collector.get_history_cache()
         c[unique_hash] = dataset
 
-        with mock.patch.object(
-            type(c),
-            "__getitem__",
-            side_effect=ModuleNotFoundError("No module named 'old_dep'"),
+        with (
+            mock.patch.object(
+                type(c),
+                "__getitem__",
+                side_effect=ModuleNotFoundError("No module named 'old_dep'"),
+            ),
+            self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs,
         ):
-            with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-                result = self.collector.load_history_cache(
-                    dataset, unique_hash, clear_history=False
-                )
+            result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)

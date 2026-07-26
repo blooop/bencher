@@ -1,13 +1,15 @@
+from typing import ClassVar
+
+import numpy as np
 import pandas as pd
 import xarray as xr
-import numpy as np
 
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 
 
 class _DummyBenchCfg:
     # Minimal stub to satisfy BenchResultBase.__init__
-    result_hmaps = []
+    result_hmaps: ClassVar[list] = []
 
 
 class _Var:

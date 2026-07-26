@@ -42,13 +42,13 @@ def example_const_vars_categorical(run_cfg: bn.BenchRunCfg | None = None) -> bn.
         title="Sweep cpu_load x backend, with cache_enabled=True",
         input_vars=["cpu_load", "backend"],
         result_vars=["latency"],
-        const_vars=dict(cache_enabled=True),
+        const_vars={"cache_enabled": True},
     )
     bench.plot_sweep(
         title="Sweep cpu_load x backend, with cache_enabled=False",
         input_vars=["cpu_load", "backend"],
         result_vars=["latency"],
-        const_vars=dict(cache_enabled=False),
+        const_vars={"cache_enabled": False},
     )
 
     return bench

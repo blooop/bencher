@@ -7,6 +7,8 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class PhaseTime:
@@ -88,4 +90,4 @@ class PerfTracker:
 
     def log_summary(self) -> None:
         """Log the report summary at INFO level."""
-        logging.info(self.report().summary())
+        logger.info(self.report().summary())

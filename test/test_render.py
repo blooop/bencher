@@ -4,11 +4,13 @@ import gc
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
-from bencher import Bench, BenchRunCfg, render_report, save_result, load_result
-from bencher.render import main as render_main, _prog
+from bencher import Bench, BenchRunCfg, load_result, render_report, save_result
 from bencher.example.benchmark_data import ExampleBenchCfg
+from bencher.render import _prog
+from bencher.render import main as render_main
 
 
 def _count_plot_objects() -> int:
@@ -129,11 +131,11 @@ class TestCollectParity(unittest.TestCase):
     defaults to False), so the two paths must produce byte-identical datasets.
     """
 
-    PARITY_KWARGS = dict(
-        input_vars=[ExampleBenchCfg.param.theta],
-        result_vars=[ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
-        title="collect_parity",
-    )
+    PARITY_KWARGS: ClassVar[dict] = {
+        "input_vars": [ExampleBenchCfg.param.theta],
+        "result_vars": [ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos],
+        "title": "collect_parity",
+    }
 
     def test_collect_dataset_matches_plot_sweep(self):
         import xarray as xr
@@ -297,8 +299,8 @@ class TestSaveLoadRender(unittest.TestCase):
     def test_cli_compare_value_error_surfaced(self):
         """A ValueError from compare (e.g. no shared metrics) must be printed to
         stderr so the user sees why, not only logged generically."""
-        import io
         import contextlib
+        import io
 
         bench_a, bench_b = _make_bench(), _make_bench()
         with tempfile.TemporaryDirectory() as tmp:

@@ -4,8 +4,8 @@
 
 import math
 
-import pytest
 import panel as pn
+import pytest
 
 import bencher as bn
 

@@ -7,16 +7,19 @@ import logging
 import signal
 import sys
 import time
+from collections.abc import Callable
 from contextlib import AbstractContextManager
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
+from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
-    from bencher.bencher import Bench
     from bencher.bench_report import GithubPagesCfg, Publisher
+    from bencher.bencher import Bench
 
 # Keep references to BenchRunners with active servers so that __del__ doesn't
 # kill the panel servers while the process is still running.
@@ -54,7 +57,7 @@ def _sigterm_handler(signum, frame) -> None:
 
 def _install_sigterm_handler() -> None:
     """Install SIGTERM handler lazily, only when servers are actually running."""
-    global _sigterm_installed, _prev_sigterm_handler  # noqa: PLW0603  # pylint: disable=global-statement
+    global _sigterm_installed, _prev_sigterm_handler  # pylint: disable=global-statement
     if not _sigterm_installed:
         _sigterm_installed = True
         _prev_sigterm_handler = signal.getsignal(signal.SIGTERM)
@@ -163,7 +166,7 @@ def run(
         instance = target
         bench = instance.to_bench()
 
-        def _sweep_fn(run_cfg: BenchRunCfg | None = None) -> "Bench":
+        def _sweep_fn(run_cfg: BenchRunCfg | None = None) -> Bench:
             bench.run_cfg = run_cfg
             bench.report.clear()
             bench.plot_sweep()
@@ -177,7 +180,7 @@ def run(
     if optimise > 0:
         _original_target = target
 
-        def _with_optimise(run_cfg: BenchRunCfg | None = None) -> "Bench":
+        def _with_optimise(run_cfg: BenchRunCfg | None = None) -> Bench:
             import panel as _pn
 
             bench = _original_target(run_cfg)
@@ -195,7 +198,7 @@ def run(
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
                     except Exception as e:  # pylint: disable=broad-except
-                        logging.exception(e)
+                        logger.exception("Optuna plot generation failed")
                         bench.report.append(
                             _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
                         )
@@ -206,19 +209,19 @@ def run(
 
     # Case 1: Callable — wrap in BenchRunner
     br = BenchRunner(target, publisher=publisher)
-    _run_kwargs = dict(
-        subsampling_divisions=subsampling_divisions,
-        repeats=repeats,
-        max_subsampling_divisions=max_subsampling_divisions,
-        max_repeats=max_repeats,
-        run_cfg=run_cfg,
-        save=save,
-        publish=publish,
-        grouped=grouped,
-        cache_samples=cache_samples,
-        over_time=over_time,
-        backend=backend,
-    )
+    _run_kwargs = {
+        "subsampling_divisions": subsampling_divisions,
+        "repeats": repeats,
+        "max_subsampling_divisions": max_subsampling_divisions,
+        "max_repeats": max_repeats,
+        "run_cfg": run_cfg,
+        "save": save,
+        "publish": publish,
+        "grouped": grouped,
+        "cache_samples": cache_samples,
+        "over_time": over_time,
+        "backend": backend,
+    }
 
     try:
         if sampling_context is None:
@@ -238,7 +241,7 @@ def run(
             try:
                 bench_to_close.close()
             except Exception:  # pylint: disable=broad-exception-caught
-                logging.exception("Error closing bench")
+                logger.exception("Error closing bench")
 
     if show_mode is ShowMode.LIVE and br.servers:
         # Always register so atexit/SIGTERM can clean up as a safety net.

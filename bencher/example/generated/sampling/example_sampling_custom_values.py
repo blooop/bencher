@@ -1,6 +1,7 @@
 """Auto-generated example: Sampling: Custom Values."""
 
 import math
+
 import bencher as bn
 
 

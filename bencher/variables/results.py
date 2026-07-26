@@ -31,14 +31,17 @@ from __future__ import annotations
 import math
 import numbers
 import warnings
+from collections.abc import Callable
 from enum import auto
-from typing import Callable, Any
 from functools import partial
+from typing import Any
+
+import holoviews as hv
 import panel as pn
 import param
 from param import Number
 from strenum import StrEnum
-import holoviews as hv
+
 from bencher.utils import hash_sha1
 
 # from bencher.variables.parametrised_sweep import ParametrizedSweep

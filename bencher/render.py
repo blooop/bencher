@@ -35,8 +35,8 @@ import pickle
 import sys
 from pathlib import Path
 
-from bencher.results.bench_result import BenchResult
 from bencher.bench_report import BenchReport
+from bencher.results.bench_result import BenchResult
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +189,7 @@ def _load_or_fail(path: str, label: str) -> tuple[BenchResult | None, int]:
         return None, 2
     try:
         return load_result(path), 0
-    except Exception:  # noqa: BLE001  pylint: disable=broad-exception-caught
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Failed to load %s from %s", label, path)
         return None, 1
 
@@ -212,7 +212,7 @@ def _run_compare(argv: list[str]) -> int:
         print(f"compare failed: {exc}", file=sys.stderr)
         logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
         return 1
-    except Exception:  # noqa: BLE001  pylint: disable=broad-exception-caught
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Failed to compare %s vs %s", args.baseline, args.candidate)
         return 1
     print(out)
@@ -250,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
             from bencher.report_export import result_to_json
 
             result_to_json(bench_res, args.json_path)
-    except Exception:  # noqa: BLE001  pylint: disable=broad-exception-caught
+    except Exception:  # pylint: disable=broad-exception-caught
         # Top-level CLI guard: convert any render failure into a clean exit code.
         logger.exception("Failed to render report from %s", args.result_path)
         return 1

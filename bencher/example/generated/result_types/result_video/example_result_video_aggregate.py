@@ -1,9 +1,11 @@
 """Auto-generated example: ResultVideo: Aggregate with Mixed Video and Image."""
 
-import bencher as bn
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):

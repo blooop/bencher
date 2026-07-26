@@ -10,7 +10,7 @@ def example_stats_distributions(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
     bench.plot_sweep(
         input_vars=["wave", "variant"],
         result_vars=["distance", "sample_noise"],
-        const_vars=dict(noise_scale=0.3),
+        const_vars={"noise_scale": 0.3},
     )
 
     return bench

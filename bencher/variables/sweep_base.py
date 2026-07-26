@@ -1,13 +1,15 @@
 from __future__ import annotations
-from typing import Any
-from copy import deepcopy
-import warnings
 
+import warnings
+from copy import deepcopy
+from typing import Any
+
+import holoviews as hv
 import numpy as np
+import panel as pn
 import param
 from param import Parameterized
-import holoviews as hv
-import panel as pn
+
 from bencher.utils import hash_sha1
 
 # slots that are shared across all Sweep classes
@@ -57,9 +59,8 @@ def describe_variable(
 
     if value is not None:
         sampling_str.append(f"{indent}value: {value}")
-    if hasattr(v, "units"):
-        if v.units != "ul" and len(v.units) > 0:
-            sampling_str.append(f"{indent}units: [{v.units}]")
+    if hasattr(v, "units") and v.units != "ul" and len(v.units) > 0:
+        sampling_str.append(f"{indent}units: [{v.units}]")
     if v.doc is not None:
         sampling_str.append(f"{indent}docs: {v.doc}")
     for i in range(len(sampling_str)):
@@ -182,7 +183,7 @@ class SweepBase(param.Parameter):
             params["default"] = self.default
 
         if hasattr(self, "step"):
-            params["step"] = getattr(self, "step")
+            params["step"] = self.step
 
         # TODO investigate why this stopped working after a holoviews update
         # if hasattr(self, "units"):

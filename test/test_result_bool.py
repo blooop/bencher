@@ -6,32 +6,31 @@ producing valid plots for boolean benchmark data.
 
 import unittest
 from enum import auto
-from strenum import StrEnum
 
 import holoviews as hv
 import numpy as np
 from param import Number
+from strenum import StrEnum
 
 import bencher as bn
+from bencher.results.histogram_result import HistogramResult
 from bencher.results.holoview_results.bar_result import BarResult
-from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.curve_result import CurveResult
-from bencher.results.holoview_results.heatmap_result import HeatmapResult
-from bencher.results.holoview_results.surface_result import SurfaceResult
-from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
 from bencher.results.holoview_results.distribution_result.box_whisker_result import (
     BoxWhiskerResult,
 )
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
+from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
+from bencher.results.holoview_results.heatmap_result import HeatmapResult
+from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.scatter_result import ScatterResult
+from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.table_result import TableResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
-from bencher.results.histogram_result import HistogramResult
 from bencher.results.volume_result import VolumeResult
-from bencher.variables.results import ResultFloat, ResultBool
-
+from bencher.variables.results import ResultBool, ResultFloat
 
 # ---------------------------------------------------------------------------
 # Test fixture: ParametrizedSweep subclasses
@@ -360,7 +359,7 @@ class TestScatterResult(unittest.TestCase):
         # ScatterResult.to_plot doesn't accept result_var, just call it
         try:
             res.to(ScatterResult)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
             self.fail(f"ScatterResult raised {type(e).__name__}: {e}")
 
 
@@ -439,12 +438,12 @@ class TestBinomialSEWithMissingRepeats(unittest.TestCase):
         res = _run_sweep(BoolBenchAlternating, ["cat"], repeats=4)
         # Inject a known pattern with one missing (NaN) repeat into a cell so the
         # valid count (3) differs from the repeat-dim size (4).
-        res.ds["out"][dict(cat=0)] = np.array([1.0, 0.0, 1.0, np.nan])
+        res.ds["out"][{"cat": 0}] = np.array([1.0, 0.0, 1.0, np.nan])
         res._to_dataset_cache.clear()  # pylint: disable=protected-access
 
         ds = res.to_dataset(reduce=bn.ReduceType.REDUCE)
-        p = float(ds["out"][dict(cat=0)])
-        se = float(ds["out_std"][dict(cat=0)])
+        p = float(ds["out"][{"cat": 0}])
+        se = float(ds["out_std"][{"cat": 0}])
 
         self.assertAlmostEqual(p, 2.0 / 3.0)  # skipna mean over 3 valid samples
         n_valid = 3
@@ -569,6 +568,7 @@ class TestBinomialSE(unittest.TestCase):
 def test_result_var_deprecation_warning():
     """ResultVar still works but emits a DeprecationWarning."""
     import warnings
+
     from bencher.variables.results import ResultVar  # pylint: disable=reimported
 
     with warnings.catch_warnings(record=True) as w:

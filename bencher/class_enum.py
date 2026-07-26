@@ -1,10 +1,12 @@
 from __future__ import annotations
-from strenum import StrEnum
-from typing import Any, TypeVar
+
 import importlib
 from abc import abstractmethod
 from dataclasses import dataclass
 from enum import auto
+from typing import Any, TypeVar
+
+from strenum import StrEnum
 
 T = TypeVar("T")  # Generic type for return value of to_class
 

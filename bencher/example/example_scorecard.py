@@ -30,6 +30,8 @@ from pathlib import Path
 
 from bencher.scorecard import Chrome, ReportLayout, ScorecardConfig, generate_scorecard
 
+logger = logging.getLogger(__name__)
+
 _N_EVENTS = 10
 _REPEATS = 8
 _SEED = 0
@@ -371,5 +373,5 @@ if __name__ == "__main__":
     # opens directly with no server needed (mirrors bencher's ShowMode.HTML path).
     try:
         webbrowser.open(path.resolve().as_uri())
-    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        logging.exception("Failed to open browser for %s", path)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("Failed to open browser for %s", path)

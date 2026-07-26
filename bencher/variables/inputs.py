@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import logging
+import warnings
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
 from typing import Any
-import warnings
 
 import numpy as np
-from param import Integer, Number, Selector
 import yaml
-from bencher.variables.sweep_base import SweepBase, shared_slots, SUBSAMPLING_DIVISIONS_SAMPLES
+from param import Integer, Number, Selector
+
+from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, SweepBase, shared_slots
+
+logger = logging.getLogger(__name__)
 
 
 # Sentinel value used to indicate that the actual selectable values for a SweepSelector
@@ -188,9 +192,7 @@ class SweepSelector(Selector, SweepBase):
         try:
             owner_param.update(**{self.name: candidate_default})
         except (ValueError, TypeError) as e:  # pragma: no cover - param validation edge case
-            import logging
-
-            logging.warning(
+            logger.warning(
                 "Failed to update param '%s' with value %r: %s", self.name, candidate_default, e
             )
 
@@ -267,7 +269,7 @@ class StringSweep(SweepSelector):
         units: str = "ul",
         doc: str | None = None,
         **params,
-    ) -> "StringSweep":
+    ) -> StringSweep:
         """Create a StringSweep intended for later population.
 
         Parameters
@@ -361,7 +363,7 @@ class YamlSelection(str):
     def __repr__(self) -> str:
         return f"YamlSelection(key={self.key()!r}, value={self.value()!r})"
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, YamlSelection):
             return (self.key(), self.value()) == (other.key(), other.value())
         if isinstance(other, str):
@@ -418,7 +420,9 @@ class YamlSweep(SweepSelector):
 
         entries = self._load_yaml(path)
         if not isinstance(entries, Mapping):
-            raise ValueError(
+            # ValueError, not TypeError: this is the documented contract exercised by
+            # test_yaml_sweep_requires_mapping, and matches the other YamlSweep raises.
+            raise ValueError(  # noqa: TRY004
                 "YamlSweep requires the YAML file to contain a mapping at the top level"
             )
 
@@ -566,14 +570,16 @@ class IntSweep(Integer, SweepBase):
             return
 
         if not isinstance(value, (int, np.integer)):
-            raise ValueError(
-                "Integer parameter %r must be an integer, not type %r." % (self.name, type(value))
+            # ValueError, not TypeError: mirrors param.Integer._validate_value so that
+            # IntSweep validation stays indistinguishable from the param base class.
+            raise ValueError(  # noqa: TRY004
+                f"Integer parameter {self.name!r} must be an integer, not type {type(value)!r}."
             )
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
     def _validate_step(self, val, step):
         if step is not None and not isinstance(step, (int, np.integer)):
-            raise ValueError("Step can only be None or an integer value, not type %r" % type(step))
+            raise ValueError(f"Step can only be None or an integer value, not type {type(step)!r}")
 
 
 class FloatSweep(Number, SweepBase):

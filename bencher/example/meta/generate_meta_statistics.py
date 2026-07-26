@@ -37,7 +37,7 @@ class MetaStatistics(MetaGeneratorBase):
             benchable_module="bencher.example.meta.example_meta",
             input_vars='["float1"]',
             result_vars='["distance", "sample_noise"]',
-            const_vars="dict(noise_scale=0.3)",
+            const_vars='{"noise_scale": 0.3}',
             run_kwargs={"subsampling_divisions": 4, "repeats": 10},
         )
 
@@ -52,7 +52,7 @@ class MetaStatistics(MetaGeneratorBase):
             benchable_module="bencher.example.meta.example_meta",
             input_vars='["wave", "variant"]',
             result_vars='["distance", "sample_noise"]',
-            const_vars="dict(noise_scale=0.3)",
+            const_vars='{"noise_scale": 0.3}',
             run_kwargs={"subsampling_divisions": 3, "repeats": 20},
         )
 
@@ -62,11 +62,8 @@ class MetaStatistics(MetaGeneratorBase):
         function_name = "example_stats_repeats_comparison"
         filename = function_name
 
-        imports = "\n".join(
-            [
-                "import bencher as bn",
-                "from bencher.example.meta.example_meta import BenchableObject",
-            ]
+        imports = (
+            "import bencher as bn\nfrom bencher.example.meta.example_meta import BenchableObject"
         )
 
         body = (
@@ -80,7 +77,7 @@ class MetaStatistics(MetaGeneratorBase):
             '        title=f"{n_repeats} repeat(s)",\n'
             '        input_vars=["wave"],\n'
             '        result_vars=["distance"],\n'
-            "        const_vars=dict(noise_scale=noise),\n"
+            '        const_vars={"noise_scale": noise},\n'
             "        run_cfg=sweep_cfg,\n"
             "    )\n"
         )

@@ -13,7 +13,6 @@ from pathlib import Path
 
 import bencher as bn
 
-
 GENERATED_DIR = Path("bencher/example/generated")
 
 
@@ -113,32 +112,31 @@ def generate_python_files():
 
     from bencher.example.meta.generate_meta import example_meta
     from bencher.example.meta.generate_meta_advanced import example_meta_advanced
-    from bencher.example.meta.generate_meta_bool_plot_types import example_meta_bool_plot_types
-    from bencher.example.meta.generate_meta_composable import example_meta_composable
-    from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
-    from bencher.example.meta.generate_meta_image_video import example_meta_image_video
-    from bencher.example.meta.generate_meta_optimization import (
-        example_meta_optimization,
-        example_meta_optimization_over_time,
-        example_meta_optimization_aggregated,
-    )
-    from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
-    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
-    from bencher.example.meta.generate_meta_levels import example_meta_levels
-    from bencher.example.meta.generate_meta_sampling import example_meta_sampling
-    from bencher.example.meta.generate_meta_statistics import example_meta_statistics
-    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
-    from bencher.example.meta.generate_meta_workflows import example_meta_workflows
-
-    from bencher.example.meta.generate_meta_regression import example_meta_regression
-    from bencher.example.meta.generate_meta_yaml import example_meta_yaml
-    from bencher.example.meta.generate_meta_performance import example_meta_performance
-    from bencher.example.meta.generate_meta_publish import example_meta_publish
     from bencher.example.meta.generate_meta_aggregation import example_meta_aggregation
+    from bencher.example.meta.generate_meta_bool_plot_types import example_meta_bool_plot_types
     from bencher.example.meta.generate_meta_cartesian_animation import (
         example_meta_cartesian_animation,
     )
+    from bencher.example.meta.generate_meta_composable import example_meta_composable
+    from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_container_tabs import example_meta_container_tabs
+    from bencher.example.meta.generate_meta_image_video import example_meta_image_video
+    from bencher.example.meta.generate_meta_levels import example_meta_levels
+    from bencher.example.meta.generate_meta_optimization import (
+        example_meta_optimization,
+        example_meta_optimization_aggregated,
+        example_meta_optimization_over_time,
+    )
+    from bencher.example.meta.generate_meta_performance import example_meta_performance
+    from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
+    from bencher.example.meta.generate_meta_publish import example_meta_publish
+    from bencher.example.meta.generate_meta_regression import example_meta_regression
+    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
+    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
+    from bencher.example.meta.generate_meta_sampling import example_meta_sampling
+    from bencher.example.meta.generate_meta_statistics import example_meta_statistics
+    from bencher.example.meta.generate_meta_workflows import example_meta_workflows
+    from bencher.example.meta.generate_meta_yaml import example_meta_yaml
 
     example_meta()
     example_meta_result_types()
@@ -174,8 +172,14 @@ def generate_python_files():
     if not init.exists():
         init.touch()
 
-    # Format all generated files in a single pass
+    # Lint-fix and format all generated files in a single pass. The autofix pass keeps
+    # generated output in sync with ruff's rules (notably import sorting) so generators
+    # can emit imports in any order without leaving `pixi run lint` dirty.
     if shutil.which("ruff"):
+        subprocess.run(
+            ["ruff", "check", "--fix-only", "--quiet", str(GENERATED_DIR)],
+            check=False,
+        )
         subprocess.run(["ruff", "format", str(GENERATED_DIR)], check=False)
 
 
@@ -252,7 +256,7 @@ def run_example_and_save(
             _take_thumbnail(Path(report_path), thumb_path, page=page)
             thumb_elapsed = time.perf_counter() - t_thumb_start
             print(f"  Saved thumbnail to {thumb_path} ({thumb_elapsed:.1f}s)")
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
             thumb_elapsed = time.perf_counter() - t_thumb_start
             print(f"  WARNING: Failed to save thumbnail for {stem}: {e}")
 
@@ -521,8 +525,10 @@ def generate_gallery_page(examples_metadata: list[dict], docs_dir: Path):
         "Gallery Overview",
         "================",
         "",
-        "All examples at a glance. Click any card to see the full example"
-        " with source code and interactive report.",
+        (
+            "All examples at a glance. Click any card to see the full example"
+            " with source code and interactive report."
+        ),
         "",
         ".. raw:: html",
         "",
@@ -632,7 +638,7 @@ def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = Fa
             browser = pw_context.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1200, "height": 900})
             print("Started headless Chromium for thumbnail screenshots")
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
             skip_thumbnails = True
             print(f"WARNING: Could not start browser for thumbnails: {e}")
 

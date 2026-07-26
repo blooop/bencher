@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from typing import Callable, Protocol, runtime_checkable
+import inspect
 import logging
 import warnings
 import webbrowser
-import inspect
+from collections.abc import Callable
+from copy import deepcopy
 from datetime import datetime
-from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
+from typing import Protocol, runtime_checkable
+
+from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
+from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
+from bencher.bencher import Bench
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.bencher import Bench
-from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
-from copy import deepcopy
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_cache_samples(cache_samples, kwargs, stacklevel=2):
@@ -116,9 +120,9 @@ class BenchRunner:
         Returns:
             str: A unique name based on timestamp, object id, and random value
         """
-        import time
         import hashlib
         import random
+        import time
 
         # Create a unique name based on timestamp, object id, and random value
         timestamp = int(time.time() * 1000)  # millisecond precision
@@ -203,7 +207,7 @@ class BenchRunner:
             report=report,
         )
 
-    def add(self, bench_fn: Benchable) -> "BenchRunner":
+    def add(self, bench_fn: Benchable) -> BenchRunner:
         """Add a benchmark function to be executed by this runner.
 
         Args:
@@ -404,7 +408,7 @@ class BenchRunner:
                 or final_max_repeats > min_repeats
             )
             if is_progressive:
-                logging.info(
+                logger.info(
                     "Automatically enabling cache_samples for progressive run "
                     "(max_subsampling_divisions=%s, max_repeats=%s). Pass cache_samples=False to disable.",
                     final_max_subsampling_divisions,
@@ -430,7 +434,7 @@ class BenchRunner:
                     run_lvl = deepcopy(run_cfg)
                     run_lvl.subsampling_divisions = lvl
                     run_lvl.repeats = r
-                    logging.info(
+                    logger.info(
                         f"Running {bch_fn} at subsampling_divisions: {lvl} with repeats:{r}"
                     )
                     res, active_report = self._execute_bench_fn(bch_fn, run_lvl, report_level)
@@ -511,9 +515,9 @@ class BenchRunner:
                 try:
                     published_url = self.publisher.publish(report)
                     if published_url:
-                        logging.info("Benchmark report published at %s", published_url)
+                        logger.info("Benchmark report published at %s", published_url)
                 except Exception:  # pylint: disable=broad-except
-                    logging.exception("Publisher.publish() failed — continuing benchmark")
+                    logger.exception("Publisher.publish() failed — continuing benchmark")
             else:
                 published_url = report.publish(remote_callback=self.publisher, debug=debug)
 
@@ -524,15 +528,15 @@ class BenchRunner:
             try:
                 webbrowser.open(path.resolve().as_uri())
             except Exception:  # pylint: disable=broad-exception-caught
-                logging.exception("Failed to open browser for %s", path)
+                logger.exception("Failed to open browser for %s", path)
         elif show_mode is ShowMode.PUBLISHED:
             if published_url:
                 try:
                     webbrowser.open(published_url)
                 except Exception:  # pylint: disable=broad-exception-caught
-                    logging.exception("Failed to open %s", published_url)
+                    logger.exception("Failed to open %s", published_url)
             else:
-                logging.warning(
+                logger.warning(
                     "show='published' but no publish URL is available "
                     "(publish=False or the publisher returned None) — nothing to open"
                 )

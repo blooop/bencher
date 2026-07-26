@@ -1,8 +1,9 @@
-import bencher as bn
-import numpy as np
-from PIL import Image
 import colorcet as cc
+import numpy as np
 import numpy.typing as npt
+from PIL import Image
+
+import bencher as bn
 
 
 def apply_colormap(data: npt.NDArray) -> npt.NDArray:

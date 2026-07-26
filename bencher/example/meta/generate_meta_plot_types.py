@@ -267,7 +267,7 @@ class MetaPlotTypes(MetaGeneratorBase):
         filename = function_name
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
-        const_vars = "dict(noise_scale=0.15)" if cfg["repeats"] > 1 else None
+        const_vars = '{"noise_scale": 0.15}' if cfg["repeats"] > 1 else None
         extra_imports = [cfg["extra_import"]] if cfg.get("extra_import") else None
 
         sd = 2 if cfg["float_dims"] >= 2 else 3

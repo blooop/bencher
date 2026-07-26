@@ -3,14 +3,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import xarray as xr
-from param import Parameter
 import panel as pn
 import plotly.graph_objs as go
+import xarray as xr
+from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.variables.results import ResultFloat
+
+logger = logging.getLogger(__name__)
 
 
 class VolumeResult(BenchResultBase):
@@ -57,7 +59,7 @@ class VolumeResult(BenchResultBase):
                                     otherwise returns filter match results.
         """
         if self.bench_cfg.over_time:
-            logging.info("Volume plots are not supported with over_time; skipping")
+            logger.info("Volume plots are not supported with over_time; skipping")
             return None
         return self.filter(
             self.to_volume_ds,
@@ -100,14 +102,14 @@ class VolumeResult(BenchResultBase):
             title=f"{result_var.name} vs ({x.name} vs {y.name} vs {z.name})",
             width=width,
             height=height,
-            margin=dict(t=50, b=50, r=50, l=50),
-            scene=dict(
-                xaxis_title=f"{x.name} [{x.units}]",
-                yaxis_title=f"{y.name} [{y.units}]",
-                zaxis_title=f"{z.name} [{z.units}]",
-            ),
+            margin={"t": 50, "b": 50, "r": 50, "l": 50},
+            scene={
+                "xaxis_title": f"{x.name} [{x.units}]",
+                "yaxis_title": f"{y.name} [{y.units}]",
+                "zaxis_title": f"{z.name} [{z.units}]",
+            },
         )
 
-        fig = dict(data=data, layout=layout)
+        fig = {"data": data, "layout": layout}
 
         return pn.pane.Plotly(fig, name="volume_plotly")

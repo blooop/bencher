@@ -30,8 +30,8 @@ from bencher.scorecard.model import (
 from bencher.scorecard.render import generate_scorecard
 
 __all__ = [
-    "Chrome",
     "DEFAULT_OTHER_CATEGORY",
+    "Chrome",
     "ReportLayout",
     "ScorecardConfig",
     "build_cell",

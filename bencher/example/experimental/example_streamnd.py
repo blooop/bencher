@@ -2,10 +2,11 @@
 
 
 import time
-import numpy as np
+
 import holoviews as hv
-from holoviews import streams
+import numpy as np
 import panel as pn
+from holoviews import streams
 
 hv.extension("bokeh")
 

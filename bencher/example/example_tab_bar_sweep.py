@@ -1,8 +1,8 @@
 """Sweep num_tabs to see how the tab bar wraps with fixed styling (marker 4, gap 4, pad 10)."""
 
-import bencher as bn
 from PIL import Image, ImageDraw, ImageFont
 
+import bencher as bn
 
 VIEWPORT_W = 1200
 BAR_MAX_H = 600

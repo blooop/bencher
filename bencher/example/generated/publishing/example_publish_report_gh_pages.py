@@ -1,6 +1,7 @@
 """Auto-generated example: Publish Report to GitHub Pages."""
 
 import math
+
 import bencher as bn
 
 
