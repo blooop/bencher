@@ -4,7 +4,7 @@ from functools import partial
 from itertools import product as iterproduct
 
 import holoviews as hv
-import hvplot.pandas
+import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
 import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
 import numpy as np
 import panel as pn
