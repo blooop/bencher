@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import partial
 
 import holoviews as hv
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
 import xarray as xr
 from param import Parameter
