@@ -2,51 +2,46 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Literal, Callable
+from collections import defaultdict
+from collections.abc import Callable
+from copy import deepcopy
 from enum import Enum, auto
+from functools import partial
+from textwrap import wrap
+from typing import Any, Literal
+
+import holoviews as hv
 import numpy as np
+import pandas as pd
+import panel as pn
 import xarray as xr
 from param import Parameter
-import holoviews as hv
-from functools import partial
-import panel as pn
-from textwrap import wrap
 
-from bencher.utils import int_to_col, color_tuple_to_css, callable_name
-
-from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.variables.inputs import with_subsampling_divisions
-
-from bencher.variables.results import OptDir
-from copy import deepcopy
-from bencher.variables.results import ResultFloat, ResultBool
-from bencher.plotting.plot_filter import VarRange, PlotFilter
-from bencher.utils import listify
-
-from bencher.variables.results import (
-    ResultReference,
-    ResultDataSet,
-    ResultVideo,
-    ResultImage,
-    ResultRerun,
-    result_is_missing,
+from bencher.bench_cfg import BenchCfg
+from bencher.plotting.plot_filter import PlotFilter, VarRange
+from bencher.plotting.plt_cnt_cfg import PltCntCfg
+from bencher.results.composable_container.composable_container_base import (
+    ComposableContainerBase,
+    ComposeType,
+    PaneLayout,
 )
-
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
-from bencher.results.composable_container.composable_container_base import (
-    ComposeType,
-    ComposableContainerBase,
-    PaneLayout,
+from bencher.utils import callable_name, color_tuple_to_css, int_to_col, listify
+from bencher.variables.inputs import with_subsampling_divisions
+from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import (
+    OptDir,
+    ResultBool,
+    ResultDataSet,
+    ResultFloat,
+    ResultImage,
+    ResultReference,
+    ResultRerun,
+    ResultVideo,
+    result_is_missing,
 )
-
-from collections import defaultdict
-
-import pandas as pd
-
-from bencher.bench_cfg import BenchCfg
-from bencher.plotting.plt_cnt_cfg import PltCntCfg
 
 # todo add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
@@ -551,7 +546,7 @@ class BenchResultBase:
         for a in zip(*panel_list):
             row = pn.Row(**container_args)
             row.append(a[0][0])
-            for a1 in range(0, len(a)):
+            for a1 in range(len(a)):
                 row.append(a[a1][1])
             out.append(row)
         return out
@@ -897,6 +892,7 @@ class BenchResultBase:
         callback to avoid Panel's ImportedStyleSheet document-ownership errors.
         """
         import base64
+
         from bokeh.models import CustomJS, Div
         from bokeh.models.widgets import Slider as BokehSlider
 

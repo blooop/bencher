@@ -1,9 +1,10 @@
 """Auto-generated example: 1 Float, 0 Categorical (over time repeats)."""
 
-import random
 import math
-import bencher as bn
+import random
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class SortBenchmark(bn.ParametrizedSweep):

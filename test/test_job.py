@@ -1,9 +1,11 @@
-import unittest
-import bencher as bn
 import random
-from bencher.job import JobFunctionCache
+import unittest
 
-from hypothesis import given, strategies as st, settings
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+import bencher as bn
+from bencher.job import JobFunctionCache
 
 
 class CachedParamExample(bn.ParametrizedSweep):

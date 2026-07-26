@@ -1,10 +1,12 @@
 """Tests for WorkerManager extracted from Bench."""
 
 import unittest
-from hypothesis import given, settings, strategies as st
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from bencher.example.benchmark_data import ExampleBenchCfg
-from bencher.worker_manager import WorkerManager, worker_cfg_wrapper, kwargs_to_input_cfg
+from bencher.worker_manager import WorkerManager, kwargs_to_input_cfg, worker_cfg_wrapper
 
 
 class TestWorkerManager(unittest.TestCase):

@@ -1,8 +1,8 @@
 """Auto-generated example: Plot Type: Line."""
 
-import bencher as bn
-
 import math
+
+import bencher as bn
 
 
 class LatencyProfile(bn.ParametrizedSweep):

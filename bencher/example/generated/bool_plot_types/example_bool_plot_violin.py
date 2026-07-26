@@ -2,8 +2,8 @@
 
 import random
 
-from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
 import bencher as bn
+from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
 
 
 class ReliabilityCat(bn.ParametrizedSweep):

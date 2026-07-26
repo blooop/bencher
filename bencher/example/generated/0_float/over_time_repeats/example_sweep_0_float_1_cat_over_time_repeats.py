@@ -1,8 +1,9 @@
 """Auto-generated example: 0 Float, 1 Categorical (over time repeats)."""
 
 import random
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class CacheBackend(bn.ParametrizedSweep):

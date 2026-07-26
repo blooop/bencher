@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Callable
 from functools import partial
-from typing import Callable
 
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 

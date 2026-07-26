@@ -1,13 +1,14 @@
 """Tests for bencher/results/holoview_results/holoview_result.py"""
 
 import unittest
+
 import holoviews as hv
 import panel as pn
 
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
-from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.bench_result_base import ReduceType
+from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
 # pylint: disable=protected-access

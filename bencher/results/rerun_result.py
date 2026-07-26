@@ -11,8 +11,8 @@ from param import Parameter
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.variables.results import (
     ResultImage,
-    ResultVideo,
     ResultString,
+    ResultVideo,
 )
 
 
@@ -140,7 +140,7 @@ class RerunResult(BenchResultBase):
             f.write(rrd_data)
         return rrd_file_to_pane(rrd_path, width=width, height=height)
 
-    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover  # noqa: F811
+    def to_rerun_plots(self, **kwargs) -> pn.panel:  # pragma: no cover
         """Plot callback for the rerun backend — drop-in replacement for ``to_auto_plots``.
 
         Renders the sweep summary, the rerun viewer, and the post-description,
@@ -219,7 +219,7 @@ def _log_to_rerun(
                 rr=rr,
                 recording=recording,
                 dataset=sliced,
-                entity_path=f"{entity_path}/{dim}/{str(val)}",
+                entity_path=f"{entity_path}/{dim}/{val!s}",
                 result_vars=result_vars,
                 float_dims=float_dims,
                 cat_dims=remaining_cat,
@@ -238,7 +238,7 @@ def _log_to_rerun(
                 rr=rr,
                 recording=recording,
                 dataset=sliced,
-                entity_path=f"{entity_path}/{dim}/{str(val)}",
+                entity_path=f"{entity_path}/{dim}/{val!s}",
                 result_vars=result_vars,
                 float_dims=float_dims,
                 cat_dims=remaining_cat,
@@ -262,7 +262,7 @@ def _log_to_rerun(
                 rr=rr,
                 recording=recording,
                 dataset=sliced,
-                entity_path=f"{entity_path}/{dim}/{str(val)}",
+                entity_path=f"{entity_path}/{dim}/{val!s}",
                 result_vars=result_vars,
                 float_dims=remaining_float,
                 cat_dims=[],

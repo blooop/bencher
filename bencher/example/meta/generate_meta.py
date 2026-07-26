@@ -1,7 +1,6 @@
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
-
 # Registry of inline class templates keyed by (float_count, cat_count).
 # Each entry defines a unique software/data-processing domain class.
 INLINE_CLASSES = {

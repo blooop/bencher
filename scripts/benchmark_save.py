@@ -36,7 +36,7 @@ import panel as pn
 # Must be at top level before any bencher imports that trigger rendering
 pn.extension()
 
-import bencher as bn  # noqa: E402
+import bencher as bn
 
 try:
     from importlib.metadata import version as _pkg_version

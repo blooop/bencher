@@ -1,6 +1,7 @@
 """Auto-generated example: Multiple Sweeps — progressive report with tabs."""
 
 import math
+
 import bencher as bn
 
 

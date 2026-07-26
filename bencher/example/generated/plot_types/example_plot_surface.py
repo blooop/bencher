@@ -1,8 +1,8 @@
 """Auto-generated example: Plot Type: Surface."""
 
-import bencher as bn
-
 import math
+
+import bencher as bn
 
 
 class SurfaceDemo(bn.ParametrizedSweep):

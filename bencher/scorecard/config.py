@@ -9,8 +9,8 @@ the zero-config path still produces a page (auto-named benchmarks, no aliases).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping
 
 # Sentinel category for unregistered tags; sorts last in the display order.
 DEFAULT_OTHER_CATEGORY = "Other"

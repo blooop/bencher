@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import xarray as xr
-from param import Parameter
 import panel as pn
 import plotly.graph_objs as go
+import xarray as xr
+from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType

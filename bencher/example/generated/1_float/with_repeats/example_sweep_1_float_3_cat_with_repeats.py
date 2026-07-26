@@ -1,7 +1,7 @@
 """Auto-generated example: 1 Float, 3 Categorical (with repeats)."""
 
-import random
 import math
+import random
 
 import bencher as bn
 

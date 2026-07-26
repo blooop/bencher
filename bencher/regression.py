@@ -17,8 +17,8 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
 from bencher.history import BIRTH_ATTR
+from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
 
 # Default thresholds per method — used when the user hasn't explicitly set a threshold.
 _METHOD_DEFAULTS = {

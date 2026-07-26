@@ -1,24 +1,25 @@
 from __future__ import annotations
-import panel as pn
-import holoviews as hv
-import numpy as np
-from param import Parameter
+
 from functools import partial
 from itertools import product as iterproduct
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
+import holoviews as hv
+import hvplot.pandas
+import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
+import numpy as np
+import panel as pn
+import xarray as xr
+from param import Parameter
+
+from bencher.results.bench_result_base import ReduceType
+from bencher.results.pane_result import PaneResult
 from bencher.utils import (
+    get_nearest_coords,
     get_nearest_coords1D,
     hmap_canonical_input,
-    get_nearest_coords,
     label_with_units,
     listify,
 )
-from bencher.results.pane_result import PaneResult
-from bencher.results.bench_result_base import ReduceType
-
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
 # NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders

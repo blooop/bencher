@@ -371,5 +371,5 @@ if __name__ == "__main__":
     # opens directly with no server needed (mirrors bencher's ShowMode.HTML path).
     try:
         webbrowser.open(path.resolve().as_uri())
-    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("Failed to open browser for %s", path)

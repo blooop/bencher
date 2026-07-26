@@ -1,23 +1,23 @@
 """Tests for bencher/optuna_conversions.py"""
 
 import unittest
-from unittest.mock import MagicMock
 from enum import auto
-from strenum import StrEnum
+from unittest.mock import MagicMock
 
 import optuna
 import panel as pn
 import param
+from strenum import StrEnum
 
 import bencher as bn
 from bencher.optuna_conversions import (
-    sweep_var_to_optuna_dist,
-    sweep_var_to_suggest,
-    summarise_trial,
     optuna_grid_search,
     param_importance,
+    summarise_trial,
+    sweep_var_to_optuna_dist,
+    sweep_var_to_suggest,
 )
-from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
+from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.time import TimeSnapshot
 
 
@@ -85,6 +85,7 @@ class TestOptimizeFlag(unittest.TestCase):
 
     def test_yaml_sweep_optimize_default_and_override(self):
         from pathlib import Path
+
         from bencher.variables.inputs import YamlSweep
 
         yaml_path = Path(__file__).resolve().parent.parent / "bencher/example/yaml_sweep_list.yaml"

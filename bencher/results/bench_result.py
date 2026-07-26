@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Any, Literal
-from collections.abc import Callable, Sequence
+
 import logging
+from collections.abc import Callable, Sequence
+from typing import Any, Literal
+
 import panel as pn
 from param import Parameter
 
@@ -15,36 +17,36 @@ except ModuleNotFoundError:
         pass
 
 
-from bencher.results.video_summary import VideoSummaryResult
-from bencher.results.pane_result import PaneResult
-from bencher.results.volume_result import VolumeResult
-from bencher.results.holoview_results.holoview_result import HoloviewResult
-
-# Updated imports for distribution result classes
-from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
-from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
-from bencher.results.holoview_results.scatter_result import ScatterResult
-from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
-    ScatterJitterResult,
-)
-from bencher.results.holoview_results.bar_result import BarResult
-from bencher.results.holoview_results.line_result import LineResult
-from bencher.results.holoview_results.curve_result import CurveResult
-from bencher.results.holoview_results.band_result import BandResult
-from bencher.results.holoview_results.heatmap_result import HeatmapResult
-from bencher.results.holoview_results.surface_result import SurfaceResult
-from bencher.results.holoview_results.table_result import TableResult
-from bencher.results.holoview_results.tabulator_result import TabulatorResult
-from bencher.results.histogram_result import HistogramResult
-from bencher.results.optuna_result import OptunaResult
-from bencher.results.dataset_result import DataSetResult
 from bencher.plugins.bench_data import BenchData, RunMeta
-from bencher.plugins.registry import get_registry, decisions_to_table
 from bencher.plugins.builtins import (
     CALLBACK_TO_PLUGIN,
     PANES_PLUGIN_NAME,
     register_builtin_plugins,
 )
+from bencher.plugins.registry import decisions_to_table, get_registry
+from bencher.results.dataset_result import DataSetResult
+from bencher.results.histogram_result import HistogramResult
+from bencher.results.holoview_results.band_result import BandResult
+from bencher.results.holoview_results.bar_result import BarResult
+from bencher.results.holoview_results.curve_result import CurveResult
+
+# Updated imports for distribution result classes
+from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
+from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
+    ScatterJitterResult,
+)
+from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
+from bencher.results.holoview_results.heatmap_result import HeatmapResult
+from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.line_result import LineResult
+from bencher.results.holoview_results.scatter_result import ScatterResult
+from bencher.results.holoview_results.surface_result import SurfaceResult
+from bencher.results.holoview_results.table_result import TableResult
+from bencher.results.holoview_results.tabulator_result import TabulatorResult
+from bencher.results.optuna_result import OptunaResult
+from bencher.results.pane_result import PaneResult
+from bencher.results.video_summary import VideoSummaryResult
+from bencher.results.volume_result import VolumeResult
 from bencher.utils import listify, resolve_aggregate
 
 
@@ -75,7 +77,7 @@ class BenchResult(
     VideoSummaryResult,
     DataSetResult,
     OptunaResult,
-):  # noqa pylint: disable=too-many-ancestors
+):
     """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
 
     def __init__(self, bench_cfg) -> None:

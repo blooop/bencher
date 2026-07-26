@@ -1,12 +1,12 @@
+import math
+import random
 from datetime import datetime, timedelta
+from enum import auto
+
+import holoviews as hv
+from strenum import StrEnum
 
 import bencher as bn
-
-from enum import auto
-from strenum import StrEnum
-import random
-import holoviews as hv
-import math
 
 
 class FunctionVariant(StrEnum):

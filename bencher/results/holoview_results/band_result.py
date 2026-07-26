@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import holoviews as hv
 import numpy as np
-from param import Parameter
 import xarray as xr
+from param import Parameter
 
-from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import SCALAR_RESULT_TYPES
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.variables.results import SCALAR_RESULT_TYPES
 
 
 class BandResult(HoloviewResult):

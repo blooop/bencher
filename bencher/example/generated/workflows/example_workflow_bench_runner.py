@@ -1,6 +1,7 @@
 """Auto-generated example: BenchRunner — run multiple benchmarks in one session."""
 
 import math
+
 import bencher as bn
 
 

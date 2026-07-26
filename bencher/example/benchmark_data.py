@@ -6,10 +6,12 @@ You can define a subclass which contains an input configuration which can be pas
 import math
 import random
 from enum import auto
+
 from strenum import StrEnum
-from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
-from bencher.variables.results import ResultFloat, OptDir
+
+from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import OptDir, ResultFloat
 
 
 class PostprocessFn(StrEnum):

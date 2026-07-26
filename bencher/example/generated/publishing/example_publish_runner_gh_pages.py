@@ -1,6 +1,7 @@
 """Auto-generated example: BenchRunner Publishing with GithubPagesCfg."""
 
 import math
+
 import bencher as bn
 
 

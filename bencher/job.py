@@ -1,11 +1,14 @@
 from __future__ import annotations
-from typing import Callable
+
 import logging
-from diskcache import Cache
+from collections.abc import Callable
 from concurrent.futures import Future, ProcessPoolExecutor
-from .utils import hash_sha1
-from strenum import StrEnum
 from enum import auto
+
+from diskcache import Cache
+from strenum import StrEnum
+
+from .utils import hash_sha1
 
 try:
     from scoop import futures as scoop_future_executor
@@ -157,7 +160,7 @@ class Executors(StrEnum):
     # THREADS=auto() #not that useful as most bench code is cpu bound
 
     @staticmethod
-    def factory(provider: "Executors") -> Future | None:
+    def factory(provider: Executors) -> Future | None:
         """Create an executor instance based on the specified execution strategy.
 
         Args:

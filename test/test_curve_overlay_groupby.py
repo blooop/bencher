@@ -6,10 +6,11 @@ contains the expected Curve elements with correct labels and optional Spread ban
 
 # pylint: disable=protected-access
 
+from unittest.mock import MagicMock
+
 import holoviews as hv
 import numpy as np
 import xarray as xr
-from unittest.mock import MagicMock
 from param import Parameter
 
 from bencher.results.holoview_results.holoview_result import HoloviewResult

@@ -7,7 +7,6 @@ import pytest
 
 import bencher as bn
 
-
 GENERATED_DIR = Path("bencher/example/generated")
 
 

@@ -1,10 +1,13 @@
 import unittest
-from hypothesis import given, strategies as st  # pylint: disable=unused-import
-from bencher.variables.inputs import IntSweep, EnumSweep, StringSweep, BoolSweep, FloatSweep
+from enum import auto
+
+from hypothesis import given  # pylint: disable=unused-import
+from hypothesis import strategies as st
+from strenum import StrEnum
+
+from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultFloat
-from enum import auto
-from strenum import StrEnum
 
 
 class TestVarSweeps(unittest.TestCase):

@@ -3,23 +3,22 @@ from __future__ import annotations
 import argparse
 import logging
 import warnings
+from copy import deepcopy
+from datetime import datetime
 from enum import auto
-from strenum import LowercaseStrEnum
-
 from typing import Any, TypeVar
 
-import param
 import panel as pn
-from datetime import datetime
-from copy import deepcopy
+import param
+from strenum import LowercaseStrEnum
 
-from bencher.variables.sweep_base import hash_sha1, describe_variable, SUBSAMPLING_DIVISIONS_SAMPLES
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.results import OptDir
-from bencher.results.composable_container.composable_container_base import PaneLayout
-from bencher.job import Executors
 from bencher.cache_management import CACHE_VERSION
+from bencher.job import Executors
+from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
+from bencher.variables.results import OptDir
+from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
+from bencher.variables.time import TimeEvent, TimeSnapshot
 
 T = TypeVar("T")  # Generic type variable
 

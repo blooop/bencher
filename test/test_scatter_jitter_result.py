@@ -11,7 +11,8 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
-from test.helpers import inner_element as _inner_element, run_dist_sweep
+from test.helpers import inner_element as _inner_element
+from test.helpers import run_dist_sweep
 
 
 class JitterBench(bn.ParametrizedSweep):

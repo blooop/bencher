@@ -1,8 +1,9 @@
 """Auto-generated example: 0 Float, 0 Categorical (over time)."""
 
 import random
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class BaselineCheck(bn.ParametrizedSweep):

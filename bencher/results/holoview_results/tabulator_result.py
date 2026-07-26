@@ -1,12 +1,12 @@
 from __future__ import annotations
+
+import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
+import pandas as pd
 import panel as pn
+import xarray as xr
+from param import Parameter
 
 from bencher.results.holoview_results.holoview_result import HoloviewResult
-
-from param import Parameter
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
-import pandas as pd
 
 
 class TabulatorResult(HoloviewResult):

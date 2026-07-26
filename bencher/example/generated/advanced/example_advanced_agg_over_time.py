@@ -1,8 +1,9 @@
 """Auto-generated example: Aggregate Over Time — 2D sweep to scalar curve with error bounds."""
 
 import math
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class ThermalPlate(bn.ParametrizedSweep):

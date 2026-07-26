@@ -2,21 +2,23 @@ from __future__ import annotations
 
 import html
 import logging
-import time
-from typing import Callable, Protocol, runtime_checkable
 import os
 import subprocess
-from pathlib import Path
 import tempfile
-from threading import Thread
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
+from threading import Thread
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
 import panel as pn
-from bencher.results.bench_result import BenchResult
-from bencher.bench_plot_server import BenchPlotServer
+
 from bencher.bench_cfg import BenchRunCfg
+from bencher.bench_plot_server import BenchPlotServer
+from bencher.results.bench_result import BenchResult
 
 
 def _inline_rrd(
@@ -119,7 +121,7 @@ class Publisher(Protocol):
     without modifying bencher.
     """
 
-    def publish(self, report: "BenchReport") -> str | None:
+    def publish(self, report: BenchReport) -> str | None:
         """Publish a report. Returns the published URL, or None."""
         ...  # pylint: disable=unnecessary-ellipsis
 

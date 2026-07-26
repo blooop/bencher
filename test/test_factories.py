@@ -1,9 +1,10 @@
 """Tests for the factories module."""
 
 import unittest
+
+from bencher.bench_cfg import BenchRunCfg
 from bencher.factories import create_bench, create_bench_runner
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.bench_cfg import BenchRunCfg
 
 
 class SimpleSweep(ParametrizedSweep):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 from copy import deepcopy
 from itertools import product as iter_product
@@ -7,24 +8,23 @@ import numpy as np
 import optuna
 import panel as pn
 
-
-# NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
-# import). It is only used inside collect_optuna_plots(), so import it lazily there.
-from bencher.utils import hmap_canonical_input
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.inputs import BoolSweep
-from bencher.results.bench_result_base import BenchResultBase, ReduceType
-
 # from bencher.results.bench_result_base import BenchResultBase
 from bencher.optuna_conversions import (
     _append_safe,
     _append_safe_sized,
-    sweep_var_to_optuna_dist,
-    summarise_trial,
-    param_importance,
     optuna_grid_search,
+    param_importance,
+    summarise_trial,
+    sweep_var_to_optuna_dist,
     sweep_var_to_suggest,
 )
+from bencher.results.bench_result_base import BenchResultBase, ReduceType
+
+# NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
+# import). It is only used inside collect_optuna_plots(), so import it lazily there.
+from bencher.utils import hmap_canonical_input
+from bencher.variables.inputs import BoolSweep
+from bencher.variables.time import TimeEvent, TimeSnapshot
 
 
 def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
@@ -243,9 +243,9 @@ class OptunaResult(BenchResultBase):
             pn.pane.panel: A panel with optuna visualisations.
         """
         from optuna.visualization import (
+            plot_optimization_history,
             plot_param_importances,
             plot_pareto_front,
-            plot_optimization_history,
         )
 
         try:
@@ -294,7 +294,7 @@ class OptunaResult(BenchResultBase):
                     try:
                         study_pane.append(param_importance(self.bench_cfg, study, plot_w))
                     except RuntimeError as e:
-                        study_pane.append(f"Error generating parameter importance: {str(e)}")
+                        study_pane.append(f"Error generating parameter importance: {e!s}")
 
                 # --- Pareto Front ---
                 if self.bench_cfg.post_description:

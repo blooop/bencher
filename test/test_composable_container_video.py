@@ -1,7 +1,10 @@
 import unittest
-import bencher as bn
+
 import numpy as np
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
+
+import bencher as bn
 
 
 class TestComposableContainerVideo(unittest.TestCase):
@@ -294,8 +297,8 @@ class TestComposableContainerVideo(unittest.TestCase):
 
     def test_render_no_stdout(self):
         """render() should not print debug output to stdout."""
-        import io
         import contextlib
+        import io
 
         img = self.small_img()
         vid = bn.ComposableContainerVideo()

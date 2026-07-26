@@ -12,7 +12,7 @@ import xarray as xr
 
 import bencher as bn
 from bencher.bench_cfg import BenchCfg
-from bencher.plotting.plt_cnt_cfg import PltCntCfg, result_kind, _samples_per_point
+from bencher.plotting.plt_cnt_cfg import PltCntCfg, _samples_per_point, result_kind
 from bencher.variables.time import TimeEvent, TimeSnapshot
 from test.helpers import run_cfg_with
 

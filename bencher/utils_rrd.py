@@ -15,7 +15,8 @@ import logging
 import os
 import re
 import shutil
-from importlib.metadata import PackageNotFoundError, version as get_package_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_package_version
 from pathlib import Path
 from urllib.parse import quote
 

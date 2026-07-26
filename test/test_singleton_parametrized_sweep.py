@@ -1,7 +1,9 @@
 from pathlib import Path
+
 import pytest
-from bencher.variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
+
 import bencher as bn
+from bencher.variables.singleton_parametrized_sweep import ParametrizedSweepSingleton
 
 
 # A module-scope class for the BenchRunner integration test must be picklable.

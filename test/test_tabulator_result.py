@@ -1,6 +1,6 @@
+import numpy as np
 import pandas as pd
 import xarray as xr
-import numpy as np
 
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 

@@ -1,4 +1,5 @@
 import unittest
+
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject, FunctionVariant
 

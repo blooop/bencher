@@ -1,9 +1,9 @@
 """Auto-generated example: Plot Type: Curve."""
 
-import bencher as bn
-
 import math
 import random
+
+import bencher as bn
 
 
 class LatencyNoisyProfile(bn.ParametrizedSweep):

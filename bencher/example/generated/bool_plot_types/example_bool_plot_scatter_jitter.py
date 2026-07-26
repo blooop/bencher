@@ -2,10 +2,10 @@
 
 import random
 
+import bencher as bn
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
-import bencher as bn
 
 
 class ReliabilityCat(bn.ParametrizedSweep):

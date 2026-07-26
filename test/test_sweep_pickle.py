@@ -7,8 +7,8 @@ of a plain list, breaking pickle serialization under multiprocessing.
 
 from __future__ import annotations
 
-import pickle
 import copy
+import pickle
 from concurrent.futures import ProcessPoolExecutor
 from enum import auto
 from pathlib import Path
@@ -18,11 +18,11 @@ from strenum import StrEnum
 
 import bencher as bn
 from bencher.variables.inputs import (
-    IntSweep,
-    FloatSweep,
-    StringSweep,
-    EnumSweep,
     BoolSweep,
+    EnumSweep,
+    FloatSweep,
+    IntSweep,
+    StringSweep,
     YamlSweep,
 )
 
@@ -61,7 +61,7 @@ def _build_sweeps():
 def _pickle_roundtrip(obj):
     """Serialize and deserialize via pickle (protocol 5, highest common)."""
     data = pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
-    return pickle.loads(data)  # noqa: S301
+    return pickle.loads(data)
 
 
 def _identity(x):
@@ -241,7 +241,7 @@ def _pickle_in_subprocess(sweep_bytes):
 
     This mimics what ProcessPoolExecutor does: serialize to child, run, return.
     """
-    sw = pickle.loads(sweep_bytes)  # noqa: S301
+    sw = pickle.loads(sweep_bytes)
     return sw.values()
 
 
@@ -392,21 +392,21 @@ class TestPickleProtocols:
     def test_all_protocols_string_sweep_with_subsampling_divisions(self, protocol):
         sw = StringSweep(["a", "b", "c"]).with_subsampling_divisions(3)
         data = pickle.dumps(sw, protocol=protocol)
-        restored = pickle.loads(data)  # noqa: S301
+        restored = pickle.loads(data)
         assert restored.values() == sw.values()
 
     @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
     def test_all_protocols_enum_sweep_with_subsampling_divisions(self, protocol):
         sw = EnumSweep(Color).with_subsampling_divisions(2)
         data = pickle.dumps(sw, protocol=protocol)
-        restored = pickle.loads(data)  # noqa: S301
+        restored = pickle.loads(data)
         assert restored.values() == sw.values()
 
     @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
     def test_all_protocols_bool_sweep_with_subsampling_divisions(self, protocol):
         sw = BoolSweep().with_subsampling_divisions(2)
         data = pickle.dumps(sw, protocol=protocol)
-        restored = pickle.loads(data)  # noqa: S301
+        restored = pickle.loads(data)
         assert restored.values() == sw.values()
 
 

@@ -1,8 +1,8 @@
 """Auto-generated example: Plot Type: Heatmap."""
 
-import bencher as bn
-
 import math
+
+import bencher as bn
 
 
 class HeatmapDemo(bn.ParametrizedSweep):

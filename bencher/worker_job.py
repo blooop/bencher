@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
 from dataclasses import dataclass, field
-from .utils import hash_sha1
+from typing import Any
+
 from bencher.utils import hmap_canonical_input
+
+from .utils import hash_sha1
 
 
 @dataclass

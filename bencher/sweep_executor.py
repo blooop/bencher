@@ -7,16 +7,16 @@ job creation, and cache management in benchmark runs.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any
 
 import param
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.job import FutureCache
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-
-from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 
 
 def _resolve_param(

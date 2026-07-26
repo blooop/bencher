@@ -4,49 +4,46 @@ import logging
 import os
 import tempfile
 import warnings
-from datetime import datetime
-from pathlib import Path
+from collections.abc import Callable
 from concurrent.futures import as_completed
-from itertools import product, combinations
-
-from param import Parameter
-from typing import Callable, Any
-from copy import deepcopy
-import param
-import numpy as np
-import xarray as xr
 from contextlib import suppress
+from copy import deepcopy
+from datetime import datetime
 from functools import partial
-import panel as pn
+from itertools import combinations, product
+from pathlib import Path
+from typing import Any
 
+import numpy as np
 import optuna
-
-from bencher.worker_job import WorkerJob
-from bencher.results.optimize_result import OptimizeResult
-from bencher.optuna_conversions import sweep_var_to_suggest, sweep_var_to_optuna_dist
-from bencher.variables.sweep_base import hash_sha1
+import panel as pn
+import param
+import xarray as xr
+from param import Parameter
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
-
-from bencher.variables.inputs import IntSweep
-from bencher.variables.results import ResultHmap
-from bencher.results.bench_result import BenchResult
-from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str, resolve_aggregate, AGG_FN_MAP
-from bencher.sample_order import SampleOrder
-from bencher.regression import detect_regressions, RegressionError
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.history import config_summary as history_config_summary
+from bencher.job import Executors, FutureCache, Job, JobFuture
+from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
+from bencher.regression import RegressionError, detect_regressions
+from bencher.result_collector import ResultCollector
+from bencher.results.bench_result import BenchResult
+from bencher.results.optimize_result import OptimizeResult
+from bencher.sample_order import SampleOrder
+from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
+from bencher.utils import AGG_FN_MAP, params_to_str, resolve_aggregate
+from bencher.variables.inputs import IntSweep
+from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import ResultHmap
+from bencher.variables.sweep_base import hash_sha1
+from bencher.worker_job import WorkerJob
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
-from bencher.result_collector import ResultCollector
-from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
-
-from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -805,7 +802,7 @@ class Bench(BenchPlotServer):
         """
         # Local import keeps render (and its holoviews/panel imports) out of the
         # hot path when the switch is off.
-        from bencher.render import save_result, load_result
+        from bencher.render import load_result, save_result
 
         with tempfile.TemporaryDirectory(prefix="bencher_force_split_") as tmp:
             path = save_result(bench_res, Path(tmp) / "result.pkl")

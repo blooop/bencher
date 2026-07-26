@@ -1,14 +1,14 @@
 from __future__ import annotations
-import panel as pn
-from param import Parameter
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
-from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+import hvplot.pandas
+import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
+import panel as pn
+import xarray as xr
+from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
+from bencher.results.bench_result_base import ReduceType
+from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.variables.results import ResultFloat
 
 

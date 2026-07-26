@@ -1,4 +1,5 @@
 import unittest
+
 import bencher as bn
 from bencher.example.example_sample_cache import UnreliableClass
 from bencher.example.example_sample_cache_context import example_cache_context

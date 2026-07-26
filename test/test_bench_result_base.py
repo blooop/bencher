@@ -1,9 +1,10 @@
 import unittest
-import bencher as bn
-import numpy as np
+
 import holoviews as hv
+import numpy as np
 import panel as pn
 
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.bench_result_base import ReduceType
 

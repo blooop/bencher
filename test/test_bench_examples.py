@@ -1,11 +1,9 @@
 import inspect
+import os
 import unittest
 
 import bencher as bn
-
 from bencher.example.meta.example_meta import example_meta
-
-import os
 
 
 class TestBenchExamples(unittest.TestCase):

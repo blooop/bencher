@@ -24,7 +24,6 @@ from bencher.regression import (
 )
 from bencher.variables.results import OptDir
 
-
 # ── detect_percentage ──────────────────────────────────────────────────────
 
 

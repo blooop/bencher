@@ -1,4 +1,5 @@
 import unittest
+
 import bencher as bn
 from bencher.example.example_simple_float import example_simple_float
 

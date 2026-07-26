@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pandas import Timestamp
 from param import Selector
+
 from bencher.variables.sweep_base import SweepBase, shared_slots
 
 

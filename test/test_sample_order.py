@@ -1,4 +1,5 @@
 import unittest
+
 import bencher as bn
 
 
@@ -15,7 +16,7 @@ class OrderExample(bn.ParametrizedSweep):
         # Maintain a per-instance counter to reflect traversal order
         idx = getattr(self, "_call_counter", 0)
         self.call_index = idx
-        setattr(self, "_call_counter", idx + 1)
+        self._call_counter = idx + 1
 
 
 class TestSampleOrder(unittest.TestCase):

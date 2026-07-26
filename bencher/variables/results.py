@@ -31,14 +31,17 @@ from __future__ import annotations
 import math
 import numbers
 import warnings
+from collections.abc import Callable
 from enum import auto
-from typing import Callable, Any
 from functools import partial
+from typing import Any
+
+import holoviews as hv
 import panel as pn
 import param
 from param import Number
 from strenum import StrEnum
-import holoviews as hv
+
 from bencher.utils import hash_sha1
 
 # from bencher.variables.parametrised_sweep import ParametrizedSweep
@@ -104,7 +107,7 @@ class ResultFloat(Number):
     bounds to [0, 1] and produces correct boolean-style plots.
     """
 
-    __slots__ = ["units", "direction", "share_axis", "max_time_events", "meaning_version"]
+    __slots__ = ["direction", "max_time_events", "meaning_version", "share_axis", "units"]
     # ``direction`` is excluded because flipping minimize<->maximize does not
     # change the recorded numeric values, only their interpretation for
     # Pareto/optimizer plots.  Keeping it in the hash would needlessly wipe
@@ -197,7 +200,7 @@ class ResultBool(ResultFloat):
 class ResultVec(param.List):
     """A class to represent fixed size vector result variable"""
 
-    __slots__ = ["units", "direction", "size", "max_time_events"]
+    __slots__ = ["direction", "max_time_events", "size", "units"]
     _hash_exclude = ("max_time_events",)
 
     def __init__(
@@ -275,7 +278,7 @@ def curve(
 
 
 class ResultPath(param.Filename):
-    __slots__ = ["units", "max_time_events"]
+    __slots__ = ["max_time_events", "units"]
     _hash_exclude = ("max_time_events",)
 
     def __init__(self, default=None, units="path", max_time_events=None, **params):
@@ -293,7 +296,7 @@ class ResultPath(param.Filename):
 
 
 class ResultVideo(param.Filename):
-    __slots__ = ["units", "max_time_events"]
+    __slots__ = ["max_time_events", "units"]
     _hash_exclude = ("max_time_events",)
 
     def __init__(self, default=None, units="path", max_time_events=None, **params):
@@ -307,7 +310,7 @@ class ResultVideo(param.Filename):
 
 
 class ResultImage(param.Filename):
-    __slots__ = ["units", "max_time_events"]
+    __slots__ = ["max_time_events", "units"]
     _hash_exclude = ("max_time_events",)
 
     def __init__(self, default=None, units="path", max_time_events=None, **params):
@@ -321,7 +324,7 @@ class ResultImage(param.Filename):
 
 
 class ResultString(param.String):
-    __slots__ = ["units", "max_time_events"]
+    __slots__ = ["max_time_events", "units"]
     _hash_exclude = ("max_time_events",)
 
     def __init__(self, default=None, units="str", max_time_events=None, **params):
@@ -335,7 +338,7 @@ class ResultString(param.String):
 
 
 class ResultContainer(param.Parameter):
-    __slots__ = ["units", "max_time_events"]
+    __slots__ = ["max_time_events", "units"]
     _hash_exclude = ("max_time_events",)
 
     def __init__(self, default=None, units="container", max_time_events=None, **params):
@@ -364,7 +367,7 @@ class ResultRerun(ResultContainer):
             self.out_rerun = bn.capture_rerun_window(width=600, height=600)
     """
 
-    __slots__ = ["width", "height"]
+    __slots__ = ["height", "width"]
     # width/height are viewer-pane sizing hints; they do not change the content
     # of the recorded .rrd file, so they must not invalidate the cache.
     _hash_exclude = ("width", "height")
@@ -397,7 +400,7 @@ class ResultRerun(ResultContainer):
 class ResultReference(param.Parameter):
     """Use this class to save arbitrary objects that are not picklable or native to panel.  You can pass a container callback that takes the object and returns a panel pane to be displayed"""
 
-    __slots__ = ["units", "obj", "container", "max_time_events"]
+    __slots__ = ["container", "max_time_events", "obj", "units"]
     _hash_exclude = ("obj", "container", "max_time_events")
 
     def __init__(
@@ -421,7 +424,7 @@ class ResultReference(param.Parameter):
 
 
 class ResultDataSet(param.Parameter):
-    __slots__ = ["units", "obj", "max_time_events"]
+    __slots__ = ["max_time_events", "obj", "units"]
     _hash_exclude = ("obj", "max_time_events")
 
     def __init__(
@@ -443,7 +446,7 @@ class ResultDataSet(param.Parameter):
 
 
 class ResultVolume(param.Parameter):
-    __slots__ = ["units", "obj", "max_time_events"]
+    __slots__ = ["max_time_events", "obj", "units"]
     _hash_exclude = ("obj", "max_time_events")
 
     def __init__(self, obj=None, default=None, units="container", max_time_events=None, **params):

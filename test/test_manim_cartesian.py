@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import itertools
 
-
 from bencher.results.manim_cartesian.cartesian_product_cfg import (
     CartesianProductCfg,
     SweepVar,

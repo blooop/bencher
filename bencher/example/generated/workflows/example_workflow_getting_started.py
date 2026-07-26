@@ -2,8 +2,8 @@
 
 import math
 import random
-
 from enum import auto
+
 from strenum import StrEnum
 
 import bencher as bn

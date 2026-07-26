@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 import panel as pn
-from param import Parameter
 import plotly.graph_objs as go
 import xarray as xr
+from param import Parameter
 
-from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import PlotFilter, VarRange
-from bencher.variables.results import ResultFloat
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.variables.results import ResultFloat
 
 
 def _da_to_sorted_grid(da: xr.DataArray, x_name: str, y_name: str):

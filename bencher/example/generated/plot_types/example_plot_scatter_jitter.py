@@ -1,11 +1,11 @@
 """Auto-generated example: Plot Type: Scatter Jitter."""
 
+import random
+
+import bencher as bn
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
-import bencher as bn
-
-import random
 
 
 class ScatterJitterDemo(bn.ParametrizedSweep):

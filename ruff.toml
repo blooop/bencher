@@ -1,5 +1,10 @@
 line-length = 100
 
+[format]
+# ruff 0.16 began formatting python code blocks embedded in markdown. The docs and
+# plans are hand-aligned prose, so keep the formatter to real source files.
+exclude = ["*.md"]
+
 [lint]
 # E501: Lines too long (maximum of 79 characters).
 ignore = [

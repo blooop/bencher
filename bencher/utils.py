@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-from collections import namedtuple
-from contextvars import ContextVar
-import xarray as xr
 import hashlib
-import re
-import math
-from colorsys import hsv_to_rgb
-from pathlib import Path
-from uuid import uuid4
-from functools import partial
-from typing import Callable, Any
 import logging
+import math
+import re
+import shutil
 import subprocess
 import tempfile
-import shutil
+from collections import namedtuple
+from collections.abc import Callable
+from colorsys import hsv_to_rgb
+from contextvars import ContextVar
+from functools import partial
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
 
-import param
 import numpy as np
+import param
+import xarray as xr
 
 
 def hmap_canonical_input(dic: dict) -> tuple:
@@ -102,7 +103,7 @@ def hash_sha1(var: Any) -> str:
     Returns:
         str: A hexadecimal SHA1 hash of the string representation of the variable
     """
-    if hasattr(var, "__bencher_hash__") and callable(getattr(var, "__bencher_hash__")):
+    if hasattr(var, "__bencher_hash__") and callable(var.__bencher_hash__):
         var = var.__bencher_hash__()
     return hashlib.sha1(str(var).encode("ASCII")).hexdigest()
 

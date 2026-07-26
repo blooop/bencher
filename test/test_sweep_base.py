@@ -1,8 +1,10 @@
 import unittest
 
-from bencher.example.benchmark_data import AllSweepVars, PostprocessFn
+from hypothesis import given
+from hypothesis import strategies as st
+
 import bencher as bn
-from hypothesis import given, strategies as st
+from bencher.example.benchmark_data import AllSweepVars, PostprocessFn
 
 
 class TestSweepBase(unittest.TestCase):

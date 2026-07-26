@@ -1,5 +1,5 @@
-import pytest
 import panel as pn
+import pytest
 
 from bencher.results.composable_container.composable_container_base import ComposeType
 from bencher.results.composable_container.composable_container_panel import (

@@ -1,7 +1,6 @@
 import bencher as bn
-from bencher.example.example_video import example_video
 from bencher.example.example_image import example_image
-
+from bencher.example.example_video import example_video
 
 if __name__ == "__main__":
     runner = bn.BenchRunner("example_docs")

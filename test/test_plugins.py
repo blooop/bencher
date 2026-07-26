@@ -458,7 +458,7 @@ class TestEntryPointDiscovery(unittest.TestCase):
         class FakeEP:
             name = "alpha"
 
-            def load(self):  # noqa: ARG002 - mock signature
+            def load(self):
                 return _alpha
 
         with patch("bencher.plugins.registry.metadata.entry_points") as ep_mock:
@@ -482,7 +482,7 @@ class TestEntryPointDiscovery(unittest.TestCase):
         class FakeEP:
             name = "factory"
 
-            def load(self):  # noqa: ARG002 - mock signature
+            def load(self):
                 return factory
 
         with patch("bencher.plugins.registry.metadata.entry_points") as ep_mock:

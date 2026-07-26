@@ -9,7 +9,6 @@ import panel as pn
 import bencher as bn
 from bencher.results.dataset_result import DataSetResult
 
-
 SCALES = [1.0, 2.0]
 
 

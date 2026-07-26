@@ -1,19 +1,19 @@
-import os
-import subprocess
-import pytest
-import unittest
-import random
-from shutil import rmtree
-from copy import deepcopy
 import logging
-
-from hypothesis import given, settings, strategies as st
-
+import os
+import random
+import subprocess
+import unittest
+from copy import deepcopy
 from datetime import datetime
-from diskcache import Cache
+from shutil import rmtree
 
-from bencher.example.benchmark_data import ExampleBenchCfg
+import pytest
+from diskcache import Cache
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from bencher import Bench, BenchCfg, BenchRunCfg
+from bencher.example.benchmark_data import ExampleBenchCfg
 
 
 def get_hash_isolated_process() -> bytes:

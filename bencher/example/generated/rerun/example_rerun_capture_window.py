@@ -1,7 +1,9 @@
 """Auto-generated example: Rerun Capture — embed spatial visualizations in sweep reports."""
 
 import math
+
 import rerun as rr
+
 import bencher as bn
 
 

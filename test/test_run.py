@@ -5,15 +5,16 @@ import contextlib
 import signal
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
 import warnings
+from unittest.mock import MagicMock, patch
+
 import bencher as bn
 from bencher.example.example_simple_float import SimpleFloat, example_simple_float
 from bencher.run import (
     _active_runners,
+    _install_sigterm_handler,
     _shutdown_all_servers,
     _sigterm_handler,
-    _install_sigterm_handler,
 )
 
 # bencher.__init__ shadows the module with `from .run import run`, so use sys.modules.
@@ -197,7 +198,7 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_run_emits_deprecation_warning(self):
         """add_run() emits a DeprecationWarning."""
         bench_runner = bn.BenchRunner("test_deprecation")
-        bench_fn = lambda run_cfg: None  # noqa: E731
+        bench_fn = lambda run_cfg: None
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.add_run(bench_fn)
@@ -208,7 +209,7 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_run_still_adds_function(self):
         """add_run() still adds the function despite deprecation."""
         bench_runner = bn.BenchRunner("test_deprecation")
-        bench_fn = lambda run_cfg: None  # noqa: E731
+        bench_fn = lambda run_cfg: None
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             bench_runner.add_run(bench_fn)
@@ -217,7 +218,7 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_does_not_emit_deprecation_warning(self):
         """add() does NOT emit a DeprecationWarning."""
         bench_runner = bn.BenchRunner("test_no_deprecation")
-        bench_fn = lambda run_cfg: None  # noqa: E731
+        bench_fn = lambda run_cfg: None
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bench_runner.add(bench_fn)
@@ -227,7 +228,7 @@ class TestAddRunDeprecation(unittest.TestCase):
     def test_add_returns_self_for_chaining(self):
         """add() returns self for method chaining."""
         bench_runner = bn.BenchRunner("test_chaining")
-        bench_fn = lambda run_cfg: None  # noqa: E731
+        bench_fn = lambda run_cfg: None
         result = bench_runner.add(bench_fn)
         self.assertIs(result, bench_runner)
 

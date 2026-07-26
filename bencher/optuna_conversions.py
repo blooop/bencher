@@ -8,14 +8,10 @@ import param
 
 # NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
 # import). It is only needed by param_importance(), so import it lazily there.
-
 from bencher.bench_cfg import BenchCfg
-
-
-from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
-from bencher.variables.time import TimeSnapshot, TimeEvent
-
+from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.time import TimeEvent, TimeSnapshot
 
 
 # BENCH_CFG

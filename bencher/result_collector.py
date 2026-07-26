@@ -18,26 +18,6 @@ import xarray as xr
 from diskcache import Cache
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
-from bencher.results.bench_result import BenchResult
-from bencher.variables.inputs import IntSweep
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.results import (
-    XARRAY_MULTIDIM_RESULT_TYPES,
-    DATA_VAR_RESULT_TYPES,
-    ResultFloat,
-    ResultVec,
-    ResultPath,
-    ResultVideo,
-    ResultImage,
-    ResultContainer,
-    ResultReference,
-    ResultDataSet,
-    ResultRerun,
-    result_missing_fill,
-)
-from bencher.worker_job import WorkerJob
-from bencher.job import JobFuture
-
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.history import (
     HISTORY_FORMAT,
@@ -52,6 +32,25 @@ from bencher.history import (
     project,
     reconcile,
 )
+from bencher.job import JobFuture
+from bencher.results.bench_result import BenchResult
+from bencher.variables.inputs import IntSweep
+from bencher.variables.results import (
+    DATA_VAR_RESULT_TYPES,
+    XARRAY_MULTIDIM_RESULT_TYPES,
+    ResultContainer,
+    ResultDataSet,
+    ResultFloat,
+    ResultImage,
+    ResultPath,
+    ResultReference,
+    ResultRerun,
+    ResultVec,
+    ResultVideo,
+    result_missing_fill,
+)
+from bencher.variables.time import TimeEvent, TimeSnapshot
+from bencher.worker_job import WorkerJob
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +128,7 @@ def set_xarray_multidim(
 
 
 def _set_result_value(
-    bench_res: "BenchResult",
+    bench_res: BenchResult,
     rv_arrays: dict[str, np.ndarray] | None,
     name: str,
     idx: tuple,
@@ -185,7 +184,7 @@ class ResultCollector:
             self._history_cache.close()
             self._history_cache = None
 
-    def __enter__(self) -> "ResultCollector":
+    def __enter__(self) -> ResultCollector:
         return self
 
     def __exit__(self, *exc_info) -> None:

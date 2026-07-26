@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-from typing import Callable, Protocol, runtime_checkable
+import inspect
 import logging
 import warnings
 import webbrowser
-import inspect
+from collections.abc import Callable
+from copy import deepcopy
 from datetime import datetime
-from bencher.bench_cfg import BenchRunCfg, BenchCfg, ShowMode, normalize_show
+from typing import Protocol, runtime_checkable
+
+from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
+from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
+from bencher.bencher import Bench
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.bencher import Bench
-from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
-from copy import deepcopy
 
 
 def _resolve_cache_samples(cache_samples, kwargs, stacklevel=2):
@@ -116,9 +118,9 @@ class BenchRunner:
         Returns:
             str: A unique name based on timestamp, object id, and random value
         """
-        import time
         import hashlib
         import random
+        import time
 
         # Create a unique name based on timestamp, object id, and random value
         timestamp = int(time.time() * 1000)  # millisecond precision
@@ -203,7 +205,7 @@ class BenchRunner:
             report=report,
         )
 
-    def add(self, bench_fn: Benchable) -> "BenchRunner":
+    def add(self, bench_fn: Benchable) -> BenchRunner:
         """Add a benchmark function to be executed by this runner.
 
         Args:

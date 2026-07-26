@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import traceback
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from importlib import metadata
-from typing import Iterable, Optional
 
 import panel as pn
 
@@ -70,7 +70,7 @@ class PluginRegistry:
             raise ValueError("Plugin must have a non-empty string backend")
         self._plugins[(plugin.name, plugin.backend)] = plugin
 
-    def unregister(self, name: str, backend: Optional[str] = None) -> None:
+    def unregister(self, name: str, backend: str | None = None) -> None:
         """Remove a plugin. With no backend, removes every backend's implementation
         of that chart type."""
         if backend is not None:
@@ -87,7 +87,7 @@ class PluginRegistry:
         """Skip the entry-point scan on next lookup. Test-only helper."""
         self._entry_points_loaded = True
 
-    def get(self, name: str, backend: Optional[str] = None) -> Optional[PlotPlugin]:
+    def get(self, name: str, backend: str | None = None) -> PlotPlugin | None:
         """Resolve a chart type to one implementation.
 
         With a backend, exact lookup. Without, the preferred implementation:
@@ -161,10 +161,10 @@ class PluginRegistry:
         self,
         data: BenchData,
         *,
-        include: Optional[Iterable[str]] = None,
-        exclude: Optional[Iterable[str]] = None,
-        backend: Optional[str] = None,
-        only: Optional[str] = None,
+        include: Iterable[str] | None = None,
+        exclude: Iterable[str] | None = None,
+        backend: str | None = None,
+        only: str | None = None,
     ) -> tuple[PlotPlugin, ...]:
         """Return one matching implementation per chart type, by descending priority.
 
@@ -191,10 +191,10 @@ class PluginRegistry:
         self,
         data: BenchData,
         *,
-        include: Optional[Iterable[str]] = None,
-        exclude: Optional[Iterable[str]] = None,
-        backend: Optional[str] = None,
-        only: Optional[str] = None,
+        include: Iterable[str] | None = None,
+        exclude: Iterable[str] | None = None,
+        backend: str | None = None,
+        only: str | None = None,
     ) -> tuple[PluginDecision, ...]:
         """The full selection decision table: one entry per registered plugin, chosen
         entries first (in `select()` order — descending priority, then name), each
@@ -287,10 +287,10 @@ class PluginRegistry:
         self,
         data: BenchData,
         *,
-        include: Optional[Iterable[str]] = None,
-        exclude: Optional[Iterable[str]] = None,
-        backend: Optional[str] = None,
-        only: Optional[str] = None,
+        include: Iterable[str] | None = None,
+        exclude: Iterable[str] | None = None,
+        backend: str | None = None,
+        only: str | None = None,
         strict: bool = False,
     ) -> tuple[tuple[str, pn.viewable.Viewable], ...]:
         """Run every selected plugin, returning (name, pane) pairs in priority order.
@@ -325,5 +325,5 @@ def register_plugin(plugin: PlotPlugin) -> PlotPlugin:
     return plugin
 
 
-def unregister_plugin(name: str, backend: Optional[str] = None) -> None:
+def unregister_plugin(name: str, backend: str | None = None) -> None:
     _REGISTRY.unregister(name, backend)

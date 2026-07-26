@@ -1,4 +1,5 @@
 import unittest
+
 from bencher.results.float_formatter import FormatFloat
 
 

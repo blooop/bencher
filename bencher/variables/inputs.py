@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
 from typing import Any
-import warnings
 
 import numpy as np
-from param import Integer, Number, Selector
 import yaml
-from bencher.variables.sweep_base import SweepBase, shared_slots, SUBSAMPLING_DIVISIONS_SAMPLES
+from param import Integer, Number, Selector
+
+from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, SweepBase, shared_slots
 
 
 # Sentinel value used to indicate that the actual selectable values for a SweepSelector
@@ -267,7 +268,7 @@ class StringSweep(SweepSelector):
         units: str = "ul",
         doc: str | None = None,
         **params,
-    ) -> "StringSweep":
+    ) -> StringSweep:
         """Create a StringSweep intended for later population.
 
         Parameters
@@ -361,7 +362,7 @@ class YamlSelection(str):
     def __repr__(self) -> str:
         return f"YamlSelection(key={self.key()!r}, value={self.value()!r})"
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, YamlSelection):
             return (self.key(), self.value()) == (other.key(), other.value())
         if isinstance(other, str):

@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 import bencher as bn
-from bencher import save_result, render_report
+from bencher import render_report, save_result
 
 GENERATED_DIR = Path("bencher/example/generated")
 RESULT_TYPES_DIR = GENERATED_DIR / "result_types"

@@ -17,8 +17,8 @@ from bencher import (
     result_to_json,
     series_for_var,
 )
-from bencher.regression import RegressionReport, RegressionResult
 from bencher.example.benchmark_data import ExampleBenchCfg
+from bencher.regression import RegressionReport, RegressionResult
 
 
 def _make_bench() -> Bench:

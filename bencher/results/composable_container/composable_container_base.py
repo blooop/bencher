@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from enum import auto
 from typing import Any
-from dataclasses import dataclass, field
+
 from strenum import StrEnum
+
 from bencher.results.float_formatter import FormatFloat
 
 
@@ -55,7 +57,7 @@ class ComposableContainerBase:
     label_len: int = 0
 
     @staticmethod
-    def label_formatter(var_name: str, var_value: int | float | str) -> str:
+    def label_formatter(var_name: str, var_value: float | str) -> str:
         """Take a variable name and values and return a pretty version with approximate fixed width
 
         Args:

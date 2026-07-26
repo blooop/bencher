@@ -29,7 +29,6 @@ from bencher.bench_cfg import BenchCfg
 from bencher.job import Executors, FutureCache, Job
 from bencher.sweep_executor import worker_kwargs_wrapper
 
-
 # ---------------------------------------------------------------------------
 # Deterministic worker configs — no randomness so serial == parallel
 # ---------------------------------------------------------------------------

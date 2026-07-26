@@ -1,8 +1,10 @@
 """Auto-generated example: Composable Video: ComposeType.overlay."""
 
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
+
 import bencher as bn
 
 

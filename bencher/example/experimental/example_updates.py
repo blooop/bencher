@@ -1,20 +1,17 @@
 # pylint: skip-file  #this is experimental still
 
 
+import holoviews as hv
 import numpy as np
 import pandas as pd
-import holoviews as hv
 import panel as pn
 
 # import streamz
 # import streamz.dataframe
-
 from holoviews import opts
 from holoviews.streams import Buffer
-
-from tornado.ioloop import PeriodicCallback
 from tornado import gen
-
+from tornado.ioloop import PeriodicCallback
 
 hv.extension("bokeh")
 

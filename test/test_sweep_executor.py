@@ -2,12 +2,13 @@
 
 import unittest
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from bencher.example.benchmark_data import ExampleBenchCfg
-from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.job import Executors
+from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
 
 
 class TestSweepExecutor(unittest.TestCase):

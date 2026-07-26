@@ -13,7 +13,6 @@ from pathlib import Path
 
 import bencher as bn
 
-
 GENERATED_DIR = Path("bencher/example/generated")
 
 
@@ -113,32 +112,31 @@ def generate_python_files():
 
     from bencher.example.meta.generate_meta import example_meta
     from bencher.example.meta.generate_meta_advanced import example_meta_advanced
-    from bencher.example.meta.generate_meta_bool_plot_types import example_meta_bool_plot_types
-    from bencher.example.meta.generate_meta_composable import example_meta_composable
-    from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
-    from bencher.example.meta.generate_meta_image_video import example_meta_image_video
-    from bencher.example.meta.generate_meta_optimization import (
-        example_meta_optimization,
-        example_meta_optimization_over_time,
-        example_meta_optimization_aggregated,
-    )
-    from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
-    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
-    from bencher.example.meta.generate_meta_levels import example_meta_levels
-    from bencher.example.meta.generate_meta_sampling import example_meta_sampling
-    from bencher.example.meta.generate_meta_statistics import example_meta_statistics
-    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
-    from bencher.example.meta.generate_meta_workflows import example_meta_workflows
-
-    from bencher.example.meta.generate_meta_regression import example_meta_regression
-    from bencher.example.meta.generate_meta_yaml import example_meta_yaml
-    from bencher.example.meta.generate_meta_performance import example_meta_performance
-    from bencher.example.meta.generate_meta_publish import example_meta_publish
     from bencher.example.meta.generate_meta_aggregation import example_meta_aggregation
+    from bencher.example.meta.generate_meta_bool_plot_types import example_meta_bool_plot_types
     from bencher.example.meta.generate_meta_cartesian_animation import (
         example_meta_cartesian_animation,
     )
+    from bencher.example.meta.generate_meta_composable import example_meta_composable
+    from bencher.example.meta.generate_meta_const_vars import example_meta_const_vars
     from bencher.example.meta.generate_meta_container_tabs import example_meta_container_tabs
+    from bencher.example.meta.generate_meta_image_video import example_meta_image_video
+    from bencher.example.meta.generate_meta_levels import example_meta_levels
+    from bencher.example.meta.generate_meta_optimization import (
+        example_meta_optimization,
+        example_meta_optimization_aggregated,
+        example_meta_optimization_over_time,
+    )
+    from bencher.example.meta.generate_meta_performance import example_meta_performance
+    from bencher.example.meta.generate_meta_plot_types import example_meta_plot_types
+    from bencher.example.meta.generate_meta_publish import example_meta_publish
+    from bencher.example.meta.generate_meta_regression import example_meta_regression
+    from bencher.example.meta.generate_meta_rerun import example_meta_rerun
+    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
+    from bencher.example.meta.generate_meta_sampling import example_meta_sampling
+    from bencher.example.meta.generate_meta_statistics import example_meta_statistics
+    from bencher.example.meta.generate_meta_workflows import example_meta_workflows
+    from bencher.example.meta.generate_meta_yaml import example_meta_yaml
 
     example_meta()
     example_meta_result_types()

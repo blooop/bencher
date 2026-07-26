@@ -1,10 +1,12 @@
 """Auto-generated example: ResultImage: Over Time Slider."""
 
-import bencher as bn
-from datetime import datetime, timedelta
 import math
+from datetime import datetime, timedelta
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):

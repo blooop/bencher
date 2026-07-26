@@ -2,8 +2,8 @@
 
 import random
 
-from bencher.results.histogram_result import HistogramResult
 import bencher as bn
+from bencher.results.histogram_result import HistogramResult
 
 
 class PassRateFloat(bn.ParametrizedSweep):
