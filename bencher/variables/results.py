@@ -440,6 +440,10 @@ class ResultDataSet(param.Parameter):
     inside ``benchmark()``), and an explicit ``container=`` passed to a renderer
     beats both.  The callback receives only the object — no plot kwargs — so
     single-argument callables are safe.
+
+    A declared container travels with ``BenchCfg`` into the result cache and through
+    the collect/render split, so it has to be picklable: a module-level function or a
+    callable object, not a lambda or a local function.
     """
 
     __slots__ = ["units", "obj", "container", "max_time_events"]

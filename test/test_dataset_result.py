@@ -1,5 +1,6 @@
 """Tests for DataSetResult (bencher/results/dataset_result.py)."""
 
+import pickle
 import unittest
 
 import numpy as np
@@ -181,6 +182,11 @@ class TestContainerIsNotData(unittest.TestCase):
         other_container = bn.ResultDataSet(container=explicit_container, doc="d")
         self.assertEqual(plain.hash_persistent(), with_container.hash_persistent())
         self.assertEqual(with_container.hash_persistent(), other_container.hash_persistent())
+
+    def test_declared_container_survives_pickling(self):
+        """It rides in BenchCfg, which the result cache and split render both pickle."""
+        rv = pickle.loads(pickle.dumps(DeclaredContainerSweep.param.table))
+        self.assertIs(rv.container, declared_container)
 
     def test_unset_slot_falls_back_to_raw_frame(self):
         """A result pickled before the slot existed unpickles with it unset, and still renders.

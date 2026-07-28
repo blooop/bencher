@@ -156,6 +156,10 @@ Without it, the alternative is `bench.add(bn.DataSetResult, container=scatter, .
 which appends the plot to the end of the report instead of placing it with the results
 it belongs to.
 
+A declared container is part of the benchmark config, which the result cache and the
+collect/render split both pickle, so it must be picklable: a module-level function (as
+above) or a callable object, not a lambda or a local function.
+
 **XY scatter of two measured columns:** for the common case of that container —
 scattering two columns of the table against each other — `bn.xy_scatter` builds it for
 you, so no plotting code is needed:
@@ -169,7 +173,7 @@ cloud = bn.ResultDataSet(
 `data_aspect=1` forces equal x/y scaling, which a cloud of positions wants: an
 auto-scaled aspect makes an elongated cloud look round. Columns are validated, and x/y
 are inferred from the numeric columns when the frame holds only the pair being plotted.
-What it returns is a picklable spec object, so it is safe as a declared container. The
+What it returns is a picklable spec object, so it satisfies the constraint above. The
 same spec is available as a chart type for a report-level plot —
 `bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`, or by name via
 `to_auto(plot_list=["xy_scatter"], x=..., y=...)`.
