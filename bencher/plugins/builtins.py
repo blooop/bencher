@@ -106,9 +106,13 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.holoview_results.surface_result import SurfaceResult
     from bencher.results.holoview_results.table_result import TableResult
     from bencher.results.holoview_results.tabulator_result import TabulatorResult
+    from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
     from bencher.results.rerun_result import RerunResult
     from bencher.results.video_summary import VideoSummaryResult
 
+    # Appended rather than grouped next to "dataset" so existing priorities keep their
+    # numbers; priority is inert for named-only plugins, which are only ever selected
+    # by name (it decides between backends implementing the *same* chart type).
     return [
         ("violin", "holoviews", ViolinResult.to_plot),
         ("scatter_jitter", "holoviews", ScatterJitterResult.to_plot),
@@ -120,6 +124,7 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
         ("dataset", "panel", DataSetResult.to_plot),
         ("video_summary", "panel", VideoSummaryResult.to_video_summary),
         ("rerun", "rerun", RerunResult.to_rerun),
+        ("xy_scatter", "holoviews", XYScatterResult.to_plot),
     ]
 
 
