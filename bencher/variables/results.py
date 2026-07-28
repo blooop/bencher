@@ -424,12 +424,31 @@ class ResultReference(param.Parameter):
 
 
 class ResultDataSet(param.Parameter):
-    __slots__ = ["units", "obj", "max_time_events"]
-    _hash_exclude = ("obj", "max_time_events")
+    """A tabular result: one DataFrame (or Dataset) per sample.
+
+    ``container`` is an optional callback taking the stored object and returning
+    something panel can display, so a table can render as the plot it means
+    instead of as raw rows.  Declare it once on the class and every sample
+    renders through it, in ``result_vars`` order, alongside the other results::
+
+        cloud = ResultDataSet(container=my_scatter)   # my_scatter(df) -> plot
+
+        def benchmark(self):
+            self.cloud = ResultDataSet(build_frame())
+
+    Per-sample overrides are honoured too (``ResultDataSet(df, container=...)``
+    inside ``benchmark()``), and an explicit ``container=`` passed to a renderer
+    beats both.  The callback receives only the object — no plot kwargs — so
+    single-argument callables are safe.
+    """
+
+    __slots__ = ["units", "obj", "container", "max_time_events"]
+    _hash_exclude = ("obj", "container", "max_time_events")
 
     def __init__(
         self,
         obj: Any | None = None,
+        container: Callable[[Any], pn.pane.panel] | None = None,
         default: Any | None = None,
         units: str = "dataset",
         max_time_events=None,
@@ -438,6 +457,7 @@ class ResultDataSet(param.Parameter):
         super().__init__(default=default, **params)
         self.units = units
         self.obj = obj
+        self.container = container
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:

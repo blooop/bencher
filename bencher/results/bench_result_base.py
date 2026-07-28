@@ -1023,8 +1023,18 @@ class BenchResultBase:
         if isinstance(result_var, ResultDataSet):
             ref = self.dataset_list[val]
             if ref is not None:
-                if container is not None:
-                    return container(ref.obj)
+                # Renderer-supplied container wins, then the one the sample was
+                # stored with, then the one declared on the class. Called with the
+                # object alone (no plot kwargs) so single-argument callables work.
+                # getattr, not attribute access: a result pickled before the slot
+                # existed unpickles without it, and reports of old runs still render.
+                dataset_container = (
+                    container
+                    or getattr(ref, "container", None)
+                    or getattr(result_var, "container", None)
+                )
+                if dataset_container is not None:
+                    return dataset_container(ref.obj)
                 return ref.obj
             return None
         if isinstance(result_var, ResultReference):

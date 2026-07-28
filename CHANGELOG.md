@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ruff format`, so regenerated examples stay lint-clean. No runtime behavior change.
 
 ### Added
+- **`ResultDataSet(container=...)`** — a `ResultDataSet` can now declare how it renders,
+  the way `ResultReference` already could. The callback takes the stored object and
+  returns anything panel can display, so a measured table shows up as the plot it means
+  rather than as raw rows, *in `result_vars` order* with the rest of the results.
+  Precedence: a container passed to a renderer wins, then one attached to the stored
+  sample (`ResultDataSet(df, container=...)` inside `benchmark()`), then the one declared
+  on the class. The callback is invoked with the object alone (no plot kwargs), so
+  single-argument callables are safe. Previously the only way to render a dataset as a
+  plot was `bench.add(bn.DataSetResult, container=...)`, which appends to the end of the
+  report and cannot sit among the other result variables. `container` is in
+  `_hash_exclude`, so declaring one does not change any cache key.
 - **Plot-selection signature enrichment** (A2 Phase S1): `PltCntCfg` gains additive, cheaply-computed facts alongside the existing counts — `has_time`/`time_steps` (temporal axis presence and length), `result_kinds` (result-variable name → coarse serializable kind, via the new `result_kind` / `RESULT_KIND_ORDER` in `bencher.variables.results`), `cat_levels` (levels per categorical input), and `samples_per_point` (min repeat count actually present at the latest time step, missing-sentinel-aware per result type, vs the configured `repeats`). `generate_plt_cnt_cfg` takes an optional dataset for the data-derived facts, `PltCntCfg.__str__` includes the new fields, and the aggregation plotting path carries them through. No selection behavior changes.
 
 ## [1.116.0] - 2026-07-11
