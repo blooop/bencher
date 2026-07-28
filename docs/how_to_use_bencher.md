@@ -156,6 +156,10 @@ Without it, the alternative is `bench.add(bn.DataSetResult, container=scatter, .
 which appends the plot to the end of the report instead of placing it with the results
 it belongs to.
 
+A declared container is part of the benchmark config, which the result cache and the
+collect/render split both pickle, so it must be picklable: a module-level function (as
+above) or a callable object, not a lambda or a local function.
+
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
 See the [ResultImage gallery](reference/meta/result_types/result_image/index) and
