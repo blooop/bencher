@@ -156,6 +156,49 @@ class TestXYScatterFactory(unittest.TestCase):
         self.assertIn("list", str(ctx.exception))
 
 
+class TestNonStringColumnLabels(unittest.TestCase):
+    """A column label is only a string by convention; lookups must use the real label."""
+
+    def setUp(self):
+        self.df = pd.DataFrame({0: [1.0, 2.0], 1: [3.0, 4.0], 2: [5.0, 6.0]})
+
+    def test_integer_labels_inferred(self):
+        points = xy_scatter()(self.df)
+        self.assertEqual([d.name for d in points.kdims], ["0", "1"])
+        self.assertEqual(len(points), 2)
+
+    def test_integer_labels_named_explicitly(self):
+        points = xy_scatter(x=2, y=0)(self.df)
+        self.assertEqual([d.name for d in points.kdims], ["2", "0"])
+        self.assertEqual(list(points["2"]), [5.0, 6.0])
+
+    def test_integer_label_as_colour_and_vdim(self):
+        points = xy_scatter(x=0, y=1, color=2)(self.df)
+        self.assertEqual([d.name for d in points.vdims], ["2"])
+        self.assertEqual(style_opts(points)["color"], "2")
+
+    def test_one_named_integer_axis_infers_the_other(self):
+        points = xy_scatter(y=1)(self.df)
+        self.assertEqual([d.name for d in points.kdims], ["0", "1"])
+
+    def test_missing_integer_label_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            xy_scatter(x=0, y=9)(self.df)
+        self.assertIn("9", str(ctx.exception))
+
+    def test_timestamp_labels_are_usable(self):
+        stamps = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        df = pd.DataFrame({stamps[0]: [1.0, 2.0], stamps[1]: [3.0, 4.0]})
+        points = xy_scatter(x=stamps[0], y=stamps[1])(df)
+        self.assertEqual([d.name for d in points.kdims], [str(stamps[0]), str(stamps[1])])
+
+    def test_labels_colliding_once_stringified_raise(self):
+        df = pd.DataFrame({0: [1.0, 2.0], "0": [3.0, 4.0]})
+        with self.assertRaises(ValueError) as ctx:
+            xy_scatter(x=0, y="0")(df)
+        self.assertIn("collide", str(ctx.exception))
+
+
 class TestXYScatterResult(unittest.TestCase):
     """The chart type: one scatter per sample, tabular results only."""
 
