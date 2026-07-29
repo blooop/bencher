@@ -22,10 +22,45 @@ import pandas as pd
 import xarray as xr
 
 
+def promote_named_index(df: pd.DataFrame) -> pd.DataFrame:
+    """Move any *named* index level into a column, so it can be plotted.
+
+    ``xr.Dataset.to_pandas()`` puts the dimension coordinate in the index and only
+    the data variables in the columns, so a ``ResultDataSet`` built the idiomatic
+    way from xarray holds its x axis there and no chart could reach it. An ordinary
+    frame has an unnamed ``RangeIndex``, which is row position rather than data, and
+    is left alone — as is a level whose name is already a column, since promoting it
+    would collide.
+
+    Promoted levels land at the front of the frame, which is also what column
+    inference wants: for a one-variable timeseries the x axis comes first.
+
+    A level whose name is already a column cannot be promoted — it would collide —
+    and cannot be left named either: pandas rejects any lookup of a label that is
+    both an index level and a column as ambiguous, so ``sort_values`` on it would
+    raise. The column is what a chart asked for, so the level keeps its values and
+    loses its name.
+    """
+    named = [name for name in df.index.names if name is not None]
+    if not named:
+        return df
+    promote = [name for name in named if name not in df.columns]
+    shadowed = {name for name in named if name in df.columns}
+    # Shallow copy so rebinding the index below cannot reach the stored sample,
+    # which is rendered again on every report build.
+    out = df.reset_index(level=promote) if promote else df.copy(deep=False)
+    if shadowed:
+        # set_names, not rename: rename() takes a list as a *single* name for a
+        # flat index. It returns a new Index, which matters because the shallow
+        # copy above still shares the original's index object.
+        out.index = out.index.set_names([None if n in shadowed else n for n in out.index.names])
+    return out
+
+
 def to_dataframe(obj: Any, chart: str) -> pd.DataFrame:
     """Coerce a stored payload to a DataFrame with plottable columns."""
     if isinstance(obj, pd.DataFrame):
-        return obj
+        return promote_named_index(obj)
     if isinstance(obj, (xr.Dataset, xr.DataArray)):
         # reset_index so dimension coordinates become columns and can be plotted.
         return obj.to_dataframe().reset_index()
@@ -219,6 +254,7 @@ __all__ = [
     "TabularSpec",
     "check_column",
     "plot_frame",
+    "promote_named_index",
     "resolve_axes",
     "to_dataframe",
 ]

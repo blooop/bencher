@@ -56,6 +56,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than indexing a list with an array several frames later.
 
 ### Added
+- **`xy_curve` chart type** — draws one or more *measured* columns of a `ResultDataSet`
+  against an x column, for a benchmark that collects a whole series as one sample. The
+  gap it fills: `curve` and `line` plot *across* the sweep, with one value per sample, so
+  they cannot show a series that lives inside one. Available the same two ways as
+  `xy_scatter`: `bn.xy_curve(x="time", y="signal")` returns a picklable spec usable as a
+  `ResultDataSet(container=...)`, and `XYCurveResult` is registered as a **named-only**
+  chart type. `y=` takes a list to overlay several series with a legend, `markers=True`
+  adds a marker per row for a sparse series, and `sort=False` keeps the frame's row order
+  so a trajectory that doubles back in x is drawn as travelled rather than sorted into a
+  function of x. Gallery example: `example_plot_xy_curve`.
+- **A named DataFrame index is now plottable as a column.** `Dataset.to_pandas()` — the
+  idiomatic way to build a `ResultDataSet` from xarray — leaves the dimension coordinate
+  in the index and only the data variables in the columns, so the x axis was unreachable
+  by any chart and inference saw a single-column frame. `to_dataframe` now promotes named
+  index levels to columns, at the front so inference finds the x axis first. An unnamed
+  `RangeIndex` is row position rather than data and is left alone; a level whose name is
+  already a column keeps its values and loses its name, since pandas rejects a label that
+  is both an index level and a column as ambiguous. The `ResultDataSet` gallery examples
+  (`example_result_dataset_1d`/`_2d`) and `BenchableDataSetResult` now declare an
+  `xy_curve` container, so they show the collected series as a curve rather than as a
+  table of raw rows.
 - **Generic per-sample data rendering, with tabular handling kept at the edge.**
   `BenchResultBase.map_sample_panes` is the single operation that retrieves each stored
   sample and optionally maps a renderer over it; it neither checks nor converts the payload

@@ -162,23 +162,49 @@ A declared container is part of the benchmark config, which the result cache and
 collect/render split both pickle, so it must be picklable: a module-level function (as
 above) or a callable object, not a lambda or a local function.
 
-**XY scatter of two measured columns:** tabular interpretation belongs to this
-renderer, not to `ResultDataSet`. `bn.xy_scatter` builds a renderer that accepts a
-DataFrame, xarray Dataset/DataArray, or HoloViews Dataset:
+**Built-in intra-sample charts:** tabular interpretation belongs to these renderers, not
+to `ResultDataSet`. For the common cases of that container bencher builds one for you, so
+no plotting code is needed. Each accepts a DataFrame, xarray Dataset/DataArray, or
+HoloViews Dataset, and plots *inside* one sample — the axes are columns the benchmark
+measured, and the sweep dimensions separate one plot from the next.
+
+| Builder | Draws | Use for |
+|---|---|---|
+| `bn.xy_scatter(x=, y=)` | an unordered cloud of points | landing points, hit locations, a phase-space cloud |
+| `bn.xy_curve(x=, y=)` | a connected series | a signal collected over time, a convergence trace |
 
 ```python
 cloud = bn.ResultDataSet(
     container=bn.xy_scatter(x="dx_mm", y="dy_mm", color="touch", data_aspect=1)
 )
+trace = bn.ResultDataSet(
+    container=bn.xy_curve(x="time_s", y=["measured_mm", "commanded_mm"])
+)
 ```
 
-`data_aspect=1` forces equal x/y scaling, which a cloud of positions wants: an
-auto-scaled aspect makes an elongated cloud look round. Columns are validated, and x/y
-are inferred from the numeric columns when the frame holds only the pair being plotted.
-What it returns is a picklable spec object, so it satisfies the constraint above. The
-same spec is available as a chart type for a report-level plot —
-`bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`, or by name via
-`to_auto(plot_list=["xy_scatter"], x=..., y=...)`.
+Do not reach for `scatter`, `curve` or `line` for this: those plot *across* the sweep,
+with one value per sample, so an input variable is their x axis. These take both axes
+from within a single sample.
+
+What each builder returns is a picklable spec object, so it satisfies the constraint
+above. Columns are validated — a typo triggers a message listing the available columns
+instead of rendering nothing — and x/y are inferred from the numeric columns when the
+frame holds only the pair being plotted. A frame built with `Dataset.to_pandas()`
+keeps its dimension coordinate in the *index* rather than a column; a named index is
+promoted, so `x="time"` works on one.
+
+Notable options: `xy_scatter(data_aspect=1)` forces equal x/y scaling, which a cloud of
+positions wants — an auto-scaled aspect makes an elongated cloud look round.
+`xy_curve(y=[...])` overlays several series with a legend, `markers=True` adds a marker
+per row so a sparse series is visible, and `sort=False` keeps the frame's row order for
+a trajectory that doubles back in x rather than sorting it into a function of x. Anything
+else holoviews accepts (`alpha`, `line_width`, `color`, ...) passes straight through.
+
+Each is also available as a chart type for a report-level plot —
+`bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")` or
+`bench.add(bn.XYCurveResult, x="time_s", y="measured_mm")` — or by name via
+`to_auto(plot_list=["xy_scatter"], x=..., y=...)`. They are never selected
+automatically, so no existing report gains a plot it did not ask for.
 
 Under `over_time`, a `ResultDataSet` renders the run being reported rather than a slider
 over the history: a cell holds an index into a payload list rebuilt on every run, so
