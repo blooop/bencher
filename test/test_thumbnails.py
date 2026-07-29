@@ -279,6 +279,9 @@ class ScreenshotPage(FakePage):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.screenshot_calls = []
+        # Left None so a missing set_viewport_size() call fails loudly rather than
+        # letting a zero-height viewport satisfy the assertions below.
+        self.viewport = None
 
     def set_viewport_size(self, size):
         self.viewport = size
