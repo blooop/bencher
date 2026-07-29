@@ -23,6 +23,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which 0.16 newly formats. Example generation now runs `ruff check --fix-only` alongside
   `ruff format`, so regenerated examples stay lint-clean. No runtime behavior change.
 
+### Fixed
+- **A `ResultDataSet` renders on every run, not only the first.** With `over_time` and
+  more than one event in the history, a tabular result reached `ds_to_container` with
+  `over_time` still a live dimension: `_to_panes_da` drops `over_time` from the pane
+  recursion so hvplot can use groupby, and the branch that rebuilds it for pane-type
+  results only covered `ResultVideo`/`ResultImage`/`ResultRerun`. The render then died in
+  `zero_dim_da_to_val` with `ValueError: Dimension over_time already exists` (no input
+  vars) or, once another dimension was consumed first, in the `dataset_list` lookup with
+  `TypeError: only integer scalar arrays can be converted to a scalar index` — one cause,
+  two signatures, and via `to_auto` the traceback was swallowed and the plot silently
+  vanished from the report. A `ResultDataSet` now renders the current event: its cells
+  hold indices into `dataset_list`, which is rebuilt from the samples of the run doing the
+  rendering, so the indices merged in from history address *this* run's list and a slider
+  across the events would show the current table under every past run's label. Scalar
+  results keep their full `over_time` series. Two supporting hardenings: a length-1
+  dimension on a point now collapses to a value instead of a one-element array, and
+  `ds_to_container` names the result variable and the dimension that was not reduced
+  rather than indexing a list with an array several frames later.
+
 ### Added
 - **`ResultDataSet(container=...)`** — a `ResultDataSet` can now declare how it renders,
   the way `ResultReference` already could. The callback takes the stored object and
