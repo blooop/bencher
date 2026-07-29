@@ -2,6 +2,7 @@
 
 import pickle
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -10,13 +11,19 @@ import panel as pn
 import xarray as xr
 
 import bencher as bn
-from bencher.results.dataset_result import DataSetResult
+from bencher.results.bench_result_base import BenchResultBase
+from bencher.results.dataset_result import DataSetResult, render_data_samples
+from bencher.variables.results import PANEL_TYPES
 
 SCALES = [1.0, 2.0]
 
 
 def expected_frame(scale: float) -> pd.DataFrame:
     return pd.DataFrame({"y": [scale * 1.0, scale * 2.0, scale * 3.0]})
+
+
+def arbitrary_payload(scale: float) -> dict:
+    return {"scale": scale, "samples": [scale, scale * 2.0]}
 
 
 class DataFrameSweep(bn.ParametrizedSweep):
@@ -40,6 +47,20 @@ def per_sample_container(df: pd.DataFrame) -> pn.pane.Markdown:
 
 def explicit_container(df: pd.DataFrame) -> pn.pane.Markdown:
     return pn.pane.Markdown(f"explicit rows={len(df)}")
+
+
+def payload_container(payload: dict) -> pn.pane.Markdown:
+    return pn.pane.Markdown(f"payload scale={payload['scale']:g} samples={len(payload['samples'])}")
+
+
+class ArbitraryPayloadSweep(bn.ParametrizedSweep):
+    """The generic store has no DataFrame/xarray requirement."""
+
+    scale = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    table = bn.ResultDataSet(container=payload_container, doc="structured Python payload")
+
+    def benchmark(self):
+        self.table = bn.ResultDataSet(arbitrary_payload(self.scale))
 
 
 class DeclaredContainerSweep(bn.ParametrizedSweep):
@@ -151,7 +172,7 @@ def container_output(viewable: pn.viewable.Viewable) -> list[str]:
     return [
         pane.object
         for pane in viewable.select(pn.pane.Markdown)
-        if str(pane.object).startswith(("declared", "per-sample", "explicit"))
+        if str(pane.object).startswith(("declared", "per-sample", "explicit", "payload"))
     ]
 
 
@@ -188,6 +209,99 @@ class TestDataSetResult(unittest.TestCase):
         frame = self.res.ds_to_container(point, rv, container=None)
         pd.testing.assert_frame_equal(frame, expected_frame(SCALES[1]))
         np.testing.assert_allclose(frame["y"].to_numpy(), [2.0, 4.0, 6.0])
+
+
+class NonDataSetSweep(bn.ParametrizedSweep):
+    """A sweep with a pane-type result that is not a ResultDataSet."""
+
+    scale = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    label = bn.ResultString(doc="a string, not a stored payload")
+
+    def __call__(self, **kwargs):
+        self.update_params_from_kwargs(**kwargs)
+        self.label = f"scale={self.scale:g}"
+        return self.get_results_values_as_dict()
+
+
+class TestOnlyDataSetResultsAreClaimed(unittest.TestCase):
+    """This view renders stored payloads only, unlike the general ``panes`` view.
+
+    The distinction is the reason the two exist: ``to_panes`` claims every pane-type
+    result, so a sweep without a ResultDataSet is its job, not this one's. Returning
+    None rather than falling back keeps a ``container=`` written for a stored payload
+    from being called with an unrelated result's value.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        bench = bn.Bench("test_dataset_non_dataset_result", NonDataSetSweep())
+        cls.res = bench.plot_sweep(
+            "string_sweep",
+            input_vars=["scale"],
+            result_vars=["label"],
+            run_cfg=bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False),
+            auto_plot=False,
+        )
+
+    def test_dataset_view_declines_a_sweep_with_no_stored_payload(self):
+        self.assertIsNone(self.res.to(DataSetResult))
+
+    def test_panes_view_still_renders_it(self):
+        """Guard on the fixture: the result is renderable, just not by this view."""
+        self.assertIsInstance(self.res.to_panes(), pn.viewable.Viewable)
+
+
+class TestSharedRenderPath(unittest.TestCase):
+    """Both per-sample views go through one render path, differing only in claim.
+
+    The default report renders a declared ``container=`` through ``to_panes``, not
+    through this view, so if the two paths were separate copies a fix to one would
+    silently not reach the report.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = run_sweep()
+
+    def _claimed_types(self, render) -> tuple:
+        with unittest.mock.patch.object(BenchResultBase, "map_sample_panes", autospec=True) as spy:
+            render()
+        self.assertEqual(spy.call_count, 1, "the view must delegate, not reimplement")
+        return spy.call_args.args[1]
+
+    def test_dataset_view_claims_only_stored_payloads(self):
+        self.assertEqual(
+            self._claimed_types(lambda: self.res.to(DataSetResult)), (bn.ResultDataSet,)
+        )
+
+    def test_panes_view_claims_every_pane_type(self):
+        self.assertEqual(self._claimed_types(self.res.to_panes), PANEL_TYPES)
+
+    def test_chart_types_reuse_the_same_path(self):
+        """A chart type composes the shared path rather than adding a parallel one."""
+        self.assertEqual(
+            self._claimed_types(lambda: render_data_samples(self.res)), (bn.ResultDataSet,)
+        )
+
+
+class TestArbitraryPayload(unittest.TestCase):
+    """ResultDataSet stores data; only its renderer interprets the payload."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = run_sweep(ArbitraryPayloadSweep(), "test_dataset_arbitrary_payload")
+
+    def test_payload_round_trips_without_tabular_coercion(self):
+        self.assertEqual(
+            [stored.obj for stored in self.res.dataset_list],
+            [arbitrary_payload(scale) for scale in SCALES],
+        )
+
+    def test_declared_renderer_receives_the_original_payload(self):
+        self.assertEqual(
+            container_output(self.res.to(DataSetResult)),
+            ["payload scale=1 samples=2", "payload scale=2 samples=2"],
+        )
 
 
 class TestDeclaredContainer(unittest.TestCase):

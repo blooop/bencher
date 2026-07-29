@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from functools import partial
-
-import holoviews as hv
 import panel as pn
 from param import Parameter
 
-from bencher.results.bench_result_base import BenchResultBase, ReduceType
+from bencher.results.bench_result_base import BenchResultBase
 from bencher.results.video_controls import VideoControls
 from bencher.variables.results import (
     PANEL_TYPES,
@@ -30,17 +27,12 @@ class PaneResult(BenchResultBase):
         subsampling_divisions: int | None = None,
         **kwargs,
     ) -> pn.pane.panel | None:
-        if hv_dataset is None:
-            hv_dataset = self.to_hv_dataset(
-                ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions
-            )
-        elif not isinstance(hv_dataset, hv.Dataset):
-            hv_dataset = hv.Dataset(hv_dataset)
-        return self.map_plot_panes(
-            partial(self.ds_to_container, container=container),
+        return self.map_sample_panes(
+            PANEL_TYPES,
+            container=container,
+            result_var=result_var,
             hv_dataset=hv_dataset,
             target_dimension=target_dimension,
-            result_var=result_var,
-            result_types=PANEL_TYPES,
+            subsampling_divisions=subsampling_divisions,
             **kwargs,
         )

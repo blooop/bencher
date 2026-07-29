@@ -129,40 +129,42 @@ demo.
 | `bn.ResultPath()` | Downloadable file outputs | `self.artifact = "/path/to/file"` |
 | `bn.ResultContainer()` | Embeddable HTML/panel content | `self.widget = pane` |
 | `bn.ResultVec(size=3)` | Fixed-size vector results (x, y, z) | `self.position = [1.0, 2.0, 3.0]` |
-| `bn.ResultDataSet()` | A table per sample (many rows measured at one point) | `self.cloud = bn.ResultDataSet(df)` |
+| `bn.ResultDataSet()` | Any picklable data payload per sample | `self.data = bn.ResultDataSet(payload)` |
 
 **Choosing between ResultFloat and ResultBool:** If a result is binary (success/failure,
 reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds to [0, 1]
 and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
 See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
-**Rendering a table as a plot:** `ResultDataSet` shows raw rows by default. Pass
-`container=` a callable taking the stored object and returning anything panel can
-display, and every sample renders through it, in `result_vars` order alongside the
-other results:
+**Rendering stored data:** `ResultDataSet` stores the payload without interpreting
+its type. Without a renderer, Panel displays the raw object. Pass `container=` a
+callable taking the stored object and returning anything Panel can display, and every
+sample renders through it, in `result_vars` order alongside the other results:
 
 ```python
-def scatter(df):                       # -> a holoviews / panel object
-    return hv.Points(df, kdims=["x", "y"])
+def render_measurement(payload):       # -> a HoloViews / Panel object
+    return build_view(payload)
 
 class MySweep(bn.ParametrizedSweep):
-    cloud = bn.ResultDataSet(container=scatter)
+    measurement = bn.ResultDataSet(container=render_measurement)
 
     def benchmark(self):
-        self.cloud = bn.ResultDataSet(measure())     # per-sample container= also works
+        self.measurement = bn.ResultDataSet(measure())
 ```
 
-Without it, the alternative is `bench.add(bn.DataSetResult, container=scatter, ...)`,
-which appends the plot to the end of the report instead of placing it with the results
-it belongs to.
+The payload can be a DataFrame, xarray object, mapping, sequence, custom dataclass,
+or another picklable Python object. Use `ResultReference` for data that cannot be
+pickled. A per-sample `container=` also works. An explicit renderer passed through
+`bench.add(bn.DataSetResult, container=...)` overrides the declared renderer and
+appends that view to the report.
 
 A declared container is part of the benchmark config, which the result cache and the
 collect/render split both pickle, so it must be picklable: a module-level function (as
 above) or a callable object, not a lambda or a local function.
 
-**XY scatter of two measured columns:** for the common case of that container —
-scattering two columns of the table against each other — `bn.xy_scatter` builds it for
-you, so no plotting code is needed:
+**XY scatter of two measured columns:** tabular interpretation belongs to this
+renderer, not to `ResultDataSet`. `bn.xy_scatter` builds a renderer that accepts a
+DataFrame, xarray Dataset/DataArray, or HoloViews Dataset:
 
 ```python
 cloud = bn.ResultDataSet(
@@ -179,9 +181,9 @@ same spec is available as a chart type for a report-level plot —
 `to_auto(plot_list=["xy_scatter"], x=..., y=...)`.
 
 Under `over_time`, a `ResultDataSet` renders the run being reported rather than a slider
-over the history: a cell holds an index into a list of tables rebuilt on every run, so
+over the history: a cell holds an index into a payload list rebuilt on every run, so
 the indices carried in from earlier runs address the current list and a slider would show
-today's table under yesterday's label. Scalar results keep their full history.
+today's payload under yesterday's label. Scalar results keep their full history.
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.

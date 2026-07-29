@@ -237,8 +237,8 @@ Result types declare what a benchmark function returns:
 - `ResultVideo` — a file path to a video
 - `ResultPath` — an arbitrary file path
 - `ResultString` — a string result
-- `ResultDataSet` — a table (DataFrame or xarray Dataset) per sample, optionally with a
-  `container=` callback that renders it as a plot instead of raw rows
+- `ResultDataSet` — any picklable Python payload per sample, optionally with a
+  `container=` callback that renders it without coupling storage to its data type
 - `ResultVolume` — volume data
 
 Bencher distinguishes inputs from results by type: anything that is a subclass of a result type

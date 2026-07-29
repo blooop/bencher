@@ -84,7 +84,15 @@ class TouchCloud(bn.ParametrizedSweep):
 
     spread = bn.FloatSweep(default=0.5, bounds=[0.1, 1.0], doc="Positioning noise")
 
-    touches = bn.ResultDataSet(doc="Landing points, one row per touch")
+    touches = bn.ResultDataSet(
+        container=bn.xy_scatter(
+            x="dx_mm",
+            y="dy_mm",
+            color="touch",
+            data_aspect=1,
+        ),
+        doc="Landing points, one row per touch",
+    )
 
     def benchmark(self):
         rng = random.Random(0)
@@ -285,10 +293,9 @@ PLOT_CONFIGS = {
         "float_dims": 1,
         "cat_dims": 0,
         "repeats": 1,
-        "plot_call": 'res.to(XYScatterResult, x="dx_mm", y="dy_mm", color="touch", data_aspect=1)',
-        "extra_import": (
-            "from bencher.results.holoview_results.xy_scatter_result import XYScatterResult"
-        ),
+        # The declared renderer replaces the raw payload in the normal result
+        # position, so the example needs no second, appended report-level plot.
+        "plot_call": None,
         "input_vars": '["spread"]',
         "result_vars": '["touches"]',
         "benchable_class": "TouchCloud",
