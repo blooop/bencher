@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ruff format`, so regenerated examples stay lint-clean. No runtime behavior change.
 
 ### Fixed
+- **`hover=False` on an intra-sample chart now actually disables hover.** `set_default_opts`
+  registers `tools=["hover"]` as a global holoviews default for most element types, so a
+  spec that merely omitted the key got hover back and the option was a silent no-op.
+  `tools` is now set in both directions (`[]` when off). Passing `tools=` through `**opts`
+  still wins, as it is applied last.
 - **A `ResultDataSet` renders on every run, not only the first.** With `over_time` and
   more than one event in the history, a tabular result reached `ds_to_container` with
   `over_time` still a live dimension: `_to_panes_da` drops `over_time` from the pane
@@ -43,6 +48,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than indexing a list with an array several frames later.
 
 ### Added
+- **Shared machinery for intra-sample chart types** (`holoview_results/tabular_spec.py`).
+  The parts of `xy_scatter` that are not specific to a scatter are now a reusable base:
+  `TabularSpec`, a frozen (therefore picklable) dataclass whose `__call__` coerces the
+  stored object to a DataFrame and delegates to a subclass's `build()`, carrying the
+  options every chart shares (`title`, `xlabel`, `ylabel`, `hover`, `data_aspect`, and
+  `**opts` passthrough) plus the column helpers (`to_dataframe`, `check_column`,
+  `resolve_axes`, `plot_frame`, `value_columns`); and `TabularSpecResult.render_spec`,
+  the `to_plot` body that maps a spec over every `ResultDataSet` sample. A new chart is
+  now a `build()`, a factory function, and a `to_plot` that names its own options.
+  Column-validation errors name the chart that rejected the column, via a `chart_name`
+  class var. Chart types keep naming their options explicitly rather than accepting
+  `**kwargs`: `**kwargs` belongs to `map_plot_panes`, and a signature-based split could
+  not tell a pane-sizing `width` from a holoviews style `width`. No behaviour change to
+  `xy_scatter`, which is the base's first user.
 - **`xy_scatter` chart type** — scatters two *measured* columns of a `ResultDataSet`
   against each other, for results whose rows are the measurement (landing points, hit
   locations, a phase-space cloud). Distinct from the existing `scatter`, which puts an
