@@ -75,10 +75,15 @@ MIN_RESULT_H = 80
 MAX_CROP_ASPECT = 1.3
 CROP_PAD = 8
 
-# Elements that count as "a result" when locating the interesting part of a report.
+# Candidate result elements, most to least preferred. A report's plots and media make a
+# better thumbnail than the summary DataFrame table that often precedes them, so a lower
+# tier is used only when no element from a higher tier exists below the "Results:" heading.
 # Bokeh/Panel render into shadow DOM, so these must be queried through Playwright's
 # selector engine (which pierces open shadow roots) rather than document.querySelectorAll.
-RESULT_SELECTOR = ".bk-Figure, .bk-Canvas, .bk-DataTable, video, img, table"
+RESULT_SELECTOR_TIERS = (
+    ".bk-Figure, video, img",
+    ".bk-Canvas, .bk-DataTable, table",
+)
 # Everything above the "Results:" heading is title, description and the sweep-shape
 # diagram — that text is what made naive top-of-page screenshots useless as thumbnails.
 RESULTS_HEADING_SELECTOR = "h1, h2, h3, h4"
@@ -86,11 +91,39 @@ RESULTS_HEADING_SELECTOR = "h1, h2, h3, h4"
 # is interactive chrome with no value in a static thumbnail, so it is hidden before the
 # region is measured — that way the crop is taken from the post-reflow layout.
 TOOLBAR_SELECTOR = ".bk-ToolbarPanel"
+# Text results (ResultString, ResultVec, ResultPath) render as Panel markup panes with no
+# plot to frame at all. For those the whole results section is cropped instead, using a
+# permissive selector and a lower size floor to pick up the small text panes.
+SECTION_SELECTOR = "div, pre, table, img, video, canvas"
+MIN_SECTION_W = 60
+MIN_SECTION_H = 30
+# Slack when testing whether an element starts below the "Results:" heading. Candidates
+# must *begin* below it, not merely end below it, or the report's page-spanning wrapper
+# divs qualify and stretch the crop to the full content width.
+MARKER_TOLERANCE = 4
+# How long to keep polling for a report's results to become measurable. Reports that
+# render nothing pay the full wait, so keep the budget modest.
+RESULT_WAIT_ATTEMPTS = 8
+RESULT_WAIT_INTERVAL_MS = 250
+
+
+def _query_all_frames(page, selector: str) -> list:
+    """Query every frame in the page, not just the main one.
+
+    over_time reports are a tab bar plus an iframe, so their entire report — plots and
+    "Results:" heading alike — lives in a child frame that page.query_selector_all cannot
+    see. Element bounding boxes are relative to the main frame's viewport either way, so
+    the coordinates compose directly into a top-level screenshot clip.
+    """
+    handles = []
+    for frame in page.frames:
+        handles.extend(frame.query_selector_all(selector))
+    return handles
 
 
 def _results_marker_bottom(page) -> float | None:
     """Return the document y of the bottom of the report's "Results:" heading, or None."""
-    for handle in page.query_selector_all(RESULTS_HEADING_SELECTOR):
+    for handle in _query_all_frames(page, RESULTS_HEADING_SELECTOR):
         raw = handle.text_content() or ""
         # Panel appends a "¶" anchor link to headings, so compare on letters only.
         if re.sub(r"[^a-z]", "", raw.lower()) != "results":
@@ -107,7 +140,7 @@ def _hide_toolbars(page) -> None:
     Panel/Bokeh render into shadow DOM, which a page-level stylesheet cannot reach, so
     each toolbar is hidden individually through Playwright's shadow-piercing selectors.
     """
-    for handle in page.query_selector_all(TOOLBAR_SELECTOR):
+    for handle in _query_all_frames(page, TOOLBAR_SELECTOR):
         try:
             handle.evaluate("el => { el.style.display = 'none'; }")
         except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
@@ -115,37 +148,72 @@ def _hide_toolbars(page) -> None:
             print(f"  WARNING: Could not hide plot toolbar: {e}")
 
 
-def _results_clip(page) -> dict | None:
-    """Return a screenshot clip rect covering the report's result plots, or None.
-
-    Grows a bounding box over the result elements in document order, stopping before the
-    crop gets so tall that each plot would be unreadable in the thumbnail.
-    """
-    marker_bottom = _results_marker_bottom(page)
-
+def _boxes_below_marker(
+    page, selector: str, marker_bottom: float | None, min_w: float, min_h: float
+) -> list[dict]:
+    """Return bounding boxes matching selector that sit below the "Results:" heading."""
     boxes = []
-    for handle in page.query_selector_all(RESULT_SELECTOR):
+    for handle in _query_all_frames(page, selector):
         box = handle.bounding_box()
-        if box is None or box["width"] < MIN_RESULT_W or box["height"] < MIN_RESULT_H:
+        if box is None or box["width"] < min_w or box["height"] < min_h:
             continue
-        # Drop anything that sits entirely above the "Results:" heading.
-        if marker_bottom is not None and box["y"] + box["height"] <= marker_bottom:
+        # Keep only elements that start below the "Results:" heading.
+        if marker_bottom is not None and box["y"] < marker_bottom - MARKER_TOLERANCE:
             continue
         boxes.append(box)
-    if not boxes:
-        return None
     boxes.sort(key=lambda b: (b["y"], b["x"]))
+    return boxes
 
+
+def _grow_region(boxes: list[dict]) -> tuple[float, float, float, float]:
+    """Union boxes in document order, stopping before the region becomes a tall strip."""
     left, top, right, bottom = None, None, None, None
     for box in boxes:
         n_left = box["x"] if left is None else min(left, box["x"])
         n_top = box["y"] if top is None else min(top, box["y"])
         n_right = max(right or 0.0, box["x"] + box["width"])
         n_bottom = max(bottom or 0.0, box["y"] + box["height"])
-        # Always accept the first box, even if it is an unusually tall one.
+        # Always accept the first box, even if it is an unusually tall one; the caller
+        # clamps the height afterwards.
         if left is not None and (n_bottom - n_top) > MAX_CROP_ASPECT * (n_right - n_left):
             break
         left, top, right, bottom = n_left, n_top, n_right, n_bottom
+    return left, top, right, bottom
+
+
+def _results_clip(page) -> dict | None:
+    """Return a screenshot clip rect covering the report's results, or None.
+
+    Prefers the highest tier of result element present below the "Results:" heading, and
+    falls back to the whole results section for reports whose results are plain text.
+    """
+    marker_bottom = _results_marker_bottom(page)
+
+    boxes = []
+    for selector in RESULT_SELECTOR_TIERS:
+        boxes = _boxes_below_marker(page, selector, marker_bottom, MIN_RESULT_W, MIN_RESULT_H)
+        if boxes:
+            break
+
+    if boxes:
+        left, top, right, bottom = _grow_region(boxes)
+    elif marker_bottom is not None:
+        # No plot, table or media: frame the results section itself.
+        section = _boxes_below_marker(
+            page, SECTION_SELECTOR, marker_bottom, MIN_SECTION_W, MIN_SECTION_H
+        )
+        if not section:
+            return None
+        left = min(b["x"] for b in section)
+        right = max(b["x"] + b["width"] for b in section)
+        top = marker_bottom
+        bottom = max(b["y"] + b["height"] for b in section)
+    else:
+        return None
+
+    # Clamp the height so a single tall result — a stacked video composition, a long
+    # DataFrame table — is topped rather than squeezed into an unreadable sliver.
+    bottom = min(bottom, top + MAX_CROP_ASPECT * (right - left))
 
     page_w = page.evaluate("document.documentElement.scrollWidth")
     page_h = page.evaluate("document.documentElement.scrollHeight")
@@ -156,6 +224,21 @@ def _results_clip(page) -> dict | None:
     if right - left < 1 or bottom - top < 1:
         return None
     return {"x": left, "y": top, "width": right - left, "height": bottom - top}
+
+
+def _wait_for_results(page) -> dict | None:
+    """Poll until the report's results region is measurable, or the attempts run out.
+
+    Returns the last clip attempted, which is None for a report that genuinely renders
+    nothing.
+    """
+    for attempt in range(RESULT_WAIT_ATTEMPTS):
+        clip = _results_clip(page)
+        if clip is not None:
+            return clip
+        if attempt < RESULT_WAIT_ATTEMPTS - 1:
+            page.wait_for_timeout(RESULT_WAIT_INTERVAL_MS)
+    return None
 
 
 def _resize_and_save_png(
@@ -202,6 +285,11 @@ def _take_thumbnail(
         pg.goto(html_path.resolve().as_uri(), wait_until="networkidle", timeout=15000)
         # Brief pause for Bokeh/Panel JS to render plots after network settles
         pg.wait_for_timeout(500)
+        # networkidle does not mean Bokeh has painted, and a fixed sleep is a coin flip on
+        # a cold browser: too short and the region is unmeasurable, so the thumbnail falls
+        # back to a screenshot of a blank page. Poll for the results instead.
+        if _wait_for_results(pg) is None:
+            return pg.screenshot()
         _hide_toolbars(pg)
         # Let Bokeh reflow after the toolbars are removed before measuring the crop.
         pg.wait_for_timeout(150)
