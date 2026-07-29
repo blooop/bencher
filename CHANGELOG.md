@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Intra-sample chart gallery examples now declare their container** rather than appending
+  a report-level plot. `res.to(XYCurveResult, ...)` and friends *add* a plot below whatever
+  `plot_sweep` already rendered, which for a `ResultDataSet` with no declared container is
+  the raw table — so the example showed the rows and the chart. Declaring
+  `container=bn.xy_curve(...)` puts the chart in the result's own position instead, which is
+  what `example_plot_xy_scatter` already did. Affects `example_plot_xy_curve`,
+  `example_plot_xy_histogram` and `example_plot_xy_hexbin`; the chart-type route is
+  unchanged and still covered by tests.
 - **`DataSetResult` now renders `ResultDataSet` results only.** It previously claimed every
   pane-type result, which made `bench.add(bn.DataSetResult)` / `plot_list=["dataset"]` a
   second name for the `panes` view on a sweep with no stored payload. Now that

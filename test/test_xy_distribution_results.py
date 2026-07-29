@@ -165,6 +165,21 @@ class TestXYHistogramFactory(unittest.TestCase):
         element = only(xy_histogram("error_mm", alpha=0.2)(self.df))
         self.assertEqual(style_opts(element)["alpha"], 0.2)
 
+    def test_explicit_labels_win_over_the_derived_defaults(self):
+        """count/density and the column name are defaults, not overrides."""
+        spec = xy_histogram("error_mm", density=True, xlabel="error [mm]", ylabel="probability")
+        opts = plot_opts(only(spec(self.df)))
+        self.assertEqual((opts["xlabel"], opts["ylabel"]), ("error [mm]", "probability"))
+
+    def test_explicit_ylabel_survives_an_overlay(self):
+        overlay = xy_histogram(["error_mm", "baseline_mm"], ylabel="fraction")(self.df)
+        self.assertEqual(plot_opts(first(overlay))["ylabel"], "fraction")
+
+    def test_opts_override_the_overlay_translucency(self):
+        """`opts` is applied last, so it beats the alpha the overlay would pick."""
+        overlay = xy_histogram(["error_mm", "baseline_mm"], alpha=1.0)(self.df)
+        self.assertEqual(style_opts(first(overlay))["alpha"], 1.0)
+
     def test_missing_column_names_the_chart_and_what_is_available(self):
         with self.assertRaises(ValueError) as ctx:
             xy_histogram("nope")(self.df)
@@ -251,6 +266,20 @@ class TestXYHexbinFactory(unittest.TestCase):
     def test_axis_labels_default_to_column_names(self):
         opts = plot_opts(xy_hexbin(x="error_mm", y="baseline_mm")(self.df))
         self.assertEqual((opts["xlabel"], opts["ylabel"]), ("error_mm", "baseline_mm"))
+
+    def test_explicit_labels_win_over_the_column_names(self):
+        opts = plot_opts(
+            xy_hexbin(x="error_mm", y="baseline_mm", xlabel="error [mm]", ylabel="baseline [mm]")(
+                self.df
+            )
+        )
+        self.assertEqual((opts["xlabel"], opts["ylabel"]), ("error [mm]", "baseline [mm]"))
+
+    def test_opts_are_applied_after_the_chart_options(self):
+        """`opts` goes on last, so an unexposed holoviews keyword is never dropped."""
+        tiles = xy_hexbin(x="error_mm", y="baseline_mm", gridsize=13, alpha=0.4)(self.df)
+        self.assertEqual(style_opts(tiles)["alpha"], 0.4)
+        self.assertEqual(plot_opts(tiles)["gridsize"], 13, "the chart option must still apply")
 
     def test_missing_column_names_the_chart(self):
         with self.assertRaises(ValueError) as ctx:

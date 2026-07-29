@@ -192,8 +192,8 @@ single sample.
 
 Pick between `xy_scatter` and `xy_hexbin` by point count: markers show individual
 outliers and stop working once they saturate, which is the point at which where the mass
-actually is becomes the thing you cannot see. A few hundred points scatter fine; tens of
-thousands want hexbin.
+actually sits becomes the thing you cannot see. A few hundred points scatter fine; tens
+of thousands want hexbin.
 
 What each builder returns is a picklable spec object, so it satisfies the constraint
 above. Columns are validated — a typo names the available columns instead of rendering
@@ -218,8 +218,11 @@ Notable options:
 Anything else holoviews accepts (`alpha`, `line_width`, `color`, ...) passes straight
 through.
 
-Each is also available as a chart type for a report-level plot —
-`bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`,
+A declared container is the preferred route: the chart takes the raw table's place in the
+normal result position, so the report shows the plot and not the rows behind it. Each is
+*also* available as a chart type for a report-level plot, which is *appended* to whatever
+`plot_sweep` already rendered (so declare the container as well if the table below it is
+not wanted) — `bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`,
 `bench.add(bn.XYCurveResult, x="time_s", y="measured_mm")`,
 `bench.add(bn.XYHistogramResult, column="latency_ms")`,
 `bench.add(bn.XYHexbinResult, x="dx_mm", y="dy_mm")` — or by name via

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 import bencher as bn
-from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult
 
 
 class LatencySamples(bn.ParametrizedSweep):
@@ -12,7 +11,14 @@ class LatencySamples(bn.ParametrizedSweep):
 
     concurrency = bn.IntSweep(default=4, bounds=[1, 16], doc="Concurrent requests")
 
-    latencies = bn.ResultDataSet(doc="One row per request, measured and baseline")
+    latencies = bn.ResultDataSet(
+        container=bn.xy_histogram(
+            column=["latency_ms", "baseline_ms"],
+            bins=40,
+            xlabel="latency [ms]",
+        ),
+        doc="One row per request, measured and baseline",
+    )
 
     def benchmark(self):
         rng = np.random.default_rng(self.concurrency)
@@ -30,12 +36,7 @@ class LatencySamples(bn.ParametrizedSweep):
 def example_plot_xy_histogram(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Plot Type: Xy Histogram."""
     bench = LatencySamples().to_bench(run_cfg)
-    res = bench.plot_sweep(input_vars=["concurrency"], result_vars=["latencies"])
-    bench.report.append(
-        res.to(
-            XYHistogramResult, column=["latency_ms", "baseline_ms"], bins=40, xlabel="latency [ms]"
-        )
-    )
+    bench.plot_sweep(input_vars=["concurrency"], result_vars=["latencies"])
 
     return bench
 

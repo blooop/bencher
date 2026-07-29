@@ -119,7 +119,14 @@ class SettlingTrace(bn.ParametrizedSweep):
 
     damping = bn.FloatSweep(default=0.5, bounds=[0.2, 1.0], doc="Damping ratio")
 
-    trace = bn.ResultDataSet(doc="Measured and commanded position over time")
+    trace = bn.ResultDataSet(
+        container=bn.xy_curve(
+            x="time_s",
+            y=["measured_mm", "commanded_mm"],
+            ylabel="position [mm]",
+        ),
+        doc="Measured and commanded position over time",
+    )
 
     def benchmark(self):
         t = np.linspace(0.0, 10.0, 120)
@@ -138,7 +145,14 @@ class LatencySamples(bn.ParametrizedSweep):
 
     concurrency = bn.IntSweep(default=4, bounds=[1, 16], doc="Concurrent requests")
 
-    latencies = bn.ResultDataSet(doc="One row per request, measured and baseline")
+    latencies = bn.ResultDataSet(
+        container=bn.xy_histogram(
+            column=["latency_ms", "baseline_ms"],
+            bins=40,
+            xlabel="latency [ms]",
+        ),
+        doc="One row per request, measured and baseline",
+    )
 
     def benchmark(self):
         rng = np.random.default_rng(self.concurrency)
@@ -162,7 +176,16 @@ class DenseCloud(bn.ParametrizedSweep):
 
     spread = bn.FloatSweep(default=0.5, bounds=[0.2, 1.0], doc="Positioning noise")
 
-    touches = bn.ResultDataSet(doc="Landing points, one row per touch")
+    touches = bn.ResultDataSet(
+        container=bn.xy_hexbin(
+            x="dx_mm",
+            y="dy_mm",
+            gridsize=30,
+            min_count=1,
+            data_aspect=1,
+        ),
+        doc="Landing points, one row per touch",
+    )
 
     def benchmark(self):
         rng = np.random.default_rng(0)
@@ -373,13 +396,8 @@ PLOT_CONFIGS = {
         "float_dims": 1,
         "cat_dims": 0,
         "repeats": 1,
-        "plot_call": (
-            'res.to(XYCurveResult, x="time_s", y=["measured_mm", "commanded_mm"], '
-            'ylabel="position [mm]")'
-        ),
-        "extra_import": (
-            "from bencher.results.holoview_results.xy_curve_result import XYCurveResult"
-        ),
+        # Declared, as for xy_scatter: the series is the result, not an extra plot.
+        "plot_call": None,
         "input_vars": '["damping"]',
         "result_vars": '["trace"]',
         "benchable_class": "SettlingTrace",
@@ -391,13 +409,9 @@ PLOT_CONFIGS = {
         "float_dims": 0,
         "cat_dims": 0,
         "repeats": 1,
-        "plot_call": (
-            'res.to(XYHistogramResult, column=["latency_ms", "baseline_ms"], bins=40, '
-            'xlabel="latency [ms]")'
-        ),
-        "extra_import": (
-            "from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult"
-        ),
+        # Declared on the result var, so the histogram takes the raw table's place in
+        # the normal result position instead of being appended below it.
+        "plot_call": None,
         "input_vars": '["concurrency"]',
         "result_vars": '["latencies"]',
         "benchable_class": "LatencySamples",
@@ -409,12 +423,8 @@ PLOT_CONFIGS = {
         "float_dims": 1,
         "cat_dims": 0,
         "repeats": 1,
-        "plot_call": (
-            'res.to(XYHexbinResult, x="dx_mm", y="dy_mm", gridsize=30, min_count=1, data_aspect=1)'
-        ),
-        "extra_import": (
-            "from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult"
-        ),
+        # Declared, as for xy_scatter: the density is the result, not an extra plot.
+        "plot_call": None,
         "input_vars": '["spread"]',
         "result_vars": '["touches"]',
         "benchable_class": "DenseCloud",
