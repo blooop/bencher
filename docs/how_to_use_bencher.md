@@ -178,6 +178,11 @@ same spec is available as a chart type for a report-level plot —
 `bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`, or by name via
 `to_auto(plot_list=["xy_scatter"], x=..., y=...)`.
 
+Under `over_time`, a `ResultDataSet` renders the run being reported rather than a slider
+over the history: a cell holds an index into a list of tables rebuilt on every run, so
+the indices carried in from earlier runs address the current list and a slider would show
+today's table under yesterday's label. Scalar results keep their full history.
+
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
 See the [ResultImage gallery](reference/meta/result_types/result_image/index) and
