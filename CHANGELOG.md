@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **A `ResultReference` container is now called with the object alone.** It was called as
   `container(obj, **kwargs)`, so the render kwargs every path adds (`override`,
-  `agg_over_dims`, the plot-size and `pane_layout` keywords) leaked into a callback that
+  `agg_over_dims`, `pane_layout`, and the `width`/`height` that `set_plot_size` injects from
+  `bench_cfg.plot_size`) leaked into a callback that
   only ever wanted the object, and a single-argument renderer raised `TypeError`. It now
   matches the `ResultDataSet` contract, so one renderer works for both. Breaking only for a
   callback that *relied* on receiving those keywords; nothing in bencher did. The
