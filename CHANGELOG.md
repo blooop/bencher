@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **`DataSetResult` now renders `ResultDataSet` results only.** It previously claimed every
+  pane-type result, which made `bench.add(bn.DataSetResult)` / `plot_list=["dataset"]` a
+  second name for the `panes` view on a sweep with no stored payload. Now that
+  `ResultDataSet` is a generic payload store, a `container=` written for a payload must not
+  be handed an unrelated result's value, so the view returns `None` for such a sweep instead
+  of falling back. Use the `panes` view (`res.to_panes()`, or the default report) for
+  image/video/string/reference results — it is unchanged, and both views share one render
+  path (`BenchResultBase.map_sample_panes`).
 - **Logging now goes through per-module loggers.** Every module logs via
   `logging.getLogger(__name__)` instead of calling `logging.info()` and friends on the
   root logger, so bencher's output can be configured and filtered per module (e.g.
@@ -49,15 +57,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Generic per-sample data rendering, with tabular handling kept at the edge.**
-  `render_data_samples` is the single operation that retrieves each
-  `ResultDataSet` payload and optionally maps a renderer over it; it neither checks nor
-  converts the payload type. `XYScatterResult` composes that generic operation instead
-  of introducing a parallel result hierarchy. The opt-in
+  `BenchResultBase.map_sample_panes` is the single operation that retrieves each stored
+  sample and optionally maps a renderer over it; it neither checks nor converts the payload
+  type, and takes the result types it claims as a parameter. Both per-sample views now go
+  through it — `PaneResult.to_panes` (every pane type, and the path the default report
+  takes) and `render_data_samples` (`ResultDataSet` only) — so a fix to the render path
+  reaches the report and the chart types alike. `XYScatterResult` composes
+  `render_data_samples` instead of introducing a parallel result hierarchy. The opt-in
   `holoview_results/tabular_spec.py` module only contains renderer-side concerns:
   `TabularSpec`, a frozen (therefore picklable) dataclass whose `__call__` coerces
   supported table-like data to a DataFrame, shared HoloViews options, and column helpers
   (`to_dataframe`, `check_column`, `resolve_axes`, `plot_frame`, `value_columns`).
-  Column-validation errors name the chart that rejected the column. Chart types keep
+  `TabularSpec` is exported as `bn.TabularSpec`, since writing a new chart type is what it
+  is for. Column-validation errors name the chart that rejected the column, for every
+  column a chart plots — including the ones a chart *option* implies (`color=`), which
+  `value_columns` validates rather than letting them reach pandas as a bare `KeyError`.
+  Chart types keep
   naming their options explicitly rather than accepting `**kwargs`: `**kwargs` belongs
   to `map_plot_panes`, and a signature-based split could not tell a pane-sizing `width`
   from a HoloViews style `width`.

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import holoviews as hv
+import pandas as pd
 import panel as pn
 from param import Parameter
 
@@ -52,8 +53,10 @@ class XYScatter(TabularSpec):
     cmap: str = "viridis"
     marker: str = "circle"
 
-    def build(self, df) -> hv.Points:
+    def build(self, df: pd.DataFrame) -> hv.Points:
         x_col, y_col = self.axes(df, self.x, self.y)
+        # value_columns validates this too; checking it here first is what names the
+        # option that was wrong ("color=") rather than the generic "value column".
         if self.color is not None:
             self.check(df, self.color, "color")
         value_cols = self.value_columns(df, self.vdims, self.color)
@@ -138,7 +141,13 @@ def xy_scatter(
 
 
 class XYScatterResult(HoloviewResult):
-    """Renders every ``ResultDataSet`` sample as an XY scatter of two of its columns."""
+    """Renders every ``ResultDataSet`` sample as an XY scatter of two of its columns.
+
+    One plot per sample rather than one plot for the sweep: the rows of a sample are
+    the cloud, so averaging them across samples would destroy the thing being
+    measured. Other result types are skipped — a scatter of two columns is only
+    defined for a tabular result.
+    """
 
     def to_plot(
         self,

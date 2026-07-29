@@ -153,6 +153,12 @@ class TabularSpec:
         override them — normally the plotted column names. *chart_opts* are the
         per-chart options; the spec's own ``opts`` are applied last, so anything
         holoviews accepts can be passed through the factory without a wrapper.
+
+        The shared fields win over *chart_opts* for the keys they own, so a chart
+        must not pass ``title``, ``data_aspect`` or ``tools`` as a chart option:
+        the first two are only overridden when the field is set, but ``tools`` is
+        always written (see below) and a chart option would be dropped silently.
+        Pass such a value through ``opts`` instead, which is applied last.
         """
         opts: dict[str, Any] = {}
         if (label := self.xlabel if self.xlabel is not None else xlabel) is not None:
@@ -191,13 +197,20 @@ class TabularSpec:
 
         *extra* is for columns a chart option implies (the one it colours by, say),
         which have to be carried as value dimensions to be usable by the plot but
-        must not be listed twice.
+        must not be listed twice. Every column returned is checked against *df*,
+        including *extra*, so a chart that names one gets this module's
+        available-columns message rather than a bare pandas ``KeyError`` from
+        :meth:`frame`. ``None`` entries in *extra* are skipped, so an unset option
+        needs no guard at the call site.
         """
         value_cols = list(vdims)
         for col in value_cols:
             self.check(df, col, "vdims entry")
         for col in extra:
-            if col is not None and col not in value_cols:
+            if col is None:
+                continue
+            self.check(df, col, "value column")
+            if col not in value_cols:
                 value_cols.append(col)
         return value_cols
 

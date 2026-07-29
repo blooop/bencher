@@ -190,6 +190,13 @@ class TestValueColumns(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.spec.value_columns(self.df, ["nope"])
 
+    def test_unknown_extra_raises_before_the_frame_is_built(self):
+        """An unchecked extra would reach frame() and raise a bare pandas KeyError."""
+        with self.assertRaises(ValueError) as ctx:
+            self.spec.value_columns(self.df, ["a"], "nope")
+        self.assertIn("probe_chart", str(ctx.exception))
+        self.assertIn("'a'", str(ctx.exception), "the error should list the available columns")
+
 
 if __name__ == "__main__":
     unittest.main()
