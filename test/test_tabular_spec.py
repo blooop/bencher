@@ -110,6 +110,12 @@ class TestElementOpts(unittest.TestCase):
         element = _Probe(x="a", y="b", opts={"alpha": 0.25})(self.df)
         self.assertEqual(style_opts(element)["alpha"], 0.25)
 
+    def test_passthrough_opts_mapping_is_not_mutated(self):
+        extra_opts = {"alpha": 0.25}
+        element = _Probe(x="a", y="b", opts=extra_opts)(self.df)
+        style_opts(element)
+        self.assertEqual(extra_opts, {"alpha": 0.25})
+
     def test_passthrough_opts_win_over_the_defaults(self):
         """``**opts`` is the escape hatch, so it is applied last."""
         element = _Probe(x="a", y="b", opts={"xlabel": "override"})(self.df)
