@@ -56,6 +56,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than indexing a list with an array several frames later.
 
 ### Added
+- **`xy_histogram` chart type** — bins one or more measured columns of a `ResultDataSet`,
+  showing the distribution a single sample measured. Distinct from the existing
+  `histogram`, which bins a `ResultFloat` across the sweep and so shows the spread of the
+  repeats. `column=` takes a list to overlay several distributions, binned over a *shared*
+  range so they are actually comparable, and drawn translucent so the one underneath stays
+  readable; it defaults to every numeric column. `density=True` normalises instead of
+  counting, and the y axis is labelled accordingly. An empty or all-NaN column produces
+  empty bins rather than raising — numpy cannot pick a range for an empty array, and NaN is
+  how bencher marks a sample missing, so NaN rows are dropped rather than poisoning the
+  range. Gallery example: `example_plot_xy_histogram`.
+- **`xy_hexbin` chart type** — the density counterpart to `xy_scatter`, taking the same
+  axes and binning them into hexagonal tiles. For a cloud of tens of thousands of points
+  the markers saturate and where the mass actually is becomes the thing a scatter cannot
+  show. `gridsize=` sets the resolution, `min_count=1` drops empty tiles, and the colourbar
+  is on by default since a density plot without one shows shape but no magnitude. Gallery
+  example: `example_plot_xy_hexbin`.
+- **`hv.HexTiles` now carries the shared default figure size.** It was absent from
+  `HoloviewResult.DEFAULT_SIZED_ELEMENTS`, so a hexbin would have fallen back to the
+  holoviews default rather than bencher's 600x600 — the same gap Histogram/Area/ErrorBars
+  were fixed for previously.
 - **`xy_curve` chart type** — draws one or more *measured* columns of a `ResultDataSet`
   against an x column, for a benchmark that collects a whole series as one sample. The
   gap it fills: `curve` and `line` plot *across* the sweep, with one value per sample, so

@@ -47,6 +47,7 @@ class HoloviewResult(PaneResult):
         hv.Histogram,
         hv.Area,
         hv.ErrorBars,
+        hv.HexTiles,
     )
 
     @staticmethod

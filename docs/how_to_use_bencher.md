@@ -172,6 +172,8 @@ measured, and the sweep dimensions separate one plot from the next.
 |---|---|---|
 | `bn.xy_scatter(x=, y=)` | an unordered cloud of points | landing points, hit locations, a phase-space cloud |
 | `bn.xy_curve(x=, y=)` | a connected series | a signal collected over time, a convergence trace |
+| `bn.xy_histogram(column=)` | a binned distribution | every request timed, not just the mean |
+| `bn.xy_hexbin(x=, y=)` | hex-binned density | the same cloud when there are too many points to read as markers |
 
 ```python
 cloud = bn.ResultDataSet(
@@ -180,11 +182,18 @@ cloud = bn.ResultDataSet(
 trace = bn.ResultDataSet(
     container=bn.xy_curve(x="time_s", y=["measured_mm", "commanded_mm"])
 )
+latencies = bn.ResultDataSet(container=bn.xy_histogram("latency_ms", bins=40))
 ```
 
-Do not reach for `scatter`, `curve` or `line` for this: those plot *across* the sweep,
-with one value per sample, so an input variable is their x axis. These take both axes
-from within a single sample.
+Do not reach for `scatter`, `curve`, `line` or `histogram` for this: those plot *across*
+the sweep, with one value per sample, so an input variable is their x axis and what a
+`histogram` shows is the spread of the repeats. These take their axes from within a
+single sample.
+
+Pick between `xy_scatter` and `xy_hexbin` by point count: markers show individual
+outliers and stop working once they saturate, which is the point at which where the mass
+actually is becomes the thing you cannot see. A few hundred points scatter fine; tens of
+thousands want hexbin.
 
 What each builder returns is a picklable spec object, so it satisfies the constraint
 above. Columns are validated — a typo names the available columns instead of rendering
@@ -193,17 +202,28 @@ pair being plotted. A frame built with `Dataset.to_pandas()` keeps its dimension
 coordinate in the *index* rather than a column; a named index is promoted, so
 `x="time"` works on one.
 
-Notable options: `xy_scatter(data_aspect=1)` forces equal x/y scaling, which a cloud of
-positions wants — an auto-scaled aspect makes an elongated cloud look round.
-`xy_curve(y=[...])` overlays several series with a legend, `markers=True` adds a marker
-per row so a sparse series is visible, and `sort=False` keeps the frame's row order for
-a trajectory that doubles back in x rather than sorting it into a function of x. Anything
-else holoviews accepts (`alpha`, `line_width`, `color`, ...) passes straight through.
+Notable options:
+
+- `xy_scatter(data_aspect=1)` and `xy_hexbin(data_aspect=1)` force equal x/y scaling,
+  which a cloud of positions wants — an auto-scaled aspect makes an elongated cloud look
+  round.
+- `xy_curve(y=[...])` overlays several series with a legend, `markers=True` adds a marker
+  per row so a sparse series is visible, and `sort=False` keeps the frame's row order for
+  a trajectory that doubles back in x rather than sorting it into a function of x.
+- `xy_histogram(column=[...])` overlays several distributions, binned over a shared range
+  so they are comparable; `density=True` normalises instead of counting.
+- `xy_hexbin(gridsize=)` sets how many hexagons span the x axis, and `min_count=1` drops
+  empty tiles rather than drawing them at zero.
+
+Anything else holoviews accepts (`alpha`, `line_width`, `color`, ...) passes straight
+through.
 
 Each is also available as a chart type for a report-level plot —
-`bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")` or
-`bench.add(bn.XYCurveResult, x="time_s", y="measured_mm")` — or by name via
-`to_auto(plot_list=["xy_scatter"], x=..., y=...)`. They are never selected
+`bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`,
+`bench.add(bn.XYCurveResult, x="time_s", y="measured_mm")`,
+`bench.add(bn.XYHistogramResult, column="latency_ms")`,
+`bench.add(bn.XYHexbinResult, x="dx_mm", y="dy_mm")` — or by name via
+`to_auto(plot_list=["xy_scatter"], x=..., y=...)`. None of them are ever selected
 automatically, so no existing report gains a plot it did not ask for.
 
 Under `over_time`, a `ResultDataSet` renders the run being reported rather than a slider

@@ -128,6 +128,53 @@ class SettlingTrace(bn.ParametrizedSweep):
             pd.DataFrame({"time_s": t, "measured_mm": settled, "commanded_mm": np.ones_like(t)})
         )"""
 
+_LATENCY_SAMPLES_CODE = """\
+import numpy as np
+import pandas as pd
+
+
+class LatencySamples(bn.ParametrizedSweep):
+    \"\"\"Every request timed, not just the mean: the sample *is* the distribution.\"\"\"
+
+    concurrency = bn.IntSweep(default=4, bounds=[1, 16], doc="Concurrent requests")
+
+    latencies = bn.ResultDataSet(doc="One row per request, measured and baseline")
+
+    def benchmark(self):
+        rng = np.random.default_rng(self.concurrency)
+        scale = 1.0 + 0.4 * self.concurrency
+        self.latencies = bn.ResultDataSet(
+            pd.DataFrame(
+                {
+                    "latency_ms": rng.gamma(3.0, scale, 4000),
+                    "baseline_ms": rng.gamma(3.0, 1.4, 4000),
+                }
+            )
+        )"""
+
+_DENSE_CLOUD_CODE = """\
+import numpy as np
+import pandas as pd
+
+
+class DenseCloud(bn.ParametrizedSweep):
+    \"\"\"Too many points to read as markers, so the marks become counts.\"\"\"
+
+    spread = bn.FloatSweep(default=0.5, bounds=[0.2, 1.0], doc="Positioning noise")
+
+    touches = bn.ResultDataSet(doc="Landing points, one row per touch")
+
+    def benchmark(self):
+        rng = np.random.default_rng(0)
+        self.touches = bn.ResultDataSet(
+            pd.DataFrame(
+                {
+                    "dx_mm": rng.normal(0.0, self.spread, 20000),
+                    "dy_mm": rng.normal(0.0, self.spread, 20000),
+                }
+            )
+        )"""
+
 _HEATMAP_DEMO_CODE = """\
 import math
 
@@ -337,6 +384,41 @@ PLOT_CONFIGS = {
         "result_vars": '["trace"]',
         "benchable_class": "SettlingTrace",
         "class_code": _SETTLING_TRACE_CODE,
+    },
+    # The distribution a single sample measured, unlike `histogram`, which bins one
+    # value per sample and so shows the spread of the repeats instead.
+    "xy_histogram": {
+        "float_dims": 0,
+        "cat_dims": 0,
+        "repeats": 1,
+        "plot_call": (
+            'res.to(XYHistogramResult, column=["latency_ms", "baseline_ms"], bins=40, '
+            'xlabel="latency [ms]")'
+        ),
+        "extra_import": (
+            "from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult"
+        ),
+        "input_vars": '["concurrency"]',
+        "result_vars": '["latencies"]',
+        "benchable_class": "LatencySamples",
+        "class_code": _LATENCY_SAMPLES_CODE,
+    },
+    # Same axes as xy_scatter; at this many points the markers saturate and the
+    # shape of the distribution is what a scatter loses.
+    "xy_hexbin": {
+        "float_dims": 1,
+        "cat_dims": 0,
+        "repeats": 1,
+        "plot_call": (
+            'res.to(XYHexbinResult, x="dx_mm", y="dy_mm", gridsize=30, min_count=1, data_aspect=1)'
+        ),
+        "extra_import": (
+            "from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult"
+        ),
+        "input_vars": '["spread"]',
+        "result_vars": '["touches"]',
+        "benchable_class": "DenseCloud",
+        "class_code": _DENSE_CLOUD_CODE,
     },
 }
 
