@@ -109,6 +109,25 @@ class TouchCloud(bn.ParametrizedSweep):
             )
         )"""
 
+_SETTLING_TRACE_CODE = """\
+import numpy as np
+import pandas as pd
+
+
+class SettlingTrace(bn.ParametrizedSweep):
+    \"\"\"A whole collected trace per sample: the rows are the series, not the sweep.\"\"\"
+
+    damping = bn.FloatSweep(default=0.5, bounds=[0.2, 1.0], doc="Damping ratio")
+
+    trace = bn.ResultDataSet(doc="Measured and commanded position over time")
+
+    def benchmark(self):
+        t = np.linspace(0.0, 10.0, 120)
+        settled = 1.0 - np.exp(-self.damping * t) * np.cos(3.0 * t)
+        self.trace = bn.ResultDataSet(
+            pd.DataFrame({"time_s": t, "measured_mm": settled, "commanded_mm": np.ones_like(t)})
+        )"""
+
 _HEATMAP_DEMO_CODE = """\
 import math
 
@@ -300,6 +319,24 @@ PLOT_CONFIGS = {
         "result_vars": '["touches"]',
         "benchable_class": "TouchCloud",
         "class_code": _TOUCH_CLOUD_CODE,
+    },
+    # A series *inside* one sample, which curve/line cannot show: they have one
+    # value per sample, so the sweep input is their x axis rather than a column.
+    "xy_curve": {
+        "float_dims": 1,
+        "cat_dims": 0,
+        "repeats": 1,
+        "plot_call": (
+            'res.to(XYCurveResult, x="time_s", y=["measured_mm", "commanded_mm"], '
+            'ylabel="position [mm]")'
+        ),
+        "extra_import": (
+            "from bencher.results.holoview_results.xy_curve_result import XYCurveResult"
+        ),
+        "input_vars": '["damping"]',
+        "result_vars": '["trace"]',
+        "benchable_class": "SettlingTrace",
+        "class_code": _SETTLING_TRACE_CODE,
     },
 }
 

@@ -82,12 +82,19 @@ class BenchablePathResult(bn.ParametrizedSweep):
 
 
 class BenchableDataSetResult(bn.ParametrizedSweep):
-    """Demonstrates ResultDataSet — an xarray dataset output."""
+    """Demonstrates ResultDataSet — an xarray dataset output, drawn as a curve.
+
+    The declared container is what makes it a plot rather than a table of raw rows,
+    and it renders in result_vars order with the other results.
+    """
 
     value = bn.FloatSweep(default=5.0, bounds=[0, 10], doc="Base value")
     scale = bn.FloatSweep(default=1.0, bounds=[0.5, 2.0], doc="Scale factor")
 
-    result_ds = bn.ResultDataSet(doc="Generated dataset")
+    result_ds = bn.ResultDataSet(
+        container=bn.xy_curve(x="index", y="result_ds", markers=True),
+        doc="Generated dataset",
+    )
 
     def benchmark(self):
         import xarray as xr
