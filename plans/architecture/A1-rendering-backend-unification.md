@@ -158,6 +158,49 @@ above:
    (`PlotFilter.match_all()` decorator default, `(name, backend)` keying);
    #970 wraps the built-in chart set and routes `to_auto` through
    `registry.select()` with output parity verified against the legacy callback loop.
+4a. **Note on the intra-sample chart family, 2026-07-29** (`xy_scatter` merged in #990;
+   `TabularSpec` base and three more charts in #991–#993). Relevant to the two live
+   goals in this doc — getting renderers off the god class, and swapping backends under
+   stable chart names.
+
+   **It already has the §4 seam, and confines the god-class dependency to one method.**
+   A `TabularSpec.build(df) -> element` touches no `self.ds`, `bench_cfg`,
+   `plt_cnt_cfg`, or registry: it is a pure, picklable function of one sample's table.
+   Everything BenchResult-bound lives in `TabularSpecResult.render_spec` — one ~20-line
+   method that walks the samples via `to_hv_dataset` / `map_plot_panes` /
+   `ds_to_container`, shared by every chart in the family. Contrast `BarResult.to_plot`,
+   which goes straight into `BenchResultBase.filter`. When the built-ins are ported off
+   `legacy_result` (A3 Phase D5), this family is **one** site to port regardless of how
+   many charts it has grown to, and the porting question is narrow and answerable:
+   "how does a plugin iterate samples of a `BenchData`?"
+
+   **The spec is the backend-neutral half of a chart type**, which is what addendum
+   item 2 ("backends over plotters") needs. The fields — `x`, `y`, `color`, `bins`,
+   `gridsize`, `sort`, `density` — say what the chart *is*, with no holoviews in them;
+   only `build()` is holoviews. So the spec's field set is a candidate declarative
+   signature for the chart type, and a second backend supplies element construction
+   under the same name.
+
+   *Caveat, and the one thing that would have to change:* today `chart_name`, the
+   fields, and the holoviews `build()` live on the same class, so `(xy_scatter, rerun)`
+   cannot be registered without duplicating the field list. Serving the backend-swap
+   goal properly means splitting the spec (backend-neutral data, one per chart type)
+   from the builder (one per `(chart type, backend)`), with the registry resolving the
+   pair. That is a real refactor, not free — but it is a *smaller* one than the same
+   split for the legacy renderers, where the chart's options are entangled with
+   plumbing kwargs in a `to_plot` signature.
+
+   **It also localizes the `**kwargs` collision.** These chart types must name every
+   option explicitly (documented in `xy_scatter_result.py`'s `to_plot`) because
+   `**kwargs` belongs to `map_plot_panes` while `**opts` belongs to holoviews, and
+   `to_auto` rides plot-size keywords through the same dict — so `width` is ambiguous
+   and no signature-based split can disambiguate it. `LegacyResultPlugin` papers over
+   this with `_declared_kwargs` filtering (`builtins.py:51-63`). A spec-shaped plugin
+   removes the ambiguity structurally rather than by introspection, because the chart
+   config and the render kwargs become two parameters instead of one namespace:
+   `SpecPlugin(name="xy_scatter", spec=XYScatter(...)).render(data)`. Worth weighing as
+   the shape the plugin contract converges on, not just a convenience for four charts.
+
 4. **Revised Phase 3 landed** (`feature/plugin-named-plotters`): named-only plugins
    (`auto=False` — in the registry, selectable by name, never auto-selected) cover the
    remaining result types: violin, scatter_jitter, scatter, band, table (holoviews);

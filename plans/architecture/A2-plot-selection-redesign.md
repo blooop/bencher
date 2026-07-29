@@ -108,6 +108,76 @@ bench.plot_sweep(..., plots=["heatmap", {"name": "curve", "agg_fn": "median"}])
 - This is what makes the collect/render split clean: the render process receives
   data + *names*, never live function objects (see A3).
 
+## 2.5 The intra-sample chart family is an accidental prototype of S2 and S3
+
+Added 2026-07-29, after `xy_scatter` landed (#990) and the `TabularSpec` base was
+proposed (#991–#993). Worth reading before starting S2 or S3: a working instance of
+both target designs already exists, for one family of charts, and it arrived by a
+different route (needing a *picklable* renderer for the collect/render split).
+
+`bn.xy_scatter(x=..., y=...)` returns a frozen dataclass
+(`holoview_results/xy_scatter_result.py:120`) that is callable as `obj -> element`. It
+exists because a container declared on a result var rides in `BenchCfg`, which the
+result cache and the collect/render split both pickle, so a closure was not an option.
+`#991` generalizes it to a `TabularSpec` base; `#992`/`#993` add `xy_curve`,
+`xy_histogram`, `xy_hexbin` on top.
+
+**It is already §2.4's plot spec.** A spec is "plugin name + kwargs, trivially
+picklable, YAML-able, CLI-able". `TabularSpec` carries `chart_name` (a ClassVar holding
+exactly the registry name) plus dataclass fields (exactly the kwargs), is frozen, and
+has a pickle round-trip test. The round-trip §2.4 asks for is mechanical:
+
+```python
+spec_to_dict = lambda s: {"name": s.chart_name, **dataclasses.asdict(s)}
+dict_to_spec = lambda d: registry.get(d["name"]).spec_factory(**without_name(d))
+```
+
+The gap is only *where* it is used: today the spec fills the per-result-var `container=`
+slot, not the report-level `plots=` slot. So S3 can be prototyped against four real
+charts instead of being designed in the abstract — and the pickling constraint that
+motivates S3 is the same constraint that produced the spec, which is good evidence the
+shape is right.
+
+**It is the safest possible pilot for S2.** The blocker on centralizing matching is
+risk: the built-ins register `PlotFilter.match_all()` and shape-check inside `to_plot`,
+so lifting a filter into the registry can silently remove a plot from every existing
+report. The `xy_*` family is immune to that, because it is registered **named-only**
+(`auto=False`, `builtins.py:165`) — automatic selection never consults it, so a filter
+that is too narrow cannot change any existing report's output. It is also the only
+family whose eligibility is a *one-line* declarative fact: "at least one result var of
+kind `dataset`".
+
+And `PltCntCfg.result_kinds` — added by S1, currently **computed but not consumed** —
+is precisely that fact, already available on `BenchData.plt_cnt_cfg`.
+
+Note that this filter would be load-bearing rather than cosmetic: `include`
+(i.e. `plot_list=[...]`) does **not** bypass `match`; only `only=` does
+(`registry.py:258-268` vs `:207`). So a named `xy_scatter` on a sweep with no tabular
+result would be rejected *with a reason* in `explain_selection()`, where today it
+renders nothing and says "chosen".
+
+### Recommended shape for the `result_kinds` predicate
+
+`PlotFilter` is uniformly `VarRange`-over-counts, and §1 says to keep that DSL. The
+predicate should therefore also be a count, keyed by kind:
+
+```python
+kind_ranges: dict[str, VarRange] = field(default_factory=dict)   # kind -> count range
+# xy_* charts: {"dataset": VarRange(1, None)}
+```
+
+Unspecified kinds are unconstrained, so every existing filter is unaffected. This
+generalizes rather than special-cases — `panel_range` is the same idea with the kinds
+pre-summed, and `cat_levels` (also unconsumed since S1) can later join by the same
+route. Rejected alternative: a bare `result_kinds: frozenset[str]` membership test,
+which cannot express "exactly one" or "no image results" and would be a second
+matching idiom alongside `VarRange`.
+
+**Suggested sequencing.** `xy_scatter` is in main, so the pilot branches off main and
+does not queue behind #991–#993: extend `PlotFilter` with `kind_ranges`, give
+`xy_scatter` a real filter, assert `explain_selection()` names the reason. #993 then
+extends it to the other three charts as a one-line registration change each.
+
 ## 3. Migration phases
 
 **Phase S1 — signature enrichment. [DONE — PR #983]** Extend `PltCntCfg` with the new
@@ -125,7 +195,9 @@ not yet centralized.
 
 **Phase S3 — plot specs.** Implement name+kwargs specs, registry lookup by name,
 deprecation shim for callables. Update YAML sweep format and docs. Verify: round-trip
-a spec through save→load→render (`pixi run test-split`).
+a spec through save→load→render (`pixi run test-split`). *See §2.5:* `TabularSpec` is
+already a working name+kwargs spec for the `xy_*` family, so start by lifting it from
+the `container=` slot to the `plots=` slot rather than designing a parallel mechanism.
 
 **Phase S4 — ranking.** Add `specificity`/`intent`, implement `best_per_intent` behind
 `plot_policy` (default still `all_matching`). Regenerate the full gallery

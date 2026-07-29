@@ -57,6 +57,16 @@ Sequencing: A1 Phases 0, 2, and 3 have landed (#932, #970, #973/v1.114.0; Phase 
 dropped — see the A1 addendum); A4 Phase C1–C2 can start immediately; A3 Phase D2
 gates A4 Phase C4; A2's ranking phases (S3–S4) come last.
 
+**Update (2026-07-29):** the intra-sample chart family (`xy_scatter`, merged #990;
+`TabularSpec` base plus `xy_curve`/`xy_histogram`/`xy_hexbin` in #991–#993) turns out to
+be a working prototype of A2's two unlanded designs — a picklable name+kwargs plot spec
+(§2.4/S3) and a chart type whose eligibility is declarable rather than checked inside
+`to_plot` (S2). Read **A2 §2.5** before starting S2 or S3, and the **A1 addendum item
+4a** for what it implies about getting renderers off the god class and about
+"backends over plotters". Because the family is registered named-only (`auto=False`),
+it is the lowest-risk place to prove declarative matching: automatic selection never
+consults it, so a wrong filter cannot change any existing report.
+
 ## State of the repo (review summary, 2026-06-11)
 
 > **Update (2026-07-06):** the snapshot below is preserved as written. Since then:
