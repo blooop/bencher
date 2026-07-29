@@ -128,7 +128,11 @@ except ModuleNotFoundError:
     pass
 
 try:
-    from .results.composable_container.composable_container_rerun import ComposableContainerRerun
+    from .results.composable_container.composable_container_rerun import (
+        ComposableContainerRerun,
+        RerunRecording,
+        RerunViewKind,
+    )
 except ModuleNotFoundError:
     pass
 

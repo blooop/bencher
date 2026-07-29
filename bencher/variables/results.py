@@ -356,7 +356,9 @@ class ResultRerun(ResultContainer):
 
     Stores a path to an .rrd file (like ResultContainer) but carries viewer
     sizing metadata and provides a dedicated ``to_container()`` that renders
-    the file with the rerun web viewer.
+    the file with the rerun web viewer. A ``ComposableContainerRerun`` can also
+    be assigned directly; result collection materializes it to one .rrd file
+    before caching.
 
     Usage in a ParametrizedSweep::
 

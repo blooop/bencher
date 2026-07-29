@@ -1,9 +1,10 @@
 """Meta-generator: Rerun visualization integration examples.
 
-Generates three rerun examples:
+Generates rerun examples for:
 - capture_window: basic rerun capture in a single sweep
 - regression: 0 input vars, 3 over-time snapshots with regression on the 3rd
 - sweep: 1 input var (damping_ratio), single sweep, no over_time
+- composable_{right,down,sequence,overlay}: combine two complete recordings
 """
 
 import bencher as bn
@@ -15,6 +16,10 @@ RERUN_EXAMPLES = [
     "capture_window",
     "regression",
     "sweep",
+    "composable_right",
+    "composable_down",
+    "composable_sequence",
+    "composable_overlay",
 ]
 
 
@@ -30,6 +35,8 @@ class MetaRerun(MetaGeneratorBase):
             self._generate_regression()
         elif self.example == "sweep":
             self._generate_sweep()
+        elif self.example.startswith("composable_"):
+            self._generate_composable(self.example.removeprefix("composable_"))
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
@@ -144,6 +151,75 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             run_kwargs={"subsampling_divisions": 3},
+        )
+
+    def _generate_composable(self, compose: str):
+        """Combine complete recordings with a native Rerun Blueprint layout."""
+        imports = "import rerun as rr\n\nimport bencher as bn"
+        class_code = f'''
+class RerunComposition(bn.ParametrizedSweep):
+    """Create two recordings and combine them into one Rerun result."""
+
+    out_rerun = bn.ResultRerun(width=900, height=520)
+
+    def benchmark(self):
+        composed = bn.ComposableContainerRerun(
+            compose_method=bn.ComposeType.{compose},
+            name="{compose.title()} composition",
+        )
+        scenes = [
+            ("Reference", [-0.65, 0.0], [230, 80, 80]),
+            ("Candidate", [0.65, 0.0], [70, 120, 235]),
+        ]
+        for index, (label, center, color) in enumerate(scenes):
+            recording = rr.RecordingStream(
+                f"bencher_composable_{compose}_{{index}}",
+                make_default=False,
+            )
+            recording.log(
+                "scene/box",
+                rr.Boxes2D(
+                    centers=[center],
+                    half_sizes=[[0.5, 0.35]],
+                    colors=[color],
+                    labels=[label],
+                ),
+                static=True,
+            )
+            recording.log(
+                "scene/landmarks",
+                rr.Points2D(
+                    [[center[0] - 0.25, -0.55], [center[0] + 0.25, 0.55]],
+                    colors=[color],
+                    radii=0.08,
+                ),
+                static=True,
+            )
+            composed.append(bn.capture_rerun_rrd(recording), label=label)
+
+        # ResultRerun recognizes the compositor and materializes one combined
+        # path-backed .rrd before the result enters Bencher's cache.
+        self.out_rerun = composed'''
+        body = f"""\
+bench = RerunComposition().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=[],
+    result_vars=["out_rerun"],
+    description="Two independent ``.rrd`` recordings are assigned directly to a "
+    "``ComposableContainerRerun``. Bencher namespaces their entity paths, combines "
+    "their chunks into one recording, and creates a native Rerun ``{compose}`` layout.",
+    post_description="``right`` and ``down`` create horizontal and vertical views; "
+    "``sequence`` creates tabs; ``overlay`` places compatible entities in one shared view.",
+)
+"""
+        self.generate_example(
+            title=f"Rerun Composition — {compose.title()}",
+            output_dir=OUTPUT_DIR,
+            filename=f"example_rerun_composable_{compose}",
+            function_name=f"example_rerun_composable_{compose}",
+            imports=imports,
+            body=body,
+            class_code=class_code,
         )
 
 

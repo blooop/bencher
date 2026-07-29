@@ -310,9 +310,12 @@ supports four composition methods:
 
 Different backends implement these operations: `ComposableContainerPanel` uses Panel's `Row`
 and `Column` widgets for interactive dashboards, `ComposableContainerVideo` uses `moviepy` for
-video compositing, and `ComposableContainerDataset` uses `xr.concat` for data merging.
+video compositing, `ComposableContainerDataset` uses `xr.concat` for data merging, and
+`ComposableContainerRerun` namespaces and merges complete Rerun recordings while generating
+native Horizontal, Vertical, Tabs, or shared-view Blueprints.
 See the [Composable Containers gallery](reference/meta/composable_containers/index) for
-interactive examples of each backend and composition mode.
+interactive examples of each backend and composition mode, and the
+[Rerun Integration gallery](reference/meta/rerun/index) for recording composition.
 
 ## Automatic Plot Selection
 

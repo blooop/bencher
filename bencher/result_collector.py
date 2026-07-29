@@ -141,6 +141,18 @@ def _set_result_value(
         set_xarray_multidim(bench_res.ds[name], idx, value)
 
 
+def _materialize_result_value(rv, value):
+    """Convert deferred result artifacts into their cacheable stored representation."""
+    if isinstance(rv, ResultRerun):
+        from bencher.results.composable_container.composable_container_rerun import (
+            ComposableContainerRerun,
+        )
+
+        if isinstance(value, ComposableContainerRerun):
+            return value.render()
+    return value
+
+
 class ResultCollector:
     """Manages benchmark result collection, storage, and caching.
 
@@ -352,6 +364,7 @@ class ResultCollector:
                         f"Make sure your benchmark() method sets "
                         f"self.{rv.name}."
                     ) from None
+                result_value = _materialize_result_value(rv, result_value)
                 if bench_run_cfg.print_bench_results:
                     logger.info(f"{rv.name}: {result_value}")
 
