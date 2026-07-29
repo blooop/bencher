@@ -187,11 +187,11 @@ with one value per sample, so an input variable is their x axis. These take both
 from within a single sample.
 
 What each builder returns is a picklable spec object, so it satisfies the constraint
-above. Columns are validated — a typo names the available columns instead of rendering
-nothing — and x/y are inferred from the numeric columns when the frame holds only the
-pair being plotted. A frame built with `Dataset.to_pandas()` keeps its dimension
-coordinate in the *index* rather than a column; a named index is promoted, so
-`x="time"` works on one.
+above. Columns are validated — a typo triggers a message listing the available columns
+instead of rendering nothing — and x/y are inferred from the numeric columns when the
+frame holds only the pair being plotted. A frame built with `Dataset.to_pandas()`
+keeps its dimension coordinate in the *index* rather than a column; a named index is
+promoted, so `x="time"` works on one.
 
 Notable options: `xy_scatter(data_aspect=1)` forces equal x/y scaling, which a cloud of
 positions wants — an auto-scaled aspect makes an elongated cloud look round.
