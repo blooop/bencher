@@ -43,6 +43,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than indexing a list with an array several frames later.
 
 ### Added
+- **`xy_scatter` chart type** — scatters two *measured* columns of a `ResultDataSet`
+  against each other, for results whose rows are the measurement (landing points, hit
+  locations, a phase-space cloud). Distinct from the existing `scatter`, which puts an
+  input variable on x and a result variable on y; here both axes come from inside one
+  sample and the sweep dimensions separate one plot from the next. Available two ways
+  from one implementation: `bn.xy_scatter(x=..., y=..., color=..., data_aspect=1)`
+  returns a picklable spec usable as a `ResultDataSet(container=...)`, so the cloud
+  renders in `result_vars` order with the other results; and `XYScatterResult` is
+  registered as a **named-only** chart type (`bench.add(bn.XYScatterResult, x=..., y=...)`
+  or `to_auto(plot_list=["xy_scatter"], ...)`), so no existing report gains a plot it
+  did not ask for. Columns are validated against the frame — a typo names the available
+  columns instead of rendering nothing — x/y are inferred from the numeric columns when
+  omitted, `data_aspect=1` gives the equal-aspect scaling a position cloud needs, and
+  DataFrame / xarray / `hv.Dataset` objects are all accepted. Gallery example:
+  `example_plot_xy_scatter`.
 - **`ResultDataSet(container=...)`** — a `ResultDataSet` can now declare how it renders,
   the way `ResultReference` already could. The callback takes the stored object and
   returns anything panel can display, so a measured table shows up as the plot it means

@@ -160,6 +160,24 @@ A declared container is part of the benchmark config, which the result cache and
 collect/render split both pickle, so it must be picklable: a module-level function (as
 above) or a callable object, not a lambda or a local function.
 
+**XY scatter of two measured columns:** for the common case of that container —
+scattering two columns of the table against each other — `bn.xy_scatter` builds it for
+you, so no plotting code is needed:
+
+```python
+cloud = bn.ResultDataSet(
+    container=bn.xy_scatter(x="dx_mm", y="dy_mm", color="touch", data_aspect=1)
+)
+```
+
+`data_aspect=1` forces equal x/y scaling, which a cloud of positions wants: an
+auto-scaled aspect makes an elongated cloud look round. Columns are validated, and x/y
+are inferred from the numeric columns when the frame holds only the pair being plotted.
+What it returns is a picklable spec object, so it satisfies the constraint above. The
+same spec is available as a chart type for a report-level plot —
+`bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`, or by name via
+`to_auto(plot_list=["xy_scatter"], x=..., y=...)`.
+
 Under `over_time`, a `ResultDataSet` renders the run being reported rather than a slider
 over the history: a cell holds an index into a list of tables rebuilt on every run, so
 the indices carried in from earlier runs address the current list and a slider would show

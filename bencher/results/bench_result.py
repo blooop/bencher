@@ -43,6 +43,7 @@ from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.table_result import TableResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
+from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.pane_result import PaneResult
 from bencher.results.video_summary import VideoSummaryResult
@@ -75,6 +76,7 @@ class BenchResult(
     # unbound on a BenchResult.
     TableResult,
     TabulatorResult,
+    XYScatterResult,
     HoloviewResult,
     VideoSummaryResult,
     DataSetResult,
