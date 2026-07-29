@@ -7,6 +7,20 @@
 }
 
 /* --- Gallery overview page --- */
+
+/* Thumbnail display geometry lives here — these two values control how big the gallery
+   cards are and what shape their thumbnails are shown in. They are independent of the
+   captured PNGs, which are cropped tightly around each report's plots and simply fitted
+   into whatever box these define (see THUMB_MAX_W/THUMB_MAX_H in
+   bencher/example/meta/generate_examples.py for the source resolution cap).
+
+   Square is the default because most Bench results are square Bokeh figures; a 4:3 box
+   letterboxes them and shrinks the plot for no gain. */
+:root {
+    --gallery-thumb-aspect: 1 / 1;
+    --gallery-card-min-width: 240px;
+}
+
 .gallery-container {
     max-width: 1400px;
 }
@@ -22,7 +36,7 @@
 
 .gallery-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--gallery-card-min-width), 1fr));
     gap: 16px;
     margin-bottom: 16px;
 }
@@ -44,16 +58,26 @@
     transform: translateY(-2px);
 }
 
+/* Thumbnails are cropped to each report's result plots, so their dimensions vary.
+   Centre them in a fixed-aspect box to keep the grid uniform without distorting or
+   cropping the plot. */
 .gallery-thumb-wrap {
     width: 100%;
+    aspect-ratio: var(--gallery-thumb-aspect);
     overflow: hidden;
     background: #fafafa;
     border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .gallery-thumb {
-    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
     height: auto;
+    object-fit: contain;
     display: block;
 }
 
