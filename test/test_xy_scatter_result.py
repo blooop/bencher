@@ -2,6 +2,7 @@
 
 import pickle
 import unittest
+from datetime import datetime, timedelta
 
 import holoviews as hv
 import pandas as pd
@@ -56,6 +57,61 @@ def run_sweep(worker: bn.ParametrizedSweep, name: str, result_vars: list[str]):
     return bench.plot_sweep(
         name, input_vars=["spread"], result_vars=result_vars, plot_callbacks=False
     )
+
+
+def run_tagged_cloud(spread: float, run_id: int) -> pd.DataFrame:
+    """A cloud offset by its run, so a rendered plot names the run it came from."""
+    return pd.DataFrame(
+        {
+            "dx_mm": [spread * i + RUN_OFFSET * run_id for i in range(POINTS_PER_SAMPLE)],
+            "dy_mm": [-spread * i for i in range(POINTS_PER_SAMPLE)],
+        }
+    )
+
+
+RUN_OFFSET = 100.0
+OVER_TIME_RUNS = 3
+
+
+class OverTimeCloudSweep(bn.ParametrizedSweep):
+    """A declared scatter, to be run repeatedly against one history."""
+
+    spread = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    cloud = bn.ResultDataSet(container=xy_scatter(x="dx_mm", y="dy_mm"))
+    peak = bn.ResultFloat(units="mm", doc="a scalar, which does keep history")
+
+    run_id = 0
+
+    def benchmark(self):
+        self.cloud = bn.ResultDataSet(run_tagged_cloud(self.spread, self.run_id))
+        self.peak = self.spread + self.run_id
+
+
+def run_sweep_over_time(worker: bn.ParametrizedSweep, name: str) -> bn.BenchResult:
+    """Run one sweep repeatedly against a single history, as a nightly rig does.
+
+    Only the first run clears the history, so from the second run on the rendered
+    dataset carries the earlier events on its over_time dimension.
+    """
+    run_cfg = run_cfg_with(1)
+    run_cfg.over_time = True
+    run_cfg.auto_plot = False
+    bench = bn.Bench(name, worker)
+    base_time = datetime(2000, 1, 1)
+    res = None
+    for i in range(OVER_TIME_RUNS):
+        worker.run_id = i
+        run_cfg.clear_cache = True
+        run_cfg.clear_history = i == 0
+        res = bench.plot_sweep(
+            name,
+            input_vars=["spread"],
+            result_vars=["cloud", "peak"],
+            run_cfg=run_cfg,
+            time_src=base_time + timedelta(seconds=i),
+            plot_callbacks=False,
+        )
+    return res
 
 
 def all_points(viewable: pn.viewable.Viewable) -> list[hv.Points]:
@@ -299,6 +355,56 @@ class TestDeclaredOnResultVar(unittest.TestCase):
         self.assertEqual(len(points), len(SPREADS))
         self.assertEqual([d.name for d in points[0].kdims], ["dx_mm", "dy_mm"])
         self.assertEqual(plot_opts(points[0])["data_aspect"], 1)
+
+
+class TestOverTimeHistory(unittest.TestCase):
+    """A cloud has to render on every run, not only the first one.
+
+    A ResultDataSet cell holds an index into dataset_list, which is rebuilt from the
+    samples of whichever run is rendering, so the indices merged in from history point
+    at *this* run's list. The render therefore stays on the current event; before
+    _to_panes_da handled ResultDataSet it raised out of expand_dims instead, and via
+    to_auto the traceback was swallowed and the plot silently vanished.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = run_sweep_over_time(OverTimeCloudSweep(), "test_xy_scatter_over_time")
+        cls.current_run = OVER_TIME_RUNS - 1
+
+    def assert_current_run(self, points: list[hv.Points]) -> None:
+        self.assertEqual(len(points), len(SPREADS))
+        for element, spread in zip(points, SPREADS):
+            self.assertEqual(len(element), POINTS_PER_SAMPLE)
+            self.assertAlmostEqual(element["dx_mm"].min(), RUN_OFFSET * self.current_run, places=6)
+            self.assertAlmostEqual(
+                element["dx_mm"].max(),
+                spread * (POINTS_PER_SAMPLE - 1) + RUN_OFFSET * self.current_run,
+                places=6,
+            )
+
+    def test_history_accumulated(self):
+        """Guard on the fixture: with a single event there is no regression to catch."""
+        self.assertEqual(self.res.to_dataset().sizes["over_time"], OVER_TIME_RUNS)
+
+    def test_declared_spec_renders_the_current_run(self):
+        self.assert_current_run(all_points(self.res.to_auto(plot_list=["panes"])))
+
+    def test_chart_type_renders_the_current_run(self):
+        rendered = self.res.to(XYScatterResult, x="dx_mm", y="dy_mm")
+        self.assert_current_run(all_points(rendered))
+
+    def test_named_chart_type_renders_the_current_run(self):
+        rendered = self.res.to_auto(plot_list=["xy_scatter"], x="dx_mm", y="dy_mm")
+        self.assert_current_run(all_points(pn.Column(*rendered)))
+
+    def test_scalar_results_keep_their_history(self):
+        """Rendering the current cloud must not cost the metrics their over_time series."""
+        peak = self.res.to_dataset()["peak"]
+        self.assertEqual(peak.sizes["over_time"], OVER_TIME_RUNS)
+        for run in range(OVER_TIME_RUNS):
+            observed = peak.isel(over_time=run).sel(spread=SPREADS[0]).values.squeeze()
+            self.assertAlmostEqual(float(observed), SPREADS[0] + run)
 
 
 if __name__ == "__main__":
