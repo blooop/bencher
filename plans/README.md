@@ -34,11 +34,24 @@ without additional context. **Read the whole plan before starting it.**
 | 12 | [Portable artifact paths & cache config](12-portable-artifact-paths-and-cache-config.md) | Low | Small–Medium | Precursor to A3/A4 |
 | 13 | [Benchmark declaration bundle & run defaults](13-benchmark-declaration-and-run-defaults.md) | Low | Medium | Coordinate with 09 |
 | 14 | [Schema-evolving over_time history](14-history-schema-reconciliation.md) | — | — | **Implemented** (design record, v1.116.0) |
+| 15 | [Stable benchmark series identity](15-benchmark-series-identity.md) | Medium | Medium | Yes — closes a hole in 09 |
+| 16 | [Inspectable, pinnable benchmark identity](16-inspectable-benchmark-identity.md) | Low | Small | Anytime; pairs with 15 |
+| 17 | [Single-point sweep ranges](17-single-point-sweep-ranges.md) | Low | Small | Yes — quick win |
+| 18 | [Reusable sweep declarations](18-reusable-sweep-declarations.md) | Low–Med | Medium | Coordinate with 13 |
+| 19 | [Reject unnamed parameters](19-unnamed-parameter-detection.md) | Low | Small | Yes — quick win |
+| 20 | [Duplicate declared variables](20-duplicate-declared-variables.md) | Low–Med | Small | With 19 |
+| 21 | [Per-sample fault tolerance in sweeps](21-sample-fault-tolerance.md) | Medium | Medium | After 10 |
 
 Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
 Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on
 2026-07-01 (see the A1 addendum); its remaining steps are still live and the other
 `OWNER DECISION` markers still apply.
+
+Plans 15–21 came out of an audit of how a large external project drives bencher,
+and of the workarounds it had accumulated. Three of them (17, 19, 20) are small
+correctness fixes worth doing first; 15 and 16 concern benchmark *identity* and
+build directly on the landed 09/14; 18 complements 13's declaration bundle; 21
+extends `optimize()`'s existing `catch=` to the sweep path.
 
 ## Architecture plans (`plans/architecture/`)
 
