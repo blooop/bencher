@@ -870,11 +870,19 @@ class BenchResultBase:
                 self.bench_cfg.over_time
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
-                and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
             ):
                 if isinstance(result_var, ResultRerun):
                     return self._pane_over_time_grid(dataset, result_var)
-                return self._pane_over_time_slider(dataset, result_var)
+                if isinstance(result_var, (ResultVideo, ResultImage)):
+                    return self._pane_over_time_slider(dataset, result_var)
+                if isinstance(result_var, ResultDataSet):
+                    # A ResultDataSet cell holds an index into dataset_list, which is
+                    # rebuilt from the samples of the run that is rendering.  Rows
+                    # merged in from history therefore address *this* run's list, so a
+                    # slider over them would show the current table under every past
+                    # run's label.  Render the event being reported instead; scalar
+                    # results keep their real history either way.
+                    dataset = dataset.isel(over_time=-1)
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.render()
@@ -1009,22 +1017,57 @@ class BenchResultBase:
         else:
             da = da_ds
 
+        # Callers hand this a single point, so collapse any length-1 dimension it
+        # still carries; keep the coordinates, they are what expand_dims below uses.
+        if any(size == 1 for size in da.sizes.values()):
+            da = da.squeeze(drop=False)
+
+        # expand_dims needs a name that is not a dimension yet.  Picking one that is
+        # still live raises "Dimension <name> already exists", which points at the
+        # coordinate rather than at the caller that failed to reduce it.
         for k in da.coords:
-            dim = k
-            break
-        if dim is None:
-            return da_ds.values.squeeze().item()
+            if k not in da.dims:
+                dim = k
+                break
+        if dim is None or dim in da.dims:
+            return da.values.squeeze().item()
         return da.expand_dims(dim).values[0]
+
+    @staticmethod
+    def _unreduced_dims(da: xr.DataArray) -> dict[str, int]:
+        """Dimensions of a supposedly-single point that still hold several values."""
+        return {str(d): int(da.sizes[d]) for d in da.dims if da.sizes[d] > 1}
 
     def ds_to_container(  # pylint: disable=too-many-return-statements
         self, dataset: xr.Dataset, result_var: Parameter, container, **kwargs
     ) -> Any:
+        if isinstance(result_var, (ResultDataSet, ResultReference)):
+            # These two store an index into a side list, so a value that is still an
+            # array indexes that list with an array several frames from the cause.
+            # Name the dimension the caller did not reduce instead.
+            unreduced = self._unreduced_dims(dataset[result_var.name])
+            if unreduced:
+                raise ValueError(
+                    f"cannot render one {type(result_var).__name__} sample for "
+                    f"'{result_var.name}': dimension(s) {unreduced} were neither "
+                    "selected nor reduced, so there is no single value to look up"
+                )
         val = self.zero_dim_da_to_val(dataset[result_var.name])
         if isinstance(result_var, ResultDataSet):
             ref = self.dataset_list[val]
             if ref is not None:
-                if container is not None:
-                    return container(ref.obj)
+                # Renderer-supplied container wins, then the one the sample was
+                # stored with, then the one declared on the class. Called with the
+                # object alone (no plot kwargs) so single-argument callables work.
+                # getattr, not attribute access: a result pickled before the slot
+                # existed unpickles without it, and reports of old runs still render.
+                for candidate in (
+                    container,
+                    getattr(ref, "container", None),
+                    getattr(result_var, "container", None),
+                ):
+                    if candidate is not None:
+                        return candidate(ref.obj)
                 return ref.obj
             return None
         if isinstance(result_var, ResultReference):
