@@ -163,16 +163,25 @@ above:
    goals in this doc — getting renderers off the god class, and swapping backends under
    stable chart names.
 
-   **It already has the §4 seam, and confines the god-class dependency to one method.**
+   **It already has the §4 seam, and confines the god-class dependency to one function.**
    A `TabularSpec.build(df) -> element` touches no `self.ds`, `bench_cfg`,
    `plt_cnt_cfg`, or registry: it is a pure, picklable function of one sample's table.
-   Everything BenchResult-bound lives in `TabularSpecResult.render_spec` — one ~20-line
-   method that walks the samples via `to_hv_dataset` / `map_plot_panes` /
-   `ds_to_container`, shared by every chart in the family. Contrast `BarResult.to_plot`,
-   which goes straight into `BenchResultBase.filter`. When the built-ins are ported off
-   `legacy_result` (A3 Phase D5), this family is **one** site to port regardless of how
-   many charts it has grown to, and the porting question is narrow and answerable:
-   "how does a plugin iterate samples of a `BenchData`?"
+   Everything BenchResult-bound lives in `render_data_samples` (`dataset_result.py`) —
+   a module-level function, not a base class the charts inherit, which each chart's
+   `to_plot` composes and which delegates to `BenchResultBase.map_sample_panes`. That
+   sample walk is shared with `PaneResult.to_panes`, i.e. with the path the default
+   report already takes, so it is *the* per-sample render path rather than a second one
+   for this family. Contrast `BarResult.to_plot`, which goes straight into
+   `BenchResultBase.filter`. When the built-ins are ported off `legacy_result` (A3 Phase
+   D5), this family is **one** site to port regardless of how many charts it has grown
+   to, and the porting question is narrow and answerable: "how does a plugin iterate
+   samples of a `BenchData`?"
+
+   Note that the chart classes deliberately subclass `HoloviewResult` rather than a
+   family-specific result base: the shared behaviour is a function they call, so nothing
+   about the family depends on a place in the `BenchResult` MRO. That is what makes the
+   porting site a single call, and it is the shape a plugin wants — the god-class
+   inheritance is incidental and drops out when `legacy_result` does.
 
    **The spec is the backend-neutral half of a chart type**, which is what addendum
    item 2 ("backends over plotters") needs. The fields — `x`, `y`, `color`, `bins`,

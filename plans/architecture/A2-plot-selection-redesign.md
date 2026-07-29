@@ -151,10 +151,11 @@ And `PltCntCfg.result_kinds` — added by S1, currently **computed but not consu
 is precisely that fact, already available on `BenchData.plt_cnt_cfg`.
 
 Note that this filter would be load-bearing rather than cosmetic: `include`
-(i.e. `plot_list=[...]`) does **not** bypass `match`; only `only=` does
-(`registry.py:258-268` vs `:207`). So a named `xy_scatter` on a sweep with no tabular
-result would be rejected *with a reason* in `explain_selection()`, where today it
-renders nothing and says "chosen".
+(i.e. `plot_list=[...]`) does **not** bypass `match` — in `PluginRegistry.select` it only
+filters by name and the loop still reaches `plugin.match.matches_result`; only the
+`only=` short-circuit above that loop skips the filter. So a named `xy_scatter` on a
+sweep with no tabular result would be rejected *with a reason* in
+`explain_selection()`, where today it renders nothing and says "chosen".
 
 ### Recommended shape for the `result_kinds` predicate
 
