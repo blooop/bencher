@@ -16,8 +16,8 @@ Two ways in, same renderer:
 
       bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm", color="index")
 
-See :mod:`bencher.results.holoview_results.tabular_spec` for the machinery this and
-the other intra-sample charts share.
+The generic result store and sample traversal do not know that the payload is a
+table. Only the renderer below performs that interpretation.
 """
 
 from __future__ import annotations
@@ -30,7 +30,9 @@ import holoviews as hv
 import panel as pn
 from param import Parameter
 
-from bencher.results.holoview_results.tabular_spec import TabularSpec, TabularSpecResult
+from bencher.results.dataset_result import render_data_samples
+from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.tabular_spec import TabularSpec
 
 
 @dataclass(frozen=True)
@@ -135,7 +137,7 @@ def xy_scatter(
     )
 
 
-class XYScatterResult(TabularSpecResult):
+class XYScatterResult(HoloviewResult):
     """Renders every ``ResultDataSet`` sample as an XY scatter of two of its columns."""
 
     def to_plot(
@@ -195,8 +197,9 @@ class XYScatterResult(TabularSpecResult):
         Returns:
             A panel of scatter plots, or None when the sweep has no tabular result.
         """
-        return self.render_spec(
-            xy_scatter(
+        return render_data_samples(
+            self,
+            renderer=xy_scatter(
                 x=x,
                 y=y,
                 color=color,

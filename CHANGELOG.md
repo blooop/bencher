@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tools` is now set in both directions (`[]` when off). Passing `tools=` through `**opts`
   still wins, as it is applied last.
 - **A `ResultDataSet` renders on every run, not only the first.** With `over_time` and
-  more than one event in the history, a tabular result reached `ds_to_container` with
+  more than one event in the history, a stored payload reached `ds_to_container` with
   `over_time` still a live dimension: `_to_panes_da` drops `over_time` from the pane
   recursion so hvplot can use groupby, and the branch that rebuilds it for pane-type
   results only covered `ResultVideo`/`ResultImage`/`ResultRerun`. The render then died in
@@ -41,27 +41,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vanished from the report. A `ResultDataSet` now renders the current event: its cells
   hold indices into `dataset_list`, which is rebuilt from the samples of the run doing the
   rendering, so the indices merged in from history address *this* run's list and a slider
-  across the events would show the current table under every past run's label. Scalar
+  across the events would show the current payload under every past run's label. Scalar
   results keep their full `over_time` series. Two supporting hardenings: a length-1
   dimension on a point now collapses to a value instead of a one-element array, and
   `ds_to_container` names the result variable and the dimension that was not reduced
   rather than indexing a list with an array several frames later.
 
 ### Added
-- **Shared machinery for intra-sample chart types** (`holoview_results/tabular_spec.py`).
-  The parts of `xy_scatter` that are not specific to a scatter are now a reusable base:
-  `TabularSpec`, a frozen (therefore picklable) dataclass whose `__call__` coerces the
-  stored object to a DataFrame and delegates to a subclass's `build()`, carrying the
-  options every chart shares (`title`, `xlabel`, `ylabel`, `hover`, `data_aspect`, and
-  `**opts` passthrough) plus the column helpers (`to_dataframe`, `check_column`,
-  `resolve_axes`, `plot_frame`, `value_columns`); and `TabularSpecResult.render_spec`,
-  the `to_plot` body that maps a spec over every `ResultDataSet` sample. A new chart is
-  now a `build()`, a factory function, and a `to_plot` that names its own options.
-  Column-validation errors name the chart that rejected the column, via a `chart_name`
-  class var. Chart types keep naming their options explicitly rather than accepting
-  `**kwargs`: `**kwargs` belongs to `map_plot_panes`, and a signature-based split could
-  not tell a pane-sizing `width` from a holoviews style `width`. No behaviour change to
-  `xy_scatter`, which is the base's first user.
+- **Generic per-sample data rendering, with tabular handling kept at the edge.**
+  `render_data_samples` is the single operation that retrieves each
+  `ResultDataSet` payload and optionally maps a renderer over it; it neither checks nor
+  converts the payload type. `XYScatterResult` composes that generic operation instead
+  of introducing a parallel result hierarchy. The opt-in
+  `holoview_results/tabular_spec.py` module only contains renderer-side concerns:
+  `TabularSpec`, a frozen (therefore picklable) dataclass whose `__call__` coerces
+  supported table-like data to a DataFrame, shared HoloViews options, and column helpers
+  (`to_dataframe`, `check_column`, `resolve_axes`, `plot_frame`, `value_columns`).
+  Column-validation errors name the chart that rejected the column. Chart types keep
+  naming their options explicitly rather than accepting `**kwargs`: `**kwargs` belongs
+  to `map_plot_panes`, and a signature-based split could not tell a pane-sizing `width`
+  from a HoloViews style `width`.
 - **`xy_scatter` chart type** — scatters two *measured* columns of a `ResultDataSet`
   against each other, for results whose rows are the measurement (landing points, hit
   locations, a phase-space cloud). Distinct from the existing `scatter`, which puts an
@@ -75,18 +74,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   did not ask for. Columns are validated against the frame — a typo names the available
   columns instead of rendering nothing — x/y are inferred from the numeric columns when
   omitted, `data_aspect=1` gives the equal-aspect scaling a position cloud needs, and
-  DataFrame / xarray / `hv.Dataset` objects are all accepted. Gallery example:
-  `example_plot_xy_scatter`.
-- **`ResultDataSet(container=...)`** — a `ResultDataSet` can now declare how it renders,
-  the way `ResultReference` already could. The callback takes the stored object and
-  returns anything panel can display, so a measured table shows up as the plot it means
-  rather than as raw rows, *in `result_vars` order* with the rest of the results.
+  DataFrame / xarray / `hv.Dataset` objects are all accepted. The
+  `example_plot_xy_scatter` gallery declares this renderer on its result, so the default
+  report contains the scatter in place of the raw table rather than appending both.
+- **`ResultDataSet(container=...)`** — `ResultDataSet` is a generic per-sample store for
+  any picklable Python payload, with no DataFrame/xarray requirement. It can declare how
+  the payload renders, the way `ResultReference` already could. The callback takes the
+  stored object and returns anything Panel can display, so domain data shows up as the
+  view it means, *in `result_vars` order* with the rest of the results.
   Precedence: a container passed to a renderer wins, then one attached to the stored
-  sample (`ResultDataSet(df, container=...)` inside `benchmark()`), then the one declared
+  sample (`ResultDataSet(data, container=...)` inside `benchmark()`), then the one declared
   on the class. The callback is invoked with the object alone (no plot kwargs), so
-  single-argument callables are safe. Previously the only way to render a dataset as a
-  plot was `bench.add(bn.DataSetResult, container=...)`, which appends to the end of the
-  report and cannot sit among the other result variables. `container` is in
+  single-argument callables are safe. An explicit
+  `bench.add(bn.DataSetResult, container=...)` view still appends to the end of the report
+  and cannot sit among the other result variables. `container` is in
   `_hash_exclude`, so declaring one does not change any cache key. A declared container
   rides in `BenchCfg` into the result cache and the collect/render split, so it must be
   picklable — a module-level function or a callable object, not a lambda.

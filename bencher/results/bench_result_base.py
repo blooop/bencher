@@ -879,7 +879,7 @@ class BenchResultBase:
                     # A ResultDataSet cell holds an index into dataset_list, which is
                     # rebuilt from the samples of the run that is rendering.  Rows
                     # merged in from history therefore address *this* run's list, so a
-                    # slider over them would show the current table under every past
+                    # slider over them would show the current payload under every past
                     # run's label.  Render the event being reported instead; scalar
                     # results keep their real history either way.
                     dataset = dataset.isel(over_time=-1)

@@ -19,6 +19,10 @@ def expected_frame(scale: float) -> pd.DataFrame:
     return pd.DataFrame({"y": [scale * 1.0, scale * 2.0, scale * 3.0]})
 
 
+def arbitrary_payload(scale: float) -> dict:
+    return {"scale": scale, "samples": [scale, scale * 2.0]}
+
+
 class DataFrameSweep(bn.ParametrizedSweep):
     """1-input sweep whose worker returns a small, scale-dependent DataFrame."""
 
@@ -40,6 +44,20 @@ def per_sample_container(df: pd.DataFrame) -> pn.pane.Markdown:
 
 def explicit_container(df: pd.DataFrame) -> pn.pane.Markdown:
     return pn.pane.Markdown(f"explicit rows={len(df)}")
+
+
+def payload_container(payload: dict) -> pn.pane.Markdown:
+    return pn.pane.Markdown(f"payload scale={payload['scale']:g} samples={len(payload['samples'])}")
+
+
+class ArbitraryPayloadSweep(bn.ParametrizedSweep):
+    """The generic store has no DataFrame/xarray requirement."""
+
+    scale = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    table = bn.ResultDataSet(container=payload_container, doc="structured Python payload")
+
+    def benchmark(self):
+        self.table = bn.ResultDataSet(arbitrary_payload(self.scale))
 
 
 class DeclaredContainerSweep(bn.ParametrizedSweep):
@@ -151,7 +169,7 @@ def container_output(viewable: pn.viewable.Viewable) -> list[str]:
     return [
         pane.object
         for pane in viewable.select(pn.pane.Markdown)
-        if str(pane.object).startswith(("declared", "per-sample", "explicit"))
+        if str(pane.object).startswith(("declared", "per-sample", "explicit", "payload"))
     ]
 
 
@@ -188,6 +206,26 @@ class TestDataSetResult(unittest.TestCase):
         frame = self.res.ds_to_container(point, rv, container=None)
         pd.testing.assert_frame_equal(frame, expected_frame(SCALES[1]))
         np.testing.assert_allclose(frame["y"].to_numpy(), [2.0, 4.0, 6.0])
+
+
+class TestArbitraryPayload(unittest.TestCase):
+    """ResultDataSet stores data; only its renderer interprets the payload."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = run_sweep(ArbitraryPayloadSweep(), "test_dataset_arbitrary_payload")
+
+    def test_payload_round_trips_without_tabular_coercion(self):
+        self.assertEqual(
+            [stored.obj for stored in self.res.dataset_list],
+            [arbitrary_payload(scale) for scale in SCALES],
+        )
+
+    def test_declared_renderer_receives_the_original_payload(self):
+        self.assertEqual(
+            container_output(self.res.to(DataSetResult)),
+            ["payload scale=1 samples=2", "payload scale=2 samples=2"],
+        )
 
 
 class TestDeclaredContainer(unittest.TestCase):

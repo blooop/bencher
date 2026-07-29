@@ -1,56 +1,29 @@
-"""Shared machinery for chart types that plot *inside* one tabular sample.
+"""Opt-in helpers for renderers that interpret stored data as a table.
 
-Every other chart in bencher plots across the sweep: an input variable on x, a
-result variable on y, one point per sample. The charts built on this module plot
-inside a single sample — a :class:`~bencher.variables.results.ResultDataSet` whose
-rows are the measurement (landing points, a collected timeseries, a phase-space
-cloud) — where the axes are columns the benchmark measured and the sweep
-dimensions are what separate one plot from the next.
+``ResultDataSet`` is an arbitrary per-sample data store; it has no tabular
+contract. A :class:`TabularSpec` is one possible renderer for that data. It
+coerces supported table-like payloads to a DataFrame, validates columns, and
+builds a HoloViews element. Other renderers can interpret the same generic store
+without depending on this module.
 
-Each such chart is two objects with one implementation:
-
-* a :class:`TabularSpec` subclass, built by a small factory function, which is a
-  callable taking the stored object and returning a holoviews element. That makes
-  it usable directly as a declared renderer, so the plot appears in
-  ``result_vars`` order with the other results::
-
-      series = bn.ResultDataSet(container=bn.xy_curve(x="time", y="signal"))
-
-* a :class:`TabularSpecResult` subclass, so the same spec can be asked for as a
-  report-level chart type::
-
-      bench.add(bn.XYCurveResult, x="time", y="signal")
-
-This module holds the parts that do not depend on which chart it is: coercing the
-stored object to a DataFrame, validating and inferring columns, converting labels
-at the holoviews boundary, and mapping a spec over every tabular sample.
-
-A spec is a frozen dataclass rather than a closure because it has to survive
-pickling: a result var declaring ``container=`` is part of ``BenchCfg``, which
-goes into the result cache and through the collect/render split, and a local
-function cannot be pickled.
+A spec is a frozen dataclass rather than a closure because a renderer declared
+on a result variable is part of ``BenchCfg`` and must survive the result cache
+and collect/render split.
 """
 
 from __future__ import annotations
 
 from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass, field
-from functools import partial
 from typing import Any, ClassVar
 
 import holoviews as hv
 import pandas as pd
-import panel as pn
 import xarray as xr
-from param import Parameter
-
-from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
-from bencher.variables.results import ResultDataSet
 
 
 def to_dataframe(obj: Any, chart: str) -> pd.DataFrame:
-    """Coerce a stored dataset object to a DataFrame with plottable columns."""
+    """Coerce a stored payload to a DataFrame with plottable columns."""
     if isinstance(obj, pd.DataFrame):
         return obj
     if isinstance(obj, (xr.Dataset, xr.DataArray)):
@@ -229,61 +202,8 @@ class TabularSpec:
         return value_cols
 
 
-class TabularSpecResult(HoloviewResult):
-    """Base for chart types that render each tabular sample through a spec.
-
-    One plot per sample rather than one plot for the sweep: the rows of a sample
-    are the measurement, so averaging them across samples would destroy the thing
-    being measured. Non-tabular results are skipped — a chart of a sample's columns
-    is only defined for a tabular result.
-
-    Subclasses implement ``to_plot``, naming their spec options explicitly and
-    handing the built spec to :meth:`render_spec`.
-    """
-
-    def render_spec(
-        self,
-        spec: TabularSpec,
-        result_var: Parameter | None = None,
-        hv_dataset=None,
-        target_dimension: int = 0,
-        subsampling_divisions: int | None = None,
-        **kwargs: Any,
-    ) -> pn.panel | None:
-        """Map *spec* over every tabular sample and lay the results out.
-
-        Args:
-            spec: The chart spec to render each sample through.
-            result_var: Restrict to one result variable. Defaults to every
-                ``ResultDataSet`` in the sweep.
-            hv_dataset: Pre-built dataset to render instead of this result's own.
-            target_dimension: Dimension depth to recurse the panes down to.
-            subsampling_divisions: Level to subsample the dataset at.
-            **kwargs: Forwarded to ``map_plot_panes`` (layout and the plot-size
-                keywords every ``to_auto`` render call carries).
-
-        Returns:
-            A panel of plots, or None when the sweep has no tabular result.
-        """
-        if hv_dataset is None:
-            hv_dataset = self.to_hv_dataset(
-                ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions
-            )
-        elif not isinstance(hv_dataset, hv.Dataset):
-            hv_dataset = hv.Dataset(hv_dataset)
-        return self.map_plot_panes(
-            partial(self.ds_to_container, container=spec),
-            hv_dataset=hv_dataset,
-            target_dimension=target_dimension,
-            result_var=result_var,
-            result_types=(ResultDataSet,),
-            **kwargs,
-        )
-
-
 __all__ = [
     "TabularSpec",
-    "TabularSpecResult",
     "check_column",
     "plot_frame",
     "resolve_axes",
