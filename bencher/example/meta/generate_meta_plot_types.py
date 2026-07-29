@@ -73,6 +73,34 @@ class ThroughputCompare(bn.ParametrizedSweep):
         lookup = {"redis": 5.4, "memcached": 4.1, "local": 8.7}
         self.distance = lookup[self.backend]"""
 
+_TOUCH_CLOUD_CODE = """\
+import random
+
+import pandas as pd
+
+
+class TouchCloud(bn.ParametrizedSweep):
+    \"\"\"Where a repeated motion lands: one row per touch, both axes measured.\"\"\"
+
+    spread = bn.FloatSweep(default=0.5, bounds=[0.1, 1.0], doc="Positioning noise")
+
+    touches = bn.ResultDataSet(doc="Landing points, one row per touch")
+
+    def benchmark(self):
+        rng = random.Random(0)
+        self.touches = bn.ResultDataSet(
+            pd.DataFrame(
+                [
+                    {
+                        "touch": i,
+                        "dx_mm": rng.gauss(0.0, self.spread),
+                        "dy_mm": rng.gauss(0.0, self.spread),
+                    }
+                    for i in range(60)
+                ]
+            )
+        )"""
+
 _HEATMAP_DEMO_CODE = """\
 import math
 
@@ -250,6 +278,21 @@ PLOT_CONFIGS = {
         "input_vars": '["backend"]',
         "benchable_class": "ScatterJitterDemo",
         "class_code": _SCATTER_JITTER_DEMO_CODE,
+    },
+    # Both axes measured *within* one sample, unlike every other scatter here, so the
+    # result is a table per sample and the sweep input separates the clouds.
+    "xy_scatter": {
+        "float_dims": 1,
+        "cat_dims": 0,
+        "repeats": 1,
+        "plot_call": 'res.to(XYScatterResult, x="dx_mm", y="dy_mm", color="touch", data_aspect=1)',
+        "extra_import": (
+            "from bencher.results.holoview_results.xy_scatter_result import XYScatterResult"
+        ),
+        "input_vars": '["spread"]',
+        "result_vars": '["touches"]',
+        "benchable_class": "TouchCloud",
+        "class_code": _TOUCH_CLOUD_CODE,
     },
 }
 
