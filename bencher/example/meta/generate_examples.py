@@ -166,19 +166,44 @@ def _boxes_below_marker(
 
 
 def _grow_region(boxes: list[dict]) -> tuple[float, float, float, float]:
-    """Union boxes in document order, stopping before the region becomes a tall strip."""
-    left, top, right, bottom = None, None, None, None
-    for box in boxes:
-        n_left = box["x"] if left is None else min(left, box["x"])
-        n_top = box["y"] if top is None else min(top, box["y"])
-        n_right = max(right or 0.0, box["x"] + box["width"])
-        n_bottom = max(bottom or 0.0, box["y"] + box["height"])
-        # Always accept the first box, even if it is an unusually tall one; the caller
-        # clamps the height afterwards.
-        if left is not None and (n_bottom - n_top) > MAX_CROP_ASPECT * (n_right - n_left):
+    """Union non-empty boxes in document order, stopping before the region becomes a strip.
+
+    Seeded from the first box, which is therefore always accepted even when it is an
+    unusually tall one; the caller clamps the height afterwards.
+    """
+    first = boxes[0]
+    left, top = first["x"], first["y"]
+    right, bottom = first["x"] + first["width"], first["y"] + first["height"]
+    for box in boxes[1:]:
+        n_left = min(left, box["x"])
+        n_top = min(top, box["y"])
+        n_right = max(right, box["x"] + box["width"])
+        n_bottom = max(bottom, box["y"] + box["height"])
+        if (n_bottom - n_top) > MAX_CROP_ASPECT * (n_right - n_left):
             break
         left, top, right, bottom = n_left, n_top, n_right, n_bottom
     return left, top, right, bottom
+
+
+def _page_size(page) -> tuple[float, float]:
+    """Return the page's scrollable width and height in a single round-trip."""
+    width, height = page.evaluate(
+        "() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight]"
+    )
+    return float(width), float(height)
+
+
+def _pad_and_clamp(
+    left: float, top: float, right: float, bottom: float, page_w: float, page_h: float
+) -> dict | None:
+    """Pad a region, clamp it to the page, and convert it to a screenshot clip rect."""
+    left = max(0.0, left - CROP_PAD)
+    top = max(0.0, top - CROP_PAD)
+    right = min(page_w, right + CROP_PAD)
+    bottom = min(page_h, bottom + CROP_PAD)
+    if right - left < 1 or bottom - top < 1:
+        return None
+    return {"x": left, "y": top, "width": right - left, "height": bottom - top}
 
 
 def _results_clip(page) -> dict | None:
@@ -215,15 +240,8 @@ def _results_clip(page) -> dict | None:
     # DataFrame table — is topped rather than squeezed into an unreadable sliver.
     bottom = min(bottom, top + MAX_CROP_ASPECT * (right - left))
 
-    page_w = page.evaluate("document.documentElement.scrollWidth")
-    page_h = page.evaluate("document.documentElement.scrollHeight")
-    left = max(0.0, left - CROP_PAD)
-    top = max(0.0, top - CROP_PAD)
-    right = min(float(page_w), right + CROP_PAD)
-    bottom = min(float(page_h), bottom + CROP_PAD)
-    if right - left < 1 or bottom - top < 1:
-        return None
-    return {"x": left, "y": top, "width": right - left, "height": bottom - top}
+    page_w, page_h = _page_size(page)
+    return _pad_and_clamp(left, top, right, bottom, page_w, page_h)
 
 
 def _wait_for_results(page) -> dict | None:
@@ -278,7 +296,6 @@ def _take_thumbnail(
 
     Uses the provided playwright page if given; otherwise creates a temporary browser.
     """
-    from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
     def _screenshot_with(pg) -> bytes:
         pg.set_viewport_size({"width": width, "height": height})
@@ -296,12 +313,21 @@ def _take_thumbnail(
         clip = _results_clip(pg)
         if clip is None:
             return pg.screenshot()
+        # full_page is required here, not redundant with clip: a report's first plot can
+        # sit thousands of pixels down the page (xy_scatter's is at y≈5400 with a 900px
+        # viewport), and clip alone then fails with "Clipped area is either empty or
+        # outside the resulting image". Resizing the viewport to reach it instead would
+        # re-trigger Bokeh's responsive relayout and invalidate the measured geometry.
         return pg.screenshot(full_page=True, clip=clip)
 
     if page is not None:
         png_data = _screenshot_with(page)
         _resize_and_save_png(png_data, thumb_path)
         return
+
+    # Only the standalone path needs playwright itself; with a caller-supplied page the
+    # capture works without it installed, which keeps the crop logic unit-testable.
+    from playwright.sync_api import sync_playwright  # pylint: disable=import-error
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)

@@ -7,6 +7,7 @@ are pinned without needing playwright or Chromium.
 """
 
 import io
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -71,7 +72,10 @@ class FakePage:
         self.waits = []
 
     def evaluate(self, script):
-        return self._page_w if "scrollWidth" in script else self._page_h
+        assert "scrollWidth" in script and "scrollHeight" in script, (
+            "page size should be fetched in a single round-trip"
+        )
+        return [self._page_w, self._page_h]
 
     def wait_for_timeout(self, ms):
         self.waits.append(ms)
@@ -267,6 +271,59 @@ def _png_bytes(width, height):
     buf = io.BytesIO()
     Image.new("RGB", (width, height), "white").save(buf, format="PNG")
     return buf.getvalue()
+
+
+class ScreenshotPage(FakePage):
+    """A page that records how screenshot() was called."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.screenshot_calls = []
+
+    def set_viewport_size(self, size):
+        self.viewport = size
+
+    def goto(self, _url, **_kwargs):
+        return None
+
+    def screenshot(self, **kwargs):
+        self.screenshot_calls.append(kwargs)
+        return _png_bytes(200, 200)
+
+
+class TestScreenshotArgs:
+    """Regression guard for the clip/full_page interaction.
+
+    A report's first plot can sit thousands of pixels down the page (xy_scatter's is at
+    y~5400 in a 900px viewport). Playwright's `clip` alone cannot reach past the viewport
+    and raises "Clipped area is either empty or outside the resulting image", so
+    `full_page=True` is required alongside it rather than redundant with it.
+    """
+
+    def _take(self, page, tmp_path):
+        from bencher.example.meta.generate_examples import _take_thumbnail
+
+        _take_thumbnail(Path("report.html"), tmp_path / "thumb.png", page=page)
+        return page.screenshot_calls[-1]
+
+    def test_clip_screenshot_also_passes_full_page(self, tmp_path):
+        page = ScreenshotPage(
+            headings=[_heading("Results: ¶", 560)],
+            tier1=[FakeHandle(box=_box(128, 5382, 600, 600))],
+            page_h=7259,
+        )
+        call = self._take(page, tmp_path)
+        assert call.get("clip") is not None, "expected a cropped screenshot"
+        assert call.get("full_page") is True, (
+            "clip beyond the viewport needs full_page; see _screenshot_with"
+        )
+        assert call["clip"]["y"] > page.viewport["height"], "test no longer covers the case"
+
+    def test_fallback_screenshot_passes_neither(self, tmp_path):
+        """A report that renders nothing falls back to a plain viewport capture."""
+        page = ScreenshotPage()
+        call = self._take(page, tmp_path)
+        assert call == {}
 
 
 class TestResizeAndSave:
