@@ -2,10 +2,12 @@
 
 import pickle
 import unittest
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import panel as pn
+import xarray as xr
 
 import bencher as bn
 from bencher.results.dataset_result import DataSetResult
@@ -65,6 +67,67 @@ class LegacyPickleSweep(bn.ParametrizedSweep):
 
     def benchmark(self):
         self.table = bn.ResultDataSet(expected_frame(self.scale))
+
+
+def tagged_frame(scale: float, run_id: int) -> pd.DataFrame:
+    """A frame that says which run produced it, so a render can be traced to its run."""
+    return pd.DataFrame({"y": [scale * 1.0, scale * 2.0], "run": [run_id, run_id]})
+
+
+def run_tagging_container(df: pd.DataFrame) -> pn.pane.Markdown:
+    return pn.pane.Markdown(f"declared run={df['run'].iloc[0]} scale={df['y'].iloc[0]:g}")
+
+
+class OverTimeSweep(bn.ParametrizedSweep):
+    """A tabular result and a scalar one, to be run repeatedly against one history."""
+
+    scale = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    table = bn.ResultDataSet(container=run_tagging_container, doc="run-tagged dataframe")
+    magnitude = bn.ResultFloat(units="m", doc="scalar result, which does keep history")
+
+    run_id = 0
+
+    def benchmark(self):
+        self.table = bn.ResultDataSet(tagged_frame(self.scale, self.run_id))
+        self.magnitude = self.scale + self.run_id
+
+
+class PlainOverTimeSweep(OverTimeSweep):
+    """The same shape with no declared container: the defect predates that feature."""
+
+    table = bn.ResultDataSet(doc="run-tagged dataframe, rendered as rows")
+
+
+OVER_TIME_RUNS = 3
+
+
+def run_sweep_over_time(
+    worker: bn.ParametrizedSweep, name: str, runs: int = OVER_TIME_RUNS
+) -> bn.BenchResult:
+    """Run one sweep `runs` times against a single history, as a nightly rig does.
+
+    Only the first run clears the history, so from the second run on the rendered
+    dataset carries the earlier events on its over_time dimension.
+    """
+    run_cfg = bn.BenchRunCfg()
+    run_cfg.over_time = True
+    run_cfg.repeats = 1
+    run_cfg.auto_plot = False
+    bench = bn.Bench(name, worker)
+    base_time = datetime(2000, 1, 1)
+    res = None
+    for i in range(runs):
+        worker.run_id = i
+        run_cfg.clear_cache = True
+        run_cfg.clear_history = i == 0
+        res = bench.plot_sweep(
+            "over_time_dataset_sweep",
+            input_vars=["scale"],
+            result_vars=["table", "magnitude"],
+            run_cfg=run_cfg,
+            time_src=base_time + timedelta(seconds=i),
+        )
+    return res
 
 
 def run_sweep(worker: bn.ParametrizedSweep | None = None, name: str = "test_dataset_result"):
@@ -200,6 +263,90 @@ class TestContainerIsNotData(unittest.TestCase):
         del res.dataset_list[0].container
         frame = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
         pd.testing.assert_frame_equal(frame, expected_frame(SCALES[0]))
+
+
+class TestOverTimeHistory(unittest.TestCase):
+    """A ResultDataSet has to render on every run, not only the first one.
+
+    dataset_list is rebuilt from the samples of whichever run is rendering, so the
+    indices merged in from history address *this* run's list.  Rendering therefore
+    stays on the current event: a slider across the events would show the current
+    table under every past run's label, and before the over_time branch knew about
+    ResultDataSet the render raised out of expand_dims instead.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = run_sweep_over_time(OverTimeSweep(), "test_dataset_over_time")
+        cls.current_run = OVER_TIME_RUNS - 1
+
+    def expected_panes(self) -> list[str]:
+        return [f"declared run={self.current_run} scale={scale:g}" for scale in SCALES]
+
+    def test_history_accumulated(self):
+        """Guard on the fixture: with a single event there is no regression to catch."""
+        self.assertEqual(self.res.to_dataset().sizes["over_time"], OVER_TIME_RUNS)
+
+    def test_panes_pass_renders_the_current_run(self):
+        self.assertEqual(
+            container_output(self.res.to_auto(plot_list=["panes"])), self.expected_panes()
+        )
+
+    def test_dataset_view_renders_the_current_run(self):
+        self.assertEqual(container_output(self.res.to(DataSetResult)), self.expected_panes())
+
+    def test_one_pane_per_sample_not_per_event(self):
+        """History must not multiply the panes, since the tables are not comparable."""
+        self.assertEqual(len(container_output(self.res.to(DataSetResult))), len(SCALES))
+
+    def test_scalar_results_keep_their_history(self):
+        """Slicing the tables must not cost the metrics their over_time series."""
+        magnitude = self.res.to_dataset()["magnitude"]
+        self.assertEqual(magnitude.sizes["over_time"], OVER_TIME_RUNS)
+        for run in range(OVER_TIME_RUNS):
+            observed = magnitude.isel(over_time=run).sel(scale=SCALES[0]).values.squeeze()
+            self.assertAlmostEqual(float(observed), SCALES[0] + run)
+
+
+class TestOverTimeWithoutContainer(unittest.TestCase):
+    def test_raw_frame_renders_after_the_first_run(self):
+        res = run_sweep_over_time(PlainOverTimeSweep(), "test_dataset_over_time_plain", runs=2)
+        rv = res.bench_cfg.result_vars[0]
+        point = res.to_dataset().isel(over_time=-1).sel(scale=SCALES[0])
+        frame = res.ds_to_container(point, rv, container=None)
+        self.assertEqual(frame["run"].tolist(), [1, 1])
+        self.assertIsInstance(res.to(DataSetResult), pn.viewable.Viewable)
+
+
+class TestSinglePointGuard(unittest.TestCase):
+    """ds_to_container renders one sample, and names the dimension when it cannot."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = run_sweep(DeclaredContainerSweep(), "test_dataset_single_point_guard")
+
+    def test_unreduced_dimension_is_named(self):
+        """A whole dataset is not a point: the error says what was not reduced.
+
+        Indexing dataset_list with an array otherwise fails several frames away,
+        naming neither the result variable nor the dimension.
+        """
+        rv = self.res.bench_cfg.result_vars[0]
+        with self.assertRaises(ValueError) as raised:
+            self.res.ds_to_container(self.res.to_dataset(), rv, container=None)
+        self.assertIn("scale", str(raised.exception))
+        self.assertIn("table", str(raised.exception))
+
+    def test_length_one_dimensions_collapse_to_a_value(self):
+        """A point that kept its length-1 dimensions is one value, not an array."""
+        da = xr.DataArray(
+            [[4.0]],
+            dims=["over_time", "repeat"],
+            coords={"over_time": [0], "repeat": [0]},
+        )
+        value = self.res.zero_dim_da_to_val(da)
+        self.assertNotIsInstance(value, np.ndarray)
+        self.assertEqual(float(value), 4.0)
 
 
 if __name__ == "__main__":
