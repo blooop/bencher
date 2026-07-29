@@ -57,15 +57,127 @@ def generate_scorecard_example():
     print(f"  Generated scorecard example: {out}")
 
 
-def _resize_and_save_png(png_data: bytes, thumb_path: Path, thumb_width: int = 480) -> None:
-    """Resize screenshot PNG data to thumbnail width and save to disk."""
+# Thumbnail geometry. Screenshots are captured at THUMB_SCALE device pixels per CSS
+# pixel and downscaled, so thumbnails stay sharp on high-DPI screens. The saved PNG is
+# fitted inside THUMB_MAX_W x THUMB_MAX_H without distortion and never upscaled. This is
+# only a resolution cap — the displayed size and aspect ratio are set by
+# --gallery-thumb-aspect / --gallery-card-min-width in docs/_static/custom.css, so keep
+# these at or above 2x the widest card the CSS can produce.
+THUMB_MAX_W = 480
+THUMB_MAX_H = 480
+THUMB_SCALE = 2
+# Ignore elements smaller than this when hunting for the results region — it filters out
+# Bokeh toolbar icons, colour swatches and other chrome.
+MIN_RESULT_W = 100
+MIN_RESULT_H = 80
+# Stop growing the crop once it is this much taller than it is wide. Reports often stack
+# several full-size plots; including them all would shrink each one to an unreadable strip.
+MAX_CROP_ASPECT = 1.3
+CROP_PAD = 8
+
+# Elements that count as "a result" when locating the interesting part of a report.
+# Bokeh/Panel render into shadow DOM, so these must be queried through Playwright's
+# selector engine (which pierces open shadow roots) rather than document.querySelectorAll.
+RESULT_SELECTOR = ".bk-Figure, .bk-Canvas, .bk-DataTable, video, img, table"
+# Everything above the "Results:" heading is title, description and the sweep-shape
+# diagram — that text is what made naive top-of-page screenshots useless as thumbnails.
+RESULTS_HEADING_SELECTOR = "h1, h2, h3, h4"
+# Bokeh's pan/zoom/save toolbar sits inside .bk-Figure, so it would land in the crop. It
+# is interactive chrome with no value in a static thumbnail, so it is hidden before the
+# region is measured — that way the crop is taken from the post-reflow layout.
+TOOLBAR_SELECTOR = ".bk-ToolbarPanel"
+
+
+def _results_marker_bottom(page) -> float | None:
+    """Return the document y of the bottom of the report's "Results:" heading, or None."""
+    for handle in page.query_selector_all(RESULTS_HEADING_SELECTOR):
+        raw = handle.text_content() or ""
+        # Panel appends a "¶" anchor link to headings, so compare on letters only.
+        if re.sub(r"[^a-z]", "", raw.lower()) != "results":
+            continue
+        box = handle.bounding_box()
+        if box is not None:
+            return box["y"] + box["height"]
+    return None
+
+
+def _hide_toolbars(page) -> None:
+    """Hide Bokeh plot toolbars so they stay out of thumbnails.
+
+    Panel/Bokeh render into shadow DOM, which a page-level stylesheet cannot reach, so
+    each toolbar is hidden individually through Playwright's shadow-piercing selectors.
+    """
+    for handle in page.query_selector_all(TOOLBAR_SELECTOR):
+        try:
+            handle.evaluate("el => { el.style.display = 'none'; }")
+        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
+            # A toolbar we cannot hide is cosmetic; keep going rather than lose the thumbnail.
+            print(f"  WARNING: Could not hide plot toolbar: {e}")
+
+
+def _results_clip(page) -> dict | None:
+    """Return a screenshot clip rect covering the report's result plots, or None.
+
+    Grows a bounding box over the result elements in document order, stopping before the
+    crop gets so tall that each plot would be unreadable in the thumbnail.
+    """
+    marker_bottom = _results_marker_bottom(page)
+
+    boxes = []
+    for handle in page.query_selector_all(RESULT_SELECTOR):
+        box = handle.bounding_box()
+        if box is None or box["width"] < MIN_RESULT_W or box["height"] < MIN_RESULT_H:
+            continue
+        # Drop anything that sits entirely above the "Results:" heading.
+        if marker_bottom is not None and box["y"] + box["height"] <= marker_bottom:
+            continue
+        boxes.append(box)
+    if not boxes:
+        return None
+    boxes.sort(key=lambda b: (b["y"], b["x"]))
+
+    left, top, right, bottom = None, None, None, None
+    for box in boxes:
+        n_left = box["x"] if left is None else min(left, box["x"])
+        n_top = box["y"] if top is None else min(top, box["y"])
+        n_right = max(right or 0.0, box["x"] + box["width"])
+        n_bottom = max(bottom or 0.0, box["y"] + box["height"])
+        # Always accept the first box, even if it is an unusually tall one.
+        if left is not None and (n_bottom - n_top) > MAX_CROP_ASPECT * (n_right - n_left):
+            break
+        left, top, right, bottom = n_left, n_top, n_right, n_bottom
+
+    page_w = page.evaluate("document.documentElement.scrollWidth")
+    page_h = page.evaluate("document.documentElement.scrollHeight")
+    left = max(0.0, left - CROP_PAD)
+    top = max(0.0, top - CROP_PAD)
+    right = min(float(page_w), right + CROP_PAD)
+    bottom = min(float(page_h), bottom + CROP_PAD)
+    if right - left < 1 or bottom - top < 1:
+        return None
+    return {"x": left, "y": top, "width": right - left, "height": bottom - top}
+
+
+def _resize_and_save_png(
+    png_data: bytes,
+    thumb_path: Path,
+    max_width: int = THUMB_MAX_W,
+    max_height: int = THUMB_MAX_H,
+) -> None:
+    """Fit screenshot PNG data inside max_width x max_height and save to disk.
+
+    Aspect ratio is preserved and the image is never upscaled, so a small result (a 200px
+    video, say) stays sharp rather than being blown up.
+    """
     from PIL import Image
 
     img = Image.open(io.BytesIO(png_data))
-    ratio = thumb_width / img.width
-    img = img.resize((thumb_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    ratio = min(max_width / img.width, max_height / img.height, 1.0)
+    if ratio < 1.0:
+        size = (max(1, round(img.width * ratio)), max(1, round(img.height * ratio)))
+        img = img.resize(size, Image.Resampling.LANCZOS)
     thumb_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(thumb_path)
+    img.save(thumb_path, optimize=True)
 
 
 def _take_thumbnail(
@@ -74,9 +186,12 @@ def _take_thumbnail(
     page=None,
     width: int = 1200,
     height: int = 900,
-    thumb_width: int = 480,
 ) -> None:
-    """Screenshot an HTML report and save as a resized PNG thumbnail.
+    """Screenshot an HTML report's results and save as a PNG thumbnail.
+
+    The crop is centred on the report's result plots rather than the top of the page,
+    which is mostly title and description text. Falls back to the top of the page when no
+    result elements can be found.
 
     Uses the provided playwright page if given; otherwise creates a temporary browser.
     """
@@ -87,19 +202,28 @@ def _take_thumbnail(
         pg.goto(html_path.resolve().as_uri(), wait_until="networkidle", timeout=15000)
         # Brief pause for Bokeh/Panel JS to render plots after network settles
         pg.wait_for_timeout(500)
-        return pg.screenshot()
+        _hide_toolbars(pg)
+        # Let Bokeh reflow after the toolbars are removed before measuring the crop.
+        pg.wait_for_timeout(150)
+        clip = _results_clip(pg)
+        if clip is None:
+            return pg.screenshot()
+        return pg.screenshot(full_page=True, clip=clip)
 
     if page is not None:
         png_data = _screenshot_with(page)
-        _resize_and_save_png(png_data, thumb_path, thumb_width)
+        _resize_and_save_png(png_data, thumb_path)
         return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        tmp_page = browser.new_page(viewport={"width": width, "height": height})
+        tmp_page = browser.new_page(
+            viewport={"width": width, "height": height},
+            device_scale_factor=THUMB_SCALE,
+        )
         try:
             png_data = _screenshot_with(tmp_page)
-            _resize_and_save_png(png_data, thumb_path, thumb_width)
+            _resize_and_save_png(png_data, thumb_path)
         finally:
             browser.close()
 
@@ -636,7 +760,10 @@ def generate_all(only: list[str] | None = None, force_skip_thumbnails: bool = Fa
 
             pw_context = sync_playwright().start()
             browser = pw_context.chromium.launch(headless=True)
-            page = browser.new_page(viewport={"width": 1200, "height": 900})
+            page = browser.new_page(
+                viewport={"width": 1200, "height": 900},
+                device_scale_factor=THUMB_SCALE,
+            )
             print("Started headless Chromium for thumbnail screenshots")
         except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
             skip_thumbnails = True
