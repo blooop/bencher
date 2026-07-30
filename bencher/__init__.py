@@ -35,6 +35,15 @@ from .bench_runner import BenchRunner
 from .bencher import Bench, BenchCfg, BenchRunCfg
 from .example.benchmark_data import ExampleBenchCfg
 from .file_server import run_file_server
+from .identity import (
+    EXCLUDED_FIELDS,
+    IDENTITY_FIELDS,
+    SweepIdentity,
+    config_summary,
+    diff_identities,
+    identity_of,
+    sweep_identity,
+)
 from .render import load_result, render_report, save_result
 from .report_export import (
     compare_results,

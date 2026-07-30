@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Sequence
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import panel as pn
 from param import Parameter
@@ -53,6 +53,11 @@ from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.volume_result import VolumeResult
 from bencher.utils import listify, resolve_aggregate
 
+if TYPE_CHECKING:
+    # Runtime import would be circular: identity imports bench_cfg, which this
+    # module's own import chain pulls in.
+    from bencher.identity import SweepIdentity
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,6 +105,17 @@ class BenchResult(
         HoloviewResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
+
+    @property
+    def identity(self) -> SweepIdentity:
+        """The keys this result was stored under, as an inspectable value.
+
+        The config has already been through ``run_sweep``'s run_cfg merge, so no
+        run config is needed here.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self.bench_cfg)
 
     @classmethod
     def from_existing(cls, original: BenchResult) -> BenchResult:
