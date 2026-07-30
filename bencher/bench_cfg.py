@@ -855,7 +855,8 @@ class BenchCfg(BenchRunCfg):
 
         *run_cfg* replays the merge :meth:`bencher.bencher.Bench.run_sweep`
         performs before hashing; pass it for a config that has not been run, whose
-        ``repeats`` and ``over_time`` are still the class defaults.
+        ``repeats`` and ``over_time`` are still the class defaults. The replay runs
+        against a copy, so asking for an identity never reconfigures *self*.
         """
         from bencher.identity import identity_of
 

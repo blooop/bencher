@@ -121,6 +121,11 @@ def diff_identities(
 def _attach_worker(bench: Any, worker: Any) -> None:
     """Make *worker* available for by-name variable resolution, without calling it.
 
+    An **instance** goes through the real :meth:`bencher.bencher.Bench.set_worker`,
+    so identity is set up by the same code path as
+    :func:`bencher.factories.create_bench` and cannot drift from it as
+    ``set_worker``'s invariants change.
+
     A **class** is accepted and never instantiated. Everything the declaration path
     needs from a worker is class-level -- ``param.objects()`` plus the
     ``get_inputs_only`` / ``get_input_defaults`` / ``get_results_only``
@@ -131,12 +136,19 @@ def _attach_worker(bench: Any, worker: Any) -> None:
     check it before running.
 
     ``Bench.set_worker`` rejects a class on purpose, because a class cannot be
-    *called*; identity never calls one, so it is attached directly instead.
+    *called*; identity never calls one, so a class is attached directly instead.
+    The only state that bypass skips is the callable ``bench.worker`` itself, which
+    the ``dry_run`` declaration path never reaches -- and the equivalence tests in
+    ``test/test_identity.py`` pin every declaration form against a real
+    ``to_bench()`` run, so a divergence between the two setups fails there.
     """
     if worker is None:
         return
+    if not isinstance(worker, type):
+        bench.set_worker(worker)
+        return
     bench.worker_class_instance = worker
-    bench._worker_mgr.worker_class_instance = worker  # noqa: SLF001
+    bench._worker_mgr.worker_class_instance = worker
 
 
 def sweep_identity(
@@ -237,10 +249,17 @@ def identity_of(bench_cfg: BenchCfg, run_cfg: BenchRunCfg | None = None) -> Swee
     required for a config that has not been through a run -- ``repeats`` and
     ``over_time`` live on the run config and reach ``BenchCfg`` only through that
     merge.
+
+    *bench_cfg* is never mutated: the merge runs against a copy. Asking a config
+    what its keys are is a query, and :class:`BenchCfg` subclasses
+    :class:`BenchRunCfg`, so merging in place would write every run-side field
+    (``repeats``, ``cache_results``, ``dry_run``, ...) onto a config the caller
+    still holds and may run again.
     """
     from bencher.bencher import Bench
 
     if run_cfg is not None:
+        bench_cfg = deepcopy(bench_cfg)
         values, _missing, _constant = Bench.filter_overridable_params(bench_cfg, run_cfg)
         with param.parameterized.discard_events(bench_cfg):
             bench_cfg.param.update(values)
