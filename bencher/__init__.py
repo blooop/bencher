@@ -45,6 +45,7 @@ from .identity import (
     sweep_identity,
 )
 from .job import SampleFailure
+from .sweep_spec import SweepSpec, diff_specs
 from .render import load_result, render_report, save_result
 from .report_export import (
     compare_results,
