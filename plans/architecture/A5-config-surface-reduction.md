@@ -200,6 +200,14 @@ they were never meant to be set by users and stop being visible as "config".
 
 ## 5. Phases
 
+**Release sequencing (owner decision, 2026-07-30):** the current all-additive work
+(plans 15–21: identity, duplicates, fault tolerance, SweepSpec phase 1,
+single-point ranges, unnamed-parameter rejection) ships first as a normal minor
+release. The breaking Phase 0–2 train below targets the **next major release** and
+is the continuing iteration of this plan; nothing in it starts until that release
+is cut. R1/R2 apply immediately regardless — they constrain new surface, not the
+release in flight.
+
 Each phase is independently shippable. Phases 0–2 form **one breaking release
 train** (one major bump, one rename table, one `CACHE_VERSION` bump) — users must
 learn the new names exactly once. `holobench` ships no runtime deprecation
