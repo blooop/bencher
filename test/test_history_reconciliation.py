@@ -22,7 +22,6 @@ from bencher.history import (
     HistoryResetError,
     column_identity,
     data_var_columns,
-    last_seen_key,
     legacy_last_seen_key,
 )
 from bencher.regression import detect_regressions

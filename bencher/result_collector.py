@@ -588,7 +588,9 @@ class ResultCollector:
             series_id (str | None): The series this run appends to
                 (``BenchCfg.series``). Keys the last-seen index, which is what lets
                 a pure rename be adopted rather than silently orphaned. When None
-                the index is not consulted and no reset is detected.
+                the series falls back to ``bench_name:tag``, so the index is still
+                consulted and reset detection is unchanged for callers that declare
+                nothing; the index is skipped only when ``bench_name`` is None too.
             config_summary (dict | None): ``bencher.history.config_summary`` of the
                 current config, stored in the last-seen index and diffed on resets.
 

@@ -263,6 +263,15 @@ class TestUpgradePath(SeriesBase):
         self.assertEqual(served.sizes["over_time"], 2)
         self.assertIn(last_seen_key("latency"), cache, "the index was not migrated")
 
+        # From here the legacy entry is read-only: it still records the pre-upgrade
+        # run while only the series key advances. It is left in place rather than
+        # deleted -- an undeclared run under the same name still reads that string
+        # as its own series key -- so "read-only" is the contract to pin, and a
+        # regression that wrote both would leave two live indices for one trend.
+        self.load(key_a, 3, bench_name="B", tag="t", series_id="latency")
+        self.assertEqual(cache[legacy_last_seen_key("B", "t")]["events"], 1)
+        self.assertEqual(cache[last_seen_key("latency")]["events"], 3)
+
     def test_declare_the_series_before_renaming_then_the_rename_is_adopted(self) -> None:
         """The supported sequence, and the reason the order matters.
 
