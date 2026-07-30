@@ -36,7 +36,7 @@ variable of its own.
 `worker.param.objects(instance=False)` and returns whatever it finds
 (`bencher/sweep_executor.py:28-36`). The lookup is by *dictionary key*, so an
 unnamed parameter is found and returned without complaint, and `plot_sweep`
-proceeds to build a config around it (`bencher/bencher.py:418-422`).
+proceeds to build a config around it (`bencher/bencher.py:418-421`).
 
 The failure lands in result storage, which uses `rv.name` as the key into the
 worker's returned dictionary (`bencher/result_collector.py:344-354`). With
@@ -92,7 +92,7 @@ user.
 
 A caller may pass a parameter object directly (`Cls.param.x`) rather than a
 string, bypassing `_resolve_param` entirely. `plot_sweep`'s conversion loops
-(`bencher/bencher.py:418-422`, and the const loop at `:440-444`) should reject a
+(`bencher/bencher.py:418-421`, and the const loop at `:439-443`) should reject a
 `param.Parameter` whose `.name` is `None`, with the same explanation.
 
 **Implementation note — do not check `name != key` here.** A parameter object
