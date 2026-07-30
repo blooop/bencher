@@ -53,12 +53,26 @@ sweep's identity tuple — `_sweep_identity()` appends `sweep_bounds` and
 plus `step` for `FloatSweep` (`bencher/variables/inputs.py:634-637`), per the
 contract at `bencher/variables/sweep_base.py:112-125`.
 
-The consequence is not cosmetic. A caller who sweeps `[0.1, 0.9]` on most runs
-and collapses to a single point on some runs is, on those runs, writing to a
-different cache key and a different history key than the range form would
-produce — so the collapsed run does not append to the trend it looks like it
-belongs to. Under plan 15 it would be reported; today it is silent, and it is
-caused entirely by having to change representation to express a legal range.
+The consequence is not cosmetic, though it is narrower than it first looks.
+Measured on `main` @ `7dad0cd4`, the three history keys for one `FloatSweep` are
+all distinct:
+
+| Declaration | `hash_persistent(include_result_vars=False)` |
+|---|---|
+| `bounds=(0.1, 0.9)` | `7b4d500d…` |
+| `values=[0.3]` | `268bc527…` |
+| `bounds=(0.3, 0.3)` | `86842759…` |
+
+Collapsing a range to a point is a genuinely different input space, so its key
+*should* differ from the range's — that reset is correct, not a defect, and this
+plan does not change it. The defect is the third row against the second: two
+spellings of *the same single measured point* carry different identities. A
+project that expresses a collapsed range as `values=[x]` today, and later drops
+that workaround once bounds accept a point, silently forks the single-point trend
+at the moment of the cleanup — the reward for removing a workaround is losing the
+history it accumulated. Under plan 15 that would at least be reported; today it is
+silent, and it is caused entirely by having to change representation to express a
+legal range.
 
 ### P4 — The error arrives late for the deferred form
 
@@ -99,6 +113,17 @@ So D1 is two changes: relax the comparison, and short-circuit
 
 The same relaxation applies to `with_samples` and any other bounds validation
 reachable from `bn.sweep`; audit for other `>=` comparisons on bounds.
+
+**A collapsed axis is squeezed out of the dataset, not kept as length 1.** Verified
+on `main` @ `7dad0cd4`: an input variable yielding one value produces
+`sizes == {}` for that dimension while still appearing in
+`BenchCfg.input_vars` — and this is pre-existing behavior, identical for the
+`values=[x]` workaround, so it is not something this plan introduces or should
+change. It does mean the acceptance tests must assert "no such dimension", not
+"dimension of length 1"; assuming the latter is the first thing an implementer
+will get wrong. It also means a collapsed sweep produces a zero-dimensional
+dataset, which is worth a glance against the `over_time` rendering path before
+declaring the feature done.
 
 ### D2 — `samples` on a degenerate range
 
