@@ -282,7 +282,7 @@ class SweepSpec:
             [[self._resolved(worker, pair[0], "const"), pair[1]] for pair in consts or ()],
         )
 
-        def survivors(entries, kept_names, var_type, name_of):
+        def survivors(entries, kept_names, name_of):
             """The caller's own entries, filtered to the names validation kept.
 
             Consumed from a list rather than a set so that when validation keeps one
@@ -309,9 +309,9 @@ class SweepSpec:
             return self._resolved(worker, pair[0], "const").name
 
         return (
-            survivors(inputs, [v.name for v in kept_inputs], "input", input_name),
-            survivors(results, [v.name for v in kept_results], "result", result_name),
-            survivors(consts, [v[0].name for v in kept_consts], "const", const_name),
+            survivors(inputs, [v.name for v in kept_inputs], input_name),
+            survivors(results, [v.name for v in kept_results], result_name),
+            survivors(consts, [v[0].name for v in kept_consts], const_name),
         )
 
     def describe(self) -> str:
