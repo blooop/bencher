@@ -749,6 +749,19 @@ class BenchCfg(BenchRunCfg):
         doc="Use tags to group different benchmarks together. By default benchmarks are considered distinct from each other and are identified by the hash of their name and inputs, constants and results and tag, but you can optionally change the hash value to only depend on the tag.  This way you can have multiple unrelated benchmarks share values with each other based only on the tag value.",
     )
 
+    series_id: str = param.String(
+        None,
+        allow_None=True,
+        doc="Names the over_time *trend* this benchmark appends to, independently of "
+        "what identifies its configuration. tag partitions storage; series_id names "
+        "the trend. Deliberately NOT part of hash_persistent: two benchmarks with the "
+        "same name, tag, inputs and consts stay one cache entry whatever their "
+        "series_id, and folding it in would re-key every existing cache and history "
+        "on upgrade. Declare it to keep a trend across a rename of the worker class "
+        "or a change of cache tag; leave it unset and the series is bench_name:tag, "
+        "exactly as before.",
+    )
+
     hash_value: str = param.String(
         "",
         doc="store the hash value of the config to avoid having to hash multiple times",
@@ -860,6 +873,13 @@ class BenchCfg(BenchRunCfg):
         from bencher.identity import identity_of
 
         return identity_of(self, run_cfg)
+
+    @property
+    def series(self) -> str:
+        """The series this run appends to: the declared ``series_id`` or the default."""
+        from bencher.history import default_series_id
+
+        return self.series_id or default_series_id(self.bench_name, self.tag)
 
     def inputs_as_str(self) -> list[str]:
         """Get a list of input variable names.

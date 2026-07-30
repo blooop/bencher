@@ -279,6 +279,7 @@ class Bench(BenchPlotServer):
         post_description: str | None = None,
         pass_repeat: bool = False,
         tag: str = "",
+        series_id: str | None = None,
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
@@ -528,6 +529,7 @@ class Bench(BenchPlotServer):
             title=title,
             pass_repeat=pass_repeat,
             tag=run_cfg.run_tag + tag,
+            series_id=series_id,
             plot_callbacks=plot_callbacks,
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
@@ -742,6 +744,7 @@ class Bench(BenchPlotServer):
                         bench_cfg.result_vars,
                         on_history_reset=run_cfg.on_history_reset,
                         bench_name=bench_cfg.bench_name,
+                        series_id=bench_cfg.series,
                         tag=bench_cfg.tag,
                         config_summary=history_config_summary(bench_cfg),
                     )
@@ -874,6 +877,7 @@ class Bench(BenchPlotServer):
         on_history_reset: str = "warn",
         bench_name: str | None = None,
         tag: str | None = None,
+        series_id: str | None = None,
         config_summary: dict | None = None,
     ) -> xr.Dataset:
         """Load, reconcile, and persist historical benchmark data from cache."""
@@ -886,6 +890,7 @@ class Bench(BenchPlotServer):
             on_history_reset=on_history_reset,
             bench_name=bench_name,
             tag=tag,
+            series_id=series_id,
             config_summary=config_summary,
         )
 
