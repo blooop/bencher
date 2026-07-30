@@ -10,8 +10,16 @@ from a range.
 
 **⚠️ Read first:** this changes what a sweep's shape-affecting fields look like
 for one previously-impossible input, so re-read the hashing contract in
-`bencher/variables/sweep_base.py:110-125` before starting. No existing valid
-input may change identity.
+`SweepBase._sweep_identity` (`bencher/variables/sweep_base.py:112-125`) before
+starting. No existing valid input may change identity.
+
+**Status: implemented in this PR** (D1 through D4). One existing test changed
+deliberately: `test_with_bounds_invalid_range` asserted the old `low >= high`
+rule, and now covers the inverted range only, with two new cases for the
+zero-width one. D2's owner decision was resolved as **raise** — `samples > 1`
+over a zero-width range is a contradiction the caller is in a position to fix,
+and silently returning one sample where five were requested is the quiet
+declaration/data disagreement this plan exists to remove.
 
 ---
 
@@ -127,20 +135,19 @@ declaring the feature done.
 
 ### D2 — `samples` on a degenerate range
 
-`with_bounds(x, x, samples=5)` asks for something that does not exist. Two
-defensible answers:
+`with_bounds(x, x, samples=5)` asks for something that does not exist.
 
-1. **Raise**, naming the contradiction — the caller asked for 5 samples of a
-   zero-width range and probably has a bug upstream.
-2. **Clamp to 1**, silently or with a warning — friendlier to a generic caller
-   that always passes `samples=N` and does not inspect the range.
+**Decided: raise**, naming the contradiction. A caller who computes bounds and
+passes an explicit sample count is in a position to handle the degenerate case,
+and silently returning one sample where five were requested is the kind of quiet
+disagreement between declaration and data this plan exists to remove. `samples=1`
+over a zero-width range is accepted, since it agrees with what will happen.
 
-**Recommendation: raise.** A caller who computes bounds and passes an explicit
-sample count is in a position to handle the degenerate case, and silently
-returning 1 sample where 5 were requested is the kind of quiet disagreement
-between declaration and data this plan exists to remove. **OWNER DECISION** —
-option 2 is reasonable if the friendlier default is preferred; the tests below
-assume option 1.
+*Considered and rejected: clamp to 1*, with or without a warning. It is friendlier
+to a generic caller that always passes `samples=N` without inspecting the range,
+but it buys that friendliness by making the sweep quietly disagree with its own
+declaration — and a caller in that position can pass `samples=None` to get the
+same behaviour explicitly.
 
 ### D3 — Validate the deferred spec early
 
