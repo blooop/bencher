@@ -128,6 +128,7 @@ demo.
 | `bn.ResultVideo()` | Videos | `self.vid = video_writer.write()` |
 | `bn.ResultPath()` | Downloadable file outputs | `self.artifact = "/path/to/file"` |
 | `bn.ResultContainer()` | Embeddable HTML/panel content | `self.widget = pane` |
+| `bn.ResultRerun()` | Rerun recording or composition | `self.scene = path_or_compositor` |
 | `bn.ResultVec(size=3)` | Fixed-size vector results (x, y, z) | `self.position = [1.0, 2.0, 3.0]` |
 | `bn.ResultDataSet()` | Any picklable data payload per sample | `self.data = bn.ResultDataSet(payload)` |
 
@@ -238,6 +239,28 @@ For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
 See the [ResultImage gallery](reference/meta/result_types/result_image/index) and
 [ResultVideo gallery](reference/meta/result_types/result_video/index) for working examples.
+
+For Rerun recordings, assign the path returned by `bn.capture_rerun_rrd()` to a
+`bn.ResultRerun`. To combine complete recordings, assign a
+`bn.ComposableContainerRerun` directly; Bencher materializes it into one namespaced
+recording and native Rerun Blueprint before caching:
+
+```python
+combined = bn.ComposableContainerRerun(compose_method=bn.ComposeType.right)
+combined.append(reference_rrd, label="Reference")
+combined.append(candidate_rrd, label="Candidate")
+self.scene = combined
+```
+
+The four composition methods map to horizontal views (`right`), vertical views
+(`down`), one shared view showing every recording at its original times
+(`overlay`), and one shared view whose timelines are spliced end to end so the
+recordings play one after the other (`sequence`). `sequence` needs recordings with
+data on a timeline — it offsets each recording's index values to start where the
+previous one ended, and clears each recording as the next begins.
+View types are inferred from recorded archetypes; pass `view_kinds=` to `append()`
+to override inference. See the
+[Rerun Integration gallery](reference/meta/rerun/index) for complete examples.
 
 ## Running a Sweep
 
