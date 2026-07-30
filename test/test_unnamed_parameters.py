@@ -117,9 +117,7 @@ def test_no_false_positives_for_legitimate_forms(make_input):
     the class namespace, so a key-equality check on this path would reject them.
     """
     res = (
-        Base()
-        .to_bench()
-        .plot_sweep(input_vars=[make_input()], result_vars=["y"], auto_plot=False)
+        Base().to_bench().plot_sweep(input_vars=[make_input()], result_vars=["y"], auto_plot=False)
     )
     assert "y" in res.to_dataset().data_vars
 

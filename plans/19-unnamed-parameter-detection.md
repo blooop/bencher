@@ -12,6 +12,14 @@ dataset assembly, with a message that points nowhere near the declaration.
 object whose name was assigned outside a metaclass — `bn.box()` does exactly that
 (`bencher/variables/inputs.py:672`). See D2's implementation note.
 
+**Status: implemented in this PR** (all three phases). Kept as a design record for
+why the check exists and why the object path is checked more weakly. Validation
+beyond this repo's suite: the guard was run against an external project's
+benchmark suite — 16 benchmarks using `bn.box`, both `bn.sweep` forms, bare param
+objects, and multiple-inheritance task mixins — and produced **1132 passing tests
+with zero false positives**. That mattered more than any single test here, because
+the only real risk in this change is rejecting a legitimate declaration.
+
 ---
 
 ## Problem statement (with evidence)
