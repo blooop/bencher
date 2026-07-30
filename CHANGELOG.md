@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ResultHmap` is the one exemption, collected out-of-band via `result_hmaps`.
 
 ### Changed
+- **A `ResultReference` container is now called with the object alone.** It was called as
+  `container(obj, **kwargs)`, so the render kwargs every path adds (`override`,
+  `agg_over_dims`, `pane_layout`, and the `width`/`height` that `set_plot_size` injects from
+  `bench_cfg.plot_size`) leaked into a callback that
+  only ever wanted the object, and a single-argument renderer raised `TypeError`. It now
+  matches the `ResultDataSet` contract, so one renderer works for both. Breaking only for a
+  callback that *relied* on receiving those keywords; nothing in bencher did. The
+  `container=` a renderer passes to `to_panes` is a separate contract — a panel pane
+  constructor, still called with `styles=` and the layout keywords — and is unchanged.
 - **Intra-sample chart gallery examples now declare their container** rather than appending
   a report-level plot. `res.to(XYCurveResult, ...)` and friends *add* a plot below whatever
   `plot_sweep` already rendered, which for a `ResultDataSet` with no declared container is
@@ -80,6 +89,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than indexing a list with an array several frames later.
 
 ### Added
+- **`container=` extended to the remaining renderable result types.** `ResultString`,
+  `ResultPath` and `ResultContainer` (and so `ResultRerun`, which subclasses it) now take
+  the same declared-renderer slot `ResultDataSet` and `ResultReference` have, and a
+  declared container **beats the type's built-in `to_container()`**. A `ResultPath` can
+  therefore render a file's *contents* — a CSV as a chart, a JSON as a tree — where before
+  it was always a download widget, and a `ResultString` can render as Markdown or
+  highlighted code instead of plain text. `ResultReference` also honours a container
+  declared on the class, not just one attached to a sample; previously a class-level one
+  was silently ignored because only the stored sample was consulted. Precedence is uniform:
+  renderer-supplied, then the sample's, then the class's, then the type's default. Every new
+  slot is in `_hash_exclude`, so declaring a renderer leaves cache keys and `over_time`
+  history series byte-identical. The resolution itself is now one helper,
+  `BenchResultBase.declared_container`, rather than being open-coded per type.
+
+  Not extended to `ResultVolume`: it has no render path at all (nothing dispatches on it —
+  `VolumeResult` plots `ResultFloat` over three float inputs, and `ResultVolume` is absent
+  from `PANEL_TYPES`), so a container slot there would be an option that never fires.
 - **`xy_histogram` chart type** — bins one or more measured columns of a `ResultDataSet`,
   showing the distribution a single sample measured. Distinct from the existing
   `histogram`, which bins a `ResultFloat` across the sweep and so shows the spread of the

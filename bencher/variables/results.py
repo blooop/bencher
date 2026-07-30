@@ -278,12 +278,29 @@ def curve(
 
 
 class ResultPath(param.Filename):
-    __slots__ = ["units", "max_time_events"]
-    _hash_exclude = ("max_time_events",)
+    """A path to a file the benchmark produced.
 
-    def __init__(self, default=None, units="path", max_time_events=None, **params):
+    Renders as a download widget by default. Declare ``container=`` a callable
+    taking the path and returning anything panel can display to render the file's
+    *contents* instead — a CSV as a chart, a JSON as a tree — and it wins over the
+    download widget. See :class:`ResultDataSet` for the contract the callback has
+    to satisfy.
+    """
+
+    __slots__ = ["units", "container", "max_time_events"]
+    _hash_exclude = ("container", "max_time_events")
+
+    def __init__(
+        self,
+        default=None,
+        units="path",
+        container: Callable[[Any], Any] | None = None,
+        max_time_events=None,
+        **params,
+    ):
         super().__init__(default=default, check_exists=False, **params)
         self.units = units
+        self.container = container
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
@@ -324,12 +341,28 @@ class ResultImage(param.Filename):
 
 
 class ResultString(param.String):
-    __slots__ = ["units", "max_time_events"]
-    _hash_exclude = ("max_time_events",)
+    """Text the benchmark produced.
 
-    def __init__(self, default=None, units="str", max_time_events=None, **params):
+    Renders as plain text by default. Declare ``container=`` a callable taking the
+    string and returning anything panel can display to render it as something
+    richer — Markdown, syntax-highlighted code, a parsed structure. See
+    :class:`ResultDataSet` for the contract the callback has to satisfy.
+    """
+
+    __slots__ = ["units", "container", "max_time_events"]
+    _hash_exclude = ("container", "max_time_events")
+
+    def __init__(
+        self,
+        default=None,
+        units="str",
+        container: Callable[[Any], Any] | None = None,
+        max_time_events=None,
+        **params,
+    ):
         super().__init__(default=default, **params)
         self.units = units
+        self.container = container
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
@@ -338,12 +371,27 @@ class ResultString(param.String):
 
 
 class ResultContainer(param.Parameter):
-    __slots__ = ["units", "max_time_events"]
-    _hash_exclude = ("max_time_events",)
+    """Embeddable HTML/panel content the benchmark produced.
 
-    def __init__(self, default=None, units="container", max_time_events=None, **params):
+    Handed to panel as-is by default. Declare ``container=`` a callable taking the
+    stored value and returning anything panel can display to wrap or transform it
+    first. See :class:`ResultDataSet` for the contract the callback has to satisfy.
+    """
+
+    __slots__ = ["units", "container", "max_time_events"]
+    _hash_exclude = ("container", "max_time_events")
+
+    def __init__(
+        self,
+        default=None,
+        units="container",
+        container: Callable[[Any], Any] | None = None,
+        max_time_events=None,
+        **params,
+    ):
         super().__init__(default=default, **params)
         self.units = units
+        self.container = container
         self.max_time_events = max_time_events
 
     def hash_persistent(self) -> str:
@@ -400,7 +448,17 @@ class ResultRerun(ResultContainer):
 
 
 class ResultReference(param.Parameter):
-    """Use this class to save arbitrary objects that are not picklable or native to panel.  You can pass a container callback that takes the object and returns a panel pane to be displayed"""
+    """Use this class to save arbitrary objects that are not picklable or native to panel.
+
+    ``container`` is a callback taking the stored object and returning something panel
+    can display. It can be attached to a single sample inside ``benchmark()`` or
+    declared once on the class, exactly as for :class:`ResultDataSet`::
+
+        plot = ResultReference(container=my_renderer)   # my_renderer(obj) -> pane
+
+    The callback receives only the object — no plot kwargs — so single-argument
+    callables are safe, and one renderer works for both this and a ``ResultDataSet``.
+    """
 
     __slots__ = ["units", "obj", "container", "max_time_events"]
     _hash_exclude = ("obj", "container", "max_time_events")

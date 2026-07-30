@@ -1072,9 +1072,43 @@ class BenchResultBase:
         """Dimensions of a supposedly-single point that still hold several values."""
         return {str(d): int(da.sizes[d]) for d in da.dims if da.sizes[d] > 1}
 
+    @staticmethod
+    def declared_container(*sources: Any) -> Any:
+        """The first container declared by *sources*, in the order given.
+
+        A "declared" container is the single-argument renderer a result variable
+        carries: attached to one stored sample inside ``benchmark()``, or declared
+        once on the class. It is distinct from the ``container=`` a *renderer* passes
+        in, which is a panel pane constructor and takes styling keywords — see
+        :meth:`ds_to_container`.
+
+        ``getattr``, not attribute access: a result pickled before a type gained the
+        slot unpickles without it, and reports of old runs still have to render.
+        """
+        for source in sources:
+            candidate = getattr(source, "container", None) if source is not None else None
+            if candidate is not None:
+                return candidate
+        return None
+
     def ds_to_container(  # pylint: disable=too-many-return-statements
         self, dataset: xr.Dataset, result_var: Parameter, container, **kwargs
     ) -> Any:
+        """Render one sample of *result_var* out of *dataset*.
+
+        Two kinds of container can apply, and they are different contracts:
+
+        * the ``container`` argument, supplied by a renderer — a panel pane
+          constructor, called with the value plus styling and layout keywords (this
+          is what ``PaneResult.to_panes`` and ``video_container`` rely on);
+        * a *declared* container, carried by the result variable or the stored
+          sample — called with the object alone, so a single-argument renderer such
+          as an ``xy_scatter`` spec works unchanged.
+
+        A declared container beats the type's built-in ``to_container()``, which is
+        what makes it possible to render a path as its contents rather than as a
+        download widget.
+        """
         if isinstance(result_var, (ResultDataSet, ResultReference)):
             # These two store an index into a side list, so a value that is still an
             # array indexes that list with an array several frames from the cause.
@@ -1089,33 +1123,31 @@ class BenchResultBase:
         val = self.zero_dim_da_to_val(dataset[result_var.name])
         if isinstance(result_var, ResultDataSet):
             ref = self.dataset_list[val]
-            if ref is not None:
-                # Renderer-supplied container wins, then the one the sample was
-                # stored with, then the one declared on the class. Called with the
-                # object alone (no plot kwargs) so single-argument callables work.
-                # getattr, not attribute access: a result pickled before the slot
-                # existed unpickles without it, and reports of old runs still render.
-                for candidate in (
-                    container,
-                    getattr(ref, "container", None),
-                    getattr(result_var, "container", None),
-                ):
-                    if candidate is not None:
-                        return candidate(ref.obj)
-                return ref.obj
-            return None
+            if ref is None:
+                return None
+            # Renderer-supplied container wins, then the sample's, then the class's.
+            resolved = container or self.declared_container(ref, result_var)
+            return resolved(ref.obj) if resolved is not None else ref.obj
         if isinstance(result_var, ResultReference):
             ref = self.object_index[val]
             if ref is not None:
                 val = ref.obj
-                if ref.container is not None:
-                    return ref.container(val, **kwargs)
+                # The sample's container, then the class's. Called with the object
+                # alone, matching ResultDataSet, so one spec serves both.
+                resolved = self.declared_container(ref, result_var)
+                if resolved is not None:
+                    return resolved(val)
         if container is not None:
             return container(val, styles={"background": "white"}, **kwargs)
+        # A container declared on the result var beats the type's built-in default,
+        # so a ResultPath can render its contents rather than a download widget.
+        resolved = self.declared_container(result_var)
+        if resolved is not None:
+            return resolved(val)
         try:
-            container = result_var.to_container()
-            if container is not None:
-                return container(val)
+            to_container = result_var.to_container()
+            if to_container is not None:
+                return to_container(val)
         except AttributeError as _:
             # TODO make sure all vars have to_container method
             pass
