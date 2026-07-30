@@ -161,7 +161,24 @@ appends that view to the report.
 
 A declared container is part of the benchmark config, which the result cache and the
 collect/render split both pickle, so it must be picklable: a module-level function (as
-above) or a callable object, not a lambda or a local function.
+above) or a callable object, not a lambda or a local function. Because a renderer is not
+data, declaring one leaves every cache key and `over_time` history series untouched.
+
+**Which result types accept one:** `ResultDataSet`, `ResultReference`, `ResultString`,
+`ResultPath`, `ResultContainer` and `ResultRerun`. The callback always receives the
+stored value alone, so one renderer works across all of them, and it beats whatever the
+type would render by default:
+
+```python
+def path_contents(path):               # a CSV as a chart, not a download button
+    return plot(pd.read_csv(path))
+
+class MySweep(bn.ParametrizedSweep):
+    report = bn.ResultPath(container=path_contents)
+    summary = bn.ResultString(container=pn.pane.Markdown)     # markdown, not plain text
+```
+
+When both a class-level and a per-sample container are present, the sample's wins.
 
 **Built-in intra-sample charts:** tabular interpretation belongs to these renderers, not
 to `ResultDataSet`. For the common cases of that container bencher builds one for you, so
