@@ -164,6 +164,15 @@ Phases 1–4 are independent; do 1 first since the rest reference `SweepIdentity
 - `explain_identity()` names `title` as excluded (a regression guard for the
   exclusion documented in `hash_persistent`'s `title` NOTE comment,
   `bencher/bench_cfg.py:820-823`).
+- Every field the explanation names as contributing or as excluded is checked
+  *behaviourally* — change it, assert a key moves or does not — and the checks are
+  asserted to cover the lists exactly, so extending either list without a check
+  fails. The explanation is prose about a rule defined elsewhere, which is the same
+  transcription hazard listed under Risks; only a behavioural check retires it.
+- Asking for an identity never mutates what it was asked about. `BenchCfg`
+  subclasses `BenchRunCfg`, so replaying `run_sweep`'s merge in place would write
+  every run-side field (`repeats`, `cache_results`, `dry_run`, ...) onto a config
+  the caller still holds — a query that silently reconfigures the next run.
 - A `SweepIdentity` round-trips through `pickle` unchanged, and through
   `json.dumps(asdict(ident))` with no custom encoder — tuple-to-list is the only
   normalization the JSON form may introduce. Two identities built from the same
