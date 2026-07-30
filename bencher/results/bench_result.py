@@ -108,8 +108,10 @@ class BenchResult(
         # Samples that raised and were tolerated because of run_cfg.catch. Empty
         # unless catch was set, so a run with no catch is byte-identical to before.
         self.failed_samples: list = []
-        # Jobs this run attempted, set by run_sweep. Needed because the dataset's
-        # own size is not the answer once over_time history has been merged in.
+        # Samples this run actually executed, set by calculate_benchmark_results.
+        # Needed because neither the dataset's own size nor the job count is the
+        # answer: the former grows once over_time history is merged in, and the
+        # latter counts cache hits that never reached the worker.
         self.n_attempted: int = 0
 
     @property
@@ -129,7 +131,14 @@ class BenchResult(
 
     @property
     def failed_fraction(self) -> float:
-        """Failed samples as a fraction of the samples this run attempted."""
+        """Failed samples as a fraction of the samples this run *executed*.
+
+        Cache hits are excluded from the denominator deliberately: they never
+        reached the worker and so could not have failed. Counting them would make
+        one ``fail_on_sample_error`` threshold mean different things on a cold and
+        a warm cache -- the single failure in a 4-sample sweep whose other 3 came
+        from cache is 100% of what ran, not 25%.
+        """
         attempted = getattr(self, "n_attempted", 0)  # absent on pre-plan-21 pickles
         return self.n_failed / attempted if attempted else 0.0
 

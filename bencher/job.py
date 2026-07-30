@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import auto
@@ -63,6 +63,36 @@ class Job:
         else:
             self.job_key = job_key
         self.tag = tag
+
+
+def normalize_catch(catch) -> tuple[type[BaseException], ...]:
+    """Coerce a ``catch=`` value to a tuple of exception types, or reject it.
+
+    Validated eagerly, at the start of the run: left alone, a bare class reaches
+    ``tuple(...)`` as ``TypeError: 'type' object is not iterable`` and a string
+    becomes a tuple of characters (``catching classes that do not inherit from
+    BaseException``), both raised from inside the sampling loop with nothing in the
+    message naming ``catch``. A bare exception class is accepted and wrapped,
+    because ``catch=RuntimeError`` is the obvious thing to type and there is
+    nothing else it could mean.
+    """
+    if catch is None:
+        return ()
+    if isinstance(catch, type):  # catch=RuntimeError -- wrap rather than reject
+        catch = (catch,)
+    # TypeError rather than ValueError because that is what `except` itself raises
+    # for a non-exception class -- same failure, reported earlier and by name.
+    if isinstance(catch, str) or not isinstance(catch, Iterable):
+        raise TypeError(
+            f"catch must be an exception type or a tuple of exception types, got {catch!r}"
+        )
+    catch = tuple(catch)
+    for entry in catch:
+        if not (isinstance(entry, type) and issubclass(entry, BaseException)):
+            raise TypeError(
+                f"catch must contain exception types (subclasses of BaseException); got {entry!r}"
+            )
+    return catch
 
 
 @dataclass(frozen=True)

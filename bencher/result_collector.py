@@ -35,7 +35,7 @@ from bencher.history import (
     project,
     reconcile,
 )
-from bencher.job import JobFuture, SampleFailure
+from bencher.job import JobFuture, SampleFailure, normalize_catch
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
 from bencher.variables.results import (
@@ -321,8 +321,9 @@ class ResultCollector:
                 rv_arrays[rv.name] = bench_res.ds[rv.name].values
         return rv_arrays
 
+    @staticmethod
     def record_caught_sample(
-        self, bench_res: BenchResult, job_id: str, inputs: dict, exc: BaseException
+        bench_res: BenchResult, job_id: str, inputs: dict, exc: BaseException
     ) -> None:
         """Record one tolerated sample failure.
 
@@ -368,7 +369,9 @@ class ResultCollector:
         """
         # No `if catch:` branch: `except ()` matches nothing, so the default empty
         # tuple is already fail-fast, and result() keeps a single call site.
-        catch = tuple(getattr(bench_run_cfg, "catch", ()) or ())
+        # Normalized here as well as in plot_sweep, because store_results is also
+        # reachable with a hand-built BenchRunCfg that never passed through it.
+        catch = normalize_catch(getattr(bench_run_cfg, "catch", ()))
         try:
             result = job_result.result()
         # catch is a runtime tuple of exception types, which pylint cannot see into.
