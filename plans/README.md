@@ -43,9 +43,9 @@ without additional context. **Read the whole plan before starting it.**
 | 14 | [Schema-evolving over_time history](14-history-schema-reconciliation.md) | — | — | **Implemented** (design record, v1.116.0) |
 | 15 | [Stable benchmark series identity](15-benchmark-series-identity.md) | Medium | Medium | Yes — closes a hole in 09 |
 | 16 | [Inspectable, pinnable benchmark identity](16-inspectable-benchmark-identity.md) | Low | Small | Anytime; pairs with 15 |
-| 17 | [Single-point sweep ranges](17-single-point-sweep-ranges.md) | Low | Small | Yes — quick win |
+| 17 | [Single-point sweep ranges](17-single-point-sweep-ranges.md) | Low | Small | **Implemented** in the plan PR |
 | 18 | [Reusable sweep declarations](18-reusable-sweep-declarations.md) | Low–Med | Medium | Coordinate with 13 |
-| 19 | [Reject unnamed parameters](19-unnamed-parameter-detection.md) | Low | Small | Yes — quick win |
+| 19 | [Reject unnamed parameters](19-unnamed-parameter-detection.md) | Low | Small | **Implemented** in the plan PR |
 | 20 | [Duplicate declared variables](20-duplicate-declared-variables.md) | Low–Med | Small | With 19 |
 | 21 | [Per-sample fault tolerance in sweeps](21-sample-fault-tolerance.md) | Medium | Medium | After 10 |
 
