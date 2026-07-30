@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Per-sample fault tolerance on the sweep path: `catch=` and `fail_on_sample_error`.**
   `Bench.optimize(catch=...)` has had this knob since #962, so the same benchmark was
-  fault-tolerant when driven by Optuna and all-or-nothing when swept. `catch` is available on
-  `BenchRunCfg` (so `bn.run(catch=...)` works) and as a `plot_sweep` argument; a bare
-  exception type is accepted and wrapped. A caught sample leaves the missing-value sentinel
+  fault-tolerant when driven by Optuna and all-or-nothing when swept. `catch` lives on
+  `BenchRunCfg` (so `bn.run(catch=...)` works, and it reaches `plot_sweep` via `run_cfg` —
+  its one home); a bare exception type is accepted and wrapped. A caught sample leaves the missing-value sentinel
   at its coordinate — `setup_dataset` already fills every result variable, so the dataset
   shape is unchanged and reductions skip it — is logged at WARNING with its inputs, and
   writes **nothing** to the sample cache, so a transient flake cannot become a permanent

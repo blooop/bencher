@@ -578,14 +578,10 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
         ``catch`` and ``fail_on_sample_error`` describe how a run *reacts* to a
         failure, not what it measures. If they moved a key, switching tolerance on
         would fork the trend -- the same silent orphaning plan 15 exists to
-        prevent, arrived at from the other direction. Both surfaces are checked:
-        the ``plot_sweep`` keyword and the ``BenchRunCfg`` field.
+        prevent, arrived at from the other direction. Both knobs live on
+        ``BenchRunCfg`` only (their one home), so that is the surface checked.
         """
         decl = {"input_vars": ["theta"], "result_vars": ["out_sin"]}
-        self._assert_no_key_moves(
-            _dry_identity(**decl),
-            _dry_identity(**decl, catch=(ValueError,)),
-        )
         self._assert_no_key_moves(
             _dry_identity(**decl),
             _dry_identity(bn.BenchRunCfg(catch=(ValueError,), fail_on_sample_error=True), **decl),

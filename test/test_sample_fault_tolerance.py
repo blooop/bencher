@@ -137,24 +137,17 @@ class TestCatch(unittest.TestCase):
             _run(fail_at=(2,), catch=(RuntimeError,))
         self.assertTrue(any("x=2" in line for line in logs.output), logs.output)
 
-    def test_plot_sweep_catch_argument_reaches_the_run_cfg(self) -> None:
-        Flaky.fail_at = (2,)
-        cfg = bn.BenchRunCfg()
-        cfg.auto_plot = False
-        cfg.cache_results = False
-        cfg.cache_samples = False
-        bench = Flaky().to_bench(cfg)
-        try:
-            res = bench.plot_sweep(
-                input_vars=["x"],
-                result_vars=["y"],
-                catch=(RuntimeError,),
-                plot_callbacks=False,
-            )
-        finally:
-            Flaky.fail_at = ()
-            bench.close()
-        self.assertEqual(res.n_failed, 1)
+    def test_catch_has_one_home(self) -> None:
+        """``catch`` is run configuration and lives on ``BenchRunCfg`` only.
+
+        ``run_cfg`` already reaches ``plot_sweep`` as an object; a second kwarg
+        spelling would give the knob two homes and a precedence rule between
+        them (A5 R1).
+        """
+        import inspect
+
+        self.assertNotIn("catch", inspect.signature(bn.Bench.plot_sweep).parameters)
+        self.assertNotIn("fail_on_sample_error", inspect.signature(bn.Bench.plot_sweep).parameters)
 
 
 class TestBothExecutorPaths(unittest.TestCase):

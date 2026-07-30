@@ -69,11 +69,16 @@ for an unattended or scheduled run.
 
 ### D1 — `catch=` on the sweep path, spelled as on `optimize()`
 
-`plot_sweep(catch: tuple[type[Exception], ...] = ())`, threaded to the sampling
-loop and honored in both executor paths (`bencher/bencher.py:1015-1029`), plus the
-same argument on `bn.run` for callers who never touch `plot_sweep` directly.
+`catch: tuple[type[Exception], ...] = ()` on `BenchRunCfg`, threaded to the
+sampling loop and honored in both executor paths (`bencher/bencher.py:1015-1029`),
+plus the same argument on `bn.run` for callers who never build a `run_cfg`.
 Default `()` — identical behavior to today. Reuse the exact name, type, and
 default from `optimize()` so the two paths read the same.
+
+*(Amended at implementation time: the plan originally also added a
+`plot_sweep(catch=...)` kwarg. That gives the knob two homes — `run_cfg.catch`
+plus a kwarg overriding it — which is the pattern plan A5's R1 exists to stop;
+`run_cfg` already reaches `plot_sweep` as an object, so the kwarg was dropped.)*
 
 ### D2 — What a caught sample records
 

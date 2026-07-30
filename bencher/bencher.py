@@ -384,7 +384,6 @@ class Bench(BenchPlotServer):
         pass_repeat: bool = False,
         tag: str = "",
         series_id: str | None = None,
-        catch: type[BaseException] | tuple[type[BaseException], ...] | None = None,
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
@@ -499,8 +498,10 @@ class Bench(BenchPlotServer):
         # sampling happens. Deferring either check to the end of the run means a
         # typo costs the whole sweep before it is reported -- and for a sweep whose
         # samples are individually expensive, that is exactly the cost this feature
-        # exists to avoid paying.
-        run_cfg.catch = normalize_catch(catch if catch is not None else run_cfg.catch)
+        # exists to avoid paying. Both knobs live on run_cfg only -- run
+        # configuration already reaches plot_sweep as an object, and a second
+        # kwarg spelling would give each knob two homes to reconcile.
+        run_cfg.catch = normalize_catch(run_cfg.catch)
         validate_sample_error_policy(run_cfg.fail_on_sample_error)
 
         if run_cfg.only_plot:
