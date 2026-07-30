@@ -107,6 +107,8 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.holoview_results.table_result import TableResult
     from bencher.results.holoview_results.tabulator_result import TabulatorResult
     from bencher.results.holoview_results.xy_curve_result import XYCurveResult
+    from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult
+    from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult
     from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
     from bencher.results.rerun_result import RerunResult
     from bencher.results.video_summary import VideoSummaryResult
@@ -127,6 +129,8 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
         ("rerun", "rerun", RerunResult.to_rerun),
         ("xy_scatter", "holoviews", XYScatterResult.to_plot),
         ("xy_curve", "holoviews", XYCurveResult.to_plot),
+        ("xy_histogram", "holoviews", XYHistogramResult.to_plot),
+        ("xy_hexbin", "holoviews", XYHexbinResult.to_plot),
     ]
 
 

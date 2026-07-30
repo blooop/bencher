@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 import bencher as bn
-from bencher.results.holoview_results.xy_curve_result import XYCurveResult
 
 
 class SettlingTrace(bn.ParametrizedSweep):
@@ -12,7 +11,14 @@ class SettlingTrace(bn.ParametrizedSweep):
 
     damping = bn.FloatSweep(default=0.5, bounds=[0.2, 1.0], doc="Damping ratio")
 
-    trace = bn.ResultDataSet(doc="Measured and commanded position over time")
+    trace = bn.ResultDataSet(
+        container=bn.xy_curve(
+            x="time_s",
+            y=["measured_mm", "commanded_mm"],
+            ylabel="position [mm]",
+        ),
+        doc="Measured and commanded position over time",
+    )
 
     def benchmark(self):
         t = np.linspace(0.0, 10.0, 120)
@@ -25,10 +31,7 @@ class SettlingTrace(bn.ParametrizedSweep):
 def example_plot_xy_curve(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Plot Type: Xy Curve."""
     bench = SettlingTrace().to_bench(run_cfg)
-    res = bench.plot_sweep(input_vars=["damping"], result_vars=["trace"])
-    bench.report.append(
-        res.to(XYCurveResult, x="time_s", y=["measured_mm", "commanded_mm"], ylabel="position [mm]")
-    )
+    bench.plot_sweep(input_vars=["damping"], result_vars=["trace"])
 
     return bench
 
