@@ -44,6 +44,7 @@ IDENTITY_FIELDS = (
 EXCLUDED_FIELDS = (
     "title",
     "description / post_description",
+    "series_id (names the trend, not the configuration)",
     "aggregate / agg_fn",
     "sample_order",
     "plot_callbacks / auto_plot",

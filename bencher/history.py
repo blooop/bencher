@@ -74,8 +74,8 @@ class HistoryResetError(Exception):
 class HistoryEvent:
     """One schema-affecting event detected while loading over_time history."""
 
-    kind: str  # full_reset | column_born | column_dormant | column_retired |
-    #            column_resumed | history_discarded
+    kind: str  # full_reset | history_renamed | column_born | column_dormant |
+    #            column_retired | column_resumed | history_discarded
     detail: str
     column: str | None = None
 
@@ -177,9 +177,34 @@ def diff_summaries(old: dict | None, new: dict | None) -> list[str]:
     return lines
 
 
-def last_seen_key(bench_name: str, tag: str | None) -> str:
-    """History-cache key of the last-seen index entry for one benchmark."""
-    return f"__history_last_seen__:{bench_name}:{tag}"
+def default_series_id(bench_name: str, tag: str | None) -> str:
+    """The series a benchmark belongs to when it does not declare one.
+
+    Byte-identical to the pre-``series_id`` index key, so nothing moves on
+    upgrade for a caller who declares nothing.
+    """
+    return f"{bench_name}:{tag}"
+
+
+def last_seen_key(series_id: str) -> str:
+    """History-cache key of the last-seen index entry for one *series*.
+
+    Keyed on the series rather than on ``(bench_name, tag)`` because those two
+    are themselves inputs to the history key: an index keyed on them moves
+    together with the key it exists to watch, so a rename -- the most common way
+    a key moves -- missed on both sides and silently orphaned the trend.
+    """
+    return f"__history_last_seen__:{series_id}"
+
+
+def legacy_last_seen_key(bench_name: str, tag: str | None) -> str:
+    """The pre-``series_id`` index key, read-only, for one upgrade.
+
+    Identical to ``last_seen_key(default_series_id(bench_name, tag))``, so it only
+    ever differs for a benchmark that declares a ``series_id``. Kept as its own
+    function so the fallback lookup is explicit and easy to delete.
+    """
+    return last_seen_key(default_series_id(bench_name, tag))
 
 
 def current_time_value(dataset: xr.Dataset) -> Any:

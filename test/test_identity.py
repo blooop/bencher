@@ -554,6 +554,24 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
             _real_run(**decl, sample_order=bn.SampleOrder.REVERSED),
         )
 
+    def check_series_id(self) -> None:
+        """The pairing this list exists to state: tag partitions storage, series_id names the trend.
+
+        ``series_id`` reaches ``BenchCfg`` and is deliberately kept out of
+        ``hash_persistent`` -- naming a trend must never move the keys whose
+        movement the trend exists to survive. ``tag`` is checked to move, one
+        entry above, so the two halves are pinned against each other.
+        """
+        decl = {"input_vars": ["theta"], "result_vars": ["out_sin"]}
+        self._assert_no_key_moves(
+            _dry_identity(**decl),
+            _dry_identity(**decl, series_id="latency"),
+        )
+        self._assert_no_key_moves(
+            _dry_identity(**decl, series_id="latency"),
+            _dry_identity(**decl, series_id="throughput"),
+        )
+
     def check_plotting(self) -> None:
         """``plot_callbacks`` is stored on BenchCfg; ``auto_plot`` is merged onto it."""
         decl = {"input_vars": ["theta"], "result_vars": ["out_sin"]}
@@ -580,6 +598,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
             "description / post_description": self.check_descriptions,
             "aggregate / agg_fn": self.check_aggregation,
             "sample_order": self.check_sample_order,
+            "series_id (names the trend, not the configuration)": self.check_series_id,
             "plot_callbacks / auto_plot": self.check_plotting,
         }
 
