@@ -6,7 +6,7 @@ import warnings
 from copy import deepcopy
 from datetime import datetime
 from enum import auto
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import panel as pn
 import param
@@ -19,6 +19,10 @@ from bencher.results.laxtex_result import to_latex
 from bencher.variables.results import OptDir
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
 from bencher.variables.time import TimeEvent, TimeSnapshot
+
+if TYPE_CHECKING:
+    # Runtime import would be circular: identity imports this module.
+    from bencher.identity import SweepIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -849,6 +853,18 @@ class BenchCfg(BenchRunCfg):
         )
 
         return hash_sha1((hash_val, result_hashes, const_hashes))
+
+    def identity(self, run_cfg: BenchRunCfg | None = None) -> SweepIdentity:
+        """This config's cache/history/sample keys as an inspectable value.
+
+        *run_cfg* replays the merge :meth:`bencher.bencher.Bench.run_sweep`
+        performs before hashing; pass it for a config that has not been run, whose
+        ``repeats`` and ``over_time`` are still the class defaults. The replay runs
+        against a copy, so asking for an identity never reconfigures *self*.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self, run_cfg)
 
     def inputs_as_str(self) -> list[str]:
         """Get a list of input variable names.
