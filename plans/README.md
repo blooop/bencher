@@ -43,11 +43,11 @@ without additional context. **Read the whole plan before starting it.**
 | 14 | [Schema-evolving over_time history](14-history-schema-reconciliation.md) | — | — | **Implemented** (design record, v1.116.0) |
 | 15 | [Stable benchmark series identity](15-benchmark-series-identity.md) | Medium | Medium | **Implemented** in #1012 (stack 3/5) |
 | 16 | [Inspectable, pinnable benchmark identity](16-inspectable-benchmark-identity.md) | Low | Small | **Implemented** in #1010 (stack 1/5) |
-| 17 | [Single-point sweep ranges](17-single-point-sweep-ranges.md) | Low | Small | **Implemented** in the plan PR |
-| 18 | [Reusable sweep declarations](18-reusable-sweep-declarations.md) | Low–Med | Medium | **Implemented** in #1014 (stack 5/5) |
-| 19 | [Reject unnamed parameters](19-unnamed-parameter-detection.md) | Low | Small | **Implemented** in the plan PR |
+| 17 | [Single-point sweep ranges](17-single-point-sweep-ranges.md) | Low | Small | **Implemented** in #1001 |
+| 18 | [Reusable sweep declarations](18-reusable-sweep-declarations.md) | Low–Med | Medium | **Implemented** (phase 1) in #1014; phase 2 deferred to A5 §6 |
+| 19 | [Reject unnamed parameters](19-unnamed-parameter-detection.md) | Low | Small | **Implemented** in #1003 |
 | 20 | [Duplicate declared variables](20-duplicate-declared-variables.md) | Low–Med | Small | **Implemented** in #1011 (stack 2/5) |
-| 21 | [Per-sample fault tolerance in sweeps](21-sample-fault-tolerance.md) | Medium | Medium | **Implemented** in #1013 (stack 4/5) |
+| 21 | [Per-sample fault tolerance in sweeps](21-sample-fault-tolerance.md) | Medium | Medium | **Implemented** in #1013; `catch` lives on `BenchRunCfg` only (amended per A5 R1) |
 
 Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
 Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on
