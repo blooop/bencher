@@ -87,8 +87,8 @@ class TestRerunDeclaredContainerOverTime(unittest.TestCase):
         single = run_over_time(RerunSweep(), "test_rerun_container_single", 1)
         history = run_over_time(RerunSweep(), "test_rerun_container_multi", SNAPSHOTS)
 
-        single_text = [t for t in markdown_text(single.to_auto(plot_list=["panes"]))]
-        history_text = [t for t in markdown_text(history.to_auto(plot_list=["panes"]))]
+        single_text = list(markdown_text(single.to_auto(plot_list=["panes"])))
+        history_text = list(markdown_text(history.to_auto(plot_list=["panes"])))
 
         self.assertTrue(any(t.startswith("contents: ") for t in single_text))
         self.assertTrue(any(t.startswith("contents: ") for t in history_text))
