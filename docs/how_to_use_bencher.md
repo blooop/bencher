@@ -161,7 +161,24 @@ appends that view to the report.
 
 A declared container is part of the benchmark config, which the result cache and the
 collect/render split both pickle, so it must be picklable: a module-level function (as
-above) or a callable object, not a lambda or a local function.
+above) or a callable object, not a lambda or a local function. Because a renderer is not
+data, declaring one leaves every cache key and `over_time` history series untouched.
+
+**Which result types accept one:** `ResultDataSet`, `ResultReference`, `ResultString`,
+`ResultPath`, `ResultContainer` and `ResultRerun`. The callback always receives the
+stored value alone, so one renderer works across all of them, and it beats whatever the
+type would render by default:
+
+```python
+def path_contents(path):               # a CSV as a chart, not a download button
+    return plot(pd.read_csv(path))
+
+class MySweep(bn.ParametrizedSweep):
+    report = bn.ResultPath(container=path_contents)
+    summary = bn.ResultString(container=pn.pane.Markdown)     # markdown, not plain text
+```
+
+When both a class-level and a per-sample container are present, the sample's wins.
 
 **Built-in intra-sample charts:** tabular interpretation belongs to these renderers, not
 to `ResultDataSet`. For the common cases of that container bencher builds one for you, so
@@ -313,6 +330,28 @@ bench.plot_sweep(
 
 See the [Constant Variables gallery](reference/meta/const_vars/index) for examples of
 slicing, comparing, and pinning parameters.
+
+## Declare Each Variable Once
+
+Variable lists are **sets keyed by name**. Order matters only for `input_vars`, where it
+sets the dimension order of the dataset; reordering `result_vars` or `const_vars` is a
+presentation change that does not affect the cache key.
+
+Declaring the same variable twice in one sweep is always a mistake, and bencher now says
+so rather than guessing:
+
+| List | A repeated variable |
+|---|---|
+| `input_vars` | **raises `ValueError`** — each input is one dataset dimension, so a repeat has no valid meaning |
+| `result_vars` | dropped, first occurrence kept, with a `UserWarning` |
+| `const_vars` | dropped when the values agree; **raises** when they disagree |
+
+This matters most when result variables are assembled by concatenation — a shared group of
+core metrics, plus a group from a base class, plus a few specific to one environment. One
+overlapping entry is invisible in review, and before this check it silently changed the
+benchmark's cache and history key without changing the data, so the run appended to a
+different trend line than the one it appeared to belong to. If you see the warning, remove
+the duplicate; the key then matches what a correct declaration would have produced.
 
 ## Run Configuration
 

@@ -6,7 +6,7 @@ import warnings
 from copy import deepcopy
 from datetime import datetime
 from enum import auto
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import panel as pn
 import param
@@ -19,6 +19,10 @@ from bencher.results.laxtex_result import to_latex
 from bencher.variables.results import OptDir
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
 from bencher.variables.time import TimeEvent, TimeSnapshot
+
+if TYPE_CHECKING:
+    # Runtime import would be circular: identity imports this module.
+    from bencher.identity import SweepIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -850,25 +854,40 @@ class BenchCfg(BenchRunCfg):
         for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 
+        # Folded as sets -- sorted *unique* digests -- so that a variable appearing twice
+        # cannot move the key, which is what "unordered set" above has always claimed.
+        # A sorted tuple delivered the ordering half of that contract but not the
+        # uniqueness half: a repeat appeared twice in the hashed sequence, while the
+        # dataset's data_vars and history's per-column metadata are keyed by name and
+        # collapsed it. That disagreement is the bug plan 20 documents.
+        # validate_declared_vars rejects or dedupes duplicates before they reach here on
+        # the plot_sweep path; deduping here too keeps identity correct on the paths that
+        # bypass it -- a BenchCfg built or deserialized directly. Configurations without a
+        # duplicate hash exactly as before, since sorted(set(xs)) == sorted(xs) when xs is
+        # already unique.
         if include_result_vars:
-            result_hashes = tuple(sorted(v.hash_persistent() for v in self.result_vars or []))
+            result_hashes = tuple(sorted({v.hash_persistent() for v in self.result_vars or []}))
         else:
             result_hashes = ()
 
         const_hashes = tuple(
             sorted(
-                hash_sha1((v[0].hash_persistent(), hash_sha1(v[1]))) for v in self.const_vars or []
+                {
+                    hash_sha1((v[0].hash_persistent(), hash_sha1(v[1])))
+                    for v in self.const_vars or []
+                }
             )
         )
 
         return hash_sha1((hash_val, result_hashes, const_hashes))
 
-    def identity(self, run_cfg: "BenchRunCfg | None" = None) -> "SweepIdentity":
+    def identity(self, run_cfg: BenchRunCfg | None = None) -> SweepIdentity:
         """This config's cache/history/sample keys as an inspectable value.
 
         *run_cfg* replays the merge :meth:`bencher.bencher.Bench.run_sweep`
         performs before hashing; pass it for a config that has not been run, whose
-        ``repeats`` and ``over_time`` are still the class defaults.
+        ``repeats`` and ``over_time`` are still the class defaults. The replay runs
+        against a copy, so asking for an identity never reconfigures *self*.
         """
         from bencher.identity import identity_of
 

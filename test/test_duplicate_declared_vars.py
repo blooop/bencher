@@ -34,6 +34,18 @@ def _sweep(**kwargs):
         bench.close()
 
 
+def _sweep_raw_warnings(**kwargs):
+    """As ``_sweep``, but keeping the warning objects so attribution can be checked."""
+    bench = _bench()
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            bench.plot_sweep(plot_callbacks=False, **kwargs)
+        return [w for w in caught if w.category is UserWarning]
+    finally:
+        bench.close()
+
+
 class TestDuplicateResultVars(unittest.TestCase):
     """P2 — the silent series split, and its repair."""
 
@@ -70,6 +82,21 @@ class TestDuplicateResultVars(unittest.TestCase):
         (msg,) = [w for w in warns if "declared twice" in w]
         self.assertIn("'out_cos'", msg)
         self.assertIn("positions 1 and 3", msg)
+
+    def test_the_warning_is_attributed_to_the_caller_not_to_bencher(self) -> None:
+        """Pins ``stacklevel``: the blame belongs to whoever wrote the declaration.
+
+        The validator is several frames below ``plot_sweep``, so any refactor that
+        adds or removes one has to move ``stacklevel`` with it or the warning
+        starts pointing inside bencher, where the user can do nothing about it.
+        """
+        caught = _sweep_raw_warnings(input_vars=["theta"], result_vars=["out_sin", "out_sin"])
+        (dup,) = [w for w in caught if "declared twice" in str(w.message)]
+        self.assertEqual(
+            dup.filename,
+            __file__,
+            f"warning blamed {dup.filename}:{dup.lineno}, not the calling test module",
+        )
 
     def test_object_and_string_forms_are_compared_by_name(self) -> None:
         res, warns = _sweep(
@@ -213,6 +240,49 @@ class TestHelperInIsolation(unittest.TestCase):
             [[ExampleBenchCfg.param.offset, 0.1], [ExampleBenchCfg.param.offset, 0.1]],
         )
         self.assertEqual(len(consts), 1)
+
+
+class TestHashFoldsVariablesAsSets(unittest.TestCase):
+    """The identity half of the fix, independent of the declaration-site validation.
+
+    ``validate_declared_vars`` only guards ``plot_sweep``. ``hash_persistent``'s
+    docstring has always promised result and const vars contribute as an *unordered
+    set*, but a sorted tuple gave the ordering half of that and not the uniqueness
+    half -- so any path that reaches a ``BenchCfg`` without passing the validator
+    (built directly, or deserialized) could still hash a duplicate to a different
+    key. These pin the promise at the place it is made.
+    """
+
+    @staticmethod
+    def _cfg(result_vars: list, const_vars: list) -> bn.BenchCfg:
+        return bn.BenchCfg(
+            bench_name="dupes",
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=result_vars,
+            const_vars=const_vars,
+        )
+
+    def test_a_duplicate_result_var_does_not_move_the_key(self) -> None:
+        once = self._cfg([ExampleBenchCfg.param.out_sin], [])
+        twice = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_sin], [])
+        self.assertEqual(once.hash_persistent(True), twice.hash_persistent(True))
+
+    def test_a_duplicate_const_does_not_move_the_key(self) -> None:
+        pair = [ExampleBenchCfg.param.offset, 0.1]
+        once = self._cfg([ExampleBenchCfg.param.out_sin], [pair])
+        twice = self._cfg([ExampleBenchCfg.param.out_sin], [pair, list(pair)])
+        self.assertEqual(once.hash_persistent(True), twice.hash_persistent(True))
+
+    def test_distinct_vars_still_produce_distinct_keys(self) -> None:
+        """Deduping must collapse repeats, not collapse the set itself."""
+        one = self._cfg([ExampleBenchCfg.param.out_sin], [])
+        two = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos], [])
+        self.assertNotEqual(one.hash_persistent(True), two.hash_persistent(True))
+
+    def test_declaration_order_is_still_irrelevant(self) -> None:
+        forward = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos], [])
+        reverse = self._cfg([ExampleBenchCfg.param.out_cos, ExampleBenchCfg.param.out_sin], [])
+        self.assertEqual(forward.hash_persistent(True), reverse.hash_persistent(True))
 
 
 if __name__ == "__main__":

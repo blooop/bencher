@@ -123,22 +123,29 @@ def diff_identities(
 def _attach_worker(bench: Any, worker: Any) -> None:
     """Make *worker* available for by-name variable resolution, without calling it.
 
-    A **class** is accepted and never instantiated. Everything the declaration path
-    needs from a worker is class-level -- ``param.objects()`` plus the
-    ``get_inputs_only`` / ``get_input_defaults`` / ``get_results_only``
-    classmethods -- and a worker whose ``__init__`` demands live resources (an
-    open device, a running simulator, an attached robot) cannot be constructed
-    just to be asked what its parameters are. Requiring an instance would put
-    identity out of reach of exactly the expensive benchmarks that most need to
-    check it before running.
+    An **instance** goes through the real :meth:`bencher.bencher.Bench.set_worker`,
+    so identity is set up by the same code path as
+    :func:`bencher.factories.create_bench` and cannot drift from it as
+    ``set_worker``'s invariants change.
 
-    ``Bench.set_worker`` rejects a class on purpose, because a class cannot be
-    *called*; identity never calls one, so it is attached directly instead.
+    A **class** goes through :meth:`bencher.bencher.Bench.set_worker_class`, which
+    owns the declaration-only contract: a class is never instantiated and never
+    called, and ``bench.worker`` is deliberately left unset so an attempt to sample
+    raises instead of calling a class object. ``set_worker`` rejects a class on
+    purpose, because a class cannot be *called* -- and identity never calls one, so
+    the two methods split that case between them rather than identity writing the
+    manager's attributes itself.
+
+    The equivalence tests in ``test/test_identity.py`` pin every declaration form
+    against a real ``to_bench()`` run, so any divergence between the two setups
+    fails there rather than showing up as a wrong key.
     """
     if worker is None:
         return
-    bench.worker_class_instance = worker
-    bench._worker_mgr.worker_class_instance = worker  # noqa: SLF001
+    if isinstance(worker, type):
+        bench.set_worker_class(worker)
+    else:
+        bench.set_worker(worker)
 
 
 def sweep_identity(
@@ -239,10 +246,17 @@ def identity_of(bench_cfg: BenchCfg, run_cfg: BenchRunCfg | None = None) -> Swee
     required for a config that has not been through a run -- ``repeats`` and
     ``over_time`` live on the run config and reach ``BenchCfg`` only through that
     merge.
+
+    *bench_cfg* is never mutated: the merge runs against a copy. Asking a config
+    what its keys are is a query, and :class:`BenchCfg` subclasses
+    :class:`BenchRunCfg`, so merging in place would write every run-side field
+    (``repeats``, ``cache_results``, ``dry_run``, ...) onto a config the caller
+    still holds and may run again.
     """
     from bencher.bencher import Bench
 
     if run_cfg is not None:
+        bench_cfg = deepcopy(bench_cfg)
         values, _missing, _constant = Bench.filter_overridable_params(bench_cfg, run_cfg)
         with param.parameterized.discard_events(bench_cfg):
             bench_cfg.param.update(values)

@@ -38,12 +38,99 @@ def _resolve_param(
     return all_params[name]
 
 
-def _positions_by_name(names: list[str]) -> dict[str, list[int]]:
-    """Declared positions of each name, in declaration order."""
-    out: dict[str, list[int]] = {}
-    for index, name in enumerate(names):
-        out.setdefault(name, []).append(index)
-    return out
+def _validate_input_vars(input_vars: list[param.Parameter]) -> list[param.Parameter]:
+    """Reject an input variable declared more than once, returning the list unchanged.
+
+    Each input variable is one dataset dimension, so a repeat has no valid
+    interpretation. Left alone it does not even reliably fail: whether xarray
+    rejects the broadcast or quietly collapses the repeat into a single dimension
+    depends on the sweep's shape, and when it does fail the message comes from
+    deep inside xarray with no reference to the declaration that caused it.
+
+    Every position is named, not just the offending pair, because the fix is to
+    delete all but one of them.
+    """
+    seen: set[str] = set()
+    for var in input_vars:
+        if var.name in seen:
+            # Only walked on the error path, so the happy path stays a single pass.
+            positions = [i for i, v in enumerate(input_vars) if v.name == var.name]
+            raise ValueError(
+                f"Input variable '{var.name}' is declared {len(positions)} times "
+                f"(positions {positions}). Each input variable defines one dataset "
+                f"dimension, so it may appear only once."
+            )
+        seen.add(var.name)
+    return input_vars
+
+
+def _dedupe_result_vars(result_vars: list[param.Parameter]) -> list[param.Parameter]:
+    """Drop result variables repeated by name, keeping the first, and warn.
+
+    The deduped set is already what bencher stores: the dataset's ``data_vars``
+    and history's per-column metadata are both keyed by name, so a repeat
+    collapses there. Only ``BenchCfg.hash_persistent`` disagreed, folding the
+    per-variable digests as a sorted *tuple* so a repeat appeared twice and moved
+    the key -- the benchmark ran, reported correct numbers, and appended to a
+    trend line other than the one it appeared to belong to. Deduping makes cache
+    and history identity agree with the data that was already being written,
+    which is why this warns rather than raising.
+    """
+    kept: list[param.Parameter] = []
+    first_seen: dict[str, int] = {}
+    for index, var in enumerate(result_vars):
+        if var.name in first_seen:
+            warnings.warn(
+                f"Result variable '{var.name}' is declared twice (positions "
+                f"{first_seen[var.name]} and {index}); the duplicate is ignored. "
+                f"Result variables are a set keyed by name -- declare each metric "
+                f"once. Until now the repeat moved the cache and history key "
+                f"without changing the data.",
+                UserWarning,
+                # here -> validate_declared_vars -> plot_sweep -> the caller to blame
+                stacklevel=4,
+            )
+            continue
+        first_seen[var.name] = index
+        kept.append(var)
+    return kept
+
+
+def _const_values_conflict(first: Any, second: Any) -> bool:
+    """Whether two values declared for the same constant disagree.
+
+    Compared by ``hash_sha1`` rather than ``!=`` so that "the same constant"
+    means exactly what ``hash_persistent`` means by it -- identity is what the
+    dedupe is protecting. It also copes with the values that actually turn up
+    here, which are arbitrary: unhashable containers, and objects whose ``__eq__``
+    is elementwise rather than a bool (numpy arrays) or missing entirely.
+    """
+    return hash_sha1(first) != hash_sha1(second)
+
+
+def _dedupe_const_vars(const_vars: list[list]) -> list[list]:
+    """Drop constants repeated with an equal value; raise when the values differ.
+
+    A repeated constant with two different values is a contradiction in the
+    declaration, and which one won depended on iteration order.
+    """
+    kept: list[list] = []
+    first_seen: dict[str, tuple[int, Any]] = {}
+    for index, entry in enumerate(const_vars):
+        var, value = entry[0], entry[1]
+        if var.name in first_seen:
+            prev_index, prev_value = first_seen[var.name]
+            if _const_values_conflict(prev_value, value):
+                raise ValueError(
+                    f"Constant '{var.name}' is declared twice with different values: "
+                    f"{prev_value!r} at position {prev_index} and {value!r} at "
+                    f"position {index}. Which one applied depended on iteration "
+                    f"order, so declare it once with the value you mean."
+                )
+            continue
+        first_seen[var.name] = (index, value)
+        kept.append(entry)
+    return kept
 
 
 def validate_declared_vars(
@@ -53,24 +140,12 @@ def validate_declared_vars(
 ) -> tuple[list[param.Parameter], list[param.Parameter], list[list]]:
     """Reject or normalise variables declared more than once in one sweep.
 
-    Compares resolved ``name``, so the string, dict and object declaration forms
-    are all covered and a mixture of them is too. The three kinds get three
-    answers because the data model gives them three meanings, not out of
-    leniency:
-
-    * **Input** -- raises. Each input variable is one dataset dimension, and a
-      repeated dimension has no valid interpretation; it already fails, deep
-      inside xarray's broadcasting with no reference to the declaration.
-    * **Result** -- deduped on name, first occurrence kept, ``UserWarning``.
-      The deduped set is already what bencher stores: the dataset's ``data_vars``
-      and history's per-column metadata are both keyed by name, so a repeat
-      collapses there. Only ``BenchCfg.hash_persistent`` disagreed, folding the
-      per-variable digests as a sorted *tuple* so a repeat appeared twice and
-      moved the key. Deduping makes cache and history identity agree with the
-      data that was already being written.
-    * **Const** -- deduped when the values agree, raises when they disagree.
-      A repeated constant with two different values is a contradiction in the
-      declaration, and which one won depended on iteration order.
+    The one validation site, called after conversion so comparison is on resolved
+    ``name``: the string, spec-dict and object declaration forms are all covered,
+    and so is a mixture of them. The three kinds get three answers because the
+    data model gives them three meanings, not out of leniency -- each helper
+    documents its own. Inputs are checked first, so a config with both a repeated
+    input and a conflicting constant reports the input.
 
     Returns:
         The three lists, with duplicate result and const entries removed.
@@ -79,49 +154,10 @@ def validate_declared_vars(
         ValueError: On a duplicate input variable, or a duplicate constant with
             conflicting values.
     """
-    for name, positions in _positions_by_name([v.name for v in input_vars]).items():
-        if len(positions) > 1:
-            raise ValueError(
-                f"Input variable '{name}' is declared {len(positions)} times "
-                f"(positions {positions}). Each input variable defines one dataset "
-                f"dimension, so it may appear only once."
-            )
-
-    kept_results: list[param.Parameter] = []
-    first_result: dict[str, int] = {}
-    for index, var in enumerate(result_vars):
-        if var.name in first_result:
-            warnings.warn(
-                f"Result variable '{var.name}' is declared twice (positions "
-                f"{first_result[var.name]} and {index}); the duplicate is ignored. "
-                f"Result variables are a set keyed by name -- declare each metric "
-                f"once. Until now the repeat moved the cache and history key "
-                f"without changing the data.",
-                UserWarning,
-                stacklevel=3,
-            )
-            continue
-        first_result[var.name] = index
-        kept_results.append(var)
-
-    kept_consts: list[list] = []
-    first_const: dict[str, tuple[int, Any]] = {}
-    for index, entry in enumerate(const_vars):
-        var, value = entry[0], entry[1]
-        if var.name in first_const:
-            prev_index, prev_value = first_const[var.name]
-            if hash_sha1(prev_value) != hash_sha1(value):
-                raise ValueError(
-                    f"Constant '{var.name}' is declared twice with different values: "
-                    f"{prev_value!r} at position {prev_index} and {value!r} at "
-                    f"position {index}. Which one applied depended on iteration "
-                    f"order, so declare it once with the value you mean."
-                )
-            continue
-        first_const[var.name] = (index, value)
-        kept_consts.append(entry)
-
-    return input_vars, kept_results, kept_consts
+    input_vars = _validate_input_vars(input_vars)
+    result_vars = _dedupe_result_vars(result_vars)
+    const_vars = _dedupe_const_vars(const_vars)
+    return input_vars, result_vars, const_vars
 
 
 # Metadata keys that must never be forwarded to the worker function.

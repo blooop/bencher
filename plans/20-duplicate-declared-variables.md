@@ -60,9 +60,17 @@ ValueError: broadcasting cannot handle duplicate dimensions on a variable: ['x',
 ```
 
 The declaration is accepted, the sweep grid is built, and the failure arrives from
-xarray with no reference to the sweep, the variable, or the call site. Unlike P2
-this is at least loud, but it is diagnosed by reading a stack trace into bencher's
-internals.
+xarray with no reference to the sweep, the variable, or the call site — diagnosed
+by reading a stack trace into bencher's internals.
+
+**Correction (measured after this plan was written):** the claim that this case is
+"at least loud, unlike P2" is wrong. Whether it raises depends on the sweep's
+shape. With `ExampleBenchCfg`, `input_vars=["theta", "theta"]` is simply
+**accepted**: `BenchCfg.input_vars` keeps both entries, the dataset collapses them
+to a single `theta` dimension of the wrong size, and the key moves — the same
+silent-identity failure as P2, not a loud one. So P4 is a weaker case than P2 only
+in how often it is reached, not in kind, which strengthens the argument for D1
+raising rather than weakening it.
 
 ### P5 — Constants have a third behavior
 
@@ -120,9 +128,20 @@ ignored. Result variables are a set keyed by name — declare each metric once, 
 compose overlapping groups with plan 18's `plus_result_vars`.
 ```
 
-Emit it as a `UserWarning` with `stacklevel=2` so it points at the caller's
-`plot_sweep` line, matching the existing no-result-vars warning
-(`bencher/bencher.py:424-430`, in `Bench.plot_sweep`).
+Emit it as a `UserWarning` whose `stacklevel` points at the caller's `plot_sweep`
+line, matching the existing no-result-vars warning (`bencher/bencher.py:424-430`,
+in `Bench.plot_sweep`). Note that `stacklevel=2` is only right for a warning
+raised *directly* in `plot_sweep`; from inside the D4 helper the correct value is
+the number of frames back to the caller, and it has to move whenever that nesting
+changes. As implemented the chain is
+`_dedupe_result_vars` → `validate_declared_vars` → `plot_sweep` → caller, so
+`stacklevel=4`; a test asserts the warning is attributed to the calling module, so
+a future refactor that adds or removes a frame fails rather than silently blaming
+`bencher/bencher.py`.
+
+The reference to plan 18's `plus_result_vars` is **omitted from the shipped
+message** until that plan lands — pointing users at an API that does not exist yet
+would be worse than the duplicate. Restore it with plan 18.
 
 **Considered and rejected: raise.** Consistency with D1 is a real argument and
 raising is unambiguous. It loses because a repeated metric, unlike a repeated
@@ -151,6 +170,32 @@ dicts, and objects the caller passed). One function makes the three policies
 readable side by side and gives plan 18's `bind()` a natural place to call the
 same validation.
 
+Each policy lives in its own private helper (`_validate_input_vars`,
+`_dedupe_result_vars`, `_dedupe_const_vars`) with `validate_declared_vars` as the
+orchestrator, so the rationale for each answer sits next to the code that
+implements it. Inputs are checked first, so a configuration with both a repeated
+input and a conflicting constant reports the input.
+
+### D5 — Also fold the hash as a set, not a sorted tuple
+
+D2 repairs P2 at the declaration boundary. That leaves the *mechanism* of P2 in
+place: `BenchCfg.hash_persistent` folds the per-variable digests as a sorted tuple
+(`bencher/bench_cfg.py:841`), so a duplicate that never passes through
+`plot_sweep` — a `BenchCfg` built directly, or deserialized, or assembled by plan
+18's `bind()` before it calls D4 — still moves the key.
+
+Fold result and const digests as **sets** (sorted unique) as well. This is not an
+extra policy decision but the correction of a discrepancy already visible in the
+code: that method's own docstring states result and const vars "contribute as an
+*unordered set*", and a sorted tuple delivers the ordering half of that promise
+and not the uniqueness half.
+
+Blast radius is nil for anything that currently works, on the same argument that
+makes D2 safe to measure: `sorted(set(xs)) == sorted(xs)` whenever `xs` is already
+unique, so only configurations containing a duplicate — the ones D2 is already
+moving — are affected. It is therefore strictly defence in depth, and it makes
+D2's dedupe a source of the *warning* rather than the sole guarantor of identity.
+
 ---
 
 ## Phased steps
@@ -159,10 +204,20 @@ same validation.
    identity change for anything that currently succeeds.
 2. D3 (constant normalization). Also no identity change, since same-valued
    duplicates already collapse.
-3. D2 (result-variable dedupe plus warning). This is the phase with a hash
-   change; land it alone so any reported reset has one obvious cause.
+3. D2 (result-variable dedupe plus warning) and D5 (the set fold). This is the
+   phase with a hash change; land it alone so any reported reset has one obvious
+   cause.
 4. `CHANGELOG.md` and a docs note that variable lists are sets by name, ordered
    only for inputs.
+
+**As landed:** steps 1-3 shipped in one PR rather than three, and the isolation
+step 3 asks for is preserved at the level that matters. What the mitigation is
+actually for is that a user reporting a history reset should have one candidate
+cause to check, and that holds here: D1 and D3 are *measured* to move no key that
+currently succeeds, and D5 moves only keys D2 already moves, so D2 remains the
+single hash-moving change in the release regardless of how the commits were cut.
+Splitting the commits would have satisfied the letter of the step without changing
+what a user would have to investigate.
 
 ## Tests / acceptance criteria
 
@@ -180,6 +235,10 @@ same validation.
   hashes for the same logical content (P5).
 - Non-duplicate configurations are bit-identical before and after: every golden
   hash in `test/test_hash_persistent.py` unchanged.
+- D5: a `BenchCfg` constructed *directly*, bypassing `plot_sweep` and therefore the
+  validator, hashes a duplicated result var and a duplicated const to the
+  single-declaration key. Two distinct variables must still hash differently, and
+  declaration order must still not matter.
 
 ## Migration & compatibility
 
@@ -195,15 +254,18 @@ warning, and `on_history_reset` controls how loudly the transition surfaces.
 
 ## Risks
 
-- **A hash change delivered quietly.** Mitigated by landing D2 alone (phase 3)
-  and by the CHANGELOG note. Users who never duplicated see nothing.
+- **A hash change delivered quietly.** Mitigated by keeping D2 the only
+  hash-moving change in the release (see *As landed* under Phased steps) and by the
+  CHANGELOG note. Users who never duplicated see nothing.
 - **Over-strict comparison.** Two *different* variables must never be judged
   duplicates. Compare resolved `name` only, after conversion, and cover the case
   of two distinct variables whose configured objects happen to be equal.
 - **Warning fatigue.** If a project legitimately builds result-variable lists by
-  concatenation, the warning fires on every run. That is the intended signal, and
-  D2's warning text already points at plan 18's `plus_result_vars` as the clean
-  way to fix it.
+  concatenation, the warning fires on every run. That is the intended signal, but
+  note the escape hatch lands *after* the warning does: until plan 18 ships
+  `plus_result_vars`, the only remedy is to dedupe the list at the call site, and
+  the message says so rather than naming an API that does not exist yet. If the
+  warning proves noisy before 18 lands, that ordering is the reason.
 
 ## Coordination
 
