@@ -12,11 +12,14 @@ all-sentinel dataset, a valid-looking report and a successful exit. ``catch`` an
 
 from __future__ import annotations
 
+import pickle
 import unittest
+from typing import ClassVar
 
 import numpy as np
 
 import bencher as bn
+from bencher.bencher import _enforce_sample_error_policy
 from bencher.job import Executors
 
 
@@ -47,7 +50,9 @@ class Counting(bn.ParametrizedSweep):
     x = bn.IntSweep(default=0, bounds=(0, 1), samples=2)
     y = bn.ResultFloat()
 
-    calls: list = []
+    # Shared across instances on purpose: the worker is re-created per sample, so
+    # a per-instance counter could not observe how many times it ran.
+    calls: ClassVar[list] = []
 
     def __call__(self, **kwargs):
         self.update_params_from_kwargs(**kwargs)
@@ -181,7 +186,7 @@ class TestBothExecutorPaths(unittest.TestCase):
         job_future = JobFuture(job=job, future=future)
 
         class Worker:
-            function_input = {"x": 1}
+            function_input: ClassVar[dict] = {"x": 1}
             index_tuple = (0, 0)
 
         cfg = bn.BenchRunCfg(catch=catch)
@@ -255,6 +260,24 @@ class TestFailOnSampleError(unittest.TestCase):
         with self.assertRaises(ValueError):
             _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1.5)
 
+    def test_an_out_of_range_threshold_is_rejected_even_when_nothing_failed(self) -> None:
+        """A config error must not wait for a sample failure to become visible.
+
+        Validating the threshold only on the failing path made a typo -- 50 for
+        "50%", say -- inert on every clean run, then surfaced it as a ValueError
+        at the one moment the caller was trying to read a sample failure.
+        """
+        for bad in (1.5, 50, -0.2):
+            with self.subTest(threshold=bad), self.assertRaises(ValueError):
+                _run(catch=(RuntimeError,), fail_on_sample_error=bad)
+
+    def test_zero_and_false_leave_the_policy_off(self) -> None:
+        """Falsy thresholds are 'off', not 'out of range' -- unchanged by validation."""
+        for off in (False, 0, 0.0):
+            with self.subTest(policy=off):
+                res = _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=off)
+                self.assertEqual(res.n_failed, 1)
+
     def test_the_result_is_still_registered_before_the_raise(self) -> None:
         """Losing the artifact would defeat the point of catching."""
         Flaky.fail_at = (2,)
@@ -273,6 +296,35 @@ class TestFailOnSampleError(unittest.TestCase):
         finally:
             Flaky.fail_at = ()
             bench.close()
+
+
+class TestResultsCachedBeforeThisFeatureExisted(unittest.TestCase):
+    """The accounting must survive a result that predates it.
+
+    ``BenchResult`` objects are pickled into the benchmark cache, and unpickling
+    restores ``__dict__`` without calling ``__init__``. A result cached by an
+    earlier bencher therefore has no ``failed_samples`` and no ``n_attempted``,
+    and ``run_sweep`` enforces the policy on the cache-hit path too -- so reading
+    those attributes directly turned "upgrade, set fail_on_sample_error, hit a
+    warm cache" into an AttributeError on a run that had nothing wrong with it.
+    """
+
+    def _revived_old_result(self) -> bn.BenchResult:
+        res = _run()
+        del res.failed_samples
+        del res.n_attempted
+        return pickle.loads(pickle.dumps(res))
+
+    def test_the_accounting_reads_as_a_clean_run(self) -> None:
+        revived = self._revived_old_result()
+        self.assertEqual(revived.n_failed, 0)
+        self.assertEqual(revived.failed_fraction, 0.0)
+
+    def test_the_policy_does_not_raise_on_such_a_result(self) -> None:
+        revived = self._revived_old_result()
+        for policy in (False, True, 0.5):
+            with self.subTest(policy=policy):
+                _enforce_sample_error_policy(revived, policy)
 
 
 class TestIdentityIsUnaffected(unittest.TestCase):

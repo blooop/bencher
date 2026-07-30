@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import traceback
-from dataclasses import dataclass
 from collections.abc import Callable
 from concurrent.futures import Future, ProcessPoolExecutor
+from dataclasses import dataclass
 from enum import auto
 
 from diskcache import Cache

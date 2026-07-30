@@ -370,6 +370,8 @@ class ResultCollector:
         if catch:
             try:
                 result = job_result.result()
+            # catch is a runtime tuple of exception types, which pylint cannot see into.
+            # pylint: disable-next=catching-non-exception
             except catch as exc:
                 self.record_caught_sample(
                     bench_res, job_result.job.job_id, worker_job.function_input, exc

@@ -82,17 +82,25 @@ def _enforce_sample_error_policy(bench_res: BenchResult, policy: bool | float) -
     fail a run made of flakes. This is the half of plan 21 that makes ``catch=``
     safe to use unattended.
     """
-    if not policy or not bench_res.n_failed:
+    if not policy:  # False, None, 0, 0.0 -- the policy is simply off
+        return
+    # The threshold is validated before the "did anything fail?" early return.
+    # Checking it afterwards means a typo'd threshold is inert on every clean run
+    # and only surfaces once a sample happens to fail -- reporting a *config*
+    # error at the one moment the caller is trying to read a *sample* failure.
+    threshold = None
+    if policy is not True:
+        threshold = float(policy)
+        if not 0.0 < threshold <= 1.0:
+            raise ValueError(
+                f"fail_on_sample_error must be True/False or a float in (0, 1], got {policy!r}"
+            )
+    if not bench_res.n_failed:
         return
     n, frac = bench_res.n_failed, bench_res.failed_fraction
     if policy is True:
         raise SampleErrorPolicyError(
             f"{n} sample(s) failed and were caught; fail_on_sample_error=True"
-        )
-    threshold = float(policy)
-    if not 0.0 < threshold <= 1.0:
-        raise ValueError(
-            f"fail_on_sample_error must be True/False or a float in (0, 1], got {policy!r}"
         )
     if frac >= threshold:
         raise SampleErrorPolicyError(
@@ -1096,6 +1104,9 @@ class Bench(BenchPlotServer):
                 if catch:
                     try:
                         result = self.sample_cache.submit(cache_job, prefetched=prefetched)
+                    # catch is a runtime tuple of exception types, which pylint
+                    # cannot see into.
+                    # pylint: disable-next=catching-non-exception
                     except catch as exc:
                         # The serial executor runs the worker *inside* submit(), so on
                         # the default executor a raising sample never reaches

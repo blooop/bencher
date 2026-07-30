@@ -120,12 +120,18 @@ class BenchResult(
         in which *every* sample failed would produce an all-sentinel dataset, a
         valid-looking report and a successful exit.
         """
-        return len(self.failed_samples)
+        # getattr, not self.failed_samples: BenchResult objects are pickled into
+        # the benchmark cache, and unpickling restores __dict__ without calling
+        # __init__ -- so a result cached by a pre-plan-21 bencher has no such
+        # attribute at all. Reading it directly turns "upgrade, then set
+        # fail_on_sample_error, then hit a warm cache" into an AttributeError.
+        return len(getattr(self, "failed_samples", ()))
 
     @property
     def failed_fraction(self) -> float:
         """Failed samples as a fraction of the samples this run attempted."""
-        return self.n_failed / self.n_attempted if self.n_attempted else 0.0
+        attempted = getattr(self, "n_attempted", 0)  # absent on pre-plan-21 pickles
+        return self.n_failed / attempted if attempted else 0.0
 
     @property
     def identity(self) -> SweepIdentity:
