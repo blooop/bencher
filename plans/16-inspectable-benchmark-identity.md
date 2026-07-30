@@ -10,8 +10,11 @@ hashing rule downstream — against a rule that has already changed twice.
 
 **⚠️ Read first:** this plan is purely additive — one new pure function and two
 accessors, all delegating to the existing `hash_persistent()`. It must not change
-any hash. The golden hashes at `test/test_hash_persistent.py:774-801` are the
-acceptance gate.
+any hash. The golden hashes in `TestGoldenBenchCfgHash`
+(`test/test_hash_persistent.py:774-801`) are the acceptance gate. Every line
+number in this document is pinned to `main` @ `7dad0cd4` (v1.116.0); the symbol
+named beside each one is the durable reference — grep the symbol if the line has
+moved.
 
 ---
 
@@ -21,20 +24,22 @@ acceptance gate.
 
 `BenchCfg.hash_persistent(include_repeats, include_result_vars)`
 (`bencher/bench_cfg.py:785`) is a method on a config object that
-`plot_sweep()` assembles from converted variables partway through its own body
-(`bencher/bencher.py:519`). There is no way to ask "what cache key and history
-key will this declaration produce?" before committing to a run — and for an
-expensive benchmark, running it is exactly what you are trying to avoid when
-checking that a refactor preserved identity.
+`Bench.plot_sweep` assembles from converted variables partway through its own
+body (the `BenchCfg(...)` construction, `bencher/bencher.py:514-530`). There is
+no way to ask "what cache key and history key will this declaration produce?"
+before committing to a run — and for an expensive benchmark, running it is
+exactly what you are trying to avoid when checking that a refactor preserved
+identity.
 
 ### P2 — The contributing set is documented, not exposed
 
-Which fields participate is stated in a docstring and a comment block
-(`bencher/bench_cfg.py:795-827`): `bench_name`, `over_time`, `repeats`, `tag`,
-`input_vars` in list order, `const_vars` and `result_vars` as sorted sets, with
-`CACHE_VERSION` folded in and `title` deliberately excluded. That rule has
-changed twice in recent history — `CACHE_VERSION` reached 5, and
-`include_result_vars=False` was introduced for the history key by plans 09/14.
+Which fields participate is stated in `BenchCfg.hash_persistent`'s docstring and
+its `title`/`CACHE_VERSION` comment block (`bencher/bench_cfg.py:793-827`):
+`bench_name`, `over_time`, `repeats`, `tag`, `input_vars` in list order,
+`const_vars` and `result_vars` as sorted sets, with `CACHE_VERSION` folded in and
+`title` deliberately excluded. That rule has changed twice in recent history —
+`CACHE_VERSION` reached 5, and `include_result_vars=False` was introduced for the
+history key by plans 09/14.
 
 Anything downstream that protects a trend by asserting on "the fields that make
 up the key" is therefore asserting on a *transcription* of the rule, which drifts
@@ -43,10 +48,12 @@ thing it was protecting has moved.
 
 ### P3 — Golden-hash coverage exists, but only inward
 
-`test/test_hash_persistent.py` pins golden hashes for bencher's own fixtures
-(`:774` with repeats, `:783` without, `:789` for the history key) and asserts the
-determinism contract. That is the right pattern, and there is no public entry
-point that lets a user apply it to their own benchmarks.
+`TestGoldenBenchCfgHash` pins golden hashes for bencher's own fixtures —
+`test_golden_hash_with_repeats` (`test/test_hash_persistent.py:774`),
+`test_golden_hash_without_repeats` (`:783`), `test_golden_hash_history_key`
+(`:789`) — and asserts the determinism contract. That is the right pattern, and
+there is no public entry point that lets a user apply it to their own
+benchmarks.
 
 ### P4 — The reset diff payload is private
 
@@ -86,11 +93,24 @@ ident.summary        # config_summary(...)
 - Returns a frozen dataclass `SweepIdentity`.
 - Implemented by building a `BenchCfg` through the *same* conversion path
   `plot_sweep` uses (`Bench.convert_vars_to_params`,
-  `bencher/bencher.py:822`) and calling `hash_persistent()` — so there is
+  `bencher/bencher.py:821`) and calling `hash_persistent()` — so there is
   exactly one implementation of the rule and it cannot drift from the runtime.
 - `worker` is required whenever any variable is given as a string or a
   `bn.sweep()` dict, because resolution needs the declaring class
-  (`bencher/sweep_executor.py:122-127` already raises a clear error otherwise).
+  (`SweepExecutor.convert_vars_to_params`'s string/dict guard,
+  `bencher/sweep_executor.py:122-126`, already raises a clear error otherwise).
+
+`SweepIdentity` is a value, not a handle. Its fields are primitives and immutable
+containers only — `str`, `int`, `bool`, `tuple`, nested frozen dataclasses — and
+never a callable, a `param` object, or a live worker instance. `cache_key` and
+`history_key` are hex digest strings; `summary` is the plain dict
+`config_summary` already returns. An identity must survive `pickle` unchanged and
+serialize through `json.dumps(asdict(ident))` with no custom encoder, and its
+equality and hashing are value-based, so it works as a dict key and compares
+equal across processes. This is a constraint rather than a preference because A4
+wants an identity *as* a storage key, and a key carrying a live object cannot
+cross a process boundary or a cache: the worker belongs in `sweep_identity`'s
+arguments, never in its return value.
 
 ### D2 — `BenchCfg.identity()` and `BenchResult.identity`
 
@@ -101,8 +121,9 @@ behavior assertable, and it costs nothing: `identity()` is a two-line wrapper.
 ### D3 — Export the summary and diff helpers
 
 `bn.config_summary(bench_cfg)` and `bn.diff_identities(old, new) -> list[str]`,
-re-exporting `bencher/history.py:135` and `:155`. These are already the payload
-the reset warning is built from; exporting them lets a caller print the same
+re-exporting `history.config_summary` (`bencher/history.py:135`) and
+`history.diff_summaries` (`:155`). These are already the payload the reset
+warning is built from; exporting them lets a caller print the same
 explanation on demand rather than waiting for a warning that may never come.
 
 ### D4 — `Bench.explain_identity() -> str`
@@ -141,7 +162,12 @@ Phases 1–4 are independent; do 1 first since the rest reference `SweepIdentity
 - `history_key` ignores `result_vars` and `cache_key` does not — the plan 09/14
   contract, asserted through the new surface.
 - `explain_identity()` names `title` as excluded (a regression guard for the
-  deliberate exclusion at `bencher/bench_cfg.py:822`).
+  exclusion documented in `hash_persistent`'s `title` NOTE comment,
+  `bencher/bench_cfg.py:820-823`).
+- A `SweepIdentity` round-trips through `pickle` unchanged, and through
+  `json.dumps(asdict(ident))` with no custom encoder — tuple-to-list is the only
+  normalization the JSON form may introduce. Two identities built from the same
+  declaration compare equal, hash equal, and address the same dict entry.
 
 ## Migration & compatibility
 
@@ -156,10 +182,10 @@ semantics; this plan only gives it a public, documented front door.
   equivalence test is the guard, and it must cover every argument form
   `plot_sweep` accepts, not just the common one.
 - **Encouraging users to depend on hash stability across versions.** They
-  cannot: `CACHE_VERSION` is folded in deliberately
-  (`bencher/bench_cfg.py:824-827`). Document that a pinned key is a
-  *within-version* guard against accidental drift, and that a `CACHE_VERSION`
-  bump legitimately moves every key.
+  cannot: `CACHE_VERSION` is folded in deliberately as the first element of
+  `hash_persistent`'s hash tuple (`bencher/bench_cfg.py:825-830`). Document that
+  a pinned key is a *within-version* guard against accidental drift, and that a
+  `CACHE_VERSION` bump legitimately moves every key.
 
 ## Coordination
 
@@ -168,5 +194,5 @@ semantics; this plan only gives it a public, documented front door.
 - **Plans 09/14** own the rule this exposes; any change there must update the
   equivalence matrix rather than the transcription (there is none).
 - **A3/A4** — a frozen identity value object is the natural key type for A4's
-  storage interface; keep `SweepIdentity` free of live objects so it stays
-  serializable.
+  storage interface; D1's serialization constraints exist for exactly that, and
+  A4 should key on `SweepIdentity` rather than reconstruct a key from its parts.
