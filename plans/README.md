@@ -15,6 +15,13 @@ without additional context. **Read the whole plan before starting it.**
 5. The PyPI package name is **`holobench`** (intentional — `bencher` was taken).
    The import name is `bencher`. Do NOT "fix" this mismatch.
 6. If a step fails in a way the plan doesn't cover, stop and report rather than improvising.
+7. **Cite code as `file:line` and name the symbol there.** The symbol is the durable
+   reference; the line number is a convenience pinned to the commit the plan was written
+   against, so it goes stale — confirm each citation against the current tree before relying
+   on it. If a plan's evidence no longer matches the code, say so in the PR rather than
+   silently working around it: a moved line is harmless, but a claim that no longer holds may
+   invalidate the plan's reasoning. When writing a plan, state the commit or version its
+   citations were taken against.
 
 ## Plan index and recommended order
 
@@ -48,10 +55,11 @@ Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-firs
 `OWNER DECISION` markers still apply.
 
 Plans 15–21 came out of an audit of how a large external project drives bencher,
-and of the workarounds it had accumulated. Three of them (17, 19, 20) are small
-correctness fixes worth doing first; 15 and 16 concern benchmark *identity* and
-build directly on the landed 09/14; 18 complements 13's declaration bundle; 21
-extends `optimize()`'s existing `catch=` to the sweep path.
+and of the workarounds it had accumulated; all seven cite code as of `main` @
+`7dad0cd4` (v1.116.0). Three of them (17, 19, 20) are small correctness fixes
+worth doing first; 15 and 16 concern benchmark *identity* and build directly on
+the landed 09/14; 18 complements 13's declaration bundle; 21 extends
+`optimize()`'s existing `catch=` to the sweep path.
 
 ## Architecture plans (`plans/architecture/`)
 
