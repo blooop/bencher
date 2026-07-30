@@ -101,6 +101,17 @@ class BenchResult(
         # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
 
+    @property
+    def identity(self) -> "SweepIdentity":
+        """The keys this result was stored under, as an inspectable value.
+
+        The config has already been through ``run_sweep``'s run_cfg merge, so no
+        run config is needed here.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self.bench_cfg)
+
     @classmethod
     def from_existing(cls, original: BenchResult) -> BenchResult:
         new_instance = cls(original.bench_cfg)

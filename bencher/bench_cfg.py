@@ -850,6 +850,17 @@ class BenchCfg(BenchRunCfg):
 
         return hash_sha1((hash_val, result_hashes, const_hashes))
 
+    def identity(self, run_cfg: "BenchRunCfg | None" = None) -> "SweepIdentity":
+        """This config's cache/history/sample keys as an inspectable value.
+
+        *run_cfg* replays the merge :meth:`bencher.bencher.Bench.run_sweep`
+        performs before hashing; pass it for a config that has not been run, whose
+        ``repeats`` and ``over_time`` are still the class defaults.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self, run_cfg)
+
     def inputs_as_str(self) -> list[str]:
         """Get a list of input variable names.
 
