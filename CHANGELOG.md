@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.117.0] - 2026-07-31
+
 ### Added
+- **Stable benchmark series identity: `plot_sweep(series_id=...)`** (plan 15, #1012).
+  Names the over_time *trend* a benchmark appends to, independently of what identifies its
+  configuration: `tag` partitions storage, `series_id` names the trend. Deliberately not
+  part of `hash_persistent`, so declaring one re-keys nothing — it exists so a trend
+  survives a worker rename or a move between modules.
+- **Inspectable, pinnable benchmark identity: `bn.sweep_identity()`, `bn.identity_of()`,
+  `bn.diff_identities()`** (plan 16, #1010). Returns the exact cache/history keys a
+  declaration resolves to *without running it*, taking `plot_sweep`'s declarative arguments
+  with the same spellings; diff two identities to see precisely which field moved a key.
+  Pairs with `SweepSpec`: `bn.sweep_identity(**spec.bind(W), worker=W)`.
+- **`bn.ComposableContainerRerun` — compose rerun recordings** (#1007). Combines complete
+  `.rrd` recordings right/down/sequence/overlay into one recording plus a generated
+  Blueprint, from inside `benchmark()`; the composition itself renders to a `.rrd`, so
+  nesting is plain recursion.
+- **`rerun_summary` / `rerun_grid` — merge a whole sweep's rerun recordings into one
+  viewer** (#1017). Sweeping a `ResultRerun` previously embedded one wasm web viewer per
+  sample (blank past ~16 due to browser WebGL context limits, nothing comparable across
+  iframes). These walk the result dataset and merge every sample's cached `.rrd` into a
+  single recording — `rerun_summary` on one shared timeline, `rerun_grid` laid out in
+  space with `compose_method_list=` control. Named-only (opt-in) like `video_summary`.
+  The dimension-ordering policy is extracted to `compose_method_list_for_dims()` so the
+  video and rerun summary renderers share it.
+- **Single-point sweep ranges** (plan 17, #1001). `with_bounds` and `bn.sweep` accept
+  `low == high`, yielding exactly one sample (previously: a raise, or N linspace copies /
+  an empty arange if the guard had simply been relaxed). `samples > 1` over a zero-width
+  range raises at declaration, and `bn.sweep` validates an inverted range at construction
+  instead of mid-run. `bounds=(x, x)` and `values=[x]` keep deliberately distinct
+  identities.
+- **Unnamed parameters are rejected at resolution time** (plan 19, #1003). A variable
+  declared on a plain (non-`Parameterized`) mixin registers with `param.name=None` and
+  used to fail far from the declaration (a `KeyError` in result storage, or a bare
+  `ValueError` from param, depending on param version). Resolution now raises a
+  `TypeError` naming the metaclass cause and the remedy; parameter objects built by
+  `bn.box()`/`bn.sweep()` are unaffected.
 - **`bn.SweepSpec` — a sweep declaration as a value (plan 18, phase 1).** A frozen record
   of `plot_sweep`'s seven declarative arguments (title, descriptions, input/result/const
   vars, tag) that can be built once, composed (`with_`, `plus_input_vars`,
