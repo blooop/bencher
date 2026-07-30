@@ -143,7 +143,7 @@ class RerunSummaryResult(BenchResultBase):
         target_dimension: int = 0,
         width: int | None = None,
         height: int | None = None,
-        **kwargs,
+        **_kwargs,
     ) -> pn.pane.HTML | None:
         """Merge *result_var*'s recordings in *dataset* into one viewer pane.
 
@@ -156,13 +156,12 @@ class RerunSummaryResult(BenchResultBase):
             target_dimension (int, optional): Recursion floor. Defaults to 0.
             width (int, optional): Viewer width. Defaults to the result var's width.
             height (int, optional): Viewer height. Defaults to the result var's height.
-            **kwargs: Unused, accepted for parity with other renderers.
+            **_kwargs: Unused, accepted for parity with other renderers (plot
+                callbacks are invoked with ``override=``).
 
         Returns:
             pn.pane.HTML | None: the viewer pane, or None if nothing was recorded.
         """
-        from bencher.utils_rrd import rrd_file_to_pane
-
         merged = self._compose_ds(
             dataset,
             result_var=result_var,
@@ -174,6 +173,17 @@ class RerunSummaryResult(BenchResultBase):
         if merged is None:
             logger.debug("no rerun recordings to compose for %s", result_var.name)
             return None
+
+        # A container declared on the result var wins over the rerun viewer, the same
+        # precedence ds_to_container and the over_time path use.  The composition is
+        # itself an .rrd path, so a single-argument renderer applies unchanged.
+        render = self.declared_container(result_var)
+        if render is not None:
+            return render(merged)
+
+        # Imported only when it is actually the renderer, so a declared container
+        # does not drag in the rerun viewer stack.
+        from bencher.utils_rrd import rrd_file_to_pane
 
         return rrd_file_to_pane(
             merged,

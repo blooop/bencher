@@ -1,5 +1,12 @@
 """Tests for merging a sweep's per-sample rerun recordings into one viewer."""
 
+# _compose_ds is exercised directly: it returns the composed .rrd path, which the
+# public renderers wrap in a pane, so it is the only way to assert on the merge.
+# pylint: disable=protected-access
+
+from pathlib import Path
+
+import panel as pn
 import rerun as rr
 from rerun.experimental import RrdReader
 
@@ -25,6 +32,21 @@ class RerunSweep(bn.ParametrizedSweep):
             recording.log("wave", rr.Scalars(self.amp * self.freq * step))
         self.out_rerun = bn.capture_rerun_rrd(recording)
         return super().benchmark()
+
+
+def name_only(path: str) -> pn.pane.Markdown:
+    """A declared container that names the composition instead of embedding a viewer.
+
+    Module level, not a closure: the declared container is pickled into the cache
+    along with the result var.
+    """
+    return pn.pane.Markdown(f"composed: {Path(path).name}")
+
+
+class DeclaredContainerSweep(RerunSweep):
+    """A ResultRerun declaring how it renders, in place of the rerun viewer."""
+
+    out_rerun = bn.ResultRerun(width=200, height=150, container=name_only)
 
 
 def _leaf_entity_paths(path: str) -> set[str]:
@@ -108,6 +130,21 @@ class TestRerunSummary:
         )
         assert pane is not None
         assert len(pane) == 1
+
+    def test_declared_container_wins_over_the_rerun_viewer(self):
+        """Same precedence as ds_to_container and the over_time path (PR #1015).
+
+        The declared container receives the *composed* recording, so unlike
+        test_rerun_declared_container the leaves must be real .rrd files.
+        """
+        bench = DeclaredContainerSweep().to_bench()
+        res = bench.plot_sweep(input_vars=["freq"], result_vars=["out_rerun"])
+        pane = res.to_rerun_grid()
+        assert pane is not None and len(pane) == 1
+        rendered = pane[0]
+        assert isinstance(rendered, pn.pane.Markdown), type(rendered)
+        assert rendered.object.startswith("composed: ")
+        assert rendered.object.endswith(".rrd")
 
     def test_registered_as_named_only_plots(self):
         from bencher.plugins.builtins import _named_only_specs
