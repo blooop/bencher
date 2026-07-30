@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Per-sample fault tolerance on the sweep path: `catch=` and `fail_on_sample_error`.**
+  `Bench.optimize(catch=...)` has had this knob since #962, so the same benchmark was
+  fault-tolerant when driven by Optuna and all-or-nothing when swept. `catch` lives on
+  `BenchRunCfg` (so `bn.run(catch=...)` works, and it reaches `plot_sweep` via `run_cfg` —
+  its one home); a bare exception type is accepted and wrapped. A caught sample leaves the missing-value sentinel
+  at its coordinate — `setup_dataset` already fills every result variable, so the dataset
+  shape is unchanged and reductions skip it — is logged at WARNING with its inputs, and
+  writes **nothing** to the sample cache, so a transient flake cannot become a permanent
+  cached failure. Default `()` is fail-fast, exactly as before, and tolerating a failure
+  moves no cache key.
+
+  `fail_on_sample_error: bool | float` is the other half, and the two are a pair rather than
+  independent knobs: `catch` alone turns real breakage into a green run over an all-sentinel
+  dataset. `True` fails the run if any sample was caught; a float in (0, 1] fails when the
+  failed *fraction* reaches it, measured over samples the run actually **executed** — a cache
+  hit never reached the worker, so counting it would make one threshold mean different things
+  on a cold and a warm cache. The raise happens after the dataset and report are assembled,
+  so the partial results survive it, and only for a run that actually sampled: on a
+  benchmark-result cache hit the loaded result carries a *previous* run's counts, which are
+  not this run's errors. Both knobs are validated before sampling starts, so a typo'd
+  threshold costs milliseconds rather than a whole sweep.
+
+  Inspect failures via `BenchResult.failed_samples` (a `SampleFailure` per caught sample:
+  job id, inputs, exception repr, traceback), `n_failed`, and `failed_fraction`.
+
 ### Removed
 - **`ResultVolume` is gone.** It was declarable but not usable: exported from
   `bencher/__init__.py` and listed in `ALL_RESULT_TYPES`/`RESULT_KIND_ORDER`, but absent
