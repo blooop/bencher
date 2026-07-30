@@ -56,7 +56,7 @@ possible.
 
 This is close to unadvertised. The name-based form appears in `bn.sweep`'s
 docstring and, indirectly, in a deprecation warning telling users to stop passing
-`input_vars` as a dict (`bencher/bencher.py:406-411`). Nothing in the docs or
+`input_vars` as a dict (`Bench.plot_sweep`, `bencher/bencher.py:406-417`). Nothing in the docs or
 gallery presents "declare a sweep without naming a class" as a pattern, so users
 reach for `Cls.param.x` and bind their declaration to one class for no reason.
 
