@@ -38,11 +38,26 @@ variable of its own.
 unnamed parameter is found and returned without complaint, and `plot_sweep`
 proceeds to build a config around it (`bencher/bencher.py:418-421`).
 
-The failure lands in result storage, which uses `rv.name` as the key into the
-worker's returned dictionary (`bencher/result_collector.py:344-354`). With
-`rv.name is None` the user sees a `KeyError` for result variable `'None'` and a
+Where it fails then depends on the `param` version, which is worth stating
+because it changes how bad the symptom is rather than whether it exists.
+Measured with a plain mixin combined into a `param.Parameterized`:
+
+| `param` | Registers with `name=None`? | Instance get/set of that variable |
+|---|---|---|
+| 2.3.3 | yes | **both succeed silently** |
+| 2.4.1 | yes | `ValueError: Parameter name is not set` |
+
+Under param 2.4 and later, assigning the variable inside `benchmark()` raises
+from inside param — earlier than before, but still pointing at param's internals
+rather than at the mixin. Under 2.3 nothing complains at all, and the failure
+lands in result storage, which uses `rv.name` as the key into the
+worker's returned dictionary (`ResultCollector.store_results`,
+`bencher/result_collector.py:344-354`): the user sees a `KeyError` for result
+variable `'None'` and a
 list of available keys — an accurate message about a symptom, with no path back
-to the mixin that caused it. The same `.name` is used for dataset variable names
+to the mixin that caused it. Neither version names the cause, and bencher
+supports both, so the guard belongs in bencher regardless of which one a user
+has. The same `.name` is used for dataset variable names
 and dimension labels, so an unnamed *input* variable corrupts the dataset's
 coordinate identity instead.
 
@@ -139,6 +154,15 @@ D2 is the one with a false-positive risk.
   parameters — the new check must not shadow it.
 - A regression case asserting the *old* symptom no longer occurs: no benchmark
   can reach `store_results` with a result variable whose `name` is `None`.
+- A test pinning the premise itself — that a `Parameter` on a plain mixin is
+  registered by param's MRO scan with `name=None` — so a future `param` release
+  that starts naming them (or rejecting them) is caught here rather than silently
+  making the guard dead code.
+
+**Implementation note for the tests:** from param 2.4 the descriptor's `__get__`
+raises for an unnamed `Parameter`, so a test cannot reach the object under test
+by plain attribute access on the mixin. Read it out of `Mixin.__dict__[name]`
+instead. This bites immediately when writing the rejection cases.
 
 ## Migration & compatibility
 
