@@ -114,7 +114,8 @@ class Bench(BenchPlotServer):
         # The worker manager owns this state; these mirror it for backward
         # compatibility and are refreshed by _expose_worker_attrs().
         self.worker: Callable | None = None
-        self.worker_class_instance: ParametrizedSweep | None = None
+        # A *class* when attached via set_worker_class for declaration only.
+        self.worker_class_instance: ParametrizedSweep | type[ParametrizedSweep] | None = None
         self.worker_input_cfg: ParametrizedSweep | None = None
 
         # Set worker using the manager

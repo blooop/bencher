@@ -64,7 +64,8 @@ class WorkerManager:
     def __init__(self) -> None:
         """Initialize a new WorkerManager."""
         self.worker: Callable | None = None
-        self.worker_class_instance: ParametrizedSweep | None = None
+        # A *class* when attached via set_worker_class for declaration only.
+        self.worker_class_instance: ParametrizedSweep | type[ParametrizedSweep] | None = None
         self.worker_input_cfg: ParametrizedSweep | None = None
 
     def set_worker(
