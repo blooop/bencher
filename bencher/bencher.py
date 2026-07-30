@@ -33,7 +33,7 @@ from bencher.result_collector import ResultCollector
 from bencher.results.bench_result import BenchResult
 from bencher.results.optimize_result import OptimizeResult
 from bencher.sample_order import SampleOrder
-from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
+from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
 from bencher.utils import AGG_FN_MAP, params_to_str, resolve_aggregate
 from bencher.variables.inputs import IntSweep
@@ -468,6 +468,12 @@ class Bench(BenchPlotServer):
             cv_list = list(const_vars_in[i])
             cv_list[0] = self.convert_vars_to_params(cv_list[0], "const", run_cfg)
             const_vars_in[i] = cv_list
+
+        # One validation site, after conversion so comparison is on resolved names
+        # rather than the mixed bag of strings, dicts and objects the caller passed.
+        input_vars_in, result_vars_in, const_vars_in = validate_declared_vars(
+            input_vars_in, result_vars_in, const_vars_in
+        )
 
         if title is None:
             if len(input_vars_in) > 0:

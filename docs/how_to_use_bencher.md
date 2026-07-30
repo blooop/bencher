@@ -331,6 +331,28 @@ bench.plot_sweep(
 See the [Constant Variables gallery](reference/meta/const_vars/index) for examples of
 slicing, comparing, and pinning parameters.
 
+## Declare Each Variable Once
+
+Variable lists are **sets keyed by name**. Order matters only for `input_vars`, where it
+sets the dimension order of the dataset; reordering `result_vars` or `const_vars` is a
+presentation change that does not affect the cache key.
+
+Declaring the same variable twice in one sweep is always a mistake, and bencher now says
+so rather than guessing:
+
+| List | A repeated variable |
+|---|---|
+| `input_vars` | **raises `ValueError`** — each input is one dataset dimension, so a repeat has no valid meaning |
+| `result_vars` | dropped, first occurrence kept, with a `UserWarning` |
+| `const_vars` | dropped when the values agree; **raises** when they disagree |
+
+This matters most when result variables are assembled by concatenation — a shared group of
+core metrics, plus a group from a base class, plus a few specific to one environment. One
+overlapping entry is invisible in review, and before this check it silently changed the
+benchmark's cache and history key without changing the data, so the run appended to a
+different trend line than the one it appeared to belong to. If you see the warning, remove
+the duplicate; the key then matches what a correct declaration would have produced.
+
 ## Run Configuration
 
 `BenchRunCfg` has many options, but you rarely need more than a few:
