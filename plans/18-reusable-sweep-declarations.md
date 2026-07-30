@@ -9,6 +9,12 @@ nothing to detect drift between them.
 
 **Branch name:** `feat/sweep-spec`
 
+**Status:** Phase 1 shipped (`bn.SweepSpec`, composition, `bind()`, `diff_specs`;
+use as `bench.plot_sweep(**spec.bind())`). Phase 2 — accepting a spec in
+`plot_sweep`'s first positional slot — is **deferred** until D5's tag-precedence
+OWNER DECISION is confirmed (now owned by plan A5 §6, which also commits phase 3's
+inversion: `plot_sweep` constructing a `SweepSpec` internally from its kwargs).
+
 **⚠️ Read first:** plan 13 owns *run* configuration (repeats, sampling
 resolution, `show`, publishing) via `@bn.benchmark(...)`. This plan owns the
 *sweep* declaration — what is measured, not how the run is driven. Keep the two

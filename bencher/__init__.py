@@ -45,7 +45,6 @@ from .identity import (
     sweep_identity,
 )
 from .job import SampleFailure
-from .sweep_spec import SweepSpec, diff_specs
 from .render import load_result, render_report, save_result
 from .report_export import (
     compare_results,
@@ -76,6 +75,7 @@ from .scorecard import (
     generate_scorecard,
 )
 from .sparkline import sparkline_svg
+from .sweep_spec import SweepSpec, diff_specs
 from .utils import (
     gen_image_path,
     gen_path,

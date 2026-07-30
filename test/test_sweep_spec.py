@@ -49,7 +49,9 @@ def _bench(worker=ExampleBenchCfg):
 
 class TestValueSemantics(unittest.TestCase):
     def test_frozen(self) -> None:
-        with self.assertRaises(Exception):
+        import dataclasses
+
+        with self.assertRaises(dataclasses.FrozenInstanceError):
             LATENCY.title = "no"
 
     def test_equality_and_pickling(self) -> None:
@@ -156,33 +158,35 @@ class TestComposition(unittest.TestCase):
 
 
 class TestBind(unittest.TestCase):
-    def test_plot_sweep_with_a_spec_matches_plot_sweep_with_its_bind(self) -> None:
+    """Phase 1: a spec reaches ``plot_sweep`` as ``**spec.bind()``.
+
+    Accepting a spec in ``plot_sweep``'s first positional slot is phase 2 of
+    plan 18, deferred until the D5 tag-precedence decision (A5 §6) is confirmed.
+    """
+
+    def test_plot_sweep_with_bind_is_deterministic(self) -> None:
         keys = []
-        for use_spec in (True, False):
+        for _ in range(2):
             bench = _bench()
             try:
-                res = (
-                    bench.plot_sweep(LATENCY, plot_callbacks=False)
-                    if use_spec
-                    else bench.plot_sweep(**LATENCY.bind(), plot_callbacks=False)
-                )
+                res = bench.plot_sweep(**LATENCY.bind(), plot_callbacks=False)
                 keys.append(res.bench_cfg.hash_persistent(True))
             finally:
                 bench.close()
         self.assertEqual(keys[0], keys[1])
 
-    def test_a_keyword_argument_overrides_the_spec(self) -> None:
+    def test_a_dict_override_on_the_bound_arguments_wins(self) -> None:
         bench = _bench()
         try:
-            res = bench.plot_sweep(LATENCY, tag="override", plot_callbacks=False)
+            res = bench.plot_sweep(**{**LATENCY.bind(), "tag": "override"}, plot_callbacks=False)
         finally:
             bench.close()
         self.assertEqual(res.bench_cfg.tag, "override")
 
-    def test_the_spec_title_is_used_when_no_keyword_title_is_given(self) -> None:
+    def test_the_spec_title_reaches_the_config(self) -> None:
         bench = _bench()
         try:
-            res = bench.plot_sweep(LATENCY, plot_callbacks=False)
+            res = bench.plot_sweep(**LATENCY.bind(), plot_callbacks=False)
         finally:
             bench.close()
         self.assertEqual(res.bench_cfg.title, "Request latency")
@@ -280,7 +284,7 @@ class TestOneSpecTwoWorkers(unittest.TestCase):
     def _cfg(self, worker):
         bench = _bench(worker)
         try:
-            return bench.plot_sweep(LATENCY, plot_callbacks=False).bench_cfg
+            return bench.plot_sweep(**LATENCY.bind(), plot_callbacks=False).bench_cfg
         finally:
             bench.close()
 

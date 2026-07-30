@@ -34,8 +34,6 @@ from bencher.results.bench_result import BenchResult
 from bencher.results.optimize_result import OptimizeResult
 from bencher.sample_order import SampleOrder
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
-from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
-from bencher.sweep_spec import SweepSpec
 from bencher.sweep_timings import SweepTimings, phase_timer
 from bencher.utils import AGG_FN_MAP, params_to_str, resolve_aggregate
 from bencher.variables.inputs import IntSweep
@@ -376,7 +374,7 @@ class Bench(BenchPlotServer):
 
     def plot_sweep(
         self,
-        title: str | SweepSpec | None = None,
+        title: str | None = None,
         input_vars: list[ParametrizedSweep] | None = None,
         result_vars: list[ParametrizedSweep] | None = None,
         const_vars: list[ParametrizedSweep] | None = None,
@@ -450,29 +448,6 @@ class Bench(BenchPlotServer):
             TypeError: If variable parameters are not of the correct type
             FileNotFoundError: If only_plot=True and no cached results exist
         """
-
-        if isinstance(title, SweepSpec):
-            # A spec occupies the first positional slot, which is otherwise title.
-            # Explicit keyword arguments win over it, for one-off tweaks.
-            bound = title.bind()
-            title = bound.pop("title", None)
-            explicit = {
-                "input_vars": input_vars,
-                "result_vars": result_vars,
-                "const_vars": const_vars,
-                "description": description,
-                "post_description": post_description,
-                "tag": tag or None,
-            }
-            for key, value in explicit.items():
-                if value is not None:
-                    bound[key] = value
-            input_vars = bound.get("input_vars")
-            result_vars = bound.get("result_vars")
-            const_vars = bound.get("const_vars")
-            description = bound.get("description")
-            post_description = bound.get("post_description")
-            tag = bound.get("tag") or ""
 
         if self.worker_class_instance is not None:
             if input_vars is not None:
