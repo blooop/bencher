@@ -111,6 +111,7 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
     from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult
     from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
     from bencher.results.rerun_result import RerunResult
+    from bencher.results.rerun_summary import RerunSummaryResult
     from bencher.results.video_summary import VideoSummaryResult
 
     # Appended rather than grouped next to "dataset" so existing priorities keep their
@@ -127,6 +128,10 @@ def _named_only_specs() -> list[tuple[str, str, Callable]]:
         ("dataset", "panel", DataSetResult.to_plot),
         ("video_summary", "panel", VideoSummaryResult.to_video_summary),
         ("rerun", "rerun", RerunResult.to_rerun),
+        # Merge every per-sample ResultRerun recording into one viewer.  Named-only
+        # (like video_summary) because merging every recording is expensive.
+        ("rerun_summary", "rerun", RerunSummaryResult.to_rerun_summary),
+        ("rerun_grid", "rerun", RerunSummaryResult.to_rerun_grid),
         ("xy_scatter", "holoviews", XYScatterResult.to_plot),
         ("xy_curve", "holoviews", XYCurveResult.to_plot),
         ("xy_histogram", "holoviews", XYHistogramResult.to_plot),

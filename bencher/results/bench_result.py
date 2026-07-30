@@ -49,6 +49,7 @@ from bencher.results.holoview_results.xy_histogram_result import XYHistogramResu
 from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.pane_result import PaneResult
+from bencher.results.rerun_summary import RerunSummaryResult
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.volume_result import VolumeResult
 from bencher.utils import listify, resolve_aggregate
@@ -90,6 +91,7 @@ class BenchResult(
     XYHexbinResult,
     HoloviewResult,
     VideoSummaryResult,
+    RerunSummaryResult,
     DataSetResult,
     OptunaResult,
 ):  # pylint: disable=too-many-ancestors

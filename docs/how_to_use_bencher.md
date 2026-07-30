@@ -279,6 +279,27 @@ View types are inferred from recorded archetypes; pass `view_kinds=` to `append(
 to override inference. See the
 [Rerun Integration gallery](reference/meta/rerun/index) for complete examples.
 
+That composition happens *inside* `benchmark()`, so it can only combine recordings
+made by a single sample. To combine the recordings of a whole **sweep**, use the
+`rerun_summary` or `rerun_grid` plot callbacks instead. Each sample still caches its
+own `.rrd`, but the renderer merges them all into one recording, so a sweep shows a
+single viewer rather than one embedded viewer per sample:
+
+```python
+bench.plot_sweep(
+    input_vars=["damping", "omega_n"],
+    result_vars=["out_rerun"],
+    plot_callbacks=[bn.BenchResult.to_rerun_summary],
+)
+```
+
+`to_rerun_summary()` puts every dimension on one timeline so the samples can be
+scrubbed together; `to_rerun_grid()` lays the dimensions out in space instead and
+takes `compose_method_list=` for explicit per-dimension control. Both are named-only
+plot types — like `video_summary`, they are opt-in because merging every recording is
+expensive. This is the `ResultRerun` counterpart to `video_summary` for
+`ResultImage`/`ResultVideo`.
+
 ## Running a Sweep
 
 ```python
