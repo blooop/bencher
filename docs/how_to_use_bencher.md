@@ -129,32 +129,34 @@ demo.
 | `bn.ResultPath()` | Downloadable file outputs | `self.artifact = "/path/to/file"` |
 | `bn.ResultContainer()` | Embeddable HTML/panel content | `self.widget = pane` |
 | `bn.ResultVec(size=3)` | Fixed-size vector results (x, y, z) | `self.position = [1.0, 2.0, 3.0]` |
-| `bn.ResultDataSet()` | A table per sample (many rows measured at one point) | `self.cloud = bn.ResultDataSet(df)` |
+| `bn.ResultDataSet()` | Any picklable data payload per sample | `self.data = bn.ResultDataSet(payload)` |
 
 **Choosing between ResultFloat and ResultBool:** If a result is binary (success/failure,
 reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds to [0, 1]
 and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
 See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
-**Rendering a table as a plot:** `ResultDataSet` shows raw rows by default. Pass
-`container=` a callable taking the stored object and returning anything panel can
-display, and every sample renders through it, in `result_vars` order alongside the
-other results:
+**Rendering stored data:** `ResultDataSet` stores the payload without interpreting
+its type. Without a renderer, Panel displays the raw object. Pass `container=` a
+callable taking the stored object and returning anything Panel can display, and every
+sample renders through it, in `result_vars` order alongside the other results:
 
 ```python
-def scatter(df):                       # -> a holoviews / panel object
-    return hv.Points(df, kdims=["x", "y"])
+def render_measurement(payload):       # -> a HoloViews / Panel object
+    return build_view(payload)
 
 class MySweep(bn.ParametrizedSweep):
-    cloud = bn.ResultDataSet(container=scatter)
+    measurement = bn.ResultDataSet(container=render_measurement)
 
     def benchmark(self):
-        self.cloud = bn.ResultDataSet(measure())     # per-sample container= also works
+        self.measurement = bn.ResultDataSet(measure())
 ```
 
-Without it, the alternative is `bench.add(bn.DataSetResult, container=scatter, ...)`,
-which appends the plot to the end of the report instead of placing it with the results
-it belongs to.
+The payload can be a DataFrame, xarray object, mapping, sequence, custom dataclass,
+or another picklable Python object. Use `ResultReference` for data that cannot be
+pickled. A per-sample `container=` also works. An explicit renderer passed through
+`bench.add(bn.DataSetResult, container=...)` overrides the declared renderer and
+appends that view to the report.
 
 A declared container is part of the benchmark config, which the result cache and the
 collect/render split both pickle, so it must be picklable: a module-level function (as
@@ -177,28 +179,77 @@ class MySweep(bn.ParametrizedSweep):
 
 When both a class-level and a per-sample container are present, the sample's wins.
 
-**XY scatter of two measured columns:** for the common case of that container —
-scattering two columns of the table against each other — `bn.xy_scatter` builds it for
-you, so no plotting code is needed:
+**Built-in intra-sample charts:** tabular interpretation belongs to these renderers, not
+to `ResultDataSet`. For the common cases of that container bencher builds one for you, so
+no plotting code is needed. Each accepts a DataFrame, xarray Dataset/DataArray, or
+HoloViews Dataset, and plots *inside* one sample — the axes are columns the benchmark
+measured, and the sweep dimensions separate one plot from the next.
+
+| Builder | Draws | Use for |
+|---|---|---|
+| `bn.xy_scatter(x=, y=)` | an unordered cloud of points | landing points, hit locations, a phase-space cloud |
+| `bn.xy_curve(x=, y=)` | a connected series | a signal collected over time, a convergence trace |
+| `bn.xy_histogram(column=)` | a binned distribution | every request timed, not just the mean |
+| `bn.xy_hexbin(x=, y=)` | hex-binned density | the same cloud when there are too many points to read as markers |
 
 ```python
 cloud = bn.ResultDataSet(
     container=bn.xy_scatter(x="dx_mm", y="dy_mm", color="touch", data_aspect=1)
 )
+trace = bn.ResultDataSet(
+    container=bn.xy_curve(x="time_s", y=["measured_mm", "commanded_mm"])
+)
+latencies = bn.ResultDataSet(container=bn.xy_histogram("latency_ms", bins=40))
 ```
 
-`data_aspect=1` forces equal x/y scaling, which a cloud of positions wants: an
-auto-scaled aspect makes an elongated cloud look round. Columns are validated, and x/y
-are inferred from the numeric columns when the frame holds only the pair being plotted.
-What it returns is a picklable spec object, so it satisfies the constraint above. The
-same spec is available as a chart type for a report-level plot —
-`bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`, or by name via
-`to_auto(plot_list=["xy_scatter"], x=..., y=...)`.
+Do not reach for `scatter`, `curve`, `line` or `histogram` for this: those plot *across*
+the sweep, with one value per sample, so an input variable is their x axis and what a
+`histogram` shows is the spread of the repeats. These take their axes from within a
+single sample.
+
+Pick between `xy_scatter` and `xy_hexbin` by point count: markers show individual
+outliers and stop working once they saturate, which is the point at which where the mass
+actually sits becomes the thing you cannot see. A few hundred points scatter fine; tens
+of thousands want hexbin.
+
+What each builder returns is a picklable spec object, so it satisfies the constraint
+above. Columns are validated — a typo triggers a message listing the available columns
+instead of rendering nothing — and x/y are inferred from the numeric columns when the
+frame holds only the pair being plotted. A frame built with `Dataset.to_pandas()`
+keeps its dimension coordinate in the *index* rather than a column; a named index is
+promoted, so `x="time"` works on one.
+
+Notable options:
+
+- `xy_scatter(data_aspect=1)` and `xy_hexbin(data_aspect=1)` force equal x/y scaling,
+  which a cloud of positions wants — an auto-scaled aspect makes an elongated cloud look
+  round.
+- `xy_curve(y=[...])` overlays several series with a legend, `markers=True` adds a marker
+  per row so a sparse series is visible, and `sort=False` keeps the frame's row order for
+  a trajectory that doubles back in x rather than sorting it into a function of x.
+- `xy_histogram(column=[...])` overlays several distributions, binned over a shared range
+  so they are comparable; `density=True` normalises instead of counting.
+- `xy_hexbin(gridsize=)` sets how many hexagons span the x axis, and `min_count=1` drops
+  empty tiles rather than drawing them at zero.
+
+Anything else holoviews accepts (`alpha`, `line_width`, `color`, ...) passes straight
+through.
+
+A declared container is the preferred route: the chart takes the raw table's place in the
+normal result position, so the report shows the plot and not the rows behind it. Each is
+*also* available as a chart type for a report-level plot, which is *appended* to whatever
+`plot_sweep` already rendered (so declare the container as well if the table below it is
+not wanted) — `bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`,
+`bench.add(bn.XYCurveResult, x="time_s", y="measured_mm")`,
+`bench.add(bn.XYHistogramResult, column="latency_ms")`,
+`bench.add(bn.XYHexbinResult, x="dx_mm", y="dy_mm")` — or by name via
+`to_auto(plot_list=["xy_scatter"], x=..., y=...)`. None of them are ever selected
+automatically, so no existing report gains a plot it did not ask for.
 
 Under `over_time`, a `ResultDataSet` renders the run being reported rather than a slider
-over the history: a cell holds an index into a list of tables rebuilt on every run, so
+over the history: a cell holds an index into a payload list rebuilt on every run, so
 the indices carried in from earlier runs address the current list and a slider would show
-today's table under yesterday's label. Scalar results keep their full history.
+today's payload under yesterday's label. Scalar results keep their full history.
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.

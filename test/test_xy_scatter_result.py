@@ -349,6 +349,12 @@ class TestSpecIsPicklable(unittest.TestCase):
 class TestDeclaredOnResultVar(unittest.TestCase):
     """The declarative route: the spec on the result var, rendered in place."""
 
+    def test_default_output_replaces_the_raw_table_with_the_scatter(self):
+        res = run_sweep(DeclaredScatterSweep(), "test_xy_scatter_default", ["cloud"])
+        rendered = pn.Column(*res.to_auto())
+        self.assertEqual(len(all_points(rendered)), len(SPREADS))
+        self.assertEqual(rendered.select(pn.pane.DataFrame), [])
+
     def test_panes_pass_renders_the_scatter(self):
         res = run_sweep(DeclaredScatterSweep(), "test_xy_scatter_declared", ["cloud"])
         points = all_points(res.to_auto(plot_list=["panes"]))

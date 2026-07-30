@@ -566,6 +566,40 @@ class BenchResultBase:
             return primary
         return panel_list
 
+    def map_sample_panes(
+        self,
+        result_types,
+        container: Callable | None = None,
+        result_var: Parameter | None = None,
+        hv_dataset=None,
+        target_dimension: int = 0,
+        subsampling_divisions: int | None = None,
+        **kwargs,
+    ) -> pn.pane.panel | None:
+        """One pane per sample of every result whose type is in *result_types*.
+
+        The single place the per-sample render path is spelled out: squeeze to one
+        value per sample, then map ``ds_to_container`` (which applies *container*,
+        the per-sample container, or the one declared on the result var) over each.
+        Callers differ only in which result types they claim — ``result_types`` is
+        the parameter rather than a subclass hook so a renderer can be a plain
+        function over any result object.
+        """
+        if hv_dataset is None:
+            hv_dataset = self.to_hv_dataset(
+                ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions
+            )
+        elif not isinstance(hv_dataset, hv.Dataset):
+            hv_dataset = hv.Dataset(hv_dataset)
+        return self.map_plot_panes(
+            partial(self.ds_to_container, container=container),
+            hv_dataset=hv_dataset,
+            target_dimension=target_dimension,
+            result_var=result_var,
+            result_types=result_types,
+            **kwargs,
+        )
+
     def map_plot_panes(
         self,
         plot_callback: Callable,
@@ -879,7 +913,7 @@ class BenchResultBase:
                     # A ResultDataSet cell holds an index into dataset_list, which is
                     # rebuilt from the samples of the run that is rendering.  Rows
                     # merged in from history therefore address *this* run's list, so a
-                    # slider over them would show the current table under every past
+                    # slider over them would show the current payload under every past
                     # run's label.  Render the event being reported instead; scalar
                     # results keep their real history either way.
                     dataset = dataset.isel(over_time=-1)

@@ -43,6 +43,9 @@ from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.table_result import TableResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
+from bencher.results.holoview_results.xy_curve_result import XYCurveResult
+from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult
+from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult
 from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.pane_result import PaneResult
@@ -77,6 +80,9 @@ class BenchResult(
     TableResult,
     TabulatorResult,
     XYScatterResult,
+    XYCurveResult,
+    XYHistogramResult,
+    XYHexbinResult,
     HoloviewResult,
     VideoSummaryResult,
     DataSetResult,

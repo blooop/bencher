@@ -482,26 +482,30 @@ class ResultReference(param.Parameter):
 
 
 class ResultDataSet(param.Parameter):
-    """A tabular result: one DataFrame (or Dataset) per sample.
+    """An arbitrary picklable data payload stored for each benchmark sample.
 
-    ``container`` is an optional callback taking the stored object and returning
-    something panel can display, so a table can render as the plot it means
-    instead of as raw rows.  Declare it once on the class and every sample
+    The payload may be a DataFrame, xarray object, mapping, sequence, custom
+    dataclass, or any other object that can travel through the configured result
+    cache. Bencher stores and retrieves it without interpreting its type.
+
+    ``container`` is an optional renderer taking the stored object and returning
+    something Panel can display. Declare it once on the class and every sample
     renders through it, in ``result_vars`` order, alongside the other results::
 
-        cloud = ResultDataSet(container=my_scatter)   # my_scatter(df) -> plot
+        payload = ResultDataSet(container=render_payload)
 
         def benchmark(self):
-            self.cloud = ResultDataSet(build_frame())
+            self.payload = ResultDataSet(measure())
 
-    Per-sample overrides are honoured too (``ResultDataSet(df, container=...)``
+    Per-sample overrides are honoured too (``ResultDataSet(data, container=...)``
     inside ``benchmark()``), and an explicit ``container=`` passed to a renderer
     beats both.  The callback receives only the object — no plot kwargs — so
     single-argument callables are safe.
 
-    A declared container travels with ``BenchCfg`` into the result cache and through
-    the collect/render split, so it has to be picklable: a module-level function or a
-    callable object, not a lambda or a local function.
+    A declared renderer travels with ``BenchCfg`` into the result cache and
+    through the collect/render split, so it has to be picklable: a module-level
+    function or a callable object, not a lambda or a local function. Use
+    ``ResultReference`` instead when the payload itself is not picklable.
     """
 
     __slots__ = ["units", "obj", "container", "max_time_events"]

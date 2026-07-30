@@ -84,7 +84,15 @@ class TouchCloud(bn.ParametrizedSweep):
 
     spread = bn.FloatSweep(default=0.5, bounds=[0.1, 1.0], doc="Positioning noise")
 
-    touches = bn.ResultDataSet(doc="Landing points, one row per touch")
+    touches = bn.ResultDataSet(
+        container=bn.xy_scatter(
+            x="dx_mm",
+            y="dy_mm",
+            color="touch",
+            data_aspect=1,
+        ),
+        doc="Landing points, one row per touch",
+    )
 
     def benchmark(self):
         rng = random.Random(0)
@@ -98,6 +106,95 @@ class TouchCloud(bn.ParametrizedSweep):
                     }
                     for i in range(60)
                 ]
+            )
+        )"""
+
+_SETTLING_TRACE_CODE = """\
+import numpy as np
+import pandas as pd
+
+
+class SettlingTrace(bn.ParametrizedSweep):
+    \"\"\"A whole collected trace per sample: the rows are the series, not the sweep.\"\"\"
+
+    damping = bn.FloatSweep(default=0.5, bounds=[0.2, 1.0], doc="Damping ratio")
+
+    trace = bn.ResultDataSet(
+        container=bn.xy_curve(
+            x="time_s",
+            y=["measured_mm", "commanded_mm"],
+            ylabel="position [mm]",
+        ),
+        doc="Measured and commanded position over time",
+    )
+
+    def benchmark(self):
+        t = np.linspace(0.0, 10.0, 120)
+        settled = 1.0 - np.exp(-self.damping * t) * np.cos(3.0 * t)
+        self.trace = bn.ResultDataSet(
+            pd.DataFrame({"time_s": t, "measured_mm": settled, "commanded_mm": np.ones_like(t)})
+        )"""
+
+_LATENCY_SAMPLES_CODE = """\
+import numpy as np
+import pandas as pd
+
+
+class LatencySamples(bn.ParametrizedSweep):
+    \"\"\"Every request timed, not just the mean: the sample *is* the distribution.\"\"\"
+
+    concurrency = bn.IntSweep(default=4, bounds=[1, 16], doc="Concurrent requests")
+
+    latencies = bn.ResultDataSet(
+        container=bn.xy_histogram(
+            column=["latency_ms", "baseline_ms"],
+            bins=40,
+            xlabel="latency [ms]",
+        ),
+        doc="One row per request, measured and baseline",
+    )
+
+    def benchmark(self):
+        rng = np.random.default_rng(self.concurrency)
+        scale = 1.0 + 0.4 * self.concurrency
+        self.latencies = bn.ResultDataSet(
+            pd.DataFrame(
+                {
+                    "latency_ms": rng.gamma(3.0, scale, 4000),
+                    "baseline_ms": rng.gamma(3.0, 1.4, 4000),
+                }
+            )
+        )"""
+
+_DENSE_CLOUD_CODE = """\
+import numpy as np
+import pandas as pd
+
+
+class DenseCloud(bn.ParametrizedSweep):
+    \"\"\"Too many points to read as markers, so the marks become counts.\"\"\"
+
+    spread = bn.FloatSweep(default=0.5, bounds=[0.2, 1.0], doc="Positioning noise")
+
+    touches = bn.ResultDataSet(
+        container=bn.xy_hexbin(
+            x="dx_mm",
+            y="dy_mm",
+            gridsize=30,
+            min_count=1,
+            data_aspect=1,
+        ),
+        doc="Landing points, one row per touch",
+    )
+
+    def benchmark(self):
+        rng = np.random.default_rng(0)
+        self.touches = bn.ResultDataSet(
+            pd.DataFrame(
+                {
+                    "dx_mm": rng.normal(0.0, self.spread, 20000),
+                    "dy_mm": rng.normal(0.0, self.spread, 20000),
+                }
             )
         )"""
 
@@ -285,14 +382,53 @@ PLOT_CONFIGS = {
         "float_dims": 1,
         "cat_dims": 0,
         "repeats": 1,
-        "plot_call": 'res.to(XYScatterResult, x="dx_mm", y="dy_mm", color="touch", data_aspect=1)',
-        "extra_import": (
-            "from bencher.results.holoview_results.xy_scatter_result import XYScatterResult"
-        ),
+        # The declared renderer replaces the raw payload in the normal result
+        # position, so the example needs no second, appended report-level plot.
+        "plot_call": None,
         "input_vars": '["spread"]',
         "result_vars": '["touches"]',
         "benchable_class": "TouchCloud",
         "class_code": _TOUCH_CLOUD_CODE,
+    },
+    # A series *inside* one sample, which curve/line cannot show: they have one
+    # value per sample, so the sweep input is their x axis rather than a column.
+    "xy_curve": {
+        "float_dims": 1,
+        "cat_dims": 0,
+        "repeats": 1,
+        # Declared, as for xy_scatter: the series is the result, not an extra plot.
+        "plot_call": None,
+        "input_vars": '["damping"]',
+        "result_vars": '["trace"]',
+        "benchable_class": "SettlingTrace",
+        "class_code": _SETTLING_TRACE_CODE,
+    },
+    # The distribution a single sample measured, unlike `histogram`, which bins one
+    # value per sample and so shows the spread of the repeats instead.
+    "xy_histogram": {
+        "float_dims": 0,
+        "cat_dims": 0,
+        "repeats": 1,
+        # Declared on the result var, so the histogram takes the raw table's place in
+        # the normal result position instead of being appended below it.
+        "plot_call": None,
+        "input_vars": '["concurrency"]',
+        "result_vars": '["latencies"]',
+        "benchable_class": "LatencySamples",
+        "class_code": _LATENCY_SAMPLES_CODE,
+    },
+    # Same axes as xy_scatter; at this many points the markers saturate and the
+    # shape of the distribution is what a scatter loses.
+    "xy_hexbin": {
+        "float_dims": 1,
+        "cat_dims": 0,
+        "repeats": 1,
+        # Declared, as for xy_scatter: the density is the result, not an extra plot.
+        "plot_call": None,
+        "input_vars": '["spread"]',
+        "result_vars": '["touches"]',
+        "benchable_class": "DenseCloud",
+        "class_code": _DENSE_CLOUD_CODE,
     },
 }
 
