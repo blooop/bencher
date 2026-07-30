@@ -52,6 +52,7 @@ before executing any phase. **A3 is the keystone — read it first.**
 | [A2 — Plot selection redesign](architecture/A2-plot-selection-redesign.md) | Centralized, explainable, *ranked* selection (S1 signature enrichment landed via PR #983; S2's `explain_selection()` shipped in v1.115.0); serializable plot specs instead of callables | Render-everything noise, scattered match logic, unpicklable `plot_callbacks` |
 | [A3 — BenchData contract](architecture/A3-benchdata-contract.md) | One frozen, pickle-free data type (netCDF + JSON manifest) used by rendering, the collect/render split, result cache, and history | Pickled god-object at four boundaries; load-time code execution |
 | [A4 — Caching architecture](architecture/A4-caching-architecture.md) | One storage interface (absorbs PR #760), one key module, worker source-code hashing, artifact manifests, netCDF history (absorbs PR #799) | Stale-results footgun, media orphans, pickle CVE class, scattered key logic |
+| [A5 — Config surface reduction](architecture/A5-config-surface-reduction.md) | Four orthogonal config objects (spec / run / analysis / report); one home per knob; absorbs PR #923 as its Phase 1; per-field disposition for all 73 `BenchCfg` fields | The 73-field god object, entry-point kwarg re-enumeration, the six-tier tag precedence (plans 13/18 D5), the #688→#704 revert lesson |
 
 Sequencing: A1 Phases 0, 2, and 3 have landed (#932, #970, #973/v1.114.0; Phase 1 is
 dropped — see the A1 addendum); A4 Phase C1–C2 can start immediately; A3 Phase D2
