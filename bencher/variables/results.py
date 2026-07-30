@@ -473,21 +473,6 @@ class ResultDataSet(param.Parameter):
         return _hash_slots(self)
 
 
-class ResultVolume(param.Parameter):
-    __slots__ = ["units", "obj", "max_time_events"]
-    _hash_exclude = ("obj", "max_time_events")
-
-    def __init__(self, obj=None, default=None, units="container", max_time_events=None, **params):
-        super().__init__(default=default, **params)
-        self.units = units
-        self.obj = obj
-        self.max_time_events = max_time_events
-
-    def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
-        return _hash_slots(self)
-
-
 PANEL_TYPES = (
     ResultPath,
     ResultImage,
@@ -526,7 +511,6 @@ ALL_RESULT_TYPES = (
     ResultRerun,
     ResultDataSet,
     ResultReference,
-    ResultVolume,
 )
 
 # Most-derived first: kind classification takes the first isinstance match
@@ -544,7 +528,6 @@ RESULT_KIND_ORDER = (
     (ResultContainer, "container"),
     (ResultHmap, "hmap"),
     (ResultReference, "reference"),
-    (ResultVolume, "volume"),
 )
 
 
@@ -585,8 +568,8 @@ _OBJECT_MISSING_TYPES = (
     ResultRerun,
 )
 # Single-column result types that get a data variable in the dataset. ResultVec
-# is handled separately (it expands to one column per element); ResultHmap and
-# ResultVolume are stored out-of-band and intentionally get no data variable.
+# is handled separately (it expands to one column per element); ResultHmap is
+# stored out-of-band and intentionally gets no data variable.
 DATA_VAR_RESULT_TYPES = SCALAR_RESULT_TYPES + _REFERENCE_MISSING_TYPES + _OBJECT_MISSING_TYPES
 
 
@@ -596,7 +579,7 @@ def result_missing_fill(rv) -> tuple[Any, type]:
         return -1, int
     if isinstance(rv, _OBJECT_MISSING_TYPES):
         return "NAN", object
-    # ResultFloat / ResultBool / ResultVec / ResultVolume and any future numeric.
+    # ResultFloat / ResultBool / ResultVec and any future numeric.
     return float("nan"), float
 
 

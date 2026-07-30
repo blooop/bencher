@@ -14,7 +14,9 @@ import numpy as np
 
 from bencher.result_collector import _sentinel_for_result_var
 from bencher.variables.results import (
+    ALL_RESULT_TYPES,
     DATA_VAR_RESULT_TYPES,
+    XARRAY_MULTIDIM_RESULT_TYPES,
     ResultBool,
     ResultContainer,
     ResultDataSet,
@@ -27,14 +29,19 @@ from bencher.variables.results import (
     ResultString,
     ResultVec,
     ResultVideo,
-    ResultVolume,
     result_is_missing,
+    result_kind,
     result_missing_fill,
 )
 
 
+def _instantiate(cls):
+    """A default instance of *cls*; ResultVec needs an explicit size."""
+    return cls(size=2) if cls is ResultVec else cls()
+
+
 def _nan_backed_vars():
-    return [ResultFloat(), ResultBool(), ResultVec(size=2), ResultVolume()]
+    return [ResultFloat(), ResultBool(), ResultVec(size=2)]
 
 
 def _reference_backed_vars():
@@ -92,11 +99,51 @@ class TestDataVarResultTypes(unittest.TestCase):
         self.assertIsInstance(ResultBool(), DATA_VAR_RESULT_TYPES)
 
     def test_out_of_band_and_multi_column_types_excluded(self):
-        # ResultVec expands to one column per element; ResultHmap and
-        # ResultVolume are stored out-of-band — none get a single data var.
+        # ResultVec expands to one column per element; ResultHmap is stored
+        # out-of-band — neither gets a single data var.
         self.assertNotIsInstance(ResultVec(size=2), DATA_VAR_RESULT_TYPES)
         self.assertNotIsInstance(ResultHmap(), DATA_VAR_RESULT_TYPES)
-        self.assertNotIsInstance(ResultVolume(), DATA_VAR_RESULT_TYPES)
+
+
+class TestEveryResultTypeIsStorable(unittest.TestCase):
+    """No result type may be declarable but unstorable.
+
+    ``ResultVolume`` used to be exactly that: exported and listed in
+    ``ALL_RESULT_TYPES``/``RESULT_KIND_ORDER``, but absent from every registry
+    that decides how a sample is *stored*. Putting one in ``result_vars`` died in
+    ``precompute_result_arrays`` with ``KeyError: No variable named ...`` — the
+    type had no data variable, yet the collector indexed one anyway. It was
+    deleted rather than wired up.
+
+    This pins the invariant that made it a trap: membership in
+    ``ALL_RESULT_TYPES`` implies the collector's store loop has a branch for the
+    type. That loop dispatches on ``XARRAY_MULTIDIM_RESULT_TYPES``,
+    ``ResultDataSet``, ``ResultReference`` and ``ResultVec``, and raises
+    ``TypeError`` otherwise; ``ResultHmap`` is the one legitimate exception,
+    collected separately via ``bench_res.result_hmaps``.
+    """
+
+    STORABLE = XARRAY_MULTIDIM_RESULT_TYPES + (ResultDataSet, ResultReference, ResultVec)
+
+    def test_all_result_types_have_a_collector_branch(self):
+        for cls in ALL_RESULT_TYPES:
+            if cls is ResultHmap:
+                continue
+            with self.subTest(cls=cls.__name__):
+                self.assertTrue(
+                    issubclass(cls, self.STORABLE),
+                    f"{cls.__name__} is in ALL_RESULT_TYPES but the collector has no "
+                    f"branch to store it, so declaring one raises at sweep time. "
+                    f"Either wire it into a storage registry or drop it from "
+                    f"ALL_RESULT_TYPES.",
+                )
+
+    def test_result_kind_covers_all_result_types(self):
+        # A type absent from RESULT_KIND_ORDER classifies as "unknown", which
+        # silently degrades plot selection rather than failing.
+        for cls in ALL_RESULT_TYPES:
+            with self.subTest(cls=cls.__name__):
+                self.assertNotEqual(result_kind(_instantiate(cls)), "unknown")
 
 
 class TestResultIsMissing(unittest.TestCase):

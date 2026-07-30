@@ -107,7 +107,6 @@ from .variables.results import (
     ResultVar,
     ResultVec,
     ResultVideo,
-    ResultVolume,
     curve,
 )
 from .variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, hash_sha1

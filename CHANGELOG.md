@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **`ResultVolume` is gone.** It was declarable but not usable: exported from
+  `bencher/__init__.py` and listed in `ALL_RESULT_TYPES`/`RESULT_KIND_ORDER`, but absent
+  from every registry that decides how a sample is *stored*. Putting one in `result_vars`
+  raised `KeyError: No variable named '<name>'` in `precompute_result_arrays` — the type
+  got no data variable, yet the collector indexed one anyway — and had it survived that,
+  the store loop's `else` raised `TypeError: Unsupported result type`. Since no working
+  code could have used it, removal is only nominally an API break. Note that
+  `VolumeResult` (`bencher/results/volume_result.py`), the 3-float-input volume *plot*, is
+  unrelated and unaffected — it renders `ResultFloat`.
+
+  A new `TestEveryResultTypeIsStorable` pins the invariant that made this a trap:
+  membership in `ALL_RESULT_TYPES` now implies the collector has a branch to store the
+  type, and that `result_kind` classifies it as something other than `"unknown"`.
+  `ResultHmap` is the one exemption, collected out-of-band via `result_hmaps`.
+
 ### Changed
 - **`DataSetResult` now renders `ResultDataSet` results only.** It previously claimed every
   pane-type result, which made `bench.add(bn.DataSetResult)` / `plot_list=["dataset"]` a

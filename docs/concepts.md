@@ -239,7 +239,6 @@ Result types declare what a benchmark function returns:
 - `ResultString` — a string result
 - `ResultDataSet` — any picklable Python payload per sample, optionally with a
   `container=` callback that renders it without coupling storage to its data type
-- `ResultVolume` — volume data
 
 Bencher distinguishes inputs from results by type: anything that is a subclass of a result type
 is an output; everything else is an input. This split drives the entire downstream pipeline.
