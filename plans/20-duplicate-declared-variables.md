@@ -9,7 +9,7 @@ input variables, an unhelpful crash deep inside xarray.
 
 **⚠️ Read first:** the result-variable case changes a hash for configurations
 that are currently accepted, so it interacts with plan 09's reset reporting. Read
-the migration section before choosing the dedupe option.
+the migration section before landing D2.
 
 ---
 
@@ -33,10 +33,10 @@ Verified on v1.116.0 with a two-variable worker, comparing
 
 The dataset is **identical** and the key is **different**. The cause is that the
 per-variable digests are folded as a sorted *tuple*, not a set
-(`bencher/bench_cfg.py:841`), so a repeated entry appears twice in the hashed
-sequence. Meanwhile the history layer keys its column metadata by name — a dict —
-so the duplicate collapses there. Hash and history therefore disagree about what
-the configuration contains.
+(`bencher/bench_cfg.py:841`, in `BenchCfg.hash_persistent`), so a repeated entry
+appears twice in the hashed sequence. Meanwhile the history layer keys its column
+metadata by name — a dict — so the duplicate collapses there. Hash and history
+therefore disagree about what the configuration contains.
 
 The practical failure is a benchmark that runs, reports correct numbers, and
 appends to a different trend line than the one it appears to belong to. Nothing
@@ -94,26 +94,46 @@ defines one dataset dimension, so it may appear only once.
 This is a strict improvement: the same configurations fail, with a message that
 identifies the cause.
 
-### D2 — Result variables: dedupe or raise — **OWNER DECISION**
+### D2 — Result variables: dedupe, keep the first occurrence, warn
 
-Both defensible:
+**Decided.** A repeated result variable is deduped on resolved name, the first
+occurrence is kept, and a warning is emitted.
 
-1. **Dedupe, keep first occurrence, warn.** Composition-friendly: concatenating
-   overlapping metric groups keeps working, and the warning tells the author to
-   clean it up. The identity produced is the same as declaring the set once, which
-   is what the dataset already reflects — so this *fixes* P2's hash/dataset
-   disagreement in the direction of the dataset.
-2. **Raise.** Consistent with D1 and unambiguous, but breaks any currently-working
-   benchmark that happens to have an overlap, and does so at declaration time
-   rather than when the numbers are wrong.
+The deduped set is *already* what bencher stores.
+`ResultCollector.setup_dataset` builds `data_vars` as a dict keyed by the
+variable's name (`bencher/result_collector.py:233-243`), so a second declaration
+of `y` overwrites the first and the dataset carries one `y` column;
+`data_var_columns` keys history's per-column metadata the same way
+(`bencher/history.py:88-103`), so reconciliation also sees one column. Only
+`BenchCfg.hash_persistent` disagrees — it folds the per-variable digests as a
+sorted *tuple* (`bencher/bench_cfg.py:841`), so the repeat appears twice in the
+hashed sequence and moves the key. Deduping makes cache and history identity
+agree with the data that was already being written, which is what makes this a
+correctness fix and the direct repair of P2, rather than the friendlier of two
+policies.
 
-**Recommendation: option 1.** The dataset is already the deduped set; making the
-hash agree with the data is the correct resolution, and the warning preserves
-discoverability. Option 2's strictness buys little here because, unlike an input
-variable, a duplicated result variable has an unambiguous intended meaning.
+The warning names the variable, both positions, and the fix:
 
-Whichever is chosen, apply it identically to the deferred and the object forms,
-comparing on resolved variable *name*.
+```
+Result variable 'y' is declared twice (positions 1 and 3); the duplicate is
+ignored. Result variables are a set keyed by name — declare each metric once, or
+compose overlapping groups with plan 18's `plus_result_vars`.
+```
+
+Emit it as a `UserWarning` with `stacklevel=2` so it points at the caller's
+`plot_sweep` line, matching the existing no-result-vars warning
+(`bencher/bencher.py:424-430`, in `Bench.plot_sweep`).
+
+**Considered and rejected: raise.** Consistency with D1 is a real argument and
+raising is unambiguous. It loses because a repeated metric, unlike a repeated
+dimension, has one obvious intended meaning that bencher can honor — so raising
+buys no clarity while breaking benchmarks that produce correct data today, and
+breaking them at declaration time. D1 raises because a repeated dimension has no
+valid interpretation at all and already fails (P4); the asymmetry follows from
+the data model, not from leniency.
+
+Apply the rule identically to the deferred and the object forms, comparing on
+resolved variable *name*.
 
 ### D3 — Constants: normalize the two forms
 
@@ -139,8 +159,8 @@ same validation.
    identity change for anything that currently succeeds.
 2. D3 (constant normalization). Also no identity change, since same-valued
    duplicates already collapse.
-3. D2, once the owner decision is made. This is the phase with a hash change;
-   land it alone so any reported reset has one obvious cause.
+3. D2 (result-variable dedupe plus warning). This is the phase with a hash
+   change; land it alone so any reported reset has one obvious cause.
 4. `CHANGELOG.md` and a docs note that variable lists are sets by name, ordered
    only for inputs.
 
@@ -149,9 +169,11 @@ same validation.
 - Duplicate input variable raises `ValueError` at `plot_sweep`, naming the
   variable and both positions; the xarray broadcasting error is no longer
   reachable. Cover string, dict, and object forms, and a mixture of them.
-- Duplicate result variable (D2 option 1): a warning is emitted, and the resulting
+- Duplicate result variable: a warning is emitted naming the variable and both
+  positions, the config holds one entry per name, and the resulting
   `hash_persistent()` equals that of the same set declared once — the direct
-  regression test for P2's `eb291525…` vs `92bca0b5…` split.
+  regression test for P2's `eb291525…` vs `92bca0b5…` split. Assert the dataset's
+  variable set matches the single-declaration run — the data never differed.
 - Duplicate constant with equal values: accepted silently, one entry. With
   differing values: raises, naming both values.
 - List-form and dict-form `const_vars` produce identical configs and identical
@@ -161,8 +183,8 @@ same validation.
 
 ## Migration & compatibility
 
-D1 and D3 change no currently-succeeding configuration. D2 option 1 **does** move
-the key of any benchmark that currently declares an overlapping result variable —
+D1 and D3 change no currently-succeeding configuration. D2 **does** move the key
+of any benchmark that currently declares an overlapping result variable —
 onto the key it would have had if declared correctly, so in the common case a
 benchmark rejoins the trend it should have been on all along, and in the worst
 case it starts a fresh series with a `full_reset` event from plan 09.
@@ -180,8 +202,8 @@ warning, and `on_history_reset` controls how loudly the transition surfaces.
   of two distinct variables whose configured objects happen to be equal.
 - **Warning fatigue.** If a project legitimately builds result-variable lists by
   concatenation, the warning fires on every run. That is the intended signal, and
-  plan 18's `plus_result_vars` gives them a clean way to fix it — reference it in
-  the warning text.
+  D2's warning text already points at plan 18's `plus_result_vars` as the clean
+  way to fix it.
 
 ## Coordination
 
