@@ -34,6 +34,18 @@ def _sweep(**kwargs):
         bench.close()
 
 
+def _sweep_raw_warnings(**kwargs):
+    """As ``_sweep``, but keeping the warning objects so attribution can be checked."""
+    bench = _bench()
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            bench.plot_sweep(plot_callbacks=False, **kwargs)
+        return [w for w in caught if w.category is UserWarning]
+    finally:
+        bench.close()
+
+
 class TestDuplicateResultVars(unittest.TestCase):
     """P2 — the silent series split, and its repair."""
 
@@ -70,6 +82,21 @@ class TestDuplicateResultVars(unittest.TestCase):
         (msg,) = [w for w in warns if "declared twice" in w]
         self.assertIn("'out_cos'", msg)
         self.assertIn("positions 1 and 3", msg)
+
+    def test_the_warning_is_attributed_to_the_caller_not_to_bencher(self) -> None:
+        """Pins ``stacklevel``: the blame belongs to whoever wrote the declaration.
+
+        The validator is several frames below ``plot_sweep``, so any refactor that
+        adds or removes one has to move ``stacklevel`` with it or the warning
+        starts pointing inside bencher, where the user can do nothing about it.
+        """
+        caught = _sweep_raw_warnings(input_vars=["theta"], result_vars=["out_sin", "out_sin"])
+        (dup,) = [w for w in caught if "declared twice" in str(w.message)]
+        self.assertEqual(
+            dup.filename,
+            __file__,
+            f"warning blamed {dup.filename}:{dup.lineno}, not the calling test module",
+        )
 
     def test_object_and_string_forms_are_compared_by_name(self) -> None:
         res, warns = _sweep(
