@@ -271,6 +271,24 @@ class TestFailOnSampleError(unittest.TestCase):
             with self.subTest(threshold=bad), self.assertRaises(ValueError):
                 _run(catch=(RuntimeError,), fail_on_sample_error=bad)
 
+    def test_a_truthy_integer_is_rejected_rather_than_guessed_at(self) -> None:
+        """``1`` could mean True or 100%; bool being a subclass of int hides the choice.
+
+        Left alone, ``1`` is truthy, is not ``True``, and becomes the 1.0 threshold --
+        "raise only if *every* sample failed", the near-opposite of the "raise if any
+        failed" that someone writing 1 (or feeding it from YAML) almost certainly
+        meant. Floats stay unambiguous, so 1.0 still means 100%.
+        """
+        with self.assertRaises(ValueError) as ctx:
+            _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1)
+        self.assertIn("ambiguous", str(ctx.exception))
+
+    def test_one_point_zero_is_still_a_hundred_percent(self) -> None:
+        res = _run(fail_at=(2,), catch=(RuntimeError,), fail_on_sample_error=1.0)
+        self.assertEqual(res.n_failed, 1)  # 1 of 4: below 100%, so no raise
+        with self.assertRaises(bn.SampleErrorPolicyError):  # all 4 fail: 100%
+            _run(fail_at=(0, 1, 2, 3), catch=(RuntimeError,), fail_on_sample_error=1.0)
+
     def test_zero_and_false_leave_the_policy_off(self) -> None:
         """Falsy thresholds are 'off', not 'out of range' -- unchanged by validation."""
         for off in (False, 0, 0.0):

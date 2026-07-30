@@ -366,19 +366,18 @@ class ResultCollector:
         Raises:
             RuntimeError: If an unsupported result variable type is encountered
         """
+        # No `if catch:` branch: `except ()` matches nothing, so the default empty
+        # tuple is already fail-fast, and result() keeps a single call site.
         catch = tuple(getattr(bench_run_cfg, "catch", ()) or ())
-        if catch:
-            try:
-                result = job_result.result()
-            # catch is a runtime tuple of exception types, which pylint cannot see into.
-            # pylint: disable-next=catching-non-exception
-            except catch as exc:
-                self.record_caught_sample(
-                    bench_res, job_result.job.job_id, worker_job.function_input, exc
-                )
-                return
-        else:
+        try:
             result = job_result.result()
+        # catch is a runtime tuple of exception types, which pylint cannot see into.
+        # pylint: disable-next=catching-non-exception
+        except catch as exc:
+            self.record_caught_sample(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
         if result is not None:
             logger.info(f"{job_result.job.job_id}:")
             if bench_res.bench_cfg.print_bench_inputs:

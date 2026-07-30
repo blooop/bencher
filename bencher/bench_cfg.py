@@ -200,7 +200,9 @@ class BenchRunCfg(BenchPlotSrvCfg):
         False,
         doc="Fail the run after the fact if samples were caught. True raises when "
         "any sample failed; a float in (0, 1] raises when the failed *fraction* "
-        "reaches it, so a flake is tolerated but a run made of flakes is not. The "
+        "reaches it, so a flake is tolerated but a run made of flakes is not. A "
+        "truthy integer is rejected rather than guessed at: 1 could mean True or "
+        "100%, so write True or 1.0. Falsy values (False, 0, 0.0) mean off. The "
         "raise happens after the dataset and report are assembled, so the partial "
         "results survive it -- losing the artifact would defeat catching in the "
         "first place.",

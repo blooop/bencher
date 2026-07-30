@@ -90,6 +90,18 @@ def _enforce_sample_error_policy(bench_res: BenchResult, policy: bool | float) -
     # error at the one moment the caller is trying to read a *sample* failure.
     threshold = None
     if policy is not True:
+        # bool is a subclass of int, so a bare 1 is truthy, is *not* True, and would
+        # otherwise silently become the 1.0 threshold -- "raise only if every sample
+        # failed", the near-opposite of the "raise if any failed" the caller almost
+        # certainly meant by writing 1. Both readings are defensible, which is why
+        # this refuses to pick one. Floats are unambiguous and stay allowed, so
+        # 1.0 still means 100%.
+        if isinstance(policy, int):
+            raise ValueError(
+                "fail_on_sample_error must be True/False or a float in (0, 1]; got the "
+                f"integer {policy!r}, which is ambiguous -- use True to fail on any "
+                f"failed sample, or {float(policy)!r} to fail at that failed fraction"
+            )
         threshold = float(policy)
         if not 0.0 < threshold <= 1.0:
             raise ValueError(
@@ -1101,23 +1113,23 @@ class Bench(BenchPlotServer):
             # later job with the wrong future.
             submitted: list[tuple] = []
             for job, cache_job in zip(jobs, cache_jobs):
-                if catch:
-                    try:
-                        result = self.sample_cache.submit(cache_job, prefetched=prefetched)
-                    # catch is a runtime tuple of exception types, which pylint
-                    # cannot see into.
-                    # pylint: disable-next=catching-non-exception
-                    except catch as exc:
-                        # The serial executor runs the worker *inside* submit(), so on
-                        # the default executor a raising sample never reaches
-                        # store_results at all -- catching only there would leave the
-                        # common path fail-fast while the pool path tolerated failures.
-                        self._collector.record_caught_sample(
-                            bench_res, cache_job.job_id, job.function_input, exc
-                        )
-                        continue
-                else:
+                # No `if catch:` branch: `except ()` matches nothing, so the default
+                # empty tuple is already fail-fast. One call site rather than two
+                # identical ones that could drift apart.
+                try:
                     result = self.sample_cache.submit(cache_job, prefetched=prefetched)
+                # catch is a runtime tuple of exception types, which pylint
+                # cannot see into.
+                # pylint: disable-next=catching-non-exception
+                except catch as exc:
+                    # The serial executor runs the worker *inside* submit(), so on
+                    # the default executor a raising sample never reaches
+                    # store_results at all -- catching only there would leave the
+                    # common path fail-fast while the pool path tolerated failures.
+                    self._collector.record_caught_sample(
+                        bench_res, cache_job.job_id, job.function_input, exc
+                    )
+                    continue
                 results_list.append(result)
                 submitted.append((job, result))
                 # For serial execution, store results immediately so that
