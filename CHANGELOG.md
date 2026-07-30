@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`bn.SweepSpec` — a sweep declaration as a value (plan 18, phase 1).** A frozen record
+  of `plot_sweep`'s seven declarative arguments (title, descriptions, input/result/const
+  vars, tag) that can be built once, composed (`with_`, `plus_input_vars`,
+  `plus_result_vars`, `merge`), compared (`bn.diff_specs`), pickled, and bound to any
+  worker: `bench.plot_sweep(**spec.bind(Worker))`. `bind(worker)` checks every by-name
+  variable up front and runs the duplicate-variable validation at bind time, where the
+  composition that caused a duplicate is in view. Run configuration (`repeats`, `run_cfg`,
+  `plot_callbacks`, …) is deliberately absent — a spec states what is measured, not how the
+  run is driven — and a callable in any field is rejected at construction. Purely additive:
+  every existing `plot_sweep` call is unchanged.
 - **Per-sample fault tolerance on the sweep path: `catch=` and `fail_on_sample_error`.**
   `Bench.optimize(catch=...)` has had this knob since #962, so the same benchmark was
   fault-tolerant when driven by Optuna and all-or-nothing when swept. `catch` lives on

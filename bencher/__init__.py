@@ -75,6 +75,7 @@ from .scorecard import (
     generate_scorecard,
 )
 from .sparkline import sparkline_svg
+from .sweep_spec import SweepSpec, diff_specs
 from .utils import (
     gen_image_path,
     gen_path,
