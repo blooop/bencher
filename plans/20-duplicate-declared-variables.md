@@ -18,8 +18,8 @@ the migration section before landing D2.
 ### P1 — Nothing checks for duplicates
 
 `plot_sweep` converts each list positionally with no uniqueness check —
-`input_vars` and `result_vars` at `bencher/bencher.py:418-422`, `const_vars` at
-`:440-444`. No dedupe, no warning, no error.
+`input_vars` and `result_vars` at `bencher/bencher.py:418-421`, `const_vars` at
+`:439-443`. No dedupe, no warning, no error.
 
 ### P2 — A duplicated result variable silently splits the series
 
@@ -67,7 +67,7 @@ internals.
 ### P5 — Constants have a third behavior
 
 `const_vars` given as a dict cannot contain duplicates at all — the dict collapses
-them before bencher sees them (`bencher/bencher.py:437-438`). Given as a list of
+them before bencher sees them (`bencher/bencher.py:436-437`). Given as a list of
 pairs, a repeated variable with two *different* values is accepted, and which one
 wins depends on downstream iteration order. So the same logical mistake is
 impossible, silent, or order-dependent depending on which of the two accepted
