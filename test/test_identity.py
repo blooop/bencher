@@ -14,7 +14,7 @@ import json
 import math
 import pickle
 import unittest
-from dataclasses import asdict
+from dataclasses import FrozenInstanceError, asdict
 from unittest import mock
 
 import bencher as bn
@@ -36,49 +36,49 @@ def _real_run(run_cfg: bn.BenchRunCfg | None = None, **kwargs) -> bn.SweepIdenti
 
 
 DECLARATIONS = {
-    "param_object": dict(
-        input_vars=[ExampleBenchCfg.param.theta],
-        result_vars=[ExampleBenchCfg.param.out_sin],
-    ),
-    "by_name": dict(input_vars=["theta"], result_vars=["out_sin"]),
-    "sweep_spec_bounds": dict(
-        input_vars=[bn.sweep("theta", bounds=(0, 1), samples=3)],
-        result_vars=["out_sin"],
-    ),
-    "sweep_spec_values": dict(
-        input_vars=[bn.sweep("theta", [0.0, 0.5, 1.0])],
-        result_vars=["out_sin"],
-    ),
-    "two_inputs": dict(
-        input_vars=[bn.sweep("theta", samples=2), bn.sweep("offset", samples=2)],
-        result_vars=["out_sin", "out_cos"],
-    ),
-    "consts_as_dict": dict(
-        input_vars=[bn.sweep("theta", samples=2)],
-        result_vars=["out_sin"],
-        const_vars={"offset": 0.1},
-    ),
-    "consts_as_pairs": dict(
-        input_vars=[bn.sweep("theta", samples=2)],
-        result_vars=["out_sin"],
-        const_vars=[(ExampleBenchCfg.param.offset, 0.1)],
-    ),
-    "tagged": dict(
-        input_vars=[bn.sweep("theta", samples=2)],
-        result_vars=["out_sin"],
-        tag="nightly",
-    ),
-    "no_inputs": dict(input_vars=[], result_vars=["out_sin"], const_vars={"theta": 0.5}),
+    "param_object": {
+        "input_vars": [ExampleBenchCfg.param.theta],
+        "result_vars": [ExampleBenchCfg.param.out_sin],
+    },
+    "by_name": {"input_vars": ["theta"], "result_vars": ["out_sin"]},
+    "sweep_spec_bounds": {
+        "input_vars": [bn.sweep("theta", bounds=(0, 1), samples=3)],
+        "result_vars": ["out_sin"],
+    },
+    "sweep_spec_values": {
+        "input_vars": [bn.sweep("theta", [0.0, 0.5, 1.0])],
+        "result_vars": ["out_sin"],
+    },
+    "two_inputs": {
+        "input_vars": [bn.sweep("theta", samples=2), bn.sweep("offset", samples=2)],
+        "result_vars": ["out_sin", "out_cos"],
+    },
+    "consts_as_dict": {
+        "input_vars": [bn.sweep("theta", samples=2)],
+        "result_vars": ["out_sin"],
+        "const_vars": {"offset": 0.1},
+    },
+    "consts_as_pairs": {
+        "input_vars": [bn.sweep("theta", samples=2)],
+        "result_vars": ["out_sin"],
+        "const_vars": [(ExampleBenchCfg.param.offset, 0.1)],
+    },
+    "tagged": {
+        "input_vars": [bn.sweep("theta", samples=2)],
+        "result_vars": ["out_sin"],
+        "tag": "nightly",
+    },
+    "no_inputs": {"input_vars": [], "result_vars": ["out_sin"], "const_vars": {"theta": 0.5}},
 }
 
 RUN_CFGS = {
-    "default": dict(),
-    "over_time": dict(over_time=True),
-    "repeats_3": dict(repeats=3),
-    "subsampling_2": dict(subsampling_divisions=2),
-    "subsampling_4_over_time": dict(subsampling_divisions=4, over_time=True, repeats=2),
-    "samples_per_var": dict(samples_per_var=4),
-    "run_tag": dict(run_tag="rt"),
+    "default": {},
+    "over_time": {"over_time": True},
+    "repeats_3": {"repeats": 3},
+    "subsampling_2": {"subsampling_divisions": 2},
+    "subsampling_4_over_time": {"subsampling_divisions": 4, "over_time": True, "repeats": 2},
+    "samples_per_var": {"samples_per_var": 4},
+    "run_tag": {"run_tag": "rt"},
 }
 
 
@@ -113,7 +113,7 @@ class TestEquivalence(unittest.TestCase):
 
     def test_auto_discovered_vars(self) -> None:
         """input_vars=None auto-discovers; the prediction must discover the same."""
-        self._check(dict(result_vars=["out_sin"], const_vars={}), dict(subsampling_divisions=2))
+        self._check({"result_vars": ["out_sin"], "const_vars": {}}, {"subsampling_divisions": 2})
 
 
 class TestKeySemantics(unittest.TestCase):
@@ -226,7 +226,7 @@ class TestValueSemantics(unittest.TestCase):
         )
 
     def test_frozen(self) -> None:
-        with self.assertRaises(Exception):
+        with self.assertRaises(FrozenInstanceError):
             self.ident.cache_key = "x"
 
     def test_pickle_round_trip_is_unchanged(self) -> None:
