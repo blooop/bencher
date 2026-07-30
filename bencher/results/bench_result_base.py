@@ -1022,21 +1022,31 @@ class BenchResultBase:
 
         Used for ResultRerun because rerun iframes do not work inside a
         Bokeh JS slider swap (the viewer fails to re-initialise).
-        """
-        from bencher.utils_rrd import rrd_file_to_pane
 
+        A container declared on the result var wins over the rerun viewer, the
+        same way it does on the single-run path in ``ds_to_container``: a renderer
+        that only applied while history was off would draw one thing on the first
+        run and something else on the second.
+        """
         time_vals = list(dataset.coords["over_time"].values)
         over_time_dtype = dataset.coords["over_time"].dtype
         is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
         labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+
+        render = self.declared_container(result_var)
+        if render is None:
+            # Imported only when it is actually the renderer, so a declared
+            # container does not drag in the rerun viewer stack.
+            from bencher.utils_rrd import rrd_file_to_pane
+
+            render = partial(rrd_file_to_pane, width=result_var.width, height=result_var.height)
 
         items = []
         for idx, label in enumerate(labels):
             filepath = self._over_time_filepath(dataset, result_var, idx)
             if filepath is None:
                 continue
-            pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
-            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), render(filepath)))
 
         if not items:
             return pn.pane.Markdown("*No rerun data available*")

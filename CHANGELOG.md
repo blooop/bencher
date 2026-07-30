@@ -65,6 +65,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ruff format`, so regenerated examples stay lint-clean. No runtime behavior change.
 
 ### Fixed
+- **A container declared on a `ResultRerun` now applies with `over_time` history too.**
+  With history off, a rerun result renders through `ds_to_container`, where a declared
+  container wins over the type's built-in viewer. With history on and more than one time
+  point, rendering is routed to `_pane_over_time_grid` instead — a separate path that
+  hardcoded `rrd_file_to_pane`, so the same benchmark honoured its declared renderer on
+  the first run and silently fell back to the rerun viewer on every run after. The grid
+  now resolves the declared container the same way, and only imports the rerun viewer
+  stack when it is the renderer actually being used. `ResultVideo`/`ResultImage` take the
+  matching `_pane_over_time_slider` path but have no container slot to honour, so they are
+  unaffected.
 - **`hover=False` on an intra-sample chart now actually disables hover.** `set_default_opts`
   registers `tools=["hover"]` as a global holoviews default for most element types, so a
   spec that merely omitted the key got hover back and the option was a silent no-op.
