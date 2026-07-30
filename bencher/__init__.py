@@ -21,15 +21,30 @@ from bencher.results.holoview_results.table_result import TableResult
 from bencher.results.holoview_results.tabular_spec import TabularSpec
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.holoview_results.xy_curve_result import XYCurveResult, xy_curve
+from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult, xy_hexbin
+from bencher.results.holoview_results.xy_histogram_result import (
+    XYHistogramResult,
+    xy_histogram,
+)
 from bencher.results.holoview_results.xy_scatter_result import XYScatterResult, xy_scatter
 from bencher.results.volume_result import VolumeResult
 
 from .bench_cfg import ShowMode
 from .bench_plot_server import BenchPlotServer
 from .bench_runner import BenchRunner
-from .bencher import Bench, BenchCfg, BenchRunCfg
+from .bencher import Bench, BenchCfg, BenchRunCfg, SampleErrorPolicyError
 from .example.benchmark_data import ExampleBenchCfg
 from .file_server import run_file_server
+from .identity import (
+    EXCLUDED_FIELDS,
+    IDENTITY_FIELDS,
+    SweepIdentity,
+    config_summary,
+    diff_identities,
+    identity_of,
+    sweep_identity,
+)
+from .job import SampleFailure
 from .render import load_result, render_report, save_result
 from .report_export import (
     compare_results,
@@ -107,7 +122,6 @@ from .variables.results import (
     ResultVar,
     ResultVec,
     ResultVideo,
-    ResultVolume,
     curve,
 )
 from .variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, hash_sha1
@@ -128,7 +142,12 @@ except ModuleNotFoundError:
     pass
 
 try:
-    from .results.composable_container.composable_container_rerun import ComposableContainerRerun
+    from .results.composable_container.composable_container_rerun import (
+        ComposableContainerRerun,
+        RerunRecording,
+        RerunViewKind,
+    )
+    from .results.rerun_summary import RerunSummaryResult
 except ModuleNotFoundError:
     pass
 

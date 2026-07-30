@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Sequence
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import panel as pn
 from param import Parameter
@@ -44,12 +44,20 @@ from bencher.results.holoview_results.surface_result import SurfaceResult
 from bencher.results.holoview_results.table_result import TableResult
 from bencher.results.holoview_results.tabulator_result import TabulatorResult
 from bencher.results.holoview_results.xy_curve_result import XYCurveResult
+from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult
+from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult
 from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
 from bencher.results.optuna_result import OptunaResult
 from bencher.results.pane_result import PaneResult
+from bencher.results.rerun_summary import RerunSummaryResult
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.volume_result import VolumeResult
 from bencher.utils import listify, resolve_aggregate
+
+if TYPE_CHECKING:
+    # Runtime import would be circular: identity imports bench_cfg, which this
+    # module's own import chain pulls in.
+    from bencher.identity import SweepIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +87,11 @@ class BenchResult(
     TabulatorResult,
     XYScatterResult,
     XYCurveResult,
+    XYHistogramResult,
+    XYHexbinResult,
     HoloviewResult,
     VideoSummaryResult,
+    RerunSummaryResult,
     DataSetResult,
     OptunaResult,
 ):  # pylint: disable=too-many-ancestors
@@ -96,6 +107,53 @@ class BenchResult(
         HoloviewResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
+        # Samples that raised and were tolerated because of run_cfg.catch. Empty
+        # unless catch was set, so a run with no catch is byte-identical to before.
+        self.failed_samples: list = []
+        # Samples this run actually executed, set by calculate_benchmark_results.
+        # Needed because neither the dataset's own size nor the job count is the
+        # answer: the former grows once over_time history is merged in, and the
+        # latter counts cache hits that never reached the worker.
+        self.n_attempted: int = 0
+
+    @property
+    def n_failed(self) -> int:
+        """How many samples raised and were tolerated.
+
+        Tolerance without accounting is worse than fail-fast: without this a run
+        in which *every* sample failed would produce an all-sentinel dataset, a
+        valid-looking report and a successful exit.
+        """
+        # getattr, not self.failed_samples: BenchResult objects are pickled into
+        # the benchmark cache, and unpickling restores __dict__ without calling
+        # __init__ -- so a result cached by a pre-plan-21 bencher has no such
+        # attribute at all. Reading it directly turns "upgrade, then set
+        # fail_on_sample_error, then hit a warm cache" into an AttributeError.
+        return len(getattr(self, "failed_samples", ()))
+
+    @property
+    def failed_fraction(self) -> float:
+        """Failed samples as a fraction of the samples this run *executed*.
+
+        Cache hits are excluded from the denominator deliberately: they never
+        reached the worker and so could not have failed. Counting them would make
+        one ``fail_on_sample_error`` threshold mean different things on a cold and
+        a warm cache -- the single failure in a 4-sample sweep whose other 3 came
+        from cache is 100% of what ran, not 25%.
+        """
+        attempted = getattr(self, "n_attempted", 0)  # absent on pre-plan-21 pickles
+        return self.n_failed / attempted if attempted else 0.0
+
+    @property
+    def identity(self) -> SweepIdentity:
+        """The keys this result was stored under, as an inspectable value.
+
+        The config has already been through ``run_sweep``'s run_cfg merge, so no
+        run config is needed here.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self.bench_cfg)
 
     @classmethod
     def from_existing(cls, original: BenchResult) -> BenchResult:

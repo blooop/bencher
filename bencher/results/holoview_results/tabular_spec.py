@@ -115,6 +115,30 @@ def resolve_axes(
     return check_column(df, x, "x", chart), y_inferred
 
 
+def resolve_columns(
+    df: pd.DataFrame, columns: Hashable | Sequence[Hashable] | None, role: str, chart: str
+) -> list[Hashable]:
+    """The one-or-more columns a single-axis chart plots, inferred when omitted.
+
+    A bare label is accepted as a single column, so the common case reads as
+    ``column="dx_mm"`` rather than ``column=["dx_mm"]``. Inference takes *every*
+    numeric column, which is the useful default for a frame holding only the
+    measurement — name the columns whenever the frame carries anything else.
+    """
+    if columns is None:
+        numeric = list(df.select_dtypes("number").columns)
+        if not numeric:
+            raise ValueError(
+                f"{chart} needs at least one numeric column to plot, found none; "
+                f"pass {role}= explicitly"
+            )
+        return numeric
+    declared = list(columns) if isinstance(columns, (list, tuple)) else [columns]
+    if not declared:
+        raise ValueError(f"{chart} {role}= is empty; name at least one column")
+    return [check_column(df, col, role, chart) for col in declared]
+
+
 def plot_frame(
     df: pd.DataFrame, columns: Sequence[Hashable], chart: str
 ) -> tuple[pd.DataFrame, dict[Hashable, str]]:
@@ -221,6 +245,10 @@ class TabularSpec:
         """The x and y columns for this chart (see :func:`resolve_axes`)."""
         return resolve_axes(df, x, y, self.chart_name)
 
+    def columns(self, df: pd.DataFrame, columns: Hashable | Sequence[Hashable] | None, role: str):
+        """The one-or-more columns for this chart (see :func:`resolve_columns`)."""
+        return resolve_columns(df, columns, role, self.chart_name)
+
     def frame(self, df: pd.DataFrame, columns: Sequence[Hashable]):
         """The plotted columns with string dimension names (see :func:`plot_frame`)."""
         return plot_frame(df, columns, self.chart_name)
@@ -256,5 +284,6 @@ __all__ = [
     "plot_frame",
     "promote_named_index",
     "resolve_axes",
+    "resolve_columns",
     "to_dataframe",
 ]

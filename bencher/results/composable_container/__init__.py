@@ -9,6 +9,11 @@ from bencher.results.composable_container.composable_container_dataframe import 
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
+from bencher.results.composable_container.composable_container_rerun import (
+    ComposableContainerRerun,
+    RerunRecording,
+    RerunViewKind,
+)
 from bencher.results.composable_container.composable_container_video import (
     ComposableContainerVideo,
     RenderCfg,
