@@ -392,7 +392,9 @@ class TestNoRuntimeCost(unittest.TestCase):
             x = bn.FloatSweep(default=0, bounds=(0, 1), samples=3)
             y = bn.ResultFloat()
 
-            def __init__(self, **params):
+            # Never reaching super().__init__ is the whole point: this class cannot be
+            # constructed at all, so identity must not try.
+            def __init__(self, **params):  # pylint: disable=super-init-not-called
                 raise RuntimeError("requires an active sampling context")
 
         ident = bn.sweep_identity(worker=NeedsHardware, input_vars=["x"], result_vars=["y"])

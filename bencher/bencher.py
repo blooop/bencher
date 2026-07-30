@@ -111,6 +111,12 @@ class Bench(BenchPlotServer):
         self._executor = SweepExecutor(cache_size=self.cache_size)
         self._collector = ResultCollector(cache_size=self.cache_size)
 
+        # The worker manager owns this state; these mirror it for backward
+        # compatibility and are refreshed by _expose_worker_attrs().
+        self.worker: Callable | None = None
+        self.worker_class_instance: ParametrizedSweep | None = None
+        self.worker_input_cfg: ParametrizedSweep | None = None
+
         # Set worker using the manager
         self.set_worker(worker, worker_input_cfg)
 
@@ -198,10 +204,30 @@ class Bench(BenchPlotServer):
             RuntimeError: If worker is a class type instead of an instance.
         """
         self._worker_mgr.set_worker(worker, worker_input_cfg)
-        # Expose worker attributes for backward compatibility
+        self._expose_worker_attrs()
+
+    def _expose_worker_attrs(self) -> None:
+        """Mirror the worker manager's state onto self, for backward compatibility."""
         self.worker = self._worker_mgr.worker
         self.worker_class_instance = self._worker_mgr.worker_class_instance
         self.worker_input_cfg = self._worker_mgr.worker_input_cfg
+
+    def set_worker_class(self, worker_class: type[ParametrizedSweep]) -> None:
+        """Attach a worker class for declaration only, without a callable worker.
+
+        Delegates to :meth:`bencher.worker_manager.WorkerManager.set_worker_class`,
+        whose docstring explains why a class is enough to declare and hash a sweep but
+        not to run one. Used by :func:`bencher.identity.sweep_identity`.
+
+        Args:
+            worker_class: A ParametrizedSweep subclass. Never instantiated, never
+                called.
+
+        Raises:
+            RuntimeError: If given an instance rather than a class.
+        """
+        self._worker_mgr.set_worker_class(worker_class)
+        self._expose_worker_attrs()
 
     def sweep_sequential(
         self,

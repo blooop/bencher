@@ -117,6 +117,40 @@ class WorkerManager:
             logger.info(f"setting worker {worker}")
         self.worker_input_cfg = worker_input_cfg
 
+    def set_worker_class(self, worker_class: type[ParametrizedSweep]) -> None:
+        """Attach a worker *class* for declaration only, leaving ``worker`` unset.
+
+        Everything the declaration path needs from a worker is class-level --
+        ``param.objects()`` plus the ``get_inputs_only`` / ``get_input_defaults`` /
+        ``get_results_only`` classmethods -- so a class is enough to resolve variables
+        by name, describe a sweep and hash it. What a class cannot do is be *called*,
+        which is why :meth:`set_worker` rejects one; ``worker`` is deliberately left
+        ``None`` here so any attempt to sample raises rather than silently calling a
+        class object.
+
+        This exists for :func:`bencher.identity.sweep_identity`, which answers "what
+        keys would this declaration produce" without running anything. Requiring an
+        instance would put that out of reach of a worker whose ``__init__`` demands
+        live resources -- an open device, a running simulator, an attached robot --
+        which is exactly the expensive benchmark whose keys are worth checking before
+        committing to a run.
+
+        Args:
+            worker_class: A ParametrizedSweep subclass. Never instantiated, never
+                called.
+
+        Raises:
+            RuntimeError: If given an instance rather than a class -- the mirror of
+                ``set_worker``'s complaint, so neither method silently accepts what
+                the other is for.
+        """
+        if not isinstance(worker_class, type):
+            raise RuntimeError(  # noqa: TRY004
+                "This should be a class, not a class instance. Use set_worker() for an instance."
+            )
+        self.worker_class_instance = worker_class
+        logger.info(f"setting worker class {worker_class} for declaration only")
+
     def get_result_vars(self, as_str: bool = True) -> list[str | ParametrizedSweep]:
         """Retrieve the result variables from the worker class instance.
 

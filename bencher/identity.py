@@ -126,29 +126,24 @@ def _attach_worker(bench: Any, worker: Any) -> None:
     :func:`bencher.factories.create_bench` and cannot drift from it as
     ``set_worker``'s invariants change.
 
-    A **class** is accepted and never instantiated. Everything the declaration path
-    needs from a worker is class-level -- ``param.objects()`` plus the
-    ``get_inputs_only`` / ``get_input_defaults`` / ``get_results_only``
-    classmethods -- and a worker whose ``__init__`` demands live resources (an
-    open device, a running simulator, an attached robot) cannot be constructed
-    just to be asked what its parameters are. Requiring an instance would put
-    identity out of reach of exactly the expensive benchmarks that most need to
-    check it before running.
+    A **class** goes through :meth:`bencher.bencher.Bench.set_worker_class`, which
+    owns the declaration-only contract: a class is never instantiated and never
+    called, and ``bench.worker`` is deliberately left unset so an attempt to sample
+    raises instead of calling a class object. ``set_worker`` rejects a class on
+    purpose, because a class cannot be *called* -- and identity never calls one, so
+    the two methods split that case between them rather than identity writing the
+    manager's attributes itself.
 
-    ``Bench.set_worker`` rejects a class on purpose, because a class cannot be
-    *called*; identity never calls one, so a class is attached directly instead.
-    The only state that bypass skips is the callable ``bench.worker`` itself, which
-    the ``dry_run`` declaration path never reaches -- and the equivalence tests in
-    ``test/test_identity.py`` pin every declaration form against a real
-    ``to_bench()`` run, so a divergence between the two setups fails there.
+    The equivalence tests in ``test/test_identity.py`` pin every declaration form
+    against a real ``to_bench()`` run, so any divergence between the two setups
+    fails there rather than showing up as a wrong key.
     """
     if worker is None:
         return
-    if not isinstance(worker, type):
+    if isinstance(worker, type):
+        bench.set_worker_class(worker)
+    else:
         bench.set_worker(worker)
-        return
-    bench.worker_class_instance = worker
-    bench._worker_mgr.worker_class_instance = worker
 
 
 def sweep_identity(

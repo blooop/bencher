@@ -48,6 +48,23 @@ class TestWorkerManager(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.manager.set_worker(ExampleBenchCfg)  # Class, not instance
 
+    def test_set_worker_class_attaches_the_class_without_a_callable_worker(self):
+        """The declaration-only path used by sweep_identity.
+
+        ``worker`` stays None on purpose: a class cannot be called, so leaving it unset
+        makes an attempt to sample fail loudly rather than call a class object.
+        """
+        self.manager.set_worker_class(ExampleBenchCfg)
+        self.assertIs(self.manager.worker_class_instance, ExampleBenchCfg)
+        self.assertIsNone(self.manager.worker)
+        # A class is enough to answer what the declaration is made of.
+        self.assertIn("out_sin", self.manager.get_result_vars(as_str=True))
+
+    def test_set_worker_class_rejects_an_instance(self):
+        """The mirror of set_worker's complaint, so neither silently takes the other's."""
+        with self.assertRaises(RuntimeError):
+            self.manager.set_worker_class(ExampleBenchCfg())
+
     def test_get_result_vars_as_str(self):
         """Test getting result var names as strings."""
         self.manager.set_worker(ExampleBenchCfg())
