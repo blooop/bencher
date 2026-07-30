@@ -6,7 +6,7 @@ import warnings
 from copy import deepcopy
 from datetime import datetime
 from enum import auto
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import panel as pn
 import param
@@ -19,6 +19,10 @@ from bencher.results.laxtex_result import to_latex
 from bencher.variables.results import OptDir
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
 from bencher.variables.time import TimeEvent, TimeSnapshot
+
+if TYPE_CHECKING:
+    # Runtime import would be circular: identity imports this module.
+    from bencher.identity import SweepIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +182,41 @@ class BenchRunCfg(BenchPlotSrvCfg):
     # These parameters control how the benchmark function is executed
 
     repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
+
+    catch: tuple[type[BaseException], ...] = param.Parameter(
+        (),
+        doc="Exception types a single sample may raise without aborting the sweep. "
+        "Default () keeps today's fail-fast behaviour. Spelled exactly as on "
+        "Bench.optimize(catch=...), which has had this knob since #962. A caught "
+        "sample leaves the missing-value sentinel at its coordinate, is logged at "
+        "WARNING, and is recorded in BenchResult.failed_samples; nothing is written "
+        "to the sample cache for it, so a transient flake cannot become permanent. "
+        "A bare exception type is accepted and wrapped, so catch=RuntimeError and "
+        "catch=(RuntimeError,) are the same; anything that is not an exception type "
+        "raises TypeError at the start of the run rather than from inside the "
+        "sampling loop. Use with fail_on_sample_error -- they are a pair, not "
+        "independent "
+        "knobs: catch alone turns real breakage into a green run over an "
+        "all-sentinel dataset.",
+    )
+
+    fail_on_sample_error: bool | float = param.Parameter(
+        False,
+        doc="Fail the run after the fact if samples were caught. True raises when "
+        "any sample failed; a float in (0, 1] raises when the failed *fraction* "
+        "reaches it, so a flake is tolerated but a run made of flakes is not. The "
+        "fraction is over samples this run *executed*, not over every coordinate: "
+        "a cache hit never reached the worker and so could not have failed, and "
+        "counting it would make one threshold mean different things on a cold and a "
+        "warm cache. A truthy integer is rejected rather than guessed at: 1 could "
+        "mean True or 100%, so write True or 1.0. Falsy values (False, 0, 0.0) mean "
+        "off; out-of-range thresholds are rejected before sampling starts. The "
+        "raise happens after the dataset and report are assembled, so the partial "
+        "results survive it -- losing the artifact would defeat catching in the "
+        "first place. It fires only for a run that actually sampled: on a "
+        "benchmark-result cache hit the loaded result carries a previous run's "
+        "failure counts, which are not this run's errors (read n_failed for that).",
+    )
 
     subsampling_divisions: int = param.Integer(
         default=0,
@@ -749,6 +788,19 @@ class BenchCfg(BenchRunCfg):
         doc="Use tags to group different benchmarks together. By default benchmarks are considered distinct from each other and are identified by the hash of their name and inputs, constants and results and tag, but you can optionally change the hash value to only depend on the tag.  This way you can have multiple unrelated benchmarks share values with each other based only on the tag value.",
     )
 
+    series_id: str = param.String(
+        None,
+        allow_None=True,
+        doc="Names the over_time *trend* this benchmark appends to, independently of "
+        "what identifies its configuration. tag partitions storage; series_id names "
+        "the trend. Deliberately NOT part of hash_persistent: two benchmarks with the "
+        "same name, tag, inputs and consts stay one cache entry whatever their "
+        "series_id, and folding it in would re-key every existing cache and history "
+        "on upgrade. Declare it to keep a trend across a rename of the worker class "
+        "or a change of cache tag; leave it unset and the series is bench_name:tag, "
+        "exactly as before.",
+    )
+
     hash_value: str = param.String(
         "",
         doc="store the hash value of the config to avoid having to hash multiple times",
@@ -837,18 +889,51 @@ class BenchCfg(BenchRunCfg):
         for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 
+        # Folded as sets -- sorted *unique* digests -- so that a variable appearing twice
+        # cannot move the key, which is what "unordered set" above has always claimed.
+        # A sorted tuple delivered the ordering half of that contract but not the
+        # uniqueness half: a repeat appeared twice in the hashed sequence, while the
+        # dataset's data_vars and history's per-column metadata are keyed by name and
+        # collapsed it. That disagreement is the bug plan 20 documents.
+        # validate_declared_vars rejects or dedupes duplicates before they reach here on
+        # the plot_sweep path; deduping here too keeps identity correct on the paths that
+        # bypass it -- a BenchCfg built or deserialized directly. Configurations without a
+        # duplicate hash exactly as before, since sorted(set(xs)) == sorted(xs) when xs is
+        # already unique.
         if include_result_vars:
-            result_hashes = tuple(sorted(v.hash_persistent() for v in self.result_vars or []))
+            result_hashes = tuple(sorted({v.hash_persistent() for v in self.result_vars or []}))
         else:
             result_hashes = ()
 
         const_hashes = tuple(
             sorted(
-                hash_sha1((v[0].hash_persistent(), hash_sha1(v[1]))) for v in self.const_vars or []
+                {
+                    hash_sha1((v[0].hash_persistent(), hash_sha1(v[1])))
+                    for v in self.const_vars or []
+                }
             )
         )
 
         return hash_sha1((hash_val, result_hashes, const_hashes))
+
+    def identity(self, run_cfg: BenchRunCfg | None = None) -> SweepIdentity:
+        """This config's cache/history/sample keys as an inspectable value.
+
+        *run_cfg* replays the merge :meth:`bencher.bencher.Bench.run_sweep`
+        performs before hashing; pass it for a config that has not been run, whose
+        ``repeats`` and ``over_time`` are still the class defaults. The replay runs
+        against a copy, so asking for an identity never reconfigures *self*.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self, run_cfg)
+
+    @property
+    def series(self) -> str:
+        """The series this run appends to: the declared ``series_id`` or the default."""
+        from bencher.history import default_series_id
+
+        return self.series_id or default_series_id(self.bench_name, self.tag)
 
     def inputs_as_str(self) -> list[str]:
         """Get a list of input variable names.

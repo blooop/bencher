@@ -9,6 +9,9 @@ from param import Parameter
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
+from bencher.results.composable_container.composable_container_base import (
+    compose_method_list_for_dims,
+)
 from bencher.results.composable_container.composable_container_video import (
     ComposableContainerVideo,
     ComposeType,
@@ -164,20 +167,11 @@ class VideoSummaryResult(BenchResultBase):
             list[ComposeType]: A list of composition methods for composing the dataset result
         """
 
-        num_dims = len(dataset.sizes)
-        if time_sequence_dimension == -1:  # use time sequence for everything
-            compose_method_list = [ComposeType.sequence] * (num_dims + 1)
-        else:
-            compose_method_list = [first_compose_method]
-            compose_method_list.extend(
-                ComposeType.flip(compose_method_list[-1]) for _ in range(num_dims - 1)
-            )
-            compose_method_list.append(ComposeType.sequence)
-
-            for i in range(min(len(compose_method_list), time_sequence_dimension + 1)):
-                compose_method_list[i] = ComposeType.sequence
-
-        return compose_method_list
+        return compose_method_list_for_dims(
+            len(dataset.sizes),
+            first_compose_method=first_compose_method,
+            time_sequence_dimension=time_sequence_dimension,
+        )
 
     def _to_video_panes_ds(
         self,

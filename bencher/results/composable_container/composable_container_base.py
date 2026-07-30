@@ -30,6 +30,43 @@ class ComposeType(StrEnum):
         return ComposeType.right if horizontal else ComposeType.down
 
 
+def compose_method_list_for_dims(
+    num_dims: int,
+    first_compose_method: ComposeType = ComposeType.down,
+    time_sequence_dimension: int = 0,
+) -> list[ComposeType]:
+    """Choose a composition method per dimension for a *num_dims*-dimensional sweep.
+
+    By default the methods alternate between right and down (so nested dimensions
+    stay readable) and a trailing sequence is appended for the level that varies
+    fastest.  Levels up to *time_sequence_dimension* are forced to sequence.
+
+    Args:
+        num_dims (int): Number of dimensions being composed.
+        first_compose_method (ComposeType, optional): Direction of the first
+            composition. Defaults to ComposeType.down.
+        time_sequence_dimension (int, optional): Compose dimensions up to this
+            index in time rather than in space. ``-1`` sequences everything.
+            Defaults to 0.
+
+    Returns:
+        list[ComposeType]: One composition method per level, consumed from the end.
+    """
+    if time_sequence_dimension == -1:  # use time sequence for everything
+        return [ComposeType.sequence] * (num_dims + 1)
+
+    compose_method_list = [first_compose_method]
+    compose_method_list.extend(
+        ComposeType.flip(compose_method_list[-1]) for _ in range(num_dims - 1)
+    )
+    compose_method_list.append(ComposeType.sequence)
+
+    for i in range(min(len(compose_method_list), time_sequence_dimension + 1)):
+        compose_method_list[i] = ComposeType.sequence
+
+    return compose_method_list
+
+
 class PaneLayout(StrEnum):
     """Controls how multi-dimensional data is laid out in panel displays.
 

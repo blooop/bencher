@@ -38,7 +38,6 @@ from bencher.variables.results import (
     ResultString,
     ResultVec,
     ResultVideo,
-    ResultVolume,
 )
 
 
@@ -169,7 +168,6 @@ class TestHashPersistentDifferentiation:
             (ResultContainer, "container", "custom"),
             (ResultReference, "container", "custom"),
             (ResultDataSet, "dataset", "custom"),
-            (ResultVolume, "container", "custom"),
         ],
         ids=lambda x: x.__name__ if isinstance(x, type) else x,
     )
@@ -276,7 +274,6 @@ class TestBenchCfgHashStability:
             cfg.result_vars = [
                 ResultReference(obj=obj_payload, doc="ref"),
                 ResultDataSet(obj=obj_payload, doc="ds"),
-                ResultVolume(obj=obj_payload, doc="vol"),
             ]
             cfg.const_vars = []
             return cfg
