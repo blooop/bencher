@@ -146,6 +146,7 @@ try:
         RerunRecording,
         RerunViewKind,
     )
+    from .results.rerun_summary import RerunSummaryResult
 except ModuleNotFoundError:
     pass
 
