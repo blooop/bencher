@@ -47,6 +47,7 @@ EXCLUDED_FIELDS = (
     "series_id (names the trend, not the configuration)",
     "aggregate / agg_fn",
     "sample_order",
+    "catch / fail_on_sample_error",
     "plot_callbacks / auto_plot",
 )
 

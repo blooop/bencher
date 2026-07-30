@@ -572,6 +572,21 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
             _dry_identity(**decl, series_id="throughput"),
         )
 
+    def check_fault_tolerance(self) -> None:
+        """Tolerating a failed sample must not move a key.
+
+        ``catch`` and ``fail_on_sample_error`` describe how a run *reacts* to a
+        failure, not what it measures. If they moved a key, switching tolerance on
+        would fork the trend -- the same silent orphaning plan 15 exists to
+        prevent, arrived at from the other direction. Both knobs live on
+        ``BenchRunCfg`` only (their one home), so that is the surface checked.
+        """
+        decl = {"input_vars": ["theta"], "result_vars": ["out_sin"]}
+        self._assert_no_key_moves(
+            _dry_identity(**decl),
+            _dry_identity(bn.BenchRunCfg(catch=(ValueError,), fail_on_sample_error=True), **decl),
+        )
+
     def check_plotting(self) -> None:
         """``plot_callbacks`` is stored on BenchCfg; ``auto_plot`` is merged onto it."""
         decl = {"input_vars": ["theta"], "result_vars": ["out_sin"]}
@@ -599,6 +614,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
             "aggregate / agg_fn": self.check_aggregation,
             "sample_order": self.check_sample_order,
             "series_id (names the trend, not the configuration)": self.check_series_id,
+            "catch / fail_on_sample_error": self.check_fault_tolerance,
             "plot_callbacks / auto_plot": self.check_plotting,
         }
 
