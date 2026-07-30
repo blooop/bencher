@@ -83,6 +83,7 @@ class RerunSummaryResult(BenchResultBase):
         time_sequence_dimension: int = 0,
         compose_method_list: list | None = None,
         reverse: bool = False,
+        override: bool = False,
         **kwargs,
     ) -> pn.panel | None:
         """Merge every recording of the sweep into one embedded rerun viewer.
@@ -96,8 +97,12 @@ class RerunSummaryResult(BenchResultBase):
                 onto a timeline instead of in space. ``-1`` sequences every dimension.
                 Defaults to 0.
             compose_method_list (list, optional): Explicit per-dimension composition
-                methods, overriding the defaults. See ``bn.ComposeType``.
+                methods, overriding the defaults. Consumed from the end, so the last
+                entry applies to the outermost dimension. See ``bn.ComposeType``.
             reverse (bool, optional): Reverse the dimension order. Defaults to False.
+            override (bool, optional): Render even when the shape filter rejects the
+                result. Declared rather than swallowed by ``**kwargs`` because every
+                plot callback is invoked with it. Defaults to False.
             **kwargs: Passed to the viewer pane (e.g. ``width``, ``height``).
 
         Returns:
@@ -110,7 +115,7 @@ class RerunSummaryResult(BenchResultBase):
             input_range=VarRange(1, None),
         )
         matches_res = plot_filter.matches_result(
-            self.plt_cnt_cfg, callable_name(self.to_rerun_grid), override=False
+            self.plt_cnt_cfg, callable_name(self.to_rerun_grid), override=override
         )
         if not matches_res.overall:
             return matches_res.to_panel()
@@ -156,8 +161,8 @@ class RerunSummaryResult(BenchResultBase):
             target_dimension (int, optional): Recursion floor. Defaults to 0.
             width (int, optional): Viewer width. Defaults to the result var's width.
             height (int, optional): Viewer height. Defaults to the result var's height.
-            **_kwargs: Unused, accepted for parity with other renderers (plot
-                callbacks are invoked with ``override=``).
+            **_kwargs: Unused, accepted so the plot-size and dispatch keywords
+                ``to_auto`` rides along do not have to be filtered out here.
 
         Returns:
             pn.pane.HTML | None: the viewer pane, or None if nothing was recorded.
@@ -225,7 +230,12 @@ class RerunSummaryResult(BenchResultBase):
             )
 
         remaining = deepcopy(compose_method_list)
-        if len(remaining) > 1:
+        # Pop whenever anything is left, not only when more than one entry is: a
+        # caller-supplied list shorter than the sweep would otherwise have its last
+        # entry dropped and silently fall back to the default compose method.  The
+        # generated lists carry num_dims + 1 entries, so their extra leading entry is
+        # still consumed by the leaf level, which never uses it.
+        if remaining:
             compose_method = remaining.pop()
 
         if num_dims <= target_dimension or num_dims == 0:
@@ -241,6 +251,10 @@ class RerunSummaryResult(BenchResultBase):
                 target_dimension=target_dimension,
                 compose_method_list=remaining,
                 time_sequence_dimension=time_sequence_dimension,
+                # Threaded through, unlike in _to_video_panes_ds: reversing only the
+                # outermost level leaves a 3D sweep peeled as a, c, b rather than
+                # reversed.
+                reverse=reverse,
             )
             if child is None:
                 continue

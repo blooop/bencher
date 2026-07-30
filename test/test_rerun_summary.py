@@ -11,6 +11,7 @@ import rerun as rr
 from rerun.experimental import RrdReader
 
 import bencher as bn
+from bencher.results import rerun_summary
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.composable_container.composable_container_base import (
     ComposeType,
@@ -23,6 +24,23 @@ class RerunSweep(bn.ParametrizedSweep):
 
     freq = bn.FloatSweep(default=1.0, bounds=[1.0, 3.0], samples=3)
     amp = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    out_rerun = bn.ResultRerun(width=200, height=150)
+
+    def benchmark(self):
+        recording = rr.RecordingStream("test_rerun_summary", make_default=False)
+        for step in range(4):
+            recording.set_time("time_s", duration=step * 0.1)
+            recording.log("wave", rr.Scalars(self.amp * self.freq * step))
+        self.out_rerun = bn.capture_rerun_rrd(recording)
+        return super().benchmark()
+
+
+class Rerun3DSweep(bn.ParametrizedSweep):
+    """Three swept dimensions, the smallest sweep where partial reversal shows."""
+
+    freq = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    amp = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    mode = bn.StringSweep(["fast", "slow"])
     out_rerun = bn.ResultRerun(width=200, height=150)
 
     def benchmark(self):
@@ -62,6 +80,35 @@ def _leaf_entity_paths(path: str) -> set[str]:
 def _sweep(input_vars):
     bench = RerunSweep().to_bench()
     return bench.plot_sweep(input_vars=input_vars, result_vars=["out_rerun"])
+
+
+def _record_levels(monkeypatch) -> list[tuple[str, ComposeType]]:
+    """Capture ``(dimension, compose_method)`` per composition level, outermost first.
+
+    ``_compose_ds`` builds one container per level before recursing, and names it
+    after the dimension it peels, so intercepting construction is what reveals the
+    peel order and the method each level ended up with.
+    """
+    levels: list[tuple[str, ComposeType]] = []
+    real = rerun_summary.ComposableContainerRerun
+
+    def spy(**kwargs):
+        levels.append((kwargs["name"], kwargs["compose_method"]))
+        return real(**kwargs)
+
+    monkeypatch.setattr(rerun_summary, "ComposableContainerRerun", spy)
+    return levels
+
+
+def _dedupe(pairs):
+    """First occurrence of each level, dropping the repeats from sibling slices."""
+    seen, ordered = set(), []
+    for name, method in pairs:
+        if name in seen:
+            continue
+        seen.add(name)
+        ordered.append((name, method))
+    return ordered
 
 
 class TestComposeMethodListForDims:
@@ -146,8 +193,51 @@ class TestRerunSummary:
         assert rendered.object.startswith("composed: ")
         assert rendered.object.endswith(".rrd")
 
+    def test_short_compose_method_list_is_honoured(self, monkeypatch):
+        """A list shorter than the sweep must still apply its last entry.
+
+        The list is consumed from the end, so a single-entry list belongs to the
+        outermost dimension rather than being dropped for the default method.
+        """
+        levels = _record_levels(monkeypatch)
+        res = _sweep(["freq", "amp"])
+        res.to_rerun_grid(compose_method_list=[ComposeType.overlay])
+        assert _dedupe(levels)[0] == ("amp", ComposeType.overlay)
+
     def test_registered_as_named_only_plots(self):
         from bencher.plugins.builtins import _named_only_specs
 
         names = {name for name, _, _ in _named_only_specs()}
         assert {"rerun_summary", "rerun_grid"} <= names
+
+
+class TestReverse:
+    """``reverse`` has to flip every level, not just the outermost one."""
+
+    @staticmethod
+    def _order(monkeypatch, reverse: bool) -> list[str]:
+        levels = _record_levels(monkeypatch)
+        bench = Rerun3DSweep().to_bench()
+        res = bench.plot_sweep(input_vars=["freq", "amp", "mode"], result_vars=["out_rerun"])
+        res.to_rerun_grid(reverse=reverse)
+        return [name for name, _ in _dedupe(levels)]
+
+    def test_forward_peels_outermost_last(self, monkeypatch):
+        assert self._order(monkeypatch, reverse=False) == ["mode", "amp", "freq"]
+
+    def test_reverse_peels_every_level(self, monkeypatch):
+        """Reversing only the top level would give freq, mode, amp."""
+        assert self._order(monkeypatch, reverse=True) == ["freq", "amp", "mode"]
+
+
+class TestOverride:
+    def test_override_is_not_swallowed(self):
+        """Every plot callback is invoked with ``override=``, so it must reach the filter.
+
+        A sweep with no input vars fails the shape filter, which is what makes the
+        difference between honouring and dropping the keyword observable.
+        """
+        bench = RerunSweep().to_bench()
+        res = bench.plot_sweep(input_vars=[], result_vars=["out_rerun"])
+        assert isinstance(res.to_rerun_grid(), pn.pane.Markdown)  # filter message
+        assert len(res.to_rerun_grid(override=True)) == 1
