@@ -242,5 +242,48 @@ class TestHelperInIsolation(unittest.TestCase):
         self.assertEqual(len(consts), 1)
 
 
+class TestHashFoldsVariablesAsSets(unittest.TestCase):
+    """The identity half of the fix, independent of the declaration-site validation.
+
+    ``validate_declared_vars`` only guards ``plot_sweep``. ``hash_persistent``'s
+    docstring has always promised result and const vars contribute as an *unordered
+    set*, but a sorted tuple gave the ordering half of that and not the uniqueness
+    half -- so any path that reaches a ``BenchCfg`` without passing the validator
+    (built directly, or deserialized) could still hash a duplicate to a different
+    key. These pin the promise at the place it is made.
+    """
+
+    @staticmethod
+    def _cfg(result_vars: list, const_vars: list) -> bn.BenchCfg:
+        return bn.BenchCfg(
+            bench_name="dupes",
+            input_vars=[ExampleBenchCfg.param.theta],
+            result_vars=result_vars,
+            const_vars=const_vars,
+        )
+
+    def test_a_duplicate_result_var_does_not_move_the_key(self) -> None:
+        once = self._cfg([ExampleBenchCfg.param.out_sin], [])
+        twice = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_sin], [])
+        self.assertEqual(once.hash_persistent(True), twice.hash_persistent(True))
+
+    def test_a_duplicate_const_does_not_move_the_key(self) -> None:
+        pair = [ExampleBenchCfg.param.offset, 0.1]
+        once = self._cfg([ExampleBenchCfg.param.out_sin], [pair])
+        twice = self._cfg([ExampleBenchCfg.param.out_sin], [pair, list(pair)])
+        self.assertEqual(once.hash_persistent(True), twice.hash_persistent(True))
+
+    def test_distinct_vars_still_produce_distinct_keys(self) -> None:
+        """Deduping must collapse repeats, not collapse the set itself."""
+        one = self._cfg([ExampleBenchCfg.param.out_sin], [])
+        two = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos], [])
+        self.assertNotEqual(one.hash_persistent(True), two.hash_persistent(True))
+
+    def test_declaration_order_is_still_irrelevant(self) -> None:
+        forward = self._cfg([ExampleBenchCfg.param.out_sin, ExampleBenchCfg.param.out_cos], [])
+        reverse = self._cfg([ExampleBenchCfg.param.out_cos, ExampleBenchCfg.param.out_sin], [])
+        self.assertEqual(forward.hash_persistent(True), reverse.hash_persistent(True))
+
+
 if __name__ == "__main__":
     unittest.main()

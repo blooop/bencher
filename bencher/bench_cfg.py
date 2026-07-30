@@ -837,14 +837,28 @@ class BenchCfg(BenchRunCfg):
         for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 
+        # Folded as sets -- sorted *unique* digests -- so that a variable appearing twice
+        # cannot move the key, which is what "unordered set" above has always claimed.
+        # A sorted tuple delivered the ordering half of that contract but not the
+        # uniqueness half: a repeat appeared twice in the hashed sequence, while the
+        # dataset's data_vars and history's per-column metadata are keyed by name and
+        # collapsed it. That disagreement is the bug plan 20 documents.
+        # validate_declared_vars rejects or dedupes duplicates before they reach here on
+        # the plot_sweep path; deduping here too keeps identity correct on the paths that
+        # bypass it -- a BenchCfg built or deserialized directly. Configurations without a
+        # duplicate hash exactly as before, since sorted(set(xs)) == sorted(xs) when xs is
+        # already unique.
         if include_result_vars:
-            result_hashes = tuple(sorted(v.hash_persistent() for v in self.result_vars or []))
+            result_hashes = tuple(sorted({v.hash_persistent() for v in self.result_vars or []}))
         else:
             result_hashes = ()
 
         const_hashes = tuple(
             sorted(
-                hash_sha1((v[0].hash_persistent(), hash_sha1(v[1]))) for v in self.const_vars or []
+                {
+                    hash_sha1((v[0].hash_persistent(), hash_sha1(v[1])))
+                    for v in self.const_vars or []
+                }
             )
         )
 

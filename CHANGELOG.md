@@ -56,6 +56,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ruff format`, so regenerated examples stay lint-clean. No runtime behavior change.
 
 ### Fixed
+- **A variable declared twice in one sweep is now rejected or normalised, instead of quietly
+  moving the cache and history key.** ⚠️ *This moves the key for affected benchmarks — see
+  below.* `plot_sweep` converted each list positionally with no uniqueness check, and the
+  three kinds of variable each misbehaved differently:
+
+  `result_vars=["y", "y"]` was the damaging one. It produced a dataset **byte-identical** to
+  `result_vars=["y"]` under a **different** key: `ResultCollector.setup_dataset` builds
+  `data_vars` as a dict keyed by name and `bencher.history` keys its per-column metadata the
+  same way, so the repeat collapsed in the data, while `BenchCfg.hash_persistent` folded the
+  per-variable digests as a sorted *tuple* and so hashed it twice. The benchmark ran,
+  reported correct numbers, and appended to a different trend line than the one it appeared
+  to belong to — with nothing in the run saying so. The duplicate is now dropped (first
+  occurrence kept) with a `UserWarning` naming the variable and both positions.
+
+  `input_vars=["x", "x"]` was accepted and then either collapsed to a single dimension or
+  died inside xarray with `broadcasting cannot handle duplicate dimensions`, depending on
+  the sweep's shape — after the whole sweep had run. It now raises a `ValueError` at
+  declaration time, naming the variable and every position.
+
+  `const_vars` behaved differently depending on spelling: the dict form collapsed duplicates
+  before bencher saw them, while the list-of-pairs form accepted a repeat with two
+  *different* values and let iteration order pick the winner. Repeats with equal values are
+  now deduped silently; conflicting values raise, naming both.
+
+  Validation happens once, in `validate_declared_vars`, called from `plot_sweep` after
+  conversion so comparison is on resolved names and every declaration form — string, spec
+  dict, param object, and mixtures — is covered by the same code.
+
+  Separately, `hash_persistent` now folds result and const digests as **sets** rather than
+  sorted tuples. Its docstring already promised they contribute as an "unordered set", but a
+  sorted tuple delivered only the ordering half of that; uniqueness was missing, which is
+  the mechanism behind the bug above. This keeps identity correct on paths that never reach
+  the validator, such as a `BenchCfg` built or deserialized directly.
+
+  **Migration:** only benchmarks that *currently declare an overlapping result variable* are
+  affected, and they are exactly the ones now emitting the new warning. Their key moves onto
+  the key it would have had if declared correctly, so in the common case the benchmark
+  rejoins the trend it should have been on all along; in the worst case it starts a fresh
+  series, and `on_history_reset` controls how loudly that surfaces. Configurations without a
+  duplicate are bit-identical: every golden hash in `test/test_hash_persistent.py` is
+  unchanged, since `sorted(set(xs)) == sorted(xs)` when `xs` is already unique.
 - **`hover=False` on an intra-sample chart now actually disables hover.** `set_default_opts`
   registers `tools=["hover"]` as a global holoviews default for most element types, so a
   spec that merely omitted the key got hover back and the option was a silent no-op.
