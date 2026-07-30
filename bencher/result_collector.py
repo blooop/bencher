@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+from contextlib import suppress
 from datetime import datetime
 from itertools import product
 from typing import Any
@@ -26,13 +27,15 @@ from bencher.history import (
     column_meta,
     current_time_value,
     data_var_columns,
+    default_series_id,
     diff_summaries,
     incompatible_reason,
     last_seen_key,
+    legacy_last_seen_key,
     project,
     reconcile,
 )
-from bencher.job import JobFuture
+from bencher.job import JobFuture, SampleFailure, normalize_catch
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
 from bencher.variables.results import (
@@ -139,6 +142,18 @@ def _set_result_value(
         rv_arrays[name][idx] = value
     else:
         set_xarray_multidim(bench_res.ds[name], idx, value)
+
+
+def _materialize_result_value(rv, value):
+    """Convert deferred result artifacts into their cacheable stored representation."""
+    if isinstance(rv, ResultRerun):
+        from bencher.results.composable_container.composable_container_rerun import (
+            ComposableContainerRerun,
+        )
+
+        if isinstance(value, ComposableContainerRerun):
+            return value.render()
+    return value
 
 
 class ResultCollector:
@@ -306,6 +321,27 @@ class ResultCollector:
                 rv_arrays[rv.name] = bench_res.ds[rv.name].values
         return rv_arrays
 
+    @staticmethod
+    def record_caught_sample(
+        bench_res: BenchResult, job_id: str, inputs: dict, exc: BaseException
+    ) -> None:
+        """Record one tolerated sample failure.
+
+        No write to the dataset is needed: ``setup_dataset`` already filled every
+        result variable with its missing-value sentinel, so the failed coordinate
+        *is* the fill and the dataset shape is unchanged -- downstream consumers
+        need no special case. Nothing was written to the sample cache either,
+        because the exception escaped before the cache write in both execution
+        paths, so a transient flake cannot become a permanent cached failure.
+        """
+        failure = SampleFailure.from_exception(job_id, inputs, exc)
+        bench_res.failed_samples.append(failure)
+        logger.warning(
+            "sample failed and was caught (%s): %s",
+            ", ".join(f"{k}={v}" for k, v in failure.inputs.items()) or "no inputs",
+            failure.exception,
+        )
+
     def store_results(
         self,
         job_result: JobFuture,
@@ -331,7 +367,20 @@ class ResultCollector:
         Raises:
             RuntimeError: If an unsupported result variable type is encountered
         """
-        result = job_result.result()
+        # No `if catch:` branch: `except ()` matches nothing, so the default empty
+        # tuple is already fail-fast, and result() keeps a single call site.
+        # Normalized here as well as in plot_sweep, because store_results is also
+        # reachable with a hand-built BenchRunCfg that never passed through it.
+        catch = normalize_catch(getattr(bench_run_cfg, "catch", ()))
+        try:
+            result = job_result.result()
+        # catch is a runtime tuple of exception types, which pylint cannot see into.
+        # pylint: disable-next=catching-non-exception
+        except catch as exc:
+            self.record_caught_sample(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
         if result is not None:
             logger.info(f"{job_result.job.job_id}:")
             if bench_res.bench_cfg.print_bench_inputs:
@@ -352,6 +401,7 @@ class ResultCollector:
                         f"Make sure your benchmark() method sets "
                         f"self.{rv.name}."
                     ) from None
+                result_value = _materialize_result_value(rv, result_value)
                 if bench_run_cfg.print_bench_results:
                     logger.info(f"{rv.name}: {result_value}")
 
@@ -412,6 +462,90 @@ class ResultCollector:
         logger.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
         c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
 
+    def _read_last_seen(
+        self, cache: Cache, series_id: str, bench_name: str | None, tag: str | None
+    ) -> dict | None:
+        """The last-seen index entry for *series_id*, falling back to the legacy key.
+
+        Ordered: the series key first, then the pre-``series_id`` ``(bench_name,
+        tag)`` key, so the first run after upgrade finds its predecessor. A legacy
+        hit needs no explicit migration -- this run's write lands under the new key
+        at the end of ``load_history_cache``. The two keys are the *same string*
+        unless a ``series_id`` was declared, so the fallback only does work where it
+        has to.
+        """
+        entry = cache.get(last_seen_key(series_id))
+        if entry is not None or bench_name is None:
+            return entry
+        return cache.get(legacy_last_seen_key(bench_name, tag))
+
+    def _adopt_or_report_reset(
+        self,
+        cache: Cache,
+        bench_cfg_hash: str,
+        *,
+        series_id: str,
+        bench_name: str | None,
+        tag: str | None,
+        config_summary: dict | None,
+        events: list[HistoryEvent],
+    ) -> dict | None:
+        """Classify a history-key miss under a known series: adopt, or report a reset.
+
+        A key can move for two very different reasons, and until the series was
+        named independently of the key there was no way to tell them apart. The
+        stored ``config_summary`` decides:
+
+        * **identical** -- the declaration did not change, so only ``bench_name``
+          or ``tag`` moved: a pure rename. The stored record is re-keyed to the new
+          hash and a non-lossy ``history_renamed`` event is emitted. Safe precisely
+          because the summary covers every field that shapes the dataset -- same
+          dimensions, same coordinates, same columns -- and the record is *moved*,
+          never concatenated with an incompatible one.
+        * **differs** -- a genuinely different experiment, which is the existing
+          ``full_reset`` with its diff.
+
+        Returns the adopted record, or None to continue as a fresh series.
+        """
+        last = self._read_last_seen(cache, series_id, bench_name, tag)
+        if not last or last.get("key") == bench_cfg_hash:
+            return None
+
+        old_key = last.get("key")
+        diff = diff_summaries(last.get("summary"), config_summary)
+        stored_summary = last.get("summary")
+        renamed = (
+            stored_summary is not None
+            and config_summary is not None
+            and stored_summary == config_summary
+        )
+        if renamed:
+            adopted = self._load_history_record(cache, old_key) if old_key else None
+            if adopted is not None:
+                events.append(
+                    HistoryEvent(
+                        "history_renamed",
+                        f"over_time history adopted for series '{series_id}': the "
+                        f"history key moved from {old_key} to {bench_cfg_hash} with an "
+                        f"unchanged declaration (benchmark '{bench_name}', tag "
+                        f"'{tag}'), so the existing "
+                        f"{last.get('events', '?')} events were carried over",
+                    )
+                )
+                with suppress(KeyError, OSError):
+                    del cache[old_key]
+                return adopted
+
+        detail = (
+            f"over_time history reset for benchmark '{bench_name}' "
+            f"(tag '{tag}'): the history key changed"
+            + (": " + "; ".join(diff) if diff else "")
+            + f"; {last.get('events', '?')} historical events are "
+            f"orphaned under the old key"
+        )
+        events.append(HistoryEvent("full_reset", detail))
+        return None
+
     def _load_history_record(self, cache: Cache, bench_cfg_hash: str) -> dict | None:
         """Fetch and normalize one history record, or None when absent/unreadable.
 
@@ -457,6 +591,7 @@ class ResultCollector:
         on_history_reset: str = "warn",
         bench_name: str | None = None,
         tag: str | None = None,
+        series_id: str | None = None,
         config_summary: dict | None = None,
     ) -> xr.Dataset:
         """Load, reconcile, and persist historical benchmark data.
@@ -481,9 +616,15 @@ class ResultCollector:
                 None, column reconciliation and projection are skipped entirely.
             on_history_reset (str): Policy for loss-y schema events — "warn",
                 "error" (raise HistoryResetError before persisting), or "ignore".
-            bench_name (str | None): Benchmark name for the last-seen index; enables
-                full-reset detection when the history key moves.
-            tag (str | None): Benchmark tag for the last-seen index.
+            bench_name (str | None): Benchmark name, used in event messages and as
+                half of the legacy index key read during the one-release upgrade.
+            tag (str | None): Benchmark tag, same two uses as bench_name.
+            series_id (str | None): The series this run appends to
+                (``BenchCfg.series``). Keys the last-seen index, which is what lets
+                a pure rename be adopted rather than silently orphaned. When None
+                the series falls back to ``bench_name:tag``, so the index is still
+                consulted and reset detection is unchanged for callers that declare
+                nothing; the index is skipped only when ``bench_name`` is None too.
             config_summary (dict | None): ``bencher.history.config_summary`` of the
                 current config, stored in the last-seen index and diffed on resets.
 
@@ -492,6 +633,12 @@ class ResultCollector:
                 historical plus current data, projected onto the current columns.
         """
         c = self.get_history_cache()
+        # An explicit series_id wins; otherwise the series is bench_name:tag, which
+        # is what the index was keyed on before series_id existed. Deriving it here
+        # rather than requiring it keeps every existing caller's reset detection.
+        series = series_id or (
+            default_series_id(bench_name, tag) if bench_name is not None else None
+        )
         current_cols = data_var_columns(result_vars)
         events: list[HistoryEvent] = []
         merged = dataset
@@ -504,20 +651,18 @@ class ResultCollector:
         else:
             logger.info(f"checking historical key: {bench_cfg_hash}")
             record = self._load_history_record(c, bench_cfg_hash)
+            if record is None and series is not None:
+                record = self._adopt_or_report_reset(
+                    c,
+                    bench_cfg_hash,
+                    series_id=series,
+                    bench_name=bench_name,
+                    tag=tag,
+                    config_summary=config_summary,
+                    events=events,
+                )
             if record is None:
                 logger.info("did not detect any historical data")
-                if bench_name is not None:
-                    last = c.get(last_seen_key(bench_name, tag))
-                    if last and last.get("key") != bench_cfg_hash:
-                        diff = diff_summaries(last.get("summary"), config_summary)
-                        detail = (
-                            f"over_time history reset for benchmark '{bench_name}' "
-                            f"(tag '{tag}'): the history key changed"
-                            + (": " + "; ".join(diff) if diff else "")
-                            + f"; {last.get('events', '?')} historical events are "
-                            f"orphaned under the old key"
-                        )
-                        events.append(HistoryEvent("full_reset", detail))
             else:
                 logger.info("loading historical data from cache")
                 ds_old = record["dataset"]
@@ -569,8 +714,8 @@ class ResultCollector:
             "columns": columns_meta,
             "retired": retired,
         }
-        if bench_name is not None:
-            c[last_seen_key(bench_name, tag)] = {
+        if series is not None:
+            c[last_seen_key(series)] = {
                 "key": bench_cfg_hash,
                 "summary": config_summary,
                 "events": int(merged.sizes.get("over_time", 0)),

@@ -7,7 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`bn.SweepSpec` — a sweep declaration as a value (plan 18, phase 1).** A frozen record
+  of `plot_sweep`'s seven declarative arguments (title, descriptions, input/result/const
+  vars, tag) that can be built once, composed (`with_`, `plus_input_vars`,
+  `plus_result_vars`, `merge`), compared (`bn.diff_specs`), pickled, and bound to any
+  worker: `bench.plot_sweep(**spec.bind(Worker))`. `bind(worker)` checks every by-name
+  variable up front and runs the duplicate-variable validation at bind time, where the
+  composition that caused a duplicate is in view. Run configuration (`repeats`, `run_cfg`,
+  `plot_callbacks`, …) is deliberately absent — a spec states what is measured, not how the
+  run is driven — and a callable in any field is rejected at construction. Purely additive:
+  every existing `plot_sweep` call is unchanged.
+- **Per-sample fault tolerance on the sweep path: `catch=` and `fail_on_sample_error`.**
+  `Bench.optimize(catch=...)` has had this knob since #962, so the same benchmark was
+  fault-tolerant when driven by Optuna and all-or-nothing when swept. `catch` lives on
+  `BenchRunCfg` (so `bn.run(catch=...)` works, and it reaches `plot_sweep` via `run_cfg` —
+  its one home); a bare exception type is accepted and wrapped. A caught sample leaves the missing-value sentinel
+  at its coordinate — `setup_dataset` already fills every result variable, so the dataset
+  shape is unchanged and reductions skip it — is logged at WARNING with its inputs, and
+  writes **nothing** to the sample cache, so a transient flake cannot become a permanent
+  cached failure. Default `()` is fail-fast, exactly as before, and tolerating a failure
+  moves no cache key.
+
+  `fail_on_sample_error: bool | float` is the other half, and the two are a pair rather than
+  independent knobs: `catch` alone turns real breakage into a green run over an all-sentinel
+  dataset. `True` fails the run if any sample was caught; a float in (0, 1] fails when the
+  failed *fraction* reaches it, measured over samples the run actually **executed** — a cache
+  hit never reached the worker, so counting it would make one threshold mean different things
+  on a cold and a warm cache. The raise happens after the dataset and report are assembled,
+  so the partial results survive it, and only for a run that actually sampled: on a
+  benchmark-result cache hit the loaded result carries a *previous* run's counts, which are
+  not this run's errors. Both knobs are validated before sampling starts, so a typo'd
+  threshold costs milliseconds rather than a whole sweep.
+
+  Inspect failures via `BenchResult.failed_samples` (a `SampleFailure` per caught sample:
+  job id, inputs, exception repr, traceback), `n_failed`, and `failed_fraction`.
+
+### Removed
+- **`ResultVolume` is gone.** It was declarable but not usable: exported from
+  `bencher/__init__.py` and listed in `ALL_RESULT_TYPES`/`RESULT_KIND_ORDER`, but absent
+  from every registry that decides how a sample is *stored*. Putting one in `result_vars`
+  raised `KeyError: No variable named '<name>'` in `precompute_result_arrays` — the type
+  got no data variable, yet the collector indexed one anyway — and had it survived that,
+  the store loop's `else` raised `TypeError: Unsupported result type`. Since no working
+  code could have used it, removal is only nominally an API break. Note that
+  `VolumeResult` (`bencher/results/volume_result.py`), the 3-float-input volume *plot*, is
+  unrelated and unaffected — it renders `ResultFloat`.
+
+  A new `TestEveryResultTypeIsStorable` pins the invariant that made this a trap:
+  membership in `ALL_RESULT_TYPES` now implies the collector has a branch to store the
+  type, and that `result_kind` classifies it as something other than `"unknown"`.
+  `ResultHmap` is the one exemption, collected out-of-band via `result_hmaps`.
+
 ### Changed
+- **A `ResultReference` container is now called with the object alone.** It was called as
+  `container(obj, **kwargs)`, so the render kwargs every path adds (`override`,
+  `agg_over_dims`, `pane_layout`, and the `width`/`height` that `set_plot_size` injects from
+  `bench_cfg.plot_size`) leaked into a callback that
+  only ever wanted the object, and a single-argument renderer raised `TypeError`. It now
+  matches the `ResultDataSet` contract, so one renderer works for both. Breaking only for a
+  callback that *relied* on receiving those keywords; nothing in bencher did. The
+  `container=` a renderer passes to `to_panes` is a separate contract — a panel pane
+  constructor, still called with `styles=` and the layout keywords — and is unchanged.
+- **Intra-sample chart gallery examples now declare their container** rather than appending
+  a report-level plot. `res.to(XYCurveResult, ...)` and friends *add* a plot below whatever
+  `plot_sweep` already rendered, which for a `ResultDataSet` with no declared container is
+  the raw table — so the example showed the rows and the chart. Declaring
+  `container=bn.xy_curve(...)` puts the chart in the result's own position instead, which is
+  what `example_plot_xy_scatter` already did. Affects `example_plot_xy_curve`,
+  `example_plot_xy_histogram` and `example_plot_xy_hexbin`; the chart-type route is
+  unchanged and still covered by tests.
 - **`DataSetResult` now renders `ResultDataSet` results only.** It previously claimed every
   pane-type result, which made `bench.add(bn.DataSetResult)` / `plot_list=["dataset"]` a
   second name for the `panes` view on a sweep with no stored payload. Now that
@@ -32,6 +101,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ruff format`, so regenerated examples stay lint-clean. No runtime behavior change.
 
 ### Fixed
+- **A container declared on a `ResultRerun` now applies with `over_time` history too.**
+  With history off, a rerun result renders through `ds_to_container`, where a declared
+  container wins over the type's built-in viewer. With history on and more than one time
+  point, rendering is routed to `_pane_over_time_grid` instead — a separate path that
+  hardcoded `rrd_file_to_pane`, so the same benchmark honoured its declared renderer on
+  the first run and silently fell back to the rerun viewer on every run after. The grid
+  now resolves the declared container the same way, and only imports the rerun viewer
+  stack when it is the renderer actually being used. `ResultVideo`/`ResultImage` take the
+  matching `_pane_over_time_slider` path but have no container slot to honour, so they are
+  unaffected.
+- **A variable declared twice in one sweep is now rejected or normalised, instead of quietly
+  moving the cache and history key.** ⚠️ *This moves the key for affected benchmarks — see
+  below.* `plot_sweep` converted each list positionally with no uniqueness check, and the
+  three kinds of variable each misbehaved differently:
+
+  `result_vars=["y", "y"]` was the damaging one. It produced a dataset **byte-identical** to
+  `result_vars=["y"]` under a **different** key: `ResultCollector.setup_dataset` builds
+  `data_vars` as a dict keyed by name and `bencher.history` keys its per-column metadata the
+  same way, so the repeat collapsed in the data, while `BenchCfg.hash_persistent` folded the
+  per-variable digests as a sorted *tuple* and so hashed it twice. The benchmark ran,
+  reported correct numbers, and appended to a different trend line than the one it appeared
+  to belong to — with nothing in the run saying so. The duplicate is now dropped (first
+  occurrence kept) with a `UserWarning` naming the variable and both positions.
+
+  `input_vars=["x", "x"]` was accepted and then either collapsed to a single dimension or
+  died inside xarray with `broadcasting cannot handle duplicate dimensions`, depending on
+  the sweep's shape — after the whole sweep had run. It now raises a `ValueError` at
+  declaration time, naming the variable and every position.
+
+  `const_vars` behaved differently depending on spelling: the dict form collapsed duplicates
+  before bencher saw them, while the list-of-pairs form accepted a repeat with two
+  *different* values and let iteration order pick the winner. Repeats with equal values are
+  now deduped silently; conflicting values raise, naming both.
+
+  Validation happens once, in `validate_declared_vars`, called from `plot_sweep` after
+  conversion so comparison is on resolved names and every declaration form — string, spec
+  dict, param object, and mixtures — is covered by the same code.
+
+  Separately, `hash_persistent` now folds result and const digests as **sets** rather than
+  sorted tuples. Its docstring already promised they contribute as an "unordered set", but a
+  sorted tuple delivered only the ordering half of that; uniqueness was missing, which is
+  the mechanism behind the bug above. This keeps identity correct on paths that never reach
+  the validator, such as a `BenchCfg` built or deserialized directly.
+
+  **Migration:** only benchmarks that *currently declare an overlapping result variable* are
+  affected, and they are exactly the ones now emitting the new warning. Their key moves onto
+  the key it would have had if declared correctly, so in the common case the benchmark
+  rejoins the trend it should have been on all along; in the worst case it starts a fresh
+  series, and `on_history_reset` controls how loudly that surfaces. Configurations without a
+  duplicate are bit-identical: every golden hash in `test/test_hash_persistent.py` is
+  unchanged, since `sorted(set(xs)) == sorted(xs)` when `xs` is already unique.
 - **`hover=False` on an intra-sample chart now actually disables hover.** `set_default_opts`
   registers `tools=["hover"]` as a global holoviews default for most element types, so a
   spec that merely omitted the key got hover back and the option was a silent no-op.
@@ -56,6 +176,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than indexing a list with an array several frames later.
 
 ### Added
+- **`container=` extended to the remaining renderable result types.** `ResultString`,
+  `ResultPath` and `ResultContainer` (and so `ResultRerun`, which subclasses it) now take
+  the same declared-renderer slot `ResultDataSet` and `ResultReference` have, and a
+  declared container **beats the type's built-in `to_container()`**. A `ResultPath` can
+  therefore render a file's *contents* — a CSV as a chart, a JSON as a tree — where before
+  it was always a download widget, and a `ResultString` can render as Markdown or
+  highlighted code instead of plain text. `ResultReference` also honours a container
+  declared on the class, not just one attached to a sample; previously a class-level one
+  was silently ignored because only the stored sample was consulted. Precedence is uniform:
+  renderer-supplied, then the sample's, then the class's, then the type's default. Every new
+  slot is in `_hash_exclude`, so declaring a renderer leaves cache keys and `over_time`
+  history series byte-identical. The resolution itself is now one helper,
+  `BenchResultBase.declared_container`, rather than being open-coded per type.
+
+  Not extended to `ResultVolume`: it has no render path at all (nothing dispatches on it —
+  `VolumeResult` plots `ResultFloat` over three float inputs, and `ResultVolume` is absent
+  from `PANEL_TYPES`), so a container slot there would be an option that never fires.
+- **`xy_histogram` chart type** — bins one or more measured columns of a `ResultDataSet`,
+  showing the distribution a single sample measured. Distinct from the existing
+  `histogram`, which bins a `ResultFloat` across the sweep and so shows the spread of the
+  repeats. `column=` takes a list to overlay several distributions, binned over a *shared*
+  range so they are actually comparable, and drawn translucent so the one underneath stays
+  readable; it defaults to every numeric column. `density=True` normalises instead of
+  counting, and the y axis is labelled accordingly. An empty or all-NaN column produces
+  empty bins rather than raising — numpy cannot pick a range for an empty array, and NaN is
+  how bencher marks a sample missing, so NaN rows are dropped rather than poisoning the
+  range. Gallery example: `example_plot_xy_histogram`.
+- **`xy_hexbin` chart type** — the density counterpart to `xy_scatter`, taking the same
+  axes and binning them into hexagonal tiles. For a cloud of tens of thousands of points
+  the markers saturate and where the mass actually is becomes the thing a scatter cannot
+  show. `gridsize=` sets the resolution, `min_count=1` drops empty tiles, and the colourbar
+  is on by default since a density plot without one shows shape but no magnitude. Gallery
+  example: `example_plot_xy_hexbin`.
+- **`hv.HexTiles` now carries the shared default figure size.** It was absent from
+  `HoloviewResult.DEFAULT_SIZED_ELEMENTS`, so a hexbin would have fallen back to the
+  holoviews default rather than bencher's 600x600 — the same gap Histogram/Area/ErrorBars
+  were fixed for previously.
 - **`xy_curve` chart type** — draws one or more *measured* columns of a `ResultDataSet`
   against an x column, for a benchmark that collects a whole series as one sample. The
   gap it fills: `curve` and `line` plot *across* the sweep, with one value per sample, so

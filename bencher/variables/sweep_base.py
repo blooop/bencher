@@ -225,11 +225,24 @@ class SweepBase(param.Parameter):
         Returns:
             SweepBase: A new sweep with the specified bounds.
 
+        A zero-width range (*low* == *high*) is legal and yields a single sample at
+        that value, so a caller whose range is computed at run time does not need to
+        switch representation when it collapses.  Switching to ``sample_values``
+        would change the sweep's identity tuple and silently move the benchmark to
+        a different cache and history series.
+
         Raises:
-            ValueError: If *low* >= *high* or the sweep has no bounds attributes.
+            ValueError: If *low* > *high*, if *samples* > 1 is requested for a
+                zero-width range, or the sweep has no bounds attributes.
         """
-        if low >= high:
-            raise ValueError(f"low must be less than high, got low={low}, high={high}")
+        if low > high:
+            raise ValueError(f"low must not exceed high, got low={low}, high={high}")
+        if low == high and samples is not None and samples > 1:
+            raise ValueError(
+                f"samples={samples} was requested for the zero-width range "
+                f"[{low}, {high}], which has exactly one distinct value. Pass "
+                f"samples=1 or omit it."
+            )
         low, high = self._coerce_bound(low), self._coerce_bound(high)
         output = deepcopy(self)
         if hasattr(output, "softbounds"):

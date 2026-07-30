@@ -653,10 +653,16 @@ class FloatSweep(Number, SweepBase):
                     "Use FloatSweep(bounds=[lo, hi]) or "
                     "FloatSweep(sample_values=[...])."
                 )
+            lo, hi = self.sweep_bounds[0], self.sweep_bounds[1]
+            # A zero-width range has one distinct value.  Neither generator gives
+            # that: linspace would return `samps` copies of it, and arange an
+            # empty array.
+            if lo == hi:
+                return np.array([float(lo)])
             if self.step is None:
-                return np.linspace(self.sweep_bounds[0], self.sweep_bounds[1], samps)
+                return np.linspace(lo, hi, samps)
 
-            return np.arange(self.sweep_bounds[0], self.sweep_bounds[1], self.step, dtype=float)
+            return np.arange(lo, hi, self.step, dtype=float)
         return self.sample_values
 
 
@@ -734,6 +740,11 @@ def sweep(
             "Cannot combine 'values' with 'bounds' or 'samples'. "
             "Use values alone, or bounds/samples together."
         )
+
+    # Validate the range here rather than leaving it to resolution time: for the
+    # deferred string form that is mid-run, long after the spec was declared.
+    if bounds is not None and bounds[0] > bounds[1]:
+        raise ValueError(f"bounds low must not exceed high, got bounds={tuple(bounds)}")
 
     # If a SweepBase param object is passed, delegate to its methods directly
     if isinstance(name, SweepBase):

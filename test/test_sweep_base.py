@@ -294,11 +294,24 @@ class TestSweepBase(unittest.TestCase):
         original.step = None  # pylint: disable=attribute-defined-outside-init
 
     def test_with_bounds_invalid_range(self):
-        """with_bounds(low >= high) raises ValueError."""
-        with self.assertRaises(ValueError, msg="low must be less than high"):
-            AllSweepVars.param.var_float.with_bounds(5.0, 5.0)
-        with self.assertRaises(ValueError, msg="low must be less than high"):
+        """with_bounds(low > high) raises ValueError."""
+        with self.assertRaises(ValueError, msg="low must not exceed high"):
             AllSweepVars.param.var_float.with_bounds(10.0, 2.0)
+
+    def test_with_bounds_zero_width_is_one_sample(self):
+        """A zero-width range is legal and yields a single sample.
+
+        Previously rejected alongside an inverted range. Expressing a collapsed
+        range as ``sample_values`` instead changes the sweep's identity, so a
+        caller with a computed range had no way to stay in one series.
+        """
+        collapsed = AllSweepVars.param.var_float.with_bounds(5.0, 5.0)
+        self.assertEqual(list(collapsed.values()), [5.0])
+
+    def test_with_bounds_zero_width_rejects_multiple_samples(self):
+        """samples > 1 over a zero-width range is a contradiction."""
+        with self.assertRaises(ValueError, msg="zero-width"):
+            AllSweepVars.param.var_float.with_bounds(5.0, 5.0, samples=5)
 
     def test_callable_conflicts_raise(self):
         """Passing values together with bounds or samples raises ValueError."""

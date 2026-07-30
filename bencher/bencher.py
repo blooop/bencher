@@ -26,14 +26,14 @@ from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.history import config_summary as history_config_summary
-from bencher.job import Executors, FutureCache, Job, JobFuture
+from bencher.job import Executors, FutureCache, Job, JobFuture, normalize_catch
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
 from bencher.results.bench_result import BenchResult
 from bencher.results.optimize_result import OptimizeResult
 from bencher.sample_order import SampleOrder
-from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
+from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
 from bencher.utils import AGG_FN_MAP, params_to_str, resolve_aggregate
 from bencher.variables.inputs import IntSweep
@@ -63,6 +63,83 @@ def _agg_job_args(kwargs, agg_vars, combo):
         for v, val in zip(agg_vars, combo):
             job_args[v.name] = val
     return job_args
+
+
+class SampleErrorPolicyError(Exception):
+    """Raised after a sweep completes when too many samples were caught.
+
+    Deliberately raised *after* the dataset and report are assembled, so the
+    partial results are still on disk when it fires; losing the artifact would
+    defeat the point of catching in the first place.
+    """
+
+
+def validate_sample_error_policy(policy: bool | float) -> float | None:
+    """Validate ``fail_on_sample_error`` and return its threshold, if it has one.
+
+    Returns ``None`` for the two policies that are not a fraction: off (falsy) and
+    ``True`` (fail on any failure). Called both from ``plot_sweep``, so a typo'd
+    threshold costs milliseconds rather than a whole sweep, and from
+    :func:`_enforce_sample_error_policy`, so the enforcement stays self-contained
+    for callers that reach it directly.
+    """
+    if not policy:  # False, None, 0, 0.0 -- the policy is simply off
+        return None
+    if policy is True:
+        return None
+    # bool is a subclass of int, so a bare 1 is truthy, is *not* True, and would
+    # otherwise silently become the 1.0 threshold -- "raise only if every sample
+    # failed", the near-opposite of the "raise if any failed" the caller almost
+    # certainly meant by writing 1. Both readings are defensible, which is why
+    # this refuses to pick one. Floats are unambiguous and stay allowed, so
+    # 1.0 still means 100%.
+    if isinstance(policy, int):
+        # ValueError, not the TypeError ruff's TRY004 suggests: int is inside this
+        # field's bool | float contract, so the type is fine and the *value* is what
+        # cannot be resolved to one meaning.
+        raise ValueError(  # noqa: TRY004
+            "fail_on_sample_error must be True/False or a float in (0, 1]; got the "
+            f"integer {policy!r}, which is ambiguous -- use True to fail on any "
+            f"failed sample, or {float(policy)!r} to fail at that failed fraction"
+        )
+    threshold = float(policy)
+    if not 0.0 < threshold <= 1.0:
+        raise ValueError(
+            f"fail_on_sample_error must be True/False or a float in (0, 1], got {policy!r}"
+        )
+    return threshold
+
+
+def _enforce_sample_error_policy(bench_res: BenchResult, policy: bool | float) -> None:
+    """Fail the run if ``fail_on_sample_error`` says the failures are the story.
+
+    ``True`` fails on any caught sample; a float in (0, 1] fails when the failed
+    fraction reaches it, which is what lets a project tolerate a flake and still
+    fail a run made of flakes. This is the half of plan 21 that makes ``catch=``
+    safe to use unattended.
+
+    Only called for a run that actually sampled: on a benchmark-result cache hit
+    the loaded result carries the *previous* run's failure counts, and failing the
+    current run on them would raise for a run whose worker never executed -- see
+    ``run_sweep``.
+    """
+    # The threshold is validated before the "did anything fail?" early return.
+    # Checking it afterwards means a typo'd threshold is inert on every clean run
+    # and only surfaces once a sample happens to fail -- reporting a *config*
+    # error at the one moment the caller is trying to read a *sample* failure.
+    threshold = validate_sample_error_policy(policy)
+    if not policy or not bench_res.n_failed:
+        return
+    n, frac = bench_res.n_failed, bench_res.failed_fraction
+    if policy is True:
+        raise SampleErrorPolicyError(
+            f"{n} sample(s) failed and were caught; fail_on_sample_error=True"
+        )
+    if frac >= threshold:
+        raise SampleErrorPolicyError(
+            f"{n} sample(s) failed ({frac:.0%} of those executed), which meets "
+            f"fail_on_sample_error={threshold}"
+        )
 
 
 class Bench(BenchPlotServer):
@@ -110,6 +187,13 @@ class Bench(BenchPlotServer):
         self._worker_mgr = WorkerManager()
         self._executor = SweepExecutor(cache_size=self.cache_size)
         self._collector = ResultCollector(cache_size=self.cache_size)
+
+        # The worker manager owns this state; these mirror it for backward
+        # compatibility and are refreshed by _expose_worker_attrs().
+        self.worker: Callable | None = None
+        # A *class* when attached via set_worker_class for declaration only.
+        self.worker_class_instance: ParametrizedSweep | type[ParametrizedSweep] | None = None
+        self.worker_input_cfg: ParametrizedSweep | None = None
 
         # Set worker using the manager
         self.set_worker(worker, worker_input_cfg)
@@ -198,10 +282,30 @@ class Bench(BenchPlotServer):
             RuntimeError: If worker is a class type instead of an instance.
         """
         self._worker_mgr.set_worker(worker, worker_input_cfg)
-        # Expose worker attributes for backward compatibility
+        self._expose_worker_attrs()
+
+    def _expose_worker_attrs(self) -> None:
+        """Mirror the worker manager's state onto self, for backward compatibility."""
         self.worker = self._worker_mgr.worker
         self.worker_class_instance = self._worker_mgr.worker_class_instance
         self.worker_input_cfg = self._worker_mgr.worker_input_cfg
+
+    def set_worker_class(self, worker_class: type[ParametrizedSweep]) -> None:
+        """Attach a worker class for declaration only, without a callable worker.
+
+        Delegates to :meth:`bencher.worker_manager.WorkerManager.set_worker_class`,
+        whose docstring explains why a class is enough to declare and hash a sweep but
+        not to run one. Used by :func:`bencher.identity.sweep_identity`.
+
+        Args:
+            worker_class: A ParametrizedSweep subclass. Never instantiated, never
+                called.
+
+        Raises:
+            RuntimeError: If given an instance rather than a class.
+        """
+        self._worker_mgr.set_worker_class(worker_class)
+        self._expose_worker_attrs()
 
     def sweep_sequential(
         self,
@@ -279,6 +383,7 @@ class Bench(BenchPlotServer):
         post_description: str | None = None,
         pass_repeat: bool = False,
         tag: str = "",
+        series_id: str | None = None,
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
@@ -389,6 +494,16 @@ class Bench(BenchPlotServer):
                 run_cfg = deepcopy(self.run_cfg)
                 logger.info("Copy run cfg from bench class")
 
+        # Normalize and validate both fault-tolerance knobs here, before any
+        # sampling happens. Deferring either check to the end of the run means a
+        # typo costs the whole sweep before it is reported -- and for a sweep whose
+        # samples are individually expensive, that is exactly the cost this feature
+        # exists to avoid paying. Both knobs live on run_cfg only -- run
+        # configuration already reaches plot_sweep as an object, and a second
+        # kwarg spelling would give each knob two homes to reconcile.
+        run_cfg.catch = normalize_catch(run_cfg.catch)
+        validate_sample_error_policy(run_cfg.fail_on_sample_error)
+
         if run_cfg.only_plot:
             run_cfg.cache_results = True
 
@@ -441,6 +556,12 @@ class Bench(BenchPlotServer):
             cv_list = list(const_vars_in[i])
             cv_list[0] = self.convert_vars_to_params(cv_list[0], "const", run_cfg)
             const_vars_in[i] = cv_list
+
+        # One validation site, after conversion so comparison is on resolved names
+        # rather than the mixed bag of strings, dicts and objects the caller passed.
+        input_vars_in, result_vars_in, const_vars_in = validate_declared_vars(
+            input_vars_in, result_vars_in, const_vars_in
+        )
 
         if title is None:
             if len(input_vars_in) > 0:
@@ -522,6 +643,7 @@ class Bench(BenchPlotServer):
             title=title,
             pass_repeat=pass_repeat,
             tag=run_cfg.run_tag + tag,
+            series_id=series_id,
             plot_callbacks=plot_callbacks,
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
@@ -736,6 +858,7 @@ class Bench(BenchPlotServer):
                         bench_cfg.result_vars,
                         on_history_reset=run_cfg.on_history_reset,
                         bench_name=bench_cfg.bench_name,
+                        series_id=bench_cfg.series,
                         tag=bench_cfg.tag,
                         config_summary=history_config_summary(bench_cfg),
                     )
@@ -783,6 +906,15 @@ class Bench(BenchPlotServer):
         bench_res.timings = timings
 
         self.results.append(bench_res)
+        # Only for a run that actually sampled. On a benchmark-result cache hit
+        # bench_res is a *previous* run's result, unpickled with that run's
+        # failed_samples and n_attempted still on it -- enforcing there raises for
+        # a run whose worker never executed at all (and, since only_plot forces
+        # cache_results, for a pure re-plot). fail_on_sample_error is about errors
+        # this run hit; a caller who wants "does this artifact have holes" reads
+        # bench_res.n_failed, which is a different question.
+        if calculate_results:
+            _enforce_sample_error_policy(bench_res, run_cfg.fail_on_sample_error)
         return bench_res
 
     def _append_result_via_split(self, bench_res: BenchResult) -> None:
@@ -868,6 +1000,7 @@ class Bench(BenchPlotServer):
         on_history_reset: str = "warn",
         bench_name: str | None = None,
         tag: str | None = None,
+        series_id: str | None = None,
         config_summary: dict | None = None,
     ) -> xr.Dataset:
         """Load, reconcile, and persist historical benchmark data from cache."""
@@ -880,6 +1013,7 @@ class Bench(BenchPlotServer):
             on_history_reset=on_history_reset,
             bench_name=bench_name,
             tag=tag,
+            series_id=series_id,
             config_summary=config_summary,
         )
 
@@ -961,7 +1095,6 @@ class Bench(BenchPlotServer):
             constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
         timings.dataset_setup_ms = elapsed()
 
-        results_list = []
         jobs = []
         cache_jobs = []
 
@@ -1006,9 +1139,41 @@ class Bench(BenchPlotServer):
         rv_arrays = self._collector.precompute_result_arrays(bench_res)
 
         with phase_timer() as elapsed:
+            catch = normalize_catch(bench_run_cfg.catch)
+            # The denominator for failed_fraction is samples this run *executed*,
+            # which is not len(jobs): a cache hit never reached the worker, so
+            # counting it as an attempt makes the same fail_on_sample_error
+            # threshold loosen as the cache warms -- 1 failure out of 1 executed
+            # sample reads as 25% when the other 3 came from cache. FutureCache
+            # increments worker_fn_call_count exactly once per job that reaches the
+            # worker (before it runs, so a caught sample still counts), and a delta
+            # rather than the raw counter keeps it per-sweep on a bench that runs
+            # several.
+            executed_before = self.sample_cache.worker_fn_call_count
+            # Jobs that were actually submitted, paired with their futures. Kept
+            # explicitly rather than zipping jobs against a results list: a caught
+            # sample submits nothing, and a positional zip would then pair every
+            # later job with the wrong future.
+            submitted: list[tuple] = []
             for job, cache_job in zip(jobs, cache_jobs):
-                result = self.sample_cache.submit(cache_job, prefetched=prefetched)
-                results_list.append(result)
+                # No `if catch:` branch: `except ()` matches nothing, so the default
+                # empty tuple is already fail-fast. One call site rather than two
+                # identical ones that could drift apart.
+                try:
+                    result = self.sample_cache.submit(cache_job, prefetched=prefetched)
+                # catch is a runtime tuple of exception types, which pylint
+                # cannot see into.
+                # pylint: disable-next=catching-non-exception
+                except catch as exc:
+                    # The serial executor runs the worker *inside* submit(), so on
+                    # the default executor a raising sample never reaches
+                    # store_results at all -- catching only there would leave the
+                    # common path fail-fast while the pool path tolerated failures.
+                    self._collector.record_caught_sample(
+                        bench_res, cache_job.job_id, job.function_input, exc
+                    )
+                    continue
+                submitted.append((job, result))
                 # For serial execution, store results immediately so that
                 # completed results are cached to disk before later jobs
                 # may crash.
@@ -1019,7 +1184,7 @@ class Bench(BenchPlotServer):
                 # can use as_completed() to overlap result storage with
                 # remaining computation.
                 pending = {}  # concurrent.futures.Future -> (WorkerJob, JobFuture)
-                for job, job_future in zip(jobs, results_list):
+                for job, job_future in submitted:
                     if job_future.future is not None:
                         pending[job_future.future] = (job, job_future)
                     else:
@@ -1027,6 +1192,7 @@ class Bench(BenchPlotServer):
                 for done in as_completed(pending):
                     worker_job, job_future = pending.pop(done)
                     self.store_results(job_future, bench_res, worker_job, bench_run_cfg, rv_arrays)
+            bench_res.n_attempted = self.sample_cache.worker_fn_call_count - executed_before
         timings.job_execution_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:

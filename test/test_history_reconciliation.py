@@ -22,7 +22,7 @@ from bencher.history import (
     HistoryResetError,
     column_identity,
     data_var_columns,
-    last_seen_key,
+    legacy_last_seen_key,
 )
 from bencher.regression import detect_regressions
 from bencher.result_collector import ResultCollector
@@ -399,7 +399,7 @@ class TestResetPolicy(ReconcilerBase):
         rv_a, rv_b = _result_float("a"), _result_float("b")
         self.load(["a", "b"], 1, [rv_a, rv_b])
         cache = self.collector.get_history_cache()
-        ls_key = last_seen_key(self.kwargs["bench_name"], self.kwargs["tag"])
+        ls_key = legacy_last_seen_key(self.kwargs["bench_name"], self.kwargs["tag"])
         record_before = cache[self.key]
         last_before = cache.get(ls_key)
         with self.assertRaises(HistoryResetError):
@@ -427,10 +427,18 @@ class TestResetPolicy(ReconcilerBase):
             self.load(["a"], 2, [rv_a], on_history_reset="ignore")
 
     def test_full_reset_reported_via_last_seen_index(self):
+        """A key move with a *changed* declaration is still a reported reset.
+
+        The declaration has to actually change: a key that moves while the stored
+        config summary is *unchanged* is a rename, and is adopted instead (see
+        TestSeriesIdentity). This harness passes config_summary explicitly, so the
+        changed declaration is expressed there.
+        """
         self.load(["a"], 1, [_result_float("a")])
-        self.key = f"history-{uuid.uuid4()}"  # input/const change = new key
+        self.key = f"history-{uuid.uuid4()}"
+        changed = {**self.kwargs["config_summary"], "inputs": [("x", "FloatSweep", "ul")]}
         with self.assertLogs("bencher.history", level=logging.WARNING) as logs:
-            self.load(["a"], 2, [_result_float("a")])
+            self.load(["a"], 2, [_result_float("a")], config_summary=changed)
         self.assertTrue(any("orphaned under the old key" in line for line in logs.output))
 
     def test_born_column_is_not_lossy(self):
