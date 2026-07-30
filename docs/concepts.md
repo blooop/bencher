@@ -312,7 +312,9 @@ Different backends implement these operations: `ComposableContainerPanel` uses P
 and `Column` widgets for interactive dashboards, `ComposableContainerVideo` uses `moviepy` for
 video compositing, `ComposableContainerDataset` uses `xr.concat` for data merging, and
 `ComposableContainerRerun` namespaces and merges complete Rerun recordings while generating
-native Horizontal, Vertical, Tabs, or shared-view Blueprints.
+a native Blueprint: Horizontal (`right`) and Vertical (`down`) give each recording its own
+view on a shared timeline, `overlay` draws them all in one view at their original times, and
+`sequence` splices their timelines end to end so one view plays them back to back.
 See the [Composable Containers gallery](reference/meta/composable_containers/index) for
 interactive examples of each backend and composition mode, and the
 [Rerun Integration gallery](reference/meta/rerun/index) for recording composition.

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 import rerun as rr
+from rerun.blueprint.components import ContainerKind
 from rerun.experimental import RrdReader
 
 import bencher as bn
@@ -11,6 +12,7 @@ from bencher.results.composable_container.composable_container_rerun import (
     ComposableContainerRerun,
     RerunRecording,
     RerunViewKind,
+    _batch_time_bounds,
 )
 from bencher.variables.results import ResultRerun
 
@@ -22,6 +24,34 @@ def _write_recording(tmp_path: Path, name: str, *archetypes) -> Path:
     path = tmp_path / f"{name}.rrd"
     path.write_bytes(recording.memory_recording().drain_as_bytes())
     return path
+
+
+def _write_temporal_recording(tmp_path: Path, name: str, *, steps: int = 4) -> Path:
+    """Write a recording that spans ``steps`` ticks of a ``frame`` sequence timeline."""
+    recording = rr.RecordingStream(name, make_default=False)
+    for step in range(steps):
+        recording.set_time("frame", sequence=step)
+        recording.log("points", rr.Points2D([[step, step]]))
+    path = tmp_path / f"{name}.rrd"
+    path.write_bytes(recording.memory_recording().drain_as_bytes())
+    return path
+
+
+def _recording_time_bounds(path: str | Path, timeline: str) -> dict[str, tuple[int, int]]:
+    """Return ``{entity_path: (first, last)}`` on ``timeline`` for a composed recording."""
+    reader = RrdReader(path)
+    bounds = {}
+    for chunk in reader.stream(store=reader.recordings()[0]):
+        chunk_bounds = _batch_time_bounds(chunk.to_record_batch()).get(timeline)
+        if chunk_bounds is None:
+            continue
+        entity_path = str(chunk.entity_path)
+        existing = bounds.get(entity_path, chunk_bounds)
+        bounds[entity_path] = (
+            min(existing[0], chunk_bounds[0]),
+            max(existing[1], chunk_bounds[1]),
+        )
+    return bounds
 
 
 def _recording_entity_paths(path: str | Path) -> set[str]:
@@ -41,12 +71,20 @@ def _blueprint_column_values(path: str | Path, column_name: str) -> list:
     return values
 
 
+def _container_kinds(path: str | Path) -> set[str]:
+    """Return the Blueprint container kinds by name (``Horizontal``, ``Vertical``, …)."""
+    return {
+        ContainerKind(value).name
+        for values in _blueprint_column_values(path, "ContainerBlueprint:container_kind")
+        for value in values
+    }
+
+
 @pytest.mark.parametrize(
     ("compose_method", "expected_container_kind"),
     [
-        (ComposeType.right, 2),
-        (ComposeType.down, 3),
-        (ComposeType.sequence, 1),
+        (ComposeType.right, "Horizontal"),
+        (ComposeType.down, "Vertical"),
     ],
 )
 def test_composes_recordings_with_blueprint_layout(
@@ -69,8 +107,51 @@ def test_composes_recordings_with_blueprint_layout(
     assert {"/item_0/points", "/item_1/points"} <= _recording_entity_paths(output)
     origins = _blueprint_column_values(output, "ViewBlueprint:space_origin")
     assert {value[0] for value in origins} == {"/item_0", "/item_1"}
-    container_kinds = _blueprint_column_values(output, "ContainerBlueprint:container_kind")
-    assert [expected_container_kind] in container_kinds
+    assert expected_container_kind in _container_kinds(output)
+
+
+def test_sequence_splices_recordings_end_to_end(tmp_path):
+    first = _write_temporal_recording(tmp_path, "first", steps=4)
+    second = _write_temporal_recording(tmp_path, "second", steps=3)
+    output = tmp_path / "sequence.rrd"
+
+    container = ComposableContainerRerun(
+        compose_method=ComposeType.sequence,
+        output_path=output,
+        name="Sequence composition",
+    )
+    container.append(first, label="First")
+    container.append(second, label="Second")
+    container.render()
+
+    bounds = _recording_time_bounds(output, "frame")
+    # The first recording keeps its own times; the second starts after it ends.
+    assert bounds["/item_0/points"] == (0, 3)
+    assert bounds["/item_1/points"] == (4, 6)
+    # Every item but the last is cleared so it does not linger under the next one.
+    assert bounds["/item_0"] == (4, 4)
+    assert "/item_1" not in bounds
+    # One shared view, so playing the timeline runs the items back to back.
+    assert _blueprint_column_values(output, "ViewBlueprint:space_origin") == [["/"]]
+
+
+def test_sequence_preserves_original_times_under_overlay(tmp_path):
+    """``overlay`` is the same layout as ``sequence`` but leaves the times alone."""
+    first = _write_temporal_recording(tmp_path, "first", steps=4)
+    second = _write_temporal_recording(tmp_path, "second", steps=3)
+    output = tmp_path / "overlay-times.rrd"
+
+    container = ComposableContainerRerun(
+        compose_method=ComposeType.overlay,
+        output_path=output,
+    )
+    container.append(first)
+    container.append(second)
+    container.render()
+
+    bounds = _recording_time_bounds(output, "frame")
+    assert bounds["/item_0/points"] == (0, 3)
+    assert bounds["/item_1/points"] == (0, 2)
 
 
 def test_overlay_uses_one_shared_view(tmp_path):
@@ -143,6 +224,23 @@ def test_missing_recording_is_rejected(tmp_path):
 
     with pytest.raises(FileNotFoundError, match="missing.rrd"):
         container.render()
+
+
+def test_output_path_must_be_an_rrd(tmp_path):
+    source = _write_recording(tmp_path, "source", ("points", rr.Points2D([[0, 0]])))
+    container = ComposableContainerRerun(output_path=tmp_path / "output.mp4")
+    container.append(source)
+
+    with pytest.raises(ValueError, match="must end in .rrd"):
+        container.render()
+
+
+def test_append_rejects_duplicate_metadata(tmp_path):
+    item = RerunRecording(tmp_path / "source.rrd", label="Source")
+    container = ComposableContainerRerun()
+
+    with pytest.raises(ValueError, match="not both"):
+        container.append(item, label="Other")
 
 
 def test_result_rerun_materializes_composable_container(tmp_path):

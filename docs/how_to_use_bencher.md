@@ -230,7 +230,11 @@ self.scene = combined
 ```
 
 The four composition methods map to horizontal views (`right`), vertical views
-(`down`), tabs (`sequence`), and compatible entities in shared views (`overlay`).
+(`down`), one shared view showing every recording at its original times
+(`overlay`), and one shared view whose timelines are spliced end to end so the
+recordings play one after the other (`sequence`). `sequence` needs recordings with
+data on a timeline — it offsets each recording's index values to start where the
+previous one ended, and clears each recording as the next begins.
 View types are inferred from recorded archetypes; pass `view_kinds=` to `append()`
 to override inference. See the
 [Rerun Integration gallery](reference/meta/rerun/index) for complete examples.

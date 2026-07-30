@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -108,12 +107,44 @@ _VIEW_NAMES = {
     RerunViewKind.state_timeline: "State timeline",
 }
 
+# ``rerun.blueprint`` is imported lazily, so the view classes are referenced by
+# attribute name rather than by value.
+_VIEW_CLASS_NAMES = {
+    RerunViewKind.spatial_2d: "Spatial2DView",
+    RerunViewKind.spatial_3d: "Spatial3DView",
+    RerunViewKind.time_series: "TimeSeriesView",
+    RerunViewKind.bar_chart: "BarChartView",
+    RerunViewKind.tensor: "TensorView",
+    RerunViewKind.text_document: "TextDocumentView",
+    RerunViewKind.text_log: "TextLogView",
+    RerunViewKind.map: "MapView",
+    RerunViewKind.graph: "GraphView",
+    RerunViewKind.state_timeline: "StateTimelineView",
+}
 
-def _infer_chunk_view_kinds(chunk) -> set[RerunViewKind]:
+_LAYOUT_CLASS_NAMES = {
+    ComposeType.right: "Horizontal",
+    ComposeType.down: "Vertical",
+}
+
+# Gap inserted between spliced recordings so consecutive items never share an index.
+_SPLICE_GAP_NS = 1
+
+
+def _index_fields(batch) -> list:
+    """Return the timeline (index) fields of a chunk record batch."""
+    return [
+        arrow_field
+        for arrow_field in batch.schema
+        if (arrow_field.metadata or {}).get(b"rerun:kind") == b"index"
+    ]
+
+
+def _batch_view_kinds(batch) -> set[RerunViewKind]:
+    """Infer which Blueprint view types can display the archetypes in a chunk."""
     kinds = set()
-    for arrow_field in chunk.to_record_batch().schema:
-        metadata = arrow_field.metadata or {}
-        archetype = metadata.get(b"rerun:archetype")
+    for arrow_field in batch.schema:
+        archetype = (arrow_field.metadata or {}).get(b"rerun:archetype")
         if archetype is None:
             continue
         archetype_name = archetype.decode().rsplit(".", maxsplit=1)[-1]
@@ -123,49 +154,120 @@ def _infer_chunk_view_kinds(chunk) -> set[RerunViewKind]:
     return kinds
 
 
-def _ordered_view_kinds(kinds: Iterable[RerunViewKind]) -> list[RerunViewKind]:
-    selected = set(kinds)
-    return [kind for kind in RerunViewKind if kind in selected]
+def _index_values(batch, name: str):
+    """Return one timeline column as a numpy int64 array of raw index units."""
+    import pyarrow as pa
+
+    column = batch.column(batch.schema.get_field_index(name))
+    return column.cast(pa.int64()).to_numpy(zero_copy_only=False)
 
 
-def _namespace_chunk(chunk, *, prefix: str, kinds: set[RerunViewKind]):
-    kinds.update(_infer_chunk_view_kinds(chunk))
-    source_path = str(chunk.entity_path).lstrip("/")
-    return chunk.with_entity_path(f"{prefix}/{source_path}")
+def _batch_time_bounds(batch) -> dict[str, tuple[int, int]]:
+    """Return ``{timeline_name: (first, last)}`` in raw index units for one chunk."""
+    bounds = {}
+    for arrow_field in _index_fields(batch):
+        values = _index_values(batch, arrow_field.name)
+        bounds[arrow_field.name] = (int(values.min()), int(values.max()))
+    return bounds
 
 
-def _blueprint_view(rrb, kind: RerunViewKind, *, origin: str, name: str):
-    view_classes = {
-        RerunViewKind.spatial_2d: rrb.Spatial2DView,
-        RerunViewKind.spatial_3d: rrb.Spatial3DView,
-        RerunViewKind.time_series: rrb.TimeSeriesView,
-        RerunViewKind.bar_chart: rrb.BarChartView,
-        RerunViewKind.tensor: rrb.TensorView,
-        RerunViewKind.text_document: rrb.TextDocumentView,
-        RerunViewKind.text_log: rrb.TextLogView,
-        RerunViewKind.map: rrb.MapView,
-        RerunViewKind.graph: rrb.GraphView,
-        RerunViewKind.state_timeline: rrb.StateTimelineView,
-    }
-    return view_classes[kind](origin=origin, name=name)
+def _shifted_chunks(chunk, offsets: dict[str, int]) -> list:
+    """Return ``chunk`` with each timeline column advanced by ``offsets[timeline]``."""
+    import pyarrow as pa
+    from rerun.experimental import Chunk
+
+    batch = chunk.to_record_batch()
+    columns = list(batch.columns)
+    shifted_any = False
+    for arrow_field in _index_fields(batch):
+        offset = offsets.get(arrow_field.name, 0)
+        if offset == 0:
+            continue
+        position = batch.schema.get_field_index(arrow_field.name)
+        shifted = _index_values(batch, arrow_field.name) + offset
+        columns[position] = pa.array(shifted).cast(batch.column(position).type)
+        shifted_any = True
+    if not shifted_any:
+        return [chunk]
+    return Chunk.from_record_batch(pa.RecordBatch.from_arrays(columns, schema=batch.schema))
 
 
-def _blueprint_views(rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str):
-    ordered = _ordered_view_kinds(kinds)
-    if not ordered:
-        ordered = [RerunViewKind.spatial_2d]
-    views = [
-        _blueprint_view(
-            rrb,
-            kind,
-            origin=origin,
-            name=label if len(ordered) == 1 else f"{label} — {_VIEW_NAMES[kind]}",
-        )
-        for kind in ordered
-    ]
-    if len(views) == 1:
-        return views[0]
-    return rrb.Vertical(*views, name=label)
+@dataclass
+class _ComposedItem:
+    """One source recording, re-rooted under ``prefix``, with its layout metadata."""
+
+    prefix: str
+    label: str
+    chunks: list = field(default_factory=list)
+    view_kinds: set[RerunViewKind] = field(default_factory=set)
+    time_bounds: dict[str, tuple[int, int]] = field(default_factory=dict)
+    time_types: dict[str, Any] = field(default_factory=dict)
+
+    def add(self, chunk) -> None:
+        """Record a chunk and fold its archetypes and time range into the metadata."""
+        self.chunks.append(chunk)
+        batch = chunk.to_record_batch()
+        self.view_kinds.update(_batch_view_kinds(batch))
+        for arrow_field in _index_fields(batch):
+            self.time_types[arrow_field.name] = arrow_field.type
+        for name, (first, last) in _batch_time_bounds(batch).items():
+            existing = self.time_bounds.get(name, (first, last))
+            self.time_bounds[name] = (min(existing[0], first), max(existing[1], last))
+
+
+def _read_item(path: str | Path, *, prefix: str, label: str) -> _ComposedItem:
+    """Decode one ``.rrd`` file, re-rooting every entity path under ``prefix``."""
+    from rerun.experimental import RrdReader
+
+    reader = RrdReader(path)
+    stores = reader.recordings()
+    if not stores:
+        raise ValueError(f"RRD contains no recording stores: {path}")
+
+    item = _ComposedItem(prefix=prefix, label=label)
+    for store in stores:
+        for chunk in reader.stream(store=store):
+            source_path = str(chunk.entity_path).lstrip("/")
+            item.add(chunk.with_entity_path(f"{prefix}/{source_path}"))
+    return item
+
+
+def _splice_offsets(items: list[_ComposedItem]) -> list[dict[str, int]]:
+    """Offset each item's timelines so it starts after the previous item ends.
+
+    Timelines are spliced independently by name: an item that does not use a
+    timeline neither consumes nor advances it.  The first user of a timeline
+    keeps its original values.
+    """
+    offsets: list[dict[str, int]] = []
+    timeline_ends: dict[str, int] = {}
+    for item in items:
+        item_offsets = {}
+        for name, (first, last) in item.time_bounds.items():
+            previous_end = timeline_ends.get(name)
+            offset = 0 if previous_end is None else previous_end - first + _SPLICE_GAP_NS
+            item_offsets[name] = offset
+            timeline_ends[name] = last + offset
+        offsets.append(item_offsets)
+    return offsets
+
+
+def _set_recording_time(recording, timeline: str, time_type, value: int) -> None:
+    """Set ``timeline`` to a raw index ``value``, matching the column's time type.
+
+    ``value`` is in nanoseconds for duration and timestamp timelines, so numpy
+    types are used to keep nanosecond precision (``timedelta`` would round to
+    microseconds).
+    """
+    import numpy as np
+    import pyarrow as pa
+
+    if pa.types.is_timestamp(time_type):
+        recording.set_time(timeline, timestamp=np.datetime64(value, "ns"))
+    elif pa.types.is_duration(time_type):
+        recording.set_time(timeline, duration=np.timedelta64(value, "ns"))
+    else:
+        recording.set_time(timeline, sequence=value)
 
 
 @dataclass(kw_only=True)
@@ -178,8 +280,9 @@ class ComposableContainerRerun(ComposableContainerBase):
 
     - ``right`` -> ``rrb.Horizontal``
     - ``down`` -> ``rrb.Vertical``
-    - ``sequence`` -> ``rrb.Tabs``
-    - ``overlay`` -> shared views rooted at ``/``
+    - ``overlay`` -> shared views rooted at ``/``, all items playing together
+    - ``sequence`` -> shared views rooted at ``/``, items spliced end to end in
+      time so scrubbing the timeline plays them one after the other
 
     View types are inferred from Rerun archetype metadata. Pass ``view_kinds`` to
     :meth:`append` when a recording needs an explicit override.
@@ -190,6 +293,24 @@ class ComposableContainerRerun(ComposableContainerBase):
     name: str | None = None
     application_id: str = "bencher/composed"
 
+    @staticmethod
+    def _to_recording(
+        obj: str | Path | RerunRecording,
+        *,
+        label: str | None,
+        view_kinds: Iterable[RerunViewKind | str] | None,
+    ) -> RerunRecording:
+        if isinstance(obj, RerunRecording):
+            if label is not None or view_kinds is not None:
+                raise ValueError(
+                    "label and view_kinds must be set on RerunRecording or append(), not both"
+                )
+            return obj
+        kinds = (
+            tuple(RerunViewKind(kind) for kind in view_kinds) if view_kinds is not None else None
+        )
+        return RerunRecording(path=obj, label=label, view_kinds=kinds)
+
     def append(
         self,
         obj: str | Path | RerunRecording,
@@ -198,20 +319,12 @@ class ComposableContainerRerun(ComposableContainerBase):
         view_kinds: Iterable[RerunViewKind | str] | None = None,
     ) -> None:
         """Append an RRD path or a recording value with optional view metadata."""
-        if isinstance(obj, RerunRecording):
-            if label is not None or view_kinds is not None:
-                raise ValueError(
-                    "label and view_kinds must be set on RerunRecording or append(), not both"
-                )
-            item = obj
-        else:
-            kinds = (
-                tuple(RerunViewKind(kind) for kind in view_kinds)
-                if view_kinds is not None
-                else None
-            )
-            item = RerunRecording(path=obj, label=label, view_kinds=kinds)
-        self.container.append(item)
+        self.container.append(self._to_recording(obj, label=label, view_kinds=view_kinds))
+
+    @property
+    def _shares_one_view(self) -> bool:
+        """Whether every item is displayed in the same view rooted at ``/``."""
+        return self.compose_method in (ComposeType.overlay, ComposeType.sequence)
 
     def _output_file(self) -> Path:
         if self.output_path is not None:
@@ -225,38 +338,76 @@ class ComposableContainerRerun(ComposableContainerBase):
 
         return Path(gen_rerun_data_path("composed"))
 
-    def _build_blueprint(self, rrb, item_kinds: list[set[RerunViewKind]]):
-        if self.compose_method == ComposeType.overlay:
-            all_kinds = set().union(*item_kinds)
-            return _blueprint_views(
+    def _views(self, rrb, kinds: Iterable[RerunViewKind], *, origin: str, label: str):
+        """Build the view (or vertical stack of views) that displays one origin."""
+        selected = set(kinds)
+        ordered = [kind for kind in RerunViewKind if kind in selected] or [RerunViewKind.spatial_2d]
+        views = [
+            getattr(rrb, _VIEW_CLASS_NAMES[kind])(
+                origin=origin,
+                name=label if len(ordered) == 1 else f"{label} — {_VIEW_NAMES[kind]}",
+            )
+            for kind in ordered
+        ]
+        if len(views) == 1:
+            return views[0]
+        return rrb.Vertical(*views, name=label)
+
+    def _layout(self, rrb, items: list[_ComposedItem]):
+        """Map the compose method onto a Blueprint layout of per-item views."""
+        if self._shares_one_view:
+            return self._views(
                 rrb,
-                all_kinds,
+                set().union(*(item.view_kinds for item in items)),
                 origin="/",
-                label=self.name or "Overlay",
+                label=self.name or self.compose_method.title(),
             )
 
-        layouts = []
-        for index, (item, kinds) in enumerate(zip(self.container, item_kinds)):
-            layouts.append(
-                _blueprint_views(
-                    rrb,
-                    kinds,
-                    origin=f"/item_{index}",
-                    label=item.label or f"Item {index + 1}",
+        views = [
+            self._views(rrb, item.view_kinds, origin=item.prefix, label=item.label)
+            for item in items
+        ]
+        if len(views) == 1:
+            return views[0]
+        layout_class = _LAYOUT_CLASS_NAMES.get(self.compose_method)
+        if layout_class is None:
+            raise RuntimeError(f"Unsupported Rerun compose type: {self.compose_method}")
+        return getattr(rrb, layout_class)(*views, name=self.name)
+
+    def _read_items(self) -> list[_ComposedItem]:
+        items = []
+        for index, entry in enumerate(self.container):
+            item = _read_item(
+                entry.path,
+                prefix=f"/item_{index}",
+                label=entry.label or f"Item {index + 1}",
+            )
+            if entry.view_kinds:
+                item.view_kinds = set(entry.view_kinds)
+            items.append(item)
+        return items
+
+    def _send_spliced(self, recording, items: list[_ComposedItem]) -> None:
+        """Send items end to end in time, clearing each one as the next begins."""
+        import rerun as rr
+
+        offsets = _splice_offsets(items)
+        for index, (item, item_offsets) in enumerate(zip(items, offsets)):
+            for chunk in item.chunks:
+                recording.send_chunks(_shifted_chunks(chunk, item_offsets))
+            if index == len(items) - 1 or not item.time_bounds:
+                continue
+            # Rerun queries are latest-at, so without an explicit clear the final
+            # frame of this item would linger underneath the following item.
+            for timeline, (_, last) in item.time_bounds.items():
+                _set_recording_time(
+                    recording,
+                    timeline,
+                    item.time_types[timeline],
+                    last + item_offsets.get(timeline, 0) + _SPLICE_GAP_NS,
                 )
-            )
-
-        if len(layouts) == 1:
-            return layouts[0]
-        match self.compose_method:
-            case ComposeType.right:
-                return rrb.Horizontal(*layouts, name=self.name)
-            case ComposeType.down:
-                return rrb.Vertical(*layouts, name=self.name)
-            case ComposeType.sequence:
-                return rrb.Tabs(*layouts, name=self.name)
-            case _:
-                raise RuntimeError(f"Unsupported Rerun compose type: {self.compose_method}")
+            recording.log(item.prefix, rr.Clear(recursive=True))
+            recording.reset_time()
 
     def render(self, **_kwargs: Any) -> str:
         """Materialize the composition as one path-backed ``.rrd`` artifact."""
@@ -267,41 +418,31 @@ class ComposableContainerRerun(ComposableContainerBase):
         if missing:
             raise FileNotFoundError(f"Rerun recording does not exist: {missing[0]}")
 
+        output = self._output_file()
+
         import rerun as rr
         import rerun.blueprint as rrb
-        from rerun.experimental import RrdReader
 
+        items = self._read_items()
         recording = rr.RecordingStream(
             self.application_id,
             make_default=False,
             make_thread_default=False,
         )
-        item_kinds: list[set[RerunViewKind]] = []
 
-        for index, item in enumerate(self.container):
-            inferred_kinds: set[RerunViewKind] = set()
-            reader = RrdReader(item.path)
-            stores = reader.recordings()
-            if not stores:
-                raise ValueError(f"RRD contains no recording stores: {item.path}")
-
-            namespace_chunk = partial(
-                _namespace_chunk,
-                prefix=f"/item_{index}",
-                kinds=inferred_kinds,
-            )
-            for store in stores:
-                recording.send_chunks(reader.stream(store=store).map(namespace_chunk))
-            item_kinds.append(set(item.view_kinds or inferred_kinds))
+        if self.compose_method == ComposeType.sequence:
+            self._send_spliced(recording, items)
+        else:
+            for item in items:
+                recording.send_chunks(item.chunks)
 
         blueprint = rrb.Blueprint(
-            self._build_blueprint(rrb, item_kinds),
+            self._layout(rrb, items),
             auto_layout=False,
             auto_views=False,
             collapse_panels=True,
         )
         recording.send_blueprint(blueprint, make_active=True, make_default=True)
 
-        output = self._output_file()
         output.write_bytes(recording.memory_recording().drain_as_bytes())
         return str(output)
