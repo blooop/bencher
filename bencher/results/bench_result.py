@@ -105,6 +105,27 @@ class BenchResult(
         HoloviewResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
+        # Samples that raised and were tolerated because of run_cfg.catch. Empty
+        # unless catch was set, so a run with no catch is byte-identical to before.
+        self.failed_samples: list = []
+        # Jobs this run attempted, set by run_sweep. Needed because the dataset's
+        # own size is not the answer once over_time history has been merged in.
+        self.n_attempted: int = 0
+
+    @property
+    def n_failed(self) -> int:
+        """How many samples raised and were tolerated.
+
+        Tolerance without accounting is worse than fail-fast: without this a run
+        in which *every* sample failed would produce an all-sentinel dataset, a
+        valid-looking report and a successful exit.
+        """
+        return len(self.failed_samples)
+
+    @property
+    def failed_fraction(self) -> float:
+        """Failed samples as a fraction of the samples this run attempted."""
+        return self.n_failed / self.n_attempted if self.n_attempted else 0.0
 
     @property
     def identity(self) -> SweepIdentity:

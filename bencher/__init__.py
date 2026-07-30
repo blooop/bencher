@@ -32,7 +32,7 @@ from bencher.results.volume_result import VolumeResult
 from .bench_cfg import ShowMode
 from .bench_plot_server import BenchPlotServer
 from .bench_runner import BenchRunner
-from .bencher import Bench, BenchCfg, BenchRunCfg
+from .bencher import Bench, BenchCfg, BenchRunCfg, SampleErrorPolicyError
 from .example.benchmark_data import ExampleBenchCfg
 from .file_server import run_file_server
 from .identity import (
@@ -44,6 +44,7 @@ from .identity import (
     identity_of,
     sweep_identity,
 )
+from .job import SampleFailure
 from .render import load_result, render_report, save_result
 from .report_export import (
     compare_results,

@@ -35,7 +35,7 @@ from bencher.history import (
     project,
     reconcile,
 )
-from bencher.job import JobFuture
+from bencher.job import JobFuture, SampleFailure
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
 from bencher.variables.results import (
@@ -321,6 +321,26 @@ class ResultCollector:
                 rv_arrays[rv.name] = bench_res.ds[rv.name].values
         return rv_arrays
 
+    def record_caught_sample(
+        self, bench_res: BenchResult, job_id: str, inputs: dict, exc: BaseException
+    ) -> None:
+        """Record one tolerated sample failure.
+
+        No write to the dataset is needed: ``setup_dataset`` already filled every
+        result variable with its missing-value sentinel, so the failed coordinate
+        *is* the fill and the dataset shape is unchanged -- downstream consumers
+        need no special case. Nothing was written to the sample cache either,
+        because the exception escaped before the cache write in both execution
+        paths, so a transient flake cannot become a permanent cached failure.
+        """
+        failure = SampleFailure.from_exception(job_id, inputs, exc)
+        bench_res.failed_samples.append(failure)
+        logger.warning(
+            "sample failed and was caught (%s): %s",
+            ", ".join(f"{k}={v}" for k, v in failure.inputs.items()) or "no inputs",
+            failure.exception,
+        )
+
     def store_results(
         self,
         job_result: JobFuture,
@@ -346,7 +366,17 @@ class ResultCollector:
         Raises:
             RuntimeError: If an unsupported result variable type is encountered
         """
-        result = job_result.result()
+        catch = tuple(getattr(bench_run_cfg, "catch", ()) or ())
+        if catch:
+            try:
+                result = job_result.result()
+            except catch as exc:
+                self.record_caught_sample(
+                    bench_res, job_result.job.job_id, worker_job.function_input, exc
+                )
+                return
+        else:
+            result = job_result.result()
         if result is not None:
             logger.info(f"{job_result.job.job_id}:")
             if bench_res.bench_cfg.print_bench_inputs:

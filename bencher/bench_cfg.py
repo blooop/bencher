@@ -183,6 +183,29 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
 
+    catch: tuple = param.Parameter(
+        (),
+        doc="Exception types a single sample may raise without aborting the sweep. "
+        "Default () keeps today's fail-fast behaviour. Spelled exactly as on "
+        "Bench.optimize(catch=...), which has had this knob since #962. A caught "
+        "sample leaves the missing-value sentinel at its coordinate, is logged at "
+        "WARNING, and is recorded in BenchResult.failed_samples; nothing is written "
+        "to the sample cache for it, so a transient flake cannot become permanent. "
+        "Use with fail_on_sample_error -- they are a pair, not independent knobs: "
+        "catch alone turns real breakage into a green run over an all-sentinel "
+        "dataset.",
+    )
+
+    fail_on_sample_error: bool | float = param.Parameter(
+        False,
+        doc="Fail the run after the fact if samples were caught. True raises when "
+        "any sample failed; a float in (0, 1] raises when the failed *fraction* "
+        "reaches it, so a flake is tolerated but a run made of flakes is not. The "
+        "raise happens after the dataset and report are assembled, so the partial "
+        "results survive it -- losing the artifact would defeat catching in the "
+        "first place.",
+    )
+
     subsampling_divisions: int = param.Integer(
         default=0,
         bounds=[0, 12],

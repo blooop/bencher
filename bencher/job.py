@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import traceback
+from dataclasses import dataclass
 from collections.abc import Callable
 from concurrent.futures import Future, ProcessPoolExecutor
 from enum import auto
@@ -61,6 +63,30 @@ class Job:
         else:
             self.job_key = job_key
         self.tag = tag
+
+
+@dataclass(frozen=True)
+class SampleFailure:
+    """One sample that raised and was tolerated because of ``catch=``.
+
+    Kept as a value on the result so a tolerated failure is *countable*: a run
+    that swallowed every sample must not look like a clean run, which is why
+    ``fail_on_sample_error`` exists alongside ``catch``.
+    """
+
+    job_id: str
+    inputs: dict
+    exception: str
+    traceback: str
+
+    @classmethod
+    def from_exception(cls, job_id: str, inputs: dict, exc: BaseException) -> SampleFailure:
+        return cls(
+            job_id=job_id,
+            inputs=dict(inputs),
+            exception=repr(exc),
+            traceback="".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+        )
 
 
 class JobFuture:

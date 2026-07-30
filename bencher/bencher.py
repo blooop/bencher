@@ -65,6 +65,42 @@ def _agg_job_args(kwargs, agg_vars, combo):
     return job_args
 
 
+class SampleErrorPolicyError(Exception):
+    """Raised after a sweep completes when too many samples were caught.
+
+    Deliberately raised *after* the dataset and report are assembled, so the
+    partial results are still on disk when it fires; losing the artifact would
+    defeat the point of catching in the first place.
+    """
+
+
+def _enforce_sample_error_policy(bench_res: BenchResult, policy: bool | float) -> None:
+    """Fail the run if ``fail_on_sample_error`` says the failures are the story.
+
+    ``True`` fails on any caught sample; a float in (0, 1] fails when the failed
+    fraction reaches it, which is what lets a project tolerate a flake and still
+    fail a run made of flakes. This is the half of plan 21 that makes ``catch=``
+    safe to use unattended.
+    """
+    if not policy or not bench_res.n_failed:
+        return
+    n, frac = bench_res.n_failed, bench_res.failed_fraction
+    if policy is True:
+        raise SampleErrorPolicyError(
+            f"{n} sample(s) failed and were caught; fail_on_sample_error=True"
+        )
+    threshold = float(policy)
+    if not 0.0 < threshold <= 1.0:
+        raise ValueError(
+            f"fail_on_sample_error must be True/False or a float in (0, 1], got {policy!r}"
+        )
+    if frac >= threshold:
+        raise SampleErrorPolicyError(
+            f"{n} sample(s) failed ({frac:.0%} of those attempted), which meets "
+            f"fail_on_sample_error={threshold}"
+        )
+
+
 class Bench(BenchPlotServer):
     def __init__(
         self,
@@ -307,6 +343,7 @@ class Bench(BenchPlotServer):
         pass_repeat: bool = False,
         tag: str = "",
         series_id: str | None = None,
+        catch: tuple[type[Exception], ...] | None = None,
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
@@ -416,6 +453,9 @@ class Bench(BenchPlotServer):
             else:
                 run_cfg = deepcopy(self.run_cfg)
                 logger.info("Copy run cfg from bench class")
+
+        if catch is not None:
+            run_cfg.catch = catch
 
         if run_cfg.only_plot:
             run_cfg.cache_results = True
@@ -819,6 +859,7 @@ class Bench(BenchPlotServer):
         bench_res.timings = timings
 
         self.results.append(bench_res)
+        _enforce_sample_error_policy(bench_res, run_cfg.fail_on_sample_error)
         return bench_res
 
     def _append_result_via_split(self, bench_res: BenchResult) -> None:
@@ -1044,9 +1085,30 @@ class Bench(BenchPlotServer):
         rv_arrays = self._collector.precompute_result_arrays(bench_res)
 
         with phase_timer() as elapsed:
+            catch = tuple(bench_run_cfg.catch or ())
+            bench_res.n_attempted = len(jobs)
+            # Jobs that were actually submitted, paired with their futures. Kept
+            # explicitly rather than zipping jobs against results_list: a caught
+            # sample submits nothing, and a positional zip would then pair every
+            # later job with the wrong future.
+            submitted: list[tuple] = []
             for job, cache_job in zip(jobs, cache_jobs):
-                result = self.sample_cache.submit(cache_job, prefetched=prefetched)
+                if catch:
+                    try:
+                        result = self.sample_cache.submit(cache_job, prefetched=prefetched)
+                    except catch as exc:
+                        # The serial executor runs the worker *inside* submit(), so on
+                        # the default executor a raising sample never reaches
+                        # store_results at all -- catching only there would leave the
+                        # common path fail-fast while the pool path tolerated failures.
+                        self._collector.record_caught_sample(
+                            bench_res, cache_job.job_id, job.function_input, exc
+                        )
+                        continue
+                else:
+                    result = self.sample_cache.submit(cache_job, prefetched=prefetched)
                 results_list.append(result)
+                submitted.append((job, result))
                 # For serial execution, store results immediately so that
                 # completed results are cached to disk before later jobs
                 # may crash.
@@ -1057,7 +1119,7 @@ class Bench(BenchPlotServer):
                 # can use as_completed() to overlap result storage with
                 # remaining computation.
                 pending = {}  # concurrent.futures.Future -> (WorkerJob, JobFuture)
-                for job, job_future in zip(jobs, results_list):
+                for job, job_future in submitted:
                     if job_future.future is not None:
                         pending[job_future.future] = (job, job_future)
                     else:
