@@ -21,6 +21,27 @@ from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.sweep_base import hash_sha1
 
 
+def _unnamed_parameter_error(var_type: str, name: str, owner: str, actual) -> TypeError:
+    """The error for a Parameter that never received a name from param's metaclass.
+
+    param assigns ``Parameter.name`` in the metaclass of the class that *declares*
+    the parameter, so a parameter declared on a plain (non-Parameterized) mixin is
+    found by param's MRO scan but keeps ``name=None``.  It resolves here without
+    complaint and fails much later, where ``.name`` is used as a dataset variable
+    name or as the key into the worker's result dict -- a symptom with no path back
+    to the declaration.  Name the cause instead.
+    """
+    return TypeError(
+        f"{var_type.capitalize()} variable '{name}' on {owner} has no name "
+        f"(param.name={actual!r}). This happens when the variable is declared on a "
+        f"base class that is not a param.Parameterized subclass: param assigns a "
+        f"Parameter's name in the metaclass of the class that declares it, and a "
+        f"plain mixin has no such metaclass. Make that base subclass "
+        f"bn.ParametrizedSweep (or param.Parameterized) and the variable will "
+        f"register correctly."
+    )
+
+
 def _resolve_param(
     name: str,
     worker: ParametrizedSweep,
@@ -35,7 +56,13 @@ def _resolve_param(
             f"{type(worker).__name__}. "
             f"Available parameters: {available}"
         ) from None
-    return all_params[name]
+    resolved = all_params[name]
+    # Found under key *name*, so a disagreeing .name means param never named it.
+    if getattr(resolved, "name", None) != name:
+        raise _unnamed_parameter_error(
+            var_type, name, type(worker).__name__, getattr(resolved, "name", None)
+        )
+    return resolved
 
 
 def _validate_input_vars(input_vars: list[param.Parameter]) -> list[param.Parameter]:
@@ -270,6 +297,13 @@ class SweepExecutor:
                 f"You need to use {var_type}_vars =[{worker_input_cfg}.param.your_variable], "
                 f"instead of {var_type}_vars =[{worker_input_cfg}.your_variable]"
             )
+        # Object path: only ``name is None`` is checkable. A Parameter passed
+        # directly need not correspond to any attribute on the worker -- bn.box()
+        # and bn.sweep() build named copies that are legitimately absent from the
+        # class namespace -- so there is no key to compare against here.
+        if variable.name is None:
+            owner = type(worker_class_instance).__name__ if worker_class_instance else "the worker"
+            raise _unnamed_parameter_error(var_type, f"<{type(variable).__name__}>", owner, None)
         return variable
 
     def define_const_inputs(self, const_vars: list[tuple[param.Parameter, Any]]) -> dict | None:
