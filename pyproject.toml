@@ -326,6 +326,7 @@ include = [
     "bencher/job.py",
     "bencher/worker_job.py",
     "bencher/result_collector.py",
+    "bencher/worker_manager.py",
 ]
 [tool.ty.overrides.rules]
 invalid-assignment = "error"
