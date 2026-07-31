@@ -45,9 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is gone: the report shows a labelled per-time grid, one pane per snapshot under its
   timestamp, instead of only the latest run. Practical effect: a report over a long history
   gets *N* times wider — bound it with `max_time_events` on the result variable if that
-  matters. Cells cached before this release render real content at the final time event and
-  an explicit labelled placeholder at earlier ones, because the legacy payload list only
-  ever held the final run's samples.
+  matters. Note that unlike an image or video, aging a dataset cell out of the history does
+  not itself delete the payload: blobs are content-addressed, so the same file may still
+  back a cell elsewhere in the cache. `max_time_events` bounds the *report*; reclaiming
+  blob storage is a cache-management operation. Cells cached before this release render
+  real content at the final time event and an explicit labelled placeholder at earlier
+  ones, because the legacy payload list only ever held the final run's samples.
 - **New gallery example `example_result_dataset_1d_over_time`** under
   `reference/meta/result_types/result_dataset/`; no existing example combined
   `ResultDataSet` with `over_time`.
