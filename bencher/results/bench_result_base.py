@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 from collections import defaultdict
@@ -89,6 +90,24 @@ def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
     if len(bool_coords) > 0:
         return dataset.assign_coords(bool_coords)
     return dataset
+
+
+def _accepts_keyword(callback: Callable, name: str) -> bool:
+    """True when *callback* can be called with the *name* keyword.
+
+    ``plot_callback`` is a public extension point: a caller may pass any callable
+    to ``map_plot_panes``, including one whose signature is exactly
+    ``(dataset, result_var)``.  Render-internal keywords must therefore be
+    offered rather than imposed — a callback that does not declare the keyword
+    (and has no ``**kwargs`` to absorb it) is called the way it always was
+    instead of raising ``TypeError``.  Uninspectable callables (C builtins) are
+    treated as not accepting it, which is the safe direction.
+    """
+    try:
+        params = inspect.signature(callback).parameters
+    except (TypeError, ValueError):
+        return False
+    return name in params or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
 
 
 class BenchResultBase:
@@ -1071,18 +1090,27 @@ class BenchResultBase:
         payloads alone, so a pre-plan history with in-range indices at every time
         point would otherwise render the current payload under historical labels.
         Untrusted legacy cells render as a labelled placeholder instead.
+
+        ``legacy_trusted`` is only *offered* to *plot_callback*: it is a
+        render-internal keyword, and ``plot_callback`` is a public extension
+        point that a caller may satisfy with a plain ``(dataset, result_var)``
+        function.  Passing it unconditionally would turn such a callback into a
+        ``TypeError`` the moment its result went over_time, so a callback that
+        cannot name it is called exactly as it was before this path existed.
         """
         time_vals = list(dataset.coords["over_time"].values)
         is_datetime = np.issubdtype(dataset.coords["over_time"].dtype, np.datetime64)
         labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
 
+        pass_trust = _accepts_keyword(plot_callback, "legacy_trusted")
         items = []
         final_idx = len(labels) - 1
         for idx, label in enumerate(labels):
+            trust_kwargs = {"legacy_trusted": idx == final_idx} if pass_trust else {}
             pane = plot_callback(
                 dataset=dataset.isel(over_time=idx),
                 result_var=result_var,
-                legacy_trusted=idx == final_idx,
+                **trust_kwargs,
                 **kwargs,
             )
             if pane is None:

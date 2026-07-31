@@ -241,6 +241,23 @@ rather than silently worked around:
 6. D4's gallery evidence required a new example —
    `example_result_dataset_1d_over_time` — since no existing example combined
    `ResultDataSet` with `over_time`.
+7. **D4's legacy-trust flag is offered to `plot_callback`, not imposed on it**
+   (found in post-implementation review). `plot_callback` is a public extension
+   point that a caller may satisfy with a plain `(dataset, result_var)` function,
+   so passing `legacy_trusted=` unconditionally turned any such callback into a
+   `TypeError` the moment its result went `over_time` — a regression against
+   pre-plan-22 behaviour, since the old `isel(over_time=-1)` path passed no extra
+   keyword. `_pane_over_time_dataset` now passes it only to callbacks that declare
+   it (or carry `**kwargs`); every callback in bencher does, so behaviour is
+   unchanged internally.
+8. **The blob store is a third cache category, not media.** `cache_management`
+   gained `_CONTENT_FOLDERS` rather than extending `_MEDIA_FOLDERS`, whose contract
+   ("contains per-job-key subdirectories") is what makes per-job and orphan cleanup
+   safe — a content-addressed blob may back cells from many job keys, so it must
+   never be pruned per job. Blobs are counted by `cache_stats` (they grow unbounded
+   until an explicit clear, so they must not be invisible in a size audit) and
+   removed by `clear_media`, degrading affected cells to placeholders exactly as a
+   cleared image does.
 
 ## Coordination
 

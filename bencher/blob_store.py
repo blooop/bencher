@@ -45,9 +45,22 @@ import xarray as xr
 logger = logging.getLogger(__name__)
 
 # Number of hex characters of the sha256 digest used in blob filenames.
+#
+# 16 hex chars is 64 bits of the digest, so content addressing is exact only up
+# to a truncated-digest collision: two *different* payloads sharing a prefix
+# would map to one filename, and because a name that already exists is not
+# rewritten, the second payload would silently load back as the first.  The
+# birthday bound puts even odds at ~2**32 distinct blobs in a single cache dir,
+# which no benchmark cache approaches, so the risk is accepted rather than
+# mitigated -- raise this constant (new blobs simply get longer names; existing
+# ones stay loadable, since load_blob dispatches on extension, not name length)
+# if a cache ever grows near that scale.
 _HASH_CHARS = 16
 
-# Subdirectory of the cache dir that holds all blobs.
+# Subdirectory of the cache dir that holds all blobs.  Cache tooling knows this
+# folder as a content-addressed store (``cache_management._CONTENT_FOLDERS``):
+# it is counted in cache stats and cleared wholesale, but never pruned per job
+# key, since one deduplicated blob may back cells from many different jobs.
 _BLOBS_SUBDIR = "blobs"
 
 # Dtypes the scipy netCDF3 engine round-trips *exactly* — same dtype, same

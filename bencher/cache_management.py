@@ -53,6 +53,17 @@ _MANAGED_CACHES = ("sample_cache", "benchmark_inputs", "history")
 # Top-level media folders that contain per-job-key subdirectories.
 _MEDIA_FOLDERS = ("img", "vid", "rrd", "generic")
 
+# Content-addressed stores: flat, sha256-named files that any number of job keys
+# may share, because identical payloads deduplicate to one file (see
+# ``bencher.blob_store``).  Deliberately *not* part of ``_MEDIA_FOLDERS``, whose
+# contract is "contains per-job-key subdirectories" — that layout is what makes
+# ``cleanup_job_media`` and ``clean_orphaned_media`` safe, and neither is
+# meaningful here: deleting the blob for one job key can strand a cell belonging
+# to another. These folders are therefore counted by ``cache_stats`` and removed
+# wholesale by ``clear_media``/``clear_all`` (a cleared blob renders as a
+# placeholder, exactly like a cleared image), but never pruned per job.
+_CONTENT_FOLDERS = ("blobs",)
+
 # File extensions recognized as media when cleaning up legacy (pre-v2) files.
 _MEDIA_EXTENSIONS = frozenset(
     {
@@ -152,6 +163,8 @@ class CacheStats:
     managed: list[CacheDirStats]
     media: list[CacheDirStats]
     total_bytes: int
+    # Defaulted so existing three-argument construction keeps working.
+    content: list[CacheDirStats] = dataclasses.field(default_factory=list)
 
     def summary(self) -> str:
         lines = ["Cache Statistics", "=" * 60]
@@ -162,6 +175,10 @@ class CacheStats:
         if self.media:
             lines.append("Media directories:")
             for s in self.media:
+                lines.append(s.summary_line())
+        if self.content:
+            lines.append("Content-addressed stores:")
+            for s in self.content:
                 lines.append(s.summary_line())
         lines.append("-" * 60)
         lines.append(f"  Total: {_fmt_size(self.total_bytes)}")
@@ -209,7 +226,13 @@ def cache_stats(cachedir: str = "cachedir") -> CacheStats:
         media.append(CacheDirStats(folder, count, size))
         total += size
 
-    return CacheStats(managed=managed, media=media, total_bytes=total)
+    content: list[CacheDirStats] = []
+    for folder in _CONTENT_FOLDERS:
+        count, size = _dir_stats(root / folder)
+        content.append(CacheDirStats(folder, count, size))
+        total += size
+
+    return CacheStats(managed=managed, media=media, total_bytes=total, content=content)
 
 
 def print_cache_stats(cachedir: str = "cachedir") -> None:
@@ -268,14 +291,18 @@ def clear_all(cachedir: str = "cachedir") -> None:
 
 
 def clear_media(cachedir: str = "cachedir") -> tuple[int, int]:
-    """Delete all files in media directories.
+    """Delete all files in media and content-addressed store directories.
+
+    Cells that referenced a deleted file (an image path, a blob path) render as
+    a placeholder afterwards rather than raising — this reclaims space at the
+    cost of the payloads, it does not corrupt a stored result.
 
     Returns (files_deleted, bytes_freed).
     """
     root = Path(cachedir)
     deleted = 0
     freed = 0
-    for folder in _MEDIA_FOLDERS:
+    for folder in _MEDIA_FOLDERS + _CONTENT_FOLDERS:
         media_path = root / folder
         if not media_path.is_dir():
             continue

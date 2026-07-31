@@ -351,6 +351,25 @@ class TestOverTimeRendersAllPoints(unittest.TestCase):
         self.assertEqual(len(rendered), len(SCALES) * OVER_TIME_RUNS - 1)
         self.assertEqual(len(placeholder_output(view)), 1)
 
+    def test_strict_signature_plot_callback_still_works(self):
+        """``plot_callback`` is a public extension point, so the render-internal
+        ``legacy_trusted`` keyword must be offered, not imposed: a callback taking
+        exactly ``(dataset, result_var)`` used to work and must keep working."""
+        calls = []
+
+        def strict_callback(dataset, result_var):  # no **kwargs to absorb extras
+            # Each slice is a single event, so over_time has been indexed away.
+            calls.append((result_var.name, "over_time" in dataset.sizes))
+            return pn.pane.Markdown("strict")
+
+        view = self.res.map_plot_panes(strict_callback)
+        self.assertIsInstance(view, pn.viewable.Viewable)
+        # map_plot_panes defaults to target_dimension=2, so the callback is handed
+        # one slice per time event (the samples still inside it) rather than one per
+        # sample: the assertion that matters is that the over_time dataset path ran
+        # for every event instead of raising TypeError on the first.
+        self.assertEqual(calls.count(("table", False)), OVER_TIME_RUNS)
+
 
 class TestLegacyOverTimeHistory(unittest.TestCase):
     """F5: a pre-plan-22 over_time result — int cells at EVERY time point but only
