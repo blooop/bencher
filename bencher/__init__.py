@@ -155,15 +155,19 @@ except ModuleNotFoundError:
 
 from .cache_management import (
     DEFAULT_CACHE_SIZE_BYTES,
+    BlobReachability,
     CacheDirStats,
     CacheStats,
+    blob_reachability,
     cache_stats,
+    clean_orphaned_blobs,
     clean_orphaned_media,
     cleanup_job_media,
     clear_all,
     clear_media,
     ensure_cache_version,
     print_cache_stats,
+    print_orphaned_blobs,
 )
 from .git_info import git_time_event
 from .history import HistoryEvent, HistoryResetError

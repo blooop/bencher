@@ -15,15 +15,34 @@ makes lifecycle management trivial:
 
 A ``CACHE_VERSION`` file inside ``cachedir/`` guards against stale data
 from older formats.  ``ensure_cache_version()`` auto-clears on mismatch.
+
+Blob store lifecycle
+--------------------
+``cachedir/blobs/`` (see :mod:`bencher.blob_store`) is content-addressed and
+therefore has no owner: one file may back cells belonging to many job keys,
+sweeps and ``over_time`` history events at once, because byte-identical
+payloads deduplicate to a single name.  None of the per-job machinery above
+applies to it, and deliberately so.  Its lifecycle is instead
+**reachability-based**: :func:`clean_orphaned_blobs` builds the set of blob
+names still referenced by anything the cache can see and deletes only the
+files that no reference names.  See that function for the roots it scans, and
+for the one it provably cannot see (results saved outside the cache with
+``bencher.render.save_result``).
 """
 
 from __future__ import annotations
 
 import dataclasses
 import logging
+import pickle
+import re
 import shutil
+import time
+from collections.abc import Iterable
 from pathlib import Path
 
+import numpy as np
+import xarray as xr
 from diskcache import Cache
 
 logger = logging.getLogger(__name__)
@@ -61,8 +80,10 @@ _MEDIA_FOLDERS = ("img", "vid", "rrd", "generic")
 # meaningful here: deleting the blob for one job key can strand a cell belonging
 # to another. These folders are therefore counted by ``cache_stats`` and removed
 # wholesale by ``clear_media``/``clear_all`` (a cleared blob renders as a
-# placeholder, exactly like a cleared image), but never pruned per job.
-_CONTENT_FOLDERS = ("blobs",)
+# placeholder, exactly like a cleared image), but never pruned per job.  What
+# *can* reclaim them selectively is reachability GC — ``clean_orphaned_blobs``.
+_BLOBS_FOLDER = "blobs"
+_CONTENT_FOLDERS = (_BLOBS_FOLDER,)
 
 # File extensions recognized as media when cleaning up legacy (pre-v2) files.
 _MEDIA_EXTENSIONS = frozenset(
@@ -398,3 +419,407 @@ def clean_orphaned_media(cachedir: str = "cachedir", dry_run: bool = True) -> tu
         orphan_bytes,
     )
     return orphans, orphan_bytes
+
+
+# ---------------------------------------------------------------------------
+# Blob store garbage collection (reachability)
+# ---------------------------------------------------------------------------
+
+# Diskcaches whose *values* can name a blob.
+#
+# ``sample_cache`` is deliberately absent.  It stores what the worker returned,
+# which is the payload *before* materialization: blobs are written by
+# ``ResultCollector._materialize_dataset_value`` at the moment the value is
+# placed in the result dataset, so a sample-cache value holds a DataFrame or a
+# ``ResultDataSet`` wrapper, never a blob path.  A payload still in the sample
+# cache also re-materializes to the *same* content-addressed path on the next
+# cache hit, so collecting its blob is recoverable rather than lossy — the one
+# place in this module where that is true (see the warning in
+# ``clean_orphaned_blobs``).
+#
+# ``benchmark_inputs`` stores whole pickled ``BenchResult`` objects and
+# ``history`` stores over_time records; both carry datasets whose cells are blob
+# path strings, so both are roots.
+_BLOB_REFERENCE_CACHES = ("benchmark_inputs", "history")
+
+# Extensions ``blob_store._serialize`` can emit.  ``.da.nc`` ends with ``.nc``,
+# so the fast prefilter below does not need to list it separately.
+_BLOB_SUFFIXES = (".parquet", ".nc", ".bin", ".pkl")
+
+# A blob filename is a truncated sha256 in lowercase hex plus one of the format
+# extensions.  The digest length is not pinned: ``blob_store._HASH_CHARS`` may be
+# raised without invalidating existing blobs, and this must keep matching both.
+_BLOB_NAME_RE = re.compile(r"^[0-9a-f]+(?:\.parquet|\.da\.nc|\.nc|\.bin|\.pkl)$")
+
+# Recursion bound for the reference walk.  Every real root is shallow (a history
+# record is dict → Dataset; a cached result is BenchResult → Dataset), so this is
+# a guard against pathological nesting, not a working limit.
+_MAX_REF_WALK_DEPTH = 8
+
+
+@dataclasses.dataclass(frozen=True)
+class BlobReachability:
+    """Which blob files are still named by something the cache can see.
+
+    Attributes:
+        names: Blob *filenames* (not full paths) reached from some root.
+        unreadable: One human-readable line per root that could not be scanned.
+            A single entry makes the whole scan untrustworthy — an unreadable
+            record may name any blob — so :attr:`complete` gates deletion.
+    """
+
+    names: frozenset[str]
+    unreadable: tuple[str, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        """True when every root was scanned, so absence of a name proves garbage."""
+        return not self.unreadable
+
+
+def _blob_name(value: str) -> str | None:
+    """The blob filename *value* names, or None when it is not a blob path.
+
+    Matching is on the **basename**, not the full path: a blob's name *is* its
+    content hash, so a name is a complete and location-independent identity.
+    That keeps references valid when a stored dataset carries an absolute path
+    from a cachedir that has since been moved, copied or renamed — the case
+    where resolving against the current ``blobs/`` directory would silently
+    declare every reference dead.
+    """
+    if not value.endswith(_BLOB_SUFFIXES):
+        return None
+    name = Path(value).name
+    return name if _BLOB_NAME_RE.match(name) else None
+
+
+def _collect_array_blob_names(values, names: set[str]) -> None:
+    """Add every blob name appearing in a numpy array of dataset cells."""
+    arr = np.asarray(values)
+    # Cells holding paths are object or unicode dtype; numeric dtypes (including
+    # the -1 legacy sentinel and NaN fills) cannot hold a reference.
+    if arr.dtype.kind not in ("O", "U"):
+        return
+    for val in arr.flat:
+        if isinstance(val, str):
+            name = _blob_name(val)
+            if name is not None:
+                names.add(name)
+
+
+def _collect_xarray_blob_names(obj: xr.Dataset | xr.DataArray, names: set[str]) -> None:
+    """Add every blob name in *obj*, including coordinates.
+
+    A ``Dataset`` is scanned through ``.variables``, which is every data
+    variable **and** every coordinate.  For a history record that matters: the
+    stored dataset is a superset holding dormant and retired columns as ordinary
+    data variables alongside the live ones, and a projection onto the current
+    config would hide exactly the references nothing else can see.
+    """
+    if isinstance(obj, xr.Dataset):
+        for var in obj.variables.values():
+            _collect_array_blob_names(var.values, names)
+    else:
+        _collect_array_blob_names(obj.values, names)
+        for coord in obj.coords.values():
+            _collect_array_blob_names(coord.values, names)
+
+
+def _walk_blob_references(value, names: set[str], seen: set[int], depth: int = 0) -> None:
+    """Recursively add every blob name reachable from *value*.
+
+    Descends through the shapes that actually hold cached datasets: containers,
+    xarray objects, numpy arrays, and the instance dicts of bencher-owned
+    objects (``BenchResult``, ``BenchCfg``, ...).  Objects from other packages
+    are leaves — walking param/numpy internals would cost far more than it could
+    find, since a blob path only ever lives in a dataset cell.
+    """
+    if depth > _MAX_REF_WALK_DEPTH or isinstance(
+        value, (bool, int, float, bytes, bytearray, type(None))
+    ):
+        return
+    if isinstance(value, str):
+        name = _blob_name(value)
+        if name is not None:
+            names.add(name)
+    elif isinstance(value, (xr.Dataset, xr.DataArray)):
+        _collect_xarray_blob_names(value, names)
+    elif isinstance(value, np.ndarray):
+        _collect_array_blob_names(value, names)
+    elif id(value) not in seen:
+        # Every object added here stays reachable from the root for the duration
+        # of the walk, so an id() can never be recycled underneath us.
+        seen.add(id(value))
+        for item in _blob_reference_children(value):
+            _walk_blob_references(item, names, seen, depth + 1)
+
+
+def _blob_reference_children(value) -> Iterable:
+    """The sub-values of *value* worth recursing into, empty for a leaf."""
+    if isinstance(value, dict):
+        return value.values()
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return value
+    if type(value).__module__.split(".")[0] == "bencher" and hasattr(value, "__dict__"):
+        return vars(value).values()
+    return ()
+
+
+def _scan_cache_for_blob_names(cache_path: Path, names: set[str], unreadable: list[str]) -> None:
+    """Walk every value in one diskcache, recording roots that cannot be read."""
+    try:
+        cache = Cache(str(cache_path))
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        unreadable.append(f"{cache_path}: cannot open ({type(exc).__name__}: {exc})")
+        return
+    try:
+        keys = list(cache.iterkeys())
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        unreadable.append(f"{cache_path}: cannot enumerate ({type(exc).__name__}: {exc})")
+        cache.close()
+        return
+    try:
+        for key in keys:
+            try:
+                value = cache[key]
+            except KeyError:
+                # Evicted between listing and reading: it references nothing now.
+                continue
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                unreadable.append(
+                    f"{cache_path}[{key!r}]: cannot deserialize ({type(exc).__name__}: {exc})"
+                )
+                continue
+            _walk_blob_references(value, names, set())
+    finally:
+        cache.close()
+
+
+def _extra_root_files(
+    extra_roots: Iterable[str | Path] | None, unreadable: list[str]
+) -> list[Path]:
+    """Resolve *extra_roots* to pickle files, recording anything that is missing.
+
+    A file is taken as-is; a directory contributes every ``*.pkl`` under it,
+    recursively.  A path that does not exist is recorded as unreadable rather
+    than skipped: a caller naming an archive to protect and getting a typo'd
+    path must not silently get an unprotected GC run.
+    """
+    files: list[Path] = []
+    for entry in extra_roots or ():
+        path = Path(entry)
+        if path.is_file():
+            files.append(path)
+        elif path.is_dir():
+            files.extend(sorted(f for f in path.rglob("*.pkl") if f.is_file()))
+        else:
+            unreadable.append(f"{path}: extra root does not exist")
+    return files
+
+
+def blob_reachability(
+    cachedir: str = "cachedir",
+    extra_roots: Iterable[str | Path] | None = None,
+) -> BlobReachability:
+    """Collect every blob filename still referenced from the cache.
+
+    Roots scanned: the ``benchmark_inputs`` and ``history`` diskcaches under
+    *cachedir*, plus any saved-result pickles named by *extra_roots*.  A missing
+    cache directory contributes no references (it is empty, not unreadable); a
+    cache that exists but cannot be opened, listed, or deserialized is recorded
+    in :attr:`BlobReachability.unreadable`.
+
+    Args:
+        cachedir: Root cache directory.
+        extra_roots: Extra ``save_result`` pickles, or directories of them, to
+            treat as live references.  **Unpickling runs arbitrary code**, the
+            same trust assumption ``bencher.render.load_result`` already makes,
+            so pass only paths you wrote.
+
+    Returns:
+        A :class:`BlobReachability` describing the live set and any root that
+        could not be scanned.
+    """
+    names: set[str] = set()
+    unreadable: list[str] = []
+    root = Path(cachedir)
+
+    for cache_name in _BLOB_REFERENCE_CACHES:
+        cache_path = root / cache_name
+        if cache_path.is_dir():
+            _scan_cache_for_blob_names(cache_path, names, unreadable)
+
+    for path in _extra_root_files(extra_roots, unreadable):
+        try:
+            with path.open("rb") as fh:
+                value = pickle.load(fh)
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            unreadable.append(f"{path}: cannot load ({type(exc).__name__}: {exc})")
+            continue
+        _walk_blob_references(value, names, set())
+
+    return BlobReachability(names=frozenset(names), unreadable=tuple(unreadable))
+
+
+def _unreferenced_blobs(
+    cachedir: str,
+    reachability: BlobReachability,
+    dry_run: bool,
+    min_age_seconds: float,
+) -> tuple[list[str], int]:
+    """List (and optionally delete) blobs whose name is in no live reference."""
+    blobs_dir = Path(cachedir) / _BLOBS_FOLDER
+    if not blobs_dir.is_dir():
+        return [], 0
+
+    now = time.time()
+    orphans: list[str] = []
+    orphan_bytes = 0
+    for blob in sorted(blobs_dir.iterdir()):
+        if not blob.is_file():
+            continue
+        # Anything not shaped like a blob is not ours to delete: notably the
+        # ``.tmp-<uuid>`` files materialize_blob renames from, which may belong
+        # to a worker writing right now.
+        if not _BLOB_NAME_RE.match(blob.name):
+            continue
+        if blob.name in reachability.names:
+            continue
+        try:
+            stat = blob.stat()
+        except OSError as exc:
+            logger.warning("Could not stat blob %s: %s", blob, exc)
+            continue
+        if min_age_seconds > 0 and (now - stat.st_mtime) < min_age_seconds:
+            continue
+        orphans.append(str(blob))
+        orphan_bytes += stat.st_size
+        if not dry_run:
+            try:
+                blob.unlink()
+            except OSError as exc:
+                logger.warning("Failed to remove unreferenced blob %s: %s", blob, exc)
+
+    action = "Dry run: found" if dry_run else "Deleted"
+    logger.info("%s %d unreferenced blobs (%d bytes)", action, len(orphans), orphan_bytes)
+    return orphans, orphan_bytes
+
+
+def _report_incomplete(reachability: BlobReachability) -> None:
+    """Log why an incomplete reachability scan collected nothing."""
+    logger.warning(
+        "Blob GC collected nothing: %d cache root(s) could not be scanned, so no "
+        "blob can be proven unreferenced. Fix or delete the entries below (bencher "
+        "discards unreadable history records itself on the next run) and retry:\n%s",
+        len(reachability.unreadable),
+        "\n".join(f"  {line}" for line in reachability.unreadable),
+    )
+
+
+def clean_orphaned_blobs(
+    cachedir: str = "cachedir",
+    dry_run: bool = True,
+    extra_roots: Iterable[str | Path] | None = None,
+    min_age_seconds: float = 0.0,
+) -> tuple[list[str], int]:
+    """Find and optionally delete blobs that no live reference names.
+
+    ``cachedir/blobs/`` is content-addressed, so a file has no owner: one blob
+    may back cells from many job keys, sweeps and ``over_time`` events at once,
+    because byte-identical payloads deduplicate to a single name.  That rules
+    out the per-job model used by :func:`cleanup_job_media` and
+    :func:`clean_orphaned_media` — deleting "this job's blob" can strand another
+    job's live cell — so collection is reachability-based instead: the union of
+    every blob name referenced from any root is computed first (see
+    :func:`blob_reachability`), and only files outside that set are deleted.
+
+    .. warning::
+        **A blob is primary storage, not a recomputable cache.**  Both
+        ``cache_results`` and ``cache_samples`` default to False, and a stored
+        ``over_time`` history holds paths rather than payload copies, so for
+        historical events there is nothing anywhere to regenerate a deleted blob
+        from.  Two consequences:
+
+        * ``dry_run=True`` is the default.  Deleting a still-referenced blob
+          silently degrades a cell to a render-time placeholder, so the safe
+          direction has to be the one you get by accident.
+        * This is GC, not eviction.  There is no size or age based reclamation
+          of *referenced* blobs, because nothing could restore them.
+
+    .. warning::
+        **Results saved outside the cache are invisible.**  A result written
+        with ``bencher.render.save_result`` is a pickle at a user-chosen path;
+        nothing records where, so its blob references cannot be discovered and
+        GC can strand it (the result still loads, and its dataset cells render
+        as placeholders).  Pass such archives as *extra_roots* to protect them.
+        The same applies to a result held only in memory by a sweep running
+        concurrently with GC: with the default ``cache_results=False`` nothing
+        on disk references its blobs yet.  ``min_age_seconds`` mitigates only
+        part of that exposure — it protects a blob the concurrent sweep *wrote*
+        during the grace window, but **not** a blob the sweep deduplicated
+        onto: a content hit skips the write entirely and never refreshes the
+        file's mtime, so an old blob that just gained a new reference looks
+        old to any grace period, however large
+        (``test_blob_store_races.py::test_min_age_does_not_protect_a_new_reference_to_an_old_deduplicated_blob``
+        pins this).  The only sufficient guard is to run GC with no sweep in
+        flight — between sessions, as :func:`clean_orphaned_media` is already
+        used.
+
+    An unreadable root makes the scan untrustworthy, since a record that cannot
+    be deserialized may name any blob.  In that case **nothing** is reported or
+    deleted in either mode (so a dry run stays an accurate preview of the real
+    one) and a warning names the offending entries.
+
+    Args:
+        cachedir: Root cache directory.
+        dry_run: If True (the default), only report unreferenced blobs.
+        extra_roots: Saved-result pickles, or directories of them, whose
+            references count as live.  See :func:`blob_reachability`.
+        min_age_seconds: Skip blobs modified more recently than this.  A
+            non-zero grace period protects blobs an in-flight sweep has
+            *written* during the window, but not an old blob it deduplicated
+            onto (see the warning above); 0 (the default) collects regardless
+            of age.
+
+    Returns:
+        (orphan_blobs, total_bytes) — paths of unreferenced blob files and their
+        combined size, matching :func:`clean_orphaned_media`'s convention.
+    """
+    reachability = blob_reachability(cachedir, extra_roots=extra_roots)
+    if not reachability.complete:
+        _report_incomplete(reachability)
+        return [], 0
+    return _unreferenced_blobs(cachedir, reachability, dry_run, min_age_seconds)
+
+
+def print_orphaned_blobs(
+    cachedir: str = "cachedir",
+    dry_run: bool = True,
+    extra_roots: Iterable[str | Path] | None = None,
+    min_age_seconds: float = 0.0,
+) -> None:
+    """Print a human-readable :func:`clean_orphaned_blobs` report.
+
+    The counterpart of :func:`print_cache_stats` for blob GC, and what the
+    ``cache-blob-orphans`` / ``cache-blob-gc`` pixi tasks call.  Arguments are
+    :func:`clean_orphaned_blobs`'s.
+    """
+    reachability = blob_reachability(cachedir, extra_roots=extra_roots)
+    if not reachability.complete:
+        print("Blob GC aborted: these cache roots could not be scanned, so no blob")
+        print("can be proven unreferenced. Nothing was deleted.")
+        for line in reachability.unreadable:
+            print(f"  {line}")
+        return
+
+    orphans, freed = _unreferenced_blobs(cachedir, reachability, dry_run, min_age_seconds)
+    verb = "Would reclaim" if dry_run else "Reclaimed"
+    print(f"Blob store: {Path(cachedir) / _BLOBS_FOLDER}")
+    print(f"  live references: {len(reachability.names)}")
+    print(f"  {verb} {len(orphans)} unreferenced blobs ({_fmt_size(freed)})")
+    for path in orphans[:20]:
+        print(f"    {path}")
+    if len(orphans) > 20:
+        print(f"    ... and {len(orphans) - 20} more")
+    if dry_run and orphans:
+        print("  Dry run: nothing deleted. Re-run with dry_run=False to reclaim.")

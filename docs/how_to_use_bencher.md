@@ -259,6 +259,13 @@ available and as a labelled placeholder where it is not. See the
 [ResultDataSet over time example](reference/meta/result_types/result_dataset/example_result_dataset_1d_over_time)
 for a working sweep.
 
+Those payloads accumulate in `cachedir/blobs/`, one file per distinct payload, and aging an
+event out with `max_time_events` leaves its file behind. `bn.clean_orphaned_blobs()` reports
+the blobs no stored result or history event references any more (`dry_run=False` reclaims
+them; `pixi run cache-blob-orphans` / `cache-blob-gc` from a checkout). Results written with
+`bn.save_result` live at paths bencher does not record, so pass them as
+`extra_roots=[...]` to keep their payloads protected.
+
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
 See the [ResultImage gallery](reference/meta/result_types/result_image/index) and
