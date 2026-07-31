@@ -258,6 +258,21 @@ rather than silently worked around:
    until an explicit clear, so they must not be invisible in a size audit) and
    removed by `clear_media`, degrading affected cells to placeholders exactly as a
    cleared image does.
+9. **"Orphan cleanup is A4's artifact-manifest scope, not this plan's" (Cache safety,
+   above) no longer holds and is retired.** It conflated two things: reclaiming a blob
+   *per owner*, which really does need A4's manifest and remains out of scope, and
+   reclaiming a blob *nothing references*, which needs no manifest at all — the
+   `benchmark_inputs` and `history` diskcaches already hold every dataset the cache can
+   see, so the live set is computable today. Leaving the store with no GC at all was the
+   cost of that conflation: a per-variable `max_time_events` limit nulls an aged-out
+   `over_time` cell without deleting its file (correctly — the blob may still back a live
+   cell), so every aged-out payload leaked permanently. `cache_management`
+   gained `blob_reachability` / `clean_orphaned_blobs` / `print_orphaned_blobs`
+   (reachability-based, `dry_run=True` by default) in the follow-up PR to #1021. Two
+   limits are documented rather than designed away: `save_result` pickles live at
+   unrecorded paths and must be declared via `extra_roots=`, and referenced blobs are
+   never evicted by size or age, since with `cache_results`/`cache_samples` defaulting to
+   False nothing could restore them.
 
 ## Coordination
 

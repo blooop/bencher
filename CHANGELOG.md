@@ -32,6 +32,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New gallery example `example_result_dataset_1d_over_time`** under
   `reference/meta/result_types/result_dataset/`; no existing example combined
   `ResultDataSet` with `over_time`.
+- **Garbage collection for the blob store: `bn.clean_orphaned_blobs()`.** `cachedir/blobs/`
+  previously grew until an explicit `clear_media()`/`clear_all()` wiped it whole; a nightly
+  sweep whose payloads drift accumulated a file per distinct payload forever, since content
+  addressing only deduplicates byte-identical ones. The new call reclaims exactly the files
+  nothing references any more, and `dry_run=True` is the default:
+
+  ```python
+  bn.clean_orphaned_blobs()                                    # report only
+  bn.clean_orphaned_blobs(dry_run=False)                        # reclaim
+  bn.clean_orphaned_blobs(dry_run=False, extra_roots=["runs/"])  # protect saved results
+  ```
+
+  It returns `(orphan_paths, total_bytes)` like `clean_orphaned_media`, and
+  `bn.print_orphaned_blobs()` prints the same report the way `print_cache_stats` does. Two
+  pixi tasks wrap it: `pixi run cache-blob-orphans` (report) and `pixi run cache-blob-gc`
+  (reclaim). `bn.blob_reachability()` exposes the live set on its own for auditing.
+
+  The model is **reachability, not ownership**. A blob is content-addressed, so one file may
+  back cells from many job keys, sweeps and `over_time` events at once — which is precisely
+  why `cleanup_job_media`/`clean_orphaned_media` must never touch it and why their per-job
+  model could not be reused. Instead, every blob name referenced from any dataset in the
+  `benchmark_inputs` and `history` diskcaches is collected first, and only files outside
+  that set are deleted. The `history` scan reads the *stored* record rather than the served
+  projection, so a reference held only by an old `over_time` event, or by a dormant or
+  retired column, still counts as live. Matching is on the blob's filename (which *is* its
+  content hash), so a stored absolute path from a cachedir that has since moved still
+  protects its payload. `sample_cache` is deliberately not a root: it holds what the worker
+  returned, before materialization, so it cannot name a blob — and a payload still in it
+  re-materializes to the same path on the next hit.
+
+  Two limitations are explicit rather than papered over. **Results saved outside the cache
+  are invisible**: nothing records where `bencher.render.save_result` wrote, so GC can strand
+  a saved result's payloads (it still loads; its dataset cells render as placeholders). Pass
+  the archive as `extra_roots=` to protect it. **A blob is primary storage, not a cache**:
+  `cache_results` and `cache_samples` both default to `False`, so with the defaults nothing
+  on disk references the blobs of a plain (non-`over_time`) sweep, and a stored history
+  holds paths rather than payload copies. GC is therefore an offline maintenance step, as
+  `clean_orphaned_media` already is — `min_age_seconds=` adds a grace period if you must run
+  it near a live sweep — and there is deliberately no size- or age-based eviction of
+  *referenced* blobs, because nothing could restore them. An unreadable cache entry makes
+  absence-of-reference unprovable, so a corrupt cache collects **nothing** in either mode
+  and warns with the offending entries named.
+
+  Practical note on where the garbage actually comes from: a per-variable `max_time_events`
+  limit ages an old `over_time` cell out by overwriting it with the missing-value sentinel,
+  and `_null_old_entries` deliberately does *not* delete the file (a deduplicated blob may
+  still back a live cell), so every aged-out payload was an immediate permanent leak before
+  this change.
 
 ### Changed
 - **BREAKING: a `ResultDataSet` dataset cell holds a blob path string, not an index.**
@@ -92,11 +140,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deliberately left out of #1021.
 
 ### Notes
-- **`cachedir/blobs/` has no garbage collection.** Every distinct dataset payload from every
-  run is retained until an explicit `clear_media()` or `clear_all()`; content addressing
-  only deduplicates byte-identical payloads. It is at least visible in `cache_stats()` now.
-  Reclaiming it per job key is not possible by design (one blob, many owners); an artifact
-  manifest that could is A4's job.
+- **`cachedir/blobs/` is garbage-collected by reachability, never per job key.** Reclaiming
+  it per job key is impossible by design (one blob, many owners), so `clean_orphaned_blobs()`
+  above deletes only what no live reference names — see that entry for the roots it scans and
+  the two cases it cannot see. What it does *not* do is bound the store's size: blobs that
+  are still referenced are never evicted, because with `cache_results`/`cache_samples`
+  defaulting to `False` and a stored history holding paths rather than payloads, there is
+  nothing to restore them from. Capping growth still means `max_time_events` plus a GC run,
+  or the artifact manifest A4 owns.
 - Blob filenames use the first 16 hex chars (64 bits) of the sha256, so two *different*
   payloads sharing that prefix would collide and the second would load back as the first.
   The birthday bound puts even odds at ~2^32 blobs in one cache directory, so the risk is
