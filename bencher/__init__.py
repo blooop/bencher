@@ -179,6 +179,7 @@ from .regression import (
 from .results.bench_result import BenchResult
 from .results.optimize_result import OptimizeResult
 from .results.pane_result import PaneResult
+from .results.render_failure import RenderFailedWarning
 from .sample_order import SampleOrder
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton

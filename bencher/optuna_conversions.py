@@ -9,6 +9,7 @@ import param
 # NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
 # import). It is only needed by param_importance(), so import it lazily there.
 from bencher.bench_cfg import BenchCfg
+from bencher.results.render_failure import report_render_failure
 from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.time import TimeEvent, TimeSnapshot
@@ -166,13 +167,12 @@ def cfg_from_optuna_trial(
 
 
 def _append_safe(row, plot_fn, *args, **kwargs):
-    """Append a plot to *row*, logging any exception instead of propagating."""
+    """Append a plot to *row*, surfacing any exception instead of propagating."""
     try:
         row.append(plot_fn(*args, **kwargs))
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
-        logger.exception("Optuna plot %s failed", fn_name)
-        row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))
+        row.append(report_render_failure(f"Optuna plot '{fn_name}'", exc))
 
 
 def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
@@ -182,7 +182,6 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
         if hasattr(fig, "update_layout"):
             fig.update_layout(width=width)
         row.append(fig)
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         fn_name = getattr(plot_fn, "__name__", str(plot_fn))
-        logger.exception("Optuna plot %s failed", fn_name)
-        row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))
+        row.append(report_render_failure(f"Optuna plot '{fn_name}'", exc))

@@ -8,6 +8,7 @@ import panel as pn
 from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
+from bencher.results.render_failure import report_render_failure
 
 try:
     from bencher.results.rerun_result import RerunResult
@@ -322,13 +323,13 @@ class BenchResult(
         ):
             try:
                 row.append(plugin.render(data))
-            except Exception:  # pylint: disable=broad-except
-                logger.exception("Plot plugin %s failed", plugin.name)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                row.append(report_render_failure(f"Plot plugin '{plugin.name}'", exc))
         for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
-            except Exception:  # pylint: disable=broad-except
-                logger.exception("Plot callback %s failed", plot_callback.__name__)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                row.append(report_render_failure(f"Plot callback '{plot_callback.__name__}'", exc))
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
@@ -443,8 +444,10 @@ class BenchResult(
                     continue
                 try:
                     plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
-                except Exception:  # pylint: disable=broad-except
-                    logger.exception("Failed to render regression overlay for %s", r.variable)
+                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                    plot_cols.append(
+                        report_render_failure(f"Regression overlay for '{r.variable}'", exc)
+                    )
 
         # --- Extra panels (user-injected) ---
         if extra_panels:
@@ -458,9 +461,9 @@ class BenchResult(
                         plot_cols.append(ep(self))
                     else:
                         plot_cols.append(ep)
-                except Exception:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                     name = getattr(ep, "__name__", repr(ep))
-                    logger.exception("Extra panel %s failed", name)
+                    plot_cols.append(report_render_failure(f"Extra panel '{name}'", exc))
 
         # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:

@@ -12,6 +12,7 @@ from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
+from bencher.results.render_failure import report_render_failure
 from bencher.utils import UNSET
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
@@ -197,11 +198,8 @@ def run(
                 for res in bench.results:
                     try:
                         bench.report.append_to_result(res, res.to_optuna_plots())
-                    except Exception as e:  # pylint: disable=broad-except
-                        logger.exception("Optuna plot generation failed")
-                        bench.report.append(
-                            _pn.pane.Markdown(f"**Optuna plot generation failed**: {e}")
-                        )
+                    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                        bench.report.append(report_render_failure("Optuna plot generation", exc))
             return bench
 
         _with_optimise.__name__ = getattr(_original_target, "__name__", "optimised")

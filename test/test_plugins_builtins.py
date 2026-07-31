@@ -2,6 +2,7 @@
 (A1 Phase 2: built-ins wrapped as plugins, no renderer logic changes)."""
 
 import unittest
+import warnings
 
 import panel as pn
 
@@ -15,6 +16,7 @@ from bencher.plugins.builtins import (
 )
 from bencher.results.bench_result import BenchResult
 from bencher.results.holoview_results.line_result import LineResult
+from bencher.results.render_failure import RenderFailedWarning
 
 BUILTIN_ORDER = ["bar", "box_whisker", "curve", "line", "heatmap", "histogram", "volume", "panes"]
 
@@ -244,15 +246,30 @@ class TestUserPluginsInToAuto(unittest.TestCase):
         finally:
             unregister_plugin("line", backend="alt")
 
-    def test_failing_user_plugin_logged_not_raised(self):
+    def test_failing_user_plugin_surfaced_not_raised(self):
         @plot_plugin(name="user.extra")
         def _boom(_: BenchData) -> pn.viewable.Viewable:
             raise RuntimeError("intentional plugin failure")
 
-        with self.assertLogs(level="ERROR") as captured:
+        with (
+            self.assertLogs(level="ERROR") as captured,
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
             panes = self.res.to_auto()
         self.assertTrue(any("user.extra" in msg for msg in captured.output))
         self.assertGreater(len(panes), 0)
+        # A caller that never configured logging still sees the failure.
+        self.assertTrue(
+            any(issubclass(w.category, RenderFailedWarning) for w in caught),
+            "expected a RenderFailedWarning for the failing plugin",
+        )
+        # The failed plugin leaves a visible marker rather than vanishing.
+        objs = [str(getattr(p, "object", "")) for p in panes]
+        self.assertTrue(
+            any("user.extra" in o and "failed to render" in o for o in objs),
+            "expected a visible failure pane naming the failing plugin",
+        )
 
 
 class TestNamedOnlyPlugins(unittest.TestCase):

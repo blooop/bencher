@@ -1,6 +1,7 @@
 """Tests for BenchResult container behavior (bencher/results/bench_result.py)."""
 
 import unittest
+import warnings
 
 import numpy as np
 import panel as pn
@@ -8,6 +9,7 @@ import panel as pn
 import bencher as bn
 from bencher.results.bench_result import BenchResult
 from bencher.results.holoview_results.line_result import LineResult
+from bencher.results.render_failure import RenderFailedWarning
 
 
 class Linear(bn.ParametrizedSweep):
@@ -122,13 +124,28 @@ class TestBenchResultToAuto(unittest.TestCase):
         self.assertIsInstance(panes[0], pn.pane.Markdown)
         self.assertIn("No Plotters are able to represent these results", panes[0].object)
 
-    def test_to_auto_failing_callback_logged_not_raised(self):
-        with self.assertLogs(level="ERROR") as captured:
+    def test_to_auto_failing_callback_surfaced_not_raised(self):
+        with (
+            self.assertLogs(level="ERROR") as captured,
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
             panes = self.res.to_auto(plot_list=[_failing_cb, LineResult.to_plot])
         self.assertTrue(any("_failing_cb" in msg for msg in captured.output))
-        # The failing callback is skipped but the working one still renders.
-        self.assertEqual(len(panes), 1)
+        # A failure warns, so a caller that never configured logging still sees it.
+        self.assertTrue(
+            any(issubclass(w.category, RenderFailedWarning) for w in caught),
+            "expected a RenderFailedWarning for the failing callback",
+        )
+        # The working callback still renders, and the failure leaves a visible
+        # marker in its place rather than silently shrinking the report.
+        self.assertEqual(len(panes), 2)
         self.assertGreater(len(collect_hv_elements(panes)), 0)
+        markers = [p for p in panes if isinstance(p, pn.pane.Markdown)]
+        self.assertTrue(
+            any("_failing_cb" in m.object and "failed to render" in m.object for m in markers),
+            "expected a visible failure pane naming the failing callback",
+        )
 
 
 class TestBenchResultToAutoPlots(unittest.TestCase):
