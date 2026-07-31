@@ -119,10 +119,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back. The new `Protocol` (`submit`, `shutdown`) is satisfied by both
   `ProcessPoolExecutor` and scoop's module.
 
-- `JobFuture.result()` is annotated `-> dict | None`. The `None` is not new behaviour, only
-  newly admitted: `JobFuture` can represent "no result and no future", and callers must
-  reject it. Plan 23 P5's `Ready(dict) | Pending(Future)` split is what makes the state
-  unrepresentable and the `| None` removable.
+- `JobFuture.result()` was annotated `-> dict | None` by P2 (the `None` was not new
+  behaviour, only newly admitted: `JobFuture` could represent "no result and no future").
+  **Superseded before release by P5 below**, which makes that state unrepresentable and
+  the method total.
+
+- **`JobFuture` holds one state field instead of two optionals** (plan 23 P5, C2). `res`
+  and `future` were independent optionals that `result()` *mutated* — it assigned to
+  `self.res` and left `self.future` set — so `future is not None` stopped meaning
+  "pending" after the first call, and both-set and neither-set were both representable
+  while neither was meaningful. The field is now a single
+  `Ready(res) | Pending(future) | Broken(error)` sum of frozen dataclasses, parsed once in
+  the constructor (whose keyword signature is unchanged, so every construction site and
+  hand-built test object reads as before); passing both a result and a future now raises
+  `ValueError`. `result()` matches exhaustively with `assert_never` — verified by deleting
+  an arm and measuring `error[type-assertion-failure] … Inferred type of argument is
+  'Broken & ~Ready & ~Pending'` — and is **total**: the `| None` return is gone. The
+  order-dependent `job_future.future is not None` dispatch in `Bench.calculate_benchmark_results`
+  reads the variant instead.
+
+  `Broken` is the constructive replacement for the one meaningful half of "neither set": a
+  job that yielded no result. The error is *stored* rather than raised at construction,
+  because the serial site is inside the caller's `except catch` block — raising there is
+  exactly the original B3 failure mode where `catch=Exception` absorbed a contract
+  violation. It is supplied by whichever caller *knows* the cause (the serial site in
+  `FutureCache.submit`, having just watched `run_job` return `None`) rather than inferred
+  from the shape of the constructor call, which cannot tell a `None`-returning worker from
+  a cache entry holding `None`. **The record-and-continue disposition is unchanged** (plan
+  23 §6.2 as amended): `result()` raises at the consume point on *either* executor path,
+  `store_results` records a `SampleFailure`, logs at ERROR, emits
+  `WorkerContractWarning`, and the sweep continues. A `None` return never aborts a run.
+  Caching semantics are also unchanged: the pre-P5 `res is not None` guard on `cache.set`
+  is now enforced by construction — a worker that returned nothing cannot reach the cache.
+
+- **`WorkerJob`'s derived inputs and hashes are `cached_property`s, not two-phase init**
+  (plan 23 P5, C8). `function_input`, `canonical_input`, `fn_inputs_sorted` and
+  `function_input_signature_pure` defaulted to `None` and were filled by a `setup_hashes()`
+  call every construction site had to remember, so nothing prevented caching a sample under
+  `job_key=None`. `setup_hashes()` is gone; the four values are computed on demand from the
+  constructor fields, so a `WorkerJob` with unset hashes no longer exists. The unused
+  `found_in_cache` and `msgs` fields (written nowhere in the package) are removed. Hash
+  values are byte-identical — the same `hash_sha1((sorted_inputs, tag))` over the same
+  inputs — so no cached sample is invalidated, and pickling across a process boundary still
+  works (computed values travel in `__dict__`; unaccessed ones recompute deterministically).
+
+- `FutureCache.clear_tag` no longer raises `AttributeError` on `None` when the cache is
+  disabled (`cache_samples=False`), and `JobFunctionCache.call` passes its counter as a
+  `str`, matching `Job.job_id`'s declared type. Both were latent defects surfaced by putting
+  `job.py` on the strict `ty` list (recorded as out-of-scope in plan 23 P2 item 7).
+  `bencher/job.py`, `bencher/worker_job.py` and `bencher/result_collector.py` are all on
+  that list now — the last one because C8 removed the `function_input`-is-`None` diagnostics
+  that were holding it off, exactly as P2 predicted.
+
+  Both fixes go past what the type checker asked for, because in both cases satisfying it
+  would have hidden the defect it pointed at. `FutureCache.call_count` was initialised to 0
+  and incremented **nowhere**, so every `JobFunctionCache.call()` produced the same job id —
+  the string every log line and contract message identifies a sample by; it is now
+  incremented, and ids read `call 1`, `call 2`, …. And `clear_tag` on a cache-less
+  `FutureCache` now logs a WARNING rather than returning silently: not crashing is right, but
+  on a public path (`Bench.clear_tag_from_sample_cache`) "nothing happened" must not read as
+  "the tag was cleared".
 
 ### Removed
 - **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
@@ -144,6 +200,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which strings `BenchRunCfg(executor=...)` accepts. See plan 23 D4.
 
 ### Added
+- **`bencher.WorkerReturnedNothingError`**, a narrow subclass of `WorkerContractError`
+  meaning *the harness itself* determined a job produced no result (plan 23 P5). Only this
+  subclass is exempt from `catch=`; a `WorkerContractError` raised by a **worker** — the
+  class is public, so a worker or plugin can raise it, e.g. to signal a hard config error
+  and abort with `catch=()` — is an ordinary sample fault and is routed through `catch=` as
+  before. Without the split, a worker-raised `WorkerContractError` was silently tolerated on
+  MULTIPROCESSING even with `catch=()` while still aborting on SERIAL: loud or silent chosen
+  by the executor, which is the defect shape plan 23 B3 exists to eliminate. Existing
+  `except WorkerContractError` handlers keep matching, by subclassing.
+
 - **Single result-type registry: `RESULT_SPECS` in `bencher/variables/results.py`**
   (plan 23 P4). One ordered `{Result* class: ResultSpec}` mapping now declares each
   result type's kind, missing fill/sentinels, and family memberships (panel, media,

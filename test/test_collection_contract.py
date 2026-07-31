@@ -86,6 +86,22 @@ class ReturnsNothing(bn.ParametrizedSweep):
         # Deliberately no `return self.get_results_values_as_dict()`.
 
 
+class RaisesContractError(bn.ParametrizedSweep):
+    """A worker that raises ``WorkerContractError`` *itself*.
+
+    The class is public API (``bn.WorkerContractError``), so a worker or plugin can
+    raise it — e.g. to signal a hard configuration error and have ``catch=()``
+    abort the run. The harness must therefore not confuse it with its *own*
+    diagnosis that a job produced nothing, which is exempt from ``catch=``.
+    """
+
+    x = bn.IntSweep(default=0, bounds=(0, 1), samples=2)
+    y = bn.ResultFloat()
+
+    def benchmark(self) -> None:
+        raise bn.WorkerContractError("raised by the worker, not by the harness")
+
+
 def _contract_messages(record) -> list[str]:
     """The WorkerContractWarning messages out of a pytest.warns record.
 
@@ -247,13 +263,57 @@ class TestCatchDoesNotChangeContractHandling(unittest.TestCase):
         with pytest.warns(WorkerContractWarning):
             res = _run(ReturnsNothing(), catch=Exception)
         self.assertEqual(res.n_failed, 2)
-        self.assertIn("WorkerContractError", res.failed_samples[0].exception)
+        # The narrow subclass by name: this is the harness's own diagnosis, which is
+        # what earns the exemption from `catch=`. A worker-raised
+        # WorkerContractError would record as a plain sample fault instead --
+        # see TestAWorkerRaisedContractErrorIsStillASampleFault.
+        self.assertIn("WorkerReturnedNothingError", res.failed_samples[0].exception)
 
     def test_catch_does_not_swallow_a_wrong_length_vector(self) -> None:
         WrongLengthVec.n_elements = 1
         with pytest.warns(WorkerContractWarning):
             res = _run(WrongLengthVec(), catch=Exception)
         self.assertEqual(res.n_failed, 2)
+
+
+class TestAWorkerRaisedContractErrorIsStillASampleFault:
+    """The converse of the class above, and the reason ``store_results`` catches
+    ``WorkerReturnedNothingError`` rather than its public base class.
+
+    ``catch=`` must not decide the fate of the harness's *own* diagnosis that a job
+    produced nothing. It must still decide the fate of a ``WorkerContractError`` a
+    **worker** raises — that is an ordinary sample fault as far as dispositions go,
+    and it aborted with ``catch=()`` before plan 23 P5.
+
+    Pinned on **both** executors because the regression this guards against was
+    visible on only one of them: P5 first moved the handler inside the ``try``
+    around ``result()``, which caught every ``WorkerContractError`` surfacing from
+    it — so a worker-raised one aborted on SERIAL (where it is raised inside
+    ``submit()``, outside that ``try``) while being silently tolerated on
+    MULTIPROCESSING with ``catch=()``. Loud or silent chosen by an unrelated knob
+    is precisely the defect shape B3 exists to kill.
+    """
+
+    @pytest.mark.parametrize(
+        "executor", [Executors.SERIAL, Executors.MULTIPROCESSING], ids=["serial", "pool"]
+    )
+    def test_no_catch_aborts_on_either_executor(self, executor) -> None:
+        with pytest.raises(WorkerContractError, match="raised by the worker"):
+            _run(RaisesContractError(), executor=executor, catch=())
+
+    @pytest.mark.parametrize(
+        "executor", [Executors.SERIAL, Executors.MULTIPROCESSING], ids=["serial", "pool"]
+    )
+    def test_catch_tolerates_it_on_either_executor(self, executor) -> None:
+        """With ``catch=`` it is a tolerated sample fault, like any other raise."""
+        res = _run(RaisesContractError(), executor=executor, catch=Exception)
+        assert res.n_failed == 2
+        assert "raised by the worker" in res.failed_samples[0].exception
+
+    def test_the_harness_diagnosis_is_a_narrow_subclass(self) -> None:
+        """What makes the two dispositions separable at all."""
+        assert issubclass(bn.WorkerReturnedNothingError, bn.WorkerContractError)
+        assert not issubclass(bn.WorkerContractError, bn.WorkerReturnedNothingError)
 
 
 class TestContractViolationSurfaces(unittest.TestCase):
