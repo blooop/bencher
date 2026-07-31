@@ -910,13 +910,14 @@ class BenchResultBase:
                 if isinstance(result_var, (ResultVideo, ResultImage)):
                     return self._pane_over_time_slider(dataset, result_var)
                 if isinstance(result_var, ResultDataSet):
-                    # A ResultDataSet cell holds an index into dataset_list, which is
-                    # rebuilt from the samples of the run that is rendering.  Rows
-                    # merged in from history therefore address *this* run's list, so a
-                    # slider over them would show the current payload under every past
-                    # run's label.  Render the event being reported instead; scalar
-                    # results keep their real history either way.
-                    dataset = dataset.isel(over_time=-1)
+                    # Path-backed cells (plan 22) make historical payloads loadable
+                    # from any run, so every time point renders like the other blob
+                    # types.  Legacy index cells inside a mixed history render where
+                    # dataset_list still covers them and as a labelled placeholder
+                    # where it does not.
+                    return self._pane_over_time_dataset(
+                        dataset, result_var, plot_callback, **kwargs
+                    )
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.render()
@@ -1052,6 +1053,39 @@ class BenchResultBase:
             return pn.pane.Markdown("*No rerun data available*")
         return pn.Row(*items)
 
+    def _pane_over_time_dataset(
+        self,
+        dataset: xr.Dataset,
+        result_var,
+        plot_callback: Callable,
+        **kwargs,
+    ) -> pn.Row | None:
+        """Render ``ResultDataSet`` over_time as a grid of labelled per-time panes.
+
+        Path-backed cells are meaningful in any process, so history points render
+        instead of being cut down to the latest event (the pre-plan-22
+        ``isel(over_time=-1)`` workaround).  A time point whose cell is missing
+        (either generation's sentinel) is skipped; a legacy index cell renders
+        through ``ds_to_container``'s legacy path — the payload where
+        ``dataset_list`` covers it, a placeholder where it does not.
+        """
+        time_vals = list(dataset.coords["over_time"].values)
+        is_datetime = np.issubdtype(dataset.coords["over_time"].dtype, np.datetime64)
+        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+
+        items = []
+        for idx, label in enumerate(labels):
+            pane = plot_callback(
+                dataset=dataset.isel(over_time=idx), result_var=result_var, **kwargs
+            )
+            if pane is None:
+                continue
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+
+        if not items:
+            return None
+        return pn.Row(*items)
+
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve
         dim = None
@@ -1101,6 +1135,67 @@ class BenchResultBase:
                 return candidate
         return None
 
+    def _dataset_sample_to_container(self, val: Any, result_var: Parameter, container) -> Any:
+        """Render one stored ``ResultDataSet`` cell, whichever generation stored it.
+
+        Three cell shapes exist (plan 22, D3):
+
+        1. a ``str`` blob path (collected after plan 22) — loaded with
+           ``load_blob``; a payload materialized with a per-sample container is a
+           pickled ``ResultDataSet`` wrapper, so the full precedence chain
+           (renderer-supplied → sample's → class's → raw object) still applies;
+        2. an ``int`` index (a result pickled or cached before plan 22) — looked
+           up in ``dataset_list`` when this result still carries the list that
+           produced it, and rendered as a labelled placeholder otherwise (an old
+           cell without its list is honestly unrecoverable — never a crash);
+        3. the missing sentinel of either generation (``"NAN"`` / ``-1``) →
+           ``None``, which pane composition skips.
+        """
+        if result_is_missing(result_var, val):
+            return None
+        if isinstance(val, str):
+            from bencher.blob_store import load_blob
+
+            payload = load_blob(val)
+            sample = payload if isinstance(payload, ResultDataSet) else None
+            if sample is not None:
+                payload = sample.obj
+            # Renderer-supplied container wins, then the sample's, then the class's.
+            resolved = container or self.declared_container(sample, result_var)
+            return resolved(payload) if resolved is not None else payload
+        # Legacy int cell.  Over_time concat can promote the old int column to
+        # float, so integral floats are legacy indices too.
+        try:
+            idx = int(val)
+        except (TypeError, ValueError):
+            logger.warning(
+                "ResultDataSet '%s': unrecognised cell %r (neither a blob path nor a legacy index)",
+                result_var.name,
+                val,
+            )
+            return pn.pane.Markdown(
+                f"*'{result_var.name}': stored cell is not renderable ({type(val).__name__})*"
+            )
+        dataset_list = getattr(self, "dataset_list", None)
+        if not dataset_list or not 0 <= idx < len(dataset_list):
+            logger.warning(
+                "ResultDataSet '%s': cell %r indexes a dataset_list of length %d; the "
+                "payload predates path-backed storage and its run's list is gone",
+                result_var.name,
+                val,
+                len(dataset_list) if dataset_list else 0,
+            )
+            return pn.pane.Markdown(
+                f"*'{result_var.name}': stored payload predates the path-backed format "
+                "and is no longer recoverable from this result*"
+            )
+        ref = dataset_list[idx]
+        if ref is None:
+            return None
+        # Renderer-supplied container wins, then the sample's, then the class's.
+        resolved = container or self.declared_container(ref, result_var)
+        return resolved(ref.obj) if resolved is not None else ref.obj
+
     def ds_to_container(  # pylint: disable=too-many-return-statements
         self, dataset: xr.Dataset, result_var: Parameter, container, **kwargs
     ) -> Any:
@@ -1120,9 +1215,10 @@ class BenchResultBase:
         download widget.
         """
         if isinstance(result_var, (ResultDataSet, ResultReference)):
-            # These two store an index into a side list, so a value that is still an
-            # array indexes that list with an array several frames from the cause.
-            # Name the dimension the caller did not reduce instead.
+            # These two store a per-sample lookup key (a blob path, or a legacy /
+            # object index into a side list), so a value that is still an array
+            # fails several frames from the cause. Name the dimension the caller
+            # did not reduce instead.
             unreduced = self._unreduced_dims(dataset[result_var.name])
             if unreduced:
                 raise ValueError(
@@ -1132,12 +1228,7 @@ class BenchResultBase:
                 )
         val = self.zero_dim_da_to_val(dataset[result_var.name])
         if isinstance(result_var, ResultDataSet):
-            ref = self.dataset_list[val]
-            if ref is None:
-                return None
-            # Renderer-supplied container wins, then the sample's, then the class's.
-            resolved = container or self.declared_container(ref, result_var)
-            return resolved(ref.obj) if resolved is not None else ref.obj
+            return self._dataset_sample_to_container(val, result_var, container)
         if isinstance(result_var, ResultReference):
             ref = self.object_index[val]
             if ref is not None:

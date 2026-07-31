@@ -11,6 +11,7 @@ import panel as pn
 import xarray as xr
 
 import bencher as bn
+from bencher.blob_store import load_blob
 from bencher.results.bench_result_base import BenchResultBase
 from bencher.results.dataset_result import DataSetResult, render_data_samples
 from bencher.variables.results import PANEL_TYPES
@@ -187,19 +188,18 @@ class TestDataSetResult(unittest.TestCase):
         self.assertIsInstance(viewer, pn.viewable.Viewable)
         self.assertGreater(len(viewer), 0)
 
-    def test_dataset_list_round_trips_worker_frames(self):
-        """Every worker-produced DataFrame is stored and recoverable unchanged."""
-        self.assertEqual(len(self.res.dataset_list), len(SCALES))
-        for ref, scale in zip(self.res.dataset_list, SCALES):
-            pd.testing.assert_frame_equal(ref.obj, expected_frame(scale))
+    def test_path_cells_round_trip_worker_frames(self):
+        """Every worker-produced DataFrame is stored as a blob and recoverable unchanged.
 
-    def test_ds_indices_map_to_correct_frames(self):
-        """The xarray dataset stores indices into dataset_list, keyed by input value."""
+        Since plan 22 the cell stores a path into the blob store rather than an
+        index into dataset_list, which stays empty (it is the legacy read path).
+        """
+        self.assertEqual(len(self.res.dataset_list), 0)
         ds = self.res.to_dataset()
         for scale in SCALES:
-            idx = int(ds["table"].sel(scale=scale).values)
-            frame = self.res.dataset_list[idx].obj
-            pd.testing.assert_frame_equal(frame, expected_frame(scale))
+            cell = ds["table"].sel(scale=scale).values.item()
+            self.assertIsInstance(cell, str)
+            pd.testing.assert_frame_equal(load_blob(cell), expected_frame(scale))
 
     def test_ds_to_container_returns_underlying_frame(self):
         """ds_to_container (used by the viewer) unwraps the stored DataFrame."""
@@ -292,8 +292,9 @@ class TestArbitraryPayload(unittest.TestCase):
         cls.res = run_sweep(ArbitraryPayloadSweep(), "test_dataset_arbitrary_payload")
 
     def test_payload_round_trips_without_tabular_coercion(self):
+        ds = self.res.to_dataset()
         self.assertEqual(
-            [stored.obj for stored in self.res.dataset_list],
+            [load_blob(ds["table"].sel(scale=scale).values.item()) for scale in SCALES],
             [arbitrary_payload(scale) for scale in SCALES],
         )
 
@@ -338,8 +339,10 @@ class TestDeclaredContainer(unittest.TestCase):
 
     def test_stored_frame_is_untouched(self):
         """Rendering is a view: the container never rewrites what was measured."""
-        for ref, scale in zip(self.res.dataset_list, SCALES):
-            pd.testing.assert_frame_equal(ref.obj, expected_frame(scale))
+        ds = self.res.to_dataset()
+        for scale in SCALES:
+            frame = load_blob(ds["table"].sel(scale=scale).values.item())
+            pd.testing.assert_frame_equal(frame, expected_frame(scale))
 
 
 class TestPerSampleContainer(unittest.TestCase):
@@ -369,49 +372,54 @@ class TestContainerIsNotData(unittest.TestCase):
         """A result pickled before the slot existed unpickles with it unset, and still renders.
 
         Unsetting the slot is the only way to reproduce that state in-process, hence
-        the dedicated sweep class: the deletions mutate params this test alone owns.
+        the dedicated sweep class: the deletion mutates a param this test alone owns.
         """
         res = run_sweep(LegacyPickleSweep(), "test_dataset_legacy_pickle")
         rv = res.bench_cfg.result_vars[0]
         del rv.container
-        del res.dataset_list[0].container
         frame = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
         pd.testing.assert_frame_equal(frame, expected_frame(SCALES[0]))
 
 
 class TestOverTimeHistory(unittest.TestCase):
-    """A ResultDataSet has to render on every run, not only the first one.
+    """A ResultDataSet history has to render every event, not only the latest one.
 
-    dataset_list is rebuilt from the samples of whichever run is rendering, so the
-    indices merged in from history address *this* run's list.  Rendering therefore
-    stays on the current event: a slider across the events would show the current
-    table under every past run's label, and before the over_time branch knew about
-    ResultDataSet the render raised out of expand_dims instead.
+    Cells are blob paths since plan 22, meaningful in any run, so the events merged
+    in from history render alongside the current one (D4).  Before that, cells were
+    indices into dataset_list — rebuilt from whichever run was rendering — so the
+    render was forcibly restricted to ``isel(over_time=-1)`` and history existed in
+    the data but could not be shown.
     """
 
     @classmethod
     def setUpClass(cls):
         cls.res = run_sweep_over_time(OverTimeSweep(), "test_dataset_over_time")
-        cls.current_run = OVER_TIME_RUNS - 1
 
     def expected_panes(self) -> list[str]:
-        return [f"declared run={self.current_run} scale={scale:g}" for scale in SCALES]
+        """One pane per (sample, event): samples are peeled outermost, time innermost."""
+        return [
+            f"declared run={run} scale={scale:g}"
+            for scale in SCALES
+            for run in range(OVER_TIME_RUNS)
+        ]
 
     def test_history_accumulated(self):
         """Guard on the fixture: with a single event there is no regression to catch."""
         self.assertEqual(self.res.to_dataset().sizes["over_time"], OVER_TIME_RUNS)
 
-    def test_panes_pass_renders_the_current_run(self):
+    def test_panes_pass_renders_every_run(self):
         self.assertEqual(
             container_output(self.res.to_auto(plot_list=["panes"])), self.expected_panes()
         )
 
-    def test_dataset_view_renders_the_current_run(self):
+    def test_dataset_view_renders_every_run(self):
         self.assertEqual(container_output(self.res.to(DataSetResult)), self.expected_panes())
 
-    def test_one_pane_per_sample_not_per_event(self):
-        """History must not multiply the panes, since the tables are not comparable."""
-        self.assertEqual(len(container_output(self.res.to(DataSetResult))), len(SCALES))
+    def test_one_pane_per_sample_per_event(self):
+        """The D4 payoff: history multiplies the panes, one per stored payload."""
+        self.assertEqual(
+            len(container_output(self.res.to(DataSetResult))), len(SCALES) * OVER_TIME_RUNS
+        )
 
     def test_scalar_results_keep_their_history(self):
         """Slicing the tables must not cost the metrics their over_time series."""

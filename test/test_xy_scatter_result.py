@@ -364,28 +364,28 @@ class TestDeclaredOnResultVar(unittest.TestCase):
 
 
 class TestOverTimeHistory(unittest.TestCase):
-    """A cloud has to render on every run, not only the first one.
+    """A cloud history has to render every run, not only the latest one.
 
-    A ResultDataSet cell holds an index into dataset_list, which is rebuilt from the
-    samples of whichever run is rendering, so the indices merged in from history point
-    at *this* run's list. The render therefore stays on the current event; before
-    _to_panes_da handled ResultDataSet it raised out of expand_dims instead, and via
-    to_auto the traceback was swallowed and the plot silently vanished.
+    Cells are blob paths since plan 22, meaningful in any run, so the events merged
+    in from history render alongside the current one (D4).  Before that, a
+    ResultDataSet cell held an index into dataset_list — rebuilt from whichever run
+    was rendering — so the render was forcibly restricted to the current event.
     """
 
     @classmethod
     def setUpClass(cls):
         cls.res = run_sweep_over_time(OverTimeCloudSweep(), "test_xy_scatter_over_time")
-        cls.current_run = OVER_TIME_RUNS - 1
 
-    def assert_current_run(self, points: list[hv.Points]) -> None:
-        self.assertEqual(len(points), len(SPREADS))
-        for element, spread in zip(points, SPREADS):
+    def assert_every_run(self, points: list[hv.Points]) -> None:
+        """One scatter per (sample, event): samples peeled outermost, time innermost."""
+        self.assertEqual(len(points), len(SPREADS) * OVER_TIME_RUNS)
+        expected = [(spread, run) for spread in SPREADS for run in range(OVER_TIME_RUNS)]
+        for element, (spread, run) in zip(points, expected):
             self.assertEqual(len(element), POINTS_PER_SAMPLE)
-            self.assertAlmostEqual(element["dx_mm"].min(), RUN_OFFSET * self.current_run, places=6)
+            self.assertAlmostEqual(element["dx_mm"].min(), RUN_OFFSET * run, places=6)
             self.assertAlmostEqual(
                 element["dx_mm"].max(),
-                spread * (POINTS_PER_SAMPLE - 1) + RUN_OFFSET * self.current_run,
+                spread * (POINTS_PER_SAMPLE - 1) + RUN_OFFSET * run,
                 places=6,
             )
 
@@ -393,16 +393,16 @@ class TestOverTimeHistory(unittest.TestCase):
         """Guard on the fixture: with a single event there is no regression to catch."""
         self.assertEqual(self.res.to_dataset().sizes["over_time"], OVER_TIME_RUNS)
 
-    def test_declared_spec_renders_the_current_run(self):
-        self.assert_current_run(all_points(self.res.to_auto(plot_list=["panes"])))
+    def test_declared_spec_renders_every_run(self):
+        self.assert_every_run(all_points(self.res.to_auto(plot_list=["panes"])))
 
-    def test_chart_type_renders_the_current_run(self):
+    def test_chart_type_renders_every_run(self):
         rendered = self.res.to(XYScatterResult, x="dx_mm", y="dy_mm")
-        self.assert_current_run(all_points(rendered))
+        self.assert_every_run(all_points(rendered))
 
-    def test_named_chart_type_renders_the_current_run(self):
+    def test_named_chart_type_renders_every_run(self):
         rendered = self.res.to_auto(plot_list=["xy_scatter"], x="dx_mm", y="dy_mm")
-        self.assert_current_run(all_points(pn.Column(*rendered)))
+        self.assert_every_run(all_points(pn.Column(*rendered)))
 
     def test_scalar_results_keep_their_history(self):
         """Rendering the current cloud must not cost the metrics their over_time series."""

@@ -510,6 +510,12 @@ class ResultDataSet(param.Parameter):
     dataclass, or any other object that can travel through the configured result
     cache. Bencher stores and retrieves it without interpreting its type.
 
+    Payloads are materialized into the cache's content-addressed blob store at
+    collect time (parquet for DataFrames, netCDF for xarray objects, pickle
+    otherwise — see :mod:`bencher.blob_store`); the dataset cell stores the blob
+    path, so any process sharing the cache filesystem can render any sample,
+    including over_time history points.
+
     ``container`` is an optional renderer taking the stored object and returning
     something Panel can display. Declare it once on the class and every sample
     renders through it, in ``result_vars`` order, alongside the other results::
@@ -631,14 +637,19 @@ def result_kind(result_var) -> str:
 # there is no single value that is both storage-valid and reduction-aware
 # across every dtype:
 #   - numeric types (float/bool/vec, and any future numeric) -> NaN   (float)
-#   - index-backed reference types (reference/dataset)       -> -1    (int)
+#   - index-backed reference types (reference)               -> -1    (int)
 #   - object/file/string types (path/video/image/string/...) -> "NAN" (object)
+#
+# ResultDataSet cells are blob paths since plan 22 (grammar phase 1), so its
+# fill is the blob-family "NAN"; results collected before that change store -1
+# int indices, and ``result_is_missing`` accepts BOTH generations permanently —
+# a mixed-generation over_time history contains cells of each kind.
 #
 # Both dataset initialisation (``ResultCollector.setup_dataset``) and over_time
 # aging (``_null_old_entries``) build their arrays from ``result_missing_fill``,
 # and consumers test for missingness with ``result_is_missing`` instead of
 # hardcoding ``np.isnan`` / ``== "NAN"`` / ``== -1`` per call site.
-_REFERENCE_MISSING_TYPES = (ResultReference, ResultDataSet)
+_REFERENCE_MISSING_TYPES = (ResultReference,)
 _OBJECT_MISSING_TYPES = (
     ResultPath,
     ResultVideo,
@@ -646,6 +657,7 @@ _OBJECT_MISSING_TYPES = (
     ResultString,
     ResultContainer,
     ResultRerun,
+    ResultDataSet,
 )
 # Single-column result types that get a data variable in the dataset. ResultVec
 # is handled separately (it expands to one column per element); ResultHmap is
@@ -663,6 +675,26 @@ def result_missing_fill(rv) -> tuple[Any, type]:
     return float("nan"), float
 
 
+def _dataset_cell_is_missing(value) -> bool:
+    """Missingness for a ``ResultDataSet`` cell, across both sentinel generations.
+
+    ``"NAN"`` (blob-path cells, plan 22 onwards) and ``-1`` (index-backed cells
+    collected before it, including the float ``-1.0`` an over_time concat can
+    promote an int column to) are both missing, permanently — a mixed-generation
+    history holds cells of each kind.  NaN/``None`` also count as missing so an
+    unrepaired concat fill is never handed to ``load_blob`` or a
+    ``dataset_list`` lookup as data.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value == "NAN"
+    if isinstance(value, numbers.Real) and not isinstance(value, bool):
+        as_float = float(value)
+        return math.isnan(as_float) or as_float == -1.0
+    return False
+
+
 def result_is_missing(rv, value) -> bool:
     """True when *value* is the missing/unrecorded sentinel for *rv*'s storage.
 
@@ -674,7 +706,12 @@ def result_is_missing(rv, value) -> bool:
     attempted (the *string* ``"nan"`` is real data, not a missing marker). For
     the ``-1`` / ``"NAN"`` sentinel types, missingness is exact equality with
     the sentinel.
+
+    ``ResultDataSet`` accepts BOTH its sentinel generations, permanently — see
+    :func:`_dataset_cell_is_missing`.
     """
+    if isinstance(rv, ResultDataSet):
+        return _dataset_cell_is_missing(value)
     fill, _ = result_missing_fill(rv)
     if isinstance(fill, float) and math.isnan(fill):
         if value is None:

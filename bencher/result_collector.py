@@ -12,6 +12,7 @@ import os
 from contextlib import suppress
 from datetime import datetime
 from itertools import product
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -19,6 +20,7 @@ import xarray as xr
 from diskcache import Cache
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
+from bencher.blob_store import materialize_blob
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.history import (
     HISTORY_FORMAT,
@@ -154,6 +156,26 @@ def _materialize_result_value(rv, value):
         if isinstance(value, ComposableContainerRerun):
             return value.render()
     return value
+
+
+def _materialize_dataset_value(result_value) -> str:
+    """Reduce a worker-returned ``ResultDataSet`` sample to a blob path (plan 22, D2).
+
+    The payload is serialized under ``cachedir/blobs/`` and the returned path
+    string is what the dataset cell stores — self-describing in any process that
+    shares the cache filesystem, exactly like the image/video/rerun path cells.
+    The literal ``cachedir`` root is the same canonical location the rest of
+    collection uses (``gen_path``, ``cachedir/rrd``, the diskcaches above).
+
+    A per-sample ``container=`` attached inside ``benchmark()`` has to travel
+    with the payload to keep the declared-container precedence chain intact, so
+    a wrapper carrying one is materialized whole (pickled); otherwise the bare
+    payload gets its structured blob format (parquet/netCDF/...).
+    """
+    payload = result_value
+    if isinstance(payload, ResultDataSet) and getattr(payload, "container", None) is None:
+        payload = payload.obj
+    return materialize_blob(payload, Path("cachedir").absolute())
 
 
 class ResultCollector:
@@ -408,9 +430,11 @@ class ResultCollector:
                 if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
                     _set_result_value(bench_res, rv_arrays, rv.name, idx, result_value)
                 elif isinstance(rv, ResultDataSet):
-                    bench_res.dataset_list.append(result_value)
+                    # Plan 22 (D2): the cell stores a blob path, not an index into
+                    # dataset_list.  The list attribute stays, empty, as the read
+                    # path for results collected before path-backed cells.
                     _set_result_value(
-                        bench_res, rv_arrays, rv.name, idx, len(bench_res.dataset_list) - 1
+                        bench_res, rv_arrays, rv.name, idx, _materialize_dataset_value(result_value)
                     )
                 elif isinstance(rv, ResultReference):
                     bench_res.object_index.append(result_value)
