@@ -1,5 +1,6 @@
 """Tests for the content-addressed blob store (plan 22, design D1, test item 1)."""
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -92,13 +93,18 @@ class TestContentAddressing:
         assert path1 == path2
         assert _blob_files(tmp_path) == [Path(path1)]
 
-    def test_file_written_once(self, tmp_path):
+    def test_file_written_once_but_mtime_refreshed_on_hit(self, tmp_path):
+        """The bytes are written once; a content hit refreshes mtime (it is a new
+        reference — the GC grace period reads mtime as "last referenced").
+        ``test_blob_store_races.py`` pins the no-rewrite half on the mechanism."""
         payload = b"same content"
         path1 = materialize_blob(payload, tmp_path)
-        mtime = Path(path1).stat().st_mtime_ns
+        backdated = 1_000_000_000
+        os.utime(path1, (backdated, backdated))
         path2 = materialize_blob(payload, tmp_path)
         assert path1 == path2
-        assert Path(path2).stat().st_mtime_ns == mtime  # not rewritten
+        assert Path(path2).read_bytes() == payload  # bytes intact
+        assert Path(path2).stat().st_mtime > backdated  # hit refreshed mtime
 
     def test_differing_payloads_differing_paths(self, tmp_path):
         path1 = materialize_blob(b"payload one", tmp_path)

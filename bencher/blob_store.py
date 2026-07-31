@@ -33,6 +33,7 @@ Supported formats, dispatched on the payload type:
 import hashlib
 import io
 import logging
+import os
 import pickle
 import uuid
 from pathlib import Path
@@ -151,6 +152,14 @@ def materialize_blob(obj: Any, cache_dir: str | Path) -> str:
     serialized bytes plus a format extension, so identical payloads map to
     identical paths (content addressing) and are written only once.
 
+    A content hit (the blob already exists) does not rewrite the file, but it
+    **does** refresh the file's mtime: a hit is a *new reference* to the
+    payload, and ``cache_management.clean_orphaned_blobs`` uses mtime as its
+    ``min_age_seconds`` grace-period signal.  A blob's mtime therefore means
+    "last referenced", not "created" — which is what makes an age-based grace
+    period a sound guard for a sweep that deduplicates onto an old blob, not
+    just for one that writes a new one.
+
     A str/Path payload is pickled like any other object — even when it names
     an existing file — so loading the blob returns exactly what the worker
     stored and every blob lives under *cache_dir*.
@@ -176,12 +185,24 @@ def materialize_blob(obj: Any, cache_dir: str | Path) -> str:
     blobs_dir.mkdir(parents=True, exist_ok=True)
     blob_path = blobs_dir / f"{digest}{extension}"
 
-    if not blob_path.exists():
-        # Write via a unique temp file + atomic rename so concurrent workers
-        # materializing the same payload never observe a partial blob.
-        tmp_path = blob_path.with_suffix(blob_path.suffix + f".tmp-{uuid.uuid4().hex}")
-        tmp_path.write_bytes(data)
-        tmp_path.replace(blob_path)
+    if blob_path.exists():
+        try:
+            # A content hit is a new reference to this payload.  Refresh mtime
+            # (never the bytes) so it reads as "last referenced" and an
+            # age-based GC grace period protects the blob a concurrent sweep
+            # just deduplicated onto, exactly as it protects one just written.
+            os.utime(blob_path)
+            return str(blob_path)
+        except OSError:
+            # The blob vanished between the existence check and the touch
+            # (e.g. a concurrent GC collected it): fall through and rewrite.
+            pass
+
+    # Write via a unique temp file + atomic rename so concurrent workers
+    # materializing the same payload never observe a partial blob.
+    tmp_path = blob_path.with_suffix(blob_path.suffix + f".tmp-{uuid.uuid4().hex}")
+    tmp_path.write_bytes(data)
+    tmp_path.replace(blob_path)
 
     return str(blob_path)
 

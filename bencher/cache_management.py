@@ -754,16 +754,22 @@ def clean_orphaned_blobs(
         as placeholders).  Pass such archives as *extra_roots* to protect them.
         The same applies to a result held only in memory by a sweep running
         concurrently with GC: with the default ``cache_results=False`` nothing
-        on disk references its blobs yet.  ``min_age_seconds`` mitigates only
-        part of that exposure — it protects a blob the concurrent sweep *wrote*
-        during the grace window, but **not** a blob the sweep deduplicated
-        onto: a content hit skips the write entirely and never refreshes the
-        file's mtime, so an old blob that just gained a new reference looks
-        old to any grace period, however large
-        (``test_blob_store_races.py::test_min_age_does_not_protect_a_new_reference_to_an_old_deduplicated_blob``
-        pins this).  The only sufficient guard is to run GC with no sweep in
+        on disk references its blobs yet.  ``min_age_seconds`` is the guard for
+        that exposure, and it covers **both** ways a concurrent sweep can gain a
+        reference: a blob it *wrote*, and an old blob it *deduplicated onto* —
+        ``materialize_blob`` refreshes mtime on a content hit, so a blob's
+        mtime means "last referenced", not "created"
+        (``test_blob_store_races.py::test_min_age_protects_a_new_reference_to_an_old_deduplicated_blob``
+        pins this).  The guard is exactly as strong as its window: choose
+        ``min_age_seconds`` longer than the gap between a sweep materializing a
+        payload and persisting the record that references it — in practice,
+        longer than your longest sweep's runtime — and note the default ``0``
+        gives no protection at all.  The deletion loop stats each blob
+        immediately before its ``unlink``, so the only residual exposure is a
+        reference landing in the instant between that stat and the unlink
+        syscall, which no grace period can close.  Running GC with no sweep in
         flight — between sessions, as :func:`clean_orphaned_media` is already
-        used.
+        used — avoids relying on the window at all.
 
     An unreadable root makes the scan untrustworthy, since a record that cannot
     be deserialized may name any blob.  In that case **nothing** is reported or
@@ -775,11 +781,12 @@ def clean_orphaned_blobs(
         dry_run: If True (the default), only report unreferenced blobs.
         extra_roots: Saved-result pickles, or directories of them, whose
             references count as live.  See :func:`blob_reachability`.
-        min_age_seconds: Skip blobs modified more recently than this.  A
-            non-zero grace period protects blobs an in-flight sweep has
-            *written* during the window, but not an old blob it deduplicated
-            onto (see the warning above); 0 (the default) collects regardless
-            of age.
+        min_age_seconds: Skip blobs whose mtime is more recent than this.
+            mtime means "last referenced" (a dedup content hit refreshes it),
+            so a non-zero grace period protects every blob an in-flight sweep
+            has written *or* deduplicated onto during the window (see the
+            warning above for how to size it); 0 (the default) collects
+            regardless of age.
 
     Returns:
         (orphan_blobs, total_bytes) — paths of unreferenced blob files and their
