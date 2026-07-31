@@ -337,10 +337,19 @@ def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: 
     rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
         data_array = dataset[rv_name]
-        # Transpose to requested dim order and extract numpy array
-        arr = data_array.transpose(*dims).values.astype(np.float32)
-        # Never-sampled points stay NaN so the viewer shows genuine gaps instead
-        # of fabricated zeros (plan 23 C12).
+        # Transpose to requested dim order, then blank every missing cell BEFORE
+        # coercing to float. `result_is_missing` is the only oracle that knows a
+        # type's sentinel, and the sentinel is not always NaN: the -1 family
+        # (ResultReference, pre-plan-22 ResultDataSet cells) is *finite*, so an
+        # np.isfinite filter alone would plot -1 as real data and drag
+        # value_range's floor down to it (plan 23 C12).
+        raw = data_array.transpose(*dims).values
+        arr = np.array(
+            [float("nan") if result_is_missing(rv, v) else v for v in raw.ravel()],
+            dtype=np.float32,
+        ).reshape(raw.shape)
+        # Surviving NaNs stay NaN so the viewer shows genuine gaps instead of
+        # fabricated zeros.
         finite = arr[np.isfinite(arr)]
         if finite.size == 0:
             logger.warning(

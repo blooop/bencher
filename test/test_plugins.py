@@ -119,6 +119,35 @@ class TestRegistry(unittest.TestCase):
         for cap in Capability:
             self.assertIn(cap.value, msg)
 
+    def test_select_does_not_abort_on_post_registration_capability_mutation(self) -> None:
+        """Selection runs mid-run, after an expensive sweep, and both production call
+        sites leave select() outside their try/except. A plugin whose `requires` went
+        bad after registration is rejected with a reason, not raised (never crash
+        mid-run)."""
+
+        @plot_plugin(
+            name="mutated",
+            backend="t",
+            match=PlotFilter(
+                float_range=VarRange(0, None),
+                cat_range=VarRange(0, None),
+                repeats_range=VarRange(0, None),
+                input_range=VarRange(0, None),
+            ),
+            register=False,
+        )
+        def _stub(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("x")
+
+        self.reg.register(_stub)
+        _stub.requires = frozenset({"bogus_capability"})  # mutate after registration
+
+        data = _data_with_floats(1)
+        with self.assertLogs("bencher.plugins.registry", level="WARNING"):
+            self.assertEqual(self.reg.select(data), ())
+        reasons = [d.reason for d in self.reg.explain(data) if d.name == "mutated"]
+        self.assertIn("invalid capability", reasons[0])
+
     def test_register_valid_capability_strings_accepted(self) -> None:
         """External plugins passing valid plain strings keep working."""
 

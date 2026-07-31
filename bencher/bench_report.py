@@ -234,27 +234,60 @@ class BenchReport(BenchPlotServer):
                 return tab
         return None
 
+    @staticmethod
+    def _result_title(bench_res: BenchResult) -> str:
+        """Best-effort human title for *bench_res*, for attributing a fallback pane."""
+        cfg = getattr(bench_res, "bench_cfg", None)
+        return getattr(cfg, "title", None) or getattr(bench_res, "title", None) or "unknown sweep"
+
+    def _append_unattributed(self, bench_res: BenchResult, pane: pn.panel) -> None:
+        """Fallback for a result with no tab of its own: append to the last tab.
+
+        The pane lands under a *different* result's heading, so it is labelled
+        with its true owner and a warning is emitted. A silently misattributed
+        pane is worse than a missing one — a reader would otherwise credit this
+        content (a regression verdict, say) to the sweep whose tab it sits in.
+        """
+        title = self._result_title(bench_res)
+        logger.warning(
+            "No tab for result %r (its plot() produced nothing, or it was never "
+            "registered via append_result); appending its content to the last tab "
+            "instead, labelled with its origin",
+            title,
+        )
+        self.append(
+            pn.pane.Markdown(
+                f"**⚠️ From `{title}`** — this sweep produced no tab of its own, "
+                "so its content appears here. It does **not** belong to the sweep "
+                "above.",
+                name=f"{title} (no tab)",
+            )
+        )
+        self.append(pane)
+
     def append_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
         """Append *pane* to the tab that belongs to *bench_res*.
 
-        Falls back to :meth:`append` (the last tab) when the result is
-        untracked or its plot() produced no tab.
+        Falls back to the last tab when the result is untracked or its plot()
+        produced no tab; the fallback labels the pane with its true owner (see
+        :meth:`_append_unattributed`).
         """
         tab = self._tab_for_result(bench_res)
         if tab is None:
-            self.append(pane)
+            self._append_unattributed(bench_res, pane)
         else:
             tab.append(pane)
 
     def prepend_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
         """Insert *pane* at the beginning of the tab that belongs to *bench_res*.
 
-        Falls back to :meth:`append` (the last tab) when the result is
-        untracked or its plot() produced no tab.
+        Falls back to the last tab when the result is untracked or its plot()
+        produced no tab; the fallback labels the pane with its true owner (see
+        :meth:`_append_unattributed`).
         """
         tab = self._tab_for_result(bench_res)
         if tab is None:
-            self.append(pane)
+            self._append_unattributed(bench_res, pane)
         else:
             tab.insert(0, pane)
 

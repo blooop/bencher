@@ -255,7 +255,17 @@ class PluginRegistry:
             if plugin.name in exc:
                 reject(plugin, "excluded by name")
                 continue
-            missing = [cap for cap in plugin.requires if not data.has(cap)]
+            # register() validates `requires`, so an invalid capability should be
+            # unreachable here. Selection nonetheless runs mid-run, after an
+            # expensive sweep, and a plugin object could be mutated after
+            # registration — so a bad capability is reported as a rejection reason
+            # rather than propagating out of the report build (never crash mid-run).
+            try:
+                missing = [cap for cap in plugin.requires if not data.has(cap)]
+            except ValueError as exc:
+                log.warning("Plugin %r has an invalid capability: %s", plugin.name, exc)
+                reject(plugin, f"invalid capability: {exc}")
+                continue
             if missing:
                 reject(plugin, f"missing capability: {', '.join(sorted(missing))}")
                 continue

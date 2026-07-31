@@ -136,13 +136,14 @@ class TestBenchReport(unittest.TestCase):
         self.assertNotIn(optuna1, report.pane[0].objects)
 
     def test_append_to_result_fallback_when_untracked(self):
-        """append_to_result() falls back to append() for untracked results."""
+        """append_to_result() falls back to the last tab for untracked results."""
         report = BenchReport("fallback")
         report.append_tab(pn.pane.Markdown("existing"), "existing")
 
         unknown = _FakeBenchResult("unknown")
         extra = pn.pane.Markdown("orphan content")
-        report.append_to_result(unknown, extra)
+        with self.assertLogs("bencher.bench_report", level="WARNING"):
+            report.append_to_result(unknown, extra)
 
         # Falls back to append, which targets the last tab
         self.assertIn(extra, report.pane[-1].objects)
@@ -199,7 +200,9 @@ class TestBenchReport(unittest.TestCase):
         self.assertIs(report.pane[0].objects[0], pane)
 
     def test_append_to_none_plot_result_falls_back_to_append(self):
-        """Content for a result with no tab falls back to append() (last tab)."""
+        """Content for a result with no tab falls back to the last tab, but is labelled
+        with its true owner and warned about — a silently misattributed pane is worse
+        than a missing one (plan 23 C9 review item 3)."""
         report = BenchReport("no_tab")
         res_none = _FakeBenchResult("no plot", plot_pane=None)
         res = _FakeBenchResult("real sweep")
@@ -207,8 +210,25 @@ class TestBenchReport(unittest.TestCase):
         report.append_result(res)
 
         pane = pn.pane.Markdown("orphan")
-        report.append_to_result(res_none, pane)
+        with self.assertLogs("bencher.bench_report", level="WARNING") as cm:
+            report.append_to_result(res_none, pane)
         self.assertIn(pane, report.pane[-1].objects)
+        self.assertIn("no plot", "\n".join(cm.output))
+        # A visible attribution note precedes the misplaced pane in the tab
+        objects = report.pane[-1].objects
+        note = objects[objects.index(pane) - 1]
+        self.assertIn("no plot", note.object)
+
+    def test_prepend_to_untracked_result_is_attributed(self):
+        """The same attribution applies to prepend_to_result's fallback."""
+        report = BenchReport("untracked")
+        report.append_result(_FakeBenchResult("real sweep"))
+
+        pane = pn.pane.Markdown("orphan")
+        with self.assertLogs("bencher.bench_report", level="WARNING") as cm:
+            report.prepend_to_result(_FakeBenchResult("ghost"), pane)
+        self.assertIn(pane, report.pane[-1].objects)
+        self.assertIn("ghost", "\n".join(cm.output))
 
     def test_clear_resets_results_and_tabs(self):
         report = BenchReport("clearable")

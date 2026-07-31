@@ -23,7 +23,13 @@ from bencher.results.rerun_result import (
     _log_result_var,
     _log_tensor,
 )
-from bencher.variables.results import ResultFloat, ResultPath, ResultString
+from bencher.variables.results import (
+    ResultDataSet,
+    ResultFloat,
+    ResultPath,
+    ResultReference,
+    ResultString,
+)
 
 LOGGER = "bencher.results.rerun_result"
 
@@ -34,6 +40,8 @@ class _Vars(param.Parameterized):
     metric = ResultFloat()
     label = ResultString()
     file_out = ResultPath()
+    ref = ResultReference()
+    data_out = ResultDataSet()
 
 
 def _fake_rr() -> SimpleNamespace:
@@ -104,6 +112,37 @@ class TestTensorMissing(unittest.TestCase):
         _path, (_kind, arr, _dims, value_range) = rec.logged[0]
         self.assertTrue(np.isnan(arr[0, 1]), "missing cell must stay NaN, not become 0.0")
         self.assertEqual(value_range, [1.0, 4.0])
+
+    def test_minus_one_sentinel_is_a_gap_not_data(self):
+        """The -1 missing sentinel (ResultReference, and legacy ResultDataSet cells) is
+        finite, so an np.isfinite filter alone would plot it as real data and drag
+        value_range's floor to -1. It must become a NaN gap (plan 23 C12)."""
+        rec = _FakeRecording()
+        ds = xr.Dataset(
+            {"ref": (("x", "y"), [[-1.0, 1.0], [2.0, 3.0]])},
+            coords={"x": [0, 1], "y": [0, 1]},
+        )
+        _log_tensor(_fake_rr(), rec, ds, "", _Vars.param.ref, ["x", "y"])
+
+        self.assertEqual(len(rec.logged), 1)
+        _path, (_kind, arr, _dims, value_range) = rec.logged[0]
+        self.assertTrue(np.isnan(arr[0, 0]), "the -1 sentinel must become a NaN gap")
+        self.assertNotIn(-1.0, arr.ravel().tolist())
+        self.assertEqual(value_range, [1.0, 3.0], "value_range must exclude the sentinel")
+
+    def test_dataset_legacy_minus_one_sentinel_is_a_gap(self):
+        """ResultDataSet accepts both sentinel generations; the legacy -1 int cells are
+        missing too and must not be plotted."""
+        rec = _FakeRecording()
+        ds = xr.Dataset(
+            {"data_out": (("x",), [-1.0, 4.0, 6.0])},
+            coords={"x": [0, 1, 2]},
+        )
+        _log_tensor(_fake_rr(), rec, ds, "", _Vars.param.data_out, ["x"])
+
+        _path, (_kind, arr, _dims, value_range) = rec.logged[0]
+        self.assertTrue(np.isnan(arr[0]))
+        self.assertEqual(value_range, [4.0, 6.0])
 
     def test_all_missing_tensor_skipped_with_warning(self):
         rec = _FakeRecording()

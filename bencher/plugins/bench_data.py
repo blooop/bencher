@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, assert_never, runtime_checkable
 
 import xarray as xr
 from strenum import StrEnum
@@ -79,17 +79,26 @@ class BenchData:
 
         Used by ``Plugin.requires`` (plugin.py) to gate plugins that need fields
         beyond dataset+vars. Raises ValueError on a capability name outside the
-        :class:`Capability` vocabulary instead of silently returning False."""
+        :class:`Capability` vocabulary instead of silently returning False.
+
+        The match is exhaustive over :class:`Capability` and ends in
+        ``assert_never``, so a new member added without a branch here is a
+        ``ty`` **check-time** error rather than a runtime abort. This is the
+        licensed case of plan 24 A1: the subject comes from
+        :func:`to_capability`, whose return type is established as
+        ``Capability`` (it is not a ``param`` descriptor read)."""
         cap = to_capability(capability)
-        if cap is Capability.OPTIMIZER_STUDY:
-            return self.optimizer_study is not None
-        if cap is Capability.BASELINE_RUNS:
-            return len(self.baseline_runs) > 0
-        if cap is Capability.CACHE:
-            return self.cache is not None
-        if cap is Capability.LEGACY_RESULT:
-            return self.legacy_result is not None
-        raise AssertionError(f"unhandled capability {cap!r}")  # exhaustiveness guard
+        match cap:
+            case Capability.OPTIMIZER_STUDY:
+                return self.optimizer_study is not None
+            case Capability.BASELINE_RUNS:
+                return len(self.baseline_runs) > 0
+            case Capability.CACHE:
+                return self.cache is not None
+            case Capability.LEGACY_RESULT:
+                return self.legacy_result is not None
+            case unreachable:
+                assert_never(unreachable)
 
     def with_changes(self, **kwargs) -> BenchData:
         return replace(self, **kwargs)
