@@ -7,7 +7,7 @@ description = "A package for benchmarking the performance of arbitrary functions
 readme = "README.md"
 license = "MIT"
 
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 
 dependencies = [
     "holoviews>=1.15,<=1.23.1",
@@ -43,15 +43,13 @@ platforms = ["linux-64"]
 libc = "2.31"
 
 [tool.pixi.dependencies]
-python = ">=3.10"
+python = ">=3.11"
 sqlite = "==3.48.0"
 shellcheck = ">=0.10.0,<0.11"
 devpod = ">=0.8.0,<0.9"
 gh = ">=2.83.0,<3.0"
 playwright = ">=1.50,<2"
 
-[tool.pixi.feature.py310.dependencies]
-python = "3.10.*"
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
 [tool.pixi.feature.py312.dependencies]
@@ -108,7 +106,6 @@ include = ["bencher", "CHANGELOG.md"]
 [tool.pixi.environments]
 default = { features = ["test", "rerun"], solve-group = "default" }
 docs = { features = ["test", "rerun", "docs"], solve-group = "default" }
-py310 = ["py310", "test", "rerun"]
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
 py313 = ["py313", "test", "rerun"]

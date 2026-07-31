@@ -18,9 +18,19 @@ relying on it; the symbol is the durable reference.
 
 **Tool versions all facts below were measured with:** `ty` 0.0.56 (what
 `.pixi/envs/default` resolves from the pin `ty>=0.0.13,<=0.0.64`,
-`pyproject.toml:80`), `typing_extensions` 4.16.0, py310 target (from
-`requires-python = ">=3.10"`, `pyproject.toml:10`). Cross-checked on `ty` 0.0.64 and
-0.0.65, and on `pyrefly` 1.1.1.
+`pyproject.toml:80`), `typing_extensions` 4.16.0, py310 target. Cross-checked on `ty`
+0.0.64 and 0.0.65, and on `pyrefly` 1.1.1.
+
+**Re-verified after the 3.11 floor raise:** the floor is now
+`requires-python = ">=3.11,<3.14"` (`pyproject.toml:10`), so `assert_never` comes from
+the stdlib and `typing_extensions` is no longer involved. **This plan's central finding
+is unaffected** — re-ran the §2.1 ingress probe at a py311 target with
+`from typing import assert_never`: a *complete* `match` fed from an unannotated source is
+still `All checks passed!` while raising
+`AssertionError: Expected code to be unreachable, but got: 'SERIAL'` at runtime. The hole
+is a property of gradual typing at an untyped boundary (§2.5), not of the import source or
+the target version, so every amendment below stands as written. Read
+`typing_extensions.assert_never` as `typing.assert_never` throughout.
 
 ---
 
@@ -227,7 +237,7 @@ Reading:
 - Add A5's third probe to `test/test_ty_gate.py`.
 - **Ordering:** depends on 23-P1 having created `test/test_ty_gate.py`. If Q1 lands
   first, it carries the pin bump only and A5 folds into P1.
-- **DoD:** `pixi run ci` green on py310 and py313; the new probe documents, in a
+- **DoD:** `pixi run ci` green on py311 and py313 (the post-floor-raise matrix); the new probe documents, in a
   comment, that it pins current `ty` behaviour rather than desired behaviour.
 
 ### Folded into existing plan 23 phases (no new PRs)

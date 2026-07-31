@@ -13,7 +13,7 @@ links so they stay reachable from this page.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -118,7 +118,7 @@ def generate_scorecard(
         nightly_url=_sanitize_url(chrome.nightly_url),
         main_url=_sanitize_url(chrome.main_url),
         stable_url=_sanitize_url(chrome.stable_url),
-        generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     )
 
     output_path = reports_dir / output_name
