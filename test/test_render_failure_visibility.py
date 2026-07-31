@@ -103,10 +103,12 @@ class TestReportRenderFailureHelper(unittest.TestCase):
 
     def test_helper_still_logs(self):
         """Callers already capturing the logger keep working."""
-        with self.assertLogs(level="ERROR") as captured:
-            with warnings.catch_warnings(record=True):
-                warnings.simplefilter("always")
-                report_render_failure("Thing 'y'", ValueError("boom"))
+        with (
+            self.assertLogs(level="ERROR") as captured,
+            warnings.catch_warnings(record=True),
+        ):
+            warnings.simplefilter("always")
+            report_render_failure("Thing 'y'", ValueError("boom"))
         self.assertTrue(any("Thing 'y'" in m for m in captured.output))
 
 

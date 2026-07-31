@@ -125,10 +125,12 @@ class TestBenchResultToAuto(unittest.TestCase):
         self.assertIn("No Plotters are able to represent these results", panes[0].object)
 
     def test_to_auto_failing_callback_surfaced_not_raised(self):
-        with self.assertLogs(level="ERROR") as captured:
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                panes = self.res.to_auto(plot_list=[_failing_cb, LineResult.to_plot])
+        with (
+            self.assertLogs(level="ERROR") as captured,
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
+            panes = self.res.to_auto(plot_list=[_failing_cb, LineResult.to_plot])
         self.assertTrue(any("_failing_cb" in msg for msg in captured.output))
         # A failure warns, so a caller that never configured logging still sees it.
         self.assertTrue(

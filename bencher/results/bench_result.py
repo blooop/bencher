@@ -323,12 +323,12 @@ class BenchResult(
         ):
             try:
                 row.append(plugin.render(data))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 row.append(report_render_failure(f"Plot plugin '{plugin.name}'", exc))
         for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 row.append(report_render_failure(f"Plot callback '{plot_callback.__name__}'", exc))
 
         self.plt_cnt_cfg.print_debug = True
@@ -455,7 +455,7 @@ class BenchResult(
                         plot_cols.append(ep(self))
                     else:
                         plot_cols.append(ep)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                     name = getattr(ep, "__name__", repr(ep))
                     plot_cols.append(report_render_failure(f"Extra panel '{name}'", exc))
 
