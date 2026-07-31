@@ -158,8 +158,10 @@ class BenchResult(
         of_attempted = f" of {attempted} executed" if attempted else ""
         lines = [
             "### ⚠ Failed samples\n",
-            f"**{self.n_failed}{of_attempted} sample(s) failed.** Their cells hold "
-            f"the missing-value sentinel and are excluded from reductions.\n",
+            (
+                f"**{self.n_failed}{of_attempted} sample(s) failed.** Their cells hold "
+                f"the missing-value sentinel and are excluded from reductions.\n"
+            ),
             "| Inputs | Error |",
             "|--------|-------|",
         ]
