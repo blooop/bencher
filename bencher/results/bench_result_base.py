@@ -9,7 +9,7 @@ from copy import deepcopy
 from enum import Enum, auto
 from functools import partial
 from textwrap import wrap
-from typing import Any, Literal
+from typing import Any, Literal, assert_never
 
 import holoviews as hv
 import numpy as np
@@ -57,6 +57,17 @@ class ReduceType(Enum):
     REDUCE = auto()  # get the mean and std dev of the data along the "repeat" dimension
     MINMAX = auto()  # get the minimum and maximum of data along the "repeat" dimension
     NONE = auto()  # don't reduce
+
+
+# ReduceType with AUTO excluded: the return type of _resolve_auto, so that the match in
+# to_dataset is exhaustive over four members rather than relying on a catch-all.
+# CAVEAT: this only *fully* holds once `invalid-return-type` is enabled (plan 23 P12).
+# That rule is what checks _resolve_auto actually returns a member of this Literal; until
+# it lands, adding a ReduceType member without updating both this alias and the match
+# passes ty and fails at runtime in assert_never instead of at check time.
+ResolvedReduceType = Literal[
+    ReduceType.SQUEEZE, ReduceType.REDUCE, ReduceType.MINMAX, ReduceType.NONE
+]
 
 
 class EmptyContainer:
@@ -196,7 +207,7 @@ class BenchResultBase:
 
     def to_hv_dataset(
         self,
-        reduce: ReduceType = ReduceType.AUTO,
+        reduce: ReduceType | None = ReduceType.AUTO,
         result_var: ResultFloat | None = None,
         subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
@@ -234,9 +245,25 @@ class BenchResultBase:
             )
         )
 
-    def _resolve_auto(self, reduce: ReduceType) -> ReduceType:
-        """Resolve AUTO to a concrete ReduceType based on repeat count."""
-        if reduce == ReduceType.AUTO:
+    def _resolve_auto(self, reduce: ReduceType | None) -> ResolvedReduceType:
+        """Resolve AUTO (and the legacy `None` sentinel) to a concrete ReduceType.
+
+        `reduce=None` reaches here from public methods that declare
+        `reduce: ReduceType | None` and forward it unchanged (`map_plot_panes`,
+        `filter`, ...). It has always meant "no reduction": it used to fall through
+        `to_dataset`'s catch-all arm. Mapping it *here* rather than at the callers
+        matters, because `to_hv_dataset` branches on `reduce == ReduceType.NONE`
+        beforehand and `None` deliberately does not match that, which preserves the
+        unit-carrying kdims of its generic arm.
+
+        NOTE (plan 23): `None` and `AUTO` meaning different things on one field is the
+        sentinel smell this plan exists to remove, and `map_plot_panes` defaulting to
+        "no reduction" disagrees with `to_hv_dataset`'s AUTO. Both are behaviour changes
+        that need a phase which can own them.
+        """
+        if reduce is None:
+            return ReduceType.NONE
+        if reduce is ReduceType.AUTO:
             return ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
         return reduce
 
@@ -259,7 +286,7 @@ class BenchResultBase:
 
     def to_dataset(
         self,
-        reduce: ReduceType = ReduceType.AUTO,
+        reduce: ReduceType | None = ReduceType.AUTO,
         result_var: ResultFloat | str | None = None,
         subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
@@ -350,9 +377,11 @@ class BenchResultBase:
                     ds_out = ds_out.squeeze("repeat", drop=True).copy(deep=True)
                 else:
                     ds_out = ds_out.squeeze(drop=True).copy(deep=True)
-            case _:
-                # ReduceType.NONE — deep copy for mutation safety
+            case ReduceType.NONE:
+                # deep copy for mutation safety
                 ds_out = ds_out.copy(deep=True)
+            case _ as unreachable:
+                assert_never(unreachable)
 
         # Optional aggregation across non-repeat dimensions (e.g., categorical)
         if agg_over_dims:
@@ -622,7 +651,7 @@ class BenchResultBase:
     def map_plot_panes(
         self,
         plot_callback: Callable,
-        hv_dataset: hv.Dataset = None,
+        hv_dataset: hv.Dataset | None = None,
         target_dimension: int = 2,
         result_var: ResultFloat | None = None,
         result_types=None,
@@ -854,7 +883,7 @@ class BenchResultBase:
     def _to_panes_da(
         self,
         dataset: xr.Dataset,
-        plot_callback: Callable | None = None,
+        plot_callback: Callable,
         target_dimension=1,
         horizontal=False,
         result_var=None,

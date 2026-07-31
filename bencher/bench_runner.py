@@ -7,7 +7,7 @@ import webbrowser
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Protocol, cast, runtime_checkable
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, ShowMode, normalize_show
 from bencher.bench_report import BenchReport, GithubPagesCfg, Publisher
@@ -277,13 +277,15 @@ class BenchRunner:
         if len(sig.parameters) == 2:
             # BenchableV1: takes (run_cfg, report)
             report = report or BenchReport()
-            result = bench_fn(run_cfg, report)
+            # The signature check above is the discriminator for the Benchable union; no
+            # type checker can narrow on it, so state the established arm explicitly.
+            result = cast("BenchableV1", bench_fn)(run_cfg, report)
             if getattr(result, "report", None) is None:
                 result.report = report
             return result, report
 
         # BenchableV2: takes (run_cfg)
-        result = bench_fn(run_cfg)
+        result = cast("BenchableV2", bench_fn)(run_cfg)
         result_report = getattr(result, "report", None)
 
         if report is not None:

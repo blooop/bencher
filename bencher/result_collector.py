@@ -13,7 +13,7 @@ from contextlib import suppress
 from datetime import datetime
 from itertools import product
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 import xarray as xr
@@ -239,9 +239,7 @@ class ResultCollector:
             self._history_cache.close()
             self._history_cache = None
 
-    # typing.Self needs python 3.11 and the package floor is 3.10, so keep the
-    # concrete return type rather than take a typing_extensions dependency.
-    def __enter__(self) -> ResultCollector:  # noqa: PYI034
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc_info) -> None:

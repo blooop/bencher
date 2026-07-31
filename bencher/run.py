@@ -50,7 +50,7 @@ def _sigterm_handler(signum, frame) -> None:
     """Handle SIGTERM so servers are stopped even when the process is killed."""
     _shutdown_all_servers()
     if _prev_sigterm_handler not in (signal.SIG_DFL, signal.SIG_IGN, None):
-        _prev_sigterm_handler(signum, frame)  # type: ignore[misc]
+        _prev_sigterm_handler(signum, frame)  # type: ignore[misc]  # ty: ignore[call-non-callable]
     else:
         sys.exit(128 + signum)
 
