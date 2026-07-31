@@ -26,7 +26,15 @@ from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.history import config_summary as history_config_summary
-from bencher.job import Executors, FutureCache, Job, JobFuture, normalize_catch
+from bencher.job import (
+    Executors,
+    FutureCache,
+    Job,
+    JobFuture,
+    normalize_catch,
+    normalize_executor,
+    require_worker_result,
+)
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
 from bencher.result_collector import ResultCollector
@@ -503,6 +511,11 @@ class Bench(BenchPlotServer):
         # kwarg spelling would give each knob two homes to reconcile.
         run_cfg.catch = normalize_catch(run_cfg.catch)
         validate_sample_error_policy(run_cfg.fail_on_sample_error)
+        # Same reasoning for `executor` (C13): `param.Selector` accepts the bare
+        # string "SERIAL" because Executors is a StrEnum, and the field is then
+        # compared with both `==` and `is` further down. Assigning the member back
+        # makes the field's type true for every reader.
+        run_cfg.executor = normalize_executor(run_cfg.executor)
 
         if run_cfg.only_plot:
             run_cfg.cache_results = True
@@ -1664,7 +1677,10 @@ class Bench(BenchPlotServer):
             job_key=cache_key,
             tag=tag,
         )
-        return self.sample_cache.submit(job).result()
+        # Same boundary check as store_results: the optimize path consumes the result
+        # dict directly, so a worker returning None must fail here by name rather than
+        # as a downstream subscript error (B3, plan 23 P2).
+        return require_worker_result(self.sample_cache.submit(job).result(), job.job_id)
 
     def _make_optuna_objective(
         self,

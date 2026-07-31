@@ -37,7 +37,7 @@ from bencher.history import (
     project,
     reconcile,
 )
-from bencher.job import JobFuture, SampleFailure, normalize_catch
+from bencher.job import JobFuture, SampleFailure, normalize_catch, require_worker_result
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
 from bencher.variables.results import (
@@ -419,59 +419,76 @@ class ResultCollector:
                 bench_res, job_result.job.job_id, worker_job.function_input, exc
             )
             return
-        if result is not None:
-            logger.info(f"{job_result.job.job_id}:")
-            if bench_res.bench_cfg.print_bench_inputs:
-                for k, v in worker_job.function_input.items():
-                    logger.info(f"\t {k}:{v}")
+        # Outside the `except catch` above, deliberately: a worker that returned
+        # nothing is a harness-contract error, not a sample fault, so `catch=` must
+        # not absorb it (plan 23 decision 2). This replaces `if result is not None:`
+        # with no `else`, which skipped everything below and left the sweep green with
+        # an all-sentinel dataset -- see require_worker_result for the full B3 story.
+        result = require_worker_result(result, job_result.job.job_id)
+        logger.info(f"{job_result.job.job_id}:")
+        if bench_res.bench_cfg.print_bench_inputs:
+            for k, v in worker_job.function_input.items():
+                logger.info(f"\t {k}:{v}")
 
-            result_dict = result if isinstance(result, dict) else result.param.values()
-            idx = worker_job.index_tuple
+        result_dict = result if isinstance(result, dict) else result.param.values()
+        idx = worker_job.index_tuple
 
-            for rv in bench_res.bench_cfg.result_vars:
-                try:
-                    result_value = result_dict[rv.name]
-                except KeyError:
-                    available = list(result_dict.keys())
-                    raise KeyError(
-                        f"Result variable '{rv.name}' was not set by the "
-                        f"benchmark function. Available keys: {available}. "
-                        f"Make sure your benchmark() method sets "
-                        f"self.{rv.name}."
-                    ) from None
-                result_value = _materialize_result_value(rv, result_value)
-                if bench_run_cfg.print_bench_results:
-                    logger.info(f"{rv.name}: {result_value}")
+        for rv in bench_res.bench_cfg.result_vars:
+            try:
+                result_value = result_dict[rv.name]
+            except KeyError:
+                available = list(result_dict.keys())
+                raise KeyError(
+                    f"Result variable '{rv.name}' was not set by the "
+                    f"benchmark function. Available keys: {available}. "
+                    f"Make sure your benchmark() method sets "
+                    f"self.{rv.name}."
+                ) from None
+            result_value = _materialize_result_value(rv, result_value)
+            if bench_run_cfg.print_bench_results:
+                logger.info(f"{rv.name}: {result_value}")
 
-                if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
-                    _set_result_value(bench_res, rv_arrays, rv.name, idx, result_value)
-                elif isinstance(rv, ResultDataSet):
-                    # Plan 22 (D2): the cell stores a blob path, not an index into
-                    # dataset_list.  The list attribute stays, empty, as the read
-                    # path for results collected before path-backed cells.
-                    _set_result_value(
-                        bench_res, rv_arrays, rv.name, idx, _materialize_dataset_value(result_value)
+            if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
+                _set_result_value(bench_res, rv_arrays, rv.name, idx, result_value)
+            elif isinstance(rv, ResultDataSet):
+                # Plan 22 (D2): the cell stores a blob path, not an index into
+                # dataset_list.  The list attribute stays, empty, as the read
+                # path for results collected before path-backed cells.
+                _set_result_value(
+                    bench_res, rv_arrays, rv.name, idx, _materialize_dataset_value(result_value)
+                )
+            elif isinstance(rv, ResultReference):
+                bench_res.object_index.append(result_value)
+                _set_result_value(
+                    bench_res, rv_arrays, rv.name, idx, len(bench_res.object_index) - 1
+                )
+
+            elif isinstance(rv, ResultVec):
+                # B2 (plan 23 P2): these two conditions used to guard the store with
+                # no `else`, so a vector of the wrong length was silently dropped and
+                # the cell kept its NaN fill -- indistinguishable, downstream, from
+                # "never sampled". The sibling arms of this ladder all raise.
+                if not isinstance(result_value, (list, np.ndarray)):
+                    raise TypeError(
+                        f"Result variable '{rv.name}' is a ResultVec(size={rv.size}), "
+                        f"so the benchmark function must set it to a list or numpy "
+                        f"array; got {type(result_value).__name__} ({result_value!r})."
                     )
-                elif isinstance(rv, ResultReference):
-                    bench_res.object_index.append(result_value)
-                    _set_result_value(
-                        bench_res, rv_arrays, rv.name, idx, len(bench_res.object_index) - 1
+                if len(result_value) != rv.size:
+                    raise TypeError(
+                        f"Result variable '{rv.name}' is a ResultVec(size={rv.size}), "
+                        f"but the benchmark function returned {len(result_value)} "
+                        f"element(s): {result_value!r}. Each element is stored in its "
+                        f"own dataset column, so every sample must return exactly "
+                        f"{rv.size} of them."
                     )
+                for i in range(rv.size):
+                    _set_result_value(bench_res, rv_arrays, rv.index_name(i), idx, result_value[i])
 
-                elif isinstance(rv, ResultVec):
-                    if (
-                        isinstance(result_value, (list, np.ndarray))
-                        and len(result_value) == rv.size
-                    ):
-                        for i in range(rv.size):
-                            _set_result_value(
-                                bench_res, rv_arrays, rv.index_name(i), idx, result_value[i]
-                            )
-
-                else:
-                    raise TypeError(f"Unsupported result type: {type(rv).__name__}")
-            for rv in bench_res.result_hmaps:
-                bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
+            else:
+                raise TypeError(f"Unsupported result type: {type(rv).__name__}")
+        for rv in bench_res.result_hmaps:
+            bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
 
     def cache_results(
         self, bench_res: BenchResult, bench_cfg_hash: str, bench_cfg_hashes: list[str]

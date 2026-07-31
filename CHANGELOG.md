@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **BREAKING (fail-loud): a benchmark that returns `None` now raises instead of producing
+  an empty sweep** (plan 23 P2, B3). A worker that forgot to `return
+  super().__call__(**kwargs)` used to trip a bare `assert` on the serial executor — and
+  nothing at all on `MULTIPROCESSING`/`SCOOP`, where the future resolved to `None`,
+  `store_results` skipped its entire body behind `if result is not None:` with no `else`,
+  and the sweep finished green with an all-sentinel dataset and `n_failed == 0`. The same
+  user error was loud or silent depending on an unrelated config knob, and the assert
+  vanished entirely under `python -O`. Both paths now funnel through one check
+  (`require_worker_result`) raising `TypeError`.
+
+- **BREAKING (fail-loud): a `ResultVec` set to the wrong number of elements now raises**
+  (plan 23 P2, B2). The store was guarded by `isinstance(value, (list, np.ndarray)) and
+  len(value) == rv.size` with no `else`, so a length mismatch was silently discarded and
+  the cell kept its NaN fill — indistinguishable downstream from "never sampled".
+  `param.List` validates that the value is a list but not how long it is, so this was
+  reachable from ordinary benchmark code. The error names the variable, the declared size
+  and the actual length.
+
+  Both checks are raised **outside** `store_results`'s `except catch` block on purpose: a
+  bad return shape is a harness-contract error, not a sample fault, so `catch=` does not
+  absorb it (plan 23 decision 2). Previously `catch=Exception` did swallow the serial
+  `assert`, restoring the silent behaviour. Tests pin this.
+
+### Changed
+- **`BenchRunCfg.executor` is normalized to an `Executors` member at the sweep boundary**
+  (plan 23 P2, C13). Because `Executors` is a `StrEnum`,
+  `param.Selector(objects=list(Executors))` accepts the bare string `"SERIAL"` and stores a
+  `str` in a field compared with `==`/`!=` in `Bench` and with `is not` in
+  `FutureCache.submit` — styles that disagree on a raw string. The four sites happened to
+  agree, because `Executors.factory` also used `==`; that was luck, not design. `executor`
+  is now parsed once in `plot_sweep` and in `FutureCache.__init__`, `factory` matches
+  exhaustively via `assert_never`, and an out-of-vocabulary value raises at the parse
+  rather than at a match site. No cache impact: `executor` feeds no persistent hash, and a
+  member's `str()` and `hash()` are identical to the raw string's.
+
+- `Executors.factory` is annotated `-> SupportsSubmit | None` rather than `-> Future |
+  None`, which was the one thing it never returns — a `Future` is what `submit()` hands
+  back. The new `Protocol` (`submit`, `shutdown`) is satisfied by both
+  `ProcessPoolExecutor` and scoop's module.
+
+- `JobFuture.result()` is annotated `-> dict | None`. The `None` is not new behaviour, only
+  newly admitted: `JobFuture` can represent "no result and no future", and callers must
+  reject it. Plan 23 P5's `Ready(dict) | Pending(Future)` split is what makes the state
+  unrepresentable and the `| None` removable.
+
 ### Removed
 - **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
   the CI matrix runs py311 + py313 (was py310 + py313). The `py310` pixi feature and
