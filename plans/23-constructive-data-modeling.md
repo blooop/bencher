@@ -11,6 +11,14 @@ tightening enforcement mechanism. Fix the live bugs the audit found along the wa
 Per plans-README rule 7, confirm each `file:line` against the current tree before
 relying on it; the symbol is the durable reference.
 
+**⚠️ Amended by [plan 24](24-assert-never-boundary-discipline.md).** D2's `assert_never`
+guarantee holds only where `ty` can establish the match subject's type, which it cannot
+for `param`-descriptor reads (`pyproject.toml:281` documents them as `Unknown`) — and no
+type checker, nor D1's strict-list ratchet, closes that gap. Plan 24 adds the missing
+boundary-normalization precondition (D2 category three), scopes it to **P2** (`executor`)
+and **P11** (`agg_fn`), and re-affirms §1's "`ty` only" non-goal with measurements. Read
+plan 24 §3 before executing P1, P2 or P11.
+
 **⚠️ Read first:** §1 Scope. Config-surface findings (regression method/thresholds,
 `fail_on_sample_error`, `show`, `plot_size`, subsampling knobs) are **out of scope** —
 they belong to A5's breaking-release train and are recorded here only as amendments
@@ -74,26 +82,37 @@ Out of scope (recorded as amendments in §8, do not implement here):
    supports `[[tool.ty.overrides]]` blocks with `include=` globs that relax or
    re-enable rules per path. Verified in a scratch project. No checker change needed.
 
-3. **Exhaustiveness enforcement — verified in detail, and the result constrains D2.**
-   ty derives its target Python version from `requires-python` (`>=3.10`,
-   `pyproject.toml:10`), i.e. it checks against **3.10**. Consequences, all measured:
+3. **Exhaustiveness enforcement — `assert_never` comes from the stdlib.** ty derives its
+   target Python version from `requires-python`, which is now `>=3.11,<3.14`
+   (`pyproject.toml:10`), so `from typing import assert_never` resolves and
+   `error[type-assertion-failure]: Argument does not have asserted type 'Never'` fires on
+   an incomplete match, with a clean pass on a complete one. Verified with stdlib `Enum`,
+   the third-party `strenum.StrEnum` the repo uses, and frozen-dataclass unions.
 
-   | Import form | Result on the py310 target |
+   **History, because it explains why the floor moved.** This plan was originally written
+   against a `>=3.10` floor, where the same probes measured:
+
+   | Import form (py310 target) | Result |
    |---|---|
-   | `from typing_extensions import assert_never` | ✅ `error[type-assertion-failure]: Argument does not have asserted type 'Never'` on an incomplete match; **clean pass** on a complete one |
-   | `from typing import assert_never` | ❌ `error[unresolved-import]: Module 'typing' has no member 'assert_never'` — it is 3.11+ |
-   | `if TYPE_CHECKING or sys.version_info >= (3, 11): from typing import assert_never` with a runtime `def` fallback | ❌ **does not work** — same unresolved-import, and the exhaustiveness signal degrades to `invalid-return-type` |
+   | `from typing_extensions import assert_never` | ✅ works |
+   | `from typing import assert_never` | ❌ `unresolved-import` — it is 3.11+ |
+   | `TYPE_CHECKING`-guarded import with a runtime `def` fallback | ❌ **silently degrades** to `invalid-return-type` |
 
-   So `typing_extensions` is **required**, not a convenience (see D2 for why this
-   overrides the repo's existing precedent against it). Verified with both stdlib
-   `Enum` and the third-party `strenum.StrEnum` the repo uses.
+   That made a `typing_extensions` dependency unavoidable and put this plan in conflict
+   with the repo's existing decision against one. **Raising the floor to 3.11 dissolved
+   that conflict** — hence the floor change landed first, as a prerequisite. Retained here
+   so nobody reintroduces the dependency thinking it is still required.
 
-4. **`type-assertion-failure` is not in the ignore list**, so once the import exists the
-   discipline is enforced with no rules-config change. Note the fallback signal
+4. **`type-assertion-failure` is not in the ignore list**, so the discipline is enforced
+   with no rules-config change. Note the degraded-fallback signal
    (`invalid-return-type`) *is* currently ignored — a second reason to land Tier B.
 
-5. `typing_extensions` 4.16.0 is already in the environment transitively and imports
-   cleanly; it is **not** a declared dependency.
+5. **Two 3.10-era workarounds are now removable** (both are P1 cleanups, not new work):
+   - `bencher/result_collector.py:242-243` declines a `typing_extensions` dependency so
+     that `__enter__` can avoid `typing.Self`. `Self` is stdlib at 3.11 — delete the
+     comment, annotate `-> Self`, drop the `# noqa: PYI034`.
+   - `strenum` (`>=0.4.0`) exists only because `enum.StrEnum` is 3.11+. Migration is now
+     possible but is **explicitly not part of this plan** — see the hazard in D4.
 
 ## 3. Problem statement (with evidence)
 
@@ -297,19 +316,10 @@ Three layers in `pyproject.toml`, mechanism verified in §2.2:
 
 ### D2 — `assert_never` discipline
 
-- Add **`typing_extensions>=4.4`** to `[project] dependencies` and import
-  `from typing_extensions import assert_never`.
-- **This overrides an existing repo decision, deliberately.**
-  `bencher/result_collector.py:242-243` declines a `typing_extensions` dependency
-  ("`typing.Self` needs python 3.11 and the package floor is 3.10, so keep the
-  concrete return type rather than take a typing_extensions dependency"). That call was
-  right for `typing.Self`, which is cosmetic. It does not transfer here: `assert_never`
-  is the mechanism the whole plan's exhaustiveness thesis rests on, and §2.3 measured
-  that **there is no working alternative on the py310 floor** — plain
-  `typing.assert_never` is an `unresolved-import`, and a `TYPE_CHECKING`-guarded import
-  with a runtime fallback silently degrades the check to `invalid-return-type`. The
-  package is already in the environment (§2.5). P1 should update that comment to point
-  at this decision so the two do not read as contradictory.
+- Import `from typing import assert_never` — **stdlib, no new dependency.** This is the
+  payoff of the 3.11 floor (§2.3); earlier revisions of this plan required
+  `typing_extensions` and had to argue past the repo's decision against it. Both the
+  dependency and that argument are now unnecessary. Do not reintroduce either.
 - **Convention (applies to all future code):** every `match` over a closed enum or
   union ends in `case _ as unreachable: assert_never(unreachable)` — **unless** the
   match subject crosses a trust boundary (deserialized cache/user input), where a
@@ -387,14 +397,36 @@ Other design points:
   a guard — a parameter whose class is defined in `bencher.variables.results` but
   absent from the registry **raises** instead of becoming an input variable.
 
-### D4 — Sum-type conventions (py310 + param constraints)
+### D4 — Sum-type conventions (py311 + param constraints)
 
 - Sum types = small frozen dataclasses joined by `|`, destructured with exhaustive
-  `match` + `assert_never`. No new dependencies beyond `typing_extensions`.
-- Closed string vocabularies = `strenum.StrEnum` (the package already in use; stdlib
-  `enum.StrEnum` is 3.11+).
+  `match` + `assert_never`. **No new dependencies at all** (§2.3).
+- Closed string vocabularies = `strenum.StrEnum`, i.e. **keep using the existing
+  package** for now, matching every enum already in the tree.
+- **Do not opportunistically migrate `strenum` → stdlib `enum.StrEnum` as part of this
+  plan.** The 3.11 floor makes it possible, but the two are *not* drop-in equivalents and
+  the difference is silent:
+
+  ```
+  strenum.StrEnum + auto()  ->  member name verbatim   ('SERIAL')
+  enum.StrEnum    + auto()  ->  lowercased name        ('serial')
+  ```
+
+  Measured across the seven StrEnums in `bencher/`: five have lowercase member names and
+  are unaffected (`ComposeType`, `PaneLayout`, `RerunViewKind`, `OptDir`, `ShowMode`).
+  **Two would silently change value** — `Executors` (`SERIAL`/`MULTIPROCESSING`/`SCOOP`)
+  and `SampleOrder` (`INORDER`/`REVERSED`). Because `executor` is a
+  `param.Selector(objects=list(Executors))` (`bench_cfg.py:241`), that flips which string
+  callers may pass: `executor="SERIAL"` is valid today and would start raising. Verified
+  *not* a cache-invalidation risk — neither enum feeds `hash_persistent`, and
+  `sample_order` is in `EXCLUDED_FIELDS` (`identity.py:49`) — so this is a narrow public
+  API break, not data corruption. If the migration is ever wanted, it belongs in its own
+  PR that gives those two enums **explicit string values** rather than `auto()`, and it
+  is A5's call whether the accepted-string change ships in a breaking release.
 - Normalize enum-typed param fields at the config boundary so `==` vs `is` can never
-  diverge again (B4's class of bug).
+  diverge (C13). Note plan 24 §2.2–2.3: a `match` on a raw `param`-descriptor read is
+  *not* a type ty can establish, so boundary normalization is a precondition for
+  `assert_never` there, not merely tidiness.
 
 ## 5. Phases
 
@@ -408,8 +440,11 @@ and may be reordered or dropped individually.
 
 ### P1 — Enforcement floor
 
-- Add `typing_extensions>=4.4` to dependencies; update the counter-precedent comment
-  at `result_collector.py:242-243` to reference D2.
+- **Prerequisite (landed separately):** the `>=3.11` floor. No dependency to add —
+  `assert_never` is stdlib (§2.3).
+- Clear the two 3.10-era workarounds (§2.5): annotate `ResultCollector.__enter__` as
+  `-> Self` and delete the now-false comment at `result_collector.py:242-243` plus its
+  `# noqa: PYI034`. Leave `strenum` alone (D4).
 - Re-enable Tier-A rules globally; fix the 17 resulting errors (guard the
   `scoop`/`playwright` imports; carve `setup.py` into the relaxed block or delete per
   plan 03). Preserve the `unused-*-ignore-comment` rationale comment. **Note the
@@ -427,8 +462,8 @@ and may be reordered or dropped individually.
   asserting both diagnostics fire (skip if the `ty` binary is absent). **Use a minimal
   standalone config for the seeded file** — running under the repo config suppresses
   Tier-C rules and the probe silently passes (this bit the author; see §2.3).
-- **DoD:** gate demonstrably fails on a seeded violation; `pixi run ci` green on py310
-  and py313.
+- **DoD:** gate demonstrably fails on a seeded violation; `pixi run ci` green on py311
+  and py313 (the CI matrix after the floor raise).
 
 ### P2 — Collection-path live bugs (B2, B3) + executor normalization (C13)
 
@@ -576,10 +611,12 @@ and may be reordered or dropped individually.
    routed through plan 21's `catch=` — a `None` return or wrong-length vector is a
    harness-contract error, not a sample fault. Alternative (warn + skip) preserves the
    current silent behavior for parallel users.
-3. **D2: take the `typing_extensions` dependency**, overriding the precedent at
-   `result_collector.py:242-243`. Recommendation: **yes** — §2.3 shows no alternative
-   works on the py310 floor, and the package is already in the environment. Declining
-   it means giving up compile-time exhaustiveness, which is most of this plan's value.
+3. ~~**D2: take the `typing_extensions` dependency**~~ — **RESOLVED, no longer a
+   decision.** The owner raised the floor to `>=3.11`, so `assert_never` is stdlib and no
+   dependency is needed (§2.3). Kept as a numbered entry so later references to
+   "decision 3" still resolve. The follow-on question — migrate `strenum` → stdlib
+   `enum.StrEnum` — is deliberately **not** opened here; D4 records why and hands the
+   accepted-string break to A5.
 4. **P1 meta-test: subprocess ty-on-seeded-violation in CI.** Recommendation: **yes**
    (~1–2 s, skip when the binary is absent). Fallback: config-parsing assertion only.
 5. **B5 (P3): fix now vs wait for A5's `RegressionCfg`.** Recommendation: **now** —

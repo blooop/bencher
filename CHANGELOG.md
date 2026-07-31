@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
+  the CI matrix runs py311 + py313 (was py310 + py313). The `py310` pixi feature and
+  environment are gone.
+
+  The motivation is type-checking, not any runtime feature: `typing.assert_never` — the
+  mechanism plan 23 uses to make `match` statements exhaustively checked by `ty` — is
+  stdlib only from 3.11. On a 3.10 floor it required a `typing_extensions` dependency the
+  repo had explicitly declined (`result_collector.py`), and the dependency-free
+  workarounds were measured to silently degrade the check to a rule the repo ignores,
+  giving false confidence. Raising the floor removes the dependency and the conflict.
+
+  Two 3.10-era workarounds are now removable and are queued as plan 23 P1 cleanups:
+  `typing.Self` in `ResultCollector.__enter__`, and the third-party `strenum` package.
+  **`strenum` is deliberately retained for now** — stdlib `enum.StrEnum` is not a drop-in
+  replacement, because `auto()` lowercases member names where `strenum` preserves them,
+  which would silently change the values of `Executors` and `SampleOrder` and therefore
+  which strings `BenchRunCfg(executor=...)` accepts. See plan 23 D4.
+
 ### Added
 - **Content-addressed blob store: `bencher/blob_store.py`** (plan 22, phase 1 of the A6
   grammar-of-ND-data migration, #1021). Result payloads that cannot live directly in a
