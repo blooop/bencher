@@ -283,6 +283,41 @@ class TestResultSpecRegistry(unittest.TestCase):
         self.assertIsNone(result_spec(param.Number()))
         self.assertIsNone(result_spec(param.String()))
 
+    def test_missing_fill_reads_from_the_spec(self):
+        # Permanent (unlike the transitional literal test below): the fill
+        # helper must resolve each instance to ITS spec, exempt classes must
+        # inherit their base's fill, and unregistered params must fall back to
+        # the NaN family. Guards the isinstance-resolution path end to end.
+        for cls, spec in RESULT_SPECS.items():
+            inst = _instantiate(cls)
+            with self.subTest(cls=cls.__name__):
+                fill, dtype = result_missing_fill(inst)
+                self.assertIs(dtype, spec.fill_dtype)
+                if isinstance(spec.missing_fill, float) and math.isnan(spec.missing_fill):
+                    self.assertTrue(math.isnan(fill))
+                else:
+                    self.assertEqual(fill, spec.missing_fill)
+        for cls in RESULT_SPEC_EXEMPT:
+            fill, dtype = result_missing_fill(_instantiate(cls))
+            self.assertTrue(math.isnan(fill))
+            self.assertIs(dtype, float)
+        fill, dtype = result_missing_fill(param.Number())
+        self.assertTrue(math.isnan(fill))
+        self.assertIs(dtype, float)
+
+    def test_fill_dtype_is_consistent_with_the_fill_value(self):
+        # A spec whose fill and dtype disagree would corrupt the backing array
+        # at setup_dataset time; make the mismatch a registry-level failure.
+        for cls, spec in RESULT_SPECS.items():
+            with self.subTest(cls=cls.__name__):
+                if spec.fill_dtype is float:
+                    self.assertTrue(math.isnan(spec.missing_fill))
+                elif spec.fill_dtype is int:
+                    self.assertIsInstance(spec.missing_fill, int)
+                else:
+                    self.assertIs(spec.fill_dtype, object)
+                    self.assertIsInstance(spec.missing_fill, str)
+
 
 class TestDerivedTuplesMatchPreRegistryLiterals(unittest.TestCase):
     """TRANSITIONAL — delete after one release (added in plan 23 P4).

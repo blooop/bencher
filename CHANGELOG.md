@@ -93,7 +93,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is intended to derive its channel vocabulary from this registry. The deprecated
   `ResultVar` is exempt by declaration (`RESULT_SPEC_EXEMPT`) and resolves to
   `ResultFloat`'s spec; `ResultHmap` keeps its historical quirks (registered, but
-  neither a data-var nor a panel type) rather than being "tidied".
+  neither a data-var nor a panel type) rather than being "tidied". Membership of
+  every derived tuple is unchanged, but iteration *order* now follows the registry's
+  most-derived-first order (e.g. `SCALAR_RESULT_TYPES` is now `(ResultBool,
+  ResultFloat)`); every in-repo consumer is an `isinstance()` check, so this is
+  observable only to external code that indexes or orders on the re-exported tuples.
 - **Content-addressed blob store: `bencher/blob_store.py`** (plan 22, phase 1 of the A6
   grammar-of-ND-data migration, #1021). Result payloads that cannot live directly in a
   dataset cell are serialized under `cachedir/blobs/` and named by the sha256 of their

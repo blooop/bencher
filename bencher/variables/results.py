@@ -788,7 +788,7 @@ RESULT_SPECS: dict[type, ResultSpec] = {
         is_media=False,
         is_data_var=True,
         multidim=False,
-        reference_backed=False,
+        reference_backed=True,
     ),
 }
 
@@ -871,30 +871,24 @@ def result_kind(result_var) -> str:
 # aging (``_null_old_entries``) build their arrays from ``result_missing_fill``,
 # and consumers test for missingness with ``result_is_missing`` instead of
 # hardcoding ``np.isnan`` / ``== "NAN"`` / ``== -1`` per call site.
-_REFERENCE_MISSING_TYPES = (ResultReference,)
-_OBJECT_MISSING_TYPES = (
-    ResultPath,
-    ResultVideo,
-    ResultImage,
-    ResultString,
-    ResultContainer,
-    ResultRerun,
-    ResultDataSet,
-)
+_REFERENCE_MISSING_TYPES = _spec_types(lambda s: s.reference_backed)
+_OBJECT_MISSING_TYPES = _spec_types(lambda s: s.fill_dtype is object)
 # Single-column result types that get a data variable in the dataset. ResultVec
 # is handled separately (it expands to one column per element); ResultHmap is
 # stored out-of-band and intentionally gets no data variable.
-DATA_VAR_RESULT_TYPES = SCALAR_RESULT_TYPES + _REFERENCE_MISSING_TYPES + _OBJECT_MISSING_TYPES
+DATA_VAR_RESULT_TYPES = _spec_types(lambda s: s.is_data_var)
 
 
 def result_missing_fill(rv) -> tuple[Any, type]:
-    """Return the ``(fill_value, numpy_dtype)`` used for missing entries of *rv*."""
-    if isinstance(rv, _REFERENCE_MISSING_TYPES):
-        return -1, int
-    if isinstance(rv, _OBJECT_MISSING_TYPES):
-        return "NAN", object
-    # ResultFloat / ResultBool / ResultVec and any future numeric.
-    return float("nan"), float
+    """Return the ``(fill_value, numpy_dtype)`` used for missing entries of *rv*.
+
+    Read from the ResultSpec registry; an unregistered parameter (or a future
+    numeric result type before registration) falls back to the NaN family,
+    matching the pre-registry behavior."""
+    spec = result_spec(rv)
+    if spec is None:
+        return float("nan"), float
+    return spec.missing_fill, spec.fill_dtype
 
 
 def _dataset_cell_is_missing(value) -> bool:
