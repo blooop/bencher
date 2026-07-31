@@ -1673,7 +1673,7 @@ class Bench(BenchPlotServer):
         target_names,
         tag,
         agg_vars=None,
-        agg_callable=None,
+        agg_callable: Callable | None = None,
         repeats=1,
     ):
         """Return an objective function compatible with ``study.optimize()``."""
@@ -1681,7 +1681,9 @@ class Bench(BenchPlotServer):
         def objective(trial: optuna.trial.Trial):
             kwargs = {iv.name: sweep_var_to_suggest(iv, trial) for iv in input_vars}
 
-            if agg_vars or repeats > 1:
+            # Non-None exactly when `needs_agg` held at the caller (agg_vars or repeats>1),
+            # so testing it here narrows the type instead of duplicating that condition.
+            if agg_callable is not None:
                 agg_combos = list(product(*(v.values() for v in agg_vars))) if agg_vars else [()]
                 all_results = [
                     self._run_optuna_job(

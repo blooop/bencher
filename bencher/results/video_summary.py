@@ -176,7 +176,7 @@ class VideoSummaryResult(BenchResultBase):
     def _to_video_panes_ds(
         self,
         dataset: xr.Dataset,
-        plot_callback: Callable | None = None,
+        plot_callback: Callable,
         target_dimension=0,
         compose_method=ComposeType.right,
         compose_method_list=None,

@@ -46,7 +46,7 @@ class _CorsStaticHandler(StaticFileHandler):
         self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.set_header("Access-Control-Allow-Headers", "*")
 
-    def options(self, *_args):
+    def options(self, *_args, **_kwargs):
         self.set_status(204)
         self.finish()
 

@@ -679,3 +679,70 @@ and may be reordered or dropped individually.
 - Grep-level checks: no `_LOSSY_KINDS`, no `match_all(`, no bare
   `assert self.res is not None`, no `zip(button_names`, no `nan_to_num(arr, nan=0.0)`
   in `rerun_result.py`, and exactly one definition of the agg-fn vocabulary.
+
+## 10. Amendments discovered during implementation
+
+Recorded per the plans-README rule that claims which stopped holding are stated rather
+than silently worked around.
+
+### P1 (implemented)
+
+1. **The gate was worse than "21 rules ignored" — it ran with no dependency
+   resolution.** The `ty` task was `ty check --respect-ignore-files .` with no
+   `--python`, so *every* third-party import was unresolved (`param`, `panel`, `numpy`,
+   `xarray`, …). That is why `unresolved-import` had to be ignored globally, and it
+   silently degraded every rule that needs a third-party type. The task now passes
+   `--python "$CONDA_PREFIX"`, which resolves the *active* pixi environment so `-e py311`
+   and `-e py313` each check against their own interpreter. **All per-rule counts in §2.1
+   are only reproducible with `--python`**; measured without it they are meaningless. A
+   meta-test now pins the flag.
+2. **Tier A is 17 diagnostics, and all 17 are fixed rather than suppressed except two.**
+   Genuine fixes: `hv_dataset: hv.Dataset = None` → `| None` (annotation contradicted its
+   own default); `plot_callback: Callable | None` narrowed to `Callable` in `_to_panes_da`
+   and `_to_video_panes_ds` (both call it unguarded, so `None` was unanswerable — all four
+   call sites already pass a real callable); `options(self, *_args)` → `*_args, **_kwargs`
+   to match tornado's `RequestHandler.options`; `ExampleEnum.to_class`'s parameter widened
+   to `ClassEnum` (it narrowed a base-class parameter, an LSP violation). Two scoped
+   `# ty: ignore` comments remain, each with its reason inline: the optional `scoop`
+   import (the `try/except ImportError` *is* the handling) and the `signal.getsignal`
+   result in `run.py` (ty cannot narrow an `IntEnum` by identity against specific members).
+3. **`extra_panels` was discriminated by `callable()`, which cannot exclude the
+   `Viewable` arm.** Now discriminated by `isinstance(ep, pn.viewable.Viewable)`. This is
+   a latent-bug fix as well as a type fix: a `Viewable` that defined `__call__` would have
+   been *called* instead of appended.
+4. **`Benchable` is discriminated by `inspect.signature` parameter count**, which no
+   checker can narrow. The two call sites now `cast()` to the arm the introspection
+   established, so the assumption is stated rather than blanket-ignored. This is the
+   shape plan 24 warns about; the `cast` is honest about being unverified.
+5. **`_resolve_auto` now returns `ResolvedReduceType`** — a `Literal` over the four
+   non-`AUTO` members — so `to_dataset`'s `match` is exhaustive by construction and its
+   `assert_never` arm is *provably* dead rather than a catch-all. Verified two ways:
+   forcing `invalid-return-type` on shows the narrowing genuinely holds (`return reduce`
+   after `if reduce is ReduceType.AUTO: return ...`), and deleting one arm produces
+   `error[type-assertion-failure] … Inferred type of argument is Literal[ReduceType.MINMAX]`,
+   naming the forgotten variant.
+6. **Plan 24's warning was confirmed empirically, by this plan breaking on it.**
+   Converting the catch-all to `assert_never` turned two green tests red with
+   `AssertionError: Expected code to be unreachable, but got: None` — `map_plot_panes`
+   declares `reduce: ReduceType | None = None` and passed that `None` straight into
+   `to_dataset`, whose annotation says `ReduceType`. The old `case _:` had been absorbing
+   it. This is exactly plan 24 §2.1: a *complete* match is type-clean while raising at
+   runtime, because the subject's type was never established.
+   **A behaviour discrepancy fell out of it, and is deliberately NOT fixed here:**
+   `reduce=None` reaching the catch-all meant `ReduceType.NONE`, whereas
+   `to_hv_dataset`'s own default is `ReduceType.AUTO`. So `map_plot_panes(cb)` has always
+   skipped reduction rather than averaging over repeats. P1 normalizes `None` →
+   `ReduceType.NONE` at the boundary to preserve today's behaviour exactly; correcting the
+   default is a rendering change that needs a phase which can own it. Compare
+   `BenchResult.to()`, which handles the same sentinel correctly by omitting the argument.
+7. **`identity.py` was pulled back off the strict list.** It is not clean: it passes
+   `list | dict | None` to `plot_sweep`, annotated `list[ParametrizedSweep] | None`. The
+   annotation is the wrong one — `convert_vars_to_params` accepts
+   `param.Parameter | str | dict | tuple` — but widening a public entry point's signature
+   is A5's business, not P1's. The strict list's rule ("a file is added only once it is
+   clean") is honoured instead of loosening the block. Initial strict members are
+   therefore `sample_order.py`, `sweep_timings.py` and `blob_store.py`.
+8. **Two rules stay ignored permanently and are labelled as such**, so a future reader
+   does not mistake them for debt: `unused-ignore-comment` and
+   `unused-type-ignore-comment`, because the repo deliberately carries 8 `# type: ignore`
+   comments for other checkers.

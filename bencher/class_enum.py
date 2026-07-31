@@ -105,7 +105,7 @@ class ExampleEnum(ClassEnum):
     Class2 = auto()
 
     @classmethod
-    def to_class(cls, enum_val: ExampleEnum) -> BaseClass:
+    def to_class(cls, enum_val: ClassEnum) -> BaseClass:
         """Convert an ExampleEnum value to its corresponding class instance.
 
         Args:

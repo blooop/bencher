@@ -143,7 +143,12 @@ format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-ty = "ty check --respect-ignore-files ."
+# --python $CONDA_PREFIX points ty at the *active* pixi environment, so `-e py311` and
+# `-e py313` each type-check against their own interpreter and installed packages.
+# Without it ty resolves no third-party import at all (param, panel, numpy, xarray all
+# read as unresolved), which silently degrades every rule that depends on knowing a
+# third-party type. See plans/23-constructive-data-modeling.md P1.
+ty = { cmd = "ty check --respect-ignore-files --python \"$CONDA_PREFIX\" ." }
 lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
@@ -240,43 +245,91 @@ exclude_also = [
 [tool.pytest.ini_options]
 tmp_path_retention_count = 0
 
+# Type-check gate. See plans/23-constructive-data-modeling.md D1 for the tier design.
+#
+# The rules below are grouped into tiers by measured cost, and the list is a RATCHET:
+# rules move out of it over time and never back in. Two rules are exempt by design and
+# stay forever (see "Permanently ignored").
+#
+# Tier A (enabled -- plan 23 P1): call-non-callable, call-top-callable, inconsistent-mro,
+#   invalid-method-override, invalid-parameter-default, missing-argument,
+#   too-many-positional-arguments, unresolved-import, unresolved-reference.
+#   Deliberately absent from this file: they are errors everywhere except the paths
+#   relaxed in [[tool.ty.overrides]] below.
+#
+# Tier B (~126 diagnostics, scheduled for plan 23 P12).
+# Tier C (~1068 diagnostics, dominated by param-descriptor dynamism and by test/).
+#   Enabled per-file via the strict override block below as modules are reworked;
+#   every plan 23 phase adds the files it touches.
 [tool.ty.rules]
-# Ignore type errors related to param library descriptors
-invalid-assignment = "ignore"
-# Ignore argument type mismatches (many false positives with param library)
-invalid-argument-type = "ignore"
-# Ignore unresolved attributes (param descriptors create dynamic attributes)
-unresolved-attribute = "ignore"
-# Ignore invalid type forms (pn.panel is a function, not a type)
-invalid-type-form = "ignore"
-# Ignore return type mismatches
+
+# --- Tier B: enable globally in plan 23 P12 -----------------------------------------
+# Return type mismatches. Also the signal a degraded assert_never falls back to, so
+# enabling this hardens the exhaustiveness gate (plan 23 section 2.4).
 invalid-return-type = "ignore"
-# Ignore not-subscriptable errors
-not-subscriptable = "ignore"
-# Ignore possibly missing attributes (Union type issues)
-possibly-missing-attribute = "ignore"
-# Ignore unsupported operator errors
-unsupported-operator = "ignore"
-# Ignore positional argument count errors
-too-many-positional-arguments = "ignore"
-missing-argument = "ignore"
-# Ignore not-iterable errors (Union types)
+# Union types read as non-iterable / no matching overload / unsupported operator.
 not-iterable = "ignore"
-# Ignore overload matching errors
 no-matching-overload = "ignore"
-# Ignore call-non-callable errors
-call-non-callable = "ignore"
-# Ignore call-top-callable errors (callable() guard + call on union types)
-call-top-callable = "ignore"
-# Ignore method override errors
-invalid-method-override = "ignore"
-# Ignore import/reference resolution errors
-unresolved-import = "ignore"
-unresolved-reference = "ignore"
-# Ignore parameter default errors (param library StrEnum/enum descriptors resolve as Unknown)
-invalid-parameter-default = "ignore"
-# Ignore MRO errors (param base classes resolve as Unknown)
-inconsistent-mro = "ignore"
-# Ignore unused type: ignore comments (needed for other type checkers)
+unsupported-operator = "ignore"
+# Possibly missing attributes (union type issues).
+possibly-missing-attribute = "ignore"
+
+# --- Tier C: param-descriptor dynamism; per-file via the strict block ---------------
+# param descriptors: a class-level `x = param.Number(1.0)` reads back as float on
+# instances, which no static checker models. bench_cfg.py alone accounts for 63.
+invalid-assignment = "ignore"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+# pn.panel is a function used in annotation position, not a type.
+invalid-type-form = "ignore"
+not-subscriptable = "ignore"
+
+# --- Permanently ignored: not debt, do not "fix" ------------------------------------
+# The repo carries 8 `# type: ignore` comments for OTHER type checkers (mypy/pyright).
+# ty considers them unused; that is expected and must stay silenced.
 unused-ignore-comment = "ignore"
 unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14
+
+# Relaxed paths: tests, generated examples, helper scripts, docs, and the dead
+# setuptools shim. Tier A/B/C are all off here.
+#   - unresolved-import: playwright is optional tooling, only needed on the standalone
+#     screenshot path; setup.py is vestigial (see plans/03-repo-hygiene.md).
+#   - 315 of the ~545 invalid-argument-type diagnostics are in test/ alone, where
+#     deliberately-wrong values are the point of the test.
+[[tool.ty.overrides]]
+include = [
+    "test/**",
+    "bencher/example/**",
+    "scripts/**",
+    "docs/**",
+    "setup.py",
+]
+[tool.ty.overrides.rules]
+unresolved-import = "ignore"
+invalid-method-override = "ignore"
+too-many-positional-arguments = "ignore"
+missing-argument = "ignore"
+call-non-callable = "ignore"
+call-top-callable = "ignore"
+invalid-parameter-default = "ignore"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+invalid-assignment = "ignore"
+not-subscriptable = "ignore"
+invalid-type-form = "ignore"
+
+# STRICT RATCHET. Files here are held to Tier C as well. Only ever append.
+# Every plan 23 phase adds the modules it reworks as part of its Definition of Done;
+# a file is added only once it is clean, so this block can never regress the gate.
+[[tool.ty.overrides]]
+include = [
+    "bencher/sample_order.py",
+    "bencher/sweep_timings.py",
+    "bencher/blob_store.py",
+]
+[tool.ty.overrides.rules]
+invalid-assignment = "error"
+invalid-argument-type = "error"
+unresolved-attribute = "error"
+invalid-type-form = "error"
+not-subscriptable = "error"

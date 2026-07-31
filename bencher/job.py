@@ -15,7 +15,9 @@ from .utils import hash_sha1
 logger = logging.getLogger(__name__)
 
 try:
-    from scoop import futures as scoop_future_executor
+    # scoop is an optional extra and is not in the default environment; the
+    # except-ImportError below is the intended handling.
+    from scoop import futures as scoop_future_executor  # ty: ignore[unresolved-import]
 except ImportError as e:
     scoop_future_executor = None
 
