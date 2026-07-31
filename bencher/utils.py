@@ -474,22 +474,23 @@ def label_with_units(var: Any) -> str:
     return f"{var.name} [{units}]" if units and units != "ul" else var.name
 
 
-def publish_file(filepath: str, remote: str, branch_name: str) -> str:  # pragma: no cover
-    """Publish a file to an orphan git branch:
+def publish_file(filepath: str, remote: str, branch_name: str) -> None:  # pragma: no cover
+    """Publish a file by force-pushing it to a branch of a git remote.
 
-    .. code-block:: python
+    Creates a fresh single-commit repository in a temporary directory containing
+    only *filepath* and force-pushes it to *branch_name* on *remote*, so no
+    existing repository data needs to be downloaded.
 
-        def publish_args(branch_name) -> tuple[str, str]:
-            return (
-                "https://github.com/blooop/bencher.git",
-                f"https://github.com/blooop/bencher/blob/{branch_name}")
-
+    This function does not return a URL: the address at which the pushed file is
+    viewable depends on the git provider, so callers construct it themselves from
+    *remote* and *branch_name* (see ``publish_and_view_rrd`` in
+    ``bencher/utils_rrd.py``, whose ``content_callback`` does exactly that).
 
     Args:
-        remote (Callable): A function the returns a tuple of the publishing urls. It must follow the signature def publish_args(branch_name) -> tuple[str, str].  The first url is the git repo name, the second url needs to match the format for viewable html pages on your git provider.  The second url can use the argument branch_name to point to the file on a specified branch.
-
-    Returns:
-        str: the url of the published file
+        filepath (str): Path of the local file to publish.
+        remote (str): URL of the git remote to push to, e.g.
+            ``"https://github.com/user/repo.git"``.
+        branch_name (str): Branch to force-push the file to.
     """
 
     with tempfile.TemporaryDirectory() as temp_dir:

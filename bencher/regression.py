@@ -924,10 +924,18 @@ def _clean_1d(a: np.ndarray) -> np.ndarray:
 
 
 def _finite_or_none(value: float | None) -> float | None:
-    """Coerce a float to a strict-JSON-safe value: non-finite (NaN/inf) -> None."""
+    """Coerce a float to a strict-JSON-safe value: non-finite (NaN/inf) -> None.
+
+    An int too large to convert to a float (JSON integers are
+    arbitrary-precision) is not JSON-safe either, so it degrades to ``None``
+    rather than raising ``OverflowError`` out of ``to_dict``.
+    """
     if value is None:
         return None
-    value = float(value)
+    try:
+        value = float(value)
+    except OverflowError:
+        return None
     return value if np.isfinite(value) else None
 
 

@@ -117,6 +117,22 @@ class TestRegressionDataclassToDict(unittest.TestCase):
         )
         self.assertIsNone(r.to_dict()["change_percent"])
 
+    def test_oversized_int_becomes_none(self):
+        # JSON ints are arbitrary-precision; float(10**400) raises OverflowError,
+        # which must not escape to_dict.
+        r = RegressionResult(
+            variable="x",
+            method="percentage",
+            regressed=False,
+            current_value=10**400,
+            baseline_value=1.0,
+            change_percent=0.0,
+            threshold=10.0,
+            direction="minimize",
+            details="",
+        )
+        self.assertIsNone(r.to_dict()["current_value"])
+
     def test_report_to_dict_parity_with_markdown(self):
         regressed = RegressionResult(
             "a", "percentage", True, 12.0, 10.0, 20.0, 10.0, "minimize", ""
@@ -131,6 +147,62 @@ class TestRegressionDataclassToDict(unittest.TestCase):
         for r in report.results:
             self.assertIn(r.variable, md)
             self.assertIn(r.variable, {x["variable"] for x in d["results"]})
+
+
+class TestVerdictMethodUnits(unittest.TestCase):
+    """_verdict must measure improvements in each method's own threshold units
+    (percent / absolute delta / MAD band), driven by real detector output."""
+
+    def test_delta_verdict_uses_absolute_units(self):
+        from bencher.regression import detect_delta
+        from bencher.report_export import _verdict
+        from bencher.variables.results import OptDir
+
+        hist = np.full(6, 10.0)
+        # Improvement of 3 absolute units (-30%): below max_delta=5 -> unchanged,
+        # even though |change_percent| (30) dwarfs the threshold number (5).
+        small = detect_delta("m", hist, np.array([7.0]), max_delta=5.0, direction=OptDir.minimize)
+        self.assertFalse(small.regressed)
+        self.assertEqual(_verdict(small.to_dict()), "unchanged")
+        # Improvement of 6 absolute units clears max_delta=5 -> improved.
+        big = detect_delta("m", hist, np.array([4.0]), max_delta=5.0, direction=OptDir.minimize)
+        self.assertEqual(_verdict(big.to_dict()), "improved")
+
+    def test_adaptive_verdict_uses_mad_band(self):
+        from bencher.regression import detect_adaptive
+        from bencher.report_export import _verdict
+        from bencher.variables.results import OptDir
+
+        rng = np.random.default_rng(42)
+        hist = 100.0 + rng.normal(0.0, 0.01, size=20)
+        # A -1% move is tiny in percent terms but far outside the MAD band of a
+        # near-noiseless history -> improved despite |change| < the sigma number.
+        improved = detect_adaptive(
+            "m", hist, np.array([99.0]), regression_mad=3.5, direction=OptDir.minimize
+        )
+        self.assertFalse(improved.regressed)
+        self.assertLess(abs(improved.change_percent), improved.threshold)
+        self.assertEqual(_verdict(improved.to_dict()), "improved")
+        # A beneficial move inside a wide MAD band must not be called improved
+        # just because |change_percent| exceeds the sigma threshold number.
+        noisy = 100.0 + rng.normal(0.0, 10.0, size=20)
+        inside = detect_adaptive(
+            "m", noisy, np.array([95.0]), regression_mad=3.5, direction=OptDir.minimize
+        )
+        self.assertFalse(inside.regressed)
+        d = inside.to_dict()
+        self.assertGreaterEqual(d["band_upper"], 95.0)
+        self.assertLessEqual(d["band_lower"], 95.0)
+        self.assertEqual(_verdict(d), "unchanged")
+
+    def test_absolute_verdict_abstains(self):
+        from bencher.regression import detect_absolute
+        from bencher.report_export import _verdict
+        from bencher.variables.results import OptDir
+
+        res = detect_absolute("m", np.array([40.0]), limit=50.0, direction=OptDir.minimize)
+        self.assertFalse(res.regressed)
+        self.assertEqual(_verdict(res.to_dict()), "unchanged")
 
 
 class TestCompareResults(unittest.TestCase):

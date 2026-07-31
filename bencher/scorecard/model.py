@@ -66,9 +66,10 @@ def cell_verdict(reg: dict | None) -> str:
     there too: the baseline is younger than ``regression_min_history``, so
     bencher reports the regression but never blocks on it — colouring it like a
     real regression would overstate a verdict its own gate treats as advisory.
-    Otherwise defer to bencher's 3-state core verdict and render its
-    ``"unchanged"`` as ``"passed"`` (the gate ran and did not flag). A gate with
-    no threshold can only have "passed".
+    Otherwise defer to bencher's 3-state core verdict (method-aware: it
+    measures the improvement in the record's own threshold units) and render
+    its ``"unchanged"`` as ``"passed"`` (the gate ran and did not flag). A gate
+    with no threshold can only have "passed".
     """
     if reg is None:
         return "trend"
@@ -79,7 +80,9 @@ def cell_verdict(reg: dict | None) -> str:
     threshold = reg.get("threshold")
     if threshold is None:
         return "passed"
-    core = _core_verdict(reg.get("change_percent"), reg.get("direction", "none"), False, threshold)
+    # reg["regressed"] is falsy past the guard above, so _core_verdict can never
+    # return "regressed" here — it only decides improved vs unchanged.
+    core = _core_verdict(reg)
     return "passed" if core == "unchanged" else core
 
 
