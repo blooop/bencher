@@ -849,7 +849,7 @@ is unaffected.
    So the old serial `assert` was not merely absent under `python -O`; with `catch=` set it
    was **downgraded to a tolerated sample failure**, which is the same silent-empty-dataset
    outcome as the parallel path. Both checks are therefore raised *outside*
-   `store_results`'s `except catch` block, and `TestCatchDoesNotAbsorbContractErrors` pins
+   `store_results`'s `except catch` block, and `TestCatchDoesNotChangeContractHandling` pins
    it — without that test the fix would have looked complete while the obvious user
    response (`catch=Exception`) restored the old behaviour.
 2. **The B3 check could not go where it naturally belongs.** `JobFuture.result()` is the
@@ -930,7 +930,7 @@ is unaffected.
    into the factory that constructs `Ready`". Read literally that reinstates the original
    B3 bug: the serial construction site (`FutureCache.submit`) runs *inside* the caller's
    `except catch` block, so a `raise` there is absorbed by `catch=Exception` — exactly the
-   failure mode P2 item 1 measured and `TestCatchDoesNotAbsorbContractErrors` pins. The
+   failure mode P2 item 1 measured and `TestCatchDoesNotChangeContractHandling` pins. The
    check therefore lives at construction as a **discovery**, not a disposition: "neither
    result nor future" parses to a third variant, `Broken(WorkerContractError)`, which
    stores the error and raises it from `result()` at the consume point. `store_results`
@@ -998,3 +998,62 @@ is unaffected.
    `record_caught_sample` argument) were the *same* defect C8 removed — `function_input`
    is now `dict`, never `None`. It is added rather than deferred to P9/P12 because the
    block's rule is "a file is added once it is clean", and it is.
+
+#### P5 review round (findings addressed before merge)
+
+Independent review returned MERGE WITH NITS after re-proving the §6.2 disposition across a
+12-case matrix (SERIAL/MULTIPROCESSING × `catch=()`/`catch=Exception` × `cache_samples`
+false/true) byte-for-byte against `main`, and proving cache keys identical two independent
+ways (cross-branch comparison of all four derived values over 10 edge cases; plus a 6-job
+sweep written by `main`'s code and read by P5's → 6/6 hits). One MEDIUM finding was real:
+
+11. **Moving the contract handler inside the `try` created a new serial↔parallel
+   divergence — the exact defect shape B3 exists to kill.** `except WorkerContractError`
+   around `result()` catches *any* such error surfacing from it, not only the one the
+   harness mints. `WorkerContractError` is public (`bencher/__init__.py`), so a worker can
+   raise it; measured, a worker doing so with `catch=()` **aborted on `main` and on SERIAL,
+   but completed with `n_failed=2` on MULTIPROCESSING** under P5 as first written. Loud or
+   silent chosen by an unrelated knob — here the executor rather than `catch=`.
+
+   Fixed by splitting the vocabulary: `WorkerReturnedNothingError(WorkerContractError)` is
+   the harness's *own* diagnosis, and `store_results` catches that narrow subclass ahead of
+   `except catch`. A worker-raised `WorkerContractError` falls through to `except catch`
+   exactly as before P5. Every existing `assertRaises(WorkerContractError)` still passes by
+   subclassing. `TestAWorkerRaisedContractErrorIsStillASampleFault` pins all four matrix
+   cells and was verified to fail on precisely the `pool` + `catch=()` cell when the
+   handler is widened back to the base class.
+
+   Worth recording as a general lesson: **the disposition split is a property of the
+   exception vocabulary, not of handler placement.** P5 moved a handler and silently
+   changed which errors it governed, because one class was doing two jobs.
+
+12. **Two of P5's own strict-ty fixes were type-true but defect-preserving, which is a
+   failure mode the ratchet invites.** `JobFunctionCache.call` passed `self.call_count`
+   (an `int`) as a `str` job id; P5 cast it to `str`. But `call_count` is initialised to 0
+   and was incremented **nowhere**, so every call produced the same id — and job ids are how
+   every log line and contract message identifies a sample. The cast made the annotation
+   true while hiding what it pointed at. Now incremented, ids read `call 1`, `call 2`, …
+   Likewise `clear_tag`'s `if self.cache is None: return` turned a live `AttributeError`
+   into a *silent* no-op on a public path; it now logs a WARNING. Both are pinned by tests
+   — a latent defect fixed without a pin can regress silently.
+
+13. **`Broken` was inferring a cause from a syntactic condition.** "Neither `res` nor
+   `future`" was mapped to an error reading "The benchmark function for job X returned
+   None", but that branch is also reached by a cache entry holding `None`. The constructor
+   now takes an optional `error=`, so `FutureCache.submit`'s serial site — the only place
+   that has actually watched `run_job` return `None` — names the cause, and the fallback
+   diagnosis says only what is known. The conflict check across the three arms uses
+   `is not None`, not truthiness, because `res={}` is a valid result.
+
+14. **Two justifications in P5 were factually wrong and are corrected (the code stands).**
+   Item 6 above rested the `cached_property`-over-`__post_init__` choice partly on
+   `WorkerJob` crossing a process boundary. **It does not** — only `Job` (function +
+   `job_args`) is pickled to an executor; a `WorkerJob` is built and consumed in the parent.
+   The choice is still right for the other reasons given (a factory leaves the plain
+   constructor reachable; `__post_init__` rehashes on every unpickle), and picklability
+   remains a worthwhile property test, but the claim was overstated in the docstring, in
+   `test/test_multiprocessing_executor.py`'s section comment, and here. Also fixed: this
+   plan cited `TestCatchDoesNotAbsorbContractErrors` at two places (one pre-existing at
+   §10 P2 item 1, one added by P5); the class is `TestCatchDoesNotChangeContractHandling`.
+   Per plans-README rule 7 the symbol is the durable reference, so a plan whose thesis is
+   "claims are measured" should not cite one that does not exist.

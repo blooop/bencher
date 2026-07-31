@@ -88,12 +88,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads the variant instead.
 
   `Broken` is the constructive replacement for the one meaningful half of "neither set": a
-  serial worker that returned `None`. The error is *stored* rather than raised at
-  construction, because the serial site is inside the caller's `except catch` block —
-  raising there is exactly the original B3 failure mode where `catch=Exception` absorbed a
-  contract violation. **The record-and-continue disposition is unchanged** (plan 23 §6.2
-  as amended): `result()` raises `WorkerContractError` at the consume point on *either*
-  executor path, `store_results` records a `SampleFailure`, logs at ERROR, emits
+  job that yielded no result. The error is *stored* rather than raised at construction,
+  because the serial site is inside the caller's `except catch` block — raising there is
+  exactly the original B3 failure mode where `catch=Exception` absorbed a contract
+  violation. It is supplied by whichever caller *knows* the cause (the serial site in
+  `FutureCache.submit`, having just watched `run_job` return `None`) rather than inferred
+  from the shape of the constructor call, which cannot tell a `None`-returning worker from
+  a cache entry holding `None`. **The record-and-continue disposition is unchanged** (plan
+  23 §6.2 as amended): `result()` raises at the consume point on *either* executor path,
+  `store_results` records a `SampleFailure`, logs at ERROR, emits
   `WorkerContractWarning`, and the sweep continues. A `None` return never aborts a run.
   Caching semantics are also unchanged: the pre-P5 `res is not None` guard on `cache.set`
   is now enforced by construction — a worker that returned nothing cannot reach the cache.
@@ -117,6 +120,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that list now — the last one because C8 removed the `function_input`-is-`None` diagnostics
   that were holding it off, exactly as P2 predicted.
 
+  Both fixes go past what the type checker asked for, because in both cases satisfying it
+  would have hidden the defect it pointed at. `FutureCache.call_count` was initialised to 0
+  and incremented **nowhere**, so every `JobFunctionCache.call()` produced the same job id —
+  the string every log line and contract message identifies a sample by; it is now
+  incremented, and ids read `call 1`, `call 2`, …. And `clear_tag` on a cache-less
+  `FutureCache` now logs a WARNING rather than returning silently: not crashing is right, but
+  on a public path (`Bench.clear_tag_from_sample_cache`) "nothing happened" must not read as
+  "the tag was cleared".
+
 ### Removed
 - **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
   the CI matrix runs py311 + py313 (was py310 + py313). The `py310` pixi feature and
@@ -137,6 +149,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which strings `BenchRunCfg(executor=...)` accepts. See plan 23 D4.
 
 ### Added
+- **`bencher.WorkerReturnedNothingError`**, a narrow subclass of `WorkerContractError`
+  meaning *the harness itself* determined a job produced no result (plan 23 P5). Only this
+  subclass is exempt from `catch=`; a `WorkerContractError` raised by a **worker** — the
+  class is public, so a worker or plugin can raise it, e.g. to signal a hard config error
+  and abort with `catch=()` — is an ordinary sample fault and is routed through `catch=` as
+  before. Without the split, a worker-raised `WorkerContractError` was silently tolerated on
+  MULTIPROCESSING even with `catch=()` while still aborting on SERIAL: loud or silent chosen
+  by the executor, which is the defect shape plan 23 B3 exists to eliminate. Existing
+  `except WorkerContractError` handlers keep matching, by subclassing.
+
 - **Single result-type registry: `RESULT_SPECS` in `bencher/variables/results.py`**
   (plan 23 P4). One ordered `{Result* class: ResultSpec}` mapping now declares each
   result type's kind, missing fill/sentinels, and family memberships (panel, media,

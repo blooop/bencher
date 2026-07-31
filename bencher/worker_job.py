@@ -23,10 +23,13 @@ class WorkerJob:
     ``setup_hashes()`` method every constructor site had to remember to call --
     two-phase init, with nothing preventing caching under a ``None`` job key.
 
-    Pickling (a ``WorkerJob`` may cross a process boundary under the pooled
-    executors) is unaffected: any already-computed properties travel in
-    ``__dict__``; ones not yet accessed are recomputed on demand, deterministically,
-    because ``hash_sha1`` is content-based.
+    Picklability is preserved and pinned by ``test/test_multiprocessing_executor.py``,
+    though **not** because a ``WorkerJob`` crosses a process boundary -- it does not.
+    Only ``Job`` (function + ``job_args``) is sent to an executor
+    (``bencher.py``'s submit loop); a ``WorkerJob`` is built and consumed entirely in
+    the parent process. It survives a round trip anyway: already-computed properties
+    travel in ``__dict__``, and ones not yet accessed recompute on demand,
+    deterministically, because ``hash_sha1`` is content-based.
 
     Attributes:
         function_input_vars (list): The values of the input variables to pass to the function
