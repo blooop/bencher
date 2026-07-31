@@ -32,6 +32,7 @@ import math
 import numbers
 import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import auto
 from functools import partial
 from typing import Any
@@ -559,71 +560,292 @@ class ResultDataSet(param.Parameter):
         return _hash_slots(self)
 
 
-PANEL_TYPES = (
-    ResultPath,
-    ResultImage,
-    ResultVideo,
-    ResultContainer,
-    ResultRerun,
-    ResultString,
-    ResultReference,
-    ResultDataSet,
-)
+# --- Result-type registry (plan 23 P4) --------------------------------------
+#
+# Single source of truth for how every Result* class is classified and stored.
+# It replaces nine hand-maintained tuples (PANEL_TYPES, SCALAR_RESULT_TYPES,
+# XARRAY_MULTIDIM_RESULT_TYPES, ALL_RESULT_TYPES, RESULT_KIND_ORDER,
+# _REFERENCE_MISSING_TYPES, _OBJECT_MISSING_TYPES, DATA_VAR_RESULT_TYPES and
+# result_collector's _MEDIA_RESULT_TYPES) that each had their own silent
+# failure mode when a new class missed one of them. The original names are
+# all still exported, derived from the registry, so call sites are unchanged.
+# Adding a Result* class without a spec fails CI (test/test_result_missing.py)
+# and is refused at sweep-declaration time (parametrised_sweep.py).
 
 
-SCALAR_RESULT_TYPES = (ResultFloat, ResultBool)
+class ResultKind(StrEnum):
+    """Coarse, serializable classification of a result variable.
 
-XARRAY_MULTIDIM_RESULT_TYPES = (
-    ResultFloat,
-    ResultBool,
-    ResultVideo,
-    ResultImage,
-    ResultString,
-    ResultContainer,
-    ResultRerun,
-    ResultPath,
-)
+    The values feed the A2 plot-selection signatures, so they must stay
+    stable strings. Explicit values rather than ``auto()``: ``strenum``'s
+    ``auto()`` yields the member *name* verbatim, which would silently change
+    these to uppercase (plan 23 D4)."""
 
-ALL_RESULT_TYPES = (
-    ResultFloat,
-    ResultBool,
-    ResultVec,
-    ResultHmap,
-    ResultPath,
-    ResultVideo,
-    ResultImage,
-    ResultString,
-    ResultContainer,
-    ResultRerun,
-    ResultDataSet,
-    ResultReference,
-)
+    BOOL = "bool"
+    FLOAT = "float"
+    VEC = "vec"
+    IMAGE = "image"
+    VIDEO = "video"
+    PATH = "path"
+    STRING = "string"
+    DATASET = "dataset"
+    RERUN = "rerun"
+    CONTAINER = "container"
+    HMAP = "hmap"
+    REFERENCE = "reference"
 
-# Most-derived first: kind classification takes the first isinstance match
+
+@dataclass(frozen=True)
+class ResultSpec:
+    """Storage and classification contract for one Result* class.
+
+    Attributes:
+        kind: Coarse kind name for plot-selection signatures (A2).
+        missing_fill: Value written for a missing/unrecorded sample.
+        fill_dtype: Numpy dtype of the backing array (float | object | int).
+        missing_sentinels: Exact-equality sentinel values accepted as
+            "missing" on READ. This can be wider than ``{missing_fill}``
+            because missingness is not a pure function of the fill:
+            ``ResultDataSet`` accepts both its cell generations (``"NAN"``
+            blob paths from plan 22 onwards, ``-1`` indices before)
+            permanently. NaN/``None`` missingness is dtype-generic and handled
+            in :func:`result_is_missing`, not listed here (NaN has no useful
+            equality semantics in a set).
+        is_scalar: Continuous/boolean scalar metric (regression, optimization).
+        is_panel: Rendered through the panel pathway rather than holoviews.
+        is_media: Cell values reference media files on disk that over_time
+            aging must delete when entries age out.
+        is_data_var: Gets a single data variable (column) in the dataset.
+            ``ResultVec`` expands to one column per element and ``ResultHmap``
+            is stored out-of-band, so neither is a data var.
+        multidim: Member of the xarray multidim store family
+            (``XARRAY_MULTIDIM_RESULT_TYPES``).
+        reference_backed: Cell stores an ``object_index`` index
+            (``ResultReference`` only).
+    """
+
+    kind: ResultKind
+    missing_fill: Any
+    fill_dtype: type
+    missing_sentinels: frozenset
+    is_scalar: bool
+    is_panel: bool
+    is_media: bool
+    is_data_var: bool
+    multidim: bool
+    reference_backed: bool
+
+
+_NAN = float("nan")
+
+# Insertion order is the isinstance-resolution order: most-derived first
 # (ResultBool subclasses ResultFloat; ResultRerun subclasses ResultContainer).
-RESULT_KIND_ORDER = (
-    (ResultBool, "bool"),
-    (ResultFloat, "float"),
-    (ResultVec, "vec"),
-    (ResultImage, "image"),
-    (ResultVideo, "video"),
-    (ResultPath, "path"),
-    (ResultString, "string"),
-    (ResultDataSet, "dataset"),
-    (ResultRerun, "rerun"),
-    (ResultContainer, "container"),
-    (ResultHmap, "hmap"),
-    (ResultReference, "reference"),
-)
+# A test pins that no key precedes one of its own subclasses.
+RESULT_SPECS: dict[type, ResultSpec] = {
+    ResultBool: ResultSpec(
+        kind=ResultKind.BOOL,
+        missing_fill=_NAN,
+        fill_dtype=float,
+        missing_sentinels=frozenset(),
+        is_scalar=True,
+        is_panel=False,
+        is_media=False,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultFloat: ResultSpec(
+        kind=ResultKind.FLOAT,
+        missing_fill=_NAN,
+        fill_dtype=float,
+        missing_sentinels=frozenset(),
+        is_scalar=True,
+        is_panel=False,
+        is_media=False,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultVec: ResultSpec(
+        kind=ResultKind.VEC,
+        missing_fill=_NAN,
+        fill_dtype=float,
+        missing_sentinels=frozenset(),
+        is_scalar=False,
+        is_panel=False,
+        is_media=False,
+        is_data_var=False,
+        multidim=False,
+        reference_backed=False,
+    ),
+    ResultImage: ResultSpec(
+        kind=ResultKind.IMAGE,
+        missing_fill="NAN",
+        fill_dtype=object,
+        missing_sentinels=frozenset({"NAN"}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=True,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultVideo: ResultSpec(
+        kind=ResultKind.VIDEO,
+        missing_fill="NAN",
+        fill_dtype=object,
+        missing_sentinels=frozenset({"NAN"}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=True,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultPath: ResultSpec(
+        kind=ResultKind.PATH,
+        missing_fill="NAN",
+        fill_dtype=object,
+        missing_sentinels=frozenset({"NAN"}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=True,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultString: ResultSpec(
+        kind=ResultKind.STRING,
+        missing_fill="NAN",
+        fill_dtype=object,
+        missing_sentinels=frozenset({"NAN"}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=False,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultDataSet: ResultSpec(
+        kind=ResultKind.DATASET,
+        missing_fill="NAN",
+        fill_dtype=object,
+        # Dual-generation compatibility (plan 22): "NAN" blob-path cells and
+        # legacy -1 index cells are both missing, permanently. The float
+        # promotion (-1.0) and NaN/None acceptance live in
+        # _dataset_cell_is_missing — do NOT collapse that into this set.
+        missing_sentinels=frozenset({"NAN", -1}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=False,
+        is_data_var=True,
+        multidim=False,
+        reference_backed=False,
+    ),
+    ResultRerun: ResultSpec(
+        kind=ResultKind.RERUN,
+        missing_fill="NAN",
+        fill_dtype=object,
+        missing_sentinels=frozenset({"NAN"}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=True,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultContainer: ResultSpec(
+        kind=ResultKind.CONTAINER,
+        missing_fill="NAN",
+        fill_dtype=object,
+        missing_sentinels=frozenset({"NAN"}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=True,
+        is_data_var=True,
+        multidim=True,
+        reference_backed=False,
+    ),
+    ResultHmap: ResultSpec(
+        kind=ResultKind.HMAP,
+        missing_fill=_NAN,
+        fill_dtype=float,
+        missing_sentinels=frozenset(),
+        is_scalar=False,
+        is_panel=False,
+        is_media=False,
+        is_data_var=False,
+        multidim=False,
+        reference_backed=False,
+    ),
+    ResultReference: ResultSpec(
+        kind=ResultKind.REFERENCE,
+        missing_fill=-1,
+        fill_dtype=int,
+        missing_sentinels=frozenset({-1}),
+        is_scalar=False,
+        is_panel=True,
+        is_media=False,
+        is_data_var=True,
+        multidim=False,
+        reference_backed=False,
+    ),
+}
+
+
+def result_spec(result_var) -> ResultSpec | None:
+    """Spec for a result-variable instance, resolved most-derived-first.
+
+    Returns ``None`` for parameters that are not registered result types.
+    Deprecated subclasses absent from the registry (``ResultVar``) resolve to
+    their base class's spec via isinstance."""
+    for cls, spec in RESULT_SPECS.items():
+        if isinstance(result_var, cls):
+            return spec
+    return None
+
+
+def _spec_types(predicate) -> tuple[type, ...]:
+    """The registry keys whose spec satisfies *predicate*, in registry order."""
+    return tuple(cls for cls, spec in RESULT_SPECS.items() if predicate(spec))
+
+
+# The nine pre-registry names, derived. Every consumer is an isinstance()
+# check, so membership (not tuple order) is the behavioral contract; only
+# RESULT_KIND_ORDER is order-sensitive and reproduces its original order
+# exactly. A transitional test pins each against its pre-migration literal.
+PANEL_TYPES = _spec_types(lambda s: s.is_panel)
+
+SCALAR_RESULT_TYPES = _spec_types(lambda s: s.is_scalar)
+
+XARRAY_MULTIDIM_RESULT_TYPES = _spec_types(lambda s: s.multidim)
+
+ALL_RESULT_TYPES = tuple(RESULT_SPECS)
+
+# Most-derived first: kind classification takes the first isinstance match.
+RESULT_KIND_ORDER = tuple((cls, spec.kind.value) for cls, spec in RESULT_SPECS.items())
+
+# Result types whose cell names a file this variable alone owns, so aging the
+# cell out of the over_time history deletes the file too (see
+# ``result_collector._null_old_entries``).
+#
+# ``ResultDataSet`` is deliberately not media (``is_media=False``), even though
+# its cells are paths as well: blob-store files are content-addressed, so one
+# file may back cells at other time points, in other result variables, or in
+# another benchmark sharing the cache — identical payloads deduplicate to a
+# single path by design, and the aging path sees only the variable it is aging.
+# Deleting the file there would strand every other cell still holding that
+# path. Aging therefore only writes the sentinel; reclaiming blob storage
+# belongs to ``bencher.cache_management``, which is the layer that can see the
+# whole cache and tell a dropped payload from a shared one.
+_MEDIA_RESULT_TYPES = _spec_types(lambda s: s.is_media)
 
 
 def result_kind(result_var) -> str:
     """Classify a result variable into a coarse, serializable kind name used by
     plot-selection signatures (A2)."""
-    for cls, kind in RESULT_KIND_ORDER:
-        if isinstance(result_var, cls):
-            return kind
-    return "unknown"
+    spec = result_spec(result_var)
+    return spec.kind.value if spec is not None else "unknown"
 
 
 # --- Missing / unrecorded-sample representation ----------------------------
@@ -734,3 +956,12 @@ class ResultVar(ResultFloat):
             stacklevel=2,
         )
         super().__init__(*args, **kwargs)
+
+
+# Result* classes deliberately absent from RESULT_SPECS, so the completeness
+# test can tell "exempt" from "forgotten". An exempt class must resolve to a
+# registered base class via isinstance (result_spec falls through to it) and
+# has never been a member of any registry tuple.
+RESULT_SPEC_EXEMPT: dict[type, str] = {
+    ResultVar: "deprecated alias of ResultFloat; instances resolve to ResultFloat's spec",
+}

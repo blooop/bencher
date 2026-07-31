@@ -86,6 +86,18 @@ class ParametrizedSweep(Parameterized):
             ):
                 results[k] = v
             else:
+                # A parameter class defined in the results module but absent
+                # from RESULT_SPECS would otherwise silently classify as an
+                # *input* variable — the hole that made the old ResultVolume
+                # class a trap (declared, unstorable, KeyError far from cause).
+                if type(v).__module__ == "bencher.variables.results":
+                    raise TypeError(
+                        f"'{k}' is declared as {type(v).__name__}, which is defined in "
+                        f"bencher.variables.results but is not registered in RESULT_SPECS, "
+                        f"so it cannot be classified as a result variable (and refusing "
+                        f"to treat it as an input). Add a ResultSpec entry for it in "
+                        f"bencher/variables/results.py."
+                    )
                 inputs[k] = v
 
         if not include_name:

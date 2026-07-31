@@ -12,11 +12,21 @@ import unittest
 import warnings
 
 import numpy as np
+import param
 
 from bencher.result_collector import _sentinel_for_result_var
+from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import (
+    _MEDIA_RESULT_TYPES,
+    _OBJECT_MISSING_TYPES,
+    _REFERENCE_MISSING_TYPES,
     ALL_RESULT_TYPES,
     DATA_VAR_RESULT_TYPES,
+    PANEL_TYPES,
+    RESULT_KIND_ORDER,
+    RESULT_SPEC_EXEMPT,
+    RESULT_SPECS,
+    SCALAR_RESULT_TYPES,
     XARRAY_MULTIDIM_RESULT_TYPES,
     ResultBool,
     ResultContainer,
@@ -33,6 +43,7 @@ from bencher.variables.results import (
     result_is_missing,
     result_kind,
     result_missing_fill,
+    result_spec,
 )
 
 
@@ -216,6 +227,206 @@ class TestResultIsMissing(unittest.TestCase):
             arr = np.full(3, fill, dtype=dtype)
             with self.subTest(rv=type(rv).__name__):
                 self.assertTrue(result_is_missing(rv, arr[0]))
+
+
+class TestResultSpecRegistry(unittest.TestCase):
+    """Plan 23 P4: RESULT_SPECS is the single source of truth for result-type
+    classification and storage; the nine legacy tuples are derived from it.
+    These tests make "add a Result* class without a spec" a CI failure with
+    one clear message instead of nine scattered silent failure modes."""
+
+    def test_every_result_class_is_registered_or_exempt(self):
+        from test.test_hash_persistent import _discover_all_result_classes
+
+        for cls in _discover_all_result_classes():
+            with self.subTest(cls=cls.__name__):
+                self.assertTrue(
+                    cls in RESULT_SPECS or cls in RESULT_SPEC_EXEMPT,
+                    f"{cls.__name__} has no entry in RESULT_SPECS and is not in "
+                    f"RESULT_SPEC_EXEMPT. Every Result* class must declare a "
+                    f"ResultSpec (bencher/variables/results.py) so all nine "
+                    f"derived registries stay complete.",
+                )
+
+    def test_exempt_classes_resolve_to_a_registered_spec(self):
+        # An exempt class must still be classifiable: isinstance resolution
+        # falls through to a registered base (ResultVar -> ResultFloat).
+        for cls in RESULT_SPEC_EXEMPT:
+            with self.subTest(cls=cls.__name__):
+                self.assertIsNotNone(result_spec(_instantiate(cls)))
+                self.assertNotIn(cls, ALL_RESULT_TYPES)
+
+    def test_no_key_precedes_its_own_subclass(self):
+        # Registry insertion order is the isinstance-resolution order, so a
+        # base class listed before its subclass would shadow the subclass.
+        keys = list(RESULT_SPECS)
+        for i, earlier in enumerate(keys):
+            for later in keys[i + 1 :]:
+                self.assertFalse(
+                    issubclass(later, earlier),
+                    f"{later.__name__} subclasses {earlier.__name__} but is listed "
+                    f"after it in RESULT_SPECS; isinstance dispatch would never "
+                    f"reach it. Most-derived classes must come first.",
+                )
+
+    def test_missing_sentinels_agree_with_result_is_missing(self):
+        # The spec's declared fill and sentinels must be judged missing by the
+        # read-side oracle, so the two cannot drift apart.
+        for cls, spec in RESULT_SPECS.items():
+            inst = _instantiate(cls)
+            with self.subTest(cls=cls.__name__):
+                self.assertTrue(result_is_missing(inst, spec.missing_fill))
+                for sentinel in spec.missing_sentinels:
+                    self.assertTrue(result_is_missing(inst, sentinel))
+
+    def test_result_spec_is_none_for_non_result_params(self):
+        self.assertIsNone(result_spec(param.Number()))
+        self.assertIsNone(result_spec(param.String()))
+
+
+class TestDerivedTuplesMatchPreRegistryLiterals(unittest.TestCase):
+    """TRANSITIONAL — delete after one release (added in plan 23 P4).
+
+    Pins that the registry-derived tuples are membership-identical to the
+    hand-maintained literals they replaced (copied here verbatim from the
+    pre-P4 module). Every consumer is an ``isinstance()`` check, so membership
+    is the behavioral contract; a single registry order cannot reproduce all
+    nine historic tuple orders (PANEL_TYPES had Image before Video,
+    XARRAY_MULTIDIM_RESULT_TYPES the reverse). RESULT_KIND_ORDER is the one
+    order-sensitive name (most-derived-first isinstance dispatch) and is
+    compared exactly, order included."""
+
+    def test_membership_identical_to_pre_registry_literals(self):
+        literals = {
+            "PANEL_TYPES": (
+                PANEL_TYPES,
+                {
+                    ResultPath,
+                    ResultImage,
+                    ResultVideo,
+                    ResultContainer,
+                    ResultRerun,
+                    ResultString,
+                    ResultReference,
+                    ResultDataSet,
+                },
+            ),
+            "SCALAR_RESULT_TYPES": (SCALAR_RESULT_TYPES, {ResultFloat, ResultBool}),
+            "XARRAY_MULTIDIM_RESULT_TYPES": (
+                XARRAY_MULTIDIM_RESULT_TYPES,
+                {
+                    ResultFloat,
+                    ResultBool,
+                    ResultVideo,
+                    ResultImage,
+                    ResultString,
+                    ResultContainer,
+                    ResultRerun,
+                    ResultPath,
+                },
+            ),
+            "ALL_RESULT_TYPES": (
+                ALL_RESULT_TYPES,
+                {
+                    ResultFloat,
+                    ResultBool,
+                    ResultVec,
+                    ResultHmap,
+                    ResultPath,
+                    ResultVideo,
+                    ResultImage,
+                    ResultString,
+                    ResultContainer,
+                    ResultRerun,
+                    ResultDataSet,
+                    ResultReference,
+                },
+            ),
+            "_REFERENCE_MISSING_TYPES": (_REFERENCE_MISSING_TYPES, {ResultReference}),
+            "_OBJECT_MISSING_TYPES": (
+                _OBJECT_MISSING_TYPES,
+                {
+                    ResultPath,
+                    ResultVideo,
+                    ResultImage,
+                    ResultString,
+                    ResultContainer,
+                    ResultRerun,
+                    ResultDataSet,
+                },
+            ),
+            "DATA_VAR_RESULT_TYPES": (
+                DATA_VAR_RESULT_TYPES,
+                {
+                    ResultFloat,
+                    ResultBool,
+                    ResultReference,
+                    ResultPath,
+                    ResultVideo,
+                    ResultImage,
+                    ResultString,
+                    ResultContainer,
+                    ResultRerun,
+                    ResultDataSet,
+                },
+            ),
+            "_MEDIA_RESULT_TYPES": (
+                _MEDIA_RESULT_TYPES,
+                {ResultPath, ResultVideo, ResultImage, ResultContainer, ResultRerun},
+            ),
+        }
+        for name, (derived, literal) in literals.items():
+            with self.subTest(registry=name):
+                self.assertEqual(set(derived), literal)
+                self.assertEqual(len(derived), len(literal), f"{name} has duplicates")
+
+    def test_result_kind_order_identical_including_order(self):
+        self.assertEqual(
+            RESULT_KIND_ORDER,
+            (
+                (ResultBool, "bool"),
+                (ResultFloat, "float"),
+                (ResultVec, "vec"),
+                (ResultImage, "image"),
+                (ResultVideo, "video"),
+                (ResultPath, "path"),
+                (ResultString, "string"),
+                (ResultDataSet, "dataset"),
+                (ResultRerun, "rerun"),
+                (ResultContainer, "container"),
+                (ResultHmap, "hmap"),
+                (ResultReference, "reference"),
+            ),
+        )
+
+
+class TestUnregisteredResultClassGuard(unittest.TestCase):
+    """A parameter class defined in the results module but missing from
+    RESULT_SPECS must be refused at sweep-declaration time, not silently
+    classified as an input variable (the old ResultVolume trap)."""
+
+    def test_unregistered_results_module_class_raises(self):
+        class ResultBogus(param.Parameter):
+            pass
+
+        # Simulate a class defined in the results module but never registered.
+        ResultBogus.__module__ = "bencher.variables.results"
+
+        class BogusSweep(ParametrizedSweep):
+            out = ResultBogus()
+
+        with self.assertRaises(TypeError) as ctx:
+            BogusSweep.get_input_and_results()
+        self.assertIn("RESULT_SPECS", str(ctx.exception))
+
+    def test_ordinary_inputs_still_classify_as_inputs(self):
+        class PlainSweep(ParametrizedSweep):
+            x = param.Number(1.0)
+            out = ResultFloat()
+
+        io = PlainSweep.get_input_and_results()
+        self.assertIn("x", io.inputs)
+        self.assertIn("out", io.results)
 
 
 if __name__ == "__main__":
