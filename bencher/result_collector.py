@@ -468,6 +468,12 @@ class ResultCollector:
                 # no `else`, so a vector of the wrong length was silently dropped and
                 # the cell kept its NaN fill -- indistinguishable, downstream, from
                 # "never sampled". The sibling arms of this ladder all raise.
+                #
+                # The accepted set is deliberately left as-is rather than widened: a
+                # `tuple` would work fine positionally, but which types each result
+                # variable accepts is P4's (the result-type registry) call, not a
+                # side effect of making the drop loud. It now says so instead of
+                # silently NaN-ing.
                 if not isinstance(result_value, (list, np.ndarray)):
                     raise TypeError(
                         f"Result variable '{rv.name}' is a ResultVec(size={rv.size}), "
