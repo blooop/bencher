@@ -43,7 +43,7 @@ from bencher.results.optimize_result import OptimizeResult
 from bencher.sample_order import SampleOrder
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
-from bencher.utils import AGG_FN_MAP, normalize_agg_fn, params_to_str, resolve_aggregate
+from bencher.utils import AGG_FN_MAP, AggFn, normalize_agg_fn, params_to_str, resolve_aggregate
 from bencher.variables.inputs import IntSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultHmap
@@ -328,7 +328,7 @@ class Bench(BenchPlotServer):
         relationship_cb: Callable | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         aggregate: bool | int | list[str] | None = None,
-        agg_fn: str = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN.value,
     ) -> list[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
@@ -396,7 +396,7 @@ class Bench(BenchPlotServer):
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
         aggregate: bool | int | list[str] | None = None,
-        agg_fn: str = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN.value,
         auto_plot: bool | None = None,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
@@ -1323,7 +1323,7 @@ class Bench(BenchPlotServer):
         sampler: optuna.samplers.BaseSampler | None = None,
         warm_start: bool = True,
         aggregate: bool | int | list[str] | None = None,
-        agg_fn: str = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN.value,
         repeats: int = 1,
         tag: str = "",
         run_cfg: BenchRunCfg | None = None,

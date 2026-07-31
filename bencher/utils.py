@@ -394,6 +394,14 @@ class AggFn(StrEnum):
     yields the member *name* verbatim (``'MEAN'``), and these strings are the
     exact values ``BenchCfg.agg_fn`` accepts, so they are pinned here
     (plan 23 D4).
+
+    Note for callers that *forward a default into* ``BenchCfg``: pass
+    ``AggFn.MEAN.value``, not ``AggFn.MEAN``. ``param`` stores whatever it is
+    handed, so the member would make ``type(bench_cfg.agg_fn)`` an ``AggFn``
+    where every other path leaves it a plain ``str``. Consumers normalize
+    anyway, but keeping the stored type uniform is what makes the descriptor's
+    contract (plain strings) true. Reading code should call
+    :func:`normalize_agg_fn` and not care which it got.
     """
 
     MEAN = "mean"
@@ -427,9 +435,16 @@ def normalize_agg_fn(agg_fn: AggFn | str | None) -> AggFn:
     try:
         return AggFn(agg_fn)
     except ValueError:
-        raise ValueError(
-            f"Unknown agg_fn={agg_fn!r}, must be one of {sorted(m.value for m in AggFn)}"
-        ) from None
+        msg = f"Unknown agg_fn={agg_fn!r}, must be one of {sorted(m.value for m in AggFn)}"
+        # Case-folding hint: the plotting path used to lowercase agg_fn before
+        # dispatch, so `agg_fn="MEAN"` worked there (and only there — plot_sweep
+        # and optimize always rejected it). That leniency is gone; name the fix
+        # rather than leaving the caller to diff the two spellings.
+        if isinstance(agg_fn, str):
+            folded = agg_fn.lower()
+            if folded in {m.value for m in AggFn}:
+                msg += f" (the vocabulary is lowercase; did you mean {folded!r}?)"
+        raise ValueError(msg) from None
 
 
 AGG_FN_MAP: dict[AggFn, Callable] = {

@@ -10,6 +10,21 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.utils import AGG_FN_MAP, AggFn
 
 
+class CountingWorker(bn.ParametrizedSweep):
+    """Counts benchmark invocations, so a test can assert sampling never started."""
+
+    float1 = bn.FloatSweep(default=0, bounds=[0, 4], samples=3)
+    distance = bn.ResultFloat()
+
+    calls = 0
+
+    def benchmark(self):
+        # Instance attribute: each test builds its own worker, so counts do not
+        # leak between tests the way a class-level counter would.
+        self.calls += 1
+        self.distance = float(self.float1)
+
+
 class TstBench(bn.ParametrizedSweep):
     float_var = bn.FloatSweep(default=0, bounds=[0, 4])
     cat_var = bn.StringSweep(["a", "b", "c", "d", "e"])
@@ -236,12 +251,21 @@ class TestAggFnVocabulary(unittest.TestCase):
     def test_agg_fn_map_covers_every_member(self):
         """AGG_FN_MAP's keys derive from (and must stay in sync with) AggFn."""
         self.assertEqual(set(AGG_FN_MAP), set(AggFn))
+        # Set equality alone would still pass if AGG_FN_MAP reverted to raw-string
+        # keys, because AggFn is a StrEnum and "mean" == AggFn.MEAN. Pin the key
+        # *type* so the derivation cannot silently regress to a fifth spelling.
+        self.assertTrue(all(isinstance(k, AggFn) for k in AGG_FN_MAP))
 
     def test_bench_cfg_objects_are_agg_fn_values(self):
         """The ObjectSelector's accepted strings are exactly AggFn's values."""
         objects = bn.BenchCfg.param.agg_fn.objects
         self.assertEqual(objects, [m.value for m in AggFn])
         self.assertEqual(bn.BenchCfg.param.agg_fn.default, AggFn.MEAN.value)
+        # Plain str, not AggFn members: the descriptor's objects are what gets
+        # stored on and serialized out of BenchCfg, so the shape is pinned here
+        # (and is why readers must construct the enum — plan 24 A3).
+        self.assertTrue(all(type(o) is str for o in objects))
+        self.assertIs(type(bn.BenchCfg.param.agg_fn.default), str)
 
     def test_unknown_agg_fn_raises_instead_of_silently_meaning_mean(self):
         """Before plan 23 P11 the ladder's terminal else silently meant mean."""
@@ -272,20 +296,69 @@ class TestAggFnVocabulary(unittest.TestCase):
 
     # --- plan 24 A3 DoD: drive the raw string through the param field ---
 
-    def test_unknown_agg_fn_through_plot_sweep_raises(self):
-        """plot_sweep routes agg_fn into BenchCfg's ObjectSelector, which
-        rejects an out-of-vocabulary string at config acceptance -- before the
-        sweep runs, so no collected data is ever lost to this raise."""
+    def test_unknown_agg_fn_through_plot_sweep_raises_before_any_sampling(self):
+        """plot_sweep routes agg_fn into BenchCfg's ObjectSelector, which rejects
+        an out-of-vocabulary string at config acceptance.
+
+        The claim that matters is *when*: the raise must land before any sample is
+        collected, so this raise can never lose expensive already-collected data
+        (plan 23 owner decision 2). Asserting only ValueError would still pass if
+        BenchCfg construction moved after sampling, so count worker calls.
+        """
+        worker = CountingWorker()
+        bench = worker.to_bench()
         with self.assertRaises(ValueError):
-            self.bench.plot_sweep(
+            bench.plot_sweep(
                 "agg_fn_bogus",
-                input_vars=[BenchableObject.param.float1],
-                result_vars=[BenchableObject.param.distance],
+                input_vars=[CountingWorker.param.float1],
+                result_vars=[CountingWorker.param.distance],
                 run_cfg=bn.BenchRunCfg(repeats=1),
                 plot_callbacks=False,
                 aggregate=["float1"],
                 agg_fn="bogus",
             )
+        self.assertEqual(worker.calls, 0, "config was rejected only after sampling")
+
+        # Control: the identical sweep with a valid agg_fn *does* sample, proving
+        # the zero above is the raise's doing and not a sweep that never runs.
+        bench.plot_sweep(
+            "agg_fn_ok",
+            input_vars=[CountingWorker.param.float1],
+            result_vars=[CountingWorker.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+            aggregate=["float1"],
+            agg_fn="mean",
+        )
+        self.assertGreater(worker.calls, 0)
+
+    def test_uppercase_agg_fn_error_names_the_lowercase_spelling(self):
+        """The break is small but the fix should not need guessing."""
+        with self.assertRaises(ValueError) as ctx:
+            self.res.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
+        msg = str(ctx.exception)
+        self.assertIn("lowercase", msg)
+        self.assertIn("'mean'", msg)
+
+    def test_unknown_agg_fn_raises_without_agg_over_dims(self):
+        """Validation must not be data-dependent.
+
+        The cache key only needs agg_fn when there are agg dims, but gating the
+        *validation* on that would make an unknown value raise or pass depending
+        on the dataset's dims -- the shape plan 23 exists to remove.
+        """
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_fn="bogus")
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_over_dims=[], agg_fn="bogus")
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_over_dims=["nonexistent"], agg_fn="bogus")
+
+    def test_unknown_agg_fn_raises_on_a_warm_cache(self):
+        """The cache-key call is the only validation once _to_dataset_cache hits."""
+        self.res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
 
     def test_unknown_agg_fn_param_assignment_raises(self):
         """Assigning through the param descriptor is also boundary-checked."""

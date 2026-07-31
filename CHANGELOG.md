@@ -52,6 +52,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `n_failed > 0`, in the same way the regression report is auto-inserted.
 
 ### Changed
+- **BREAKING (small): one `AggFn` vocabulary, and an unknown `agg_fn` now raises instead
+  of silently meaning `mean`** (plan 23 P11, C11). The aggregation-function vocabulary
+  existed in four independent spellings — the `Literal`s on `to`/`to_dataset`/
+  `to_hv_dataset`/`filter`, `AGG_FN_MAP`, `BenchCfg.agg_fn`'s `ObjectSelector`, and an
+  if/elif ladder in `to_dataset` that consulted none of the others. `AggFn`
+  (`bencher/utils.py`) is now the single definition and the other three derive from it;
+  the ladder normalizes at the boundary (`normalize_agg_fn`) and then matches
+  exhaustively under `assert_never`.
+
+  Two user-visible changes, both on the plotting path:
+
+  1. **An unrecognised `agg_fn` raises `ValueError`.** The ladder's terminal `else` was
+     commented "Fall back to mean if unknown string provided", so `agg_fn="meen"`
+     silently produced a mean-aggregated plot — while `optimize()` raised on the very
+     same input. The two agree now. The raise lands at plot/aggregation time, never
+     mid-sweep: via `plot_sweep`, `BenchCfg`'s `ObjectSelector` rejects the value before
+     any sample is collected; via `to_dataset`/`filter`, results are already collected
+     and cached. Validation is also unconditional now — previously an unknown value was
+     only checked when `agg_over_dims` was non-empty, so whether you got an error
+     depended on the data.
+
+  2. **Uppercase is no longer accepted.** The ladder did `(agg_fn or "mean").lower()`,
+     so `agg_fn="MEAN"` worked in `to`/`to_dataset`/`to_hv_dataset`/`filter` — and
+     nowhere else: `plot_sweep(agg_fn="MEAN")` and `optimize(agg_fn="MEAN")` already
+     raised, because the `ObjectSelector`'s objects are lowercase. That leniency was
+     undocumented, unused anywhere in the tree, and asymmetric across the API, i.e. a
+     fifth partial spelling of the vocabulary rather than a feature. Preserving it
+     inside `normalize_agg_fn` would have recreated exactly the divergence this change
+     deletes; honouring it everywhere would mean widening the accepted set, which is a
+     public-API decision that does not belong in an internal single-sourcing change.
+     The error message names the lowercase spelling
+     (`... (the vocabulary is lowercase; did you mean 'mean'?)`), so the fix is
+     mechanical. Lowercase the string, or pass an `AggFn` member.
+
+  No cache, hash or `CACHE_VERSION` impact: `agg_fn` feeds no persistent hash (it is in
+  `identity.py`'s `EXCLUDED_FIELDS`), the accepted string set is byte-identical, and all
+  five aggregations are numerically unchanged.
+
 - **`BenchRunCfg.executor` is normalized to an `Executors` member at the sweep boundary**
   (plan 23 P2, C13). Because `Executors` is a `StrEnum`,
   `param.Selector(objects=list(Executors))` accepts the bare string `"SERIAL"` and stores a
