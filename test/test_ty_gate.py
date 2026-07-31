@@ -227,3 +227,71 @@ def handle(k: Kind) -> str:
         assert "All checks passed" in output, (
             f"ty rejected a complete match, so the gate has false positives:\n{output}"
         )
+
+    def test_untyped_ingress_into_complete_match_is_clean(self, tmp_path: Path) -> None:
+        """Pins the gate's *boundary*: what an exhaustive `match` does NOT prove.
+
+        This probe asserts CURRENT `ty` behavior, not desired behavior (plan 24 A5,
+        decision 3). A complete `match` over a closed union is type-clean even when the
+        value reaching it comes from an unannotated helper that actually returns the raw
+        string ``"SERIAL"`` — the annotation on ``handle``'s parameter is trusted, the
+        call site passes `Unknown`, and no rule fires (not even
+        ``invalid-argument-type``, per plan 24 section 2.1). At runtime the same code
+        raises ``AssertionError: Expected code to be unreachable, but got: 'SERIAL'``.
+
+        This is the gradual-typing ingress hole that NO checker in the field closes
+        (plan 24 section 2.5 measured ty, pyrefly, pyright, basedpyright, mypy, zuban) —
+        it is why plan 24 A1 requires normalizing `param`-sourced values at the boundary
+        before any `assert_never` downstream of them.
+
+        Asserted clean (not xfail) deliberately: if a future `ty` release starts
+        rejecting this, the failure lands HERE with this explanation attached, telling
+        us the gate's boundary moved — an xfail that quietly flips to xpass would be a
+        silent improvement nobody notices, and the boundary comments elsewhere in the
+        tree would silently go stale.
+        """
+        output, returncode = self._run_ty(
+            tmp_path,
+            """
+from enum import Enum, auto
+from typing import assert_never
+
+
+class Kind(Enum):
+    A = auto()
+    B = auto()
+
+
+def get_kind():  # unannotated on purpose: this is the untyped ingress
+    return "SERIAL"
+
+
+def handle(kind: Kind) -> str:
+    match kind:
+        case Kind.A:
+            return "a"
+        case Kind.B:
+            return "b"
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def caller() -> str:
+    # At runtime: AssertionError("Expected code to be unreachable, but got: 'SERIAL'")
+    return handle(get_kind())
+""",
+        )
+        assert returncode == 0, (
+            f"ty exited {returncode} on the untyped-ingress probe. Current ty accepts "
+            f"this (the gradual-typing hole no checker closes, plan 24 section 2); a "
+            f"nonzero exit means the ty in this environment has CHANGED behavior and "
+            f"now checks values crossing an untyped boundary. That is an improvement, "
+            f"not a bug — but it moves the gate's boundary, so re-run plan 24's probes, "
+            f"update the boundary documentation, and re-pin this test to the new "
+            f"reality. Output:\n{output}"
+        )
+        assert "All checks passed" in output, (
+            f"ty exited 0 but did not report a clean pass on the untyped-ingress "
+            f"probe, so it emitted some diagnostic without failing. Inspect whether "
+            f"the ingress hole is now at least warned about. Output:\n{output}"
+        )
