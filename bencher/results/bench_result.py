@@ -108,8 +108,9 @@ class BenchResult(
         HoloviewResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
-        # Samples that raised and were tolerated because of run_cfg.catch. Empty
-        # unless catch was set, so a run with no catch is byte-identical to before.
+        # Samples that failed without aborting the sweep: raised and tolerated
+        # because of run_cfg.catch, or dropped for breaking the worker contract
+        # (None return / wrong-shape ResultVec — recorded unconditionally).
         self.failed_samples: list = []
         # Samples this run actually executed, set by calculate_benchmark_results.
         # Needed because neither the dataset's own size nor the job count is the
@@ -144,6 +145,35 @@ class BenchResult(
         """
         attempted = getattr(self, "n_attempted", 0)  # absent on pre-plan-21 pickles
         return self.n_failed / attempted if attempted else 0.0
+
+    def failed_samples_markdown(self, max_rows: int = 20) -> str:
+        """Markdown summary of this run's failed samples, for the report.
+
+        Bencher's contract is that a failing or contract-breaking sample never
+        aborts a sweep (the expensive samples already collected must survive),
+        so the report has to carry the loudness instead: this block is
+        auto-inserted by :meth:`to_auto_plots` whenever ``n_failed > 0``.
+        """
+        attempted = getattr(self, "n_attempted", 0)
+        of_attempted = f" of {attempted} executed" if attempted else ""
+        lines = [
+            "### ⚠ Failed samples\n",
+            (
+                f"**{self.n_failed}{of_attempted} sample(s) failed.** Their cells hold "
+                f"the missing-value sentinel and are excluded from reductions.\n"
+            ),
+            "| Inputs | Error |",
+            "|--------|-------|",
+        ]
+        failures = getattr(self, "failed_samples", ())
+        for failure in failures[:max_rows]:
+            inputs = ", ".join(f"{k}={v}" for k, v in failure.inputs.items()) or "—"
+            # First line of the exception repr; the full traceback is in the log.
+            error = failure.exception.splitlines()[0] if failure.exception else "—"
+            lines.append(f"| {inputs} | {error} |")
+        if len(failures) > max_rows:
+            lines.append(f"\n*… and {len(failures) - max_rows} more (see the run log).*")
+        return "\n".join(lines)
 
     @property
     def identity(self) -> SweepIdentity:
@@ -425,6 +455,19 @@ class BenchResult(
         """
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
+
+        # --- Failed samples (auto-inserted whenever any sample failed) ---
+        # Failures never abort a sweep (caught samples and worker-contract
+        # violations alike), so the report is where they must be impossible to
+        # miss — a log line is not a surface anyone reads after the fact.
+        if self.n_failed:
+            plot_cols.append(
+                pn.pane.Markdown(
+                    self.failed_samples_markdown(),
+                    name="Failed Samples",
+                    width=800,
+                )
+            )
 
         # --- Regression report (auto-inserted when regression detection is enabled) ---
         # Summary table surfaces whenever a regression fires (including the

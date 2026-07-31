@@ -607,10 +607,17 @@ and may be reordered or dropped individually.
    **delete** — `result_vars` already carries `# todo remove`; only a test writes them;
    their gates have never fired. The phase must first report what would start being
    filtered if populated.
-2. **B2/B3 (P2): raise vs warn.** Recommendation: **raise `TypeError`**, and *not*
-   routed through plan 21's `catch=` — a `None` return or wrong-length vector is a
-   harness-contract error, not a sample fault. Alternative (warn + skip) preserves the
-   current silent behavior for parallel users.
+2. **B2/B3 (P2): raise vs warn.** ~~Recommendation: raise `TypeError`~~ — **RESOLVED by
+   the owner (2026-07-31): record + warn visibly, never raise through the sweep.** A core
+   bencher principle is that a run must not crash mid-way and lose expensive
+   already-collected data; a visible warning in the report is the correct loudness. P2
+   first landed as raise (per the original recommendation); the follow-up amendment
+   converts contract violations to `WorkerContractError` consumed by `store_results`:
+   recorded in `failed_samples` (so `n_failed` counts them and `fail_on_sample_error`
+   gates them at run end), an ERROR log, a `WorkerContractWarning`, and an auto-inserted
+   failed-samples summary in the report. The "*not* routed through `catch=`" half of the
+   original decision **still holds**: the violation is recorded unconditionally, with or
+   without `catch=`, so neither setting can silence it (see §10 P2-amendment).
 3. ~~**D2: take the `typing_extensions` dependency**~~ — **RESOLVED, no longer a
    decision.** The owner raised the floor to `>=3.11`, so `assert_never` is stdlib and no
    dependency is needed (§2.3). Kept as a numbered entry so later references to
@@ -810,6 +817,23 @@ than silently worked around.
    on exactly that seeded bypass. The probe tests also assert ty's **exit code**, not just
    its output text, so a rule demoted to warning level cannot pass; and their class
    docstring no longer claims to prove the repo's gate, only the mechanism.
+
+### P2-amendment (owner decision, 2026-07-31)
+
+Decision 2 was re-resolved by the owner after P2 merged: **warn visibly, never crash the
+sweep**. Rationale: bencher's core contract is that a run must not abort mid-way and lose
+expensive already-collected samples; the report is where loudness belongs. The amendment
+(branch `plan/p2-amendment-warn-not-crash`) keeps every loud property P2 established while
+removing the abort: `require_worker_result` and the ResultVec checks raise
+`WorkerContractError` (a `TypeError` subclass), which `store_results` consumes —
+recording a `SampleFailure` (counted by `n_failed`, gated by `fail_on_sample_error` at
+run end), logging at ERROR, emitting `WorkerContractWarning`, and leaving the cells at
+the missing sentinel. `to_auto_plots` auto-inserts a failed-samples summary whenever
+`n_failed > 0` (previously failures were counted but never shown in any report). The
+missing-result-key `KeyError` — the same contract shape, reachable only from raw-dict
+workers — was converted with them. `catch=` still plays no part: violations are recorded
+identically with and without it. P1's `invalid-method-override` static catch (below)
+is unaffected.
 
 ### P2 (implemented)
 
