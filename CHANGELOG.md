@@ -77,6 +77,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which strings `BenchRunCfg(executor=...)` accepts. See plan 23 D4.
 
 ### Added
+- **Single result-type registry: `RESULT_SPECS` in `bencher/variables/results.py`**
+  (plan 23 P4). One ordered `{Result* class: ResultSpec}` mapping now declares each
+  result type's kind, missing fill/sentinels, and family memberships (panel, media,
+  data-var, multidim, scalar, reference-backed). The nine previously hand-maintained
+  registries — `PANEL_TYPES`, `SCALAR_RESULT_TYPES`, `XARRAY_MULTIDIM_RESULT_TYPES`,
+  `ALL_RESULT_TYPES`, `RESULT_KIND_ORDER`, `_REFERENCE_MISSING_TYPES`,
+  `_OBJECT_MISSING_TYPES`, `DATA_VAR_RESULT_TYPES`, and `result_collector`'s
+  `_MEDIA_RESULT_TYPES` — are derived from it under their existing names, so call
+  sites are unchanged and no stored cell value or sentinel changes (no
+  `CACHE_VERSION` bump). Adding a `Result*` class without a spec now fails CI with
+  one clear message, and a parameter class defined in the results module but absent
+  from the registry is refused at sweep-declaration time instead of silently
+  classifying as an *input* variable. A6 phase 2 (the generalized rendering plan)
+  is intended to derive its channel vocabulary from this registry. The deprecated
+  `ResultVar` is exempt by declaration (`RESULT_SPEC_EXEMPT`) and resolves to
+  `ResultFloat`'s spec; `ResultHmap` keeps its historical quirks (registered, but
+  neither a data-var nor a panel type) rather than being "tidied".
 - **Content-addressed blob store: `bencher/blob_store.py`** (plan 22, phase 1 of the A6
   grammar-of-ND-data migration, #1021). Result payloads that cannot live directly in a
   dataset cell are serialized under `cachedir/blobs/` and named by the sha256 of their

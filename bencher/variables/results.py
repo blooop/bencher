@@ -487,7 +487,7 @@ class ResultReference(param.Parameter):
     def __init__(
         self,
         obj: Any | None = None,
-        container: Callable[Any, pn.pane.panel] | None = None,
+        container: Callable[[Any], Any] | None = None,
         default: Any | None = None,
         units: str = "container",
         max_time_events=None,

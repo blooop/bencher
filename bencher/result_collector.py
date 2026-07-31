@@ -41,17 +41,14 @@ from bencher.job import JobFuture, SampleFailure, normalize_catch, require_worke
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
 from bencher.variables.results import (
+    _MEDIA_RESULT_TYPES,
     DATA_VAR_RESULT_TYPES,
     XARRAY_MULTIDIM_RESULT_TYPES,
-    _MEDIA_RESULT_TYPES,
     ResultDataSet,
     ResultFloat,
-    ResultImage,
-    ResultPath,
     ResultReference,
     ResultRerun,
     ResultVec,
-    ResultVideo,
     result_missing_fill,
 )
 from bencher.variables.time import TimeEvent, TimeSnapshot
