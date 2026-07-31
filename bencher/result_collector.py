@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import warnings
 from contextlib import suppress
 from datetime import datetime
 from itertools import product
@@ -37,7 +38,14 @@ from bencher.history import (
     project,
     reconcile,
 )
-from bencher.job import JobFuture, SampleFailure, normalize_catch, require_worker_result
+from bencher.job import (
+    JobFuture,
+    SampleFailure,
+    WorkerContractError,
+    WorkerContractWarning,
+    normalize_catch,
+    require_worker_result,
+)
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
 from bencher.variables.results import (
@@ -375,6 +383,32 @@ class ResultCollector:
             failure.exception,
         )
 
+    @staticmethod
+    def record_contract_violation(
+        bench_res: BenchResult, job_id: str, inputs: dict, exc: WorkerContractError
+    ) -> None:
+        """Record a broken worker contract without aborting the sweep.
+
+        Owner decision amending plan 23 §6.2 (2026-07-31): a sweep must never
+        crash mid-run and lose the expensive samples already collected, so a
+        contract violation (worker returned ``None``, wrong-shape ``ResultVec``)
+        is recorded like a caught sample — the cell keeps its missing sentinel,
+        ``n_failed`` counts it, ``fail_on_sample_error`` sees it, and the report
+        shows it in the failed-samples summary — but *louder*: an ERROR log and
+        a :class:`WorkerContractWarning`, unconditionally. ``catch=`` plays no
+        part in this (plan 23 decision 2 still holds): the violation is recorded
+        with or without it, so ``catch=Exception`` cannot restore the old silent
+        skip, and leaving ``catch`` unset cannot turn it back into a crash.
+        """
+        failure = SampleFailure.from_exception(job_id, inputs, exc)
+        bench_res.failed_samples.append(failure)
+        logger.error(
+            "worker contract violation (%s): %s",
+            ", ".join(f"{k}={v}" for k, v in failure.inputs.items()) or "no inputs",
+            exc,
+        )
+        warnings.warn(str(exc), WorkerContractWarning, stacklevel=2)
+
     def store_results(
         self,
         job_result: JobFuture,
@@ -398,7 +432,10 @@ class ResultCollector:
                 precompute_result_arrays(). Falls back to dataset lookup if None.
 
         Raises:
-            RuntimeError: If an unsupported result variable type is encountered
+            TypeError: If an unsupported result variable type is encountered (a
+                bencher-internal invariant; worker-contract violations are
+                recorded and warned instead of raised — see
+                ``record_contract_violation``).
         """
         # No `if catch:` branch: `except ()` matches nothing, so the default empty
         # tuple is already fail-fast, and result() keeps a single call site.
@@ -416,10 +453,19 @@ class ResultCollector:
             return
         # Outside the `except catch` above, deliberately: a worker that returned
         # nothing is a harness-contract error, not a sample fault, so `catch=` must
-        # not absorb it (plan 23 decision 2). This replaces `if result is not None:`
-        # with no `else`, which skipped everything below and left the sweep green with
-        # an all-sentinel dataset -- see require_worker_result for the full B3 story.
-        result = require_worker_result(result, job_result.job.job_id)
+        # not decide its fate (plan 23 decision 2). This replaces `if result is not
+        # None:` with no `else`, which skipped everything below and left the sweep
+        # green with an all-sentinel dataset -- see require_worker_result for the
+        # full B3 story. The violation is recorded and warned, never raised through
+        # the sweep (plan 23 §6.2 as amended): the cells keep their missing
+        # sentinel, and the failed-samples summary makes that visible.
+        try:
+            result = require_worker_result(result, job_result.job.job_id)
+        except WorkerContractError as exc:
+            self.record_contract_violation(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
         logger.info(f"{job_result.job.job_id}:")
         if bench_res.bench_cfg.print_bench_inputs:
             for k, v in worker_job.function_input.items():
@@ -428,12 +474,39 @@ class ResultCollector:
         result_dict = result if isinstance(result, dict) else result.param.values()
         idx = worker_job.index_tuple
 
+        try:
+            self._store_result_vars(bench_res, result_dict, idx, bench_run_cfg, rv_arrays)
+        except WorkerContractError as exc:
+            # Record-and-continue, like the None-return check above. Result vars
+            # stored before the violating one keep their values; the violating
+            # one (and any after it) keep the missing sentinel, and the failure
+            # record names the sample.
+            self.record_contract_violation(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
+        for rv in bench_res.result_hmaps:
+            bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
+
+    @staticmethod
+    def _store_result_vars(
+        bench_res: BenchResult,
+        result_dict: dict,
+        idx: tuple,
+        bench_run_cfg: BenchRunCfg,
+        rv_arrays: dict[str, np.ndarray] | None,
+    ) -> None:
+        """Write one sample's result variables into the dataset (see store_results)."""
         for rv in bench_res.bench_cfg.result_vars:
             try:
                 result_value = result_dict[rv.name]
             except KeyError:
+                # Same contract-error shape as the ResultVec checks below: only a
+                # worker returning a raw dict can omit a declared result var
+                # (benchmark() always emits every declared key), and aborting the
+                # sweep for it would lose the samples already collected.
                 available = list(result_dict.keys())
-                raise KeyError(
+                raise WorkerContractError(
                     f"Result variable '{rv.name}' was not set by the "
                     f"benchmark function. Available keys: {available}. "
                     f"Make sure your benchmark() method sets "
@@ -470,13 +543,13 @@ class ResultCollector:
                 # side effect of making the drop loud. It now says so instead of
                 # silently NaN-ing.
                 if not isinstance(result_value, (list, np.ndarray)):
-                    raise TypeError(
+                    raise WorkerContractError(
                         f"Result variable '{rv.name}' is a ResultVec(size={rv.size}), "
                         f"so the benchmark function must set it to a list or numpy "
                         f"array; got {type(result_value).__name__} ({result_value!r})."
                     )
                 if len(result_value) != rv.size:
-                    raise TypeError(
+                    raise WorkerContractError(
                         f"Result variable '{rv.name}' is a ResultVec(size={rv.size}), "
                         f"but the benchmark function returned {len(result_value)} "
                         f"element(s): {result_value!r}. Each element is stored in its "
@@ -488,8 +561,6 @@ class ResultCollector:
 
             else:
                 raise TypeError(f"Unsupported result type: {type(rv).__name__}")
-        for rv in bench_res.result_hmaps:
-            bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
 
     def cache_results(
         self, bench_res: BenchResult, bench_cfg_hash: str, bench_cfg_hashes: list[str]

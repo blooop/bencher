@@ -44,7 +44,7 @@ from .identity import (
     identity_of,
     sweep_identity,
 )
-from .job import SampleFailure
+from .job import SampleFailure, WorkerContractError, WorkerContractWarning
 from .render import load_result, render_report, save_result
 from .report_export import (
     compare_results,

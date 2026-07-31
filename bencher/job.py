@@ -115,6 +115,27 @@ def normalize_catch(catch) -> tuple[type[BaseException], ...]:
     return catch
 
 
+class WorkerContractError(TypeError):
+    """A worker broke the harness contract (returned ``None``, or set a
+    ``ResultVec`` to the wrong shape).
+
+    Distinct from a sample fault: the collector records the sample as failed,
+    emits :class:`WorkerContractWarning`, surfaces it in the report, and the
+    sweep **continues** — a broken sample must never abort a run and lose the
+    expensive samples already collected (owner decision amending plan 23 §6.2,
+    2026-07-31). Subclasses ``TypeError`` so callers that consumed the previous
+    raising behavior still match."""
+
+
+class WorkerContractWarning(UserWarning):
+    """Emitted when a sample is dropped because the worker broke the harness
+    contract (see :class:`WorkerContractError`).
+
+    The sample is counted in ``BenchResult.n_failed`` and listed in the
+    report's failed-samples summary. Promote to an error in strict pipelines
+    with ``warnings.filterwarnings("error", category=bn.WorkerContractWarning)``."""
+
+
 def require_worker_result(result: dict | None, job_id: str) -> dict:
     """Reject a worker that returned ``None`` instead of a result dict.
 
@@ -127,11 +148,13 @@ def require_worker_result(result: dict | None, job_id: str) -> dict:
     unrelated config knob; this is the one check both paths funnel through.
 
     Deliberately **not** routed through ``catch=`` (plan 23 decision 2): a missing
-    return value is a harness-contract error, not a sample fault, so every call site
-    must raise it from *outside* its ``except catch`` block.
-    """
+    return value is a harness-contract error, not a sample fault, so ``catch=``
+    must never decide its fate. The raise is consumed by ``store_results``, which
+    records the sample as failed and warns instead of aborting the sweep (plan 23
+    §6.2 as amended: crashing mid-run loses expensive data; the failure surfaces
+    in the report instead)."""
     if result is None:
-        raise TypeError(
+        raise WorkerContractError(
             f"The benchmark function for job {job_id} returned None. "
             "Make sure you are returning a dict or `super().__call__(**kwargs)` "
             "from your __call__ function."

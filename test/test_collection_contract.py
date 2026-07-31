@@ -11,10 +11,14 @@ sweep that had not been run yet.
 - **C13** ``executor`` is compared with both ``==`` and ``is``, and
   ``param.Selector`` accepts a raw string for it, so the two styles can disagree.
 
-These are contract errors, not sample faults, so none of them is routed through
-``catch=`` (plan 23 decision 2) -- ``TestCatchDoesNotAbsorbContractErrors`` pins
-that, since ``catch=Exception`` is the natural thing for a user to reach for and
-would otherwise turn every one of these back into a silent skip.
+Disposition (plan 23 §6.2, owner-amended 2026-07-31): a contract violation is
+**recorded and warned, never raised through the sweep** — bencher must not crash
+mid-run and lose expensive already-collected data. Loudness comes from the
+``WorkerContractWarning``, ``n_failed``, the report's failed-samples summary, and
+(opt-in) ``fail_on_sample_error`` at the end of the run. ``catch=`` still plays
+no part in it (plan 23 decision 2): the violation is recorded with or without
+``catch=Exception``, so neither setting nor omitting it restores the old silent
+skip — ``TestCatchDoesNotChangeContractHandling`` pins that.
 """
 
 from __future__ import annotations
@@ -31,6 +35,8 @@ from bencher.job import (
     FutureCache,
     Job,
     JobFuture,
+    WorkerContractError,
+    WorkerContractWarning,
     normalize_executor,
     require_worker_result,
 )
@@ -80,6 +86,14 @@ class ReturnsNothing(bn.ParametrizedSweep):
         # Deliberately no `return self.get_results_values_as_dict()`.
 
 
+def _contract_messages(record) -> list[str]:
+    """The WorkerContractWarning messages out of a pytest.warns record.
+
+    ``record[0]`` is unreliable: unrelated warnings (deprecations, fork) share
+    the capture."""
+    return [str(w.message) for w in record if issubclass(w.category, WorkerContractWarning)]
+
+
 def _run(worker, *, executor=Executors.SERIAL, **run_kwargs):
     cfg = bn.BenchRunCfg(executor=executor, **run_kwargs)
     cfg.auto_plot = False
@@ -98,7 +112,8 @@ def _run(worker, *, executor=Executors.SERIAL, **run_kwargs):
 
 
 class TestResultVecLength(unittest.TestCase):
-    """B2: the ladder's other arms raise; this one used to just not store."""
+    """B2: a wrong-shape vector used to be silently dropped; now it is recorded,
+    warned, and left at the sentinel — without aborting the sweep."""
 
     def tearDown(self) -> None:
         WrongLengthVec.n_elements = 2
@@ -110,25 +125,32 @@ class TestResultVecLength(unittest.TestCase):
         for name in WrongLengthVec.param.v.index_names():
             self.assertIn(name, res.ds)
             self.assertFalse(np.isnan(res.ds[name].values).any(), f"{name} left at the NaN fill")
+        self.assertEqual(res.n_failed, 0)
 
-    def test_a_short_vector_raises_instead_of_being_dropped(self) -> None:
+    def test_a_short_vector_warns_and_is_recorded_not_dropped(self) -> None:
         WrongLengthVec.n_elements = 1
-        with self.assertRaises(TypeError) as ctx:
-            _run(WrongLengthVec())
-        msg = str(ctx.exception)
+        with pytest.warns(WorkerContractWarning) as record:
+            res = _run(WrongLengthVec())
+        # The sweep completed; the bad samples are counted, not fatal.
+        self.assertEqual(res.n_failed, 2)
+        msg = _contract_messages(record)[0]
         # The message has to carry all three facts, because the symptom the user
         # would otherwise see is an all-NaN column with nothing pointing at 'v'.
         self.assertIn("'v'", msg)
         self.assertIn("size=2", msg)
         self.assertIn("1 element", msg)
+        # The cells stay at the missing sentinel — failed, not fabricated.
+        for name in WrongLengthVec.param.v.index_names():
+            self.assertTrue(np.isnan(res.ds[name].values).all())
 
-    def test_a_long_vector_also_raises(self) -> None:
+    def test_a_long_vector_is_also_recorded(self) -> None:
         WrongLengthVec.n_elements = 3
-        with self.assertRaises(TypeError) as ctx:
-            _run(WrongLengthVec())
-        self.assertIn("3 element", str(ctx.exception))
+        with pytest.warns(WorkerContractWarning) as record:
+            res = _run(WrongLengthVec())
+        self.assertEqual(res.n_failed, 2)
+        self.assertIn("3 element", _contract_messages(record)[0])
 
-    def test_a_non_sequence_raises_naming_the_type(self) -> None:
+    def test_a_non_sequence_is_recorded_naming_the_type(self) -> None:
         """Only reachable from a worker that returns a raw dict.
 
         Assignment through ``self.v`` cannot get here -- ``param.List`` rejects a
@@ -144,16 +166,20 @@ class TestResultVecLength(unittest.TestCase):
             index_tuple = (0, 0)
             canonical_input = ("x", 0)
 
-        with self.assertRaises(TypeError) as ctx:
+        n_failed_before = res.n_failed
+        with pytest.warns(WorkerContractWarning) as record:
             collector.store_results(
                 JobFuture(job=job, res={"v": 3.0}),
                 res,
                 _Worker(),
                 bn.BenchRunCfg(),
             )
-        msg = str(ctx.exception)
+        self.assertEqual(res.n_failed, n_failed_before + 1)
+        msg = _contract_messages(record)[0]
         self.assertIn("'v'", msg)
         self.assertIn("float", msg)
+        # The recorded failure is distinguishable from a catch= sample fault.
+        self.assertIn("WorkerContractError", res.failed_samples[-1].exception)
 
 
 # ---------------------------------------------------------------------------
@@ -162,25 +188,39 @@ class TestResultVecLength(unittest.TestCase):
 
 
 class TestWorkerReturnedNothing(unittest.TestCase):
-    """B3: loud or silent used to be chosen by an unrelated config knob."""
+    """B3: loud or silent used to be chosen by an unrelated config knob.
 
-    def test_serial_raises(self) -> None:
-        with self.assertRaises(TypeError) as ctx:
-            _run(ReturnsNothing())
-        self.assertIn("returned None", str(ctx.exception))
+    Now it is uniformly loud-but-nonfatal on both execution paths: recorded,
+    warned, counted — never a green run with ``n_failed == 0``, and never an
+    aborted run that loses the samples already collected."""
 
-    def test_multiprocessing_raises_too(self) -> None:
+    def test_serial_records_and_warns(self) -> None:
+        with pytest.warns(WorkerContractWarning) as record:
+            res = _run(ReturnsNothing())
+        self.assertEqual(res.n_failed, 2)
+        self.assertIn("returned None", _contract_messages(record)[0])
+        # Nothing fabricated: the cells hold the missing sentinel.
+        self.assertTrue(np.isnan(res.ds["y"].values).all())
+
+    def test_multiprocessing_records_and_warns_too(self) -> None:
         """The path that used to complete green with an all-sentinel dataset."""
-        with self.assertRaises(TypeError) as ctx:
-            _run(ReturnsNothing(), executor=Executors.MULTIPROCESSING)
-        self.assertIn("returned None", str(ctx.exception))
+        with pytest.warns(WorkerContractWarning) as record:
+            res = _run(ReturnsNothing(), executor=Executors.MULTIPROCESSING)
+        self.assertEqual(res.n_failed, 2)
+        self.assertIn("returned None", _contract_messages(record)[0])
 
     def test_the_message_says_what_to_do(self) -> None:
-        with self.assertRaises(TypeError) as ctx:
+        # require_worker_result itself still raises (a pure check); the
+        # record-and-continue disposition lives in store_results.
+        with self.assertRaises(WorkerContractError) as ctx:
             require_worker_result(None, "job-42")
         msg = str(ctx.exception)
         self.assertIn("job-42", msg)
         self.assertIn("super().__call__(**kwargs)", msg)
+
+    def test_contract_error_is_a_type_error(self) -> None:
+        """Callers that matched the previous raising behavior still match."""
+        self.assertTrue(issubclass(WorkerContractError, TypeError))
 
     def test_a_real_result_passes_straight_through(self) -> None:
         payload = {"y": 1.0}
@@ -191,26 +231,86 @@ class TestWorkerReturnedNothing(unittest.TestCase):
         self.assertEqual(require_worker_result({}, "job-1"), {})
 
 
-class TestCatchDoesNotAbsorbContractErrors(unittest.TestCase):
+class TestCatchDoesNotChangeContractHandling(unittest.TestCase):
     """Plan 23 decision 2: ``catch=`` tolerates failing *samples*, not a broken harness.
 
-    Both checks are raised outside ``store_results``'s ``except catch`` block on
-    purpose. Without this test the fix would look complete while
-    ``catch=Exception`` -- the obvious thing to reach for -- silently restored the
-    old behaviour, which is the exact failure mode B2 and B3 are about.
+    A contract violation is recorded and warned identically with and without
+    ``catch=Exception``. Without this test the fix would look complete while
+    ``catch=`` either silently absorbed the violation (the old B2/B3 failure
+    mode) or its absence turned the violation back into a mid-run crash.
     """
 
     def tearDown(self) -> None:
         WrongLengthVec.n_elements = 2
 
     def test_catch_does_not_swallow_a_none_return(self) -> None:
-        with self.assertRaises(TypeError):
-            _run(ReturnsNothing(), catch=Exception)
+        with pytest.warns(WorkerContractWarning):
+            res = _run(ReturnsNothing(), catch=Exception)
+        self.assertEqual(res.n_failed, 2)
+        self.assertIn("WorkerContractError", res.failed_samples[0].exception)
 
     def test_catch_does_not_swallow_a_wrong_length_vector(self) -> None:
         WrongLengthVec.n_elements = 1
-        with self.assertRaises(TypeError):
-            _run(WrongLengthVec(), catch=Exception)
+        with pytest.warns(WorkerContractWarning):
+            res = _run(WrongLengthVec(), catch=Exception)
+        self.assertEqual(res.n_failed, 2)
+
+
+class TestContractViolationSurfaces(unittest.TestCase):
+    """The loudness contract: visible in the report, and gateable at run end."""
+
+    def tearDown(self) -> None:
+        WrongLengthVec.n_elements = 2
+
+    def test_failed_samples_appear_in_the_report(self) -> None:
+        WrongLengthVec.n_elements = 1
+        with pytest.warns(WorkerContractWarning):
+            res = _run(WrongLengthVec())
+        md = res.failed_samples_markdown()
+        self.assertIn("Failed samples", md)
+        self.assertIn("x=0", md)
+        self.assertIn("WorkerContractError", md)
+        # And the auto-plot report actually carries the pane.
+        panes = res.to_auto_plots()
+        names = [getattr(p, "name", "") for p in panes]
+        self.assertIn("Failed Samples", names)
+
+    def test_a_clean_run_gets_no_failure_pane(self) -> None:
+        res = _run(WrongLengthVec())
+        panes = res.to_auto_plots()
+        names = [getattr(p, "name", "") for p in panes]
+        self.assertNotIn("Failed Samples", names)
+
+    def test_fail_on_sample_error_gates_contract_violations_at_run_end(self) -> None:
+        """Opt-in hard failure still exists — after collection, not mid-run."""
+        from bencher.bencher import SampleErrorPolicyError
+
+        WrongLengthVec.n_elements = 1
+        with pytest.warns(WorkerContractWarning), self.assertRaises(SampleErrorPolicyError):
+            _run(WrongLengthVec(), fail_on_sample_error=True)
+
+    def test_a_missing_result_key_is_recorded_not_fatal(self) -> None:
+        """A raw-dict worker omitting a declared result var is the same contract
+        shape; it used to abort the sweep with a KeyError."""
+        res = _run(WrongLengthVec())
+        collector = ResultCollector()
+        job = Job(job_id="missing-key", function=lambda **_: None, job_args={"x": 0})
+
+        class _Worker:
+            function_input: ClassVar[dict] = {"x": 0}
+            index_tuple = (0, 0)
+            canonical_input = ("x", 0)
+
+        n_failed_before = res.n_failed
+        with pytest.warns(WorkerContractWarning) as record:
+            collector.store_results(
+                JobFuture(job=job, res={"other": 1.0}),
+                res,
+                _Worker(),
+                bn.BenchRunCfg(),
+            )
+        self.assertEqual(res.n_failed, n_failed_before + 1)
+        self.assertIn("'v'", _contract_messages(record)[0])
 
 
 # ---------------------------------------------------------------------------

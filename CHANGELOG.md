@@ -8,32 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **BREAKING (fail-loud): a benchmark that returns `None` now raises instead of producing
-  an empty sweep** (plan 23 P2, B3). A worker that forgot to `return
+- **Fail-loud, not fail-fatal: a benchmark that returns `None` no longer produces a
+  silently empty sweep — and no longer aborts the run either** (plan 23 P2, B3; amended
+  per owner decision before release). A worker that forgot to `return
   super().__call__(**kwargs)` used to trip a bare `assert` on the serial executor — and
   nothing at all on `MULTIPROCESSING`/`SCOOP`, where the future resolved to `None`,
   `store_results` skipped its entire body behind `if result is not None:` with no `else`,
   and the sweep finished green with an all-sentinel dataset and `n_failed == 0`. The same
   user error was loud or silent depending on an unrelated config knob, and the assert
   vanished entirely under `python -O`. Both paths now funnel through one check
-  (`require_worker_result`) raising `TypeError`.
+  (`require_worker_result`, raising `WorkerContractError`), which `store_results`
+  consumes: the sample is recorded in `failed_samples` (so `n_failed` counts it and
+  `fail_on_sample_error` can gate the run at the end), logged at ERROR, announced with a
+  `WorkerContractWarning`, and shown in the report's failed-samples summary — while the
+  sweep continues, because crashing mid-run loses the expensive samples already
+  collected. Strict pipelines can promote the warning:
+  `warnings.filterwarnings("error", category=bn.WorkerContractWarning)`.
 
-- **BREAKING (fail-loud): a `ResultVec` set to the wrong number of elements now raises**
-  (plan 23 P2, B2). The store was guarded by `isinstance(value, (list, np.ndarray)) and
-  len(value) == rv.size` with no `else`, so a length mismatch was silently discarded and
-  the cell kept its NaN fill — indistinguishable downstream from "never sampled".
-  `param.List` validates that the value is a list but not how long it is, so this was
-  reachable from ordinary benchmark code. The error names the variable, the declared size
-  and the actual length.
+- **A `ResultVec` set to the wrong number of elements is recorded and warned, not
+  silently dropped** (plan 23 P2, B2; same amended disposition as B3). The store was
+  guarded by `isinstance(value, (list, np.ndarray)) and len(value) == rv.size` with no
+  `else`, so a length mismatch was silently discarded and the cell kept its NaN fill —
+  indistinguishable downstream from "never sampled". `param.List` validates that the
+  value is a list but not how long it is, so this was reachable from ordinary benchmark
+  code. The warning names the variable, the declared size and the actual length. A
+  raw-dict worker omitting a declared result variable (previously a mid-sweep
+  `KeyError`) is handled the same way.
 
-  Both checks are raised **outside** `store_results`'s `except catch` block on purpose: a
-  bad return shape is a harness-contract error, not a sample fault, so `catch=` does not
-  absorb it (plan 23 decision 2). Previously `catch=Exception` did swallow the serial
-  `assert`, restoring the silent behaviour. Tests pin this. The `Bench.optimize` path is
-  the documented exception — its objective runs under `study.optimize(..., catch=catch)`,
-  so a `catch=` there still absorbs the error. That is pre-existing rather than new: the
-  old code was absorbed at the same point, as an `AssertionError` on serial and a `None`
-  subscript `TypeError` on the pool.
+  Contract violations are handled **outside** `store_results`'s `except catch` block on
+  purpose: a bad return shape is a harness-contract error, not a sample fault, so
+  `catch=` plays no part in it (plan 23 decision 2) — the violation is recorded
+  identically with and without `catch=Exception`, so neither setting nor omitting it
+  restores the old silent skip. The `Bench.optimize` path is the documented exception —
+  its objective runs under `study.optimize(..., catch=catch)`, so a `catch=` there still
+  absorbs the error. That is pre-existing rather than new: the old code was absorbed at
+  the same point, as an `AssertionError` on serial and a `None` subscript `TypeError` on
+  the pool.
+
+- **The report now shows failed samples.** `n_failed`/`failed_samples` existed since
+  plan 21 but never surfaced anywhere a reader would look: a run with failures produced
+  a normal-looking report and only log lines. `to_auto_plots` now auto-inserts a
+  failed-samples summary (inputs + first error line per failure) whenever
+  `n_failed > 0`, in the same way the regression report is auto-inserted.
 
 ### Changed
 - **`BenchRunCfg.executor` is normalized to an `Executors` member at the sweep boundary**
