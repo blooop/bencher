@@ -59,6 +59,17 @@ from bencher.worker_job import WorkerJob
 
 logger = logging.getLogger(__name__)
 
+# Result types whose cell names a file this variable alone owns, so aging the cell
+# out of the over_time history deletes the file too (see ``_null_old_entries``).
+#
+# ``ResultDataSet`` is deliberately NOT here, even though its cells are paths as
+# well: blob-store files are content-addressed, so one file may back cells at other
+# time points, in other result variables, or in another benchmark sharing the cache
+# — identical payloads deduplicate to a single path by design, and this function
+# sees only the variable it is aging. Deleting the file here would strand every
+# other cell still holding that path. Aging therefore only writes the sentinel;
+# reclaiming blob storage belongs to ``bencher.cache_management``, which is the
+# layer that can see the whole cache and tell a dropped payload from a shared one.
 _MEDIA_RESULT_TYPES = (ResultPath, ResultVideo, ResultImage, ResultContainer, ResultRerun)
 
 
