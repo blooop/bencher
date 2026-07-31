@@ -52,16 +52,27 @@ def _pt(time_event, mean, std, n=4):
     return {"time_event": time_event, "mean": mean, "std": std, "n": n}
 
 
-def _reg(variable, direction, regressed, baseline, current, change, threshold=15.0):
+def _reg(
+    variable,
+    direction,
+    regressed,
+    baseline,
+    current,
+    change,
+    threshold=15.0,
+    method="percentage",
+    **extra,
+):
     return {
         "variable": variable,
-        "method": "percentage",
+        "method": method,
         "regressed": regressed,
         "current_value": current,
         "baseline_value": baseline,
         "change_percent": change,
         "threshold": threshold,
         "direction": direction,
+        **extra,
     }
 
 
@@ -193,6 +204,107 @@ class TestCellVerdict:
     def test_passed_when_threshold_none(self):
         reg = _reg("v", "maximize", False, 1.0, 1.2, 20.0, threshold=None)
         assert cell_verdict(reg) == "passed"
+
+
+class TestCellVerdictMethodUnits:
+    """threshold is percent ONLY for method='percentage' — MAD-sigma for
+    'adaptive', an absolute delta for 'delta', an absolute limit for
+    'absolute'. The verdict must measure improvements in the record's own
+    units, not compare |change_percent| against a non-percent threshold."""
+
+    def test_adaptive_small_percent_outside_mad_band_is_improved(self):
+        # 1% improvement on a very quiet metric: far outside the MAD band even
+        # though |change| (1.0) is below the sigma threshold number (3.5).
+        reg = _reg(
+            "v",
+            "minimize",
+            False,
+            100.0,
+            99.0,
+            -1.0,
+            threshold=3.5,
+            method="adaptive",
+            band_lower=99.9,
+            band_upper=100.1,
+        )
+        assert cell_verdict(reg) == "improved"
+
+    def test_adaptive_inside_band_not_improved_by_sigma_number(self):
+        # 5% beneficial move but inside the MAD acceptance band: |change| (5.0)
+        # >= the sigma threshold number (3.5) must NOT make it "improved".
+        reg = _reg(
+            "v",
+            "minimize",
+            False,
+            100.0,
+            95.0,
+            -5.0,
+            threshold=3.5,
+            method="adaptive",
+            band_lower=90.0,
+            band_upper=110.0,
+        )
+        assert cell_verdict(reg) == "passed"
+
+    def test_adaptive_dual_band_gate_requires_both(self):
+        # Outside the MAD band but inside the percent band: the detector's
+        # dual-band AND gate would not have fired, so no "improved" either.
+        inside_pct = _reg(
+            "v",
+            "minimize",
+            False,
+            100.0,
+            99.0,
+            -1.0,
+            threshold=3.5,
+            method="adaptive",
+            band_lower=99.9,
+            band_upper=100.1,
+            percent_band_lower=95.0,
+            percent_band_upper=105.0,
+        )
+        assert cell_verdict(inside_pct) == "passed"
+        outside_both = _reg(
+            "v",
+            "minimize",
+            False,
+            100.0,
+            90.0,
+            -10.0,
+            threshold=3.5,
+            method="adaptive",
+            band_lower=99.9,
+            band_upper=100.1,
+            percent_band_lower=95.0,
+            percent_band_upper=105.0,
+        )
+        assert cell_verdict(outside_both) == "improved"
+
+    def test_adaptive_missing_bands_abstains(self):
+        reg = _reg("v", "minimize", False, 100.0, 90.0, -10.0, threshold=3.5, method="adaptive")
+        assert cell_verdict(reg) == "passed"
+
+    def test_delta_threshold_is_absolute_units(self):
+        # -30% change but the absolute delta (3) is below max_delta (5):
+        # comparing |change_percent| against the threshold used to say improved.
+        small_delta = _reg("v", "minimize", False, 10.0, 7.0, -30.0, threshold=5.0, method="delta")
+        assert cell_verdict(small_delta) == "passed"
+        # -0.6% change but the absolute delta (6) clears max_delta (5).
+        big_delta = _reg("v", "minimize", False, 1000.0, 994.0, -0.6, threshold=5.0, method="delta")
+        assert cell_verdict(big_delta) == "improved"
+
+    def test_delta_adverse_move_not_improved(self):
+        reg = _reg("v", "minimize", False, 10.0, 14.0, 40.0, threshold=5.0, method="delta")
+        assert cell_verdict(reg) == "passed"
+
+    def test_absolute_abstains_to_passed(self):
+        # detect_absolute has no baseline: change_percent serializes to None.
+        reg = _reg("v", "minimize", False, 50.0, 40.0, None, threshold=50.0, method="absolute")
+        assert cell_verdict(reg) == "passed"
+
+    def test_unknown_method_falls_back_to_percentage(self):
+        reg = _reg("v", "maximize", False, 1.0, 1.2, 20.0, method="mystery")
+        assert cell_verdict(reg) == "improved"
 
 
 class TestDiscover:

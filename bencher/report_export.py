@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import warnings
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -186,25 +187,96 @@ def _snapshot_ds(bench_res: BenchResult) -> xr.Dataset:
     return ds
 
 
-def _verdict(
-    change_percent: float | None, direction: str, regressed: bool, threshold: float
-) -> str:
+def _finite_value(value) -> float | None:
+    """Coerce *value* to a finite float, or None (handles None/NaN/inf/non-numbers)."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if np.isfinite(value) else None
+
+
+def _verdict(reg: Mapping) -> str:
     """Classify a metric movement as improved / regressed / unchanged.
 
-    ``regressed`` comes straight from the detector (direction- and
-    threshold-aware). An improvement is the mirror image: a beneficial-direction
-    move whose magnitude clears the same threshold.
+    *reg* follows the :meth:`~bencher.regression.RegressionResult.to_dict`
+    contract. ``regressed`` comes straight from the detector (direction- and
+    threshold-aware). An improvement is the mirror image — a beneficial-direction
+    move that clears the detector's gate — measured in each method's own units,
+    because ``threshold`` means percent, absolute delta, MAD-sigma, or an
+    absolute limit depending on ``method``:
+
+    * ``percentage`` (and unknown methods, mirroring the fallback in
+      :func:`~bencher.regression.method_cells`): ``|change_percent|`` clears
+      ``threshold`` (a percent).
+    * ``delta``: ``|current_value - baseline_value|`` clears ``threshold``
+      (absolute units).
+    * ``adaptive``: ``current_value`` lies outside the MAD acceptance band
+      (``band_lower``/``band_upper``) and, when the dual-band percent gate is
+      present, outside ``percent_band_lower``/``percent_band_upper`` too —
+      mirroring :func:`~bencher.regression.detect_adaptive`'s AND gate.
+      Abstains to "unchanged" when the bands are absent from the record.
+    * ``absolute``: a fixed limit with no baseline to improve against
+      (``change_percent`` is always NaN/None), so a non-regressed check is
+      explicitly "unchanged".
     """
-    if regressed:
+    if reg.get("regressed"):
         return "regressed"
-    if change_percent is None or not np.isfinite(change_percent):
-        return "unchanged"
-    beneficial = (direction == OptDir.minimize.value and change_percent < 0) or (
-        direction == OptDir.maximize.value and change_percent > 0
+    method = reg.get("method")
+    if method == "absolute":
+        improved = False
+    elif method == "delta":
+        improved = _delta_improved(reg)
+    elif method == "adaptive":
+        improved = _adaptive_improved(reg)
+    else:
+        improved = _percent_improved(reg)
+    return "improved" if improved else "unchanged"
+
+
+def _beneficial(delta: float, direction) -> bool:
+    """True when a signed movement is in the variable's beneficial direction."""
+    return (direction == OptDir.minimize.value and delta < 0) or (
+        direction == OptDir.maximize.value and delta > 0
     )
-    if beneficial and abs(change_percent) >= threshold:
-        return "improved"
-    return "unchanged"
+
+
+def _delta_improved(reg: Mapping) -> bool:
+    """delta method: gate the improvement on |current - baseline| in absolute units."""
+    current = _finite_value(reg.get("current_value"))
+    baseline = _finite_value(reg.get("baseline_value"))
+    threshold = _finite_value(reg.get("threshold"))
+    if current is None or baseline is None or threshold is None:
+        return False
+    delta = current - baseline
+    return _beneficial(delta, reg.get("direction")) and abs(delta) >= threshold
+
+
+def _adaptive_improved(reg: Mapping) -> bool:
+    """adaptive method: improved iff outside the MAD band (and any percent band)."""
+    current = _finite_value(reg.get("current_value"))
+    baseline = _finite_value(reg.get("baseline_value"))
+    band_lower = _finite_value(reg.get("band_lower"))
+    band_upper = _finite_value(reg.get("band_upper"))
+    if current is None or baseline is None or band_lower is None or band_upper is None:
+        return False  # bands absent from the record: abstain.
+    if not _beneficial(current - baseline, reg.get("direction")):
+        return False
+    if band_lower <= current <= band_upper:
+        return False
+    # Dual-band AND gate: when the percent band is present, being inside it suppresses.
+    pct_lower = _finite_value(reg.get("percent_band_lower"))
+    pct_upper = _finite_value(reg.get("percent_band_upper"))
+    return pct_lower is None or pct_upper is None or not pct_lower <= current <= pct_upper
+
+
+def _percent_improved(reg: Mapping) -> bool:
+    """percentage method (and unknown-method fallback, mirroring method_cells)."""
+    change_percent = _finite_value(reg.get("change_percent"))
+    threshold = _finite_value(reg.get("threshold"))
+    if change_percent is None or threshold is None:
+        return False
+    return _beneficial(change_percent, reg.get("direction")) and abs(change_percent) >= threshold
 
 
 def compare_results(baseline: BenchResult, candidate: BenchResult, *, run_cfg=None) -> dict:
@@ -257,7 +329,7 @@ def compare_results(baseline: BenchResult, candidate: BenchResult, *, run_cfg=No
     metrics = []
     counts = {"improved": 0, "regressed": 0, "unchanged": 0}
     for r in report.results:
-        verdict = _verdict(r.change_percent, r.direction, r.regressed, r.threshold)
+        verdict = _verdict(r.to_dict())
         counts[verdict] += 1
         metrics.append(
             {
