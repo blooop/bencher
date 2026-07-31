@@ -48,6 +48,7 @@ without additional context. **Read the whole plan before starting it.**
 | 19 | [Reject unnamed parameters](19-unnamed-parameter-detection.md) | Low | Small | **Implemented** in #1003 |
 | 20 | [Duplicate declared variables](20-duplicate-declared-variables.md) | Low–Med | Small | **Implemented** in #1011 (stack 2/5) |
 | 21 | [Per-sample fault tolerance in sweeps](21-sample-fault-tolerance.md) | Medium | Medium | **Implemented** in #1013; `catch` lives on `BenchRunCfg` only (amended per A5 R1) |
+| 22 | [Grammar phase 1: self-describing canonical dataset](22-grammar-phase-1-data-model.md) | Medium | Medium | First PR of the A6 stack; 15–21 have landed, ready to implement |
 
 Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
 Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on
@@ -74,6 +75,7 @@ before executing any phase. **A3 is the keystone — read it first.**
 | [A3 — BenchData contract](architecture/A3-benchdata-contract.md) | One frozen, pickle-free data type (netCDF + JSON manifest) used by rendering, the collect/render split, result cache, and history | Pickled god-object at four boundaries; load-time code execution |
 | [A4 — Caching architecture](architecture/A4-caching-architecture.md) | One storage interface (absorbs PR #760), one key module, worker source-code hashing, artifact manifests, netCDF history (absorbs PR #799) | Stale-results footgun, media orphans, pickle CVE class, scattered key logic |
 | [A5 — Config surface reduction](architecture/A5-config-surface-reduction.md) | Four orthogonal config objects (spec / run / analysis / report); one home per knob; absorbs PR #923 as its Phase 1; per-field disposition for all 73 `BenchCfg` fields | The 73-field god object, entry-point kwarg re-enumeration, the six-tier tag precedence (plans 13/18 D5), the #688→#704 revert lesson |
+| [A6 — Grammar of ND data](architecture/A6-grammar-of-nd-data.md) | Owner-accepted decision record: one dimension→channel `Plan` unifying all nine rendering pathways (holoviews, plotly, video, rerun); frozen transforms, closed channel vocabulary, capability-table backends, five-phase stacked migration. Supersedes A2's S3–S4 selection mechanics | Nine divergent pathways, three filter dialects, four composition dialects, 24 verified dim-assignment bugs |
 
 Sequencing: A1 Phases 0, 2, and 3 have landed (#932, #970, #973/v1.114.0; Phase 1 is
 dropped — see the A1 addendum); A4 Phase C1–C2 can start immediately; A3 Phase D2
