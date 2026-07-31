@@ -174,6 +174,101 @@ class MetaResultTypes(MetaGeneratorBase):
         )
 
 
+class MetaResultDatasetOverTime(MetaGeneratorBase):
+    """Generate the ResultDataSet + over_time example.
+
+    Dataset cells are stored as blob-store paths, so every ``over_time`` history
+    point stays renderable: the report shows a labelled per-time grid of curves
+    instead of clipping to the latest run.
+    """
+
+    def benchmark(self):
+        self._generate_dataset_over_time()
+
+    def _generate_dataset_over_time(self):
+        imports = "import math\nfrom datetime import datetime, timedelta\n\nimport bencher as bn"
+        class_code = '''\
+class TimeseriesCollector(bn.ParametrizedSweep):
+    """Collects a timeseries whose amplitude drifts between runs.
+
+    Each plot_sweep call below is one time snapshot; over_time=True stacks the
+    snapshots into a history. A ResultDataSet cell stores a path into the blob
+    store, so every history point stays renderable and the report shows a
+    labelled per-time grid with one curve per snapshot instead of only the
+    latest run.
+    """
+
+    duration = bn.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Collection duration")
+
+    result_ds = bn.ResultDataSet(
+        container=bn.xy_curve(x="time", y="result_ds", markers=True),
+        doc="Collected timeseries dataset",
+    )
+
+    _drift = 0.0  # set externally per snapshot
+
+    def benchmark(self):
+        import xarray as xr
+
+        n_samples = max(1, int(self.duration))
+        gain = 1.0 + 0.5 * self._drift
+        values = [
+            math.sin(2 * math.pi * i / max(n_samples, 1)) * self.duration * gain
+            for i in range(n_samples)
+        ]
+        data_array = xr.DataArray(values, dims=["time"], coords={"time": list(range(n_samples))})
+        ds = xr.Dataset({"result_ds": data_array})
+        self.result_ds = bn.ResultDataSet(ds.to_pandas())'''
+
+        description = (
+            "Demonstrates an xarray/pandas dataset tracked with over_time=True. "
+            "Dataset cells are stored as blob-store paths, so the report renders "
+            "every history point as a labelled per-time grid of curves rather "
+            "than only the latest run."
+        )
+        post_description = (
+            "Each column of the grid is one time snapshot, labelled with its "
+            "timestamp. The curve amplitude grows between snapshots, showing "
+            "that each history point renders its own stored dataset."
+        )
+
+        body = f"""\
+if run_cfg is None:
+    run_cfg = bn.BenchRunCfg()
+
+benchable = TimeseriesCollector()
+bench = benchable.to_bench(run_cfg)
+
+base_time = datetime(2024, 1, 1)
+n_snapshots = 3
+for i in range(n_snapshots):
+    benchable._drift = float(i)
+    run_cfg.clear_cache = True
+    run_cfg.clear_history = i == 0
+    run_cfg.auto_plot = i == n_snapshots - 1
+    bench.plot_sweep(
+        "dataset_over_time",
+        input_vars=["duration"],
+        result_vars=["result_ds"],
+        run_cfg=run_cfg,
+        time_src=base_time + timedelta(seconds=i),
+        description={description!r},
+        post_description={post_description!r},
+    )
+"""
+
+        self.generate_example(
+            title="Result Dataset: 1D input, over time",
+            output_dir=f"{OUTPUT_DIR}/result_dataset",
+            filename="example_result_dataset_1d_over_time",
+            function_name="example_result_dataset_1d_over_time",
+            imports=imports,
+            body=body,
+            class_code=class_code,
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
+        )
+
+
 def example_meta_result_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench = MetaResultTypes().to_bench(run_cfg)
 
@@ -183,6 +278,17 @@ def example_meta_result_types(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
             bn.sweep("result_type", RESULT_TYPES),
             bn.sweep("input_dims", [0, 1, 2]),
         ],
+    )
+
+    return bench
+
+
+def example_meta_result_dataset_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
+    bench = MetaResultDatasetOverTime().to_bench(run_cfg)
+
+    bench.plot_sweep(
+        title="Result Dataset Over Time",
+        input_vars=[],
     )
 
     return bench

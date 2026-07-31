@@ -370,7 +370,10 @@ def generate_python_files():
     from bencher.example.meta.generate_meta_publish import example_meta_publish
     from bencher.example.meta.generate_meta_regression import example_meta_regression
     from bencher.example.meta.generate_meta_rerun import example_meta_rerun
-    from bencher.example.meta.generate_meta_result_types import example_meta_result_types
+    from bencher.example.meta.generate_meta_result_types import (
+        example_meta_result_dataset_over_time,
+        example_meta_result_types,
+    )
     from bencher.example.meta.generate_meta_sampling import example_meta_sampling
     from bencher.example.meta.generate_meta_statistics import example_meta_statistics
     from bencher.example.meta.generate_meta_workflows import example_meta_workflows
@@ -378,6 +381,7 @@ def generate_python_files():
 
     example_meta()
     example_meta_result_types()
+    example_meta_result_dataset_over_time()
     example_meta_image_video()
     example_meta_composable()
     example_meta_plot_types()
