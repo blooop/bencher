@@ -17,7 +17,8 @@ they belong to A5's breaking-release train and are recorded here only as amendme
 (§8). Do not refactor `BenchRunCfg`/`BenchCfg` fields in this plan.
 
 **Note on provenance:** the audit behind this plan was first run against `e6b7d707`.
-Plan 22 landed in between and **fixed one finding outright** (the former "B5", §3.1) and
+Plan 22 landed in between and **fixed one finding outright** (the `ResultDataSet`
+missing-sentinel bug, §3.1 — the B-series was renumbered after dropping it) and
 **changed the missing-value scheme** that D3 depends on. Every citation below has been
 re-verified against `4a13ab8e`. Where plan 22 already solved something, this plan says
 so rather than proposing it again.
@@ -32,14 +33,16 @@ In scope:
 - **Internal sum types** — types no external caller constructs directly: `JobFuture`,
   `VarRange`, `HistoryEvent`, `ComposeType` matching, `WorkerManager` state, the
   result-type classification tuples.
-- **Live bug fixes** — defects that ship wrong behavior today (§3, B1–B6).
+- **Live bug fixes** — defects that ship wrong behavior today (§3, B1–B5).
 
 Out of scope (recorded as amendments in §8, do not implement here):
 - Public config-surface sum types → **A5** (`plans/architecture/A5-config-surface-reduction.md`).
 - `BenchResult` two-phase init / indistinguishable dry-run result → **A3**.
 - The residual `dataset_list` / `object_index` dual read path → **plan 22 phase 3**.
-- Switching or adding type checkers. Owner decision: **`ty` only** (already wired into
-  `pixi run ci` via `lint`, `pyproject.toml:149-150`).
+- Switching or adding type checkers. Owner decision: **`ty` only** — already wired in,
+  listed directly in the `ci` task (`pyproject.toml:170`; the `ty` and `lint` task
+  definitions are at `:149-150`, and `lint` itself is reached via `style`/`ci-no-cover`,
+  not by `ci`).
 
 ## 2. Measured facts (verified 2026-07-31 against `4a13ab8e`; do not re-litigate)
 
@@ -49,18 +52,23 @@ Out of scope (recorded as amendments in §8, do not implement here):
 
    | Tier | Rules | Errors |
    |---|---|---|
-   | **A** — enable now | `call-non-callable`, `call-top-callable`, `inconsistent-mro`, `invalid-method-override`, `invalid-parameter-default`, `missing-argument`, `too-many-positional-arguments`, `unresolved-import`, `unresolved-reference` | ~18 total (each ≤6) |
-   | **B** — ratchet in P12 | `invalid-return-type` (32), `not-iterable` (43), `possibly-missing-attribute` (16), `no-matching-overload` (21), `unsupported-operator` (14) | ~126 |
-   | **C** — strict-list only | `invalid-argument-type` (531), `unresolved-attribute` (251), `invalid-assignment` (110), `not-subscriptable` (79), `invalid-type-form` (78) | ~1049 |
+   | **A** — enable now | `call-non-callable` (6), `call-top-callable` (1), `inconsistent-mro` (0), `invalid-method-override` (2), `invalid-parameter-default` (1), `missing-argument` (1), `too-many-positional-arguments` (1), `unresolved-import` (5), `unresolved-reference` (0) | 17 |
+   | **B** — ratchet in P12 | `invalid-return-type` (32), `not-iterable` (43), `possibly-missing-attribute` (16), `no-matching-overload` (21), `unsupported-operator` (14) | 126 |
+   | **C** — strict-list only | `invalid-argument-type` (545), `unresolved-attribute` (256), `invalid-assignment` (110), `not-subscriptable` (79), `invalid-type-form` (78) | ~1068 |
    | **keep ignored by design** | `unused-ignore-comment`, `unused-type-ignore-comment` | — |
 
-   9 + 5 + 5 + 2 = 21. Tier C is dominated by `param` descriptor magic and by `test/`
-   (302 of the 531 `invalid-argument-type` errors are in `test/`). The two
-   `unused-*-ignore-comment` rules are ignored **deliberately** — the repo keeps 7
-   `# type: ignore` comments for other type checkers (comment at
-   `pyproject.toml:283`). Do not "fix" them.
-   The 5 `unresolved-import` errors are real: `playwright.sync_api`, `scoop`
-   (`job.py:18`), `setuptools` (`setup.py`, dead per plan 03).
+   9 + 5 + 5 + 2 = 21. Counts measured with
+   `ty check --error <rule> --python .pixi/envs/default .` at `4a13ab8e`; they drift as
+   code lands, so re-measure rather than trusting them to the digit. Tier C is dominated
+   by `param` descriptor magic and by `test/` (315 of the 545 `invalid-argument-type`
+   errors are in `test/`). The two `unused-*-ignore-comment` rules are ignored
+   **deliberately** — the repo keeps 8 `# type: ignore` comments for other type checkers
+   (`bencher/run.py:53`, six in `bencher/variables/inputs.py`, one in
+   `test/test_plugins.py`; rationale comment at `pyproject.toml:283`). Do not "fix" them.
+   The 5 `unresolved-import` errors are real: `playwright.sync_api`
+   (`bencher/example/meta/generate_examples.py:330,877`,
+   `test/test_docs_scrollbars.py:28`), `scoop` (`job.py:18`), `setuptools`
+   (`setup.py`, dead per plan 03).
 
 2. **ty 0.0.56** (resolved from the pin `ty>=0.0.13,<=0.0.64`, `pyproject.toml:80`)
    supports `[[tool.ty.overrides]]` blocks with `include=` globs that relax or
@@ -105,9 +113,9 @@ The original audit's most severe rendering finding was that `ds_to_container` in
 `self.dataset_list[val]` where the `ResultDataSet` missing sentinel was `-1`, a valid
 Python index, so a never-recorded sample silently rendered the **last** recorded
 sample's payload. **Plan 22 fixed this.** `_dataset_sample_to_container`
-(`bencher/results/bench_result_base.py:1174-1268`) now checks `result_is_missing`
-first (`:1226`), and the legacy-int path is bounds-guarded by
-`if not dataset_list or not 0 <= idx < len(dataset_list)` (`:1256`) → a labelled
+(`bencher/results/bench_result_base.py:1173-1268`) now checks `result_is_missing`
+first (`:1200`), and the legacy-int path is bounds-guarded by
+`if not dataset_list or not 0 <= idx < len(dataset_list)` (`:1251`) → a labelled
 Markdown placeholder. Plan 22 also added a guard this plan's author did not anticipate:
 `legacy_trusted` (`:1105-1109`, `:1238-1245`) renders a placeholder for a legacy int at
 a non-final `over_time` index rather than the final run's payload (plan 22 amendment
@@ -131,21 +139,20 @@ Nothing to do here.
   returns `None`, the entire `store_results` body is skipped by `if result is not
   None:` with no `else`, and the sweep completes green with an all-sentinel dataset and
   `n_failed == 0`. Same user error; loud or silent chosen by an unrelated config knob.
-- **B4** `bencher/bencher.py:1180` tests `bench_run_cfg.executor == Executors.SERIAL`
-  (and `!=` at `:1182`) while `bencher/job.py:355` tests
-  `is not Executors.SERIAL` (and `==` at `:230`) — four sites, three styles.
-  `Executors` is a StrEnum and `executor = param.Selector(...)` (`bench_cfg.py:241`)
-  accepts raw strings, so `BenchRunCfg(executor="serial")` takes the **parallel**
-  branch in `FutureCache.submit` and the **serial** branch in
-  `calculate_benchmark_results` — a live, reachable inconsistency.
-- **B5** `bencher/utils.py:477` — `publish_file` is declared `-> str` and documented to
+- **B4** `bencher/utils.py:477` — `publish_file` is declared `-> str` and documented to
   return a URL; the body ends at `:512` with `git("push", ...)` and returns `None`.
-- **B6** `bencher/regression.py` — `RegressionResult.threshold` means percent,
+- **B5** `bencher/regression.py` — `RegressionResult.threshold` means percent,
   MAD-sigma, absolute delta, or an absolute limit depending on `method`, but the
   scorecard verdict `_verdict` (`bencher/report_export.py:189-191`, imported as
   `_core_verdict` at `bencher/scorecard/model.py:13`, called at `:82` where it also
   hardcodes `regressed=False`) compares `threshold` against `abs(change_percent)`
-  regardless — **wrong scorecard verdicts ship today** for every non-percentage method.
+  regardless. **Scope this precisely:** `scorecard/model.py:77` already returns
+  `"regressed"` straight from `reg["regressed"]` *before* reaching `_verdict`, and
+  `_verdict`'s only threshold comparison is
+  `if beneficial and abs(change_percent) >= threshold` (`report_export.py:205`). So
+  regressions are still reported correctly; the unit mismatch corrupts only the
+  **improved-vs-unchanged** distinction for non-percentage methods. Real, but narrower
+  than "wrong verdicts".
 
 ### Nine hand-maintained result-type tuples (C1)
 
@@ -199,7 +206,7 @@ equivalent guards the other eight tuples.
   `test/test_plugins.py:415` sets them, so the tests assert machinery production never
   exercises.
 - **C5** `bencher/history.py:66-85` — `HistoryEvent.kind: str` (`:77`) whose 7 legal
-  values live in a trailing comment (`:77-78`); `lossy` (`:83-85`) is membership in
+  values live in a trailing comment (`:77-78`); `lossy` (`:82-85`) is membership in
   `_LOSSY_KINDS` (`:66`, only 4 of the 7 kinds), so a typo'd kind is silently
   non-lossy — defeating the `on_history_reset="error"` CI gate. `load_history_cache`
   (`result_collector.py`) accepts any policy string; unknown values silently mean
@@ -223,28 +230,51 @@ equivalent guards the other eight tuples.
 - **C9** `bencher/bench_report.py:203-235` — `bench_results` (appended `:204`) and
   `pane` (appended `:235`) are parallel lists correlated by index; `append_tab`
   (`:231`) skips `None` panes, after which `append_to_result` (`:215-221`) resolves
-  `self.bench_results.index(bench_res)` → `self.pane[idx]` and writes into a
-  **different result's tab** — a valid index, so the `except (ValueError, IndexError)`
-  fallback never fires. Same for `prepend_to_result` (`:222-229`).
+  `self.bench_results.index(bench_res)` → `self.pane[idx]`. Once the lists desync, an
+  `idx` that is still in range silently writes into a **different result's tab**; an
+  out-of-range one hits the `except (ValueError, IndexError)` fallback. So the guard
+  does fire in the trailing case (e.g. one result whose `plot()` returned `None`:
+  `bench_results=[r1]`, `pane=[]`) but cannot catch the misroute, which is the
+  dangerous case. Same for `prepend_to_result` (`:222-229`).
 - **C10** `bencher/plugins/bench_data.py:50-62` — capability dispatch on raw strings
-  (`if capability ==` at `:54`, `:56`, …) with a `return False` fallthrough:
-  `requires=frozenset({"legacy_resutl"})` (typo) yields a plugin that is permanently,
-  silently never selected, indistinguishable from an absent capability.
+  (`if capability ==` at `:54`, `:56`, …) with a `return False` fallthrough, consumed by
+  `registry.py:241`. A misspelled capability in a plugin's `requires` (a hypothetical
+  `frozenset({"legacy_resutl"})` — **no such typo exists in the tree today**; the real
+  sites at `plugins/builtins.py:161,174` are spelled correctly) would yield a plugin
+  that is permanently, silently never selected, indistinguishable from one whose
+  capability is genuinely absent. This is a latent footgun on a public extension point,
+  not a shipped defect. Note also that `bench_data.py:53`'s docstring misattributes
+  `requires` to `PlotFilter`; it lives on `Plugin` (`plugin.py:25`).
 - **C11** the aggregation-function vocabulary exists in **four** independent spellings:
   the `Literal`s (`results/bench_result.py:175`; `bench_result_base.py:203`, `:266`,
   `:712`), `AGG_FN_MAP` (`utils.py:385-391`), the `ObjectSelector`
-  (`bench_cfg.py:820-824`), and the if/elif ladder (`bench_result_base.py:373-392`)
-  which does **not** consult `AGG_FN_MAP`, has no final `else` raise, and silently
-  falls through to `mean` on an unknown string — while `optimize()` raises on the same
-  bad input (`bencher.py:1370-1372`).
+  (`bench_cfg.py:820-824`), and the if/elif ladder (`bench_result_base.py:373-399`)
+  which does **not** consult `AGG_FN_MAP` and whose terminal `else` (`:397-399`,
+  commented `# Fall back to mean if unknown string provided`) silently means `mean` on
+  an unknown string rather than raising — while `optimize()` raises on the same bad
+  input (`bencher.py:1370-1372`).
 - **C12** `bencher/results/rerun_result.py` — missing values rendered as real data:
   `float(val) if val is not None else 0.0` (`:323`) and
   `np.nan_to_num(arr, nan=0.0)` (`:337`) turn never-sampled points into plotted zeros;
   the isinstance ladder (`:352`, `:358`, `:364`) has a `# Default:` numeric
-  fallthrough (`:371`) that a `ResultPath` reaches as `float("/path/to/x.csv")`, and
+  fallthrough (`:370-371`) that a `ResultPath` reaches as `float("/path/to/x.csv")`, and
   four `except (KeyError, ValueError, TypeError)` handlers log at **DEBUG** (`:312`,
   `:325`, `:343`, `:375`) so the rerun report is silently incomplete. The single oracle
   `result_is_missing` (`variables/results.py:698`) exists and is not consulted here.
+- **C13** `Executors` is compared four ways in three styles: `==` at
+  `bencher/bencher.py:1180`, `!=` at `:1182`, `==` at `bencher/job.py:230`, and
+  `is not` at `job.py:355`. **This is a latent smell, not a shipped bug** — an earlier
+  draft of this plan claimed `BenchRunCfg(executor="serial")` diverged between the two
+  branches; that was **false** and is corrected here per plans-README rule 7.
+  `strenum.auto()` yields the *name*, so `Executors.SERIAL.value == "SERIAL"`;
+  `executor="serial"` is rejected outright by `param.Selector`
+  (`bench_cfg.py:241`) with `ValueError`, and even `executor="SERIAL"` behaves
+  correctly because `Executors.factory("SERIAL")` returns `None` at `job.py:230` (it
+  uses `==`), so `job.py:355-357` still falls to the serial path. Mixing `==` and `is`
+  on a StrEnum is nonetheless a real hazard the moment a raw string reaches a site that
+  uses `is` — normalize at the config boundary so it cannot become a bug later. No
+  regression test is possible for C13; a test pinning "a raw-string executor resolves
+  to the same branch everywhere" is the appropriate guard.
 
 ## 4. Proposed design
 
@@ -337,13 +367,22 @@ Other design points:
   the hand-written truth table `TestResultIsMissingTruthTable`
   (`test/test_grammar_data_model.py:468`) so it becomes registry-driven. Reuse
   `_discover_all_result_classes` (`test/test_hash_persistent.py:45`): every discovered
-  `Result*` class must be a `RESULT_SPECS` key. **Any test that instantiates every
-  class must suppress `DeprecationWarning`** — `ResultHmap` now emits one
-  (`results.py:268-277`); both existing tests already do this via
-  `warnings.catch_warnings()` (`test_hash_persistent.py:58-66`).
-- `ResultHmap` is deprecated but still in `ALL_RESULT_TYPES` and `RESULT_KIND_ORDER`
-  and still absent from `DATA_VAR_RESULT_TYPES` — the registry must reproduce that
-  exactly, not "tidy" it.
+  `Result*` class must be a `RESULT_SPECS` key **or appear on an explicit, documented
+  exemption list**. **Any test that instantiates every class must suppress
+  `DeprecationWarning`** — both `ResultHmap` (`results.py:268-277`) and `ResultVar`
+  (`:730-735`) emit one; the existing tests already do this via
+  `warnings.catch_warnings()` (`test_hash_persistent.py:58-66`,
+  `test_result_missing.py:39-44`).
+- **Two deprecated classes need explicit handling — a naive completeness test fails on
+  day one:**
+  - `ResultHmap` is deprecated but still in `ALL_RESULT_TYPES` and `RESULT_KIND_ORDER`
+    and still absent from `DATA_VAR_RESULT_TYPES`. The registry must reproduce that
+    exactly, not "tidy" it.
+  - `ResultVar` (`class ResultVar(ResultFloat)`, `results.py:727`) is deprecated and
+    absent from **every** registry, yet `_discover_all_result_classes` finds it because
+    it lives in `bencher.variables.results`. It therefore needs either a spec that
+    mirrors `ResultFloat` or a place on the exemption list — decide in P4 and state
+    which in the PR.
 - Close the misclassification hole: the `else` arm at `parametrised_sweep.py:89` gains
   a guard — a parameter whose class is defined in `bencher.variables.results` but
   absent from the registry **raises** instead of becoming an input variable.
@@ -371,9 +410,13 @@ and may be reordered or dropped individually.
 
 - Add `typing_extensions>=4.4` to dependencies; update the counter-precedent comment
   at `result_collector.py:242-243` to reference D2.
-- Re-enable Tier-A rules globally; fix the ~18 resulting errors (guard the
+- Re-enable Tier-A rules globally; fix the 17 resulting errors (guard the
   `scoop`/`playwright` imports; carve `setup.py` into the relaxed block or delete per
-  plan 03). Preserve the `unused-*-ignore-comment` rationale comment.
+  plan 03). Preserve the `unused-*-ignore-comment` rationale comment. **Note the
+  interaction:** 3 of the 5 `unresolved-import` errors live in
+  `bencher/example/meta/generate_examples.py` and `test/test_docs_scrollbars.py` —
+  the relaxed override block exempts those paths from Tier B/C only, so Tier A still
+  fires there and those three edits land in code this plan otherwise treats as exempt.
 - Add the relaxed override block and an initially-small strict override block (D1).
 - Convert `bench_result_base.py:353` (`match reduce:` over `ReduceType`) to
   `assert_never` if the arm is genuinely unreachable after `_resolve_auto`.
@@ -387,35 +430,38 @@ and may be reordered or dropped individually.
 - **DoD:** gate demonstrably fails on a seeded violation; `pixi run ci` green on py310
   and py313.
 
-### P2 — Collection-path live bugs (B2, B3, B4)
+### P2 — Collection-path live bugs (B2, B3) + executor normalization (C13)
 
 - `result_collector.py:463-471`: add the missing `else` → `TypeError` naming the
-  variable, expected size and actual length (mirror the sibling at `:473-474`).
+  variable, expected size and actual length. Match the wording style of the ladder's
+  terminal `else` at `:473-474` (`Unsupported result type`) — note that is the whole
+  `if/elif` chain's fallback, not a sibling of this branch's length check.
 - Worker-returns-`None`: one boundary check raising `TypeError` with the current
   assert's helpful message ("return a dict or `super().__call__(**kwargs)`…") on
   **both** serial and parallel paths; delete the bare `assert` (`job.py:158-160`) and
   the silent `if result is not None:` skip (`result_collector.py:424`).
-- Normalize `executor` to the `Executors` enum where `BenchRunCfg` is accepted so all
-  four comparison sites (`bencher.py:1180`, `:1182`, `job.py:230`, `:355`) agree
-  regardless of `==`/`is` style.
+- C13: normalize `executor` to the `Executors` enum where `BenchRunCfg` is accepted so
+  all four comparison sites (`bencher.py:1180`, `:1182`, `job.py:230`, `:355`) agree
+  regardless of `==`/`is` style. This is hardening, not a bug fix — see C13.
 - **Tests:** wrong-length `ResultVec` raises; `None` worker result raises under SERIAL
-  *and* MULTIPROCESSING; `BenchRunCfg(executor="serial")` takes the serial path in
-  every branch.
+  *and* MULTIPROCESSING; a raw-string `executor` (the exact-case `"SERIAL"`, since
+  lowercase is rejected by the `Selector`) resolves to the same branch at all four
+  comparison sites.
 
-### P3 — Reporting/rendering live bugs (B1, B5, B6)
+### P3 — Reporting/rendering live bugs (B1, B4, B5)
 
 - `video_controls.py:30-35`: replace the two parallel lists with one
   `list[tuple[str, Callable]]`; implement all four callbacks (play, pause, loop, reset)
   correctly — pause must pause, and Loop/Reset must exist.
 - `utils.py:477` `publish_file`: make the annotation truthful — decide in-phase from
   the call sites whether to return the constructed URL or annotate `-> None`.
-- B6: thread `method` through to the verdict so `_verdict`
-  (`report_export.py:189-191`) only compares `threshold` against `abs(change_percent)`
-  for the percentage method; other methods get a correct or explicitly-abstaining
-  verdict. Also revisit the hardcoded `regressed=False` at `scorecard/model.py:82`.
-  Minimal change; A5's `RegressionCfg` sum type subsumes it later (§8).
-- **Tests:** four correctly-wired buttons; scorecard verdict correct for a MAD-method
-  regression fixture.
+- B5: thread `method` through to the verdict so the beneficial-change comparison at
+  `report_export.py:205` only measures `threshold` against `abs(change_percent)` for the
+  percentage method; other methods get a correct or explicitly-abstaining verdict. Also
+  revisit the hardcoded `regressed=False` at `scorecard/model.py:82`. Minimal change;
+  A5's `RegressionCfg` sum type subsumes it later (§8).
+- **Tests:** four correctly-wired buttons; for a MAD-method result, an improvement is
+  not misclassified as unchanged (or vice versa) by a percent-vs-sigma comparison.
 
 ### P4 — Result-type registry (C1, D3)
 
@@ -498,7 +544,7 @@ and may be reordered or dropped individually.
   raises at registration instead of yielding a permanently-unselectable plugin.
 - `rerun_result.py`: route every value read through `result_is_missing`; replace the
   `0.0`/`nan_to_num` fills (`:323`, `:337`) with genuine gaps; replace the isinstance
-  ladder's numeric fallthrough (`:371`) with explicit dispatch and raise the four
+  ladder's numeric fallthrough (`:370-371`) with explicit dispatch and raise the four
   DEBUG-swallowed handlers (`:312`, `:325`, `:343`, `:375`) to WARNING with context.
 - **Tests:** None-plot result no longer misroutes panes; typo'd capability raises;
   a missing rerun value is not rendered as `0.0`.
@@ -536,7 +582,7 @@ and may be reordered or dropped individually.
    it means giving up compile-time exhaustiveness, which is most of this plan's value.
 4. **P1 meta-test: subprocess ty-on-seeded-violation in CI.** Recommendation: **yes**
    (~1–2 s, skip when the binary is absent). Fallback: config-parsing assertion only.
-5. **B6 (P3): fix now vs wait for A5's `RegressionCfg`.** Recommendation: **now** —
+5. **B5 (P3): fix now vs wait for A5's `RegressionCfg`.** Recommendation: **now** —
    wrong scorecard verdicts ship today; the fix is small and A5 subsumes it.
 6. **Tier-C endgame:** whether `invalid-argument-type` (531) / `unresolved-attribute`
    (251) ever go global, or the strict-list ratchet is the permanent mechanism. Out of
@@ -566,7 +612,7 @@ and may be reordered or dropped individually.
   threshold as a **sum type** — one variant per detection method carrying its own
   threshold with its own unit semantics (`PercentThreshold`, `MadSigma`, `DeltaLimit`,
   `AbsoluteLimit`) — not a method string plus one overloaded `threshold: float`. P3's
-  B6 fix is a stopgap this design subsumes. Apply the same discipline to
+  B5 fix is a stopgap this design subsumes. Apply the same discipline to
   `fail_on_sample_error` (`bool | float` today, with a hand-written ambiguity guard
   rejecting `1`), `show` (7 objects for 4 modes), `plot_size`/`plot_width`/
   `plot_height` (documented precedence), and the subsampling knobs
@@ -591,7 +637,8 @@ and may be reordered or dropped individually.
 - `pixi run ci` enforces: Tier A+B rules globally, Tier C on every module this plan
   touched, `assert_never` exhaustiveness (`type-assertion-failure` never ignored), and
   the registry completeness test.
-- Bugs B1–B6 each have a regression test that fails on the pre-fix code.
+- Bugs B1–B5 each have a regression test that fails on the pre-fix code. C13 gets a
+  branch-agreement test instead — it is a latent smell with no failing pre-fix case.
 - Grep-level checks: no `_LOSSY_KINDS`, no `match_all(`, no bare
   `assert self.res is not None`, no `zip(button_names`, no `nan_to_num(arr, nan=0.0)`
   in `rerun_result.py`, and exactly one definition of the agg-fn vocabulary.
