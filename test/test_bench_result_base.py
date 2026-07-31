@@ -7,6 +7,7 @@ import panel as pn
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.bench_result_base import ReduceType
+from bencher.utils import AGG_FN_MAP, AggFn
 
 
 class TstBench(bn.ParametrizedSweep):
@@ -201,10 +202,122 @@ class TestAggOverDimsStd(unittest.TestCase):
         ds = self.res_1d_1rep.to_dataset()
         self.assertNotIn("distance_std", ds.data_vars)
 
-    def test_case_insensitive_agg_fn(self):
-        """agg_fn should be case-insensitive."""
-        ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
-        self.assertIn("distance_std", ds.data_vars)
+    def test_uppercase_agg_fn_raises(self):
+        """The vocabulary is exactly AggFn's lowercase values (case-sensitive).
+
+        Plan 23 P11: the old aggregation ladder lowercased agg_fn before
+        dispatch, so "MEAN" used to be accepted here. That leniency was one
+        more spelling of the vocabulary and is gone — optimize() and
+        BenchCfg.agg_fn always rejected "MEAN".
+        """
+        with self.assertRaises(ValueError):
+            self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
+
+
+class TestAggFnVocabulary(unittest.TestCase):
+    """Plan 23 P11 (C11): one AggFn vocabulary; unknown aggregation raises.
+
+    Plan 24 A3: BenchCfg.agg_fn is a param.ObjectSelector whose objects are raw
+    strings, so these tests drive raw strings through the param field into the
+    shipped code path rather than only calling enum-typed functions directly.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.bench = BenchableObject().to_bench()
+        cls.res = cls.bench.plot_sweep(
+            "agg_fn_vocab",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+
+    def test_agg_fn_map_covers_every_member(self):
+        """AGG_FN_MAP's keys derive from (and must stay in sync with) AggFn."""
+        self.assertEqual(set(AGG_FN_MAP), set(AggFn))
+
+    def test_bench_cfg_objects_are_agg_fn_values(self):
+        """The ObjectSelector's accepted strings are exactly AggFn's values."""
+        objects = bn.BenchCfg.param.agg_fn.objects
+        self.assertEqual(objects, [m.value for m in AggFn])
+        self.assertEqual(bn.BenchCfg.param.agg_fn.default, AggFn.MEAN.value)
+
+    def test_unknown_agg_fn_raises_instead_of_silently_meaning_mean(self):
+        """Before plan 23 P11 the ladder's terminal else silently meant mean."""
+        with self.assertRaises(ValueError) as ctx:
+            self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
+        msg = str(ctx.exception)
+        self.assertIn("bogus", msg)
+        for member in AggFn:
+            self.assertIn(member.value, msg)
+
+    def test_each_member_aggregates_as_before(self):
+        """Every valid agg_fn (member or raw string) matches the numpy result."""
+        raw = self.res.to_dataset()["distance"].values
+        expected = {
+            AggFn.MEAN: np.nanmean,
+            AggFn.SUM: np.nansum,
+            AggFn.MAX: np.nanmax,
+            AggFn.MIN: np.nanmin,
+            AggFn.MEDIAN: np.nanmedian,
+        }
+        self.assertEqual(set(expected), set(AggFn))
+        for member, np_fn in expected.items():
+            for spelling in (member, member.value):
+                ds = self.res.to_dataset(agg_over_dims=["float1"], agg_fn=spelling)
+                np.testing.assert_allclose(
+                    float(ds["distance"].values), float(np_fn(raw)), rtol=1e-10
+                )
+
+    # --- plan 24 A3 DoD: drive the raw string through the param field ---
+
+    def test_unknown_agg_fn_through_plot_sweep_raises(self):
+        """plot_sweep routes agg_fn into BenchCfg's ObjectSelector, which
+        rejects an out-of-vocabulary string at config acceptance -- before the
+        sweep runs, so no collected data is ever lost to this raise."""
+        with self.assertRaises(ValueError):
+            self.bench.plot_sweep(
+                "agg_fn_bogus",
+                input_vars=[BenchableObject.param.float1],
+                result_vars=[BenchableObject.param.distance],
+                run_cfg=bn.BenchRunCfg(repeats=1),
+                plot_callbacks=False,
+                aggregate=["float1"],
+                agg_fn="bogus",
+            )
+
+    def test_unknown_agg_fn_param_assignment_raises(self):
+        """Assigning through the param descriptor is also boundary-checked."""
+        with self.assertRaises(ValueError):
+            self.res.bench_cfg.agg_fn = "bogus"
+
+    def test_valid_raw_string_through_param_field_reaches_shipped_path(self):
+        """A valid raw string stored by param (a plain str, not an AggFn
+        member) must survive the shipped read of bench_cfg.agg_fn into the
+        normalize+match pipeline and aggregate correctly."""
+        res = self.bench.plot_sweep(
+            "agg_fn_median_param",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+            aggregate=["float1"],
+            agg_fn="median",
+        )
+        # param stores the raw string, not an enum member: this is exactly why
+        # normalize_agg_fn must construct the enum at the boundary (plan 24 A3).
+        self.assertIs(type(res.bench_cfg.agg_fn), str)
+        raw = res.to_dataset()["distance"].values
+        ds = res.to_dataset(agg_over_dims=res.bench_cfg.agg_over_dims, agg_fn=res.bench_cfg.agg_fn)
+        np.testing.assert_allclose(
+            float(ds["distance"].values), float(np.nanmedian(raw)), rtol=1e-10
+        )
+        # The shipped consumer itself (reads bench_cfg.agg_fn internally);
+        # calling the private method is the point of this plan-24 A3 test.
+        summary = res._scalar_aggregate_summary()  # pylint: disable=protected-access
+        self.assertIsInstance(summary, pn.pane.Markdown)
+        self.assertNotIn("No result variables found", summary.object)
 
 
 class TestBenchResultBase(unittest.TestCase):

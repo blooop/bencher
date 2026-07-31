@@ -43,7 +43,7 @@ from bencher.results.optimize_result import OptimizeResult
 from bencher.sample_order import SampleOrder
 from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
-from bencher.utils import AGG_FN_MAP, params_to_str, resolve_aggregate
+from bencher.utils import AGG_FN_MAP, normalize_agg_fn, params_to_str, resolve_aggregate
 from bencher.variables.inputs import IntSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultHmap
@@ -1346,7 +1346,8 @@ class Bench(BenchPlotServer):
                 first input dim, an *int N* aggregates the last N dims, or a
                 *list[str]* names specific dims.  Aggregated dims are looped
                 over internally so Optuna sees the aggregated value.
-            agg_fn: Aggregation function name (``"mean"``, ``"sum"``, ``"max"``,
+            agg_fn: Aggregation function name — one of the values of
+                :class:`bencher.utils.AggFn` (``"mean"``, ``"sum"``, ``"max"``,
                 ``"min"``, ``"median"``).  Applied when *aggregate* is set or
                 *repeats* > 1.
             repeats: Number of times to evaluate each parameter combination.
@@ -1380,9 +1381,9 @@ class Bench(BenchPlotServer):
 
         needs_agg = bool(agg_vars) or repeats > 1
         if needs_agg:
-            if agg_fn not in AGG_FN_MAP:
-                raise ValueError(f"Unknown agg_fn={agg_fn!r}, must be one of {sorted(AGG_FN_MAP)}")
-            agg_callable = AGG_FN_MAP[agg_fn]
+            # normalize_agg_fn raises ValueError on an unknown value — the same
+            # behaviour this site always had, now shared with the plotting path.
+            agg_callable = AGG_FN_MAP[normalize_agg_fn(agg_fn)]
         else:
             agg_callable = None
 

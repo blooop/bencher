@@ -19,6 +19,7 @@ from uuid import uuid4
 import numpy as np
 import param
 import xarray as xr
+from strenum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -382,12 +383,61 @@ def resolve_aggregate(
     )
 
 
-AGG_FN_MAP: dict[str, Callable] = {
-    "mean": lambda vals: float(np.nanmean(vals)),
-    "sum": lambda vals: float(np.nansum(vals)),
-    "max": lambda vals: float(np.nanmax(vals)),
-    "min": lambda vals: float(np.nanmin(vals)),
-    "median": lambda vals: float(np.nanmedian(vals)),
+class AggFn(StrEnum):
+    """The aggregation-function vocabulary — the single source of truth (plan 23 C11).
+
+    Every other spelling derives from this enum: ``AGG_FN_MAP``'s keys, the
+    ``BenchCfg.agg_fn`` ``param.ObjectSelector``'s objects, and the ``agg_fn``
+    signature annotations on the result classes.
+
+    Explicit lowercase values rather than ``auto()``: ``strenum``'s ``auto()``
+    yields the member *name* verbatim (``'MEAN'``), and these strings are the
+    exact values ``BenchCfg.agg_fn`` accepts, so they are pinned here
+    (plan 23 D4).
+    """
+
+    MEAN = "mean"
+    SUM = "sum"
+    MAX = "max"
+    MIN = "min"
+    MEDIAN = "median"
+
+
+def normalize_agg_fn(agg_fn: AggFn | str | None) -> AggFn:
+    """Coerce ``agg_fn`` to an ``AggFn`` member at the boundary.
+
+    ``None`` means the default (``AggFn.MEAN``) — public signatures declare
+    ``agg_fn: AggFn | str | None`` and forward it unchanged. A raw string read
+    from ``BenchCfg.agg_fn`` (a ``param.ObjectSelector`` holding plain strings)
+    is not a type a checker can establish, so constructing the enum here is
+    what licenses the exhaustive ``match`` downstream (plan 24 A2/A3).
+
+    Args:
+        agg_fn: An ``AggFn`` member, one of its string values, or ``None``.
+
+    Returns:
+        AggFn: The corresponding member.
+
+    Raises:
+        ValueError: If ``agg_fn`` is not an ``AggFn`` member or one of its
+            values. Raised at plot/aggregation call time, never mid-sweep.
+    """
+    if agg_fn is None:
+        return AggFn.MEAN
+    try:
+        return AggFn(agg_fn)
+    except ValueError:
+        raise ValueError(
+            f"Unknown agg_fn={agg_fn!r}, must be one of {sorted(m.value for m in AggFn)}"
+        ) from None
+
+
+AGG_FN_MAP: dict[AggFn, Callable] = {
+    AggFn.MEAN: lambda vals: float(np.nanmean(vals)),
+    AggFn.SUM: lambda vals: float(np.nansum(vals)),
+    AggFn.MAX: lambda vals: float(np.nanmax(vals)),
+    AggFn.MIN: lambda vals: float(np.nanmin(vals)),
+    AggFn.MEDIAN: lambda vals: float(np.nanmedian(vals)),
 }
 
 
