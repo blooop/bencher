@@ -31,9 +31,9 @@ from bencher.job import (
     FutureCache,
     Job,
     JobFuture,
+    Pending,
     normalize_catch,
     normalize_executor,
-    require_worker_result,
 )
 from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
 from bencher.regression import RegressionError, detect_regressions
@@ -1127,7 +1127,6 @@ class Bench(BenchPlotServer):
                     bench_cfg_sample_hash,
                     bench_tag,
                 )
-                job.setup_hashes()
                 jobs.append(job)
 
                 cache_jobs.append(
@@ -1198,10 +1197,16 @@ class Bench(BenchPlotServer):
                 # remaining computation.
                 pending = {}  # concurrent.futures.Future -> (WorkerJob, JobFuture)
                 for job, job_future in submitted:
-                    if job_future.future is not None:
-                        pending[job_future.future] = (job, job_future)
-                    else:
-                        self.store_results(job_future, bench_res, job, bench_run_cfg, rv_arrays)
+                    # No assert_never arm: job_future arrives via an untyped tuple, so
+                    # exhaustiveness would be an assertion, not a proof (plan 24 A1);
+                    # the default arm is a real behavior anyway -- Ready (a cache hit)
+                    # and Broken (a fallen-back-to-serial worker that returned None,
+                    # recorded by store_results) are both stored immediately.
+                    match job_future.state:
+                        case Pending(future=future):
+                            pending[future] = (job, job_future)
+                        case _:
+                            self.store_results(job_future, bench_res, job, bench_run_cfg, rv_arrays)
                 for done in as_completed(pending):
                     worker_job, job_future = pending.pop(done)
                     self.store_results(job_future, bench_res, worker_job, bench_run_cfg, rv_arrays)
@@ -1665,7 +1670,7 @@ class Bench(BenchPlotServer):
         full_input["repeat"] = repeat
 
         cache_key = self._build_cache_key(full_input, tag)
-        # Mirror the sweep path (WorkerJob.setup_hashes): constants must reach the
+        # Mirror the sweep path (WorkerJob.function_input): constants must reach the
         # worker, not just the cache key. Collisions with input_vars are already
         # stripped in _resolve_optimize_vars, so suggested values are never clobbered.
         # deepcopy for the same mutation safety worker_kwargs_wrapper gives the sweep
@@ -1679,7 +1684,9 @@ class Bench(BenchPlotServer):
         )
         # Same boundary check as store_results: the optimize path consumes the result
         # dict directly, so a worker returning None must fail here by name rather than
-        # as a downstream subscript error (B3, plan 23 P2).
+        # as a downstream subscript error (B3, plan 23 P2). Since P5 the check lives
+        # inside `result()` itself, which is total and raises WorkerContractError for
+        # a worker that returned nothing -- on either executor path.
         #
         # Unlike the sweep path this one *is* inside a `catch=`, because the objective
         # runs under `study.optimize(..., catch=catch)`. That asymmetry is pre-existing
@@ -1687,7 +1694,7 @@ class Bench(BenchPlotServer):
         # here too, as an AssertionError on serial and a `None` subscript TypeError on
         # the pool. Only the message and the serial/parallel agreement improve. Making
         # optuna's catch selective is its own decision, not B3's.
-        return require_worker_result(self.sample_cache.submit(job).result(), job.job_id)
+        return self.sample_cache.submit(job).result()
 
     def _make_optuna_objective(
         self,

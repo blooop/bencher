@@ -136,6 +136,20 @@ class WorkerContractWarning(UserWarning):
     with ``warnings.filterwarnings("error", category=bn.WorkerContractWarning)``."""
 
 
+def _returned_none_error(job_id: str) -> WorkerContractError:
+    """Build the contract error for a worker that returned ``None``.
+
+    Factored out so the two places that can *discover* the violation -- the
+    ``JobFuture`` constructor on the serial path (which stores it as a
+    :class:`Broken` state) and ``require_worker_result`` on the pooled path --
+    produce the identical message."""
+    return WorkerContractError(
+        f"The benchmark function for job {job_id} returned None. "
+        "Make sure you are returning a dict or `super().__call__(**kwargs)` "
+        "from your __call__ function."
+    )
+
+
 def require_worker_result(result: dict | None, job_id: str) -> dict:
     """Reject a worker that returned ``None`` instead of a result dict.
 
@@ -145,7 +159,9 @@ def require_worker_result(result: dict | None, job_id: str) -> dict:
     ``store_results`` skipped its whole body behind ``if result is not None:`` with
     no ``else``, so the sweep completed green with an all-sentinel dataset and
     ``n_failed == 0``. The same user error was loud or silent depending on an
-    unrelated config knob; this is the one check both paths funnel through.
+    unrelated config knob; this is the one check both paths funnel through --
+    since P5 it is applied *inside* ``JobFuture.result()``, so a ``None`` can no
+    longer leak past the resolve at all.
 
     Deliberately **not** routed through ``catch=`` (plan 23 decision 2): a missing
     return value is a harness-contract error, not a sample fault, so ``catch=``
@@ -154,11 +170,7 @@ def require_worker_result(result: dict | None, job_id: str) -> dict:
     §6.2 as amended: crashing mid-run loses expensive data; the failure surfaces
     in the report instead)."""
     if result is None:
-        raise WorkerContractError(
-            f"The benchmark function for job {job_id} returned None. "
-            "Make sure you are returning a dict or `super().__call__(**kwargs)` "
-            "from your __call__ function."
-        )
+        raise _returned_none_error(job_id)
     return result
 
 
@@ -186,6 +198,44 @@ class SampleFailure:
         )
 
 
+@dataclass(frozen=True)
+class Ready:
+    """A result already in hand: a cache hit, or a serial worker that returned one."""
+
+    res: dict
+
+
+@dataclass(frozen=True)
+class Pending:
+    """A submitted job whose result has not been collected from its executor yet."""
+
+    future: Future
+
+
+@dataclass(frozen=True)
+class Broken:
+    """A serial worker that returned nothing, i.e. broke the harness contract.
+
+    The error is *stored*, not raised, because the serial path constructs the
+    ``JobFuture`` inside the caller's ``except catch`` block -- raising here would
+    let ``catch=`` absorb a contract violation (the original B3 failure mode).
+    ``result()`` raises it at the consume point instead, where ``store_results``
+    records the sample as failed, warns, and continues (plan 23 §6.2 as amended:
+    a broken sample must never abort the sweep and lose collected data)."""
+
+    error: WorkerContractError
+
+
+JobState = Ready | Pending | Broken
+"""The three states a submitted job can be in (plan 23 P5, C2).
+
+Previously ``JobFuture`` held ``res``/``future`` as two optionals and mutated
+``res`` on the first ``result()`` call, so both-set and neither-set were
+representable and ``future is not None`` stopped meaning "pending". ``Broken``
+is the constructive replacement for the meaningful half of "neither-set": the
+one production path that reached it was a serial worker returning ``None``."""
+
+
 class JobFuture:
     """A wrapper for a job result or future that handles caching.
 
@@ -195,8 +245,7 @@ class JobFuture:
 
     Attributes:
         job (Job): The job this future corresponds to
-        res (dict): The result, if available immediately
-        future (Future): The future representing the pending job, if executed asynchronously
+        state (JobState): ``Ready(res)`` | ``Pending(future)`` | ``Broken(error)``
         cache: The cache to store results in when they become available
     """
 
@@ -209,6 +258,14 @@ class JobFuture:
     ) -> None:
         """Initialize a JobFuture with either an immediate result or a future.
 
+        The keyword signature is kept from the two-optional era so the four
+        construction sites (and tests that build one directly) read unchanged;
+        the arguments are parsed into a single :data:`JobState` here, at the
+        boundary. Passing *both* ``res`` and ``future`` -- previously
+        representable, never meaningful -- is rejected. Passing *neither* means
+        a serial worker returned ``None`` (the only production path that gets
+        here) and becomes :class:`Broken`, resolved at the consume point.
+
         Args:
             job (Job): The job this future corresponds to
             res (dict, optional): The immediate result, if available. Defaults to None.
@@ -216,36 +273,59 @@ class JobFuture:
             cache (Cache, optional): The cache to store results in. Defaults to None.
         """
         self.job = job
-        self.res = res
-        self.future = future
-        # No `assert res is not None or future is not None` here any more (B3, plan
-        # 23 P2). It only caught a None worker return on the serial path, where
-        # `submit()` runs inside the caller's `except catch` block and `catch=` would
-        # therefore have absorbed it. Both paths now converge on
-        # require_worker_result() at the point where the result is consumed.
+        if res is not None and future is not None:
+            raise ValueError(
+                f"JobFuture for job {job.job_id} was given both a result and a future; "
+                "a job is either already resolved or still pending, never both"
+            )
+        if res is not None:
+            self.state: JobState = Ready(res)
+        elif future is not None:
+            self.state = Pending(future)
+        else:
+            self.state = Broken(_returned_none_error(job.job_id))
         self.cache = cache
 
-    def result(self) -> dict | None:
+    def result(self) -> dict:
         """Get the job result, waiting for completion if necessary.
 
-        If the result is not immediately available (i.e., it's a future),
-        this method will wait for the future to complete. Once the result
-        is available, it will be cached if a cache is provided.
+        If the result is not immediately available (i.e., it's ``Pending``),
+        this method will wait for the future to complete. Once the result is
+        available, it will be cached if a cache is provided; a worker that
+        returned nothing is never cached (the pre-P5 ``res is not None`` guard,
+        now enforced by construction).
 
-        Returns ``None`` when the worker returned nothing, which every caller must
-        reject via ``require_worker_result()``. The annotation is deliberately
-        honest rather than narrow: ``JobFuture`` can represent "no result and no
-        future", and only plan 23 P5's ``Ready(dict) | Pending(Future)`` split makes
-        that state unrepresentable and this ``| None`` removable.
+        Total over :data:`JobState` (plan 23 P5): the pre-P5 ``dict | None``
+        return is gone. A worker that returned nothing surfaces as a
+        :class:`WorkerContractError` raised here -- on *either* executor path --
+        and is consumed by ``store_results``, which records the failure and
+        continues rather than aborting the sweep (plan 23 §6.2 as amended).
 
         Returns:
-            dict | None: The job result, or None if the worker returned nothing
+            dict: The job result
+
+        Raises:
+            WorkerContractError: If the worker returned ``None`` instead of a
+                result dict (`Broken`, or a `Pending` future that resolves to
+                ``None``).
         """
-        if self.future is not None:
-            self.res = self.future.result()
-        if self.cache is not None and self.res is not None:
-            self.cache.set(self.job.job_key, self.res, tag=self.job.tag)
-        return self.res
+        match self.state:
+            case Ready(res=res):
+                return self._cache_and_return(res)
+            case Pending(future=future):
+                return self._cache_and_return(
+                    require_worker_result(future.result(), self.job.job_id)
+                )
+            case Broken(error=error):
+                raise error
+            case _ as unreachable:
+                assert_never(unreachable)
+
+    def _cache_and_return(self, res: dict) -> dict:
+        """Cache a resolved (never-``None``) result and hand it back."""
+        if self.cache is not None:
+            self.cache.set(self.job.job_key, res, tag=self.job.tag)
+        return res
 
 
 def run_job(job: Job) -> dict:
@@ -519,6 +599,11 @@ class FutureCache:
         Args:
             tag (str): The tag identifying entries to remove from the cache
         """
+        # Guarded like every other cache access here: with cache_samples=False this
+        # used to be a live AttributeError on None (found by the strict ty ratchet,
+        # plan 23 P2 item 7; fixed in P5 when this file joined the strict list).
+        if self.cache is None:
+            return
         logger.info(f"clearing the sample cache for tag: {tag}")
         removed_vals = self.cache.evict(tag)
         logger.info(f"removed: {removed_vals} items from the cache")
@@ -595,4 +680,6 @@ class JobFunctionCache(FutureCache):
         Returns:
             JobFuture: A future representing the function call
         """
-        return self.submit(Job(self.call_count, self.function, kwargs))
+        # str() because job_id is declared (and everywhere else used as) a string;
+        # this call site passed the raw counter, caught by the strict ty ratchet.
+        return self.submit(Job(str(self.call_count), self.function, kwargs))

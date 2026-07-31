@@ -1,11 +1,21 @@
 import random
 import unittest
+from concurrent.futures import Future
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import bencher as bn
-from bencher.job import JobFunctionCache
+from bencher.job import (
+    Broken,
+    Job,
+    JobFunctionCache,
+    JobFuture,
+    Pending,
+    Ready,
+    WorkerContractError,
+)
 
 
 class CachedParamExample(bn.ParametrizedSweep):
@@ -92,6 +102,114 @@ class TestJob(unittest.TestCase):
         bench_run.add_bench(CachedParamExample())
 
         bench_run.run(subsampling_divisions=2)
+
+
+class _RecordingCache:
+    """Minimal stand-in for diskcache.Cache recording only what was written."""
+
+    def __init__(self) -> None:
+        self.sets: list[tuple] = []
+
+    def set(self, key, value, tag=None) -> None:
+        self.sets.append((key, value, tag))
+
+
+def _job(job_id: str = "job-1") -> Job:
+    return Job(job_id=job_id, function=lambda **_: None, job_args={"x": 1}, tag="t")
+
+
+class TestJobFutureState:
+    """C2 (plan 23 P5): one field holding ``Ready | Pending | Broken``.
+
+    ``res``/``future`` used to be two independent optionals that ``result()``
+    *mutated*, so ``future is not None`` stopped meaning "pending" after the
+    first call, and both-set / neither-set were both representable.
+    """
+
+    def test_a_result_parses_to_ready(self) -> None:
+        assert JobFuture(job=_job(), res={"y": 1.0}).state == Ready({"y": 1.0})
+
+    def test_a_future_parses_to_pending(self) -> None:
+        future: Future = Future()
+        assert JobFuture(job=_job(), future=future).state == Pending(future)
+
+    def test_both_at_once_is_rejected(self) -> None:
+        """Previously representable, never meaningful."""
+        future: Future = Future()
+        with pytest.raises(ValueError, match="both a result and a future"):
+            JobFuture(job=_job(), res={"y": 1.0}, future=future)
+
+    def test_resolving_does_not_change_the_variant(self) -> None:
+        """The order-dependent read `bencher.py` used to do is now stable.
+
+        Pre-P5, ``result()`` assigned to ``self.res`` but left ``self.future``
+        set, so the meaning of a state read depended on whether ``result()``
+        had already been called.
+        """
+        future: Future = Future()
+        future.set_result({"y": 1.0})
+        job_future = JobFuture(job=_job(), future=future)
+        assert job_future.result() == {"y": 1.0}
+        assert job_future.state == Pending(future)
+
+    def test_a_ready_result_is_cached(self) -> None:
+        cache = _RecordingCache()
+        JobFuture(job=_job(), res={"y": 1.0}, cache=cache).result()
+        assert cache.sets == [(_job().job_key, {"y": 1.0}, "t")]
+
+    def test_a_pending_result_is_cached_on_resolve(self) -> None:
+        cache = _RecordingCache()
+        future: Future = Future()
+        future.set_result({"y": 2.0})
+        JobFuture(job=_job(), future=future, cache=cache).result()
+        assert cache.sets == [(_job().job_key, {"y": 2.0}, "t")]
+
+
+class TestJobFutureNoneReturn:
+    """B3's disposition, preserved through the new type (plan 23 §6.2 as amended).
+
+    ``result()`` is total -- it no longer returns ``dict | None`` -- so a worker
+    that returned nothing raises ``WorkerContractError`` on *either* executor
+    path. ``store_results`` consumes that and records-and-continues; nothing
+    here may abort a sweep on its own.
+    """
+
+    def test_neither_result_nor_future_is_broken(self) -> None:
+        state = JobFuture(job=_job()).state
+        assert isinstance(state, Broken)
+        assert isinstance(state.error, WorkerContractError)
+
+    def test_broken_raises_at_the_consume_point_not_at_construction(self) -> None:
+        """Construction must stay quiet: the serial site is inside `except catch`."""
+        job_future = JobFuture(job=_job("job-42"))  # no raise here
+        with pytest.raises(WorkerContractError, match="job-42"):
+            job_future.result()
+
+    def test_a_future_resolving_to_none_raises_too(self) -> None:
+        """The pooled path: same error, same message, same job id."""
+        future: Future = Future()
+        future.set_result(None)
+        with pytest.raises(WorkerContractError, match="job-42"):
+            JobFuture(job=_job("job-42"), future=future).result()
+
+    def test_a_broken_serial_result_is_never_cached(self) -> None:
+        """Pre-P5 semantics preserved: `cache.set` only for a non-None result."""
+        cache = _RecordingCache()
+        with pytest.raises(WorkerContractError):
+            JobFuture(job=_job(), cache=cache).result()
+        assert cache.sets == []
+
+    def test_a_future_resolving_to_none_is_never_cached(self) -> None:
+        cache = _RecordingCache()
+        future: Future = Future()
+        future.set_result(None)
+        with pytest.raises(WorkerContractError):
+            JobFuture(job=_job(), future=future, cache=cache).result()
+        assert cache.sets == []
+
+    def test_an_empty_dict_is_a_valid_result(self) -> None:
+        """A worker with no result vars returns ``{}`` -- falsy but not missing."""
+        assert JobFuture(job=_job(), res={}).state == Ready({})
 
 
 if __name__ == "__main__":

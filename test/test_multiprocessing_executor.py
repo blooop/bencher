@@ -311,7 +311,9 @@ class TestWorkerJobPickle:
             bench_cfg_sample_hash="abc123",
             tag="test",
         )
-        job.setup_hashes()
+        # Touch the derived hashes so the pickle round-trip below covers them as
+        # populated cached_property values, not just lazy recomputation.
+        assert job.function_input_signature_pure
         return job
 
     def test_worker_job_with_string_values(self):
