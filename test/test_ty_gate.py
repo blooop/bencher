@@ -60,8 +60,8 @@ class TestGateConfiguration:
             f"`{rule}` has been added back to [tool.ty.rules] as 'ignore'. "
             f"It guards {MUST_NOT_BE_IGNORED[rule]}. Silencing it globally makes the "
             f"gate pass while the property it protects is unenforced. Scope the "
-            f"suppression to the offending file with `# ty: ignore[{rule}]`, or relax "
-            f"it for a path in [[tool.ty.overrides]], rather than disabling it here."
+            f"suppression to the offending line with `# ty: ignore[{rule}]` and a "
+            f"reason, rather than disabling it here."
         )
 
     def test_ty_task_resolves_the_environment(self) -> None:
@@ -72,10 +72,43 @@ class TestGateConfiguration:
         the active environment.
         """
         task = _load_ty_task()
+        assert "$CONDA_PREFIX" in task, (
+            "the `ty` task must resolve the *active* pixi environment via $CONDA_PREFIX, "
+            "so that `-e py311` and `-e py313` each check against their own interpreter. "
+            f"A hardcoded or empty path would check the wrong env. Task: {task!r}"
+        )
         assert "--python" in task, (
             "the `ty` pixi task no longer passes --python, so ty will type-check with "
             "no third-party packages resolved. Every rule that depends on knowing an "
             'external type degrades silently. Restore --python "$CONDA_PREFIX".'
+        )
+
+    @pytest.mark.parametrize("rule", sorted(MUST_NOT_BE_IGNORED))
+    def test_rule_not_ignored_for_the_package_via_overrides(self, rule: str) -> None:
+        """The global ignore table is not the only way to disable a rule.
+
+        An ``[[tool.ty.overrides]]`` block with a broad ``include`` silences rules just
+        as effectively, and asserting only on ``[tool.ty.rules]`` would not notice. This
+        caught a real hole in review: a block covering ``bencher/example/**`` had
+        ``missing-argument`` off across the corpus that doubles as integration tests.
+        """
+        offenders = []
+        for block in _ty_config().get("overrides", []):
+            if block.get("rules", {}).get(rule) != "ignore":
+                continue
+            for pattern in block.get("include", []):
+                # Silencing a rule for first-party package code is the regression; the
+                # generated-example tree and helper trees are allowed to be exempted, but
+                # must be listed explicitly rather than swept in by a `bencher/**` glob.
+                if pattern.startswith("bencher/") and not pattern.startswith(
+                    ("bencher/example/", "bencher/_vendor/")
+                ):
+                    offenders.append((pattern, rule))
+        assert not offenders, (
+            f"`{rule}` is disabled for first-party package code by an override block "
+            f"({offenders}). It guards {MUST_NOT_BE_IGNORED[rule]}. Prefer a scoped "
+            f"`# ty: ignore[{rule}]` on the offending line, which is greppable and "
+            f"carries a reason, over an include pattern that silently covers a subtree."
         )
 
     def test_strict_override_block_is_non_empty(self) -> None:
@@ -100,7 +133,11 @@ def _load_ty_task() -> str:
 
 @pytest.mark.skipif(shutil.which("ty") is None, reason="ty binary not on PATH")
 class TestGateActuallyFires:
-    """End-to-end proof that the configured gate rejects real violations.
+    """Proof that `ty` itself enforces exhaustiveness, under a minimal config.
+
+    Scope note: these run against a *standalone* minimal config, so they verify the
+    mechanism plan 23 D2 depends on rather than this repo's full gate. The repo-level
+    properties are asserted by TestGateConfiguration above.
 
     Configuration assertions above can pass while the checker itself is misconfigured,
     so these run ty against seeded violations. They deliberately use a *minimal
@@ -110,7 +147,7 @@ class TestGateActuallyFires:
     """
 
     @staticmethod
-    def _run_ty(tmp_path: Path, source: str) -> str:
+    def _run_ty(tmp_path: Path, source: str) -> tuple[str, int]:
         (tmp_path / "pyproject.toml").write_text(
             '[project]\nname = "probe"\nversion = "0"\nrequires-python = ">=3.11"\n'
         )
@@ -123,10 +160,10 @@ class TestGateActuallyFires:
             cwd=tmp_path,
             check=False,
         )
-        return result.stdout + result.stderr
+        return result.stdout + result.stderr, result.returncode
 
     def test_non_exhaustive_match_is_rejected(self, tmp_path: Path) -> None:
-        output = self._run_ty(
+        output, returncode = self._run_ty(
             tmp_path,
             """
 from enum import Enum, auto
@@ -149,6 +186,10 @@ def handle(k: Kind) -> str:
             assert_never(unreachable)
 """,
         )
+        assert returncode != 0, (
+            f"ty exited 0 on a non-exhaustive match, so the diagnostic is not "
+            f"error-level and would not fail CI. Output:\n{output}"
+        )
         assert "type-assertion-failure" in output, (
             "ty did not reject a match missing one enum member. The exhaustiveness "
             f"mechanism plan 23 D2 relies on is not working. Output:\n{output}"
@@ -160,7 +201,7 @@ def handle(k: Kind) -> str:
 
     def test_exhaustive_match_is_accepted(self, tmp_path: Path) -> None:
         """Guards against a gate that rejects everything (which would be equally useless)."""
-        output = self._run_ty(
+        output, returncode = self._run_ty(
             tmp_path,
             """
 from enum import Enum, auto
@@ -182,6 +223,7 @@ def handle(k: Kind) -> str:
             assert_never(unreachable)
 """,
         )
+        assert returncode == 0, f"ty exited {returncode} on a complete match:\n{output}"
         assert "All checks passed" in output, (
             f"ty rejected a complete match, so the gate has false positives:\n{output}"
         )

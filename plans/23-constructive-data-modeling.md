@@ -706,35 +706,70 @@ than silently worked around.
    `# ty: ignore` comments remain, each with its reason inline: the optional `scoop`
    import (the `try/except ImportError` *is* the handling) and the `signal.getsignal`
    result in `run.py` (ty cannot narrow an `IntEnum` by identity against specific members).
-3. **`extra_panels` was discriminated by `callable()`, which cannot exclude the
-   `Viewable` arm.** Now discriminated by `isinstance(ep, pn.viewable.Viewable)`. This is
-   a latent-bug fix as well as a type fix: a `Viewable` that defined `__call__` would have
-   been *called* instead of appended.
+3. **`extra_panels`' `callable()` check cannot exclude the `Viewable` arm**, so the
+   predicate is now `callable(ep) and not isinstance(ep, pn.viewable.Viewable)`.
+   **Corrected during review:** the first attempt used `isinstance(...)` alone with the
+   branches swapped, which *introduced* a regression — the two predicates are not
+   complementary, and an object that is neither callable nor `Viewable` (a `str`, an
+   `hv.Curve`, a `DataFrame`) used to reach `append`, where `Column.append` coerces it.
+   Under the swapped form it was called instead, raising `TypeError` into the surrounding
+   `except Exception` and **silently dropping the panel**. `test_extra_panels.py` only
+   covers `pn.pane.Markdown`, so nothing caught it. Note also that the "latent bug" the
+   change was originally justified by is hypothetical: no panel `Viewable` is callable
+   (`Viewable` has no `__call__` in its MRO). The guard is cheap and kept, but it defends
+   a possibility, not an observed defect.
 4. **`Benchable` is discriminated by `inspect.signature` parameter count**, which no
    checker can narrow. The two call sites now `cast()` to the arm the introspection
    established, so the assumption is stated rather than blanket-ignored. This is the
    shape plan 24 warns about; the `cast` is honest about being unverified.
 5. **`_resolve_auto` now returns `ResolvedReduceType`** — a `Literal` over the four
-   non-`AUTO` members — so `to_dataset`'s `match` is exhaustive by construction and its
-   `assert_never` arm is *provably* dead rather than a catch-all. Verified two ways:
-   forcing `invalid-return-type` on shows the narrowing genuinely holds (`return reduce`
-   after `if reduce is ReduceType.AUTO: return ...`), and deleting one arm produces
+   non-`AUTO` members — so `to_dataset`'s `match` is exhaustive over those members and the
+   `assert_never` arm is not a catch-all. Deleting one arm produces
    `error[type-assertion-failure] … Inferred type of argument is Literal[ReduceType.MINMAX]`,
    naming the forgotten variant.
+   **Scope corrected during review — this is not yet a compile-time guarantee.** The
+   proof rests on `_resolve_auto` really returning a member of that `Literal`, and the only
+   rule that checks it, `invalid-return-type`, is Tier B and still globally ignored.
+   Measured: seeding `return ReduceType.AUTO` into `_resolve_auto` passes `pixi run ty`
+   (it is caught only with `--error invalid-return-type`), and adding a `ReduceType` member
+   without updating the alias or the match also passes ty, then fails at runtime in
+   `assert_never`. So for that scenario P1 moves "silently degrades to NONE" to "crashes,
+   still statically undetected". P12 closes it; a caveat comment records this at the alias.
 6. **Plan 24's warning was confirmed empirically, by this plan breaking on it.**
    Converting the catch-all to `assert_never` turned two green tests red with
    `AssertionError: Expected code to be unreachable, but got: None` — `map_plot_panes`
-   declares `reduce: ReduceType | None = None` and passed that `None` straight into
-   `to_dataset`, whose annotation says `ReduceType`. The old `case _:` had been absorbing
-   it. This is exactly plan 24 §2.1: a *complete* match is type-clean while raising at
-   runtime, because the subject's type was never established.
-   **A behaviour discrepancy fell out of it, and is deliberately NOT fixed here:**
-   `reduce=None` reaching the catch-all meant `ReduceType.NONE`, whereas
-   `to_hv_dataset`'s own default is `ReduceType.AUTO`. So `map_plot_panes(cb)` has always
-   skipped reduction rather than averaging over repeats. P1 normalizes `None` →
-   `ReduceType.NONE` at the boundary to preserve today's behaviour exactly; correcting the
-   default is a rendering change that needs a phase which can own it. Compare
-   `BenchResult.to()`, which handles the same sentinel correctly by omitting the argument.
+   declares `reduce: ReduceType | None = None` and passed that `None` into `to_dataset`,
+   whose annotation says `ReduceType`. The old `case _:` had been absorbing it. This is
+   exactly plan 24 §2.1: a *complete* match is type-clean while raising at runtime,
+   because the subject's type was never established.
+
+   **Where the sentinel is normalized matters, and the first attempt got it wrong.**
+   Mapping `None` → `ReduceType.NONE` in `map_plot_panes` (the obvious place) was **not**
+   behaviour-preserving, and review caught it: `to_hv_dataset` branches on
+   `reduce == ReduceType.NONE` *before* delegating, and `None` deliberately did not match
+   that, so it took the generic arm where holoviews infers kdims from the xarray variables
+   **with their units**. Normalizing early flipped it onto the arm that passes bare
+   strings as `kdims`, silently dropping unit metadata:
+
+   ```
+   reduce=None       -> [('theta', 'rad'), ('repeat', 'repeats')]
+   ReduceType.NONE   -> [('theta', None),  ('repeat', None)]
+   ```
+
+   The normalization therefore lives in **`_resolve_auto`** — the single funnel, reached
+   after every `== ReduceType.NONE` branch has already been decided on the raw value. That
+   preserves behaviour on every path *and* fixes the wider problem: `to_dataset`,
+   `to_hv_dataset`, `to_hv_type`, `to_points` and `filter` all forward `reduce` unchanged,
+   so an early fix in one caller would have left `reduce=None` crashing on all the others.
+   `to_dataset`/`to_hv_dataset` are now annotated `ReduceType | None`, which is the domain
+   they have always accepted.
+
+   **The behaviour discrepancy this exposed is recorded, not fixed:** `map_plot_panes`
+   defaulting to `None` means it has always skipped reduction, whereas `to_hv_dataset`'s own
+   default is `AUTO` (mean/std over repeats). Changing that alters rendering output and
+   needs a phase that can own it. Compare `BenchResult.to()`, which handles the same
+   sentinel correctly by omitting the argument.
+
 7. **`identity.py` was pulled back off the strict list.** It is not clean: it passes
    `list | dict | None` to `plot_sweep`, annotated `list[ParametrizedSweep] | None`. The
    annotation is the wrong one — `convert_vars_to_params` accepts
@@ -746,3 +781,32 @@ than silently worked around.
    does not mistake them for debt: `unused-ignore-comment` and
    `unused-type-ignore-comment`, because the repo deliberately carries 8 `# type: ignore`
    comments for other checkers.
+9. **D1's relaxed override block was dropped entirely, and D1 should be read as amended.**
+   As first written it exempted `test/**`, `bencher/example/**`, `scripts/**`, `docs/**`
+   and `setup.py` from twelve rules. Review measured what actually fires in those paths
+   with nothing silenced: **6 diagnostics**, all addressable inline — 4
+   `unresolved-import` (optional `playwright` ×3, vestigial `setuptools` in `setup.py`) and
+   2 `call-non-callable` in `scripts/benchmark_save.py:190` (a heterogeneous dict literal
+   widens `fdef["cls"]` past `type`). Five of the twelve rules were also **no-ops**, being
+   Tier C and already globally ignored. So the block's real effect was disabling seven
+   Tier-A rules over the largest trees in the repo — including `missing-argument` across
+   `bencher/example/**`, the corpus that doubles as integration tests and doc source, and
+   the very rule that catches a call site omitting a newly-required argument like this
+   phase's `plot_callback`. It is replaced by the two narrowest things that work: one
+   scoped `# ty: ignore[call-non-callable]` in `scripts/benchmark_save.py`, and a
+   **file-precise** override silencing only `unresolved-import` for exactly three files
+   (`generate_examples.py`, `test_docs_scrollbars.py`, `setup.py`). Those three cannot take
+   an inline comment: ruff reflows the import past the line limit and the comment lands on
+   the inner line, where pylint's own `import-error` pragma stops applying — attempting it
+   dropped `pixi run pylint` from 10.00/10. Verified afterwards that `missing-argument`
+   still fires in both `test/` and `bencher/example/`, so **Tier A is now enforced in those
+   trees**. A future phase enabling Tier B/C may need a broader relaxed block; it should
+   size it from measured evidence and list paths explicitly rather than by subtree glob.
+10. **The meta-tests could not detect the bypass they exist to prevent.** Asserting only
+   on `[tool.ty.rules]` missed the override route: review demonstrated adding
+   `"bencher/**"` to a relaxed `include` turned the whole Tier-A gate off for the package
+   with `test_ty_gate.py` still green. There is now a parametrized assertion that no
+   override block silences a protected rule for first-party package code, verified to fail
+   on exactly that seeded bypass. The probe tests also assert ty's **exit code**, not just
+   its output text, so a rule demoted to warning level cannot pass; and their class
+   docstring no longer claims to prove the repo's gate, only the mechanism.

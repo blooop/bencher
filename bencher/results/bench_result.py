@@ -450,10 +450,14 @@ class BenchResult(
         if extra_panels:
             for ep in extra_panels:
                 try:
-                    if isinstance(ep, pn.viewable.Viewable):
-                        plot_cols.append(ep)
-                    else:
+                    # Call only genuine factories. Excluding Viewable keeps a Viewable
+                    # that defined __call__ from being invoked, while objects that are
+                    # neither callable nor Viewable (a str, an hv element, a DataFrame)
+                    # still fall through to append, where Column.append coerces them.
+                    if callable(ep) and not isinstance(ep, pn.viewable.Viewable):
                         plot_cols.append(ep(self))
+                    else:
+                        plot_cols.append(ep)
                 except Exception:  # pylint: disable=broad-except
                     name = getattr(ep, "__name__", repr(ep))
                     logger.exception("Extra panel %s failed", name)

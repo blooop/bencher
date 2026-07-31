@@ -290,33 +290,19 @@ not-subscriptable = "ignore"
 unused-ignore-comment = "ignore"
 unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14
 
-# Relaxed paths: tests, generated examples, helper scripts, docs, and the dead
-# setuptools shim. Tier A/B/C are all off here.
-#   - unresolved-import: playwright is optional tooling, only needed on the standalone
-#     screenshot path; setup.py is vestigial (see plans/03-repo-hygiene.md).
-#   - 315 of the ~545 invalid-argument-type diagnostics are in test/ alone, where
-#     deliberately-wrong values are the point of the test.
+# Optional/vestigial imports, scoped to the exact files rather than whole trees. These
+# three cannot be annotated inline: ruff reflows the import past the line limit and the
+# comment lands where pylint's own import-error pragma stops applying.
+#   - playwright is optional tooling, needed only on the standalone screenshot path.
+#   - setup.py is a vestigial setuptools shim (see plans/03-repo-hygiene.md).
 [[tool.ty.overrides]]
 include = [
-    "test/**",
-    "bencher/example/**",
-    "scripts/**",
-    "docs/**",
+    "bencher/example/meta/generate_examples.py",
+    "test/test_docs_scrollbars.py",
     "setup.py",
 ]
 [tool.ty.overrides.rules]
 unresolved-import = "ignore"
-invalid-method-override = "ignore"
-too-many-positional-arguments = "ignore"
-missing-argument = "ignore"
-call-non-callable = "ignore"
-call-top-callable = "ignore"
-invalid-parameter-default = "ignore"
-invalid-argument-type = "ignore"
-unresolved-attribute = "ignore"
-invalid-assignment = "ignore"
-not-subscriptable = "ignore"
-invalid-type-form = "ignore"
 
 # STRICT RATCHET. Files here are held to Tier C as well. Only ever append.
 # Every plan 23 phase adds the modules it reworks as part of its Definition of Done;

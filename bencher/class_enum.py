@@ -109,7 +109,7 @@ class ExampleEnum(ClassEnum):
         """Convert an ExampleEnum value to its corresponding class instance.
 
         Args:
-            enum_val (ExampleEnum): The enum value to convert
+            enum_val (ClassEnum): The enum value to convert
 
         Returns:
             BaseClass: An instance of either Class1 or Class2, depending on the enum value

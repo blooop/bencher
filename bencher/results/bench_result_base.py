@@ -60,7 +60,11 @@ class ReduceType(Enum):
 
 
 # ReduceType with AUTO excluded: the return type of _resolve_auto, so that the match in
-# to_dataset is provably exhaustive over four members rather than relying on a catch-all.
+# to_dataset is exhaustive over four members rather than relying on a catch-all.
+# CAVEAT: this only *fully* holds once `invalid-return-type` is enabled (plan 23 P12).
+# That rule is what checks _resolve_auto actually returns a member of this Literal; until
+# it lands, adding a ReduceType member without updating both this alias and the match
+# passes ty and fails at runtime in assert_never instead of at check time.
 ResolvedReduceType = Literal[
     ReduceType.SQUEEZE, ReduceType.REDUCE, ReduceType.MINMAX, ReduceType.NONE
 ]
@@ -203,7 +207,7 @@ class BenchResultBase:
 
     def to_hv_dataset(
         self,
-        reduce: ReduceType = ReduceType.AUTO,
+        reduce: ReduceType | None = ReduceType.AUTO,
         result_var: ResultFloat | None = None,
         subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
@@ -241,8 +245,24 @@ class BenchResultBase:
             )
         )
 
-    def _resolve_auto(self, reduce: ReduceType) -> ResolvedReduceType:
-        """Resolve AUTO to a concrete ReduceType based on repeat count."""
+    def _resolve_auto(self, reduce: ReduceType | None) -> ResolvedReduceType:
+        """Resolve AUTO (and the legacy `None` sentinel) to a concrete ReduceType.
+
+        `reduce=None` reaches here from public methods that declare
+        `reduce: ReduceType | None` and forward it unchanged (`map_plot_panes`,
+        `filter`, ...). It has always meant "no reduction": it used to fall through
+        `to_dataset`'s catch-all arm. Mapping it *here* rather than at the callers
+        matters, because `to_hv_dataset` branches on `reduce == ReduceType.NONE`
+        beforehand and `None` deliberately does not match that, which preserves the
+        unit-carrying kdims of its generic arm.
+
+        NOTE (plan 23): `None` and `AUTO` meaning different things on one field is the
+        sentinel smell this plan exists to remove, and `map_plot_panes` defaulting to
+        "no reduction" disagrees with `to_hv_dataset`'s AUTO. Both are behaviour changes
+        that need a phase which can own them.
+        """
+        if reduce is None:
+            return ReduceType.NONE
         if reduce is ReduceType.AUTO:
             return ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
         return reduce
@@ -266,7 +286,7 @@ class BenchResultBase:
 
     def to_dataset(
         self,
-        reduce: ReduceType = ReduceType.AUTO,
+        reduce: ReduceType | None = ReduceType.AUTO,
         result_var: ResultFloat | str | None = None,
         subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
@@ -642,14 +662,7 @@ class BenchResultBase:
         **kwargs,
     ) -> pn.Row | None:
         if hv_dataset is None:
-            # `reduce=None` historically fell through to_dataset's catch-all arm and got
-            # ReduceType.NONE semantics -- NOT to_hv_dataset's own ReduceType.AUTO default.
-            # Normalizing here preserves that behaviour and keeps the sentinel out of the
-            # enum's domain, which is what lets to_dataset's match be exhaustive.
-            # NOTE (plan 23): that this default disagrees with to_hv_dataset's AUTO is a
-            # real inconsistency; changing it would alter rendering, so it is left for a
-            # phase that can own the behaviour change.
-            hv_dataset = self.to_hv_dataset(reduce=ReduceType.NONE if reduce is None else reduce)
+            hv_dataset = self.to_hv_dataset(reduce=reduce)
 
         if pane_collection is None:
             pane_collection = pn.Row()
