@@ -29,7 +29,7 @@ without additional context. **Read the whole plan before starting it.**
 |---|------|------|--------|-----------|
 | 01 | [Release & CI safety](01-release-safety.md) | Low | Small | **DONE** — executed verbatim in PR #982 |
 | 02 | [Inflight PR triage](02-pr-triage.md) | Low–Med | Medium | Partially done — see status note in the plan |
-| 03 | [Repo hygiene](03-repo-hygiene.md) | Low | Small | Yes |
+| 03 | [Repo hygiene](03-repo-hygiene.md) | Low | Small | **DONE** — see status note in the plan |
 | 04 | [Dependencies & import time](04-dependencies.md) | Medium | Medium | After 02 (depends on PR #760 decision) |
 | 05 | [Test coverage gaps](05-test-coverage.md) | Low | Large | **Mostly done** — see status note in the plan |
 | 06 | [Docs & onboarding](06-docs-onboarding.md) | Low | Medium | Anytime |
@@ -96,6 +96,11 @@ gates A4 Phase C4; A2's ranking phases (S3–S4) come last.
 > `explain_selection()` shipped in v1.115.0 and Phase S1 is in review as PR #983;
 > plans 09 and 14 were implemented in v1.116.0 (cache re-key, `CACHE_VERSION` 5),
 > so A4 §1's cache-layer table now describes the post-1.116 key split.
+>
+> **Update (2026-07-31):** plan 03 executed — the "Repo clutter" bullet below is resolved.
+> The stale root-level plan docs now live in `plans/archive/` with `ARCHIVED:` headers, and
+> `setup.py`/`setup.cfg`/`MANIFEST.in` are deleted. See plan 03's status note for the two
+> claims in it that no longer matched the tree.
 
 ### What is good
 

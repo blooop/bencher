@@ -181,6 +181,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "the tag was cleared".
 
 ### Removed
+- **Deleted the dead setuptools files `setup.py`, `setup.cfg`, and `MANIFEST.in`** (plan
+  03). The build has been hatchling via `pyproject.toml` for a long time, and
+  `[tool.hatch.build] include` never shipped these three in the wheel or the sdist, so
+  `pip install holobench` and `pip install -e .` are unaffected. They were leftovers from a
+  ROS-era layout and actively misleading: `setup.py` declared the package name as `bencher`
+  rather than `holobench` and listed a `package.xml` in `data_files` that does not exist in
+  the repo. The only workflow this breaks is the legacy `python setup.py <cmd>` invocation,
+  which has been unsupported since the move to hatchling. Verified by diffing a wheel built
+  before and after the removal: the two contain an identical set of 400 files.
+  `resource/bencher` (the empty ROS ament index marker that `setup.py` pointed at) is
+  deliberately kept, and still ships in the wheel exactly as before.
+
 - **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
   the CI matrix runs py311 + py313 (was py310 + py313). The `py310` pixi feature and
   environment are gone.

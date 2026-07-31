@@ -76,6 +76,18 @@ Bencher is a benchmarking framework built around these core concepts:
 - `bencher/results/` - Result containers and visualization classes
 - `test/` - Test suite
 
+### Repository Layout
+- `plans/` - Current improvement plans (read `plans/README.md` first); `plans/archive/`
+  holds historical ones, each with an `ARCHIVED:` header saying why — never execute those.
+- `scripts/` - Developer/CI shell and profiling scripts, invoked from Pixi tasks.
+- `resource/` - Vestigial ROS ament index marker (`resource/bencher`, zero bytes). No code
+  reads it; it lands in the wheel only because hatchling's `include = ["bencher", ...]`
+  pattern matches any path named `bencher` at any depth.
+- `ralph.yml` + `PROMPT.md` - Config and task prompt for the Ralph agent orchestrator
+  (`pixi run ralph`, used by the `agent-iterate` flows).
+- `rockerc.yaml` - rocker/docker dev-container configuration.
+- The build is hatchling via `pyproject.toml` only; there is no setuptools shim.
+
 ### Configuration Files
 - `pyproject.toml` - Project dependencies and Pixi task definitions
 - `ruff.toml` - Code formatting/linting configuration (100 char line length)

@@ -300,16 +300,16 @@ not-subscriptable = "ignore"
 unused-ignore-comment = "ignore"
 unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14
 
-# Optional/vestigial imports, scoped to the exact files rather than whole trees. These
-# three cannot be annotated inline: ruff reflows the import past the line limit and the
-# comment lands where pylint's own import-error pragma stops applying.
+# Optional imports, scoped to the exact files rather than whole trees. Neither can be
+# annotated inline: ruff reflows the import past the line limit and the comment lands
+# where pylint's own import-error pragma stops applying.
 #   - playwright is optional tooling, needed only on the standalone screenshot path.
-#   - setup.py is a vestigial setuptools shim (see plans/03-repo-hygiene.md).
+# (A third entry, the vestigial `setup.py` setuptools shim, was dropped when plan 03
+# deleted that file along with setup.cfg and MANIFEST.in.)
 [[tool.ty.overrides]]
 include = [
     "bencher/example/meta/generate_examples.py",
     "test/test_docs_scrollbars.py",
-    "setup.py",
 ]
 [tool.ty.overrides.rules]
 unresolved-import = "ignore"

@@ -8,6 +8,10 @@ autofig/
 /index.html
 /reports/
 
+# Written to the repo root by `pixi run benchmark-save`; the 2026-03 run is archived as
+# plans/archive/SAVE_PERFORMANCE_REPORT.md, so fresh runs stay untracked.
+/SAVE_PERFORMANCE_REPORT.md
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
