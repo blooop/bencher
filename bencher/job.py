@@ -226,14 +226,14 @@ class Broken:
     error: WorkerContractError
 
 
+# The three states a submitted job can be in (plan 23 P5, C2). Previously JobFuture
+# held res/future as two optionals and mutated res on the first result() call, so
+# both-set and neither-set were representable and `future is not None` stopped meaning
+# "pending". Broken is the constructive replacement for the meaningful half of
+# "neither-set": the one production path that reached it was a serial worker returning
+# None. (A comment rather than a docstring: check-docstring-first reads a bare string
+# after a module-level assignment as a misplaced module docstring.)
 JobState = Ready | Pending | Broken
-"""The three states a submitted job can be in (plan 23 P5, C2).
-
-Previously ``JobFuture`` held ``res``/``future`` as two optionals and mutated
-``res`` on the first ``result()`` call, so both-set and neither-set were
-representable and ``future is not None`` stopped meaning "pending". ``Broken``
-is the constructive replacement for the meaningful half of "neither-set": the
-one production path that reached it was a serial worker returning ``None``."""
 
 
 class JobFuture:
