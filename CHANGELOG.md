@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Content-addressed blob store: `bencher/blob_store.py`** (plan 22, phase 1 of the A6
+  grammar-of-ND-data migration, #1021). Result payloads that cannot live directly in a
+  dataset cell are serialized under `cachedir/blobs/` and named by the sha256 of their
+  bytes, so identical payloads across repeats and time points deduplicate to one file.
+  Dispatch is by payload type: `DataFrame` → `.parquet`, `Dataset` → `.nc`, `DataArray` →
+  `.da.nc` (name preserved), `bytes` → `.bin`, anything else picklable → `.pkl`. The
+  environment is netCDF3-only (scipy is the sole engine), which silently narrows int64 →
+  int32 and raises on other dtypes, so an empirically-derived whitelist
+  (`_NETCDF3_SAFE_DTYPES`) diverts unsafe payloads to pickle rather than let them
+  round-trip with changed values. Every structured-format failure falls back to pickle with
+  a logged warning: a payload inside the documented contract can never abort a sweep. The
+  `.pkl` branch is the pickle surface plan A3 wants gone and is flagged as such in the
+  module docstring.
+- **`ResultDataSet` renders its full `over_time` history.** Because a cell is now
+  meaningful in any process (see below), the pre-existing `isel(over_time=-1)` restriction
+  is gone: the report shows a labelled per-time grid, one pane per snapshot under its
+  timestamp, instead of only the latest run. Practical effect: a report over a long history
+  gets *N* times wider — bound it with `max_time_events` on the result variable if that
+  matters. Cells cached before this release render real content at the final time event and
+  an explicit labelled placeholder at earlier ones, because the legacy payload list only
+  ever held the final run's samples.
+- **New gallery example `example_result_dataset_1d_over_time`** under
+  `reference/meta/result_types/result_dataset/`; no existing example combined
+  `ResultDataSet` with `over_time`.
+
+### Changed
+- **BREAKING: a `ResultDataSet` dataset cell holds a blob path string, not an index.**
+  Cells were `int` indices into `BenchResult.dataset_list`, valid only inside the process
+  that produced them; they are now absolute `str` paths into the blob store, so any process
+  sharing the cache filesystem can render any sample. Code that introspects a result
+  directly is affected — `res.to_dataset()["var"].values` and `res.to_pandas()` now yield
+  `/…/cachedir/blobs/a1b2c3.parquet` where they yielded `0, 1, 2`. To recover the payload:
+
+  ```python
+  from bencher.blob_store import load_blob
+  cell = res.to_dataset()["my_dataset_var"].sel(x=1.0).values.item()
+  payload = load_blob(cell)   # was: res.dataset_list[int(cell)].obj
+  ```
+
+  Rendering is unaffected — every built-in render path goes through
+  `BenchResultBase.ds_to_container`, which accepts both generations. `result_is_missing`
+  accepts both sentinels (`"NAN"` and the legacy `-1`) permanently, since one mixed
+  `over_time` history contains cells of each kind.
+- **BREAKING: `BenchResult.dataset_list` is now always empty.** It survives as the read
+  path for results collected before this release and is scheduled for removal with phase 3.
+  Nothing in bencher's own examples, docs, or exports used it, but code that did
+  (`res.dataset_list[i].obj`) now sees an empty list rather than an error at the point of
+  change — use `load_blob` on the cell as shown above.
+- **`clear_media()` now also clears `cachedir/blobs/`, and `cache_stats()` counts it.**
+  The blob store is tracked as a third cache category (`_CONTENT_FOLDERS`) rather than as
+  media, because `_MEDIA_FOLDERS` means "contains per-job-key subdirectories" and that
+  layout is what makes per-job and orphan cleanup safe — a deduplicated blob may back cells
+  belonging to many job keys, so `cleanup_job_media` and `clean_orphaned_media` must never
+  touch it, and they don't. A cell whose blob was cleared renders as a placeholder, exactly
+  as a cell whose image was cleared does. `CacheStats` gained a `content` field (defaulted,
+  so existing construction is unaffected) and `cache_stats().total_bytes` now includes
+  blobs, so totals are not comparable across this release.
+- **A `plot_callback` may now be offered a `legacy_trusted=` keyword.** The `over_time`
+  dataset path needs to tell the render layer "a legacy index at this time point cannot be
+  trusted". Since `plot_callback` is a public extension point that a caller may satisfy with
+  a plain `(dataset, result_var)` function, the keyword is passed *only* to callbacks that
+  declare it or carry `**kwargs`; a stricter callback is called exactly as before instead of
+  raising `TypeError`. Every callback in bencher declares `**kwargs`, so nothing internal
+  changes. `ds_to_container` gained the parameter with a default, so overrides written
+  against the old signature keep working.
+- **No `CACHE_VERSION` bump** (stays `5`), so an existing `cachedir` is *not* wiped by this
+  release. Pre-existing sample-cache entries re-materialize into blobs on a cache hit;
+  stored `over_time` histories merge (the int64 column and the new object column concat to
+  object, and legacy cells survive intact); results saved with `save_result` still load.
+  Old data degrades honestly where it cannot support the new capability rather than failing.
+
+### Deprecated
+- **`ResultHmap` is deprecated** and now emits a `DeprecationWarning` on instantiation;
+  removal is scheduled for a later phase of the A6 migration. Its data lives out-of-band in
+  `bench_res.hmaps` rather than in the canonical result dataset, so it cannot participate in
+  the grammar-of-ND-data model. Use `ResultContainer`, or `ResultReference` with a declared
+  `container=`, instead. Behavior and `hash_persistent()` are unchanged until removal. Note
+  for downstream code: this breaks builds that run with `-W error::DeprecationWarning` or
+  pytest `filterwarnings = error`. **Known follow-up:** bencher's own
+  `bencher/example/meta/example_meta.py` still declares a `ResultHmap`, so the flagship
+  meta example warns about itself; migrating it changes generated gallery output and was
+  deliberately left out of #1021.
+
+### Notes
+- **`cachedir/blobs/` has no garbage collection.** Every distinct dataset payload from every
+  run is retained until an explicit `clear_media()` or `clear_all()`; content addressing
+  only deduplicates byte-identical payloads. It is at least visible in `cache_stats()` now.
+  Reclaiming it per job key is not possible by design (one blob, many owners); an artifact
+  manifest that could is A4's job.
+- Blob filenames use the first 16 hex chars (64 bits) of the sha256, so two *different*
+  payloads sharing that prefix would collide and the second would load back as the first.
+  The birthday bound puts even odds at ~2^32 blobs in one cache directory, so the risk is
+  accepted rather than mitigated; `_HASH_CHARS` can be raised without invalidating existing
+  blobs, since `load_blob` dispatches on extension rather than name length.
+
 ## [1.117.0] - 2026-07-31
 
 ### Added

@@ -137,6 +137,10 @@ reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds t
 and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
 See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
+**Deprecated:** `bn.ResultHmap` is deprecated (it stores its data outside the result
+dataset) — use `bn.ResultContainer` or `bn.ResultReference` with a declared
+`container=` instead.
+
 **Rendering stored data:** `ResultDataSet` stores the payload without interpreting
 its type. Without a renderer, Panel displays the raw object. Pass `container=` a
 callable taking the stored object and returning anything Panel can display, and every
@@ -247,10 +251,13 @@ not wanted) — `bench.add(bn.XYScatterResult, x="dx_mm", y="dy_mm")`,
 `to_auto(plot_list=["xy_scatter"], x=..., y=...)`. None of them are ever selected
 automatically, so no existing report gains a plot it did not ask for.
 
-Under `over_time`, a `ResultDataSet` renders the run being reported rather than a slider
-over the history: a cell holds an index into a payload list rebuilt on every run, so
-the indices carried in from earlier runs address the current list and a slider would show
-today's payload under yesterday's label. Scalar results keep their full history.
+Under `over_time`, a `ResultDataSet` renders its full history: each cell stores a
+blob-store path, so every time point's payload stays loadable and the report shows a
+labelled per-time grid — one pane per snapshot under its timestamp. Cells cached before
+the blob store existed (legacy index cells) render where their payload list is still
+available and as a labelled placeholder where it is not. See the
+[ResultDataSet over time example](reference/meta/result_types/result_dataset/example_result_dataset_1d_over_time)
+for a working sweep.
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.

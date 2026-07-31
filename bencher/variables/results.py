@@ -252,13 +252,28 @@ class ResultVec(param.List):
 
 
 class ResultHmap(param.Parameter):
-    """A class to represent a holomap return type.
+    """Deprecated: use ResultContainer or ResultReference with a declared container instead.
+
+    A class to represent a holomap return type. Its data lives out-of-band in
+    ``bench_res.hmaps`` rather than in the canonical result dataset, so it cannot
+    participate in the A6 grammar-of-ND-data migration; removal is scheduled for
+    a later phase of that migration.
 
     Note: this class has no __slots__, so _hash_slots hashes only the class name.
     Every ResultHmap instance produces the same hash. This is intentional — there are
     no configuration attributes that would differentiate instances. If a slot is added
     in the future, _hash_slots will automatically include it.
     """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "ResultHmap is deprecated and will be removed in a later phase of the A6 "
+            "grammar-of-nd-data migration; use ResultContainer or ResultReference with "
+            "a declared container= instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -458,6 +473,11 @@ class ResultReference(param.Parameter):
 
     The callback receives only the object — no plot kwargs — so single-argument
     callables are safe, and one renderer works for both this and a ``ResultDataSet``.
+
+    This is the documented same-process escape hatch: the stored object stays live,
+    is stripped by both the result cache write and the collect/render split, and is
+    never load-bearing for the core rendering algebra. Use :class:`ResultDataSet`
+    when the payload should survive process boundaries.
     """
 
     __slots__ = ["units", "obj", "container", "max_time_events"]
@@ -489,6 +509,12 @@ class ResultDataSet(param.Parameter):
     The payload may be a DataFrame, xarray object, mapping, sequence, custom
     dataclass, or any other object that can travel through the configured result
     cache. Bencher stores and retrieves it without interpreting its type.
+
+    Payloads are materialized into the cache's content-addressed blob store at
+    collect time (parquet for DataFrames, netCDF for xarray objects, pickle
+    otherwise — see :mod:`bencher.blob_store`); the dataset cell stores the blob
+    path, so any process sharing the cache filesystem can render any sample,
+    including over_time history points.
 
     ``container`` is an optional renderer taking the stored object and returning
     something Panel can display. Declare it once on the class and every sample
@@ -611,14 +637,19 @@ def result_kind(result_var) -> str:
 # there is no single value that is both storage-valid and reduction-aware
 # across every dtype:
 #   - numeric types (float/bool/vec, and any future numeric) -> NaN   (float)
-#   - index-backed reference types (reference/dataset)       -> -1    (int)
+#   - index-backed reference types (reference)               -> -1    (int)
 #   - object/file/string types (path/video/image/string/...) -> "NAN" (object)
+#
+# ResultDataSet cells are blob paths since plan 22 (grammar phase 1), so its
+# fill is the blob-family "NAN"; results collected before that change store -1
+# int indices, and ``result_is_missing`` accepts BOTH generations permanently —
+# a mixed-generation over_time history contains cells of each kind.
 #
 # Both dataset initialisation (``ResultCollector.setup_dataset``) and over_time
 # aging (``_null_old_entries``) build their arrays from ``result_missing_fill``,
 # and consumers test for missingness with ``result_is_missing`` instead of
 # hardcoding ``np.isnan`` / ``== "NAN"`` / ``== -1`` per call site.
-_REFERENCE_MISSING_TYPES = (ResultReference, ResultDataSet)
+_REFERENCE_MISSING_TYPES = (ResultReference,)
 _OBJECT_MISSING_TYPES = (
     ResultPath,
     ResultVideo,
@@ -626,6 +657,7 @@ _OBJECT_MISSING_TYPES = (
     ResultString,
     ResultContainer,
     ResultRerun,
+    ResultDataSet,
 )
 # Single-column result types that get a data variable in the dataset. ResultVec
 # is handled separately (it expands to one column per element); ResultHmap is
@@ -643,6 +675,26 @@ def result_missing_fill(rv) -> tuple[Any, type]:
     return float("nan"), float
 
 
+def _dataset_cell_is_missing(value) -> bool:
+    """Missingness for a ``ResultDataSet`` cell, across both sentinel generations.
+
+    ``"NAN"`` (blob-path cells, plan 22 onwards) and ``-1`` (index-backed cells
+    collected before it, including the float ``-1.0`` an over_time concat can
+    promote an int column to) are both missing, permanently — a mixed-generation
+    history holds cells of each kind.  NaN/``None`` also count as missing so an
+    unrepaired concat fill is never handed to ``load_blob`` or a
+    ``dataset_list`` lookup as data.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value == "NAN"
+    if isinstance(value, numbers.Real) and not isinstance(value, bool):
+        as_float = float(value)
+        return math.isnan(as_float) or as_float == -1.0
+    return False
+
+
 def result_is_missing(rv, value) -> bool:
     """True when *value* is the missing/unrecorded sentinel for *rv*'s storage.
 
@@ -654,7 +706,12 @@ def result_is_missing(rv, value) -> bool:
     attempted (the *string* ``"nan"`` is real data, not a missing marker). For
     the ``-1`` / ``"NAN"`` sentinel types, missingness is exact equality with
     the sentinel.
+
+    ``ResultDataSet`` accepts BOTH its sentinel generations, permanently — see
+    :func:`_dataset_cell_is_missing`.
     """
+    if isinstance(rv, ResultDataSet):
+        return _dataset_cell_is_missing(value)
     fill, _ = result_missing_fill(rv)
     if isinstance(fill, float) and math.isnan(fill):
         if value is None:

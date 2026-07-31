@@ -9,6 +9,7 @@ fails loudly here instead of corrupting datasets.
 
 import math
 import unittest
+import warnings
 
 import numpy as np
 
@@ -37,7 +38,11 @@ from bencher.variables.results import (
 
 def _instantiate(cls):
     """A default instance of *cls*; ResultVec needs an explicit size."""
-    return cls(size=2) if cls is ResultVec else cls()
+    with warnings.catch_warnings():
+        # ResultHmap warns on instantiation (deprecated); its storage semantics
+        # are still pinned here until phase 3 removes it.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return cls(size=2) if cls is ResultVec else cls()
 
 
 def _nan_backed_vars():
@@ -45,10 +50,12 @@ def _nan_backed_vars():
 
 
 def _reference_backed_vars():
-    return [ResultReference(), ResultDataSet()]
+    return [ResultReference()]
 
 
 def _object_backed_vars():
+    # ResultDataSet joined the blob family with plan 22: its cells are paths
+    # into the blob store and its fill is the object-family "NAN" sentinel.
     return [
         ResultPath(),
         ResultVideo(),
@@ -56,6 +63,7 @@ def _object_backed_vars():
         ResultString(),
         ResultContainer(),
         ResultRerun(),
+        ResultDataSet(),
     ]
 
 
@@ -102,7 +110,7 @@ class TestDataVarResultTypes(unittest.TestCase):
         # ResultVec expands to one column per element; ResultHmap is stored
         # out-of-band — neither gets a single data var.
         self.assertNotIsInstance(ResultVec(size=2), DATA_VAR_RESULT_TYPES)
-        self.assertNotIsInstance(ResultHmap(), DATA_VAR_RESULT_TYPES)
+        self.assertNotIsInstance(_instantiate(ResultHmap), DATA_VAR_RESULT_TYPES)
 
 
 class TestEveryResultTypeIsStorable(unittest.TestCase):
@@ -185,6 +193,20 @@ class TestResultIsMissing(unittest.TestCase):
         self.assertFalse(result_is_missing(rv, "img/frame_001.png"))
         self.assertFalse(result_is_missing(rv, ""))
         self.assertFalse(result_is_missing(rv, None))
+
+    def test_dataset_accepts_both_sentinel_generations(self):
+        """A mixed-generation over_time history holds "NAN" path sentinels next to
+        legacy -1 index sentinels (possibly float-promoted by concat), permanently."""
+        rv = ResultDataSet()
+        self.assertTrue(result_is_missing(rv, "NAN"))
+        self.assertTrue(result_is_missing(rv, -1))
+        self.assertTrue(result_is_missing(rv, np.int64(-1)))
+        self.assertTrue(result_is_missing(rv, np.float64(-1.0)))
+        self.assertTrue(result_is_missing(rv, float("nan")))
+        self.assertTrue(result_is_missing(rv, None))
+        self.assertFalse(result_is_missing(rv, "cachedir/blobs/abc123.parquet"))
+        self.assertFalse(result_is_missing(rv, 0))
+        self.assertFalse(result_is_missing(rv, 3))
 
     def test_fill_round_trips_through_typed_array(self):
         # An array initialised with (fill, dtype) — exactly what

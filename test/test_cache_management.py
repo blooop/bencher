@@ -94,6 +94,15 @@ class _TempCacheMixin:
             f.write(content)
         return p
 
+    def _make_blob(self, name, content=b"x" * 100):
+        """Create a flat, sha256-named file matching the blob store layout."""
+        blobs_dir = os.path.join(self.cachedir, "blobs")
+        os.makedirs(blobs_dir, exist_ok=True)
+        p = os.path.join(blobs_dir, name)
+        with open(p, "wb") as f:
+            f.write(content)
+        return p
+
     def _make_legacy_media(self, folder, filename, content=b"x" * 100):
         """Create a legacy UUID-named file (pre-v2 layout)."""
         full_dir = os.path.join(self.cachedir, folder, filename)
@@ -168,6 +177,19 @@ class TestCacheStatsIntegration(_TempCacheMixin, unittest.TestCase):
         stats = cache_stats(self.cachedir)
         self.assertEqual(stats.total_bytes, 0)
 
+    def test_blob_store_is_counted(self):
+        """The blob store grows without per-job pruning, so it must not be
+        invisible to anyone auditing cache size."""
+        self._make_blob("abc123def456abcd.parquet")
+        self._make_blob("0123456789abcdef.nc", b"y" * 300)
+
+        stats = cache_stats(self.cachedir)
+        blobs = next(s for s in stats.content if s.path == "blobs")
+        self.assertEqual(blobs.entries, 2)
+        self.assertEqual(blobs.size_bytes, 400)
+        self.assertEqual(stats.total_bytes, 400)
+        self.assertIn("blobs", stats.summary())
+
 
 class TestCleanupJobMedia(_TempCacheMixin, unittest.TestCase):
     def test_removes_job_key_dirs(self):
@@ -213,6 +235,38 @@ class TestClearMedia(_TempCacheMixin, unittest.TestCase):
         c = Cache(os.path.join(self.cachedir, "sample_cache"))
         self.assertEqual(c["k"], "v")
         c.close()
+
+    def test_clears_blobs_too(self):
+        """Blobs are payload files like images: clearing media reclaims them, and
+        the cells that referenced them degrade to placeholders at render."""
+        self._make_managed_cache("sample_cache", {"k": "v"})
+        self._make_blob("abc123def456abcd.parquet", b"q" * 80)
+
+        deleted, freed = clear_media(self.cachedir)
+        self.assertEqual(deleted, 1)
+        self.assertEqual(freed, 80)
+        self.assertFalse(Path(self.cachedir, "blobs").exists())
+
+
+class TestBlobsAreNotPerJobPruned(_TempCacheMixin, unittest.TestCase):
+    """A blob is shared by every job whose payload hashes the same, so the
+    per-job and orphan cleanup paths must never touch it — deleting one job's
+    blob would strand another job's cell."""
+
+    def test_cleanup_job_media_leaves_blobs(self):
+        blob = self._make_blob("abc123def456abcd.parquet")
+        self._make_job_media("img", "img", "abc123")
+
+        cleanup_job_media("abc123", self.cachedir)
+        self.assertTrue(os.path.exists(blob))
+
+    def test_clean_orphaned_media_leaves_blobs(self):
+        # No sample cache at all, so every job key is dead: maximally aggressive.
+        blob = self._make_blob("abc123def456abcd.parquet")
+
+        orphans, _ = clean_orphaned_media(self.cachedir, dry_run=False)
+        self.assertEqual(orphans, [])
+        self.assertTrue(os.path.exists(blob))
 
 
 class TestCleanOrphanedMedia(_TempCacheMixin, unittest.TestCase):

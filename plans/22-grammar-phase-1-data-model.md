@@ -213,6 +213,52 @@ exact sentence.
   removing `dataset_list`/`ResultHmap` code (phase 3).
 - A2/A3-style serialization of plot *choices* — plans/views arrive in phases 2 and 5.
 
+## Amendments discovered during implementation
+
+Recorded per the plans-README rule that claims which stopped holding are stated
+rather than silently worked around:
+
+1. **The environment is netCDF3-only** (scipy is the sole xarray engine), which
+   silently narrows int64→int32 and raises on other values. D1 therefore carries an
+   empirically-derived dtype whitelist (`_NETCDF3_SAFE_DTYPES` in
+   `bencher/blob_store.py`, evidence in its comment); Datasets/DataArrays with unsafe
+   dtypes take the pickle fallback rather than risk corruption. Structured-format
+   failures of any kind fall back to pickle with a logged warning — a worker payload
+   inside the documented contract must never abort a sweep.
+2. **D4's legacy wording was wrong and is amended.** "Render via D3(2) where the list
+   is available" would resolve in-range historical indices against the *final* run's
+   `dataset_list`, rendering the current payload under historical labels (reproduced
+   in review). Legacy int cells are trusted only at the final time event; earlier
+   events render the placeholder.
+3. **No path passthrough in the blob store**: a str/Path payload is pickled like any
+   object so the render-time container receives exactly what the worker stored.
+4. **Per-sample containers** are preserved by materializing the pickled
+   `ResultDataSet` wrapper (such payloads store as `.pkl`); an unpicklable per-sample
+   container (e.g. a lambda) is dropped with a warning and the bare payload stored —
+   class-level containers still apply.
+5. Both owner decisions resolved to their recorded defaults: the pickle fallback is
+   allowed (flagged for A3), and no `CACHE_VERSION` bump.
+6. D4's gallery evidence required a new example —
+   `example_result_dataset_1d_over_time` — since no existing example combined
+   `ResultDataSet` with `over_time`.
+7. **D4's legacy-trust flag is offered to `plot_callback`, not imposed on it**
+   (found in post-implementation review). `plot_callback` is a public extension
+   point that a caller may satisfy with a plain `(dataset, result_var)` function,
+   so passing `legacy_trusted=` unconditionally turned any such callback into a
+   `TypeError` the moment its result went `over_time` — a regression against
+   pre-plan-22 behaviour, since the old `isel(over_time=-1)` path passed no extra
+   keyword. `_pane_over_time_dataset` now passes it only to callbacks that declare
+   it (or carry `**kwargs`); every callback in bencher does, so behaviour is
+   unchanged internally.
+8. **The blob store is a third cache category, not media.** `cache_management`
+   gained `_CONTENT_FOLDERS` rather than extending `_MEDIA_FOLDERS`, whose contract
+   ("contains per-job-key subdirectories") is what makes per-job and orphan cleanup
+   safe — a content-addressed blob may back cells from many job keys, so it must
+   never be pruned per job. Blobs are counted by `cache_stats` (they grow unbounded
+   until an explicit clear, so they must not be invisible in a size audit) and
+   removed by `clear_media`, degrading affected cells to placeholders exactly as a
+   cleared image does.
+
 ## Coordination
 
 - **A3/A4:** D1's store is a deliberate step toward A4's artifact manifests — keep the

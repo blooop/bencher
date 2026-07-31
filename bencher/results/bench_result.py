@@ -186,7 +186,9 @@ class BenchResult(
         result_instance = result_type(self.bench_cfg)
         result_instance.ds = self.ds
         result_instance.plt_cnt_cfg = self.plt_cnt_cfg
-        result_instance.dataset_list = self.dataset_list
+        # getattr: a result pickled before dataset_list existed (or with it stripped)
+        # must still render — the legacy read path degrades to a placeholder instead.
+        result_instance.dataset_list = getattr(self, "dataset_list", [])
         result_instance.regression_report = self.regression_report
         # Build kwargs for the plot call, only include reduce if explicitly set
         plot_kwargs = {
