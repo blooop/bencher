@@ -137,6 +137,10 @@ reachable/unreachable, pass/fail), always use `ResultBool` — it locks bounds t
 and produces correct boolean-style plots. Only use `ResultFloat` for continuous metrics.
 See the [Result Types gallery](reference/meta/result_types/index) for examples of each type.
 
+**Deprecated:** `bn.ResultHmap` is deprecated (it stores its data outside the result
+dataset) — use `bn.ResultContainer` or `bn.ResultReference` with a declared
+`container=` instead.
+
 **Rendering stored data:** `ResultDataSet` stores the payload without interpreting
 its type. Without a renderer, Panel displays the raw object. Pass `container=` a
 callable taking the stored object and returning anything Panel can display, and every

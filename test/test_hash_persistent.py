@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 import textwrap
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from enum import Enum
@@ -56,9 +57,13 @@ def _discover_all_result_classes():
 
 def _make_instance(cls):
     """Create an instance of a result class with sensible defaults."""
-    if cls is ResultVec:
-        return cls(size=3, units="ul", doc="test")
-    return cls(doc="test")
+    with warnings.catch_warnings():
+        # Deprecated classes (e.g. ResultHmap) warn on instantiation but their
+        # hashes must stay pinned until they are actually removed.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        if cls is ResultVec:
+            return cls(size=3, units="ul", doc="test")
+        return cls(doc="test")
 
 
 def _collect_mro_slots(cls):

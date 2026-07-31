@@ -252,13 +252,28 @@ class ResultVec(param.List):
 
 
 class ResultHmap(param.Parameter):
-    """A class to represent a holomap return type.
+    """Deprecated: use ResultContainer or ResultReference with a declared container instead.
+
+    A class to represent a holomap return type. Its data lives out-of-band in
+    ``bench_res.hmaps`` rather than in the canonical result dataset, so it cannot
+    participate in the A6 grammar-of-ND-data migration; removal is scheduled for
+    a later phase of that migration.
 
     Note: this class has no __slots__, so _hash_slots hashes only the class name.
     Every ResultHmap instance produces the same hash. This is intentional — there are
     no configuration attributes that would differentiate instances. If a slot is added
     in the future, _hash_slots will automatically include it.
     """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "ResultHmap is deprecated and will be removed in a later phase of the A6 "
+            "grammar-of-nd-data migration; use ResultContainer or ResultReference with "
+            "a declared container= instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
     def hash_persistent(self) -> str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
@@ -458,6 +473,11 @@ class ResultReference(param.Parameter):
 
     The callback receives only the object — no plot kwargs — so single-argument
     callables are safe, and one renderer works for both this and a ``ResultDataSet``.
+
+    This is the documented same-process escape hatch: the stored object stays live,
+    is stripped by both the result cache write and the collect/render split, and is
+    never load-bearing for the core rendering algebra. Use :class:`ResultDataSet`
+    when the payload should survive process boundaries.
     """
 
     __slots__ = ["units", "obj", "container", "max_time_events"]

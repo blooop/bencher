@@ -9,6 +9,7 @@ fails loudly here instead of corrupting datasets.
 
 import math
 import unittest
+import warnings
 
 import numpy as np
 
@@ -37,7 +38,11 @@ from bencher.variables.results import (
 
 def _instantiate(cls):
     """A default instance of *cls*; ResultVec needs an explicit size."""
-    return cls(size=2) if cls is ResultVec else cls()
+    with warnings.catch_warnings():
+        # ResultHmap warns on instantiation (deprecated); its storage semantics
+        # are still pinned here until phase 3 removes it.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return cls(size=2) if cls is ResultVec else cls()
 
 
 def _nan_backed_vars():
@@ -102,7 +107,7 @@ class TestDataVarResultTypes(unittest.TestCase):
         # ResultVec expands to one column per element; ResultHmap is stored
         # out-of-band — neither gets a single data var.
         self.assertNotIsInstance(ResultVec(size=2), DATA_VAR_RESULT_TYPES)
-        self.assertNotIsInstance(ResultHmap(), DATA_VAR_RESULT_TYPES)
+        self.assertNotIsInstance(_instantiate(ResultHmap), DATA_VAR_RESULT_TYPES)
 
 
 class TestEveryResultTypeIsStorable(unittest.TestCase):
