@@ -69,9 +69,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cache_results` and `cache_samples` both default to `False`, so with the defaults nothing
   on disk references the blobs of a plain (non-`over_time`) sweep, and a stored history
   holds paths rather than payload copies. GC is therefore an offline maintenance step, as
-  `clean_orphaned_media` already is — `min_age_seconds=` adds a grace period if you must run
-  it near a live sweep — and there is deliberately no size- or age-based eviction of
-  *referenced* blobs, because nothing could restore them. An unreadable cache entry makes
+  `clean_orphaned_media` already is. `min_age_seconds=` adds a grace period, but it is a
+  mitigation, not a guarantee: it protects blobs a concurrent sweep *wrote* during the
+  window, yet a sweep that deduplicates onto an existing old blob gets no protection at any
+  grace period — a content hit skips the write and never refreshes the file's mtime
+  (pinned by `test_min_age_does_not_protect_a_new_reference_to_an_old_deduplicated_blob`).
+  Run GC only when no sweep is in flight. There is deliberately no size- or age-based
+  eviction of *referenced* blobs, because nothing could restore them. An unreadable cache
+  entry makes
   absence-of-reference unprovable, so a corrupt cache collects **nothing** in either mode
   and warns with the offending entries named.
 

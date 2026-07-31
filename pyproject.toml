@@ -205,8 +205,12 @@ cache-clear-media = "python -c 'from bencher.cache_management import clear_media
 cache-clean-orphans = "python -c 'from bencher.cache_management import clean_orphaned_media; clean_orphaned_media(dry_run=False)'"
 # Reachability GC for the content-addressed blob store. Report first (blobs are
 # primary storage, so a mistaken delete is data loss), then reclaim.
+# The reclaim task passes a one-hour grace period so blobs a concurrent sweep just
+# wrote are not collected. This is a mitigation, not a guarantee: no grace period
+# protects a blob a concurrent sweep deduplicated onto (a content hit never
+# refreshes mtime) — run GC only when no sweep is in flight.
 cache-blob-orphans = "python -c 'from bencher.cache_management import print_orphaned_blobs; print_orphaned_blobs()'"
-cache-blob-gc = "python -c 'from bencher.cache_management import print_orphaned_blobs; print_orphaned_blobs(dry_run=False)'"
+cache-blob-gc = "python -c 'from bencher.cache_management import print_orphaned_blobs; print_orphaned_blobs(dry_run=False, min_age_seconds=3600)'"
 
 #demos
 benchmark-save = "python scripts/benchmark_save.py"

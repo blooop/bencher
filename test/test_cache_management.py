@@ -16,6 +16,7 @@ import xarray as xr
 from diskcache import Cache
 
 import bencher as bn
+from bencher import cache_management
 from bencher.blob_store import materialize_blob
 from bencher.cache_management import (
     CACHE_VERSION,
@@ -415,6 +416,22 @@ class TestBlobReachability(_TempCacheMixin, unittest.TestCase):
         )
         reach = blob_reachability(self.cachedir)
         self.assertEqual(reach.names, frozenset({BLOB_A, BLOB_B, BLOB_C}))
+
+    def test_every_managed_cache_is_a_gc_root_or_the_documented_exclusion(self):
+        """Guard on the hand-maintained coupling between the two cache lists.
+
+        ``_BLOB_REFERENCE_CACHES`` is a manually curated subset of
+        ``_MANAGED_CACHES``: every managed diskcache must either be scanned as a
+        GC root or be ``sample_cache``, whose exclusion is argued in the comment
+        on ``_BLOB_REFERENCE_CACHES`` (it holds pre-materialization worker
+        payloads, which cannot name a blob).  Adding a new managed cache that
+        can hold datasets without also making it a root would let GC delete
+        live blobs — this test forces that decision to be made explicitly.
+        """
+        # pylint: disable=protected-access  # the coupling of the two module constants is the subject
+        managed = set(cache_management._MANAGED_CACHES)
+        roots = set(cache_management._BLOB_REFERENCE_CACHES)
+        self.assertEqual(managed, roots | {"sample_cache"})
 
 
 class TestCleanOrphanedBlobs(_TempCacheMixin, unittest.TestCase):

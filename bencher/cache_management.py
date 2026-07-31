@@ -754,8 +754,16 @@ def clean_orphaned_blobs(
         as placeholders).  Pass such archives as *extra_roots* to protect them.
         The same applies to a result held only in memory by a sweep running
         concurrently with GC: with the default ``cache_results=False`` nothing
-        on disk references its blobs yet.  ``min_age_seconds`` is the guard for
-        that case; running GC between sessions avoids it entirely.
+        on disk references its blobs yet.  ``min_age_seconds`` mitigates only
+        part of that exposure — it protects a blob the concurrent sweep *wrote*
+        during the grace window, but **not** a blob the sweep deduplicated
+        onto: a content hit skips the write entirely and never refreshes the
+        file's mtime, so an old blob that just gained a new reference looks
+        old to any grace period, however large
+        (``test_blob_store_races.py::test_min_age_does_not_protect_a_new_reference_to_an_old_deduplicated_blob``
+        pins this).  The only sufficient guard is to run GC with no sweep in
+        flight — between sessions, as :func:`clean_orphaned_media` is already
+        used.
 
     An unreadable root makes the scan untrustworthy, since a record that cannot
     be deserialized may name any blob.  In that case **nothing** is reported or
@@ -768,8 +776,10 @@ def clean_orphaned_blobs(
         extra_roots: Saved-result pickles, or directories of them, whose
             references count as live.  See :func:`blob_reachability`.
         min_age_seconds: Skip blobs modified more recently than this.  A
-            non-zero grace period protects an in-flight sweep whose result is
-            not on disk yet; 0 (the default) collects regardless of age.
+            non-zero grace period protects blobs an in-flight sweep has
+            *written* during the window, but not an old blob it deduplicated
+            onto (see the warning above); 0 (the default) collects regardless
+            of age.
 
     Returns:
         (orphan_blobs, total_bytes) — paths of unreferenced blob files and their
