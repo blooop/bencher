@@ -29,7 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Both checks are raised **outside** `store_results`'s `except catch` block on purpose: a
   bad return shape is a harness-contract error, not a sample fault, so `catch=` does not
   absorb it (plan 23 decision 2). Previously `catch=Exception` did swallow the serial
-  `assert`, restoring the silent behaviour. Tests pin this.
+  `assert`, restoring the silent behaviour. Tests pin this. The `Bench.optimize` path is
+  the documented exception — its objective runs under `study.optimize(..., catch=catch)`,
+  so a `catch=` there still absorbs the error. That is pre-existing rather than new: the
+  old code was absorbed at the same point, as an `AssertionError` on serial and a `None`
+  subscript `TypeError` on the pool.
 
 ### Changed
 - **`BenchRunCfg.executor` is normalized to an `Executors` member at the sweep boundary**

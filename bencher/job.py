@@ -537,7 +537,7 @@ class JobFunctionCache(FutureCache):
         self,
         function: Callable,
         overwrite: bool = False,
-        executor: Executors = Executors.SERIAL,
+        executor: Executors | str = Executors.SERIAL,
         cache_name: str = "fcache",
         tag_index: bool = True,
         size_limit: int = int(100e8),

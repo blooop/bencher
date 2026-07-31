@@ -1680,6 +1680,13 @@ class Bench(BenchPlotServer):
         # Same boundary check as store_results: the optimize path consumes the result
         # dict directly, so a worker returning None must fail here by name rather than
         # as a downstream subscript error (B3, plan 23 P2).
+        #
+        # Unlike the sweep path this one *is* inside a `catch=`, because the objective
+        # runs under `study.optimize(..., catch=catch)`. That asymmetry is pre-existing
+        # and not a behaviour change: with `catch=Exception` the old code was absorbed
+        # here too, as an AssertionError on serial and a `None` subscript TypeError on
+        # the pool. Only the message and the serial/parallel agreement improve. Making
+        # optuna's catch selective is its own decision, not B3's.
         return require_worker_result(self.sample_cache.submit(job).result(), job.job_id)
 
     def _make_optuna_objective(

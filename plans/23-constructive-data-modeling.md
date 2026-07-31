@@ -883,7 +883,16 @@ than silently worked around.
    subject under test. The useful implication: for a worker whose return type is
    annotated, B3 is already a **static** error; `require_worker_result` is what covers the
    unannotated case, which is the common one.
-9. **Cache safety confirmed for the C13 normalization** (§7's requirement). `executor`
+9. **The "not routed through `catch=`" guarantee has one documented exception, found by
+   self-review after Sourcery hit its weekly cap again.** It holds on the sweep path,
+   which is what decision 2 is about. It does **not** hold on `Bench.optimize`: that
+   objective runs under `study.optimize(..., catch=catch)`, so a `catch=` there absorbs
+   the `TypeError`. This is pre-existing rather than introduced — with `catch=Exception`
+   the old code was absorbed at the same point, as an `AssertionError` on serial and a
+   `None`-subscript `TypeError` on the pool — so B3 still strictly improves both the
+   message and serial/parallel agreement. Making optuna's catch selective is its own
+   decision. Recorded because the unqualified claim would have been an overstatement.
+10. **Cache safety confirmed for the C13 normalization** (§7's requirement). `executor`
    reaches no persistent hash — it appears in neither `identity.py` nor `worker_job.py` —
    and for the one place it is stringified (`bench_cfg.py`'s sampling summary) a member and
    the raw string are indistinguishable: `str(Executors.SERIAL) == str("SERIAL")` and
