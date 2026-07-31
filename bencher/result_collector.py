@@ -170,12 +170,30 @@ def _materialize_dataset_value(result_value) -> str:
     A per-sample ``container=`` attached inside ``benchmark()`` has to travel
     with the payload to keep the declared-container precedence chain intact, so
     a wrapper carrying one is materialized whole (pickled); otherwise the bare
-    payload gets its structured blob format (parquet/netCDF/...).
+    payload gets its structured blob format (parquet/netCDF/...).  A wrapper
+    whose container cannot be pickled (a lambda, a closure) never fails the
+    sweep: the bare payload is stored instead and the per-sample container is
+    dropped, with the class-level container still applying at render.
     """
+    cache_dir = Path("cachedir").absolute()
     payload = result_value
-    if isinstance(payload, ResultDataSet) and getattr(payload, "container", None) is None:
-        payload = payload.obj
-    return materialize_blob(payload, Path("cachedir").absolute())
+    if isinstance(payload, ResultDataSet):
+        if getattr(payload, "container", None) is None:
+            payload = payload.obj
+        else:
+            try:
+                return materialize_blob(payload, cache_dir)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "ResultDataSet sample: per-sample container %r could not be "
+                    "pickled (%s: %s); storing the bare payload without it — a "
+                    "class-level container still applies at render",
+                    payload.container,
+                    type(exc).__name__,
+                    exc,
+                )
+                payload = payload.obj
+    return materialize_blob(payload, cache_dir)
 
 
 class ResultCollector:

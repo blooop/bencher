@@ -9,7 +9,9 @@ Covers items 2-5 and 7 of the plan's test list:
   renders; the same result without its dataset_list renders a labelled
   placeholder instead of raising;
 - item 5: over_time with ResultDataSet across >=2 time points renders ALL points
-  (the D4 payoff), including a mixed history of legacy int and path cells;
+  (the D4 payoff); legacy int cells in a history are only trusted at the final
+  time index (dataset_list holds the final run's payloads alone), so historical
+  legacy cells render a labelled placeholder rather than the wrong run's payload;
 - item 7: the result_is_missing truth table per relevant type.
 
 Item 1 lives in test/test_blob_store.py, item 6 in test/test_hash_persistent.py,
@@ -26,7 +28,7 @@ import pandas as pd
 import panel as pn
 
 import bencher as bn
-from bencher.blob_store import load_blob
+from bencher.blob_store import load_blob, materialize_blob
 from bencher.results.dataset_result import DataSetResult
 from bencher.variables.results import (
     ResultDataSet,
@@ -80,6 +82,42 @@ class PerSampleSweep(PathCellSweep):
 
     def benchmark(self):
         self.table = bn.ResultDataSet(expected_frame(self.scale), container=sample_container)
+
+
+class LambdaContainerSweep(PathCellSweep):
+    """Worker attaches an unpicklable per-sample container (a lambda)."""
+
+    def benchmark(self):
+        self.table = bn.ResultDataSet(expected_frame(self.scale), container=lambda df: df)
+
+
+def str_container(payload: str) -> pn.pane.Markdown:
+    return pn.pane.Markdown(f"declared str={payload}")
+
+
+class StrPayloadSweep(bn.ParametrizedSweep):
+    """Worker stores a plain path string as its ResultDataSet payload."""
+
+    scale = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    table = bn.ResultDataSet(container=str_container, doc="path-string payload")
+
+    def benchmark(self):
+        self.table = bn.ResultDataSet("/tmp/whatever.csv")
+
+
+def nested_frame() -> pd.DataFrame:
+    """A frame pyarrow cannot write as parquet (nested object cells)."""
+    return pd.DataFrame({"a": [{"nested": 1}, [1, 2]]})
+
+
+class NestedFrameSweep(bn.ParametrizedSweep):
+    """Worker returns a DataFrame that has no parquet representation."""
+
+    scale = bn.FloatSweep(default=1.0, bounds=[1.0, 2.0], samples=2)
+    table = bn.ResultDataSet(doc="nested-object dataframe")
+
+    def benchmark(self):
+        self.table = bn.ResultDataSet(nested_frame())
 
 
 class OverTimeSweep(bn.ParametrizedSweep):
@@ -291,11 +329,19 @@ class TestOverTimeRendersAllPoints(unittest.TestCase):
         res._to_dataset_cache.clear()  # pylint: disable=protected-access
         return res
 
-    def test_mixed_history_renders_legacy_cell_from_dataset_list(self):
+    def test_mixed_history_legacy_event_is_placeholder_even_with_list(self):
+        """F5: dataset_list is the *final* run's, so a historical legacy int cell
+        must never resolve against it — that would render the current payload
+        under a historical label."""
         res = self._make_mixed([bn.ResultDataSet(tagged_frame(SCALES[0], 99))])
-        rendered = container_output(res.to(DataSetResult))
-        self.assertEqual(len(rendered), len(SCALES) * OVER_TIME_RUNS)
-        self.assertIn("declared run=99 scale=1", rendered)
+        view = res.to(DataSetResult)
+        rendered = container_output(view)
+        # The three path cells render; the historical legacy cell degrades.
+        self.assertEqual(len(rendered), len(SCALES) * OVER_TIME_RUNS - 1)
+        self.assertNotIn("declared run=99 scale=1", rendered)
+        placeholders = placeholder_output(view)
+        self.assertEqual(len(placeholders), 1)
+        self.assertIn("only the final time event", placeholders[0])
 
     def test_mixed_history_without_dataset_list_degrades_to_placeholder(self):
         res = self._make_mixed([])
@@ -304,6 +350,100 @@ class TestOverTimeRendersAllPoints(unittest.TestCase):
         # The three path cells still render; the orphaned legacy cell degrades.
         self.assertEqual(len(rendered), len(SCALES) * OVER_TIME_RUNS - 1)
         self.assertEqual(len(placeholder_output(view)), 1)
+
+
+class TestLegacyOverTimeHistory(unittest.TestCase):
+    """F5: a pre-plan-22 over_time result — int cells at EVERY time point but only
+    the final run's dataset_list — must render the final event's real content and
+    a labelled placeholder for every historical event, never the current payload
+    under a historical label."""
+
+    def _make_full_legacy(self) -> bn.BenchResult:
+        res = run_sweep_over_time(OverTimeSweep(), "test_grammar_over_time_full_legacy")
+        da = res.ds["table"]
+        for i, scale in enumerate(SCALES):
+            da.loc[{"scale": scale}] = i  # in-range int cell at every time point
+        res.dataset_list = [
+            bn.ResultDataSet(tagged_frame(scale, OVER_TIME_RUNS - 1)) for scale in SCALES
+        ]
+        res._to_dataset_cache.clear()  # pylint: disable=protected-access
+        return res
+
+    def test_final_event_real_content_earlier_event_placeholder(self):
+        res = self._make_full_legacy()
+        view = res.to(DataSetResult)
+        # Only the final event resolves against the (final run's) dataset_list.
+        self.assertEqual(
+            container_output(view),
+            [f"declared run={OVER_TIME_RUNS - 1} scale={scale:g}" for scale in SCALES],
+        )
+        # Every historical event degrades to a labelled placeholder.
+        placeholders = placeholder_output(view)
+        self.assertEqual(len(placeholders), len(SCALES) * (OVER_TIME_RUNS - 1))
+        for text in placeholders:
+            self.assertIn("only the final time event", text)
+
+
+class TestSerializationRobustness(unittest.TestCase):
+    """F1/F3/F6 at pipeline level: awkward payloads never fail collection."""
+
+    def test_nested_object_frame_sweep_completes_and_round_trips(self):
+        """F1 escalation: a payload parquet cannot represent completes collection
+        (no raise from store_results) and round-trips via the pickle fallback."""
+        res = run_sweep(NestedFrameSweep(), "test_grammar_nested_frame")
+        ds = res.to_dataset()
+        for scale in SCALES:
+            cell = ds["table"].sel(scale=scale).values.item()
+            with self.subTest(scale=scale):
+                self.assertIsInstance(cell, str)
+                self.assertTrue(cell.endswith(".pkl"))
+                pd.testing.assert_frame_equal(load_blob(cell), nested_frame())
+
+    def test_str_payload_renders_the_stored_string(self):
+        """F3: a path-string payload reaches the container chain as exactly the
+        string the worker stored (the file need not exist)."""
+        res = run_sweep(StrPayloadSweep(), "test_grammar_str_payload")
+        cell = res.to_dataset()["table"].sel(scale=SCALES[0]).values.item()
+        self.assertTrue(cell.endswith(".pkl"))
+        self.assertEqual(load_blob(cell), "/tmp/whatever.csv")
+        rv = res.bench_cfg.result_vars[0]
+        pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
+        self.assertEqual(pane.object, "declared str=/tmp/whatever.csv")
+        self.assertEqual(
+            container_output(res.to(DataSetResult)),
+            ["declared str=/tmp/whatever.csv"] * len(SCALES),
+        )
+
+    def test_unpicklable_per_sample_container_is_dropped_not_fatal(self):
+        """F6: a lambda per-sample container cannot travel with the payload; the
+        bare payload is stored and the class-level container applies at render."""
+        res = run_sweep(LambdaContainerSweep(), "test_grammar_lambda_container")
+        self.assertEqual(res.dataset_list, [])
+        cell = res.to_dataset()["table"].sel(scale=SCALES[0]).values.item()
+        self.assertIsInstance(cell, str)
+        self.assertTrue(Path(cell).is_file())
+        pd.testing.assert_frame_equal(load_blob(cell), expected_frame(SCALES[0]))
+        rv = res.bench_cfg.result_vars[0]
+        pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)
+        self.assertEqual(pane.object, "declared sum=3")
+
+
+class TestUnloadableBlobPlaceholder(unittest.TestCase):
+    """F7: a path cell whose blob file is gone renders a placeholder, never raises."""
+
+    def test_deleted_blob_renders_placeholder_not_raise(self):
+        res = run_sweep(PathCellSweep(), "test_grammar_deleted_blob")
+        rv = res.bench_cfg.result_vars[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            blob = materialize_blob(expected_frame(3.0), tmp)
+        # TemporaryDirectory cleanup deleted the blob file behind the path cell.
+        self.assertFalse(Path(blob).exists())
+        ds = res.to_dataset().copy(deep=True)
+        ds["table"].loc[{"scale": SCALES[0]}] = blob
+        pane = res.ds_to_container(ds.sel(scale=SCALES[0]), rv, container=None)
+        self.assertIsInstance(pane, pn.pane.Markdown)
+        self.assertIn("could not be loaded", pane.object)
+        self.assertIn("table", pane.object)
 
 
 class TestResultIsMissingTruthTable(unittest.TestCase):

@@ -912,9 +912,10 @@ class BenchResultBase:
                 if isinstance(result_var, ResultDataSet):
                     # Path-backed cells (plan 22) make historical payloads loadable
                     # from any run, so every time point renders like the other blob
-                    # types.  Legacy index cells inside a mixed history render where
-                    # dataset_list still covers them and as a labelled placeholder
-                    # where it does not.
+                    # types.  Legacy index cells are only trusted at the final time
+                    # index — dataset_list belongs to the final run, so an in-range
+                    # historical index would silently render the *current* payload
+                    # under a historical label; those render a labelled placeholder.
                     return self._pane_over_time_dataset(
                         dataset, result_var, plot_callback, **kwargs
                     )
@@ -1065,18 +1066,24 @@ class BenchResultBase:
         Path-backed cells are meaningful in any process, so history points render
         instead of being cut down to the latest event (the pre-plan-22
         ``isel(over_time=-1)`` workaround).  A time point whose cell is missing
-        (either generation's sentinel) is skipped; a legacy index cell renders
-        through ``ds_to_container``'s legacy path — the payload where
-        ``dataset_list`` covers it, a placeholder where it does not.
+        (either generation's sentinel) is skipped.  A legacy index cell is only
+        trusted at the *final* time index: ``dataset_list`` holds the final run's
+        payloads alone, so a pre-plan history with in-range indices at every time
+        point would otherwise render the current payload under historical labels.
+        Untrusted legacy cells render as a labelled placeholder instead.
         """
         time_vals = list(dataset.coords["over_time"].values)
         is_datetime = np.issubdtype(dataset.coords["over_time"].dtype, np.datetime64)
         labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
 
         items = []
+        final_idx = len(labels) - 1
         for idx, label in enumerate(labels):
             pane = plot_callback(
-                dataset=dataset.isel(over_time=idx), result_var=result_var, **kwargs
+                dataset=dataset.isel(over_time=idx),
+                result_var=result_var,
+                legacy_trusted=idx == final_idx,
+                **kwargs,
             )
             if pane is None:
                 continue
@@ -1135,7 +1142,9 @@ class BenchResultBase:
                 return candidate
         return None
 
-    def _dataset_sample_to_container(self, val: Any, result_var: Parameter, container) -> Any:
+    def _dataset_sample_to_container(  # pylint: disable=too-many-return-statements
+        self, val: Any, result_var: Parameter, container, legacy_trusted: bool = True
+    ) -> Any:
         """Render one stored ``ResultDataSet`` cell, whichever generation stored it.
 
         Three cell shapes exist (plan 22, D3):
@@ -1144,19 +1153,41 @@ class BenchResultBase:
            ``load_blob``; a payload materialized with a per-sample container is a
            pickled ``ResultDataSet`` wrapper, so the full precedence chain
            (renderer-supplied → sample's → class's → raw object) still applies;
+           a blob that cannot be loaded (deleted, corrupt) renders as a labelled
+           placeholder — never a crash;
         2. an ``int`` index (a result pickled or cached before plan 22) — looked
            up in ``dataset_list`` when this result still carries the list that
-           produced it, and rendered as a labelled placeholder otherwise (an old
-           cell without its list is honestly unrecoverable — never a crash);
+           produced it *and* the cell is trusted (see below), and rendered as a
+           labelled placeholder otherwise (an old cell without its list is
+           honestly unrecoverable — never a crash);
         3. the missing sentinel of either generation (``"NAN"`` / ``-1``) →
            ``None``, which pane composition skips.
+
+        ``legacy_trusted`` guards the over_time case: ``dataset_list`` holds only
+        the *final* run's payloads, so a legacy int at a historical time index is
+        in range yet points at the wrong run's payload.  The over_time render
+        path passes ``legacy_trusted=False`` for every non-final time index;
+        every other call site keeps the default ``True``.
         """
         if result_is_missing(result_var, val):
             return None
         if isinstance(val, str):
             from bencher.blob_store import load_blob
 
-            payload = load_blob(val)
+            try:
+                payload = load_blob(val)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "ResultDataSet '%s': failed to load blob %r (%s: %s)",
+                    result_var.name,
+                    val,
+                    type(exc).__name__,
+                    exc,
+                )
+                return pn.pane.Markdown(
+                    f"*'{result_var.name}': stored blob could not be loaded "
+                    "and is no longer recoverable from this result*"
+                )
             sample = payload if isinstance(payload, ResultDataSet) else None
             if sample is not None:
                 payload = sample.obj
@@ -1175,6 +1206,18 @@ class BenchResultBase:
             )
             return pn.pane.Markdown(
                 f"*'{result_var.name}': stored cell is not renderable ({type(val).__name__})*"
+            )
+        if not legacy_trusted:
+            logger.warning(
+                "ResultDataSet '%s': legacy cell %r at a historical time point; "
+                "dataset_list only holds the final run's payloads, so the "
+                "historical payload is unrecoverable",
+                result_var.name,
+                val,
+            )
+            return pn.pane.Markdown(
+                f"*'{result_var.name}': stored payload predates the path-backed format; "
+                "only the final time event's payload is recoverable from this result*"
             )
         dataset_list = getattr(self, "dataset_list", None)
         if not dataset_list or not 0 <= idx < len(dataset_list):
@@ -1197,9 +1240,20 @@ class BenchResultBase:
         return resolved(ref.obj) if resolved is not None else ref.obj
 
     def ds_to_container(  # pylint: disable=too-many-return-statements
-        self, dataset: xr.Dataset, result_var: Parameter, container, **kwargs
+        self,
+        dataset: xr.Dataset,
+        result_var: Parameter,
+        container,
+        legacy_trusted: bool = True,
+        **kwargs,
     ) -> Any:
         """Render one sample of *result_var* out of *dataset*.
+
+        ``legacy_trusted`` is threaded through to
+        :meth:`_dataset_sample_to_container` for ``ResultDataSet`` cells; the
+        over_time render path passes ``False`` for historical time indices whose
+        legacy int cells cannot be resolved against the final run's
+        ``dataset_list`` (see that method).
 
         Two kinds of container can apply, and they are different contracts:
 
@@ -1228,7 +1282,7 @@ class BenchResultBase:
                 )
         val = self.zero_dim_da_to_val(dataset[result_var.name])
         if isinstance(result_var, ResultDataSet):
-            return self._dataset_sample_to_container(val, result_var, container)
+            return self._dataset_sample_to_container(val, result_var, container, legacy_trusted)
         if isinstance(result_var, ResultReference):
             ref = self.object_index[val]
             if ref is not None:
