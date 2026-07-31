@@ -49,6 +49,7 @@ without additional context. **Read the whole plan before starting it.**
 | 20 | [Duplicate declared variables](20-duplicate-declared-variables.md) | Low–Med | Small | **Implemented** in #1011 (stack 2/5) |
 | 21 | [Per-sample fault tolerance in sweeps](21-sample-fault-tolerance.md) | Medium | Medium | **Implemented** in #1013; `catch` lives on `BenchRunCfg` only (amended per A5 R1) |
 | 22 | [Grammar phase 1: self-describing canonical dataset](22-grammar-phase-1-data-model.md) | Medium | Medium | First PR of the A6 stack; 15–21 have landed, ready to implement |
+| 23 | [Constructive data modeling & type enforcement](23-constructive-data-modeling.md) | Low–Med | Medium (12 phased PRs) | P1–P3 (ty gate + live bug fixes) anytime; P4 (result-type registry) before A6 phase 2; P5–P11 independent |
 
 Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
 Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on
