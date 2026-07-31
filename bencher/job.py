@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import auto
+from typing import Protocol, assert_never, runtime_checkable
 
 from diskcache import Cache
 from strenum import StrEnum
@@ -23,6 +24,23 @@ except ImportError as e:
 
 
 _MISSING = object()  # Sentinel for cache.get() miss detection
+
+
+@runtime_checkable
+class SupportsSubmit(Protocol):
+    """The executor surface bencher actually uses.
+
+    ``Executors.factory`` was annotated ``-> Future | None``, which is the one thing
+    it never returns: a ``Future`` is what ``submit()`` *hands back*. The concrete
+    values are a ``ProcessPoolExecutor`` and -- for SCOOP -- a *module*, which is why
+    naming ``concurrent.futures.Executor`` would be a second, smaller lie. Two
+    methods is the whole contract, so a Protocol is both the honest type and the
+    narrow one (plan 23 P2).
+    """
+
+    def submit(self, fn: Callable, /, *args, **kwargs) -> Future: ...
+
+    def shutdown(self, wait: bool = True) -> None: ...
 
 
 class Job:
@@ -97,6 +115,30 @@ def normalize_catch(catch) -> tuple[type[BaseException], ...]:
     return catch
 
 
+def require_worker_result(result: dict | None, job_id: str) -> dict:
+    """Reject a worker that returned ``None`` instead of a result dict.
+
+    B3 (plan 23 P2): this used to be a bare ``assert`` in ``JobFuture.__init__``,
+    which fired only on the serial path -- and not at all under ``python -O``. On
+    MULTIPROCESSING/SCOOP the future was set, ``result()`` returned ``None``, and
+    ``store_results`` skipped its whole body behind ``if result is not None:`` with
+    no ``else``, so the sweep completed green with an all-sentinel dataset and
+    ``n_failed == 0``. The same user error was loud or silent depending on an
+    unrelated config knob; this is the one check both paths funnel through.
+
+    Deliberately **not** routed through ``catch=`` (plan 23 decision 2): a missing
+    return value is a harness-contract error, not a sample fault, so every call site
+    must raise it from *outside* its ``except catch`` block.
+    """
+    if result is None:
+        raise TypeError(
+            f"The benchmark function for job {job_id} returned None. "
+            "Make sure you are returning a dict or `super().__call__(**kwargs)` "
+            "from your __call__ function."
+        )
+    return result
+
+
 @dataclass(frozen=True)
 class SampleFailure:
     """One sample that raised and was tolerated because of ``catch=``.
@@ -149,29 +191,32 @@ class JobFuture:
             res (dict, optional): The immediate result, if available. Defaults to None.
             future (Future, optional): The future representing the pending result. Defaults to None.
             cache (Cache, optional): The cache to store results in. Defaults to None.
-
-        Raises:
-            AssertionError: If neither res nor future is provided
         """
         self.job = job
         self.res = res
         self.future = future
-        # either a result or a future needs to be passed
-        assert self.res is not None or self.future is not None, (
-            "make sure you are returning a dict or super().__call__(**kwargs) from your __call__ function"
-        )
-
+        # No `assert res is not None or future is not None` here any more (B3, plan
+        # 23 P2). It only caught a None worker return on the serial path, where
+        # `submit()` runs inside the caller's `except catch` block and `catch=` would
+        # therefore have absorbed it. Both paths now converge on
+        # require_worker_result() at the point where the result is consumed.
         self.cache = cache
 
-    def result(self) -> dict:
+    def result(self) -> dict | None:
         """Get the job result, waiting for completion if necessary.
 
         If the result is not immediately available (i.e., it's a future),
         this method will wait for the future to complete. Once the result
         is available, it will be cached if a cache is provided.
 
+        Returns ``None`` when the worker returned nothing, which every caller must
+        reject via ``require_worker_result()``. The annotation is deliberately
+        honest rather than narrow: ``JobFuture`` can represent "no result and no
+        future", and only plan 23 P5's ``Ready(dict) | Pending(Future)`` split makes
+        that state unrepresentable and this ``| None`` removable.
+
         Returns:
-            dict: The job result
+            dict | None: The job result, or None if the worker returned nothing
         """
         if self.future is not None:
             self.res = self.future.result()
@@ -220,28 +265,75 @@ class Executors(StrEnum):
     # THREADS=auto() #not that useful as most bench code is cpu bound
 
     @staticmethod
-    def factory(provider: Executors) -> Future | None:
+    def factory(provider: Executors | str) -> SupportsSubmit | None:
         """Create an executor instance based on the specified execution strategy.
 
         Args:
-            provider (Executors): The type of executor to create
+            provider (Executors | str): The type of executor to create. A raw string
+                is normalized to a member first, so the comparisons below can be
+                identity checks -- see ``normalize_executor``.
 
         Returns:
-            Future | None: The executor instance, or None for serial execution
+            SupportsSubmit | None: The executor, or None for serial execution
+
+        Raises:
+            ValueError: If ``provider`` is not an ``Executors`` member or its value
         """
-        if provider == Executors.SERIAL:
-            return None
-        if provider == Executors.MULTIPROCESSING:
-            try:
-                return ProcessPoolExecutor()
-            except (OSError, PermissionError) as exc:  # pragma: no cover - env specific
-                logger.warning(
-                    "Falling back to serial execution; multiprocessing unavailable: %s", exc
-                )
+        # Parse first, so the match below is over a value whose type is established
+        # rather than over a raw string (plan 24 A1/A2). Before C13 this compared with
+        # `==`, which quietly accepted `"SERIAL"` while FutureCache.submit's `is not`
+        # on the same field rejected it.
+        match normalize_executor(provider):
+            case Executors.SERIAL:
                 return None
-        if provider == Executors.SCOOP:
-            return scoop_future_executor
-        raise ValueError(f"Unknown executor provider: {provider}")
+            case Executors.MULTIPROCESSING:
+                try:
+                    return ProcessPoolExecutor()
+                except (OSError, PermissionError) as exc:  # pragma: no cover - env specific
+                    logger.warning(
+                        "Falling back to serial execution; multiprocessing unavailable: %s", exc
+                    )
+                    return None
+            case Executors.SCOOP:
+                return scoop_future_executor
+            case _ as unreachable:
+                assert_never(unreachable)
+
+
+def normalize_executor(executor: Executors | str) -> Executors:
+    """Coerce ``executor`` to an ``Executors`` member.
+
+    C13 (plan 23 P2). ``Executors`` is a ``StrEnum``, so ``"SERIAL" ==
+    Executors.SERIAL`` is True and ``param.Selector(objects=list(Executors))``
+    (``BenchRunCfg.executor``) therefore *accepts* the bare string and stores a
+    ``str`` in a field that is compared three different ways: ``==``/``!=`` in
+    ``Bench._sample_and_store`` and ``is not`` in ``FutureCache.submit``. An identity
+    check against a raw string is False, so those sites disagree the moment one is
+    reached with an un-normalized value. Today they still all land on the serial path,
+    but only because ``factory`` used to compare with ``==`` as well -- that is luck,
+    not design, and it is why plan 23 records C13 as a latent smell rather than a
+    shipped bug.
+
+    Normalizing at each ingress is what makes the field's declared type true. Per plan
+    24 A2 that is not merely hardening: it is the precondition that licenses matching
+    on ``executor`` exhaustively at all, because ``ty`` cannot establish the type of a
+    ``param`` descriptor read, and an ``assert_never`` reached with a raw string reads
+    as a proof while behaving as an assertion.
+
+    Raises:
+        ValueError: for a value outside the vocabulary. ``param.Selector`` rejects
+            those on assignment already, so this fires for hand-built configs and
+            direct calls -- i.e. at the parse, never at a match site.
+    """
+    if isinstance(executor, Executors):
+        return executor
+    try:
+        return Executors(executor)
+    except ValueError:
+        raise ValueError(
+            f"executor must be one of {[e.value for e in Executors]} "
+            f"(or the matching Executors member), got {executor!r}"
+        ) from None
 
 
 class FutureCache:
@@ -265,7 +357,7 @@ class FutureCache:
 
     def __init__(
         self,
-        executor=Executors.SERIAL,
+        executor: Executors | str = Executors.SERIAL,
         overwrite: bool = True,
         cache_name: str = "fcache",
         tag_index: bool = True,
@@ -282,7 +374,10 @@ class FutureCache:
             size_limit (int, optional): Maximum size of the cache in bytes. Defaults to 20GB.
             cache_samples (bool, optional): Whether to cache results at all. Defaults to True.
         """
-        self.executor_type = executor
+        # Normalized here as well as in plot_sweep, because FutureCache is also
+        # constructed directly (SampleCache, and by callers building their own
+        # cache), and `submit()` below discriminates with `is not` (C13).
+        self.executor_type = normalize_executor(executor)
         self.executor = None
         if cache_samples:
             self.cache = Cache(f"cachedir/{cache_name}", tag_index=tag_index, size_limit=size_limit)
@@ -442,7 +537,7 @@ class JobFunctionCache(FutureCache):
         self,
         function: Callable,
         overwrite: bool = False,
-        executor: Executors = Executors.SERIAL,
+        executor: Executors | str = Executors.SERIAL,
         cache_name: str = "fcache",
         tag_index: bool = True,
         size_limit: int = int(100e8),

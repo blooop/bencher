@@ -810,3 +810,91 @@ than silently worked around.
    on exactly that seeded bypass. The probe tests also assert ty's **exit code**, not just
    its output text, so a rule demoted to warning level cannot pass; and their class
    docstring no longer claims to prove the repo's gate, only the mechanism.
+
+### P2 (implemented)
+
+1. **B2 and B3 both landed as `raise TypeError`, per decision 2 — and the "not routed
+   through `catch=`" half of that decision turned out to be the load-bearing half.**
+   Seeding the pre-fix code back to measure what the new tests catch produced this, from a
+   run with `catch=Exception`:
+
+   ```
+   WARNING sample failed and was caught (x=0, repeat=1): AssertionError('old assert')
+   ```
+
+   So the old serial `assert` was not merely absent under `python -O`; with `catch=` set it
+   was **downgraded to a tolerated sample failure**, which is the same silent-empty-dataset
+   outcome as the parallel path. Both checks are therefore raised *outside*
+   `store_results`'s `except catch` block, and `TestCatchDoesNotAbsorbContractErrors` pins
+   it — without that test the fix would have looked complete while the obvious user
+   response (`catch=Exception`) restored the old behaviour.
+2. **The B3 check could not go where it naturally belongs.** `JobFuture.result()` is the
+   one place both executors converge, but it is called *inside* that same `except catch`
+   block (and `FutureCache.submit` is inside the caller's), so raising from either would be
+   absorbed. The check is `require_worker_result(result, job_id)` at the two points where a
+   result is *consumed* — `store_results` and the optimize path (`bencher.py`, which calls
+   `.result()` directly and would otherwise fail as a downstream subscript error).
+   Consequently `JobFuture.result()` is now annotated `-> dict | None`: honest rather than
+   narrow, since `JobFuture` really can hold neither a result nor a future. **P5 removes
+   the `| None`** by making that state unrepresentable; until then the widening is the
+   truthful option, not a regression.
+3. **C13's `assert_never` works on a `strenum.StrEnum` — verified, not assumed.**
+   `Executors.factory` now parses with `normalize_executor` and matches exhaustively.
+   Deleting the SCOOP arm yields
+   `error[type-assertion-failure] … Inferred type of argument is Literal[Executors.SCOOP]`,
+   naming the missing member. This is the first place in the repo where plan 24 A2's claim
+   is realised end to end: the parse is what makes the subject typed, and
+   `test_factory_rejects_an_unknown_value_before_matching` pins that bad input raises
+   `ValueError` at the parse rather than `AssertionError` at the match.
+4. **No pre-fix regression test exists for C13, and the plan was right that none could.**
+   What is testable is the *reason* the normalization exists, so it is pinned as an
+   executable fact: `"SERIAL" == Executors.SERIAL` while `"SERIAL" is not Executors.SERIAL`.
+   That assertion doubles as a tripwire for the stdlib-`StrEnum` migration (D4 / handover
+   §5.4), which would change the vocabulary rather than just the representation.
+5. **Normalization is not visible on the caller's own config, and that is intended.**
+   `to_bench(cfg)` deepcopies, so `plot_sweep` normalizes the copy — asserted via
+   `bench.last_run_cfg`. A config passed directly as `plot_sweep(run_cfg=cfg)` is not
+   copied and *is* normalized in place. A first draft of the test asserted the wrong one of
+   these and failed; both paths are now pinned explicitly so the asymmetry is documented
+   rather than rediscovered.
+6. **`Executors.factory` was annotated `-> Future | None`, the one type it never
+   returns.** A `Future` is what `submit()` hands back. Found by putting `job.py` on the
+   strict list to measure it: `Object of type Future[Unknown] has no attribute submit`. The
+   concrete values are a `ProcessPoolExecutor` and, for SCOOP, a *module*, so naming
+   `concurrent.futures.Executor` would be a second smaller lie; the fix is a two-method
+   `SupportsSubmit` Protocol, which both satisfy.
+7. **Neither reworked file could join the strict ratchet, and the block's rule is honoured
+   rather than loosened** (as in P1 item 7). Measured with `job.py` and
+   `result_collector.py` added to it: 6 diagnostics, 2 of which the Protocol above fixed.
+   The remaining 4 are pre-existing and out of P2's scope:
+   - `job.py` `clear_tag` calls `self.cache.evict(tag)` on `Cache | None` with no guard —
+     a live latent `AttributeError`.
+   - `job.py` `Job.__init__` argument type; `result_collector.py`
+     `record_caught_sample` argument type.
+   - `result_collector.py` iterates `worker_job.function_input.items()` where the field is
+     `dict | None`. The last two are the *same* defect: `WorkerJob.function_input` is
+     `None` until `setup_hashes()` runs, i.e. two-phase init. **That is P5/P9 territory**
+     (`WorkerJob`/`JobFuture` state), and fixing it there should let both files onto the
+     strict list in one step.
+8. **P1's Tier-A gate caught this phase's own test fixture**, which is worth recording as
+   evidence the gate earns its keep: `ReturnsNothing.__call__` is annotated `-> None` and
+   `invalid-method-override` flagged it against `ParametrizedSweep.__call__ -> dict`. It
+   carries a scoped `# ty: ignore` with a reason, because the invalid override *is* the
+   subject under test. The useful implication: for a worker whose return type is
+   annotated, B3 is already a **static** error; `require_worker_result` is what covers the
+   unannotated case, which is the common one.
+9. **The "not routed through `catch=`" guarantee has one documented exception, found by
+   self-review after Sourcery hit its weekly cap again.** It holds on the sweep path,
+   which is what decision 2 is about. It does **not** hold on `Bench.optimize`: that
+   objective runs under `study.optimize(..., catch=catch)`, so a `catch=` there absorbs
+   the `TypeError`. This is pre-existing rather than introduced — with `catch=Exception`
+   the old code was absorbed at the same point, as an `AssertionError` on serial and a
+   `None`-subscript `TypeError` on the pool — so B3 still strictly improves both the
+   message and serial/parallel agreement. Making optuna's catch selective is its own
+   decision. Recorded because the unqualified claim would have been an overstatement.
+10. **Cache safety confirmed for the C13 normalization** (§7's requirement). `executor`
+   reaches no persistent hash — it appears in neither `identity.py` nor `worker_job.py` —
+   and for the one place it is stringified (`bench_cfg.py`'s sampling summary) a member and
+   the raw string are indistinguishable: `str(Executors.SERIAL) == str("SERIAL")` and
+   `hash(Executors.SERIAL) == hash("SERIAL")`, both True, since `StrEnum` inherits `str`.
+   No `CACHE_VERSION` bump.
