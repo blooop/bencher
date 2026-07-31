@@ -13,7 +13,7 @@ built-in chart types onto the plugin mechanism happens in subsequent PRs."""
 from __future__ import annotations
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
-from bencher.plugins.bench_data import BenchData, CacheHandle, RunMeta
+from bencher.plugins.bench_data import BenchData, CacheHandle, Capability, RunMeta, to_capability
 from bencher.plugins.plugin import PlotPlugin, plot_plugin
 from bencher.plugins.registry import (
     ENTRY_POINT_GROUP,
@@ -29,6 +29,7 @@ __all__ = [
     "ENTRY_POINT_GROUP",
     "BenchData",
     "CacheHandle",
+    "Capability",
     "PlotFilter",
     "PlotPlugin",
     "PluginDecision",
@@ -39,5 +40,6 @@ __all__ = [
     "get_registry",
     "plot_plugin",
     "register_plugin",
+    "to_capability",
     "unregister_plugin",
 ]

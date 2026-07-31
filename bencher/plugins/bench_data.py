@@ -5,8 +5,35 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 import xarray as xr
+from strenum import StrEnum
 
 from bencher.plotting.plt_cnt_cfg import PltCntCfg
+
+
+class Capability(StrEnum):
+    """The full vocabulary of optional BenchData context fields a plugin may require.
+
+    A plugin's ``requires`` (see ``Plugin`` in plugin.py) names capabilities from this
+    enum (plain strings with these exact values are accepted and normalized). Unknown
+    names raise at plugin registration time — a misspelled capability would otherwise
+    make the plugin permanently, silently unselectable (plan 23 C10)."""
+
+    OPTIMIZER_STUDY = "optimizer_study"
+    BASELINE_RUNS = "baseline_runs"
+    CACHE = "cache"
+    LEGACY_RESULT = "legacy_result"
+
+
+def to_capability(value: str | Capability) -> Capability:
+    """Normalize *value* to a :class:`Capability`.
+
+    Raises ValueError naming the bad string and the valid vocabulary when *value*
+    is not a known capability."""
+    try:
+        return Capability(value)
+    except ValueError:
+        valid = ", ".join(sorted(c.value for c in Capability))
+        raise ValueError(f"Unknown capability {value!r}; valid capabilities are: {valid}") from None
 
 
 @runtime_checkable
@@ -47,19 +74,22 @@ class BenchData:
     legacy_result: Any | None = None
     render_kwargs: dict = field(default_factory=dict)
 
-    def has(self, capability: str) -> bool:
+    def has(self, capability: str | Capability) -> bool:
         """True when an optional context field is populated.
 
-        Used by PlotFilter.requires to gate plugins that need fields beyond dataset+vars."""
-        if capability == "optimizer_study":
+        Used by ``Plugin.requires`` (plugin.py) to gate plugins that need fields
+        beyond dataset+vars. Raises ValueError on a capability name outside the
+        :class:`Capability` vocabulary instead of silently returning False."""
+        cap = to_capability(capability)
+        if cap is Capability.OPTIMIZER_STUDY:
             return self.optimizer_study is not None
-        if capability == "baseline_runs":
+        if cap is Capability.BASELINE_RUNS:
             return len(self.baseline_runs) > 0
-        if capability == "cache":
+        if cap is Capability.CACHE:
             return self.cache is not None
-        if capability == "legacy_result":
+        if cap is Capability.LEGACY_RESULT:
             return self.legacy_result is not None
-        return False
+        raise AssertionError(f"unhandled capability {cap!r}")  # exhaustiveness guard
 
     def with_changes(self, **kwargs) -> BenchData:
         return replace(self, **kwargs)

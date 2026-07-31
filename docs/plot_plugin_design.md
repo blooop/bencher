@@ -518,6 +518,11 @@ plugins = registry.select(data,
   capability-gated (every name in `plugin.requires` must satisfy
   `data.has(name)`), and matched against `data.plt_cnt_cfg` via the
   existing `PlotFilter.matches_result(...)` rule.
+- **Capability vocabulary**: the names accepted in `requires` are exactly the
+  members of `bencher.plugins.Capability` (`optimizer_study`, `baseline_runs`,
+  `cache`, `legacy_result`). Plain strings with those values are accepted and
+  normalised; an unknown name raises `ValueError` at `register()` time rather
+  than yielding a plugin that is permanently, silently never selected.
 - **Named-only plugins** (`auto=False`) are dropped from the candidate set
   when `include is None` — they exist in the registry (addressable, listable,
   overridable) but never render in a default report. Naming them via

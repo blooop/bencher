@@ -144,7 +144,22 @@ class BenchReport(BenchPlotServer):
         self.bench_name = bench_name
         self.pane = pn.Tabs(tabs_location="above", name=self.bench_name)
         self.last_save_ms: float = 0.0
-        self.bench_results: list[BenchResult] = []
+        # Each result is stored together with the tab that was created for it
+        # (None when its plot() produced nothing), so tab routing can never
+        # resolve into a *different* result's tab (plan 23 C9). The previous
+        # representation — two parallel lists correlated by index — silently
+        # misrouted once a None plot desynced them.
+        self._result_tabs: list[tuple[BenchResult, pn.Column | None]] = []
+
+    @property
+    def bench_results(self) -> tuple[BenchResult, ...]:
+        """The results registered via :meth:`append_result`, in registration order.
+
+        Read-only snapshot: register results through :meth:`append_result` so each
+        one is paired with its tab. (A mutable list here would make direct appends
+        a silent no-op — a tuple fails loudly instead.)
+        """
+        return tuple(res for res, _tab in self._result_tabs)
 
     def clear(self) -> None:
         """Remove all tabs and results so the report can be reused between runs.
@@ -152,7 +167,7 @@ class BenchReport(BenchPlotServer):
         Not safe to call while the report is being served to a live Panel session.
         """
         self.pane.clear()
-        self.bench_results.clear()
+        self._result_tabs.clear()
 
     def append_title(self, title: str, new_tab: bool = True):
         if new_tab:
@@ -201,7 +216,6 @@ class BenchReport(BenchPlotServer):
         return label
 
     def append_result(self, bench_res: BenchResult, render_from: BenchResult | None = None) -> None:
-        self.bench_results.append(bench_res)
         title = bench_res.bench_cfg.title
         label = self._time_event_label(bench_res)
         if label:
@@ -210,30 +224,50 @@ class BenchReport(BenchPlotServer):
         # routing (append_to_result) while building the pane from another — used
         # by the BENCHER_FORCE_SPLIT_RENDER path to render from a deserialized
         # copy without breaking routing. Defaults to bench_res (normal path).
-        self.append_tab((render_from or bench_res).plot(), title)
+        tab = self.append_tab((render_from or bench_res).plot(), title)
+        self._result_tabs.append((bench_res, tab))
+
+    def _tab_for_result(self, bench_res: BenchResult) -> pn.Column | None:
+        """The tab created for *bench_res*, or None when untracked / plot() was None."""
+        for res, tab in self._result_tabs:
+            if res is bench_res:
+                return tab
+        return None
 
     def append_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
-        """Append *pane* to the tab that belongs to *bench_res*."""
-        try:
-            idx = self.bench_results.index(bench_res)
-            self.pane[idx].append(pane)
-        except (ValueError, IndexError):
+        """Append *pane* to the tab that belongs to *bench_res*.
+
+        Falls back to :meth:`append` (the last tab) when the result is
+        untracked or its plot() produced no tab.
+        """
+        tab = self._tab_for_result(bench_res)
+        if tab is None:
             self.append(pane)
+        else:
+            tab.append(pane)
 
     def prepend_to_result(self, bench_res: BenchResult, pane: pn.panel) -> None:
-        """Insert *pane* at the beginning of the tab that belongs to *bench_res*."""
-        try:
-            idx = self.bench_results.index(bench_res)
-            self.pane[idx].insert(0, pane)
-        except (ValueError, IndexError):
-            self.append(pane)
+        """Insert *pane* at the beginning of the tab that belongs to *bench_res*.
 
-    def append_tab(self, pane: pn.panel, name: str | None = None) -> None:
-        if pane is not None:
-            if name is None:
-                name = pane.name
-            self.pane.append(pn.Column(pane, name=name))
-            self.pane.active = len(self.pane) - 1
+        Falls back to :meth:`append` (the last tab) when the result is
+        untracked or its plot() produced no tab.
+        """
+        tab = self._tab_for_result(bench_res)
+        if tab is None:
+            self.append(pane)
+        else:
+            tab.insert(0, pane)
+
+    def append_tab(self, pane: pn.panel, name: str | None = None) -> pn.Column | None:
+        """Add *pane* as a new tab and return the created tab column (None if no pane)."""
+        if pane is None:
+            return None
+        if name is None:
+            name = pane.name
+        tab = pn.Column(pane, name=name)
+        self.pane.append(tab)
+        self.pane.active = len(self.pane) - 1
+        return tab
 
     def save_index(self, directory: str = "", filename: str = "index.html") -> Path:
         """Saves the result to index.html in the root folder so that it can be displayed by github pages.

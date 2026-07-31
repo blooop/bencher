@@ -6,13 +6,14 @@ from pathlib import Path
 import numpy as np
 import panel as pn
 import xarray as xr
-from param import Parameter
+from param import Number, Parameter
 
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.variables.results import (
     ResultImage,
     ResultString,
     ResultVideo,
+    result_is_missing,
 )
 
 logger = logging.getLogger(__name__)
@@ -305,12 +306,15 @@ def _log_line_graph(rr, recording, dataset: xr.Dataset, entity_path: str, rv, fl
     rv_name, path = _rv_name_and_path(entity_path, rv)
     try:
         for i, coord_val in enumerate(dataset.coords[float_dim].values):
-            recording.set_time("log_tick", sequence=i)
             val = _extract_scalar(dataset, rv_name, {float_dim: coord_val})
-            if val is not None and not (isinstance(val, float) and np.isnan(val)):
-                recording.log(path, rr.Scalars(float(val)))
+            if result_is_missing(rv, val):
+                # Never-sampled point: skip the tick so the plot shows a genuine
+                # gap instead of a fabricated value (plan 23 C12).
+                continue
+            recording.set_time("log_tick", sequence=i)
+            recording.log(path, rr.Scalars(float(val)))
     except (KeyError, ValueError, TypeError) as e:
-        logger.debug("Could not log line graph for %s: %s", rv_name, e)
+        logger.warning("Could not log line graph for %s at %r: %s", rv_name, path, e)
 
 
 def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat_dim: str):
@@ -320,10 +324,12 @@ def _log_bar_chart(rr, recording, dataset: xr.Dataset, entity_path: str, rv, cat
         values = []
         for coord_val in dataset.coords[cat_dim].values:
             val = _extract_scalar(dataset, rv_name, {cat_dim: coord_val})
-            values.append(float(val) if val is not None else 0.0)
+            # A never-sampled category stays NaN (rendered as a gap) rather than
+            # being fabricated as a real zero-height bar (plan 23 C12).
+            values.append(float("nan") if result_is_missing(rv, val) else float(val))
         recording.log(path, rr.BarChart(values))
     except (KeyError, ValueError, TypeError) as e:
-        logger.debug("Could not log bar chart for %s: %s", rv_name, e)
+        logger.warning("Could not log bar chart for %s at %r: %s", rv_name, path, e)
 
 
 def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: list[str]):
@@ -333,15 +339,21 @@ def _log_tensor(rr, recording, dataset: xr.Dataset, entity_path: str, rv, dims: 
         data_array = dataset[rv_name]
         # Transpose to requested dim order and extract numpy array
         arr = data_array.transpose(*dims).values.astype(np.float32)
-        # Replace NaN with 0 so the tensor renders cleanly
-        arr = np.nan_to_num(arr, nan=0.0)
+        # Never-sampled points stay NaN so the viewer shows genuine gaps instead
+        # of fabricated zeros (plan 23 C12).
+        finite = arr[np.isfinite(arr)]
+        if finite.size == 0:
+            logger.warning(
+                "Tensor for %s at %r contains no recorded values; skipping", rv_name, path
+            )
+            return
         # Pass value_range so the viewer maps the colormap to the actual data range
-        vmin, vmax = float(arr.min()), float(arr.max())
+        vmin, vmax = float(finite.min()), float(finite.max())
         if vmin == vmax:
             vmax = vmin + 1.0
         recording.log(path, rr.Tensor(arr, dim_names=dims, value_range=[vmin, vmax]))
     except (KeyError, ValueError, TypeError) as e:
-        logger.debug("Could not log tensor for %s: %s", rv_name, e)
+        logger.warning("Could not log tensor for %s at %r: %s", rv_name, path, e)
 
 
 def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
@@ -349,31 +361,41 @@ def _log_result_var(rr, recording, dataset: xr.Dataset, entity_path: str, rv):
     rv_name, path = _rv_name_and_path(entity_path, rv)
 
     try:
+        val = _extract_scalar(dataset, rv_name)
+        if result_is_missing(rv, val):
+            # Never-sampled point: nothing to log — a genuine gap (plan 23 C12).
+            return
+
         if isinstance(rv, ResultImage):
-            val = _extract_scalar(dataset, rv_name)
-            if val is not None and val and Path(str(val)).exists():
+            if val and Path(str(val)).exists():
                 recording.log(path, rr.EncodedImage(path=str(val)))
             return
 
         if isinstance(rv, ResultVideo):
-            val = _extract_scalar(dataset, rv_name)
-            if val is not None and val and Path(str(val)).exists():
+            if val and Path(str(val)).exists():
                 recording.log(path, rr.AssetVideo(path=str(val)))
             return
 
         if isinstance(rv, ResultString):
-            val = _extract_scalar(dataset, rv_name)
-            if val is not None:
-                recording.log(path, rr.TextDocument(str(val)))
+            recording.log(path, rr.TextDocument(str(val)))
             return
 
-        # Default: ResultVar, ResultBool, or any numeric result -> Scalars
-        val = _extract_scalar(dataset, rv_name)
-        if val is not None and not (isinstance(val, float) and np.isnan(val)):
+        # Numeric family (ResultFloat/ResultBool/param.Number subclasses) -> Scalars.
+        if isinstance(rv, Number):
             recording.log(path, rr.Scalars(float(val)))
+            return
+
+        # No blind float() fallthrough: a type without a rerun mapping (e.g.
+        # ResultPath) surfaces visibly instead of being coerced (plan 23 C12).
+        logger.warning(
+            "No rerun mapping for result var %s of type %s at %r; skipping",
+            rv_name,
+            type(rv).__name__,
+            path,
+        )
 
     except (KeyError, ValueError, TypeError) as e:
-        logger.debug("Could not log result var %s: %s", rv_name, e)
+        logger.warning("Could not log result var %s at %r: %s", rv_name, path, e)
 
 
 def _build_blueprint(rrb, result_vars, float_dims, cat_dims, time_dim, dim_values):

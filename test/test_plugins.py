@@ -10,6 +10,7 @@ from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.plotting.plt_cnt_cfg import PltCntCfg
 from bencher.plugins import (
     BenchData,
+    Capability,
     PluginRegistry,
     RunMeta,
     get_registry,
@@ -43,11 +44,25 @@ class TestBenchData(unittest.TestCase):
         self.assertFalse(data.has("optimizer_study"))
         self.assertFalse(data.has("baseline_runs"))
         self.assertFalse(data.has("cache"))
-        self.assertFalse(data.has("nonexistent"))
 
         data2 = data.with_changes(optimizer_study=object())
         self.assertTrue(data2.has("optimizer_study"))
         self.assertFalse(data.has("optimizer_study"), "with_changes must not mutate original")
+
+    def test_has_capability_accepts_enum(self) -> None:
+        data = BenchData.fake().with_changes(cache=object())
+        self.assertTrue(data.has(Capability.CACHE))
+        self.assertTrue(data.has("cache"))
+
+    def test_has_unknown_capability_raises(self) -> None:
+        """An unknown capability name raises (with the valid vocabulary) instead of
+        silently reading as 'absent' (plan 23 C10)."""
+        data = BenchData.fake()
+        with self.assertRaises(ValueError) as ctx:
+            data.has("nonexistent")
+        self.assertIn("nonexistent", str(ctx.exception))
+        for cap in Capability:
+            self.assertIn(cap.value, str(ctx.exception))
 
     def test_frozen(self) -> None:
         data = BenchData.fake()
@@ -81,6 +96,43 @@ class TestRegistry(unittest.TestCase):
         _stub.name = ""
         with self.assertRaises(ValueError):
             self.reg.register(_stub)
+
+    def test_register_typoed_capability_raises(self) -> None:
+        """A misspelled capability in requires raises at registration, naming the bad
+        string and the valid vocabulary, instead of yielding a plugin that is
+        permanently, silently unselectable (plan 23 C10)."""
+
+        @plot_plugin(
+            name="typo",
+            backend="t",
+            requires={"legacy_resutl"},  # cspell:disable-line
+            register=False,
+        )
+        def _stub(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("x")
+
+        with self.assertRaises(ValueError) as ctx:
+            self.reg.register(_stub)
+        msg = str(ctx.exception)
+        self.assertIn("legacy_resutl", msg)  # cspell:disable-line
+        self.assertIn("typo", msg)
+        for cap in Capability:
+            self.assertIn(cap.value, msg)
+
+    def test_register_valid_capability_strings_accepted(self) -> None:
+        """External plugins passing valid plain strings keep working."""
+
+        @plot_plugin(
+            name="valid_caps",
+            backend="t",
+            requires={"legacy_result", "cache"},
+            register=False,
+        )
+        def _stub(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("x")
+
+        self.reg.register(_stub)
+        self.assertIs(self.reg.get("valid_caps"), _stub)
 
     def test_override_same_name_and_backend_replaces(self) -> None:
         @plot_plugin(name="dup", backend="a", register=False)
@@ -433,6 +485,29 @@ class TestEntryPointDiscovery(unittest.TestCase):
             # Second call must not re-scan.
             reg.all()
             ep_mock.assert_called_once()
+
+    def test_skip_entry_point_with_bad_capability(self) -> None:
+        """Entry-point loading is lazy (first lookup, possibly mid-run), so a
+        third-party plugin with an invalid capability is skipped with a visible
+        warning instead of aborting the run; explicit register() still raises
+        (plan 23 C10 + the never-crash-mid-run principle)."""
+
+        @plot_plugin(name="ep_typo", backend="t", requires={"nope"}, register=False)
+        def _stub(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("x")
+
+        class FakeEP:
+            name = "ep_typo"
+
+            def load(self):
+                return _stub
+
+        reg = PluginRegistry()
+        with patch("bencher.plugins.registry.metadata.entry_points") as ep_mock:
+            ep_mock.return_value = [FakeEP()]
+            with self.assertLogs("bencher.plugins.registry", level="WARNING") as cm:
+                self.assertEqual(reg.all(), ())
+        self.assertIn("nope", "\n".join(cm.output))
 
     def test_skip_on_load_failure(self) -> None:
         reg = PluginRegistry()

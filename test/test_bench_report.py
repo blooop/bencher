@@ -116,14 +116,12 @@ class TestBenchReport(unittest.TestCase):
         """append_to_result() routes content to the tab matching a tracked result."""
         report = BenchReport("targeted")
 
-        # Simulate two results being added via append_result
         res0 = _FakeBenchResult("sweep A")
         res1 = _FakeBenchResult("sweep B")
-        report.bench_results.append(res0)
-        report.append_tab(pn.pane.Markdown("Sweep A plot"), "sweep A")
-        report.bench_results.append(res1)
-        report.append_tab(pn.pane.Markdown("Sweep B plot"), "sweep B")
+        report.append_result(res0)
+        report.append_result(res1)
         self.assertEqual(len(report.pane), 2)
+        self.assertEqual([r.bench_cfg.title for r in report.bench_results], ["sweep A", "sweep B"])
 
         optuna0 = pn.pane.Markdown("optuna for A")
         optuna1 = pn.pane.Markdown("optuna for B")
@@ -153,8 +151,7 @@ class TestBenchReport(unittest.TestCase):
         """Multiple append_to_result calls on the same result accumulate in the same tab."""
         report = BenchReport("accum")
         res = _FakeBenchResult("single")
-        report.bench_results.append(res)
-        report.append_tab(pn.pane.Markdown("base"), "single")
+        report.append_result(res)
 
         items = [pn.pane.Markdown(f"item {i}") for i in range(3)]
         for item in items:
@@ -163,9 +160,90 @@ class TestBenchReport(unittest.TestCase):
         for item in items:
             self.assertIn(item, report.pane[0].objects)
 
+    def test_none_plot_does_not_misroute_following_results(self):
+        """A result whose plot() returned None (so no tab) must not shift routing:
+        content for a later result lands in *that* result's tab, never a neighbour's
+        (plan 23 C9 — fails on the parallel-lists representation)."""
+        report = BenchReport("desync")
+        res_none = _FakeBenchResult("no plot", plot_pane=None)
+        res_a = _FakeBenchResult("sweep A")
+        res_b = _FakeBenchResult("sweep B")
+        report.append_result(res_none)  # creates no tab
+        report.append_result(res_a)  # tab 0
+        report.append_result(res_b)  # tab 1
+        self.assertEqual(len(report.pane), 2)
 
-class _FakeBenchResult:
-    """Minimal stand-in for BenchResult so we can test identity-based lookup."""
+        extra_a = pn.pane.Markdown("extra for A")
+        report.append_to_result(res_a, extra_a)
+        self.assertIn(extra_a, report.pane[0].objects)
+        self.assertNotIn(extra_a, report.pane[1].objects)
 
+        prep_a = pn.pane.Markdown("prepended for A")
+        report.prepend_to_result(res_a, prep_a)
+        self.assertIs(report.pane[0].objects[0], prep_a)
+        self.assertNotIn(prep_a, report.pane[1].objects)
+
+    def test_none_plot_then_prepend_to_second_result(self):
+        """Prepending to the result after a None-plot result lands at the start of the
+        second result's own tab (plan 23 C9 — fails on the parallel-lists code, which
+        fell through to append() and put the pane at the end)."""
+        report = BenchReport("prepend")
+        res_none = _FakeBenchResult("no plot", plot_pane=None)
+        res = _FakeBenchResult("real sweep")
+        report.append_result(res_none)
+        report.append_result(res)
+        self.assertEqual(len(report.pane), 1)
+
+        pane = pn.pane.Markdown("prepended")
+        report.prepend_to_result(res, pane)
+        self.assertIs(report.pane[0].objects[0], pane)
+
+    def test_append_to_none_plot_result_falls_back_to_append(self):
+        """Content for a result with no tab falls back to append() (last tab)."""
+        report = BenchReport("no_tab")
+        res_none = _FakeBenchResult("no plot", plot_pane=None)
+        res = _FakeBenchResult("real sweep")
+        report.append_result(res_none)
+        report.append_result(res)
+
+        pane = pn.pane.Markdown("orphan")
+        report.append_to_result(res_none, pane)
+        self.assertIn(pane, report.pane[-1].objects)
+
+    def test_clear_resets_results_and_tabs(self):
+        report = BenchReport("clearable")
+        report.append_result(_FakeBenchResult("sweep"))
+        self.assertEqual(len(report.bench_results), 1)
+        report.clear()
+        self.assertEqual(report.bench_results, ())
+        self.assertEqual(len(report.pane), 0)
+
+    def test_bench_results_is_read_only_snapshot(self):
+        """bench_results is an immutable snapshot, so an out-of-band append cannot
+        silently desync result/tab pairing (plan 23 C9). Callers register through
+        append_result, which pairs each result with its tab."""
+        report = BenchReport("readonly")
+        report.append_result(_FakeBenchResult("sweep"))
+        self.assertIsInstance(report.bench_results, tuple)
+
+
+class _FakeBenchCfg:
     def __init__(self, title: str):
         self.title = title
+        self.over_time = False
+
+
+class _FakeBenchResult:
+    """Minimal stand-in for BenchResult so we can test identity-based tab routing."""
+
+    _UNSET = object()
+
+    def __init__(self, title: str, plot_pane=_UNSET):
+        self.title = title
+        self.bench_cfg = _FakeBenchCfg(title)
+        if plot_pane is self._UNSET:
+            plot_pane = pn.pane.Markdown(f"{title} plot")
+        self._plot_pane = plot_pane
+
+    def plot(self):
+        return self._plot_pane

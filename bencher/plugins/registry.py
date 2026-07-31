@@ -8,7 +8,7 @@ from importlib import metadata
 
 import panel as pn
 
-from bencher.plugins.bench_data import BenchData
+from bencher.plugins.bench_data import BenchData, to_capability
 from bencher.plugins.plugin import PlotPlugin
 
 ENTRY_POINT_GROUP = "bencher.plot_plugins"
@@ -68,6 +68,16 @@ class PluginRegistry:
             raise ValueError("Plugin must have a non-empty string name")
         if not isinstance(plugin.backend, str) or not plugin.backend:
             raise ValueError("Plugin must have a non-empty string backend")
+        # Validate the capability vocabulary at registration: a misspelled entry in
+        # `requires` would otherwise make the plugin permanently, silently unselectable
+        # (plan 23 C10). Registration-time errors may raise.
+        for cap in getattr(plugin, "requires", None) or ():
+            try:
+                to_capability(cap)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Plugin {plugin.name!r} (backend {plugin.backend!r}): {exc}"
+                ) from None
         self._plugins[(plugin.name, plugin.backend)] = plugin
 
     def unregister(self, name: str, backend: str | None = None) -> None:
@@ -128,7 +138,14 @@ class PluginRegistry:
             except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 log.warning("Skipping plugin entry-point %r: %s", ep.name, exc)
                 continue
-            self._register_loaded(ep.name, obj)
+            try:
+                self._register_loaded(ep.name, obj)
+            except ValueError as exc:
+                # Entry-point loading is lazy: it happens on the first lookup, which
+                # can be mid-run. A third-party plugin that fails validation (e.g. a
+                # bad capability in `requires`) is skipped with a visible warning
+                # rather than aborting the run; explicit register() calls still raise.
+                log.warning("Skipping invalid plugin entry-point %r: %s", ep.name, exc)
 
     def _register_loaded(self, ep_name: str, obj) -> None:
         # Entry points may resolve to a single plugin instance, a plugin class (no-arg
