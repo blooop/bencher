@@ -849,7 +849,7 @@ is unaffected.
    So the old serial `assert` was not merely absent under `python -O`; with `catch=` set it
    was **downgraded to a tolerated sample failure**, which is the same silent-empty-dataset
    outcome as the parallel path. Both checks are therefore raised *outside*
-   `store_results`'s `except catch` block, and `TestCatchDoesNotAbsorbContractErrors` pins
+   `store_results`'s `except catch` block, and `TestCatchDoesNotChangeContractHandling` pins
    it — without that test the fix would have looked complete while the obvious user
    response (`catch=Exception`) restored the old behaviour.
 2. **The B3 check could not go where it naturally belongs.** `JobFuture.result()` is the
@@ -922,3 +922,138 @@ is unaffected.
    the raw string are indistinguishable: `str(Executors.SERIAL) == str("SERIAL")` and
    `hash(Executors.SERIAL) == hash("SERIAL")`, both True, since `StrEnum` inherits `str`.
    No `CACHE_VERSION` bump.
+
+### P5 (implemented)
+
+1. **P5's spec had to be reconciled with the P2-amendment, and the reconciliation is the
+   phase's main design decision.** The spec says "the worker-`None` check from P2 moves
+   into the factory that constructs `Ready`". Read literally that reinstates the original
+   B3 bug: the serial construction site (`FutureCache.submit`) runs *inside* the caller's
+   `except catch` block, so a `raise` there is absorbed by `catch=Exception` — exactly the
+   failure mode P2 item 1 measured and `TestCatchDoesNotChangeContractHandling` pins. The
+   check therefore lives at construction as a **discovery**, not a disposition: "neither
+   result nor future" parses to a third variant, `Broken(WorkerContractError)`, which
+   stores the error and raises it from `result()` at the consume point. `store_results`
+   consumes it unchanged — `SampleFailure`, ERROR log, `WorkerContractWarning`, sweep
+   continues. A `None` return still cannot abort a run on either executor path (§6.2 as
+   amended). `Broken` is not an invented state: it is the one meaningful half of the
+   "neither set" case the old two-optional shape allowed, given a name.
+2. **The union is three arms, not the two the spec names**, and the third is what lets
+   `result()` be total. With only `Ready | Pending` the None case would have to be either a
+   `Ready(None)` (the sentinel back again) or a raise at construction (item 1). The
+   `assert_never` in `result()` is licensed by plan 24 A1 — the subject is
+   `JobFuture.state`, a field this module writes and annotates, not a `param` read.
+   Measured rather than assumed: deleting the `Broken` arm yields
+   `error[type-assertion-failure] … Inferred type of argument is
+   'Broken & ~Ready & ~Pending'`, naming the forgotten variant.
+3. **`bencher.py`'s dispatch deliberately does *not* end in `assert_never`.** It matches
+   `Pending` and falls through on the default arm, because `job_future` arrives from an
+   untyped `list[tuple]` (plan 24 A1: exhaustiveness there would be an assertion, not a
+   proof) and because the default arm is real behaviour rather than a residual — `Ready`
+   (a cache hit) and `Broken` (a pool that fell back to serial and got `None`) both need
+   storing immediately.
+4. **The constructor keyword signature is kept**, so `FutureCache.submit`'s four call
+   sites and the two hand-built `JobFuture(job=…, res=…)` objects in
+   `test/test_collection_contract.py` (`:172`, `:307`) and one in
+   `test/test_sample_fault_tolerance.py:176` read unchanged. Both files stay **green
+   unmodified**, which is the point: they pin the #1032 disposition and would have been
+   the first thing to break if `Broken` had been given raise-at-construction semantics.
+   The one thing that changed at the boundary is that `res` **and** `future` together now
+   raises `ValueError`; nothing in the repo did that.
+5. **One ordering change was required in `store_results` and it is load-bearing.**
+   `require_worker_result` used to run *after* the `try/except catch` around
+   `job_result.result()`; now `result()` raises the violation itself, from inside that
+   `try`. Since `WorkerContractError` subclasses `TypeError`, an `except catch` with
+   `catch=Exception` listed first would absorb it — so `except WorkerContractError` is
+   ordered **before** `except catch`. `TestCatchDoesNotChangeContractHandling` fails
+   without that ordering, which is how it was found.
+6. **C8: `cached_property`, not a factory classmethod.** A factory leaves the plain
+   constructor reachable (`WorkerJob(...)` without `.setup_hashes()` was the defect), and
+   `__post_init__` would recompute hashes on every unpickle. `cached_property` makes the
+   unset state unrepresentable *and* keeps pickling working: computed values travel in
+   `__dict__`, unaccessed ones recompute deterministically because `hash_sha1` is
+   content-based. Verified against `TestWorkerJobPickle`.
+7. **Cache safety: hashes are byte-identical, no `CACHE_VERSION` bump.**
+   `function_input_signature_pure` is still `hash_sha1((sorted(function_input.items()),
+   tag))` over the same `function_input`, and `canonical_input` is still computed from the
+   swept dims *before* constants are merged — the ordering the old imperative
+   `setup_hashes()` relied on, now expressed as two independent properties that each
+   rebuild the pre-merge dict. `test/test_worker_job.py`'s hash assertions cover it.
+8. **`found_in_cache` and `msgs` were dead and are deleted.** Nothing in `bencher/` reads
+   or writes either; the only references were `test_worker_job.py`'s own default-checking
+   test. That test is replaced by one asserting the hashes exist from construction (the C8
+   property), and `test_msgs_lists_are_independent` — a `field(default_factory=list)`
+   regression test for a field that no longer exists — is dropped with it.
+9. **Both files are on the strict `ty` list, and getting them there fixed two live
+   defects P2 item 7 had recorded as out of scope.** `FutureCache.clear_tag` called
+   `self.cache.evict(tag)` unguarded on `Cache | None` (an `AttributeError` for anyone
+   with `cache_samples=False` clearing a tag), and `JobFunctionCache.call` passed
+   `self.call_count` — an `int` — as `Job.job_id`, declared `str`.
+10. **P2 item 7's prediction is confirmed exactly, so `result_collector.py` joins the
+   strict list too — three files, not the two P5's DoD names.** P2 measured 4 remaining
+   diagnostics and predicted "fixing [`WorkerJob`'s two-phase init] in P5 should let both
+   files onto the strict list in one step". Measured after this phase: adding
+   `bencher/result_collector.py` alongside the two P5 files gives `All checks passed!`.
+   Both `function_input`-is-`None` diagnostics (the `.items()` iteration and the
+   `record_caught_sample` argument) were the *same* defect C8 removed — `function_input`
+   is now `dict`, never `None`. It is added rather than deferred to P9/P12 because the
+   block's rule is "a file is added once it is clean", and it is.
+
+#### P5 review round (findings addressed before merge)
+
+Independent review returned MERGE WITH NITS after re-proving the §6.2 disposition across a
+12-case matrix (SERIAL/MULTIPROCESSING × `catch=()`/`catch=Exception` × `cache_samples`
+false/true) byte-for-byte against `main`, and proving cache keys identical two independent
+ways (cross-branch comparison of all four derived values over 10 edge cases; plus a 6-job
+sweep written by `main`'s code and read by P5's → 6/6 hits). One MEDIUM finding was real:
+
+11. **Moving the contract handler inside the `try` created a new serial↔parallel
+   divergence — the exact defect shape B3 exists to kill.** `except WorkerContractError`
+   around `result()` catches *any* such error surfacing from it, not only the one the
+   harness mints. `WorkerContractError` is public (`bencher/__init__.py`), so a worker can
+   raise it; measured, a worker doing so with `catch=()` **aborted on `main` and on SERIAL,
+   but completed with `n_failed=2` on MULTIPROCESSING** under P5 as first written. Loud or
+   silent chosen by an unrelated knob — here the executor rather than `catch=`.
+
+   Fixed by splitting the vocabulary: `WorkerReturnedNothingError(WorkerContractError)` is
+   the harness's *own* diagnosis, and `store_results` catches that narrow subclass ahead of
+   `except catch`. A worker-raised `WorkerContractError` falls through to `except catch`
+   exactly as before P5. Every existing `assertRaises(WorkerContractError)` still passes by
+   subclassing. `TestAWorkerRaisedContractErrorIsStillASampleFault` pins all four matrix
+   cells and was verified to fail on precisely the `pool` + `catch=()` cell when the
+   handler is widened back to the base class.
+
+   Worth recording as a general lesson: **the disposition split is a property of the
+   exception vocabulary, not of handler placement.** P5 moved a handler and silently
+   changed which errors it governed, because one class was doing two jobs.
+
+12. **Two of P5's own strict-ty fixes were type-true but defect-preserving, which is a
+   failure mode the ratchet invites.** `JobFunctionCache.call` passed `self.call_count`
+   (an `int`) as a `str` job id; P5 cast it to `str`. But `call_count` is initialised to 0
+   and was incremented **nowhere**, so every call produced the same id — and job ids are how
+   every log line and contract message identifies a sample. The cast made the annotation
+   true while hiding what it pointed at. Now incremented, ids read `call 1`, `call 2`, …
+   Likewise `clear_tag`'s `if self.cache is None: return` turned a live `AttributeError`
+   into a *silent* no-op on a public path; it now logs a WARNING. Both are pinned by tests
+   — a latent defect fixed without a pin can regress silently.
+
+13. **`Broken` was inferring a cause from a syntactic condition.** "Neither `res` nor
+   `future`" was mapped to an error reading "The benchmark function for job X returned
+   None", but that branch is also reached by a cache entry holding `None`. The constructor
+   now takes an optional `error=`, so `FutureCache.submit`'s serial site — the only place
+   that has actually watched `run_job` return `None` — names the cause, and the fallback
+   diagnosis says only what is known. The conflict check across the three arms uses
+   `is not None`, not truthiness, because `res={}` is a valid result.
+
+14. **Two justifications in P5 were factually wrong and are corrected (the code stands).**
+   Item 6 above rested the `cached_property`-over-`__post_init__` choice partly on
+   `WorkerJob` crossing a process boundary. **It does not** — only `Job` (function +
+   `job_args`) is pickled to an executor; a `WorkerJob` is built and consumed in the parent.
+   The choice is still right for the other reasons given (a factory leaves the plain
+   constructor reachable; `__post_init__` rehashes on every unpickle), and picklability
+   remains a worthwhile property test, but the claim was overstated in the docstring, in
+   `test/test_multiprocessing_executor.py`'s section comment, and here. Also fixed: this
+   plan cited `TestCatchDoesNotAbsorbContractErrors` at two places (one pre-existing at
+   §10 P2 item 1, one added by P5); the class is `TestCatchDoesNotChangeContractHandling`.
+   Per plans-README rule 7 the symbol is the durable reference, so a plan whose thesis is
+   "claims are measured" should not cite one that does not exist.

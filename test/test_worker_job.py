@@ -14,8 +14,8 @@ def make_job(
     bench_cfg_sample_hash="sample_hash",
     tag="",
 ) -> WorkerJob:
-    """Construct a WorkerJob with setup_hashes() already applied."""
-    job = WorkerJob(
+    """Construct a WorkerJob."""
+    return WorkerJob(
         function_input_vars=list(function_input_vars),
         index_tuple=(0, 0),
         dims_name=list(dims_name),
@@ -23,15 +23,19 @@ def make_job(
         bench_cfg_sample_hash=bench_cfg_sample_hash,
         tag=tag,
     )
-    job.setup_hashes()
-    return job
 
 
-# ── construction defaults ───────────────────────────────────────────────────
+# ── construction ─────────────────────────────────────────────────────────────
 
 
-class TestWorkerJobDefaults:
-    def test_defaults_before_setup(self):
+class TestWorkerJobConstruction:
+    def test_hashes_exist_from_construction(self):
+        """C8 (plan 23 P5): no WorkerJob with unset hashes can exist.
+
+        These four used to be ``None``-default fields filled by a
+        ``setup_hashes()`` call every constructor site had to remember,
+        so nothing prevented caching under a ``None`` job key.
+        """
         job = WorkerJob(
             function_input_vars=[1],
             index_tuple=(0,),
@@ -40,21 +44,13 @@ class TestWorkerJobDefaults:
             bench_cfg_sample_hash="h",
             tag="",
         )
-        assert job.function_input is None
-        assert job.canonical_input is None
-        assert job.fn_inputs_sorted is None
-        assert job.function_input_signature_pure is None
-        assert job.found_in_cache is False
-        assert job.msgs == []
-
-    def test_msgs_lists_are_independent(self):
-        job_a = make_job()
-        job_b = make_job()
-        job_a.msgs.append("only on a")
-        assert job_b.msgs == []
+        assert job.function_input == {"x": 1}
+        assert job.canonical_input == (1,)
+        assert job.fn_inputs_sorted == [("x", 1)]
+        assert isinstance(job.function_input_signature_pure, str)
 
 
-# ── setup_hashes: function input construction ───────────────────────────────
+# ── derived inputs: function input construction ──────────────────────────────
 
 
 class TestFunctionInputConstruction:
@@ -86,7 +82,7 @@ class TestFunctionInputConstruction:
         assert job.fn_inputs_sorted == [("a", 3), ("x", 1), ("y", 2)]
 
 
-# ── setup_hashes: hash behavior ─────────────────────────────────────────────
+# ── derived hashes: hash behavior ─────────────────────────────────────────────
 
 
 class TestFunctionInputSignature:

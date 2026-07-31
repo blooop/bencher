@@ -295,12 +295,18 @@ class TestJobMultiprocessing:
 
 
 # ---------------------------------------------------------------------------
-# 3. WorkerJob hash + pickle (the dataclass sent alongside the Job)
+# 3. WorkerJob hash + pickle (the dataclass that accompanies the Job in-process)
 # ---------------------------------------------------------------------------
 
 
 class TestWorkerJobPickle:
-    """WorkerJob dataclass must be picklable with all value types."""
+    """WorkerJob dataclass must be picklable with all value types.
+
+    Note a ``WorkerJob`` is **not** actually sent to an executor -- only ``Job``
+    (function + ``job_args``) crosses the process boundary, and the ``WorkerJob``
+    is built and consumed in the parent. This is a property test on the dataclass
+    (it must hold every value type a sweep can produce without one of them
+    breaking pickling), not a test of a production serialization path."""
 
     def _make_worker_job(self, dims_name, function_input_vars, constant_inputs=None):
         job = WorkerJob(
@@ -311,7 +317,9 @@ class TestWorkerJobPickle:
             bench_cfg_sample_hash="abc123",
             tag="test",
         )
-        job.setup_hashes()
+        # Touch the derived hashes so the pickle round-trip below covers them as
+        # populated cached_property values, not just lazy recomputation.
+        assert job.function_input_signature_pure
         return job
 
     def test_worker_job_with_string_values(self):
