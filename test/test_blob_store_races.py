@@ -11,9 +11,11 @@ three genuinely concurrent surfaces, and this module pins the behaviour of each:
 2. **GC versus a writer.** ``clean_orphaned_blobs`` computes reachability and
    *then* lists the directory. Anything that becomes referenced inside that window
    is invisible to the snapshot but present in the listing. These tests establish
-   exactly how far the guarantees reach, including the two cases
-   ``min_age_seconds`` does **not** cover — they are the reason GC is documented as
-   a between-sessions operation.
+   exactly how far the guarantees reach: ``min_age_seconds`` protects both a blob
+   the concurrent sweep *wrote* and one it *deduplicated onto* (a content hit
+   refreshes mtime, so mtime means "last referenced"), but the **default**
+   ``min_age_seconds=0`` offers no protection at all — that case stays pinned, and
+   is why GC is still documented as a between-sessions operation.
 3. **GC versus GC, and GC versus a reader.** Both must degrade rather than raise:
    a losing racer sees ``FileNotFoundError`` from its own ``unlink``, and a
    renderer whose blob vanished must produce a placeholder.
@@ -265,16 +267,19 @@ class TestGCRacingAWriter:
         assert orphans == [] and nbytes == 0
         assert len(list((tmp_path / "blobs").iterdir())) == 1
 
-    def test_min_age_does_not_protect_a_new_reference_to_an_old_deduplicated_blob(
+    def test_min_age_protects_a_new_reference_to_an_old_deduplicated_blob(
         self, tmp_path, monkeypatch
     ):
-        """**The gap ``min_age_seconds`` cannot close.** Dedup lets a *new* sweep
-        reference an *old* blob without rewriting it: ``materialize_blob`` returns
-        the existing path and leaves mtime untouched. So an age-based grace period —
-        which reasons about write time — offers no protection at all here, however
-        large it is set. Only running GC while nothing sweeps is sufficient."""
+        """**The gap ``min_age_seconds`` used to leave open, now closed.** Dedup
+        lets a *new* sweep reference an *old* blob without rewriting it —
+        ``materialize_blob`` returns the existing path — but a content hit now
+        refreshes the blob's mtime, so mtime means "last referenced" rather than
+        "created" and the grace period protects this blob exactly as it protects
+        a freshly written one. The deletion loop stats each blob immediately
+        before its unlink, so the touch is visible to the age check even though
+        it lands after the reachability scan."""
         old_path = materialize_blob(frame(7.0), tmp_path)
-        os.utime(old_path, (1, 1))  # backdate beyond any plausible grace period
+        os.utime(old_path, (1, 1))  # backdate far beyond the grace period below
 
         def concurrent_sweep_dedups_onto_it() -> None:
             again = materialize_blob(frame(7.0), tmp_path)  # same content -> same name
@@ -282,10 +287,12 @@ class TestGCRacingAWriter:
             write_reference(tmp_path, again)
 
         self._inject_after_scan(monkeypatch, concurrent_sweep_dedups_onto_it)
-        orphans, _ = clean_orphaned_blobs(str(tmp_path), dry_run=False, min_age_seconds=86_400)
+        orphans, nbytes = clean_orphaned_blobs(str(tmp_path), dry_run=False, min_age_seconds=3600)
 
-        assert orphans == [str(old_path)], "a huge grace period does not help here"
-        assert not Path(old_path).exists()
+        assert orphans == [] and nbytes == 0, "the dedup touch must protect the old blob"
+        assert Path(old_path).exists()
+        # The reference the sweep recorded is intact, not dangling.
+        assert blob_reachability(str(tmp_path)).names == {Path(old_path).name}
 
     def test_a_blob_referenced_before_the_scan_is_never_at_risk(self, tmp_path):
         """The ordinary, safe case: reference recorded first, so GC sees it."""
@@ -431,16 +438,40 @@ class TestContentAddressingUnderConcurrency:
             stem = blob.name.split(".")[0]
             assert stem == digest, f"{blob.name} does not match its content digest"
 
-    def test_repeated_materialize_never_rewrites_an_existing_blob(self, tmp_path):
-        """Skipping the write on a content hit is what makes concurrent dedup cheap
-        and keeps mtime stable — the property the dedup/min_age test above relies on."""
+    def test_repeated_materialize_refreshes_mtime_but_never_rewrites_the_bytes(self, tmp_path):
+        """The content-hit contract: the bytes are never rewritten (what makes
+        concurrent dedup cheap and tear-free), but the mtime **is** refreshed —
+        a hit is a new reference, and mtime is the GC grace period's signal for
+        "recently referenced" (see the dedup/min_age test above).
+
+        "Never rewritten" is asserted on the mechanism: publication only ever
+        happens through the temp-file ``Path.replace``, so zero replace calls
+        during the hits means zero writes — mtime can no longer stand in as the
+        no-rewrite witness, since the touch moves it by design.
+        """
         payload = frame(1.5)
         path = Path(materialize_blob(payload, tmp_path))
-        first_mtime = path.stat().st_mtime_ns
+        original_bytes = path.read_bytes()
+        backdated = 1_000_000_000  # far in the past, so a refresh is unmistakable
+        os.utime(path, (backdated, backdated))
 
-        for _ in range(5):
-            assert materialize_blob(payload, tmp_path) == str(path)
-        assert path.stat().st_mtime_ns == first_mtime, "an existing blob was rewritten"
+        replace_calls: list[str] = []
+        real_replace = Path.replace
+
+        def counting_replace(self, target):
+            replace_calls.append(self.name)
+            return real_replace(self, target)
+
+        with mock.patch.object(Path, "replace", counting_replace):
+            for _ in range(5):
+                assert materialize_blob(payload, tmp_path) == str(path)
+
+        assert replace_calls == [], "a content hit must not rewrite the blob"
+        assert path.read_bytes() == original_bytes
+        assert path.stat().st_mtime > backdated, (
+            "a content hit must refresh mtime — it is a new reference, and the GC "
+            "grace period reasons about last-referenced time"
+        )
 
 
 class TestPickleRoundTripUnderConcurrency:

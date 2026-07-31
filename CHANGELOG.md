@@ -162,14 +162,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cache_results` and `cache_samples` both default to `False`, so with the defaults nothing
   on disk references the blobs of a plain (non-`over_time`) sweep, and a stored history
   holds paths rather than payload copies. GC is therefore an offline maintenance step, as
-  `clean_orphaned_media` already is. `min_age_seconds=` adds a grace period, but it is a
-  mitigation, not a guarantee: it protects blobs a concurrent sweep *wrote* during the
-  window, yet a sweep that deduplicates onto an existing old blob gets no protection at any
-  grace period — a content hit skips the write and never refreshes the file's mtime
-  (pinned by `test_min_age_does_not_protect_a_new_reference_to_an_old_deduplicated_blob`).
-  Run GC only when no sweep is in flight. There is deliberately no size- or age-based
-  eviction of *referenced* blobs, because nothing could restore them. An unreadable cache
-  entry makes
+  `clean_orphaned_media` already is. `min_age_seconds=` adds a grace period, and it covers
+  both ways a concurrent sweep gains a reference: a blob it *wrote*, and an old blob it
+  *deduplicated onto* — a content hit in `materialize_blob` refreshes the blob's mtime, so
+  **a blob's mtime means "last referenced", not "created"** (pinned by
+  `test_min_age_protects_a_new_reference_to_an_old_deduplicated_blob`; the bytes are still
+  never rewritten on a hit). Size the window honestly: the guard holds when
+  `min_age_seconds` exceeds the gap between a sweep materializing a payload and persisting
+  the record that references it — in practice, your longest sweep's runtime — and the
+  default `0` gives no protection at all. The deletion loop stats each blob immediately
+  before its unlink, leaving only the syscall-instant between stat and unlink uncovered,
+  so running GC with no sweep in flight remains the zero-assumption choice. There is
+  deliberately no size- or age-based eviction of *referenced* blobs, because nothing could
+  restore them. An unreadable cache entry makes
   absence-of-reference unprovable, so a corrupt cache collects **nothing** in either mode
   and warns with the offending entries named.
 
