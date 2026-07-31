@@ -30,7 +30,10 @@ citations have gone stale; this plan's §2 is the refreshed baseline.
   already exists: `RenderFailedWarning` + `report_render_failure`
   (`bencher/results/render_failure.py:30-58`, PR #1027) — an ERROR log, a warning a
   strict pipeline can promote, and a labelled failure pane in the report. The planner
-  is designed so this principle is structural, not aspirational (D6).
+  is designed so this principle is structural, not aspirational — **and D6 splits it in
+  two**, because that helper takes a `BaseException` and a deliberate planner `Reject`
+  is not one; feeding it a `Reject` is itself fatal (verified). Bugs and rejects get
+  different handlers and different visual treatment.
 - **(b) long-term correctness beats short-term convenience** — no shims that would let
   a wrong plan render "close enough"; divergences from today's behavior are recorded
   and reviewed, not absorbed.
@@ -87,7 +90,8 @@ Out of scope (recorded so nobody "helpfully" pulls them forward):
 A6's header says "No implementation yet". **Stale.** Since acceptance:
 
 1. **Phase 1 (Law 1) is complete** — plan 22, PRs #1019/#1021, plus follow-ups: blob
-   store GC (#1022), dedup-mtime fix and worker-contract amendment (#1030/#1031/#1032).
+   store GC (#1022), the dedup-mtime fix (#1031) and the worker-contract warn-not-crash
+   amendment (#1032).
    `ResultDataSet` cells are content-addressed blob paths
    (`bencher/blob_store.py:148` `materialize_blob`, `:210` `load_blob`, layout
    `<cachedir>/blobs/<sha256[:16]><ext>`); the `isel(over_time=-1)` render restriction
@@ -106,12 +110,16 @@ A6's header says "No implementation yet". **Stale.** Since acceptance:
    (`PANEL_TYPES` `:817`, `SCALAR_RESULT_TYPES` `:819`, …). This is the registry plan 23
    §8 told this plan to derive the channel vocabulary from.
 3. **The degrade-visibly mechanism exists** — PR #1027. `RenderFailedWarning`
-   (`bencher/results/render_failure.py:30`), `report_render_failure(what, exc)`
-   (`:34-58`: ERROR log with `exc_info`, warning at `stacklevel=3`, labelled Markdown
-   failure pane), publicly exported (`bencher/__init__.py:186`). Seven call sites:
+   (`bencher/results/render_failure.py:30`, the one symbol publicly exported at
+   `bencher/__init__.py:186`) and `report_render_failure(what: str, exc: BaseException)`
+   (`:34-58`: ERROR log with `exc_info=exc`, warning at `stacklevel=3`, labelled
+   Markdown failure pane; **not** exported from `bencher/__init__.py` — it is imported
+   from its module by each caller). Seven call sites, complete:
    `bencher/results/bench_result.py:357,362,492,509`,
    `bencher/optuna_conversions.py:175,187`, `bencher/run.py:202`. A6 predates this;
-   this plan makes it the planner's failure contract (D6).
+   this plan makes it the planner's failure contract (D6) — **with the exception
+   pipeline's precondition respected, see D6, because the helper's
+   `traceback.format_exception_only(type(exc), exc)` at `:51` accepts exceptions only.**
 4. **The worker-contract warn-not-crash pattern exists** — `WorkerContractError`
    (`bencher/job.py:118`), `WorkerContractWarning` (`:130`), `SampleFailure` (`:165`),
    consumed by `store_results` (`bencher/result_collector.py:412-489`), surfaced by the
@@ -136,21 +144,29 @@ All nine of A6 §1's pathways exist, none renamed:
 | 6 | rerun over-time grid | `_pane_over_time_grid` (`bench_result_base.py:1066-1103`) — **not** in `rerun_result.py`/`video_summary` as A6 §1 implies |
 | 7 | video composition | `VideoSummaryResult._to_video_panes_ds` (`video_summary.py:176-245`) + `ComposableContainerVideo.render` (`composable_container/composable_container_video.py:113-184`) |
 | 8 | plotly direct | `VolumeResult.to_volume_ds` (`volume_result.py:76-115`), `SurfaceResult.to_surface_ds` (`holoview_results/surface_result.py:90-171`) |
-| 9 | rerun whole-sweep recorder | `RerunResult.to_rerun` (`rerun_result.py:50-143`), blueprint at `_build_blueprint` (`:379-391`) |
+| 9 | rerun whole-sweep recorder | `RerunResult.to_rerun` (`rerun_result.py:50-143`), blueprint built by the module-level `_build_blueprint` (`:379-391`) |
 
-The surface has **grown since the A6 audit**, in three ways the phase-3/4 migration
-must budget for (recorded here so the "nine pathways" framing is not taken literally):
+Three further pathways sit outside A6 §1's list of nine and the phase-3/4 migration must
+budget for them. **Only the first postdates the A6 commit** (`cead5fff`,
+2026-07-30 21:18 UTC); the other two predate it and were simply not enumerated — a real
+distinction, so this plan claims "A6 did not enumerate them", never "the surface grew":
 
-- **A tenth member of the over-time-grid family:** `_pane_over_time_dataset`
-  (`bench_result_base.py:1105-1151`), added by plan 22 D4 for blob-backed
-  `ResultDataSet` history — dispatched from `_to_panes_da` at `:960-969`.
+- **A tenth member of the over-time-grid family, genuinely post-A6:**
+  `_pane_over_time_dataset` (`bench_result_base.py:1105-1151`), added
+  2026-07-31 (`48b64798`) by plan 22 D4 for blob-backed `ResultDataSet` history —
+  dispatched from `_to_panes_da` at `:960-969`. Phase 1 created it.
 - **The `TabularSpec` family** (`holoview_results/tabular_spec.py:167`, `.build` at
-  `:202`) with four xy result classes (`xy_scatter_result.py:56-82` builds `hv.Points`;
+  `:202`) with four xy result classes (`xy_scatter_result.py:56-74` builds `hv.Points`;
   siblings `xy_curve_result.py`, `xy_hexbin_result.py`, `xy_histogram_result.py`) —
-  a new hand-built-hv pathway registered named-only in the plugin registry.
-- **`RerunSummaryResult`** (`rerun_summary.py:48`, recursion `_compose_ds:194-254`) is
-  the *second* hand-synced rerun recursion A6 §Law 10 phase 4 refers to; it also
-  independently reproduces the video `reverse` omission (§2.4).
+  a hand-built-hv pathway registered named-only in the plugin registry. Created
+  2026-07-28/29 (`fb39d9ce`, `ed005ac5`), i.e. **before** A6.
+- **`RerunSummaryResult`** (`rerun_summary.py:48`, recursion `_compose_ds:194-254`),
+  created 2026-07-30 18:22 UTC (`11e91171`), also **before** A6. It is a **third**
+  rerun recursion, not the second: A6 §1 point 2's two hand-synchronized copies are both
+  inside the `rerun_result.py` module — `_log_to_rerun` (`:177-300`) and
+  `_build_blueprint_contents`'s inner `_recurse` (`:404-470`, `_recurse` at `:416-417`),
+  both module-level functions. So **phase 4's deletion budget is three recursions**, and
+  `RerunSummaryResult` independently reproduces the video `reverse` omission (§2.4 #20).
 
 Sizing: `bencher/results/**` is 9,586 lines across 47 files at this commit.
 
@@ -158,7 +174,7 @@ Sizing: `bencher/results/**` is 9,586 lines across 47 files at this commit.
 
 1. **`VarRange` counts** — `bencher/plotting/plot_filter.py:13-69` (`VarRange`),
    `:72-114` (`PlotFilter`, 7 range fields at `:75-81`), matching loop in
-   `PlotMatchesResult` (`:117-181`). Call sites of `matches_result`:
+   `PlotMatchesResult` (`:117-178`, end of file). Call sites of `matches_result`:
    `bench_result_base.py:801` (the generic `filter()` gate),
    `holoview_results/surface_result.py:122` (the second, inner surface check — A6
    finding 17, still live), `video_summary.py:69-71`, `rerun_summary.py:112-114`, and
@@ -175,22 +191,32 @@ Sizing: `bencher/results/**` is 9,586 lines across 47 files at this commit.
    `(ResultRerun,)` (`rerun_summary.py:54`), and the unmatchable `(ResultVar,)`
    (`scatter_result.py:48` — A6 finding 11, still live).
 3. **`target_dimension` recursion depth** — declared at `map_sample_panes:623` (=0),
-   `map_plot_panes:655` (=2), `filter:734` (=2), `to_panes_multi_panel:834` (=1);
-   recursion predicate at `_to_panes_da` `bench_result_base.py:902`. Values in use:
-   0 (panes/dataset/video/rerun/xy), 2 (most hvplot), 3 (volume), `cat_cnt + 1`
-   (distribution — A6 finding 7), `None` → never recurses (band, resolved at
-   `:847-848`).
+   `map_plot_panes:655` (=2), `filter:734` (=2), `to_panes_multi_panel:834` (=1), and
+   `_to_panes_da`'s own default (`bench_result_base.py:886`, =1); recursion predicate at
+   `:902`. Values in use: **0** (panes/dataset/video/rerun/xy), **1** (the
+   `to_panes_multi_panel` path and `_to_panes_da`'s default), **2** (most hvplot),
+   **3** (volume), **`cat_cnt + 1`** (distribution — A6 finding 7), and **`None`** →
+   never recurses (band, resolved at `:847-848`).
 
-Plus a **fourth gate layer** A6's count predates in its current form: the plugin
-registry's selection ladder (`bencher/plugins/registry.py:190-284` `explain()`:
-include/exclude → named-only `auto=False` → `requires` capability strings checked
-against `BenchData.has()` (`plugins/bench_data.py:50-62`, unknown string silently
-`False` — plan 23 C10) → `PlotFilter` → backend/priority). It is a *selection* layer,
-not a shape dialect, but the planner replaces the shape-relevant part of it in phase 3,
-so it is counted here. Note the builtins all register `PlotFilter.match_all()`
-(`plugins/builtins.py:159,172`) and keep their real shape checks inside `to_plot` — so
-`registry.explain()` alone does **not** reveal today's effective selection (this shapes
-the shadow-harness design, D5).
+Alongside these three sits the plugin registry's **selection** ladder
+(`bencher/plugins/registry.py:190-284` `explain()`), in this exact order: `only`
+short-circuit that **bypasses every filter** (`:210-225`) → `include` (`:232-233`) →
+named-only `auto=False` during auto selection (`:235-237`) → `exclude` (`:238-240`) →
+`requires` capability strings checked against `BenchData.has()` (`:241-243`;
+`plugins/bench_data.py:50-62`, unknown string silently `False` — plan 23 C10) → an
+easily-missed gate on `plt_cnt_cfg is None` (`:245-246`) → `PlotFilter` (`:248-254`) →
+backend/priority resolution (`:257-279`).
+
+**A6's count of three is correct for what it counts.** A6 counts three *shape*
+dialects; this ladder is a selection layer, not a shape dialect, and it long predates
+A6 (the `plt_cnt_cfg` gate dates to 2026-04-26, `0ae9f6ca`; the `requires`/priority
+ladder was complete by 2026-07-07 — both months before A6's `cead5fff`). It is
+enumerated here only because the planner replaces its shape-relevant part in phase 3.
+
+The load-bearing observation for this plan: the builtins all register
+`PlotFilter.match_all()` (`plugins/builtins.py:159,172`) and keep their real shape checks
+inside `to_plot` — so `registry.explain()` alone does **not** reveal today's effective
+selection. That is what forces the shadow harness to measure empirically (D7).
 
 ### 2.4 A6 §6 findings spot-checked — the baseline is still the baseline
 
@@ -202,7 +228,7 @@ Every finding this plan's harness leans on was re-verified live at `398bdd96`:
 | #12 histogram `isel(over_time=-1)` cache alias | live | `histogram_result.py:37`; also `plt_cnt_cfg.py:174` (`_samples_per_point` measures only the last time point) |
 | #13 hidden `ResultBool` re-reduce | live | `bench_result_base.py:700-705` overrides the caller's `reduce` |
 | #17 surface double filter | live | outer `filter(...)` at `surface_result.py:77-88`, inner `matches_result` at `:122` |
-| #20 video `reverse` not propagated | live | declared `video_summary.py:186`, applied `:192-193`, omitted from the recursive call `:217-225` — **and reproduced in `rerun_summary.py:202,:217-218,:238-244`**, which the A6 audit did not list |
+| #20 video `reverse` not propagated | live (video); **latent** (rerun-summary) | declared `video_summary.py:186`, applied `:192-193`, omitted from the recursive call `:217-225`; the only `reverse=True` in `bencher/` is `video_summary.py:97` into video's own method. `rerun_summary.py:202,:217-218,:238-244` has the identical shape but **no caller passes `reverse=True`**, so it is latent, not shipped |
 | #22 signature fields computed, unread | live | `has_time`/`time_steps`/`samples_per_point` on `PltCntCfg` (A2 S1) still feed no selection |
 | #24 hvplot implicit widget | live (behavioral) | named in comments at `bench_result_base.py:895`, `:946-950` |
 | C4 dead filter axes | live | `plt_cnt_cfg.py:38-39` (plan 23 P6 pending) |
@@ -215,46 +241,103 @@ rerun container hmap reference`, `variables/results.py:576-595`), each `ResultSp
 carries the classification bits the channel capability function needs (`is_scalar`,
 `is_panel`, `is_media`, `is_data_var`, `kind`), and `result_spec()` resolves deprecated
 subclasses (`ResultVar` → `ResultFloat`'s spec) via isinstance fall-through (`:796-805`).
-A total function over `ResultKind` with `assert_never` therefore covers every result
-type that can legally exist, and CI already fails on an unregistered `Result*` class
-(plan 23 P4 DoD). **This is what makes a closed channel vocabulary derivable now** — the
-premise of plan 23 §8's instruction to write this plan after P4.
+A total function over `ResultKind` with `assert_never` therefore covers every result type
+that can legally exist. **This is what makes a closed channel vocabulary derivable now**
+— the premise of plan 23 §8's instruction to write this plan after P4.
 
-### 2.6 Stale A6 claims found while verifying (correct the doc, not the plan)
+**Use the right producer — this is the one ingress trap in the whole plan.** There are
+two functions and only one of them is typed:
 
-Recorded per plans-README rule 7; none invalidates A6's reasoning:
+| Function | Returns | Behavior on an unregistered param |
+|---|---|---|
+| `result_kind(rv)` (`variables/results.py:844-848`) | **`str`** | the string `"unknown"` |
+| `result_spec(rv)` (`:796-805`) | **`ResultSpec \| None`** | `None` |
 
-1. A6 header "No implementation yet" — phase 1 landed (§2.1.1); the header should say
-   phase 1 is complete and link plan 22's amendments.
+The grammar must obtain kinds as **`result_spec(rv).kind`**, having handled the `None`
+arm. The coercion an implementing agent would naturally reach for —
+`ResultKind(result_kind(rv))` — is **type-clean but raises at runtime**
+(`ValueError: 'unknown' is not a valid ResultKind`, verified by execution), which would
+put a crash at the ingress boundary of a plan whose first principle is never-crash. So
+**plan 24 §2's caveat is not "satisfied by design" here; it is satisfied by an explicit
+disposition** stated in D4: `PlanInputs.from_bench_result` treats `result_spec(rv) is
+None` as "not a result variable, not plannable" and omits it from `result_vars` with a
+logged note — it never coerces a string into the enum.
+
+Two real no-silent-link guards already exist upstream and are what let the grammar trust
+`RESULT_SPECS` as closed:
+
+- `test/test_result_missing.py:244` — an unregistered `Result*` class (not on the
+  documented `RESULT_SPEC_EXEMPT` list, `variables/results.py:959`) **fails CI**.
+- `bencher/variables/parametrised_sweep.py:96` — a parameter class defined in
+  `bencher.variables.results` but absent from the registry is **refused at
+  sweep-declaration time**, rather than silently becoming an input variable.
+
+Verified by execution: `kind_caps()`-style totality bites even without the strict `ty`
+list — deleting the `REFERENCE` arm from a match over `ResultKind` yields
+`error[type-assertion-failure] … Inferred type of argument is Literal[ResultKind.REFERENCE]`.
+P1's DoD is therefore real, not aspirational.
+
+### 2.6 A6 claims checked against the tree
+
+A6 is an **owner-accepted decision record**, so the bar for calling any part of it stale
+is evidence, not inference — a false staleness claim is worse than a missing one, because
+it licenses editing a document the owner signed off. Three claims are genuinely stale.
+Four things this plan initially listed as stale are **not**, and are demoted to
+clarifications. None of the seven affects A6's reasoning.
+
+**Genuinely stale — safe to correct in A6:**
+
+1. A6's header says "No implementation yet" — phase 1 has landed (§2.1.1). The header
+   should say phase 1 is complete and link plan 22's amendments.
 2. A6 §5 cites `hmap_kdims = sorted(...)` at `bencher.py:1059` — now
-   `bencher/bencher.py:1107`.
-3. A6 §1 places the "rerun over-time grid" pathway among the rerun/video files — it
-   lives in `bench_result_base.py:1066-1103` (`_pane_over_time_grid`).
-4. A6 Law 1 "ResultHmap is deprecated and removed" — deprecated only; removal is
-   phase 3 (plan 22 D6). Phase 2 must plan *around* live hmaps, not assume them gone.
-5. The "nine pathways" and "three dialects" counts are floors, not exact: §2.2 lists
-   three growths (one of them created by phase 1 itself) and §2.3 a fourth gate layer.
-6. A6 §6 finding 21 lists three divergent nesting orders; the rerun-summary `reverse`
-   omission (§2.4) is a fourth instance of the same class, previously unlisted.
-7. Law 5's "existing plugin registry (entry points group `bencher.plot_plugins`)" —
-   group name confirmed (`plugins/registry.py:14` `ENTRY_POINT_GROUP`), but note
-   `pyproject.toml` declares no entry points itself; builtins register imperatively at
-   import of `bench_result` (`bencher/results/bench_result.py:591`). The group is a
+   `bencher/bencher.py:1107` (line drift only).
+3. A6 §6 finding 21 lists three divergent nesting orders; `rerun_summary.py` holds a
+   fourth instance of the same *shape*, previously unlisted — though **latent, not
+   shipped** (§2.4 #20: nothing passes it `reverse=True`).
+
+**Clarifications — A6 is correct; these are things it does not spell out:**
+
+4. A6 §1 groups the "rerun over-time grid" pathway with rerun/video conceptually; the
+   code lives in `bench_result_base.py:1066-1103` (`_pane_over_time_grid`). A6 gives no
+   file citation here, so there is nothing stale — just a locator worth recording.
+5. A6 Law 1 says `ResultHmap` "is deprecated and removed". That states the **target
+   architecture**, which is what a Law is for; §2.1.1 reads it that way. Removal is
+   phase 3 (plan 22 D6). The only actionable note for *this* plan is operational: phase 2
+   must plan around live hmaps (D3).
+6. A6's "nine pathways" and "three dialects" are correct for what they count. Three
+   further pathways sit outside the list of nine (§2.2) and one selection ladder sits
+   beside the three shape dialects (§2.3) — but only `_pane_over_time_dataset` postdates
+   A6, and the ladder predates it by months. "A6 did not enumerate them" is the true
+   claim; "the surface grew" and "A6's count predates it" are not, and are withdrawn.
+7. Law 5's entry-point group name is **right** (`plugins/registry.py:14`
+   `ENTRY_POINT_GROUP = "bencher.plot_plugins"`). Worth recording alongside it:
+   `pyproject.toml` declares no entry points itself, and builtins register imperatively at
+   import of `bench_result` (`bencher/results/bench_result.py:591`), so the group is a
    third-party surface only.
 
 ### 2.7 No golden/snapshot infrastructure exists
 
 Measured: no `conftest.py` anywhere; zero non-`.py` files under `test/`; no
 update-flag machinery. The two precedents are inline constants with documented update
-procedures: `GOLDEN_BENCH_CFG_HASH_*` (`test/test_hash_persistent.py:741-763`) and the
-pixel-MD5 goldens in `test/test_cartesian_pil_renderer.py:143-171`. The golden-plan
-corpus (D7) is therefore new infrastructure and must carry its own regeneration task
-and documented update procedure.
+procedures:
+
+- `GOLDEN_BENCH_CFG_HASH_*` — the **update procedure** is the comment block at
+  `test/test_hash_persistent.py:727-739` (bump `CACHE_VERSION`, update the values,
+  document in `CHANGELOG.md`); the three constants are at `:740-744` (including
+  `GOLDEN_BENCH_CFG_HASH_HISTORY` at `:744`), the fixture builder `_build_golden_bench_cfg`
+  at `:745`, and `class TestGoldenBenchCfgHash` spans `:766-846` (end of file).
+- The pixel-MD5 goldens in `test/test_cartesian_pil_renderer.py:143-180`, whose
+  instruction is "update golden hashes only after visually confirming the new output is
+  acceptable" (`:146-148`).
+
+The golden-plan corpus (D7) is therefore new infrastructure and must carry its own
+regeneration task and a documented update procedure modelled on the first of these.
 
 ## 3. Problem statement
 
 Phase 3 rewrites `_to_panes_da` + `map_plot_panes` as plan execution and phase 4
-deletes the two rerun recursions and the video peel bug. Neither can start until:
+deletes the rerun recursions (three of them, §2.2) and the video peel bug. Neither can
+start until:
 
 1. **The plan exists as a type** — frozen, picklable, serializable — so a "did
    auto-deduction change?" question has a diffable answer (Law 6's golden plans).
@@ -279,19 +362,39 @@ from `RESULT_SPECS` is one total function (§2.5).
 
 ```
 bencher/grammar/
-    __init__.py      # public re-exports; GRAMMAR_VERSION
-    channels.py      # Channel enum, Frame enum, kind_caps()
-    plan.py          # DimAssignment, Transform records, Spread, Plan, Reject, LayoutPlan
+    __init__.py      # public re-exports; nothing but re-exports (no logic, no cycles)
+    channels.py      # GRAMMAR_VERSION, Channel, Frame, SpreadStat, KindCaps, kind_caps()
+    plan.py          # POLICY_VERSION, DimAssignment, Transform records, Substitution,
+                     # ConstantDim, Plan, Reject, PlanOutcome, SweepPlan,
+                     # PlanInputs/DimInfo/VarInfo/Pins/Prefs
     marks.py         # MarkDecl + the seed mark table + panel-backend capability table
     planner.py       # plan_result_var(), plan_sweep(), explain(); policy v1.1
 ```
+
+**Module ownership is fixed here, deliberately — do not relitigate it at P1.** The
+dependency order is strictly one-way: `channels.py` imports nothing from the package;
+`plan.py` imports from `channels.py`; `marks.py` from both; `planner.py` from all three.
+
+- **`SpreadStat` lives in `channels.py`**, not `plan.py`. It has to: `kind_caps()` returns
+  `KindCaps`, whose `spread_stat` field is `SpreadStat | None`, so `channels.py` must own
+  or import it — and owning it is the only choice that avoids a cycle, since `plan.py`
+  already imports `Channel`. `plan.py` and `marks.py` import `SpreadStat` from
+  `channels.py`. (An earlier draft of this plan placed it in three modules at once; that
+  contradiction is resolved in favour of `channels.py`.)
+- **`GRAMMAR_VERSION` lives in `channels.py`** (it versions the vocabulary) and
+  **`POLICY_VERSION` in `plan.py`** (it versions assignment policy, and `Plan` embeds
+  both). §8's grep expects exactly one definition of each.
+- **There is no `LayoutPlan` type.** The multi-result-var composition type is
+  **`SweepPlan`** (D4). An earlier draft named both; `SweepPlan` is the one that exists.
 
 - Every module lands on the strict `ty` override list in the same PR that creates it
   (plan 23 D1's ratchet rule: "constructively modeled" ⇔ "strictly checked").
 - Every `match` over `Channel`/`ResultKind`/`Frame`/transform unions ends in
   `assert_never` (plan 23 D2), and every match subject is constructed by the grammar
-  package itself — no raw `param`-descriptor reads (plan 24 §2's precondition is
-  satisfied by design: `PlanInputs` normalizes at the boundary, D4).
+  package itself — no raw `param`-descriptor reads. Plan 24 §2's precondition is met by
+  an **explicit disposition at one boundary**, not by assumption: `PlanInputs`
+  normalizes on the way in, and the untyped-ingress trap (`result_kind()` returning
+  `"unknown"`) has a stated non-coercing handling — see §2.5 and D4.
 - Nothing under `bencher/results/` or `bencher/plugins/` imports `bencher.grammar` in
   this plan — enforced by a DoD grep (§8). The planner has consumers only in `test/`.
 
@@ -357,21 +460,24 @@ def kind_caps(kind: ResultKind) -> KindCaps:
 Design points:
 
 - **Derivation, not duplication.** The function is keyed on `ResultKind`, which only
-  `RESULT_SPECS` produces (`result_kind()`, `variables/results.py:844`); a completeness
-  test iterates `RESULT_SPECS` and asserts `kind_caps(spec.kind)` succeeds for every
-  entry, and the `assert_never` makes a new `ResultKind` member a **static** error in
-  the grammar package (`type-assertion-failure` is never ignored — plan 23 P1's
-  meta-test already pins that). Together with plan 23 P4's registration guard, the
-  chain "new `Result*` class → must have a spec → must have a kind → must have caps"
-  has no silent link.
+  `RESULT_SPECS` produces — reached as **`result_spec(rv).kind`** (`ResultSpec | None`,
+  `variables/results.py:796`), never via `result_kind()`, which returns a `str` and
+  yields `"unknown"` off-registry (§2.5's trap table). A completeness test iterates
+  `RESULT_SPECS` and asserts `kind_caps(spec.kind)` succeeds for every entry, and the
+  `assert_never` makes a new `ResultKind` member a **static** error
+  (`type-assertion-failure` is never ignored — plan 23 P1's meta-test pins that;
+  verified by execution in §2.5). Together with the two upstream guards
+  (`test/test_result_missing.py:244` fails CI on an unregistered class;
+  `parametrised_sweep.py:96` refuses one at declaration time), the chain "new `Result*`
+  class → must have a spec → must have a kind → must have caps" has no silent link.
 - **`missing`-awareness comes free:** the planner consults `result_is_missing`
   (`variables/results.py:914`) for observed-sample counts — never a hand-rolled NaN or
   sentinel check (plan 22 D5's oracle discipline; contrast finding C12's `0.0` fills in
   rerun, which phase 4 fixes).
 - **Where per-spec bits are needed** (`is_panel` for the sample-mark decision,
   `is_data_var` to skip hmap/vec expansion), the planner reads the spec itself.
-  **OWNER DECISION 2** records the alternative (adding a `frame` field to `ResultSpec`)
-  and why derived-in-grammar is recommended.
+  §6a records the alternative (adding a `frame` field to `ResultSpec`) and why
+  derived-in-grammar wins.
 - **`ResultReference`** plans like `CONTAINER` but the resulting `Plan` is tagged
   `same_process_only=True` — Law 1: nothing in the core algebra may *depend* on it, and
   the tag is how a phase-3 renderer refuses to pretend a stripped reference is
@@ -383,7 +489,7 @@ Design points:
   `variables/results.py:246-252`) and belongs to a phase that owns a cache-safety
   story for it (phase 3, alongside the other dataset-shape work). **Phase 2 plans each
   expanded column as an independent float result var, matching storage today.**
-  OWNER DECISION 3.
+  OWNER DECISION 1.
 
 ### D4 — The frozen `Plan` type and its inputs (Laws 2, 5, 6, 7)
 
@@ -465,34 +571,86 @@ class DimInfo:
 @dataclass(frozen=True)
 class VarInfo:
     name: str
-    kind: ResultKind                 # from result_kind() — the registry, nothing else
+    kind: ResultKind                 # from result_spec(rv).kind — NEVER result_kind(),
+                                     # which returns str and yields "unknown" (§2.5)
     observed_samples_per_point: int  # counted via result_is_missing over the RAW repeat
                                      # dim, all time points — NOT plt_cnt_cfg's
                                      # last-time-point-only _samples_per_point (§2.4 #12/#22)
 
 @dataclass(frozen=True)
+class Pins:
+    """The user's partial constraint set (Law 6). Every field is optional; an empty
+    Pins is the zero-API auto path. Unsatisfiable combinations produce a Reject."""
+    channels: tuple[DimAssignment, ...] = ()   # pin a dim to a channel, by dim name
+    mark: str | None = None                    # MarkDecl key
+    backend: str | None = None
+    transforms: tuple[Transform, ...] = ()     # user-requested, applied before planning
+    spread: SpreadStat | None = None
+
+@dataclass(frozen=True)
+class Prefs:
+    """Non-constraint preferences: the planner honors them where a free choice
+    exists and silently ignores them where a pin or a budget decides."""
+    layout: PaneLayout                         # grid | tabs | tabs_and_grid — the
+                                               # pane_layout successor (bench_cfg.py:364-371)
+    overlay_opacity: float | None = None       # Law 5's Overlay alpha knob (default 1/N)
+    prefer_3d: bool = False                    # licenses the Z channel (D5 step 3)
+
+@dataclass(frozen=True)
 class PlanInputs:
     dims: tuple[DimInfo, ...]
     result_vars: tuple[VarInfo, ...]
-    pins: Pins                       # frozen partial-constraint set (Law 6): any subset
-                                     # of channel-by-dim-name / mark / backend / transforms
-    prefs: Prefs                     # pane_layout successor knob etc. (grid-vs-tabs chain)
+    pins: Pins
+    prefs: Prefs
 ```
 
 `PlanInputs.from_bench_result(bench_res)` is the only place the grammar touches bencher
-objects; it reads `bench_res.ds` (the raw stored dataset) and result-var metadata —
-**never through `to_dataset()`'s reduce cache** (finding #12's poisoned-cache class must
-not gain a new client; see §7).
+objects. Two constraints on it:
+
+1. It reads `bench_res.ds` (the raw stored dataset) and result-var metadata —
+   **never through `to_dataset()`'s reduce cache** (finding #12's poisoned-cache class
+   must not gain a new client; see §7).
+2. **The untyped-ingress disposition (§2.5), stated once and normatively:** for each
+   declared result variable it calls `result_spec(rv)`; a `None` result means "not a
+   registered result type, therefore not plannable" and the variable is **omitted from
+   `result_vars` with a logged note**. It must never call `ResultKind(result_kind(rv))`,
+   which is type-clean but raises `ValueError` on `"unknown"`. A P2 test pins that a
+   plain `param.Number` on a sweep class produces an omission, not an exception.
 
 ### D5 — The planner: policy v1.1, deterministic and explainable (Laws 3, 6, 7)
 
-`plan_result_var(inputs, var) -> PlanOutcome` implements A6 Law 7's seven steps
-literally — each step is a named function with its own unit tests, in this order:
+`plan_result_var(inputs, var) -> PlanOutcome` implements A6 Law 7's seven steps — each
+step a named function with its own unit tests.
 
-1. `repeat` → `SPREAD` if the chosen mark accepts it, else `Aggregate(("repeat",), "mean")`.
-   Never positional. Spread stat defaults from `kind_caps` (bool → binomial — Law 2.2's
-   "kind-based default stat in one place", replacing the hidden re-reduce at
-   `bench_result_base.py:700-705`).
+**First, resolve a circularity A6 Law 7 contains and this plan must not inherit.** Law 7
+step 1 says `repeat` → `SPREAD` "if the mark accepts it", but the mark is not chosen until
+step 7, and step 7's mark choice depends on the residual shape *after* repeat is handled.
+Taken literally the policy is not a function, so "byte-identical plan for identical
+inputs" would be unachievable — the determinism law (Law 6) would be unenforceable no
+matter how many tests point at it. **Resolution: two passes over a provisional mark.**
+
+```
+pass 1 (provisional): choose a candidate mark from (result kind, raw dim shape,
+        observed_samples_per_point) alone — the step-7 rules evaluated as if repeat
+        were consumed by Spread. This is a total function; no channel is assigned.
+pass 2 (binding):     run steps 1-6 with that candidate's MarkDecl, then re-evaluate
+        step 7 against the true residual shape. If the confirmed mark differs from
+        the candidate, redo steps 1-6 once with the confirmed mark and take that
+        result. A third divergence is a planner bug -> Reject("internal: mark did
+        not converge in two passes"), never a third pass.
+```
+
+Bounded at two passes, so the planner is total and terminating by construction, and the
+convergence bound is itself a test (a mark table that oscillates fails CI rather than
+looping). Step 4's frame check is **not** part of this circularity — `kind_caps().frame`
+is derived from the result kind alone, so it is available in pass 1.
+
+The steps, run inside pass 2:
+
+1. `repeat` → `SPREAD` if the (provisional, then confirmed) mark accepts it, else
+   `Aggregate(("repeat",), "mean")`. Never positional. Spread stat defaults from
+   `kind_caps` (bool → binomial — Law 2.2's "kind-based default stat in one place",
+   replacing the hidden re-reduce at `bench_result_base.py:700-705`).
 2. Time dims with >1 **observed** points → `TIME`; size-1 time dims become
    `ConstantDim` provenance, absent for planning (finding #15).
 3. Floats in declaration order → `X`, `Y` (`Z` only when a 3D mark/backend is in
@@ -509,8 +667,8 @@ literally — each step is a named function with its own unit tests, in this ord
    `TABS ≤ 20` → `Reject` with `suggestions` naming the `Aggregate`/`Subsample` the
    user could pin. The planner **never** applies an uninvited data transformation
    (Law 7.6). Budget constants are named module-level values folded into
-   `POLICY_VERSION` (OWNER DECISION 1).
-7. Mark by residual shape × `result_kind`; backend by fidelity over the seed capability
+   `POLICY_VERSION` (§6a: exactly 8 / 6 / 20).
+7. Mark by residual shape × result kind; backend by fidelity over the seed capability
    table (panel/holoviews only in phase 2). Repeat thresholds gate on
    `observed_samples_per_point` (line at ==1; curve/box/violin at ≥2 — finding #23).
 
@@ -563,19 +721,45 @@ unrepresentable because a `MarkDecl` has no contradictory dual bounds).
   (programmer error at the boundary parse, same posture as `normalize_executor`).
 - In phase 2 the planner runs **only in tests**, where a raise is a loud test failure —
   correct.
-- The phase-3 integration contract is stated now, once, so no later phase improvises:
-  *any* exception or `Reject` on the auto path degrades through
-  `report_render_failure(f"Plan for '{var}'", exc_or_reject)`
-  (`render_failure.py:34-58`) — labelled pane, ERROR log, `RenderFailedWarning`, report
-  continues. On the *pinned* path (Law 6: user pins that cannot be satisfied), the
-  `Reject` with its reasons and suggestions **is** the visible artifact — loud, but
-  still a pane, never an exception through the report build. This mirrors the
-  worker-contract disposition (plan 23 §10 P2-amendment): record + warn visibly, never
-  lose the run.
-- Consequence for phase 2's own deliverables: `Reject` must carry enough structure
-  (`reasons`, `suggestions`) to *be* that pane without reformatting. The golden corpus
-  includes `Reject` outcomes (e.g. a 30-level StringSweep hitting every budget) so the
-  degraded path is pinned from birth.
+
+**A `Reject` must not be fed to `report_render_failure`.** The existing helper is
+typed `report_render_failure(what: str, exc: BaseException)` and its body calls
+`traceback.format_exception_only(type(exc), exc)` (`render_failure.py:51`) and
+`logger.error(..., exc_info=exc)` (`:45`). Passing a frozen `Reject` dataclass raises
+`AttributeError: 'Reject' object has no attribute '__suppress_context__'` — **verified by
+execution** — misbehaves in the `exc_info=` call, and would be an
+`invalid-argument-type` error under D1's own strict-`ty` mandate. So the mechanism this
+plan designates as the never-crash answer would itself be fatal on the reject path if
+wired naively. Two distinct dispositions instead:
+
+| Outcome | Handler | Why |
+|---|---|---|
+| Planner raised an exception (a **bug**) | `report_render_failure(f"Plan for '{var}'", exc)` — the existing helper, unchanged | It really is a render failure; "failed to render" is the honest label |
+| Planner returned a **`Reject`** (a deliberate decision) | a **new sibling**, `report_plan_rejected(what: str, reject: Reject) -> pn.pane.Markdown` | A budget reject is expected behavior, not a defect |
+
+`report_plan_rejected` is specified (phase 3 implements it; phase 2 only fixes its
+contract):
+
+- formats `reject.reasons` and `reject.suggestions` — both **tuples**, so they need
+  real formatting into Markdown bullets; the earlier claim that a `Reject` "is the
+  visible pane without reformatting" was wrong and is withdrawn;
+- its own warning class `PlanRejectedWarning` (sibling of `RenderFailedWarning`, same
+  promote-to-error affordance) and a log at **WARNING**, not ERROR;
+- its own visual treatment and pane title — *"no plot for `x` (2,400 tabs exceeds the
+  20-tab budget); pin `Aggregate(('lidar_id',), 'mean')` to reduce it"* — never the
+  "⚠️ failed to render" wording. Labelling a deliberate planner decision as a failure
+  would conflate the two states the whole plan exists to separate, and would teach users
+  to ignore genuine failure panes.
+
+Both paths keep the report building: pane in, exception never out. This mirrors the
+worker-contract disposition (plan 23 §10 P2-amendment) — record + surface visibly, never
+lose the run.
+
+Consequence for phase 2's own deliverables: `Reject` must carry enough *structure*
+(`reasons`, `suggestions`, both tuples of plain strings) for `report_plan_rejected` to
+render it without consulting the planner again. The golden corpus includes `Reject`
+outcomes (e.g. a 30-level StringSweep hitting every budget) so the degraded path is
+pinned from birth.
 
 ### D7 — Shadow harness, divergence ledger, golden corpus (Law 10 phase 2; Law 6)
 
@@ -635,6 +819,18 @@ filter), #20/#21 (video/rerun peel order — planner emits the panel order), #24
 
 Each phase is one PR on a `plan/grammar-p2-*` branch; `pixi run ci` and
 `pixi run test-split` must pass; each adds its new files to the strict `ty` list.
+
+**How "zero visual change" is actually proven.** Not by a gallery diff: `generate-docs`
+writes into `docs/reference/meta/`, `docs/_extra/`, `_thumbs` and
+`docs/_extra/scorecard_example/`, **all gitignored** (`.gitignore:204-206`;
+`git ls-files docs/reference/meta/` returns 0 files), so there is no committed baseline to
+compare against — and `ci` depends on `generate-examples` (the 221 tracked files under
+`bencher/example/generated/`), not on `generate-docs`. The checkable proof is structural
+and it is stronger: **no module under `bencher/results/` or `bencher/plugins/` imports
+`bencher.grammar`** (§8's isolation grep), so no rendering code path can consult the
+planner and therefore nothing it produces can reach a pixel. A6 Law 10's before/after
+gallery review is a *manual* owner activity and stays that; phases 3–4 are where it earns
+its keep.
 **Ordering rationale:** vocabulary before records (records embed channels), records
 before planner (the planner returns them), planner before shadow (the harness compares
 it). P1–P3 are pure-additive library PRs reviewable in isolation; P4 is where the
@@ -644,13 +840,15 @@ phase gate for A6 phase 3.
 ### P1 — Channel vocabulary + kind capabilities (`channels.py`)
 
 - `Channel` (9 members, explicit values), `Frame`, `SpreadStat`, `KindCaps`,
-  `kind_caps()` with `assert_never`, `GRAMMAR_VERSION`.
+  `kind_caps()` with `assert_never`, `GRAMMAR_VERSION` — all in `channels.py` (D1 fixes
+  module ownership; `SpreadStat` lives here so `KindCaps` needs no cross-module import).
 - **Tests:** member-count pin (9 channels; adding one fails a test *and* requires a
-  version bump the test checks); completeness over `RESULT_SPECS` (every spec's kind
-  has caps; run under `warnings.catch_warnings()` — instantiating `ResultHmap`/
-  `ResultVar` warns, plan 23 D3 note); frame-legality table (image/video → PIXELS,
-  rerun → ENTITY, scalar → AXES, path/string/dataset/container/reference → NONE);
-  bool → binomial default.
+  version bump the test checks); completeness over `RESULT_SPECS` (every spec's kind has
+  caps — this iterates the registry dict and reads `spec.kind` off a frozen dataclass, so
+  it instantiates no `Result*` class and needs **no** `warnings.catch_warnings()`; the
+  plan-23-D3 deprecation-warning caveat applies only to tests that *construct* every
+  class); frame-legality table (image/video → PIXELS, rerun → ENTITY, scalar → AXES,
+  path/string/dataset/container/reference → NONE); bool → binomial default.
 - **DoD:** deleting a `case` arm from `kind_caps` fails `pixi run ty` with
   `type-assertion-failure`; `bencher/grammar/` contains no `isinstance` on `Result*`
   classes (grep, §8).
@@ -661,28 +859,40 @@ phase gate for A6 phase 3.
   `Reject`, `SweepPlan`, `PlanInputs`/`DimInfo`/`VarInfo`/`Pins`/`Prefs`,
   `POLICY_VERSION`; canonical JSON `to_json`/`from_json`; `MarkDecl` + the seed table +
   the panel-backend capability table.
-- `PlanInputs.from_bench_result` (reads `bench_res.ds` and declaration metadata only).
+- `PlanInputs.from_bench_result` (reads `bench_res.ds` and declaration metadata only,
+  with D4's non-coercing disposition for unregistered params).
 - **Tests:** pickle round-trip; JSON round-trip is byte-stable and key-sorted; every
   record is frozen and hashable; `MarkDecl` with empty/unknown `target_kinds` raises at
   construction; `from_bench_result` on a real small sweep yields declaration-order
   dims, observed (not configured) `samples_per_point` counted across *all* time points
   via `result_is_missing`, and never touches `to_dataset`'s cache (assert
-  `_to_dataset_cache` empty after extraction).
+  `_to_dataset_cache` empty after extraction); a sweep carrying a plain `param.Number`
+  omits it from `result_vars` rather than raising (§2.5's ingress trap).
 - **DoD:** grammar records import cleanly with no panel/holoviews import (keep the
-  package light — it must be importable in the collect process; assert
-  `sys.modules` free of `holoviews` after `import bencher.grammar` in a subprocess
-  test, same technique as `test/test_render.py`).
+  package light — it must be importable in the collect process). Write this as a
+  subprocess that imports `bencher.grammar` and asserts `"holoviews" not in sys.modules`.
+  **Note there is no existing precedent to copy:** no test in the repo asserts anything
+  about `sys.modules`, and `test/test_render.py` uses a different technique for a
+  different question — `_count_plot_objects()` (`:16-24`) walks `gc.get_objects()`
+  counting live `holoviews.*`/`bokeh.*` *instances*. The subprocess check is trivial to
+  write from scratch; just do not go looking for a template.
 
 ### P3 — The planner (`planner.py`)
 
-- Policy v1.1 steps 1–7 as named functions; budgets as named constants;
-  `plan_result_var`, `plan_sweep`, `explain()`.
-- **Tests:** one unit test per Law 7 step; the invariants list in D5 (each mapped to
-  its finding numbers); determinism (repeat call + hypothesis property over generated
-  `PlanInputs`); budget demote-then-reject chain including the `suggestions` payload;
-  pins honored as hard constraints with unsatisfiable pins → `Reject` naming the
-  conflicting pins (Law 6); `explain()` snapshot-tested on three canonical shapes
-  (inline expected strings, `test_explain_selection.py` style).
+- Policy v1.1 steps 1–7 as named functions, **inside D5's two-pass mark resolution**
+  (resolving the step-1↔step-7 circularity A6 Law 7 contains — without it determinism is
+  not achievable and the three determinism tests below are vacuous); budgets as named
+  constants; `plan_result_var`, `plan_sweep`, `explain()`.
+- **Tests:** one unit test per Law 7 step; the two-pass convergence bound (a mark table
+  that would need a third pass yields `Reject`, never a loop); the invariants list in D5
+  (each mapped to its finding numbers); determinism (repeat call + hypothesis property
+  over generated `PlanInputs`); budget demote-then-reject chain including the
+  `suggestions` payload; pins honored as hard constraints with unsatisfiable pins →
+  `Reject` naming the conflicting pins (Law 6); `explain()` pinned on three canonical
+  shapes with inline expected strings — note this is **new for this repo**:
+  `test_explain_selection.py` pins its table by list-equality on `(name, backend)` pairs
+  (`:64-68`) plus `assertIn` substring probes, not by inline expected output, so there is
+  no snapshot style to follow.
 - **DoD:** `grep -rn "override" bencher/grammar/` empty; planner is total over the
   corpus of P2's generated inputs (hypothesis finds no uncaught exception).
 
@@ -694,45 +904,56 @@ phase gate for A6 phase 3.
 - **Tests:** full-corpus agreement modulo ledger (both directions, D7); every ledger
   row cites a finding; golden byte-identity; `Reject` outcomes present in the corpus
   (budget overflow, unsatisfiable pins, hmap-only sweep).
-- **DoD:** `pixi run generate-docs` diff-clean (zero visual change — the acceptance
-  artifact for a phase that must not render anything differently); the plan-level DoD
-  greps (§8) all pass; a PR comment records the final divergence count and its finding
-  breakdown — that table is the input phase 3's visual diffs will be reviewed against.
+- **DoD:** the **isolation grep** below passes — that is this phase's acceptance
+  artifact; plus the rest of §8's greps; plus a PR comment recording the final
+  divergence count and its finding breakdown, which is the table phase 3's visual diffs
+  get reviewed against.
 
 ## 6. OWNER DECISIONS
 
-1. **Budget constants (P3).** Law 7 gives `Overlay ≤ 8`, facet level `≤ ~6`,
-   `Tabs ≤ ~20`. Recommendation: pin exactly 8 / 6 / 20 as named constants inside
-   `POLICY_VERSION = "1.1"`; tuning later is a policy bump with a golden diff — cheap
-   and visible. The "~" must die here; a fuzzy budget cannot produce deterministic
-   plans.
-2. **Where kind→channel knowledge lives (P1).** Recommendation: derived in
-   `bencher/grammar/channels.py` as a total function over `ResultKind` (D3), **not** a
-   new `frame` field on `ResultSpec`. Rationale: plan 23's registry is the storage and
-   classification contract; channel legality is grammar knowledge, versioned with
-   `GRAMMAR_VERSION`, and the `assert_never` + completeness test give the same
-   no-silent-link guarantee a spec field would. Alternative (spec field) recorded: it
-   would put one more consumer inside `variables/results.py` and couple registry edits
-   to grammar version bumps.
-3. **`ResultVec` index-as-dim (deviation from A6 Law 7's invariant list).**
-   Recommendation: defer the stored-shape change to phase 3 and plan per-expanded-column
-   in phase 2 (D3). This is an explicit, recorded deviation: A6 says the vector index
-   "becomes a real dim (kills #10)", but that is a collection-layer change to stored
-   datasets with its own cache-safety story, and phase 2 is forbidden from touching
-   stored data. The shadow ledger carries #10 as "deferred, not divergent".
-4. **Golden corpus breadth (P4).** Recommendation: full generated-tree *shadow
-   agreement* (cheap — planning is milliseconds) but byte-goldens only for a curated
-   ~60-entry set (meta examples + finding shapes + reject cases), one JSON file per
-   entry. Golden-diffing 200+ files on every policy tweak would train reviewers to
-   rubber-stamp; 60 curated ones stay readable.
-5. **Plan-at-collect wiring (Law 9).** Recommendation: phase 3 (§1 rationale — first
-   consumer). If the owner wants plans persisted earlier for forward-compatibility of
-   pickles, P4 can add the attribute write behind the same additive-`getattr` posture
-   as PR #994; the recommendation stands against it (dead weight, second source of
-   truth before any reader exists).
-6. **Version literals (P1/P2).** Recommendation: `GRAMMAR_VERSION = "1"`,
-   `POLICY_VERSION = "1.1"` (keeping A6's name for the audited policy). Strings, not
-   ints — they end up in JSON and `explain()` output.
+Deliberately short. A marker that fires on every judgement call trains the owner to skim
+it, so the bar here is: **the decision either contradicts something the owner has already
+accepted, or it commits to something a later phase cannot cheaply reverse.** Everything
+else is a plan decision (§6a) — recorded with rationale, executable without asking.
+
+1. **`ResultVec` index-as-dim — deferred to phase 3.** This is the one genuine owner
+   call, because it **contradicts an owner-accepted Law**: A6 Law 7's invariant list says
+   the vector index "becomes a real dim (kills #10)". This plan does not do that. Rationale:
+   it is a collection-layer change to *stored datasets* with its own cache-safety story,
+   and phase 2 is forbidden from touching stored data — so phase 2 plans each expanded
+   column as an independent float result var, matching storage today (D3). The shadow
+   ledger carries #10 as "deferred, not divergent". **Confirm the deferral or direct that
+   phase 2 grow a stored-shape change.**
+2. **Plan-at-collect wiring (Law 9) — deferred to phase 3.** Borderline, recorded because
+   it touches pickle forward-compatibility. Recommendation: phase 3, the first phase with
+   a consumer (§1). If the owner wants plans persisted earlier so older pickles carry
+   them, P4 can add the attribute write behind the same additive-`getattr` posture as
+   PR #994. The recommendation stands against it: dead weight plus a second source of
+   truth before any reader exists.
+
+### 6a. Plan decisions (settled here; no owner input needed)
+
+Each was an OWNER DECISION in this plan's first draft and is demoted on review — the
+recommendation was already made with rationale, and escalating four more markers only
+diluted the two above.
+
+- **Budget constants (P3): 8 / 6 / 20**, as named constants folded into
+  `POLICY_VERSION = "1.1"`. Law 7's "~6" and "~20" must become exact here; a fuzzy budget
+  cannot produce a deterministic plan. Tuning later is a policy bump with a golden diff —
+  cheap and visible, which is exactly why it does not need pre-approval.
+- **Where kind→channel knowledge lives (P1): derived in `bencher/grammar/channels.py`**
+  as a total function over `ResultKind` (D3), *not* a new `frame` field on `ResultSpec`.
+  Plan 23's registry is the storage and classification contract; channel legality is
+  grammar knowledge, versioned with `GRAMMAR_VERSION`, and `assert_never` plus the
+  completeness test give the same no-silent-link guarantee a spec field would. The
+  alternative would add a consumer inside `variables/results.py` and couple registry
+  edits to grammar version bumps.
+- **Golden corpus breadth (P4): full-tree shadow agreement, byte-goldens for a curated
+  ~60 entries** (meta examples + finding shapes + reject cases), one JSON file per entry.
+  Shadow agreement is cheap (planning is milliseconds); byte-diffing 200+ files on every
+  policy tweak would train reviewers to rubber-stamp.
+- **Version literals: `GRAMMAR_VERSION = "1"`, `POLICY_VERSION = "1.1"`** (keeping A6's
+  name for the audited policy), as strings — they land in JSON and `explain()` output.
 
 ## 7. Cache safety
 
@@ -746,7 +967,7 @@ phase gate for A6 phase 3.
 - **No stored-format change of any kind:** no dataset cell, sentinel, fill, blob, or
   history file is written differently. Phase 2 is additive modules + tests only. Old
   pickles are unaffected because nothing reads or writes a plan from a pickle yet
-  (OWNER DECISION 5).
+  (OWNER DECISION 2).
 - **Read-path hygiene:** `PlanInputs.from_bench_result` reads `bench_res.ds` and
   declaration metadata; it must not call `to_dataset()`/`to_hv_dataset()` — the reduce
   cache they share is the one finding #12 shows being poisoned by an extra client, and
@@ -761,21 +982,31 @@ phase gate for A6 phase 3.
 
 All four phases merged (or explicitly dropped with a note here), and:
 
-- `pixi run ci` and `pixi run test-split` green on py311 and py313;
-  `pixi run generate-docs` produces a byte-identical gallery (zero visual change).
+- `pixi run ci` and `pixi run test-split` green on py311 and py313.
+- **The acceptance artifact for shadow-only-ness is the isolation grep below**, not a
+  gallery diff (P5's rationale: the gallery output is gitignored, so "byte-identical
+  gallery" is not a checkable claim).
 - Every `bencher/grammar/*.py` file is on the strict `ty` override list;
   `type-assertion-failure` still never ignored (plan 23 P1 meta-test unchanged).
 - The shadow suite passes with a fully-cited divergence ledger; the golden corpus is
   checked in with a working `update-golden-plans` task and a documented update
   procedure.
 - Grep-level checks (each a line in a meta-test or the PR checklist):
+  - **The isolation grep — this phase's acceptance artifact:**
+    `grep -rln "bencher.grammar\|from .grammar\|from ..grammar" bencher/results/ bencher/plugins/ bencher/identity.py bencher/worker_job.py`
+    → **empty**. Nothing under the renderers or plugins can consult the planner (so no
+    plan can reach a pixel: shadow-only, proven structurally) and neither hashed module
+    can see it (so no plan can reach a cache key: Law 9 layer 1, §7).
   - `grep -rn "class Channel" bencher/` → exactly one definition; a test pins 9 members.
-  - `grep -rn "GRAMMAR_VERSION\|POLICY_VERSION" bencher/` → one definition each, both
-    in `bencher/grammar/`.
-  - `grep -rln "bencher.grammar\|from .grammar\|from ..grammar" bencher/results/ bencher/plugins/ bencher/identity.py bencher/worker_job.py` → empty (no renderer wiring, no hash coupling).
+  - `grep -rn "GRAMMAR_VERSION" bencher/` → one definition, in `channels.py`;
+    `grep -rn "POLICY_VERSION" bencher/` → one definition, in `plan.py` (D1).
   - `grep -rn "isinstance(.*Result" bencher/grammar/` → empty (all kind knowledge flows
-    through `RESULT_SPECS`/`ResultKind`).
+    through `result_spec(...).kind`/`RESULT_SPECS`, never an isinstance ladder).
+  - `grep -rn "result_kind(" bencher/grammar/` → **empty** — the grammar uses the typed
+    `result_spec(...).kind`, never the `str`-returning `result_kind()` (§2.5's trap).
   - `grep -rn "override" bencher/grammar/` → empty (Law 7: no escape hatch).
+  - `grep -rn "report_render_failure" bencher/grammar/` → empty (phase 2 wires no
+    reporting; and per D6 a `Reject` must never reach that helper at all).
   - `grep -rn "assert_never" bencher/grammar/` → non-empty, and no subject is a raw
     `param` attribute read (plan 24 A4's check, applied to the new package).
 - Every A6 §6 finding number referenced by this plan appears in either a planner
@@ -784,20 +1015,33 @@ All four phases merged (or explicitly dropped with a note here), and:
 
 ## 9. Deviations from A6 (recorded, per plans-README rule 7)
 
-1. **§2.6's seven stale citations/claims** — line drift and count growth; A6's
-   reasoning stands. This plan's §2 is the refreshed baseline for phases 3–5.
-2. **`ResultVec` index-as-dim deferred to phase 3** (OWNER DECISION 3) — a stored-data
-   change misfiled under planner invariants; deferring it is the conservative reading
-   of "phase 2 is shadow-only".
-3. **Backend capability tables scoped to panel/holoviews in phase 2** — Law 3's full
+**One substantive deviation** — a place this plan does something A6's accepted text says
+otherwise about, hence its OWNER DECISION:
+
+1. **`ResultVec` index-as-dim is deferred to phase 3** (OWNER DECISION 1) — A6 Law 7's
+   invariant list assigns it to the planner; it is really a stored-data change, and
+   deferring it is the only reading consistent with "phase 2 touches no stored data".
+
+**Four scope placements** — A6 assigns these to the migration but not to a specific
+phase, so this plan places them. No A6 text is contradicted:
+
+2. **Backend capability tables scoped to panel/holoviews in phase 2** — Law 3's full
    table set arrives with the lowerings that can validate it (phases 3–4). The *type*
    ships now so the planner's fidelity-based backend choice has its final shape.
-4. **Plan-at-collect deferred to phase 3** (OWNER DECISION 5) — Law 9 describes
+3. **Plan-at-collect placed in phase 3** (OWNER DECISION 2) — Law 9 describes
    `collect()`'s end state; Law 10's phase list does not assign it, and this plan
    assigns it to the first phase with a consumer.
-5. **Marks-open-via-entry-points deferred to phase 5** — Law 5 names the mechanism
+4. **Marks-open-via-entry-points placed in phase 5** — Law 5 names the mechanism
    (`bencher.plot_plugins`, confirmed at `plugins/registry.py:14`); publishing it as a
    third-party promise belongs with the API phase, not the shadow phase.
+5. **The step-1↔step-7 circularity in Law 7 is resolved, not inherited** (D5's two-pass
+   mark resolution). A6's policy text is not executable as literally ordered; this is a
+   completion of it rather than a departure from it, and it is a precondition for the
+   determinism Law 6 requires.
+
+Separately, §2.6 records **three genuinely stale A6 citations** plus four clarifications
+where A6 turned out to be correct — those are documentation corrections to A6, not
+deviations by this plan.
 
 ## 10. Coordination
 
@@ -813,7 +1057,10 @@ All four phases merged (or explicitly dropped with a note here), and:
   unreachable from the report path (`to_auto` uses `select()` + its own
   `report_render_failure` handling), so it is not fixed here — recorded for phase 3,
   which rewrites that dispatch, to route it through `report_render_failure` or delete
-  it.
+  it. **Phase 3 owns the same module's other addition:** implementing D6's
+  `report_plan_rejected` + `PlanRejectedWarning` sibling, so all three of
+  "render failed", "plan rejected" and "plugin errored" have one home and three
+  distinguishable presentations.
 - **A2:** this plan begins the supersession of S3–S4 that A6 declares; `explain()`
   (D5) is designed to absorb `explain_selection` in phase 3. Nothing in A2's landed
   S1/S2 is changed; the S1 signature fields (`has_time`, `time_steps`,
