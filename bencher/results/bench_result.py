@@ -444,8 +444,10 @@ class BenchResult(
                     continue
                 try:
                     plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
-                except Exception:  # pylint: disable=broad-except
-                    logger.exception("Failed to render regression overlay for %s", r.variable)
+                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                    plot_cols.append(
+                        report_render_failure(f"Regression overlay for '{r.variable}'", exc)
+                    )
 
         # --- Extra panels (user-injected) ---
         if extra_panels:

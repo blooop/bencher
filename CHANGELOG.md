@@ -53,6 +53,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ResultDataSet` with `over_time`.
 
 ### Changed
+- **A plot that fails to render now leaves a visible mark instead of vanishing.** Report
+  building stays best-effort — one bad plot still never aborts a whole report — but the
+  failure was previously recorded with `logger.exception` and nothing else. Loggers are off
+  by default in library use, so a report could be written *missing whole plots* while every
+  caller-visible signal still said success: no warning, a zero exit code, and an HTML file
+  that looks complete unless you already know which plot should have been there.
+
+  Each swallowed failure now leaves two marks: a `bencher.RenderFailedWarning`, so an
+  embedding test runner (pytest's warnings summary, `-W error`) sees it without configuring
+  logging; and a pane in the report naming what failed and why, so the gap is legible to
+  whoever opens the HTML. The `logger` call is kept for callers already capturing it, though
+  render-failure records now come from the `bencher.results.render_failure` logger rather
+  than from each calling module's logger — code filtering on
+  `bencher.results.bench_result` to catch plot failures should filter on the new name.
+
+  Applied to every best-effort render site: plot plugins, legacy plot callbacks, and
+  user-injected `extra_panels` in `to_auto`/`to_auto_plots`; regression overlays; and the
+  optuna analysis plots, which previously hand-rolled their own differently-formatted
+  failure pane and are now unified on the shared helper.
+
+  Reports that were silently short will now show these panes. That is the point — but a
+  caller whose test run cannot tolerate the new warning can silence that half of it (the
+  report pane is not affected):
+
+  ```python
+  import warnings
+  import bencher as bn
+  warnings.filterwarnings("ignore", category=bn.RenderFailedWarning)
+  ```
+
 - **BREAKING: a `ResultDataSet` dataset cell holds a blob path string, not an index.**
   Cells were `int` indices into `BenchResult.dataset_list`, valid only inside the process
   that produced them; they are now absolute `str` paths into the blob store, so any process

@@ -36,8 +36,13 @@ def report_render_failure(what: str, exc: BaseException) -> pn.pane.Markdown:
 
     Returns the pane to append in place of the plot that failed, so a caller can
     keep rendering the rest of the report.
+
+    The traceback comes from *exc* rather than from the ambient
+    ``sys.exc_info()``, so a caller that has already left its ``except`` block
+    (or never had one) still gets the real traceback in the log instead of
+    ``NoneType: None``.
     """
-    logger.exception("%s failed", what)
+    logger.error("%s failed", what, exc_info=exc)
     warnings.warn(
         f"{what} failed to render ({type(exc).__name__}: {exc}); the report is missing this plot",
         RenderFailedWarning,
