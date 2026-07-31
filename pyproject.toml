@@ -323,6 +323,7 @@ include = [
     "bencher/sweep_timings.py",
     "bencher/blob_store.py",
     "bencher/variables/results.py",
+    "bencher/history.py",
 ]
 [tool.ty.overrides.rules]
 invalid-assignment = "error"

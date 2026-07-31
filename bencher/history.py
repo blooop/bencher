@@ -40,10 +40,11 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, assert_never
 
 import numpy as np
 import xarray as xr
+from strenum import StrEnum
 
 from bencher.utils import hash_sha1
 from bencher.variables.results import (
@@ -63,7 +64,32 @@ HISTORY_FORMAT = 1
 # Absent for columns as old as the history itself.
 BIRTH_ATTR = "history_birth"
 
-_LOSSY_KINDS = frozenset({"full_reset", "column_dormant", "column_retired", "history_discarded"})
+
+class HistoryEventKind(StrEnum):
+    """Kind of schema-affecting event detected while loading over_time history.
+
+    Runtime-only: kinds are produced inside :mod:`bencher.history` and
+    ``ResultCollector`` and consumed by ``apply_policy`` in the same run; no
+    kind string is ever persisted into a history record. Explicit lowercase
+    values rather than ``auto()``: ``strenum``'s ``auto()`` yields the member
+    *name* verbatim, which would change these to uppercase (plan 23 D4).
+    """
+
+    FULL_RESET = "full_reset"
+    HISTORY_RENAMED = "history_renamed"
+    COLUMN_BORN = "column_born"
+    COLUMN_DORMANT = "column_dormant"
+    COLUMN_RETIRED = "column_retired"
+    COLUMN_RESUMED = "column_resumed"
+    HISTORY_DISCARDED = "history_discarded"
+
+
+class OnHistoryReset(StrEnum):
+    """Policy for surfacing lossy history events (``BenchRunCfg.on_history_reset``)."""
+
+    WARN = "warn"
+    ERROR = "error"
+    IGNORE = "ignore"
 
 
 class HistoryResetError(Exception):
@@ -74,15 +100,35 @@ class HistoryResetError(Exception):
 class HistoryEvent:
     """One schema-affecting event detected while loading over_time history."""
 
-    kind: str  # full_reset | history_renamed | column_born | column_dormant |
-    #            column_retired | column_resumed | history_discarded
+    kind: HistoryEventKind
     detail: str
     column: str | None = None
 
     @property
     def lossy(self) -> bool:
-        """True when the event removes data from what consumers will see."""
-        return self.kind in _LOSSY_KINDS
+        """True when the event removes data from what consumers will see.
+
+        Exhaustive over ``HistoryEventKind``: a new kind must be classified
+        here before it can exist, where the old ``_LOSSY_KINDS`` set silently
+        treated an unlisted (or typo'd) kind as non-lossy, defeating the
+        ``on_history_reset='error'`` CI gate.
+        """
+        match self.kind:
+            case (
+                HistoryEventKind.FULL_RESET
+                | HistoryEventKind.COLUMN_DORMANT
+                | HistoryEventKind.COLUMN_RETIRED
+                | HistoryEventKind.HISTORY_DISCARDED
+            ):
+                return True
+            case (
+                HistoryEventKind.HISTORY_RENAMED
+                | HistoryEventKind.COLUMN_BORN
+                | HistoryEventKind.COLUMN_RESUMED
+            ):
+                return False
+            case _ as unreachable:
+                assert_never(unreachable)
 
 
 def data_var_columns(result_vars: list | None) -> dict[str, Any]:
@@ -285,7 +331,7 @@ def reconcile(
             else:
                 events.append(
                     HistoryEvent(
-                        "column_born",
+                        HistoryEventKind.COLUMN_BORN,
                         f"result column '{name}' added; earlier history is backfilled "
                         f"as missing and its regression baseline starts now",
                         column=name,
@@ -301,7 +347,7 @@ def reconcile(
             if was_dormant:
                 events.append(
                     HistoryEvent(
-                        "column_resumed",
+                        HistoryEventKind.COLUMN_RESUMED,
                         f"result column '{name}' returned with the same identity; "
                         f"its earlier history resumes",
                         column=name,
@@ -316,7 +362,7 @@ def reconcile(
             columns[name] = column_meta(rv, name, birth_val)
             events.append(
                 HistoryEvent(
-                    "column_retired",
+                    HistoryEventKind.COLUMN_RETIRED,
                     f"result column '{name}' changed identity "
                     f"(class/units/meaning_version); {n_history} historical events "
                     f"retired to '{mangled}' and the column restarts",
@@ -327,7 +373,7 @@ def reconcile(
             meta["dormant"] = False
             events.append(
                 HistoryEvent(
-                    "column_resumed",
+                    HistoryEventKind.COLUMN_RESUMED,
                     f"result column '{name}' returned with the same identity; "
                     f"its earlier history resumes",
                     column=name,
@@ -352,7 +398,7 @@ def reconcile(
         }
         events.append(
             HistoryEvent(
-                "column_dormant",
+                HistoryEventKind.COLUMN_DORMANT,
                 f"result column '{name}' from a record predating column tracking is "
                 f"absent from the config; {n_history} historical events retained "
                 f"(dormant) and will resume if it returns",
@@ -365,7 +411,7 @@ def reconcile(
             meta["dormant"] = True
             events.append(
                 HistoryEvent(
-                    "column_dormant",
+                    HistoryEventKind.COLUMN_DORMANT,
                     f"result column '{name}' removed from the config; {n_history} "
                     f"historical events retained (dormant) and will resume if it "
                     f"returns with the same identity",
@@ -427,7 +473,7 @@ def project(merged: xr.Dataset, current_cols: dict[str, Any], columns_meta: dict
     return served
 
 
-def apply_policy(events: list[HistoryEvent], policy: str) -> None:
+def apply_policy(events: list[HistoryEvent], policy: OnHistoryReset | str) -> None:
     """Surface history events according to on_history_reset.
 
     Informational events (born, resumed) always log at INFO. Lossy events
@@ -435,15 +481,30 @@ def apply_policy(events: list[HistoryEvent], policy: str) -> None:
     policy='error' they raise HistoryResetError — callers must apply the
     policy *before* persisting the merged record so an erroring CI run does
     not advance history state; policy='ignore' logs at DEBUG.
+
+    Raises:
+        ValueError: If ``policy`` is not an ``OnHistoryReset`` member or one of
+            its values. The policy string is a trust boundary (it arrives from
+            user config), so an unknown value must raise rather than silently
+            meaning "ignore" as it used to (plan 24 §3).
     """
+    # Parse first, so the match below is over a value whose type is established
+    # rather than over a raw string (plan 24 A1/A2).
+    normalized = OnHistoryReset(policy)
     for event in events:
         if not event.lossy:
             logger.info("history: %s", event.detail)
     lossy = [e for e in events if e.lossy]
     if not lossy:
         return
-    if policy == "error":
-        raise HistoryResetError("; ".join(e.detail for e in lossy))
-    log = logger.warning if policy == "warn" else logger.debug
+    match normalized:
+        case OnHistoryReset.ERROR:
+            raise HistoryResetError("; ".join(e.detail for e in lossy))
+        case OnHistoryReset.WARN:
+            log = logger.warning
+        case OnHistoryReset.IGNORE:
+            log = logger.debug
+        case _ as unreachable:
+            assert_never(unreachable)
     for event in lossy:
         log("history: %s", event.detail)

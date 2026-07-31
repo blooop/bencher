@@ -19,7 +19,11 @@ import bencher as bn
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.history import (
     BIRTH_ATTR,
+    HistoryEvent,
+    HistoryEventKind,
     HistoryResetError,
+    OnHistoryReset,
+    apply_policy,
     column_identity,
     data_var_columns,
     legacy_last_seen_key,
@@ -447,6 +451,70 @@ class TestResetPolicy(ReconcilerBase):
             self.load(
                 ["a", "c"], 2, [_result_float("a"), _result_float("c")], on_history_reset="error"
             )
+
+    def test_unknown_policy_raises_before_touching_the_cache(self):
+        """An unknown policy string used to silently mean 'ignore'; now it is a
+        config error raised at the parse, before any cache read or write."""
+        with self.assertRaises(ValueError):
+            self.load(["a"], 1, [_result_float("a")], on_history_reset="ignroe")
+        # nothing was persisted: the bad-config run advanced no history state
+        cache = self.collector.get_history_cache()
+        self.assertNotIn(self.key, cache)
+        ls_key = legacy_last_seen_key(self.kwargs["bench_name"], self.kwargs["tag"])
+        self.assertIsNone(cache.get(ls_key))
+
+    def test_enum_policy_value_accepted(self):
+        served = self.load(["a"], 1, [_result_float("a")], on_history_reset=OnHistoryReset.ERROR)
+        self.assertEqual(set(served.data_vars), {"a"})
+
+
+class TestEventKindLossiness(unittest.TestCase):
+    """Every HistoryEventKind is classified through apply_policy under 'error'.
+
+    Exhaustive over the enum: adding a kind without classifying it in
+    ``HistoryEvent.lossy`` fails here (and in ty's exhaustiveness check)
+    instead of silently defeating the on_history_reset='error' CI gate the
+    way the old ``_LOSSY_KINDS`` set did for a typo'd kind.
+    """
+
+    LOSSY = frozenset(
+        {
+            HistoryEventKind.FULL_RESET,
+            HistoryEventKind.COLUMN_DORMANT,
+            HistoryEventKind.COLUMN_RETIRED,
+            HistoryEventKind.HISTORY_DISCARDED,
+        }
+    )
+    NON_LOSSY = frozenset(
+        {
+            HistoryEventKind.HISTORY_RENAMED,
+            HistoryEventKind.COLUMN_BORN,
+            HistoryEventKind.COLUMN_RESUMED,
+        }
+    )
+
+    def test_partition_covers_every_kind(self):
+        self.assertEqual(self.LOSSY | self.NON_LOSSY, set(HistoryEventKind))
+        self.assertEqual(self.LOSSY & self.NON_LOSSY, set())
+
+    def test_lossy_kinds_raise_under_error_policy(self):
+        for kind in self.LOSSY:
+            with self.subTest(kind=kind):
+                event = HistoryEvent(kind, f"synthetic {kind} event")
+                self.assertTrue(event.lossy)
+                with self.assertRaises(HistoryResetError):
+                    apply_policy([event], "error")
+
+    def test_non_lossy_kinds_pass_under_error_policy(self):
+        for kind in self.NON_LOSSY:
+            with self.subTest(kind=kind):
+                event = HistoryEvent(kind, f"synthetic {kind} event")
+                self.assertFalse(event.lossy)
+                apply_policy([event], "error")  # must not raise
+
+    def test_apply_policy_rejects_unknown_policy_even_with_no_events(self):
+        with self.assertRaises(ValueError):
+            apply_policy([], "silently-ignore")
 
 
 class TestYoungBaselineGating(unittest.TestCase):

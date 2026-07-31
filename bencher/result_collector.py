@@ -26,6 +26,8 @@ from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.history import (
     HISTORY_FORMAT,
     HistoryEvent,
+    HistoryEventKind,
+    OnHistoryReset,
     apply_policy,
     column_meta,
     current_time_value,
@@ -653,7 +655,7 @@ class ResultCollector:
             if adopted is not None:
                 events.append(
                     HistoryEvent(
-                        "history_renamed",
+                        HistoryEventKind.HISTORY_RENAMED,
                         f"over_time history adopted for series '{series_id}': the "
                         f"history key moved from {old_key} to {bench_cfg_hash} with an "
                         f"unchanged declaration (benchmark '{bench_name}', tag "
@@ -672,7 +674,7 @@ class ResultCollector:
             + f"; {last.get('events', '?')} historical events are "
             f"orphaned under the old key"
         )
-        events.append(HistoryEvent("full_reset", detail))
+        events.append(HistoryEvent(HistoryEventKind.FULL_RESET, detail))
         return None
 
     def _load_history_record(self, cache: Cache, bench_cfg_hash: str) -> dict | None:
@@ -717,7 +719,7 @@ class ResultCollector:
         max_time_events: int | None = None,
         result_vars: list | None = None,
         *,
-        on_history_reset: str = "warn",
+        on_history_reset: OnHistoryReset | str = OnHistoryReset.WARN,
         bench_name: str | None = None,
         tag: str | None = None,
         series_id: str | None = None,
@@ -743,8 +745,10 @@ class ResultCollector:
             result_vars (list | None): Result variable instances defining the served
                 columns. Also used for per-variable ``max_time_events`` aging. When
                 None, column reconciliation and projection are skipped entirely.
-            on_history_reset (str): Policy for loss-y schema events — "warn",
-                "error" (raise HistoryResetError before persisting), or "ignore".
+            on_history_reset (OnHistoryReset | str): Policy for loss-y schema
+                events — "warn", "error" (raise HistoryResetError before
+                persisting), or "ignore". Any other value raises ValueError
+                at the parse, before the cache is touched.
             bench_name (str | None): Benchmark name, used in event messages and as
                 half of the legacy index key read during the one-release upgrade.
             tag (str | None): Benchmark tag, same two uses as bench_name.
@@ -761,6 +765,10 @@ class ResultCollector:
             xr.Dataset: The current config's view of the accumulated history —
                 historical plus current data, projected onto the current columns.
         """
+        # Parse the policy up front: it arrives as user config (a trust
+        # boundary), so an unknown value must raise here — before any cache
+        # read or write — instead of silently meaning "ignore" as it used to.
+        policy = OnHistoryReset(on_history_reset)
         c = self.get_history_cache()
         # An explicit series_id wins; otherwise the series is bench_name:tag, which
         # is what the index was keyed on before series_id existed. Deriving it here
@@ -799,7 +807,7 @@ class ResultCollector:
                 if incompatible:
                     events.append(
                         HistoryEvent(
-                            "history_discarded",
+                            HistoryEventKind.HISTORY_DISCARDED,
                             f"Discarding incompatible historical data ({incompatible})",
                         )
                     )
@@ -817,7 +825,7 @@ class ResultCollector:
 
         # Policy runs before anything is persisted so on_history_reset="error"
         # leaves the stored history untouched for the next (acknowledged) run.
-        apply_policy(events, on_history_reset)
+        apply_policy(events, policy)
 
         if (
             max_time_events is not None
