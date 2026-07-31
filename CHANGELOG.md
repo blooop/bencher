@@ -8,6 +8,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Scorecard and A/B verdicts now measure an improvement in the units the detector
+  actually used** (plan 23 P3, B5). `RegressionResult.threshold` means a percent for
+  `regression_method="percentage"`, but **MAD-sigma** for `"adaptive"`, an **absolute
+  delta** for `"delta"`, and an **absolute limit** for `"absolute"` — and the verdict
+  helper compared it against `abs(change_percent)` regardless. Regressions were never
+  affected (both call sites resolve `regressed` from the detector before the comparison
+  is reached); what was corrupted is the **improved-vs-unchanged** split for the three
+  non-percentage methods: a tiny but real improvement on a quiet metric read as
+  "unchanged", and a beneficial move well inside the acceptance band read as "improved"
+  because its percent number happened to exceed a sigma count. Each method is now judged
+  on its own terms — `delta` on `|current - baseline|`, `adaptive` against the MAD
+  acceptance band (plus the percent band when the dual-band gate is configured),
+  `absolute` abstaining because a fixed limit has no baseline to improve on — and a
+  record missing the fields a method needs abstains instead of guessing.
+
+  **This recolours existing scorecards.** `schema_version` is a *structural* version and
+  the discovery pass has no version gate, so every `*.summary.json` already on disk is
+  re-read with the corrected rules on the next scorecard build: cells from `adaptive`,
+  `delta`, and `absolute` gates can move between `improved` and `passed` with no file
+  changing and no benchmark re-running. `regressed` and `trend` cells are unaffected. See
+  `docs/scorecard.md` for the versioning policy this follows.
+
+- **All four video-control buttons exist and each does what its label says** (plan 23 P3,
+  B1). Four button labels were zipped against a two-element callback list, so `zip`
+  truncated the row: only two buttons were ever built, "Pause Videos" was wired to the
+  callback that *unpauses*, and the Loop and Reset buttons did not exist. All four are now
+  built from a single list of `(label, callback)` pairs. Looping is driven by one shared
+  flag so a click moves every video pane to the same state instead of inverting each
+  independently, and the button is labelled "Toggle Looping" because videos start out
+  looping — a button reading "Loop Videos" would have turned looping *off* when first
+  pressed. Note that Reset's rewind is a request panel's client-side model can drop while
+  a video is playing (its `set_time` handler returns without seeking when a recent
+  `timeupdate` armed its internal guard); the docstring records this rather than promising
+  a rewind bencher cannot deliver.
+
+- **`publish_file` no longer claims to return a URL it never returned** (plan 23 P3, B4).
+  It was annotated `-> str` and documented as returning the published file's URL, but the
+  body ends at the `git push` and falls off the end returning `None` — so a caller
+  following the signature got `None`. The annotation and docstring now state that, and
+  document `remote` as the string it is (it was described as a callable returning a pair
+  of URLs, from a signature that no longer exists). Behaviour is unchanged: the viewable
+  URL is provider-specific and not derivable from the arguments, so callers still build it
+  themselves, as `publish_and_view_rrd` already did.
+
+- **A malformed or foreign `*.summary.json` no longer aborts a scorecard build.** JSON
+  integers are arbitrary-precision, so an oversized integer where a metric value was
+  expected raised `OverflowError` (not caught by the `TypeError`/`ValueError` guard) out of
+  the verdict pass and out of the page render; it now degrades to an abstaining verdict.
+  The same gap is closed in the writer (`RegressionResult.to_dict`), which now emits `null`
+  for such a value rather than raising.
+
 - **Fail-loud, not fail-fatal: a benchmark that returns `None` no longer produces a
   silently empty sweep — and no longer aborts the run either** (plan 23 P2, B3; amended
   per owner decision before release). A worker that forgot to `return

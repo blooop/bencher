@@ -60,7 +60,7 @@ class TestVideoControls(unittest.TestCase):
         buttons = list(column[0])
         self.assertEqual(
             [b.label for b in buttons],
-            ["Play Videos", "Pause Videos", "Loop Videos", "Reset Videos"],
+            ["Play Videos", "Pause Videos", "Toggle Looping", "Reset Videos"],
         )
         for button in buttons:
             self.assertIsInstance(button, pn.widgets.Button)
@@ -79,16 +79,34 @@ class TestVideoControls(unittest.TestCase):
         vc.pause_videos()
         self.assertTrue(vid.paused)
 
-    def test_loop_callback_toggles(self):
+    def test_toggle_looping_flips_every_video_together(self):
         vc = VideoControls()
         vid = self._make_video(vc)
-        self.assertTrue(vid.loop)  # video_container turns looping on
-        vc.loop_videos()
+        self.assertTrue(vid.loop)  # video_container starts videos looping
+        vc.toggle_looping()
         self.assertFalse(vid.loop)
-        vc.loop_videos()
+        vc.toggle_looping()
         self.assertTrue(vid.loop)
 
-    def test_reset_callback_rewinds_and_plays(self):
+    def test_toggle_looping_converges_on_mixed_state(self):
+        """A per-pane toggle would invert each video independently and never
+        converge; one shared flag drives them all to the same value."""
+        vc = VideoControls()
+        first = self._make_video(vc)
+        second = self._make_video(vc)
+        second.loop = False  # desynchronise, e.g. set by caller/kwargs
+        vc.toggle_looping()
+        self.assertEqual(first.loop, second.loop)
+        self.assertFalse(first.loop)
+        vc.toggle_looping()
+        self.assertEqual(first.loop, second.loop)
+        self.assertTrue(first.loop)
+
+    def test_reset_callback_sets_python_state_and_plays(self):
+        """Asserts only the python-side state: the ``time`` write is a request
+        panel's client-side ``set_time`` can swallow while playing (see
+        ``VideoControls.reset_videos``), so this is not evidence of a browser
+        rewind. Unpausing has no such guard and is reliable."""
         vc = VideoControls()
         vid = self._make_video(vc)
         vid.time = 12.5

@@ -307,6 +307,55 @@ class TestCellVerdictMethodUnits:
         assert cell_verdict(reg) == "improved"
 
 
+class TestCellVerdictHostileRecords:
+    """Summary records may be hand-edited or written by another tool: a scorecard
+    build must degrade to a verdict, never raise out of the page render."""
+
+    def test_oversized_json_integer_does_not_raise(self):
+        # JSON integers are arbitrary-precision; float() on one raises
+        # OverflowError, which is not a ValueError/TypeError.
+        reg = _reg("v", "minimize", False, 10**400, 1.0, -50.0, threshold=10**400)
+        assert cell_verdict(reg) == "passed"
+
+    def test_non_numeric_values_do_not_raise(self):
+        reg = _reg("v", "minimize", False, "n/a", None, "lots", threshold=15.0)
+        assert cell_verdict(reg) == "passed"
+
+    def test_negative_baseline_percent_band_still_suppresses(self):
+        """detect_adaptive derives the percent band as baseline*(1 ± pct/100),
+        which inverts the endpoints for a negative baseline — the dual-band gate
+        must still suppress there, exactly as it does for a positive mirror."""
+        negative = _reg(
+            "v",
+            "minimize",
+            False,
+            -100.0,
+            -100.5,
+            -0.5,
+            threshold=3.5,
+            method="adaptive",
+            band_lower=-100.1,
+            band_upper=-99.9,
+            percent_band_lower=-100.0 * (1 - 0.05),  # -95.0
+            percent_band_upper=-100.0 * (1 + 0.05),  # -105.0
+        )
+        positive = _reg(
+            "v",
+            "maximize",
+            False,
+            100.0,
+            100.5,
+            0.5,
+            threshold=3.5,
+            method="adaptive",
+            band_lower=99.9,
+            band_upper=100.1,
+            percent_band_lower=95.0,
+            percent_band_upper=105.0,
+        )
+        assert cell_verdict(negative) == cell_verdict(positive) == "passed"
+
+
 class TestDiscover:
     def test_finds_benches_across_categories(self, mock_reports: Path):
         names = {r["bench_name"] for r in discover_summaries(mock_reports, CONFIG)}

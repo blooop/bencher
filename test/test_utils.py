@@ -1,3 +1,6 @@
+import ast
+import inspect
+import textwrap
 import unittest
 from functools import partial
 
@@ -13,6 +16,7 @@ from bencher.utils import (
     lerp,
     listify,
     mult_tuple,
+    publish_file,
     tabs_in_markdown,
 )
 
@@ -176,3 +180,24 @@ class TestBencherUtils(unittest.TestCase):
         input_str = ""
         expected_output = ""
         self.assertEqual(tabs_in_markdown(input_str), expected_output)
+
+
+class TestPublishFileContract(unittest.TestCase):
+    """publish_file's declared return type must match what it actually returns.
+
+    It was annotated ``-> str`` and documented to return the published file's
+    URL, but the body ends at the ``git push`` and returns ``None`` (plan 23 B4).
+    Asserted via the signature rather than by calling it, so no git remote is
+    touched. ``from __future__ import annotations`` in ``bencher/utils.py`` makes
+    annotations strings, hence the comparison against ``"None"``.
+    """
+
+    def test_return_annotation_is_none(self):
+        annotation = inspect.signature(publish_file).return_annotation
+        self.assertIn(annotation, (None, "None"), f"publish_file claims -> {annotation}")
+
+    def test_body_has_no_return_value(self):
+        # No `return <expr>` anywhere: nothing for a caller to consume.
+        tree = ast.parse(textwrap.dedent(inspect.getsource(publish_file)))
+        returns = [n for n in ast.walk(tree) if isinstance(n, ast.Return) and n.value is not None]
+        self.assertEqual(returns, [])

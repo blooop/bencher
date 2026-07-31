@@ -117,6 +117,22 @@ class TestRegressionDataclassToDict(unittest.TestCase):
         )
         self.assertIsNone(r.to_dict()["change_percent"])
 
+    def test_oversized_int_becomes_none(self):
+        # JSON ints are arbitrary-precision; float(10**400) raises OverflowError,
+        # which must not escape to_dict.
+        r = RegressionResult(
+            variable="x",
+            method="percentage",
+            regressed=False,
+            current_value=10**400,
+            baseline_value=1.0,
+            change_percent=0.0,
+            threshold=10.0,
+            direction="minimize",
+            details="",
+        )
+        self.assertIsNone(r.to_dict()["current_value"])
+
     def test_report_to_dict_parity_with_markdown(self):
         regressed = RegressionResult(
             "a", "percentage", True, 12.0, 10.0, 20.0, 10.0, "minimize", ""
