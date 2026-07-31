@@ -479,9 +479,14 @@ bench.plot_sweep(
     aggregate=True,          # collapse all dimensions except the first
     # aggregate=2,           # collapse the last 2 dimensions
     # aggregate=["method"],  # collapse only the "method" dimension
-    agg_fn="mean",           # aggregation function: mean, sum, max, min, median
+    agg_fn="mean",           # aggregation function: see bencher.utils.AggFn
 )
 ```
+
+- `agg_fn` — one of the values of `bencher.utils.AggFn`, the single definition of
+  this vocabulary: `"mean"`, `"sum"`, `"max"`, `"min"`, `"median"`. The strings are
+  **lowercase and case-sensitive**, and an unrecognised value raises `ValueError`
+  rather than quietly falling back to `"mean"`.
 
 - `aggregate=True` — collapse all dimensions except the first into a single
   aggregated statistic
