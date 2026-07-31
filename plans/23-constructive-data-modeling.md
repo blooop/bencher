@@ -11,6 +11,14 @@ tightening enforcement mechanism. Fix the live bugs the audit found along the wa
 Per plans-README rule 7, confirm each `file:line` against the current tree before
 relying on it; the symbol is the durable reference.
 
+**⚠️ Amended by [plan 24](24-assert-never-boundary-discipline.md).** D2's `assert_never`
+guarantee holds only where `ty` can establish the match subject's type, which it cannot
+for `param`-descriptor reads (`pyproject.toml:281` documents them as `Unknown`) — and no
+type checker, nor D1's strict-list ratchet, closes that gap. Plan 24 adds the missing
+boundary-normalization precondition (D2 category three), scopes it to **P2** (`executor`)
+and **P11** (`agg_fn`), and re-affirms §1's "`ty` only" non-goal with measurements. Read
+plan 24 §3 before executing P1, P2 or P11.
+
 **⚠️ Read first:** §1 Scope. Config-surface findings (regression method/thresholds,
 `fail_on_sample_error`, `show`, `plot_size`, subsampling knobs) are **out of scope** —
 they belong to A5's breaking-release train and are recorded here only as amendments
