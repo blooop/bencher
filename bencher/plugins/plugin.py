@@ -69,12 +69,12 @@ def plot_plugin(
     ``plot_list``/``include``/``only``."""
 
     def decorator(fn: Callable[[BenchData], pn.viewable.Viewable]) -> _FunctionPlugin:
-        # No match rule means "always eligible": PlotFilter() would match nothing
-        # (its default VarRanges are empty), silently hiding the plugin forever.
+        # No match rule means "always eligible": every PlotFilter field defaults to
+        # VarRange.unbounded(), so a default-constructed filter matches every shape.
         plugin = _FunctionPlugin(
             name=name,
             backend=backend,
-            match=match if match is not None else PlotFilter.match_all(),
+            match=match if match is not None else PlotFilter(),
             priority=priority,
             requires=frozenset(requires) if requires else frozenset(),
             _fn=fn,

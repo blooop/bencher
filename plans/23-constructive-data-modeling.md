@@ -535,8 +535,11 @@ and may be reordered or dropped individually.
   `results/holoview_results/*`, `bench_result_base.py`, `plugins/`,
   `surface_result.py`, `test/test_plugins.py` (~18 files, mechanical).
 - **DoD:** plot-selection output unchanged on the gallery-driving tests
-  (`pixi run generate-docs` diff-clean); a default-constructed filter can no longer
-  hide a plugin.
+  (~~`pixi run generate-docs` diff-clean~~ — **not achievable, see §10 P6 item 1**: the
+  reports embed random UUIDs, wall-clock times and randomly generated benchmark values,
+  so two runs of *identical* code differ in bytes. The substitute measurement is the
+  id-independent plot skeleton of every report, against a same-code noise floor);
+  a default-constructed filter can no longer hide a plugin.
 
 ### P7 — History enums (C5)
 
@@ -1057,3 +1060,65 @@ sweep written by `main`'s code and read by P5's → 6/6 hits). One MEDIUM findin
    §10 P2 item 1, one added by P5); the class is `TestCatchDoesNotChangeContractHandling`.
    Per plans-README rule 7 the symbol is the durable reference, so a plan whose thesis is
    "claims are measured" should not cite one that does not exist.
+
+### P6 (implemented, C3 half)
+
+1. **The DoD's "`pixi run generate-docs` diff-clean" is not achievable, by this or any
+   other change — including a no-op.** The generated reports embed a fresh UUID per Bokeh
+   document, a wall-clock `run date`, gzip-encoded arrays of *randomly generated*
+   benchmark values, and CPython `id()` addresses in `CustomJS` tags. Measured rather
+   than assumed: `generate-docs` was run three times — once on clean `origin/main`, once
+   on the branch, and a second time on the branch to establish a noise floor. Every pair
+   differs in raw bytes, including the two runs of identical code.
+   **The substitute measurement, which is what the DoD was reaching for:** compare the
+   id-independent *plot skeleton* of each report — the ordered sequence of Bokeh/Panel
+   model types plus the pane-title sequence — which is exactly what plot selection
+   determines and is unaffected by data values. Noise floor (branch vs branch): 0 of 295
+   reports differ in model-type sequence. Main vs branch: 1 of 295, and it is
+   `advanced/example_advanced_git_time_event`, whose sweep is keyed by
+   `time_src=bn.git_time_event()` — a different commit gives its over_time axis a second
+   tick and a regression-comparison plot. That report also differs in the noise floor.
+   All 231 plain-text outputs (gallery `.rst`/`.md`/`.json`) *are* byte-identical, and so
+   is `bencher/example/generated/**.py`. A future phase quoting "diff-clean" for a
+   rendering change should state this measurement instead.
+   The Bokeh model-id counter also drifts run-to-run at the same file boundaries in the
+   noise floor as it does between main and branch, so counter deltas are not evidence.
+
+2. **A second, stronger check that does not depend on the doc build:** each removed
+   `VarRange(lo, hi)` literal was paired with the constructor that replaced it and their
+   truth tables compared over counts 0..40, evaluating the old literal with the *pre-P6*
+   `matches()` implementation. 29 of 29 automatically pairable sites are identical; the
+   9 files whose literal count changed are the hand-edits in items 3–5.
+
+3. **Nothing in `bencher/` ever inherited the match-nothing default, so flipping it was
+   safe.** There are only four `PlotFilter(...)` constructions in the package — everything
+   else routes through `BenchResultBase.filter()`, whose own `None`-defaults were already
+   permissive. Of the four, `bench_result_base.py` states all five ranges;
+   `surface_result.py` omitted `panel_range`/`repeats_range`/`input_range` and
+   `video_summary.py`/`rerun_summary.py` omitted `repeats_range` — all *restrictive*
+   inherited values, none of them `float_range`/`cat_range`. Those three now state every
+   range explicitly at its previous value, so the default's value no longer reaches any
+   production filter. The old default could therefore only ever have harmed plugin
+   authors, which is exactly what `plugin.py:72-73` had written down.
+
+4. **`VarRange(-1, 0)`** (`volume_result.py`, `cat_range`) was not a fourth sentinel: a
+   negative lower bound is inert because `matches()` rejects negative counts, so the range
+   matched exactly `0`. It is now `VarRange.exactly(0)`. **`VarRange(None, None)`** (7
+   sites, all in `test/test_plot_filter.py`) meant "no lower bound, no upper bound" =
+   every count = `VarRange.unbounded()`; two of those tests had become the same test and
+   are replaced by an `unbounded` test plus a real `at_least` test.
+
+5. **Two adjacent removals the phase spec did not name.** `BenchResultBase.filter()`'s
+   `plot_filter=` parameter was dead — unconditionally overwritten two lines below its own
+   declaration — and its five `*_range: VarRange | None = None` parameters plus the
+   five-branch "avoid shared mutable defaults" fixup collapse into real defaults now that
+   `VarRange` is frozen (module-level singletons, because ruff B008 forbids the call in
+   the signature).
+
+6. **The human-readable match report keeps its exact pre-P6 wording**
+   (`float\t1>= 2 <=None is False`, with `None` still standing for "no upper bound").
+   That string is surfaced by `explain_selection()` rejection reasons and by the debug
+   pane `filter()` returns when `PltCntCfg.print_debug` is set — which **defaults to
+   `True`**, so it reaches any report built outside `to_auto()`. Rewording it would have
+   been a user-visible change riding along on a type refactor; the sentinel it prints is
+   now only a rendering, not a representable state.

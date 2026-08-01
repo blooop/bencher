@@ -130,10 +130,10 @@ class TestRegistry(unittest.TestCase):
             name="mutated",
             backend="t",
             match=PlotFilter(
-                float_range=VarRange(0, None),
-                cat_range=VarRange(0, None),
-                repeats_range=VarRange(0, None),
-                input_range=VarRange(0, None),
+                float_range=VarRange.unbounded(),
+                cat_range=VarRange.unbounded(),
+                repeats_range=VarRange.unbounded(),
+                input_range=VarRange.unbounded(),
             ),
             register=False,
         )
@@ -230,10 +230,10 @@ class TestSelection(unittest.TestCase):
         self.reg.mark_entry_points_loaded()
 
         self.permissive_filter = PlotFilter(
-            float_range=VarRange(0, None),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(0, None),
-            input_range=VarRange(0, None),
+            float_range=VarRange.unbounded(),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.unbounded(),
+            input_range=VarRange.unbounded(),
         )
 
         @plot_plugin(
@@ -256,9 +256,15 @@ class TestSelection(unittest.TestCase):
         def _beta(_: BenchData) -> pn.viewable.Viewable:
             return _make_pane("beta")
 
-        @plot_plugin(name="gamma", backend="hv", match=PlotFilter(), register=False)
+        # gamma opts out of every shape explicitly; selection must skip it.
+        @plot_plugin(
+            name="gamma",
+            backend="hv",
+            match=PlotFilter(float_range=VarRange.none()),
+            register=False,
+        )
         def _gamma(_: BenchData) -> pn.viewable.Viewable:
-            return _make_pane("gamma")  # default PlotFilter never matches
+            return _make_pane("gamma")
 
         self.alpha, self.beta, self.gamma = _alpha, _beta, _gamma
         for p in (_alpha, _beta, _gamma):
@@ -394,10 +400,10 @@ class TestRender(unittest.TestCase):
         self.reg = PluginRegistry()
         self.reg.mark_entry_points_loaded()
         self.permissive = PlotFilter(
-            float_range=VarRange(0, None),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(0, None),
-            input_range=VarRange(0, None),
+            float_range=VarRange.unbounded(),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.unbounded(),
+            input_range=VarRange.unbounded(),
         )
 
     def test_render_happy_path(self) -> None:
@@ -474,7 +480,8 @@ class TestGlobalRegistration(unittest.TestCase):
 
     def test_default_match_is_always_eligible(self) -> None:
         """A plugin declared without a match rule must be selectable for any sweep
-        shape — PlotFilter()'s empty default ranges would silently hide it forever."""
+        shape. Before plan 23 P6 the default ranges were empty, so a plugin author
+        who wrote the obvious ``match=PlotFilter()`` hid it forever."""
         reg = PluginRegistry()
         reg.mark_entry_points_loaded()
 
@@ -488,19 +495,47 @@ class TestGlobalRegistration(unittest.TestCase):
             self.assertEqual([p.name for p in selected], ["global.smoke"])
 
 
-class TestPlotFilterMatchAll(unittest.TestCase):
-    def test_match_all_matches_various_shapes(self) -> None:
-        f = PlotFilter.match_all()
-        for cfg in (
-            PltCntCfg(),
-            PltCntCfg(float_cnt=3, cat_cnt=2, repeats=5, inputs_cnt=5),
-            PltCntCfg(panel_cnt=2),
-        ):
-            self.assertTrue(f.matches_result(cfg, "match_all", override=False).overall)
+class TestDefaultPlotFilterIsPermissive(unittest.TestCase):
+    """Plan 23 P6 (C3): a default-constructed filter can no longer hide a plugin.
 
-    def test_default_plot_filter_matches_nothing(self) -> None:
-        # Documents the existing default: PlotFilter() is restrictive by design.
-        self.assertFalse(PlotFilter().matches_result(PltCntCfg(), "default", False).overall)
+    The ``match_all`` classmethod used to exist only because ``PlotFilter()`` matched
+    nothing; every field now defaults to ``VarRange.unbounded()`` and the classmethod
+    is gone."""
+
+    SHAPES = (
+        PltCntCfg(),
+        PltCntCfg(float_cnt=3, cat_cnt=2, repeats=5, inputs_cnt=5),
+        PltCntCfg(panel_cnt=2),
+    )
+
+    def test_default_filter_matches_various_shapes(self) -> None:
+        f = PlotFilter()
+        for cfg in self.SHAPES:
+            self.assertTrue(f.matches_result(cfg, "default", override=False).overall)
+
+    def test_match_all_is_gone(self) -> None:
+        self.assertFalse(hasattr(PlotFilter, "match_all"))
+
+    def test_plugin_without_a_match_rule_is_never_hidden(self) -> None:
+        """The plugin.py footgun: declaring a plugin with no match rule, or with the
+        obvious ``match=PlotFilter()``, must leave it eligible for every shape."""
+        reg = PluginRegistry()
+        reg.mark_entry_points_loaded()
+
+        @plot_plugin(name="p6.implicit", register=False)
+        def _implicit(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("implicit")
+
+        @plot_plugin(name="p6.explicit", match=PlotFilter(), register=False)
+        def _explicit(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("explicit")
+
+        reg.register(_implicit)
+        reg.register(_explicit)
+        for cfg in self.SHAPES:
+            data = BenchData.fake(plt_cnt_cfg=cfg)
+            names = sorted(p.name for p in reg.select(data))
+            self.assertEqual(names, ["p6.explicit", "p6.implicit"], msg=str(cfg))
 
 
 class TestEntryPointDiscovery(unittest.TestCase):
@@ -603,12 +638,12 @@ class TestDeletedPlotGates(unittest.TestCase):
     They were declared on both ``PltCntCfg`` and ``PlotFilter`` and read on
     every plot-selection pass, but nothing in the package ever assigned the
     ``PltCntCfg`` side -- so both always held their default ``1`` and both
-    gates (``VarRange(1, 1)``) always passed. They could not filter anything,
+    gates (``VarRange.exactly(1)``) always passed. They could not filter anything,
     including ``surface_result``'s "exactly one scalar result" intent, which
     is why deleting them leaves plot selection byte-identical.
 
     Populating them instead would have been the breaking option: with every
-    filter defaulting to ``VarRange(1, 1)``, a real ``vector_len`` would have
+    filter defaulting to ``VarRange.exactly(1)``, a real ``vector_len`` would have
     made *every* plot reject any sweep containing a ``ResultVec(size > 1)``,
     and a real ``result_vars`` would have made every plot reject any sweep
     with more than one result variable -- which is most of them.
@@ -629,11 +664,11 @@ class TestDeletedPlotGates(unittest.TestCase):
         # ever been populated still matches a permissive filter.
         cfg = PltCntCfg(float_cnt=1, cat_cnt=0, panel_cnt=0, repeats=1, inputs_cnt=1)
         res = PlotFilter(
-            float_range=VarRange(1, 1),
-            cat_range=VarRange(0, None),
-            panel_range=VarRange(0, None),
-            repeats_range=VarRange(1, None),
-            input_range=VarRange(1, None),
+            float_range=VarRange.exactly(1),
+            cat_range=VarRange.unbounded(),
+            panel_range=VarRange.unbounded(),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.at_least(1),
         ).matches_result(cfg, "probe", False)
         self.assertTrue(res.overall)
 

@@ -95,17 +95,18 @@ class TestExplainMatchesSelect(unittest.TestCase):
         self.assertTrue(line.chosen)
 
     def test_shape_filter_rejection_reason(self):
-        """Built-ins register match_all (shape gating still lives inside to_plot),
+        """Built-ins register a permissive default filter (shape gating still lives
+        inside to_plot),
         so use a plugin with an honest filter to exercise the mismatch reason."""
 
         @plot_plugin(
             name="needs_two_floats",
             backend="test",
             match=PlotFilter(
-                float_range=VarRange(2, 2),
-                cat_range=VarRange(0, None),
-                repeats_range=VarRange(1, None),
-                input_range=VarRange(1, None),
+                float_range=VarRange.exactly(2),
+                cat_range=VarRange.unbounded(),
+                repeats_range=VarRange.at_least(1),
+                input_range=VarRange.at_least(1),
             ),
         )
         def _two_floats(_: object):

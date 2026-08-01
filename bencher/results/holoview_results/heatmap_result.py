@@ -72,10 +72,10 @@ class HeatmapResult(HoloviewResult):
 
         return self.filter(
             heatmap_cb,
-            float_range=VarRange(2, None),
-            cat_range=VarRange(0, None),
-            input_range=VarRange(2, None),
-            panel_range=VarRange(0, None),
+            float_range=VarRange.at_least(2),
+            cat_range=VarRange.unbounded(),
+            input_range=VarRange.at_least(2),
+            panel_range=VarRange.unbounded(),
             target_dimension=target_dimension,
             result_var=result_var,
             result_types=(ResultFloat,),
