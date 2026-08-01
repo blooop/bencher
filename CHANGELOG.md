@@ -103,6 +103,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `n_failed > 0`, in the same way the regression report is auto-inserted.
 
 ### Changed
+- **`WorkerManager` holds one `WorkerState` instead of a not-set invariant** (plan 23 P9,
+  C7). `worker_class_instance: ParametrizedSweep | type[ParametrizedSweep] | None` carried
+  three different situations in one field — an instance, a declaration-only class, or
+  nothing — with "declaration only" inferred from `worker is None`, and three
+  `RuntimeError("Worker class instance not set")` sites plus two `# noqa: TRY004`
+  suppressions standing in for the type the field did not have. The state is now a single
+  `Unbound | Declared(cls) | RunnableFunction(fn) | RunnableInstance(instance)` sum of
+  frozen dataclasses, parsed once in `set_worker` / `set_worker_class`; `worker` and
+  `worker_class_instance` remain as read-only views over it, so **the public
+  `set_worker` / `set_worker_class` API, the attributes `Bench` mirrors, and the
+  `RuntimeError` contract for a class-vs-instance mix-up are all unchanged**. The three
+  raise sites collapse into one total `_declaring()` accessor, and all three matches over
+  the union end in `assert_never` — verified by seeding a fifth variant and measuring
+  `error[type-assertion-failure]` at each site. The messages are now actionable: reading
+  variables with nothing attached names `set_worker()` and `set_worker_class()`, and doing
+  it with a plain-function worker says so and points at `input_vars`/`result_vars`/
+  `const_vars` rather than repeating "Worker class instance not set". These are all
+  setup-time errors, raised before any sample exists, so no in-progress sweep can lose
+  collected data to them. `bencher/worker_manager.py` joins the strict `ty` list.
+
+  Note the sum has **four** variants where the plan sketched three: callability and
+  "declares the sweep's variables" are independent axes, and folding them together would
+  have needed a nullable `instance` field inside `Runnable` — the same sentinel, one level
+  down. Also corrected while putting the module under strict typing:
+  `worker_input_cfg` is annotated `type[ParametrizedSweep]`, the class every caller has
+  always passed and the body has always instantiated (the annotation said instance while
+  the docstring said class). `bencher.py` and `sweep_executor.py` still carry the old
+  annotation on their pass-through parameters.
 - **BREAKING (small): one `AggFn` vocabulary, and an unknown `agg_fn` now raises instead
   of silently meaning `mean`** (plan 23 P11, C11). The aggregation-function vocabulary
   existed in four independent spellings — the `Literal`s on `to`/`to_dataset`/
