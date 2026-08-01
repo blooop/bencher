@@ -11,6 +11,7 @@ import shutil
 import tempfile
 import unittest
 import uuid
+from typing import ClassVar
 
 import numpy as np
 import xarray as xr
@@ -454,9 +455,16 @@ class TestResetPolicy(ReconcilerBase):
 
     def test_unknown_policy_raises_before_touching_the_cache(self):
         """An unknown policy string used to silently mean 'ignore'; now it is a
-        config error raised at the parse, before any cache read or write."""
+        config error raised at the parse, before any history-cache read or write.
+
+        Keep the invalid value out of codespell's dictionary. A plausible
+        misspelling of a policy name is usually a dictionary entry, and the
+        repo's hook runs with --write-changes: it would rewrite the value here
+        into the correctly-spelled *valid* policy, silently turning this
+        assertion into one that can never fail.
+        """
         with self.assertRaises(ValueError):
-            self.load(["a"], 1, [_result_float("a")], on_history_reset="ignroe")
+            self.load(["a"], 1, [_result_float("a")], on_history_reset="silently-ignore")
         # nothing was persisted: the bad-config run advanced no history state
         cache = self.collector.get_history_cache()
         self.assertNotIn(self.key, cache)
@@ -515,6 +523,102 @@ class TestEventKindLossiness(unittest.TestCase):
     def test_apply_policy_rejects_unknown_policy_even_with_no_events(self):
         with self.assertRaises(ValueError):
             apply_policy([], "silently-ignore")
+
+    def test_raw_string_kinds_are_parsed_to_members(self):
+        """HistoryEvent is public API; a valid raw-string kind still classifies."""
+        for kind in HistoryEventKind:
+            with self.subTest(kind=kind):
+                event = HistoryEvent(str(kind), "from a raw string")
+                self.assertIs(event.kind, kind)
+                self.assertEqual(event.lossy, HistoryEvent(kind, "x").lossy)
+
+    def test_unknown_kind_raises_naming_the_value(self):
+        """A bad kind is a ValueError naming it, not the misdirecting
+        "Expected code to be unreachable" of a reached assert_never arm."""
+        with self.assertRaises(ValueError) as ctx:
+            HistoryEvent("not_a_real_kind", "detail")
+        self.assertIn("not_a_real_kind", str(ctx.exception))
+
+
+class _CountingSweep(bn.ParametrizedSweep):
+    """Module-level (so results stay pickleable) sweep that records each sample."""
+
+    calls: ClassVar[list] = []
+
+    x = bn.FloatSweep(default=0.0, bounds=[0.0, 1.0])
+    out = bn.ResultFloat()
+
+    def benchmark(self):
+        _CountingSweep.calls.append(self.x)
+        return {"out": self.x}
+
+
+class TestPolicyVocabularySingleSource(unittest.TestCase):
+    """The policy vocabulary is defined once, by OnHistoryReset (plan 23 §9)."""
+
+    def setUp(self):
+        self._old_cwd = os.getcwd()
+        self._tmp = tempfile.mkdtemp()
+        os.chdir(self._tmp)
+        _CountingSweep.calls = []
+
+    def tearDown(self):
+        os.chdir(self._old_cwd)
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def test_run_cfg_selector_objects_come_from_the_enum(self):
+        """The Selector's objects must be the enum *members*, not equal strings.
+
+        Asserting equality alone would not gate this: OnHistoryReset is a
+        StrEnum, so a hardcoded ["warn", "error", "ignore"] compares equal to
+        list(OnHistoryReset). Only an identity/type check catches a second,
+        drifting definition of the vocabulary.
+        """
+        objects = list(BenchRunCfg.param.on_history_reset.objects)
+        self.assertEqual(objects, list(OnHistoryReset))
+        for obj in objects:
+            self.assertIsInstance(obj, OnHistoryReset)
+
+    def test_run_cfg_default_is_an_enum_member(self):
+        self.assertIs(BenchRunCfg().on_history_reset, OnHistoryReset.WARN)
+
+    def test_plot_sweep_normalizes_a_string_policy_to_a_member(self):
+        """plot_sweep assigns the member back, so downstream readers see the enum.
+
+        This is the half of the fix that param cannot provide: a raw string
+        passes the Selector (StrEnum members compare equal to their values), so
+        without the normalization the field stays a ``str`` all the way into
+        ``load_history_cache``.
+        """
+        bench = bn.Bench("policy-normalize", _CountingSweep())
+        run_cfg = BenchRunCfg(over_time=True, repeats=1, on_history_reset="ignore")
+        bench.plot_sweep(input_vars=[_CountingSweep.param.x], run_cfg=run_cfg)
+        self.assertIs(run_cfg.on_history_reset, OnHistoryReset.IGNORE)
+        self.assertTrue(_CountingSweep.calls, "the sweep should have run")
+
+    def test_bad_policy_raises_before_any_sample_is_collected(self):
+        """A bad policy must never cost a fully-collected run.
+
+        ``load_history_cache`` runs *after* ``calculate_benchmark_results`` and
+        before ``cache_results``, and ``cache_samples`` defaults False — so a
+        parse that only happened there would discard every sample it just paid
+        for. Two independent guards now sit ahead of sampling: param's own
+        Selector check (whose vocabulary is the enum, per the test above) and
+        ``plot_sweep``'s normalization. This disables the former on both config
+        classes to prove the latter alone is early enough.
+        """
+        bench = bn.Bench("policy-presample", _CountingSweep())
+        run_cfg = BenchRunCfg(over_time=True, repeats=1)
+        run_params = (run_cfg.param.on_history_reset, BenchCfg.param.on_history_reset)
+        for p in run_params:
+            p.check_on_set = False
+        self.addCleanup(lambda: [setattr(p, "check_on_set", True) for p in run_params])
+        run_cfg.on_history_reset = "silently-ignore"
+        with self.assertRaises(ValueError):
+            bench.plot_sweep(input_vars=[_CountingSweep.param.x], run_cfg=run_cfg)
+        self.assertEqual(
+            _CountingSweep.calls, [], "samples were collected before the policy was parsed"
+        )
 
 
 class TestYoungBaselineGating(unittest.TestCase):

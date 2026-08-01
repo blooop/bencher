@@ -104,6 +104,21 @@ class HistoryEvent:
     detail: str
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Coerce ``kind`` to a ``HistoryEventKind``, raising on an unknown value.
+
+        ``HistoryEvent`` is exported public API, so ``kind`` can arrive as a raw
+        string from outside this module. Parsing here is what makes ``lossy``'s
+        ``assert_never`` arm *provably* dead rather than merely unreached: a bad
+        kind raises a ``ValueError`` naming it, instead of the misdirecting
+        "Expected code to be unreachable" that plan 24 A1 warns about. Valid
+        raw strings (``"full_reset"``) keep working and become members.
+
+        Raises:
+            ValueError: If ``kind`` is not a ``HistoryEventKind`` member or value.
+        """
+        self.kind = HistoryEventKind(self.kind)
+
     @property
     def lossy(self) -> bool:
         """True when the event removes data from what consumers will see.
@@ -111,7 +126,8 @@ class HistoryEvent:
         Exhaustive over ``HistoryEventKind``: a new kind must be classified
         here before it can exist, where the old ``_LOSSY_KINDS`` set silently
         treated an unlisted (or typo'd) kind as non-lossy, defeating the
-        ``on_history_reset='error'`` CI gate.
+        ``on_history_reset='error'`` CI gate. ``__post_init__`` guarantees the
+        subject is a member, so the final arm is dead by construction.
         """
         match self.kind:
             case (
