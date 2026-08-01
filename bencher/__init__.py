@@ -176,7 +176,7 @@ from .cache_management import (
     print_orphaned_blobs,
 )
 from .git_info import git_time_event
-from .history import HistoryEvent, HistoryResetError
+from .history import HistoryEvent, HistoryEventKind, HistoryResetError, OnHistoryReset
 from .perf_tracker import PerfReport, PerfTracker
 from .plotting.plot_filter import PlotFilter, VarRange
 from .regression import (

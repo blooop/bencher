@@ -25,6 +25,7 @@ from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
+from bencher.history import OnHistoryReset
 from bencher.history import config_summary as history_config_summary
 from bencher.job import (
     Executors,
@@ -516,6 +517,14 @@ class Bench(BenchPlotServer):
         # compared with both `==` and `is` further down. Assigning the member back
         # makes the field's type true for every reader.
         run_cfg.executor = normalize_executor(run_cfg.executor)
+        # Same reasoning again for `on_history_reset` (plan 23 P7): the policy is
+        # only consumed by load_history_cache, which runs *after*
+        # calculate_benchmark_results and before cache_results -- so parsing it
+        # there would raise on a bad value only once every sample had already been
+        # collected and (with cache_samples off by default) thrown away. Parsing
+        # here moves that config error ahead of all sampling. Assigning the member
+        # back also makes the field's type true for every downstream reader.
+        run_cfg.on_history_reset = OnHistoryReset(run_cfg.on_history_reset)
 
         if run_cfg.only_plot:
             run_cfg.cache_results = True
@@ -1010,13 +1019,18 @@ class Bench(BenchPlotServer):
         max_time_events: int | None = None,
         result_vars: list | None = None,
         *,
-        on_history_reset: str = "warn",
+        on_history_reset: OnHistoryReset | str = OnHistoryReset.WARN,
         bench_name: str | None = None,
         tag: str | None = None,
         series_id: str | None = None,
         config_summary: dict | None = None,
     ) -> xr.Dataset:
-        """Load, reconcile, and persist historical benchmark data from cache."""
+        """Load, reconcile, and persist historical benchmark data from cache.
+
+        Raises:
+            ValueError: If ``on_history_reset`` is not an ``OnHistoryReset``
+                member or one of its values.
+        """
         return self._collector.load_history_cache(
             dataset,
             bench_cfg_hash,
