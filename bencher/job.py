@@ -299,11 +299,12 @@ class JobFuture:
     ) -> None:
         """Initialize a JobFuture with a result, a pending future, or an error.
 
-        The keyword signature is kept from the two-optional era so the four
-        construction sites (and tests that build one directly) read unchanged;
-        the arguments are parsed into a single :data:`JobState` here, at the
-        boundary. One argument at most may be given -- previously ``res`` and
-        ``future`` together were representable and never meaningful. ``error=``
+        The keyword signature is kept from the two-optional era so every
+        construction site in ``FutureCache.submit`` (and tests that build one
+        directly) reads unchanged; the arguments are parsed into a single
+        :data:`JobState` here, at the boundary. One argument at most may be given
+        -- previously ``res`` and ``future`` together were representable and
+        never meaningful. ``error=``
         exists so a caller that *knows* why a job produced nothing (the serial
         site in ``FutureCache.submit``, which has just seen ``run_job`` return
         ``None``) can say so; with none of the three, the state is still
@@ -334,8 +335,10 @@ class JobFuture:
             self.state: JobState = Ready(res)
         elif future is not None:
             self.state = Pending(future)
+        elif error is not None:
+            self.state = Broken(error)
         else:
-            self.state = Broken(error or _no_result_error(job.job_id))
+            self.state = Broken(_no_result_error(job.job_id))
         self.cache = cache
 
     def result(self) -> dict:
