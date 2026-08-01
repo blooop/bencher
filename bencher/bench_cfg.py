@@ -13,6 +13,7 @@ import param
 from strenum import LowercaseStrEnum
 
 from bencher.cache_management import CACHE_VERSION
+from bencher.history import OnHistoryReset
 from bencher.job import Executors
 from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
@@ -389,8 +390,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
     on_history_reset: str = param.Selector(
-        default="warn",
-        objects=["warn", "error", "ignore"],
+        default=OnHistoryReset.WARN,
+        objects=list(OnHistoryReset),
         doc="Policy for history-affecting schema changes detected at history-load "
         "time (a result column removed or redefined, or the whole history "
         "orphaned by an input/const change). 'warn' (default): log a WARNING "
