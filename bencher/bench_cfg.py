@@ -726,6 +726,57 @@ class BenchCfg(BenchRunCfg):
         tag (str): Tags for grouping different benchmarks
         hash_value (str): Stored hash value of the config
         plot_callbacks (list): Callables that take a BenchResult and return panel representation
+
+    Parameter interactions:
+        The caching and history knobs below are declared on ``BenchRunCfg`` and
+        inherited here; the ``run_cfg`` passed to ``plot_sweep`` is merged onto
+        the ``BenchCfg`` before the run, so a run_cfg value wins over the one
+        stored on the config (except for parameters declared constant, which are
+        skipped with a warning).
+
+        Benchmark-level result cache (``cache_results``, ``clear_cache``):
+            * The *write* is unconditional. Whenever a sweep actually runs, the
+              finished ``BenchResult`` is stored under the config hash regardless
+              of ``cache_results`` — so a later run with ``cache_results=True``
+              can hit an entry left by a run that had it off.
+            * ``cache_results`` controls only the *read*: with it True, a stored
+              result under the same config hash is loaded and the entire sweep is
+              skipped.
+            * ``clear_cache=True`` takes precedence over ``cache_results``: the
+              entry is deleted and no read is attempted, so the sweep always
+              re-runs (and repopulates the entry at the end).
+            * ``only_plot=True`` forces ``cache_results=True``, and turns a cache
+              miss into ``FileNotFoundError`` instead of a re-run.
+
+        Per-sample cache (``cache_samples``, ``overwrite_sample_cache``,
+        ``clear_sample_cache``):
+            * Independent of the benchmark-level cache: this one caches individual
+              benchmark-function calls rather than the finished result.
+            * With ``cache_samples=False`` no sample cache is opened at all, so
+              nothing is read or written per sample and the other two flags have
+              nothing to act on — clearing a tag then logs a warning rather than
+              letting "nothing happened" look like "the tag was cleared".
+            * ``overwrite_sample_cache=True`` keeps writing but stops reading:
+              every sample is recomputed and its stored value replaced.
+            * ``clear_sample_cache=True`` evicts this benchmark's ``tag`` from the
+              sample cache before any sampling starts.
+
+        History and ``over_time`` (``clear_history``, ``max_time_events``):
+            * History is only loaded, merged and written back when
+              ``over_time=True``. With it False the run is a single snapshot and
+              neither ``clear_history`` nor ``max_time_events`` does anything.
+            * The history key deliberately excludes result variables, so adding or
+              removing a metric reconciles per column instead of orphaning the
+              whole series. The benchmark-level result cache above stays strict —
+              a hit there requires the exact result-var set.
+            * ``clear_history=True`` skips the load: a fresh series starts from
+              this run and is written back.
+            * ``max_time_events`` trims the merged dataset after reconciliation,
+              keeping the newest N events and dropping older ones; ``None`` means
+              unlimited. A result variable may additionally carry its own
+              ``max_time_events``, which nulls that variable's older cells (and
+              deletes any media files they owned) without shortening the shared
+              ``over_time`` axis.
     """
 
     input_vars = param.List(
