@@ -1351,6 +1351,38 @@ class Bench(BenchPlotServer):
     ) -> OptimizeResult | None:
         """Run optuna optimization directly — no full grid sweep required.
 
+        **Objectives and direction.** The objectives are the result variables that declare
+        an optimisation direction (``OptDir.minimize`` / ``OptDir.maximize``); variables
+        left at ``OptDir.none`` are excluded. If no result variable declares a direction,
+        a warning is logged and *None* is returned rather than running a study with
+        nothing to optimise.
+
+        **Single vs multi-objective.** One directional result variable creates a
+        single-objective study, and :attr:`OptimizeResult.best_params` /
+        :attr:`OptimizeResult.best_value` are available. Two or more create a
+        multi-objective optuna study whose directions are those variables' ``OptDir``\\ s
+        in order; there is then no single best trial, so ``best_params``/``best_value``
+        raise ``RuntimeError`` and :attr:`OptimizeResult.best_trials` returns the
+        Pareto front instead. :meth:`OptimizeResult.summary` follows the same split,
+        reporting the best value/params for one objective and the Pareto-front size for
+        several.
+
+        **Aggregation.** *aggregate* marks input dimensions that Optuna should not
+        suggest. Those dimensions are looped over inside the objective function and their
+        results combined with *agg_fn*, so Optuna sees one aggregated number per trial and
+        never varies them. This finds the parameters that work best *across* the
+        aggregated dimension rather than the best (aggregated-value, parameter) pair — the
+        usual case being a nuisance dimension such as a random seed or a set of scenarios.
+        *repeats* > 1 aggregates the same way, over repeated evaluations of one
+        combination rather than over a dimension; the two compose, and each repeat gets
+        its own cache key. An unrecognised *agg_fn* raises ``ValueError`` rather than
+        silently falling back to the mean.
+
+        **Warm start.** With *warm_start* (the default), evaluations already in the sample
+        cache — including those from a preceding ``plot_sweep`` — are added to the study
+        as completed trials before the new ones run, and counted in
+        ``OptimizeResult.n_warm_start_trials``.
+
         Args:
             title: Study name. Auto-generated when *None*.
             input_vars: Input variables to optimize over.  Detected from

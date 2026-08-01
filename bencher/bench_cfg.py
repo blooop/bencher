@@ -110,6 +110,18 @@ class BenchRunCfg(BenchPlotSrvCfg):
     It defines numerous parameters that control how benchmark runs are performed, cached,
     and displayed to the user.
 
+    Two groups of parameters have dedicated guides, because their interactions matter more
+    than any single flag:
+
+    * Caching (``cache_results``, ``cache_samples``, ``clear_cache``,
+      ``clear_sample_cache``, ``overwrite_sample_cache``, ``run_tag``,
+      ``only_plot``, ``cache_size``) — see ``docs/caching.md``, which also records
+      which of these have real readers (``only_hash_tag`` does not).
+    * Time tracking and regression detection (``over_time``, ``clear_history``,
+      ``max_time_events``, ``max_slider_points``, ``show_aggregated_time_tab``,
+      ``on_history_reset``, ``time_event``, and the ``regression_*`` family) — see
+      ``docs/over_time.md``.
+
     Quick-start examples::
 
         # Use defaults — each variable uses its own ``samples`` setting:
@@ -161,7 +173,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
         cache_results (bool): Benchmark level cache for completed benchmark results
         clear_cache (bool): Clear the cache of saved input->output mappings
         cache_samples (bool): Enable per-sample caching
-        only_hash_tag (bool): Use only the tag hash for cache identification
+        only_hash_tag (bool): Dead flag; no reader. The sample cache key is
+                             unconditionally tag-only. See docs/caching.md.
         clear_sample_cache (bool): Clear the per-sample cache
         overwrite_sample_cache (bool): Recalculate and overwrite cached sample values
         only_plot (bool): Do not calculate benchmarks if no results are found in cache
@@ -287,7 +300,14 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     only_hash_tag: bool = param.Boolean(
         False,
-        doc="By default when checking if a sample has been calculated before it includes the hash of the greater benchmarking context.  This is safer because it means that data generated from one benchmark will not affect data from another benchmark.  However, if you are careful it can be more flexible to ignore which benchmark generated the data and only use the tag hash to check if that data has been calculated before. ie, you can create two benchmarks that sample a subset of the problem during exploration and give them the same tag, and then afterwards create a larger benchmark that covers the cases you already explored.  If this value is true, the combined benchmark will use any data from other benchmarks with the same tag.",
+        doc="DEAD FLAG -- nothing reads this. The per-sample cache key is "
+        "unconditionally hash_sha1((sorted function inputs, tag)) (see "
+        "WorkerJob.function_input_signature_pure), so the tag-only behaviour "
+        "described below is always on and cannot be turned off; use distinct "
+        "run_tag values to isolate benchmarks instead. Tracked as W6 in "
+        "plans/architecture/A4-caching-architecture.md and scheduled for removal "
+        "in A5 phase 0. Historical doc follows. "
+        "By default when checking if a sample has been calculated before it includes the hash of the greater benchmarking context.  This is safer because it means that data generated from one benchmark will not affect data from another benchmark.  However, if you are careful it can be more flexible to ignore which benchmark generated the data and only use the tag hash to check if that data has been calculated before. ie, you can create two benchmarks that sample a subset of the problem during exploration and give them the same tag, and then afterwards create a larger benchmark that covers the cases you already explored.  If this value is true, the combined benchmark will use any data from other benchmarks with the same tag.",
     )
 
     only_plot: bool = param.Boolean(
