@@ -498,7 +498,7 @@ class TestGlobalRegistration(unittest.TestCase):
 class TestDefaultPlotFilterIsPermissive(unittest.TestCase):
     """Plan 23 P6 (C3): a default-constructed filter can no longer hide a plugin.
 
-    ``PlotFilter.match_all()`` used to exist only because ``PlotFilter()`` matched
+    The ``match_all`` classmethod used to exist only because ``PlotFilter()`` matched
     nothing; every field now defaults to ``VarRange.unbounded()`` and the classmethod
     is gone."""
 
