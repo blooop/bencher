@@ -755,8 +755,6 @@ class BenchResultBase:
         plot_filter=None,
         float_range: VarRange | None = None,
         cat_range: VarRange | None = None,
-        vector_len: VarRange | None = None,
-        result_vars: VarRange | None = None,
         panel_range: VarRange | None = None,
         repeats_range: VarRange | None = None,
         input_range: VarRange | None = None,
@@ -777,10 +775,6 @@ class BenchResultBase:
             float_range = VarRange(0, None)
         if cat_range is None:
             cat_range = VarRange(0, None)
-        if vector_len is None:
-            vector_len = VarRange(1, 1)
-        if result_vars is None:
-            result_vars = VarRange(1, 1)
         if panel_range is None:
             panel_range = VarRange(0, None)
         if repeats_range is None:
@@ -790,8 +784,6 @@ class BenchResultBase:
         plot_filter = PlotFilter(
             float_range=float_range,
             cat_range=cat_range,
-            vector_len=vector_len,
-            result_vars=result_vars,
             panel_range=panel_range,
             repeats_range=repeats_range,
             input_range=input_range,
@@ -809,8 +801,6 @@ class BenchResultBase:
                 float_cnt=len(adj_float),
                 cat_vars=adj_cat,
                 cat_cnt=len(adj_cat),
-                vector_len=self.plt_cnt_cfg.vector_len,
-                result_vars=self.plt_cnt_cfg.result_vars,
                 panel_vars=list(self.plt_cnt_cfg.panel_vars),
                 panel_cnt=self.plt_cnt_cfg.panel_cnt,
                 repeats=self.plt_cnt_cfg.repeats,

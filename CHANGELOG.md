@@ -280,6 +280,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `str | None` inputs, which is what it has always accepted and returned.
 
 ### Removed
+- **Deleted the two plot-selection gates that could never fire: `vector_len` and
+  `result_vars`** (plan 23 P6, C4; owner decision §6.1 resolved as *delete*). Both were
+  declared on `PltCntCfg` *and* on `PlotFilter`, and both were read on every
+  plot-selection pass (`PlotMatchesResult`) — but nothing in the package ever assigned
+  the `PltCntCfg` side, so both always held their default `1` while every filter
+  defaulted to `VarRange(1, 1)`. The gates therefore always passed and could not filter
+  anything, including `surface_result`'s "exactly one scalar result" intent, which never
+  actually held. `result_vars` had carried a `# todo remove` for some time.
+
+  **What populating them instead would have done** (the analysis §6.1 required before
+  deleting): with every filter left at the `VarRange(1, 1)` default, a correctly
+  populated `vector_len` would have made *every* plot reject any sweep containing a
+  `ResultVec(size > 1)`, and a correctly populated `result_vars` would have made every
+  plot reject any sweep with more than one result variable — which describes most of the
+  example corpus. Populating was the breaking option; deleting is the inert one, and
+  `pixi run generate-examples` confirms the generated gallery is byte-identical.
+
+  `BenchResultBase.filter()`'s `vector_len=` and `result_vars=` keyword parameters are
+  removed with them. No caller in the tree passed either; a caller who did could only
+  ever have used them to unconditionally *disable* a plot, since the counts they were
+  compared against were frozen at `1`.
+
 - **Deleted the dead setuptools files `setup.py`, `setup.cfg`, and `MANIFEST.in`** (plan
   03). The build has been hatchling via `pyproject.toml` for a long time, and
   `[tool.hatch.build] include` never shipped these three in the wheel or the sdist, so
