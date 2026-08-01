@@ -8,6 +8,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Scorecard and A/B verdicts now measure an improvement in the units the detector
+  actually used** (plan 23 P3, B5). `RegressionResult.threshold` means a percent for
+  `regression_method="percentage"`, but **MAD-sigma** for `"adaptive"`, an **absolute
+  delta** for `"delta"`, and an **absolute limit** for `"absolute"` — and the verdict
+  helper compared it against `abs(change_percent)` regardless. Regressions were never
+  affected (both call sites resolve `regressed` from the detector before the comparison
+  is reached); what was corrupted is the **improved-vs-unchanged** split for the three
+  non-percentage methods: a tiny but real improvement on a quiet metric read as
+  "unchanged", and a beneficial move well inside the acceptance band read as "improved"
+  because its percent number happened to exceed a sigma count. Each method is now judged
+  on its own terms — `delta` on `|current - baseline|`, `adaptive` against the MAD
+  acceptance band (plus the percent band when the dual-band gate is configured),
+  `absolute` abstaining because a fixed limit has no baseline to improve on — and a
+  record missing the fields a method needs abstains instead of guessing.
+
+  **This recolours existing scorecards.** `schema_version` is a *structural* version and
+  the discovery pass has no version gate, so every `*.summary.json` already on disk is
+  re-read with the corrected rules on the next scorecard build: cells from `adaptive`,
+  `delta`, and `absolute` gates can move between `improved` and `passed` with no file
+  changing and no benchmark re-running. `regressed` and `trend` cells are unaffected. See
+  `docs/scorecard.md` for the versioning policy this follows.
+
+- **All four video-control buttons exist and each does what its label says** (plan 23 P3,
+  B1). Four button labels were zipped against a two-element callback list, so `zip`
+  truncated the row: only two buttons were ever built, "Pause Videos" was wired to the
+  callback that *unpauses*, and the Loop and Reset buttons did not exist. All four are now
+  built from a single list of `(label, callback)` pairs. Looping is driven by one shared
+  flag so a click moves every video pane to the same state instead of inverting each
+  independently, and the button is labelled "Toggle Looping" because videos start out
+  looping — a button reading "Loop Videos" would have turned looping *off* when first
+  pressed. Note that Reset's rewind is a request panel's client-side model can drop while
+  a video is playing (its `set_time` handler returns without seeking when a recent
+  `timeupdate` armed its internal guard); the docstring records this rather than promising
+  a rewind bencher cannot deliver.
+
+- **`publish_file` no longer claims to return a URL it never returned** (plan 23 P3, B4).
+  It was annotated `-> str` and documented as returning the published file's URL, but the
+  body ends at the `git push` and falls off the end returning `None` — so a caller
+  following the signature got `None`. The annotation and docstring now state that, and
+  document `remote` as the string it is (it was described as a callable returning a pair
+  of URLs, from a signature that no longer exists). Behaviour is unchanged: the viewable
+  URL is provider-specific and not derivable from the arguments, so callers still build it
+  themselves, as `publish_and_view_rrd` already did.
+
+- **A malformed or foreign `*.summary.json` no longer aborts a scorecard build.** JSON
+  integers are arbitrary-precision, so an oversized integer where a metric value was
+  expected raised `OverflowError` (not caught by the `TypeError`/`ValueError` guard) out of
+  the verdict pass and out of the page render; it now degrades to an abstaining verdict.
+  The same gap is closed in the writer (`RegressionResult.to_dict`), which now emits `null`
+  for such a value rather than raising.
+
 - **Fail-loud, not fail-fatal: a benchmark that returns `None` no longer produces a
   silently empty sweep — and no longer aborts the run either** (plan 23 P2, B3; amended
   per owner decision before release). A worker that forgot to `return
@@ -52,6 +103,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `n_failed > 0`, in the same way the regression report is auto-inserted.
 
 ### Changed
+- **BREAKING (small): one `AggFn` vocabulary, and an unknown `agg_fn` now raises instead
+  of silently meaning `mean`** (plan 23 P11, C11). The aggregation-function vocabulary
+  existed in four independent spellings — the `Literal`s on `to`/`to_dataset`/
+  `to_hv_dataset`/`filter`, `AGG_FN_MAP`, `BenchCfg.agg_fn`'s `ObjectSelector`, and an
+  if/elif ladder in `to_dataset` that consulted none of the others. `AggFn`
+  (`bencher/utils.py`) is now the single definition and the other three derive from it;
+  the ladder normalizes at the boundary (`normalize_agg_fn`) and then matches
+  exhaustively under `assert_never`.
+
+  Two user-visible changes, both on the plotting path:
+
+  1. **An unrecognised `agg_fn` raises `ValueError`.** The ladder's terminal `else` was
+     commented "Fall back to mean if unknown string provided", so `agg_fn="meen"`
+     silently produced a mean-aggregated plot — while `optimize()` raised on the very
+     same input. The two agree now. The raise lands at plot/aggregation time, never
+     mid-sweep: via `plot_sweep`, `BenchCfg`'s `ObjectSelector` rejects the value before
+     any sample is collected; via `to_dataset`/`filter`, results are already collected
+     and cached. Validation is also unconditional now — previously an unknown value was
+     only checked when `agg_over_dims` was non-empty, so whether you got an error
+     depended on the data.
+
+  2. **Uppercase is no longer accepted.** The ladder did `(agg_fn or "mean").lower()`,
+     so `agg_fn="MEAN"` worked in `to`/`to_dataset`/`to_hv_dataset`/`filter` — and
+     nowhere else: `plot_sweep(agg_fn="MEAN")` and `optimize(agg_fn="MEAN")` already
+     raised, because the `ObjectSelector`'s objects are lowercase. That leniency was
+     undocumented, unused anywhere in the tree, and asymmetric across the API, i.e. a
+     fifth partial spelling of the vocabulary rather than a feature. Preserving it
+     inside `normalize_agg_fn` would have recreated exactly the divergence this change
+     deletes; honouring it everywhere would mean widening the accepted set, which is a
+     public-API decision that does not belong in an internal single-sourcing change.
+     The error message names the lowercase spelling
+     (`... (the vocabulary is lowercase; did you mean 'mean'?)`), so the fix is
+     mechanical. Lowercase the string, or pass an `AggFn` member.
+
+  No cache, hash or `CACHE_VERSION` impact: `agg_fn` feeds no persistent hash (it is in
+  `identity.py`'s `EXCLUDED_FIELDS`), the accepted string set is byte-identical, and all
+  five aggregations are numerically unchanged.
+
 - **`BenchRunCfg.executor` is normalized to an `Executors` member at the sweep boundary**
   (plan 23 P2, C13). Because `Executors` is a `StrEnum`,
   `param.Selector(objects=list(Executors))` accepts the bare string `"SERIAL"` and stores a
@@ -68,12 +157,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back. The new `Protocol` (`submit`, `shutdown`) is satisfied by both
   `ProcessPoolExecutor` and scoop's module.
 
-- `JobFuture.result()` is annotated `-> dict | None`. The `None` is not new behaviour, only
-  newly admitted: `JobFuture` can represent "no result and no future", and callers must
-  reject it. Plan 23 P5's `Ready(dict) | Pending(Future)` split is what makes the state
-  unrepresentable and the `| None` removable.
+- `JobFuture.result()` was annotated `-> dict | None` by P2 (the `None` was not new
+  behaviour, only newly admitted: `JobFuture` could represent "no result and no future").
+  **Superseded before release by P5 below**, which makes that state unrepresentable and
+  the method total.
+
+- **`JobFuture` holds one state field instead of two optionals** (plan 23 P5, C2). `res`
+  and `future` were independent optionals that `result()` *mutated* — it assigned to
+  `self.res` and left `self.future` set — so `future is not None` stopped meaning
+  "pending" after the first call, and both-set and neither-set were both representable
+  while neither was meaningful. The field is now a single
+  `Ready(res) | Pending(future) | Broken(error)` sum of frozen dataclasses, parsed once in
+  the constructor (whose keyword signature is unchanged, so every construction site and
+  hand-built test object reads as before); passing both a result and a future now raises
+  `ValueError`. `result()` matches exhaustively with `assert_never` — verified by deleting
+  an arm and measuring `error[type-assertion-failure] … Inferred type of argument is
+  'Broken & ~Ready & ~Pending'` — and is **total**: the `| None` return is gone. The
+  order-dependent `job_future.future is not None` dispatch in `Bench.calculate_benchmark_results`
+  reads the variant instead.
+
+  `Broken` is the constructive replacement for the one meaningful half of "neither set": a
+  job that yielded no result. The error is *stored* rather than raised at construction,
+  because the serial site is inside the caller's `except catch` block — raising there is
+  exactly the original B3 failure mode where `catch=Exception` absorbed a contract
+  violation. It is supplied by whichever caller *knows* the cause (the serial site in
+  `FutureCache.submit`, having just watched `run_job` return `None`) rather than inferred
+  from the shape of the constructor call, which cannot tell a `None`-returning worker from
+  a cache entry holding `None`. **The record-and-continue disposition is unchanged** (plan
+  23 §6.2 as amended): `result()` raises at the consume point on *either* executor path,
+  `store_results` records a `SampleFailure`, logs at ERROR, emits
+  `WorkerContractWarning`, and the sweep continues. A `None` return never aborts a run.
+  Caching semantics are also unchanged: the pre-P5 `res is not None` guard on `cache.set`
+  is now enforced by construction — a worker that returned nothing cannot reach the cache.
+
+- **`WorkerJob`'s derived inputs and hashes are `cached_property`s, not two-phase init**
+  (plan 23 P5, C8). `function_input`, `canonical_input`, `fn_inputs_sorted` and
+  `function_input_signature_pure` defaulted to `None` and were filled by a `setup_hashes()`
+  call every construction site had to remember, so nothing prevented caching a sample under
+  `job_key=None`. `setup_hashes()` is gone; the four values are computed on demand from the
+  constructor fields, so a `WorkerJob` with unset hashes no longer exists. The unused
+  `found_in_cache` and `msgs` fields (written nowhere in the package) are removed. Hash
+  values are byte-identical — the same `hash_sha1((sorted_inputs, tag))` over the same
+  inputs — so no cached sample is invalidated, and pickling across a process boundary still
+  works (computed values travel in `__dict__`; unaccessed ones recompute deterministically).
+
+- `FutureCache.clear_tag` no longer raises `AttributeError` on `None` when the cache is
+  disabled (`cache_samples=False`), and `JobFunctionCache.call` passes its counter as a
+  `str`, matching `Job.job_id`'s declared type. Both were latent defects surfaced by putting
+  `job.py` on the strict `ty` list (recorded as out-of-scope in plan 23 P2 item 7).
+  `bencher/job.py`, `bencher/worker_job.py` and `bencher/result_collector.py` are all on
+  that list now — the last one because C8 removed the `function_input`-is-`None` diagnostics
+  that were holding it off, exactly as P2 predicted.
+
+  Both fixes go past what the type checker asked for, because in both cases satisfying it
+  would have hidden the defect it pointed at. `FutureCache.call_count` was initialised to 0
+  and incremented **nowhere**, so every `JobFunctionCache.call()` produced the same job id —
+  the string every log line and contract message identifies a sample by; it is now
+  incremented, and ids read `call 1`, `call 2`, …. And `clear_tag` on a cache-less
+  `FutureCache` now logs a WARNING rather than returning silently: not crashing is right, but
+  on a public path (`Bench.clear_tag_from_sample_cache`) "nothing happened" must not read as
+  "the tag was cleared".
+
+- **Flipping a composition direction lives on a two-member `Axis` type, so a partial flip
+  is unrepresentable** (plan 23 P8, C6). `ComposeType.flip()` raised
+  `RuntimeError("cannot flip this type")` on 2 of its 4 members, and that arm was reachable
+  from the public `compose_method_list_for_dims(first_compose_method=...)` /
+  `VideoSummaryResult.dataset_to_compose_list(first_compose_method=...)` — so a
+  `sequence`/`overlay` seed aborted a 2+-dimensional video or rerun composition part-way
+  through rendering, after the samples had already been collected. The new
+  `bencher.Axis` (`right | down`) owns `flip()`, which is total over its two members;
+  `ComposeType` keeps its four members and answers `as_axis() -> Axis | None`, so "has no
+  opposite" is a value rather than an exception. `compose_method_list_for_dims` accepts
+  either type and, for a seed with no axis, repeats it on every spatial level instead of
+  failing. Every input the old implementation answered returns a byte-identical list — the
+  test suite pins that against the pre-refactor algorithm.
+
+- **Composition `match` statements over `ComposeType` are exhaustively checked**
+  (plan 23 P8, C6). `ComposableContainerPanel.__post_init__` and
+  `ComposableContainerDataset.render` had no final arm, so a fifth `ComposeType` member
+  would have produced an `UnboundLocalError` three frames from the cause and a silent
+  `None` composition respectively. Both now end in `assert_never`; verified empirically by
+  seeding a fifth member and measuring `error[type-assertion-failure]` at all four match
+  sites. `ComposableContainerRerun`'s two tables that had to stay exactly complementary
+  (`_shares_one_view` and `_LAYOUT_CLASS_NAMES`) are merged into one exhaustive mapping
+  onto a `_SharedViewLayout | _StackedViewLayout` sum, which makes "shares one view" and
+  "has a stacking layout class" mutually exclusive by construction and retires the
+  `Unsupported Rerun compose type` raise as unreachable. The four
+  `bencher/results/composable_container/*` modules this touches join the strict `ty` list.
+
+- `ComposableContainerPanel._tabs` is declared on the class instead of being created only
+  by the `sequence` arm, and `append`/`render` read that one field rather than each
+  re-deriving "am I a tab strip?" from `compose_method`.
+  `ComposableContainerBase.label_formatter` is annotated `-> str | None` over
+  `str | None` inputs, which is what it has always accepted and returned.
 
 ### Removed
+- **`ComposableContainerPanel(horizontal=...)`**, which silently overwrote
+  `compose_method` — and did so *inverted* relative to the rest of the codebase
+  (`horizontal=True` meant a `pn.Column` here, while the same flag in
+  `BenchResultBase._to_panes_da` selects a row). Two spellings of one concept that
+  disagreed; only `compose_method` remains. No caller in the package used the kwarg
+  (plan 23 P8, C6).
+
+- **`ComposeType.flip()`** — superseded by `Axis.flip()`, see above. `ComposeType.as_axis()`
+  converts, and `Axis.to_compose_type()` converts back.
+
 - **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
   the CI matrix runs py311 + py313 (was py310 + py313). The `py310` pixi feature and
   environment are gone.
@@ -93,6 +281,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which strings `BenchRunCfg(executor=...)` accepts. See plan 23 D4.
 
 ### Added
+- **`bencher.WorkerReturnedNothingError`**, a narrow subclass of `WorkerContractError`
+  meaning *the harness itself* determined a job produced no result (plan 23 P5). Only this
+  subclass is exempt from `catch=`; a `WorkerContractError` raised by a **worker** — the
+  class is public, so a worker or plugin can raise it, e.g. to signal a hard config error
+  and abort with `catch=()` — is an ordinary sample fault and is routed through `catch=` as
+  before. Without the split, a worker-raised `WorkerContractError` was silently tolerated on
+  MULTIPROCESSING even with `catch=()` while still aborting on SERIAL: loud or silent chosen
+  by the executor, which is the defect shape plan 23 B3 exists to eliminate. Existing
+  `except WorkerContractError` handlers keep matching, by subclassing.
+
 - **Single result-type registry: `RESULT_SPECS` in `bencher/variables/results.py`**
   (plan 23 P4). One ordered `{Result* class: ResultSpec}` mapping now declares each
   result type's kind, missing fill/sentinels, and family memberships (panel, media,

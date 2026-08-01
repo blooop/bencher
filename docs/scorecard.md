@@ -15,6 +15,16 @@ It reads the machine-readable `*.summary.json` written by
 {func}`bencher.result_to_json` (with `include_series=True`) for every benchmark
 under a reports directory and groups them by category.
 
+```{note}
+`schema_version` in those files is a **structural** version: it changes when the
+JSON's shape changes (fields added, removed, renamed, or retyped), not when the
+meaning of a value changes. Verdict semantics — how a recorded threshold, delta,
+or band is turned into `regressed` / `improved` / `passed` / `trend` — can be
+corrected within a version, and the scorecard applies the current rules to every
+summary it finds, including ones written by an earlier release. So a bug fix in
+the verdict logic can recolour historical cells without any file changing.
+```
+
 Within each category the same cells can be read two ways, switched by a control
 in the page header (the choice is remembered across visits):
 

@@ -9,10 +9,13 @@ import bencher as bn
 from bencher.result_collector import _materialize_result_value
 from bencher.results.composable_container.composable_container_base import ComposeType
 from bencher.results.composable_container.composable_container_rerun import (
+    _RERUN_COMPOSE_SPECS,
     ComposableContainerRerun,
     RerunRecording,
     RerunViewKind,
     _batch_time_bounds,
+    _SharedViewLayout,
+    _StackedViewLayout,
 )
 from bencher.variables.results import ResultRerun
 
@@ -253,6 +256,41 @@ def test_result_rerun_materializes_composable_container(tmp_path):
 
     assert result == str(output)
     assert output.is_file()
+
+
+def test_every_compose_type_has_a_rerun_spec():
+    """One table, checked (plan 23 P8).
+
+    This replaced a pair of tables -- a ``_shares_one_view`` predicate and a
+    ``_LAYOUT_CLASS_NAMES`` dict -- that had to stay exactly complementary with
+    nothing asserting that they did.
+    """
+    assert set(_RERUN_COMPOSE_SPECS) == set(ComposeType)
+    for member in ComposeType:
+        assert isinstance(_RERUN_COMPOSE_SPECS[member], (_SharedViewLayout, _StackedViewLayout))
+
+
+def test_rerun_specs_match_the_two_tables_they_replaced():
+    """Parity oracle: the pre-P8 ``_shares_one_view`` / ``_LAYOUT_CLASS_NAMES`` pair."""
+    legacy_shares_one_view = {ComposeType.overlay, ComposeType.sequence}
+    legacy_layout_class_names = {ComposeType.right: "Horizontal", ComposeType.down: "Vertical"}
+
+    for member in ComposeType:
+        spec = _RERUN_COMPOSE_SPECS[member]
+        if member in legacy_shares_one_view:
+            assert isinstance(spec, _SharedViewLayout)
+            # Only sequence spliced its items along the timeline.
+            assert spec.splice_in_time is (member == ComposeType.sequence)
+        else:
+            assert isinstance(spec, _StackedViewLayout)
+            assert spec.layout_class_name == legacy_layout_class_names[member]
+
+
+def test_unknown_compose_method_is_rejected_by_name():
+    """An out-of-vocabulary compose method names itself instead of raising KeyError."""
+    container = ComposableContainerRerun(compose_method="not_a_compose_type")
+    with pytest.raises(ValueError, match="not_a_compose_type"):
+        _ = container._spec  # pylint: disable=protected-access
 
 
 def test_public_api_exports_rerun_composition_types():

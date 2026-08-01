@@ -17,6 +17,7 @@ from bencher.history import OnHistoryReset
 from bencher.job import Executors
 from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
+from bencher.utils import AggFn
 from bencher.variables.results import OptDir
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
 from bencher.variables.time import TimeEvent, TimeSnapshot
@@ -818,9 +819,13 @@ class BenchCfg(BenchRunCfg):
         "When set, run_sweep will automatically append CurveResult (mean +/- std) "
         "and BandResult (percentile bands) with these dims collapsed.",
     )
+    # The objects derive from AggFn (the single source of the vocabulary, plan 23
+    # C11/P11) but stay plain strings: param stores whatever the caller assigns, so
+    # readers of this field must construct the enum at the boundary via
+    # normalize_agg_fn before matching on it (plan 24 A2/A3).
     agg_fn = param.ObjectSelector(
-        default="mean",
-        objects=["mean", "sum", "max", "min", "median"],
+        default=AggFn.MEAN.value,
+        objects=[m.value for m in AggFn],
         doc="Aggregation function to use when agg_over_dims is set.",
     )
 

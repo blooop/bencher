@@ -75,7 +75,7 @@ test = [
     "sphinxcontrib-mermaid>=1.0,<3.0",
     "coverage>=7.5.4,<=7.15.2",
     "prek>=0.2.28,<0.5.0",
-    "ty>=0.0.13,<=0.0.64",
+    "ty>=0.0.13,<=0.0.65",
 ]
 
 docs = [
@@ -324,6 +324,13 @@ include = [
     "bencher/blob_store.py",
     "bencher/variables/results.py",
     "bencher/history.py",
+    "bencher/job.py",
+    "bencher/worker_job.py",
+    "bencher/result_collector.py",
+    "bencher/results/composable_container/composable_container_base.py",
+    "bencher/results/composable_container/composable_container_panel.py",
+    "bencher/results/composable_container/composable_container_dataframe.py",
+    "bencher/results/composable_container/composable_container_rerun.py",
 ]
 [tool.ty.overrides.rules]
 invalid-assignment = "error"

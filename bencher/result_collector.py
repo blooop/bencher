@@ -45,8 +45,8 @@ from bencher.job import (
     SampleFailure,
     WorkerContractError,
     WorkerContractWarning,
+    WorkerReturnedNothingError,
     normalize_catch,
-    require_worker_result,
 )
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
@@ -446,25 +446,34 @@ class ResultCollector:
         catch = normalize_catch(getattr(bench_run_cfg, "catch", ()))
         try:
             result = job_result.result()
+        # Ordered *before* `except catch`, deliberately: a worker that returned
+        # nothing is a harness-contract error, not a sample fault, so `catch=` must
+        # not decide its fate (plan 23 decision 2) -- WorkerReturnedNothingError
+        # subclasses TypeError, so a later `except catch` with catch=Exception would
+        # otherwise absorb it. Since P5, JobFuture.result() is total
+        # (Ready|Pending|Broken) and raises this itself on either executor path,
+        # replacing the separate require_worker_result step that used to live after
+        # the try -- see require_worker_result for the full B3 story. The violation
+        # is recorded and warned, never raised through the sweep (plan 23 §6.2 as
+        # amended): the cells keep their missing sentinel, and the failed-samples
+        # summary makes that visible.
+        #
+        # The narrow subclass, NOT WorkerContractError: that base class is public, so
+        # a worker or plugin can raise it, and catching it here would silently
+        # tolerate a worker-raised one on the pooled path even with catch=() --
+        # raising on SERIAL but completing on MULTIPROCESSING, exactly the
+        # executor-dependent divergence B3 exists to kill. A worker-raised
+        # WorkerContractError falls through to `except catch` below instead, which is
+        # what it did before P5.
+        except WorkerReturnedNothingError as exc:
+            self.record_contract_violation(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
         # catch is a runtime tuple of exception types, which pylint cannot see into.
         # pylint: disable-next=catching-non-exception
         except catch as exc:
             self.record_caught_sample(
-                bench_res, job_result.job.job_id, worker_job.function_input, exc
-            )
-            return
-        # Outside the `except catch` above, deliberately: a worker that returned
-        # nothing is a harness-contract error, not a sample fault, so `catch=` must
-        # not decide its fate (plan 23 decision 2). This replaces `if result is not
-        # None:` with no `else`, which skipped everything below and left the sweep
-        # green with an all-sentinel dataset -- see require_worker_result for the
-        # full B3 story. The violation is recorded and warned, never raised through
-        # the sweep (plan 23 §6.2 as amended): the cells keep their missing
-        # sentinel, and the failed-samples summary makes that visible.
-        try:
-            result = require_worker_result(result, job_result.job.job_id)
-        except WorkerContractError as exc:
-            self.record_contract_violation(
                 bench_res, job_result.job.job_id, worker_job.function_input, exc
             )
             return
