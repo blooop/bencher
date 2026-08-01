@@ -10,6 +10,7 @@ from param import Parameter
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
 from bencher.results.composable_container.composable_container_base import (
+    Axis,
     compose_method_list_for_dims,
 )
 from bencher.results.composable_container.composable_container_video import (
@@ -153,14 +154,14 @@ class VideoSummaryResult(BenchResultBase):
     def dataset_to_compose_list(
         self,
         dataset: xr.Dataset,
-        first_compose_method: ComposeType = ComposeType.down,
+        first_compose_method: ComposeType | Axis = ComposeType.down,
         time_sequence_dimension: int = 0,
     ) -> list[ComposeType]:
         """ "Given a dataset, chose an order for composing the results.  By default will flip between right and down and the last dimension will be a time sequence.
 
         Args:
             dataset (xr.Dataset): the dataset to render
-            first_compose_method (ComposeType, optional): the direction of the first composition method. Defaults to ComposeType.right.
+            first_compose_method (ComposeType | Axis, optional): the direction of the first composition method. Defaults to ComposeType.down.  Only ``right`` and ``down`` alternate; ``sequence``/``overlay`` have no opposite and are repeated on every spatial level.
             time_sequence_dimension (int, optional): The dimension to start time sequencing instead of composing in space. Defaults to 0.
 
         Returns:

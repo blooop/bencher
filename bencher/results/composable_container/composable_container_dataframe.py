@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import assert_never
 
 import xarray as xr
 
@@ -30,3 +31,5 @@ class ComposableContainerDataset(ComposableContainerBase):
                 return xr.concat(self.container, dim="sequence")
             case ComposeType.overlay:
                 return xr.concat(self.container, dim="overlay").mean(dim="overlay")
+            case _ as unreachable:
+                assert_never(unreachable)

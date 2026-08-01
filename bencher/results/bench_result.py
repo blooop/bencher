@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import panel as pn
 from param import Parameter
@@ -53,7 +53,7 @@ from bencher.results.pane_result import PaneResult
 from bencher.results.rerun_summary import RerunSummaryResult
 from bencher.results.video_summary import VideoSummaryResult
 from bencher.results.volume_result import VolumeResult
-from bencher.utils import listify, resolve_aggregate
+from bencher.utils import AggFn, listify, resolve_aggregate
 
 if TYPE_CHECKING:
     # Runtime import would be circular: identity imports bench_cfg, which this
@@ -203,7 +203,7 @@ class BenchResult(
         reduce: ReduceType | None = None,
         # Aggregation controls (applied in filter())
         aggregate: bool | int | list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN,
         **kwargs: Any,
     ) -> BenchResult:
         """Return the current instance of BenchResult.

@@ -103,6 +103,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `n_failed > 0`, in the same way the regression report is auto-inserted.
 
 ### Changed
+- **BREAKING (small): one `AggFn` vocabulary, and an unknown `agg_fn` now raises instead
+  of silently meaning `mean`** (plan 23 P11, C11). The aggregation-function vocabulary
+  existed in four independent spellings — the `Literal`s on `to`/`to_dataset`/
+  `to_hv_dataset`/`filter`, `AGG_FN_MAP`, `BenchCfg.agg_fn`'s `ObjectSelector`, and an
+  if/elif ladder in `to_dataset` that consulted none of the others. `AggFn`
+  (`bencher/utils.py`) is now the single definition and the other three derive from it;
+  the ladder normalizes at the boundary (`normalize_agg_fn`) and then matches
+  exhaustively under `assert_never`.
+
+  Two user-visible changes, both on the plotting path:
+
+  1. **An unrecognised `agg_fn` raises `ValueError`.** The ladder's terminal `else` was
+     commented "Fall back to mean if unknown string provided", so `agg_fn="meen"`
+     silently produced a mean-aggregated plot — while `optimize()` raised on the very
+     same input. The two agree now. The raise lands at plot/aggregation time, never
+     mid-sweep: via `plot_sweep`, `BenchCfg`'s `ObjectSelector` rejects the value before
+     any sample is collected; via `to_dataset`/`filter`, results are already collected
+     and cached. Validation is also unconditional now — previously an unknown value was
+     only checked when `agg_over_dims` was non-empty, so whether you got an error
+     depended on the data.
+
+  2. **Uppercase is no longer accepted.** The ladder did `(agg_fn or "mean").lower()`,
+     so `agg_fn="MEAN"` worked in `to`/`to_dataset`/`to_hv_dataset`/`filter` — and
+     nowhere else: `plot_sweep(agg_fn="MEAN")` and `optimize(agg_fn="MEAN")` already
+     raised, because the `ObjectSelector`'s objects are lowercase. That leniency was
+     undocumented, unused anywhere in the tree, and asymmetric across the API, i.e. a
+     fifth partial spelling of the vocabulary rather than a feature. Preserving it
+     inside `normalize_agg_fn` would have recreated exactly the divergence this change
+     deletes; honouring it everywhere would mean widening the accepted set, which is a
+     public-API decision that does not belong in an internal single-sourcing change.
+     The error message names the lowercase spelling
+     (`... (the vocabulary is lowercase; did you mean 'mean'?)`), so the fix is
+     mechanical. Lowercase the string, or pass an `AggFn` member.
+
+  No cache, hash or `CACHE_VERSION` impact: `agg_fn` feeds no persistent hash (it is in
+  `identity.py`'s `EXCLUDED_FIELDS`), the accepted string set is byte-identical, and all
+  five aggregations are numerically unchanged.
+
 - **`BenchRunCfg.executor` is normalized to an `Executors` member at the sweep boundary**
   (plan 23 P2, C13). Because `Executors` is a `StrEnum`,
   `param.Selector(objects=list(Executors))` accepts the bare string `"SERIAL"` and stores a
@@ -180,6 +218,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a public path (`Bench.clear_tag_from_sample_cache`) "nothing happened" must not read as
   "the tag was cleared".
 
+- **Flipping a composition direction lives on a two-member `Axis` type, so a partial flip
+  is unrepresentable** (plan 23 P8, C6). `ComposeType.flip()` raised
+  `RuntimeError("cannot flip this type")` on 2 of its 4 members, and that arm was reachable
+  from the public `compose_method_list_for_dims(first_compose_method=...)` /
+  `VideoSummaryResult.dataset_to_compose_list(first_compose_method=...)` — so a
+  `sequence`/`overlay` seed aborted a 2+-dimensional video or rerun composition part-way
+  through rendering, after the samples had already been collected. The new
+  `bencher.Axis` (`right | down`) owns `flip()`, which is total over its two members;
+  `ComposeType` keeps its four members and answers `as_axis() -> Axis | None`, so "has no
+  opposite" is a value rather than an exception. `compose_method_list_for_dims` accepts
+  either type and, for a seed with no axis, repeats it on every spatial level instead of
+  failing. Every input the old implementation answered returns a byte-identical list — the
+  test suite pins that against the pre-refactor algorithm.
+
+- **Composition `match` statements over `ComposeType` are exhaustively checked**
+  (plan 23 P8, C6). `ComposableContainerPanel.__post_init__` and
+  `ComposableContainerDataset.render` had no final arm, so a fifth `ComposeType` member
+  would have produced an `UnboundLocalError` three frames from the cause and a silent
+  `None` composition respectively. Both now end in `assert_never`; verified empirically by
+  seeding a fifth member and measuring `error[type-assertion-failure]` at all four match
+  sites. `ComposableContainerRerun`'s two tables that had to stay exactly complementary
+  (`_shares_one_view` and `_LAYOUT_CLASS_NAMES`) are merged into one exhaustive mapping
+  onto a `_SharedViewLayout | _StackedViewLayout` sum, which makes "shares one view" and
+  "has a stacking layout class" mutually exclusive by construction and retires the
+  `Unsupported Rerun compose type` raise as unreachable. The four
+  `bencher/results/composable_container/*` modules this touches join the strict `ty` list.
+
+- `ComposableContainerPanel._tabs` is declared on the class instead of being created only
+  by the `sequence` arm, and `append`/`render` read that one field rather than each
+  re-deriving "am I a tab strip?" from `compose_method`.
+  `ComposableContainerBase.label_formatter` is annotated `-> str | None` over
+  `str | None` inputs, which is what it has always accepted and returned.
+
 ### Removed
 - **Deleted the dead setuptools files `setup.py`, `setup.cfg`, and `MANIFEST.in`** (plan
   03). The build has been hatchling via `pyproject.toml` for a long time, and
@@ -192,6 +263,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before and after the removal: the two contain an identical set of 400 files.
   `resource/bencher` (the empty ROS ament index marker that `setup.py` pointed at) is
   deliberately kept, and still ships in the wheel exactly as before.
+- **`ComposableContainerPanel(horizontal=...)`**, which silently overwrote
+  `compose_method` — and did so *inverted* relative to the rest of the codebase
+  (`horizontal=True` meant a `pn.Column` here, while the same flag in
+  `BenchResultBase._to_panes_da` selects a row). Two spellings of one concept that
+  disagreed; only `compose_method` remains. No caller in the package used the kwarg
+  (plan 23 P8, C6).
+
+- **`ComposeType.flip()`** — superseded by `Axis.flip()`, see above. `ComposeType.as_axis()`
+  converts, and `Axis.to_compose_type()` converts back.
 
 - **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
   the CI matrix runs py311 + py313 (was py310 + py313). The `py310` pixi feature and

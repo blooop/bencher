@@ -1,4 +1,5 @@
 from bencher.results.composable_container.composable_container_base import (
+    Axis,
     ComposableContainerBase,
     ComposeType,
     PaneLayout,

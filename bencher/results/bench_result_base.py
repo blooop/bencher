@@ -29,7 +29,14 @@ from bencher.results.composable_container.composable_container_base import (
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
-from bencher.utils import callable_name, color_tuple_to_css, int_to_col, listify
+from bencher.utils import (
+    AggFn,
+    callable_name,
+    color_tuple_to_css,
+    int_to_col,
+    listify,
+    normalize_agg_fn,
+)
 from bencher.variables.inputs import with_subsampling_divisions
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import (
@@ -211,7 +218,7 @@ class BenchResultBase:
         result_var: ResultFloat | None = None,
         subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
+        agg_fn: AggFn | str | None = None,
     ) -> hv.Dataset:
         """Generate a holoviews dataset from the xarray dataset.
 
@@ -273,15 +280,29 @@ class BenchResultBase:
         result_var: ResultFloat | str | None,
         subsampling_divisions: int | None,
         agg_over_dims: list[str] | None,
-        agg_fn: str | None,
+        agg_fn: AggFn | str | None,
     ) -> tuple:
-        """Build a hashable cache key from normalized to_dataset() arguments."""
+        """Build a hashable cache key from normalized to_dataset() arguments.
+
+        Raises:
+            ValueError: If ``agg_fn`` is outside the ``AggFn`` vocabulary. Validating
+                here is deliberate and load-bearing, not a side effect of key building:
+                ``to_dataset`` returns on a cache hit before reaching its ``match``, so
+                this is the only ``agg_fn`` check on the warm-cache path.
+        """
         reduce = self._resolve_auto(reduce)
         rv_key = result_var.name if isinstance(result_var, Parameter) else result_var
         # Normalize dimension order so aggregation over the same set shares cache entries
         dims_key = tuple(sorted(agg_over_dims)) if agg_over_dims else None
-        # fn is irrelevant when no agg dims — aggregation is skipped entirely
-        fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
+        # Validate unconditionally, even though the *key* only needs fn when there are
+        # agg dims (without them aggregation is skipped entirely, so every fn collapses
+        # to the same dataset — hence the None below, which keeps those calls sharing one
+        # cache entry). Gating the *validation* on agg_over_dims would make an unknown
+        # agg_fn raise or not depending on the data ("does this dim exist in the
+        # dataset?"), which is exactly the data-dependent validation plan 23 exists to
+        # remove. normalize_agg_fn is cheap, idempotent and total (None -> MEAN).
+        fn = normalize_agg_fn(agg_fn)
+        fn_key = fn if agg_over_dims else None
         return (reduce, rv_key, subsampling_divisions, dims_key, fn_key)
 
     def to_dataset(
@@ -290,7 +311,7 @@ class BenchResultBase:
         result_var: ResultFloat | str | None = None,
         subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
+        agg_fn: AggFn | str | None = None,
         deep: bool = True,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
@@ -309,6 +330,10 @@ class BenchResultBase:
             a deep copy is returned so callers can safely mutate the result. Internal
             hot paths pass ``deep=False`` to reuse the cached object directly.
         """
+        # NOTE: this call validates agg_fn (normalize_agg_fn, inside), and that is
+        # load-bearing rather than redundant with the match further down: on a cache
+        # hit we return two lines below and never reach the match, so this is the
+        # *only* validation on the warm-cache path. Do not "optimize" it away.
         cache_key = self._to_dataset_cache_key(
             reduce, result_var, subsampling_divisions, agg_over_dims, agg_fn
         )
@@ -398,34 +423,39 @@ class BenchResultBase:
                         list(ds_out.dims),
                     )
 
-                # Support basic aggregations; default to mean
-                fn = (agg_fn or "mean").lower()
-                if fn == "sum":
-                    ds_out = ds_out.sum(dim=dims_present, skipna=True)
-                elif fn == "mean":
-                    ds_agg_mean = ds_out.mean(dim=dims_present, skipna=True)
-                    non_std_vars = [v for v in ds_out.data_vars if not v.endswith("_std")]
-                    if non_std_vars:
-                        ds_agg_std = ds_out[non_std_vars].std(dim=dims_present, skipna=True)
-                        ds_agg_std = rename_ds(ds_agg_std, "std")
-                        # Drop pre-existing _std vars that will be replaced by the
-                        # aggregation std (e.g. from repeat reduction) to avoid merge conflicts.
-                        expected_std = {f"{v}_std" for v in non_std_vars}
-                        old_std = [v for v in ds_agg_mean.data_vars if v in expected_std]
-                        if old_std:
-                            ds_agg_mean = ds_agg_mean.drop_vars(old_std)
-                        ds_out = xr.merge([ds_agg_mean, ds_agg_std])
-                    else:
-                        ds_out = ds_agg_mean
-                elif fn == "max":
-                    ds_out = ds_out.max(dim=dims_present, skipna=True)
-                elif fn == "min":
-                    ds_out = ds_out.min(dim=dims_present, skipna=True)
-                elif fn == "median":
-                    ds_out = ds_out.median(dim=dims_present, skipna=True)
-                else:
-                    # Fall back to mean if unknown string provided
-                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+                # Normalize at the boundary (raises on an unknown value — no more
+                # silent fall-back to mean), then match exhaustively (plan 24 A2/A3).
+                # This is the second normalize_agg_fn call on this path (the first is in
+                # _to_dataset_cache_key above) and both are needed: that one is the only
+                # validation when the cache hits and this one is the only thing that
+                # gives the match subject a type ty can check. Neither substitutes for
+                # the other; the function is idempotent, so calling it twice is free.
+                match normalize_agg_fn(agg_fn):
+                    case AggFn.MEAN:
+                        ds_agg_mean = ds_out.mean(dim=dims_present, skipna=True)
+                        non_std_vars = [v for v in ds_out.data_vars if not v.endswith("_std")]
+                        if non_std_vars:
+                            ds_agg_std = ds_out[non_std_vars].std(dim=dims_present, skipna=True)
+                            ds_agg_std = rename_ds(ds_agg_std, "std")
+                            # Drop pre-existing _std vars that will be replaced by the
+                            # aggregation std (e.g. from repeat reduction) to avoid merge conflicts.
+                            expected_std = {f"{v}_std" for v in non_std_vars}
+                            old_std = [v for v in ds_agg_mean.data_vars if v in expected_std]
+                            if old_std:
+                                ds_agg_mean = ds_agg_mean.drop_vars(old_std)
+                            ds_out = xr.merge([ds_agg_mean, ds_agg_std])
+                        else:
+                            ds_out = ds_agg_mean
+                    case AggFn.SUM:
+                        ds_out = ds_out.sum(dim=dims_present, skipna=True)
+                    case AggFn.MAX:
+                        ds_out = ds_out.max(dim=dims_present, skipna=True)
+                    case AggFn.MIN:
+                        ds_out = ds_out.min(dim=dims_present, skipna=True)
+                    case AggFn.MEDIAN:
+                        ds_out = ds_out.median(dim=dims_present, skipna=True)
+                    case _ as unreachable:
+                        assert_never(unreachable)
             else:
                 logger.warning(
                     "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
@@ -738,7 +768,7 @@ class BenchResultBase:
         override=False,
         hv_dataset: hv.Dataset | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN,
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel | None:

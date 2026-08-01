@@ -19,6 +19,7 @@ from uuid import uuid4
 import numpy as np
 import param
 import xarray as xr
+from strenum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -382,12 +383,76 @@ def resolve_aggregate(
     )
 
 
-AGG_FN_MAP: dict[str, Callable] = {
-    "mean": lambda vals: float(np.nanmean(vals)),
-    "sum": lambda vals: float(np.nansum(vals)),
-    "max": lambda vals: float(np.nanmax(vals)),
-    "min": lambda vals: float(np.nanmin(vals)),
-    "median": lambda vals: float(np.nanmedian(vals)),
+class AggFn(StrEnum):
+    """The aggregation-function vocabulary — the single source of truth (plan 23 C11).
+
+    Every other spelling derives from this enum: ``AGG_FN_MAP``'s keys, the
+    ``BenchCfg.agg_fn`` ``param.ObjectSelector``'s objects, and the ``agg_fn``
+    signature annotations on the result classes.
+
+    Explicit lowercase values rather than ``auto()``: ``strenum``'s ``auto()``
+    yields the member *name* verbatim (``'MEAN'``), and these strings are the
+    exact values ``BenchCfg.agg_fn`` accepts, so they are pinned here
+    (plan 23 D4).
+
+    Note for callers that *forward a default into* ``BenchCfg``: pass
+    ``AggFn.MEAN.value``, not ``AggFn.MEAN``. ``param`` stores whatever it is
+    handed, so the member would make ``type(bench_cfg.agg_fn)`` an ``AggFn``
+    where every other path leaves it a plain ``str``. Consumers normalize
+    anyway, but keeping the stored type uniform is what makes the descriptor's
+    contract (plain strings) true. Reading code should call
+    :func:`normalize_agg_fn` and not care which it got.
+    """
+
+    MEAN = "mean"
+    SUM = "sum"
+    MAX = "max"
+    MIN = "min"
+    MEDIAN = "median"
+
+
+def normalize_agg_fn(agg_fn: AggFn | str | None) -> AggFn:
+    """Coerce ``agg_fn`` to an ``AggFn`` member at the boundary.
+
+    ``None`` means the default (``AggFn.MEAN``) — public signatures declare
+    ``agg_fn: AggFn | str | None`` and forward it unchanged. A raw string read
+    from ``BenchCfg.agg_fn`` (a ``param.ObjectSelector`` holding plain strings)
+    is not a type a checker can establish, so constructing the enum here is
+    what licenses the exhaustive ``match`` downstream (plan 24 A2/A3).
+
+    Args:
+        agg_fn: An ``AggFn`` member, one of its string values, or ``None``.
+
+    Returns:
+        AggFn: The corresponding member.
+
+    Raises:
+        ValueError: If ``agg_fn`` is not an ``AggFn`` member or one of its
+            values. Raised at plot/aggregation call time, never mid-sweep.
+    """
+    if agg_fn is None:
+        return AggFn.MEAN
+    try:
+        return AggFn(agg_fn)
+    except ValueError:
+        msg = f"Unknown agg_fn={agg_fn!r}, must be one of {sorted(m.value for m in AggFn)}"
+        # Case-folding hint: the plotting path used to lowercase agg_fn before
+        # dispatch, so `agg_fn="MEAN"` worked there (and only there — plot_sweep
+        # and optimize always rejected it). That leniency is gone; name the fix
+        # rather than leaving the caller to diff the two spellings.
+        if isinstance(agg_fn, str):
+            folded = agg_fn.lower()
+            if folded in {m.value for m in AggFn}:
+                msg += f" (the vocabulary is lowercase; did you mean {folded!r}?)"
+        raise ValueError(msg) from None
+
+
+AGG_FN_MAP: dict[AggFn, Callable] = {
+    AggFn.MEAN: lambda vals: float(np.nanmean(vals)),
+    AggFn.SUM: lambda vals: float(np.nansum(vals)),
+    AggFn.MAX: lambda vals: float(np.nanmax(vals)),
+    AggFn.MIN: lambda vals: float(np.nanmin(vals)),
+    AggFn.MEDIAN: lambda vals: float(np.nanmedian(vals)),
 }
 
 

@@ -7,6 +7,7 @@ values, variable names, coordinates, and append order all stay intact.
 
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 
 from bencher.results.composable_container.composable_container_base import ComposeType
@@ -84,6 +85,15 @@ class TestComposableContainerDataframe:
         c.append(_make_ds([3.0, 4.0, float("nan")]))
         result = c.render()
         np.testing.assert_allclose(result["metric"].values, [2.0, 4.0, 3.0])
+
+    def test_unknown_compose_method_is_loud(self):
+        """Before plan 23 P8 the match had no final arm, so render() silently
+        returned None and the caller composed nothing."""
+        c = ComposableContainerDataset(compose_method="not_a_compose_type")
+        c.append(_make_ds([1.0, 2.0, 3.0]))
+        c.append(_make_ds([4.0, 5.0, 6.0]))
+        with pytest.raises(AssertionError):
+            c.render()
 
     def test_var_name_and_value_fields_stored(self):
         c = ComposableContainerDataset(
