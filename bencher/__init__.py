@@ -1,5 +1,10 @@
 import warnings
 
+# matplotlib.projections warns at import time when it cannot import
+# mpl_toolkits.mplot3d, which disables *matplotlib's* 3D projection. Bencher only
+# reaches matplotlib through holoviews' matplotlib backend (regression PNG
+# export) and renders its 3D plots with plotly, so the warning says nothing about
+# this package -- it is import-order noise for anyone importing bencher.
 warnings.filterwarnings("ignore", message="Unable to import Axes3D", category=UserWarning)
 
 from bencher.results.dataset_result import DataSetResult

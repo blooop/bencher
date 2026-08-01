@@ -366,21 +366,6 @@ class OptunaResult(BenchResultBase):
             return study_panes[0][1]
         return pn.Tabs(*study_panes)
 
-    # def extract_study_to_dataset(study: optuna.Study, bench_cfg: BenchCfg) -> BenchCfg:
-    #     """Extract an optuna study into an xarray dataset for easy plotting
-
-    #     Args:
-    #         study (optuna.Study): The result of a gridsearch
-    #         bench_cfg (BenchCfg): Options for the grid search
-
-    #     Returns:
-    #         BenchCfg: An updated config with the results included
-    #     """
-    #     for t in study.trials:
-    #         for it, rv in enumerate(bench_cfg.result_vars):
-    #             bench_cfg.ds[rv.name].loc[t.params] = t.values[it]
-    #     return bench_cfg
-
     def deep(self) -> OptunaResult:  # pragma: no cover
         """Return a deep copy of these results"""
         return deepcopy(self)

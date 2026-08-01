@@ -53,7 +53,6 @@ def describe_variable(
     sampling_str = []
     sampling_str.append(f"{v.name}:")
     if include_samples:
-        # sampling_str.append(f"{indent}{v.sampling_str(debug)}")
         sampling_str.append(f"{indent}number of samples: {len(v.values())}")
         sampling_str.append(f"{indent}sample values: {[str(v) for v in v.values()]}")
 
@@ -69,12 +68,6 @@ def describe_variable(
 
 
 class SweepBase(param.Parameter):
-    # def __init__(self, **params):
-    # super().__init__(**params)
-    # self.units = ""
-    # slots = ["units", "samples"]
-    # __slots__ = shared_slots
-
     @property
     def sweep_bounds(self) -> tuple | None:
         """Return the sweep range (low, high).

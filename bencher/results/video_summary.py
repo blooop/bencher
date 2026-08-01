@@ -201,8 +201,6 @@ class VideoSummaryResult(BenchResultBase):
                 dataset, compose_method, time_sequence_dimension=time_sequence_dimension
             )
 
-            # print(compose_method_list)
-
         compose_method_list_pop = deepcopy(compose_method_list)
         if len(compose_method_list_pop) > 1:
             compose_method = compose_method_list_pop.pop()

@@ -166,13 +166,46 @@ def cfg_from_optuna_trial(
     return cfg
 
 
+# The failure modes optuna's plotting functions are known to raise: a bad or
+# empty study (ValueError), a plotly/optuna version mismatch (AttributeError,
+# TypeError), or a backend that refuses to render (RuntimeError). These get an
+# error pane and nothing more -- report_render_failure already logs at ERROR
+# and warns.
+_EXPECTED_PLOT_FAILURES = (RuntimeError, ValueError, TypeError, AttributeError)
+
+
+def _plot_failure_pane(plot_fn, exc: Exception, *, unexpected: bool = False):
+    """Build the error pane that replaces a plot that failed to render.
+
+    *unexpected* marks an exception outside ``_EXPECTED_PLOT_FAILURES``; it gets
+    an extra ERROR log naming the type, because an unanticipated type here is a
+    signal that the expected-failure tuple has fallen out of date.
+    """
+    fn_name = getattr(plot_fn, "__name__", str(plot_fn))
+    if unexpected:
+        logger.error(
+            "Unexpected %s while rendering optuna plot '%s'; rendering an error pane instead",
+            type(exc).__name__,
+            fn_name,
+            exc_info=exc,
+        )
+    return report_render_failure(f"Optuna plot '{fn_name}'", exc)
+
+
 def _append_safe(row, plot_fn, *args, **kwargs):
-    """Append a plot to *row*, surfacing any exception instead of propagating."""
+    """Append a plot to *row*, surfacing any exception instead of propagating.
+
+    Nothing is ever re-raised: this runs while the report is being built, after
+    the sweep has already paid for every sample, so a crash here would throw
+    away the whole run's results to report one missing plot. A visible error
+    pane costs nothing and keeps the rest of the report.
+    """
     try:
         row.append(plot_fn(*args, **kwargs))
+    except _EXPECTED_PLOT_FAILURES as exc:
+        row.append(_plot_failure_pane(plot_fn, exc))
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        fn_name = getattr(plot_fn, "__name__", str(plot_fn))
-        row.append(report_render_failure(f"Optuna plot '{fn_name}'", exc))
+        row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))
 
 
 def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
@@ -182,6 +215,7 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
         if hasattr(fig, "update_layout"):
             fig.update_layout(width=width)
         row.append(fig)
+    except _EXPECTED_PLOT_FAILURES as exc:
+        row.append(_plot_failure_pane(plot_fn, exc))
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        fn_name = getattr(plot_fn, "__name__", str(plot_fn))
-        row.append(report_render_failure(f"Optuna plot '{fn_name}'", exc))
+        row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))

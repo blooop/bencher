@@ -51,7 +51,6 @@ class Axis(StrEnum):
         return Axis.right if horizontal else Axis.down
 
 
-# TODO enable these options
 class ComposeType(StrEnum):
     right = auto()  # append the container to the right (creates a row)
     down = auto()  # append the container below (creates a column)
