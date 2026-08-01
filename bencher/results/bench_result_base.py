@@ -131,7 +131,6 @@ def _accepts_keyword(callback: Callable, name: str) -> bool:
 class BenchResultBase:
     def __init__(self, bench_cfg: BenchCfg) -> None:
         self.bench_cfg = bench_cfg
-        # self.wrap_long_time_labels(bench_cfg)  # todo remove
         self.ds = xr.Dataset()
         self.object_index = []
         self.hmaps = defaultdict(dict)
@@ -143,12 +142,6 @@ class BenchResultBase:
         self.regression_report = None
         self.perf_report = None
         self._to_dataset_cache: dict = {}
-
-        # self.width=600/
-        # self.height=600
-
-        #   bench_res.objects.append(rv)
-        # bench_res.reference_index = len(bench_res.objects)
 
     def to_xarray(self) -> xr.Dataset:
         return self.ds
