@@ -64,19 +64,37 @@ class TestComposableContainerPanel:
         assert "step" in str(result[0].object)
         assert isinstance(result[1], pn.Tabs)
 
-    def test_backward_compat_horizontal_true(self):
-        """horizontal=True was Column (down) in the old code."""
-        c = ComposableContainerPanel(horizontal=True)
-        c.append(pn.pane.Markdown("A"))
-        result = c.render()
-        assert isinstance(result, pn.Column)
+    @pytest.mark.parametrize("compose_method", list(ComposeType))
+    def test_compose_method_is_never_overwritten(self, compose_method):
+        """Plan 23 P8: `horizontal` silently overwrote compose_method, inverted at that.
 
-    def test_backward_compat_horizontal_false(self):
-        """horizontal=False was Row (right) in the old code."""
-        c = ComposableContainerPanel(horizontal=False)
-        c.append(pn.pane.Markdown("A"))
-        result = c.render()
-        assert isinstance(result, pn.Row)
+        `horizontal=True` mapped to `down` here while `_to_panes_da` maps the same flag
+        to `right`, so the two spellings of one concept disagreed.  Only compose_method
+        remains.
+        """
+        assert ComposableContainerPanel(compose_method=compose_method).compose_method is (
+            compose_method
+        )
+
+    def test_horizontal_kwarg_is_gone(self):
+        # The removed kwarg is the point of the test, so both checkers must tolerate it
+        # here -- and both flagging it is itself evidence that it is gone.
+        # pylint: disable=unexpected-keyword-arg
+        with pytest.raises(TypeError):
+            ComposableContainerPanel(horizontal=True)  # ty: ignore[unknown-argument]
+
+    @pytest.mark.parametrize("compose_method", list(ComposeType))
+    def test_tabs_declared_for_every_compose_method(self, compose_method):
+        """_tabs exists on every instance; only the sequence arm fills it in."""
+        c = ComposableContainerPanel(compose_method=compose_method)
+        tabs = c._tabs  # pylint: disable=protected-access
+        assert (tabs is not None) == (compose_method == ComposeType.sequence)
+
+    def test_unknown_compose_method_fails_at_construction(self):
+        """Before P8 the match had no final arm: `align` stayed unbound and the
+        failure surfaced as an UnboundLocalError three frames from the cause."""
+        with pytest.raises(AssertionError):
+            ComposableContainerPanel(compose_method="not_a_compose_type")
 
     @pytest.mark.parametrize("compose_type", list(ComposeType))
     def test_render_returns_panel_for_all_types(self, compose_type):

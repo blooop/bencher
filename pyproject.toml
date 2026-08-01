@@ -327,6 +327,10 @@ include = [
     "bencher/worker_job.py",
     "bencher/result_collector.py",
     "bencher/worker_manager.py",
+    "bencher/results/composable_container/composable_container_base.py",
+    "bencher/results/composable_container/composable_container_panel.py",
+    "bencher/results/composable_container/composable_container_dataframe.py",
+    "bencher/results/composable_container/composable_container_rerun.py",
 ]
 [tool.ty.overrides.rules]
 invalid-assignment = "error"
