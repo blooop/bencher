@@ -3,9 +3,9 @@
 Each wrapper delegates to the existing renderer method on the live BenchResult
 (carried in ``BenchData.legacy_result``), so renderer logic is unchanged — this
 phase only moves *dispatch* onto the plugin registry. The registry-level match
-rule is permissive (``PlotFilter.match_all()``) because today's renderers build
-their shape filters dynamically inside ``to_plot`` (scenario lists, over_time
-special cases) and return ``None`` on mismatch; centralizing those filters into
+rule is permissive (a default ``PlotFilter()``, which matches every shape) because
+today's renderers build their shape filters dynamically inside ``to_plot`` (scenario
+lists, over_time special cases) and return ``None`` on mismatch; centralizing those into
 declarative signatures is the plot-selection redesign (A2), not this phase.
 
 Priorities encode the legacy ``default_plot_callbacks()`` ordering so reports
@@ -156,7 +156,7 @@ def register_builtin_plugins() -> None:
             LegacyResultPlugin(
                 name=name,
                 backend=backend,
-                match=PlotFilter.match_all(),
+                match=PlotFilter(),
                 priority=priority,
                 requires=frozenset({"legacy_result"}),
                 callback=callback,
@@ -169,7 +169,7 @@ def register_builtin_plugins() -> None:
             LegacyResultPlugin(
                 name=name,
                 backend=backend,
-                match=PlotFilter.match_all(),
+                match=PlotFilter(),
                 priority=priority,
                 requires=frozenset({"legacy_result"}),
                 callback=callback,

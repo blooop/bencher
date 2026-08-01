@@ -76,9 +76,9 @@ class SurfaceResult(HoloviewResult):
         """
         return self.filter(
             self.to_surface_ds,
-            float_range=VarRange(2, None),
-            cat_range=VarRange(0, None),
-            input_range=VarRange(1, None),
+            float_range=VarRange.at_least(2),
+            cat_range=VarRange.unbounded(),
+            input_range=VarRange.at_least(1),
             reduce=ReduceType.REDUCE,
             target_dimension=target_dimension,
             result_var=result_var,
@@ -115,8 +115,11 @@ class SurfaceResult(HoloviewResult):
                                otherwise returns filter match results.
         """
         matches_res = PlotFilter(
-            float_range=VarRange(2, 2),
-            cat_range=VarRange(0, None),
+            float_range=VarRange.exactly(2),
+            cat_range=VarRange.unbounded(),
+            panel_range=VarRange.exactly(0),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.at_least(1),
         ).matches_result(self.plt_cnt_cfg, "to_surface_hv", override)
         if matches_res.overall:
             x = self.plt_cnt_cfg.float_vars[0]

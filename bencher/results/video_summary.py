@@ -62,10 +62,11 @@ class VideoSummaryResult(BenchResultBase):
             pn.panel | None: a panel pane with a video of all results concatenated together
         """
         plot_filter = PlotFilter(
-            float_range=VarRange(0, None),
-            cat_range=VarRange(0, None),
-            panel_range=VarRange(1, None),
-            input_range=VarRange(1, None),
+            float_range=VarRange.unbounded(),
+            cat_range=VarRange.unbounded(),
+            panel_range=VarRange.at_least(1),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.at_least(1),
         )
         matches_res = plot_filter.matches_result(
             self.plt_cnt_cfg, callable_name(self.to_video_grid_ds), override=False

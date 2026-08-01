@@ -334,10 +334,12 @@ A `PlotFilter` specifies acceptable ranges for:
 - `cat_range` — how many categorical inputs
 - `repeats_range` — how many repeats
 - `panel_range` — how many panel-type results (images, videos)
-- `result_vars` — how many numeric result variables
 - `input_range` — total input count
 
-Each range is a `VarRange(lower, upper)` where `None` for upper means unbounded. A plot type
+Each range is built with a named constructor — `VarRange.exactly(1)`,
+`VarRange.between(0, 2)`, `VarRange.at_most(2)`, `VarRange.at_least(2)`,
+`VarRange.unbounded()` or `VarRange.none()`. Any range left unstated defaults to
+`VarRange.unbounded()`, so omitting a dimension never narrows the filter. A plot type
 matches only when *all* ranges are satisfied. When multiple plot types match, Bencher renders
 all of them, giving a multi-perspective view of the data.
 

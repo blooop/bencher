@@ -40,9 +40,9 @@ class HistogramResult(HoloviewResult):
         self_snapshot.ds = ds
         return self_snapshot.filter(
             self.to_histogram_ds,
-            float_range=VarRange(0, 0),
-            cat_range=VarRange(0, None),
-            input_range=VarRange(0, 0),
+            float_range=VarRange.exactly(0),
+            cat_range=VarRange.unbounded(),
+            input_range=VarRange.exactly(0),
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
             result_var=result_var,

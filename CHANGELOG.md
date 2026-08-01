@@ -103,6 +103,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `n_failed > 0`, in the same way the regression report is auto-inserted.
 
 ### Changed
+- **`VarRange` is built with named constructors; the `-1`/`None` sentinel pair is gone**
+  (plan 23 P6, C3). `VarRange.upper_bound` carried three meanings on one field — `-1`
+  meant "match nothing" (and was the default), `None` meant "no upper bound", and any
+  other value was a real bound — while `lower_bound` accepted `None` as a fourth
+  spelling of `0`. The class docstring had already drifted away from the code (it claimed
+  both bounds defaulted to `-1`; `lower_bound` defaulted to `0`). A `VarRange` is now a
+  frozen wrapper over a three-variant sum — no counts, a closed `low..high` interval, or
+  an open `low..` interval — built through `VarRange.none()`, `.exactly(n)`,
+  `.between(lo, hi)`, `.at_most(n)`, `.at_least(n)` and `.unbounded()`. Nonsense that the
+  old constructor accepted silently (`VarRange(2, 1)`, a negative bound) now raises at
+  construction, and `matches()` dispatches over the variants with `assert_never`.
+
+  **`PlotFilter()` no longer matches nothing.** Every field now defaults to
+  `VarRange.unbounded()`, so an omitted range never narrows a filter and a plugin
+  declared with the obvious `match=PlotFilter()` — or with no match rule at all — is
+  eligible for every sweep shape instead of being hidden forever. `PlotFilter.match_all()`
+  existed only to work around the old default and has been **removed**; use `PlotFilter()`.
+  `BenchResultBase.filter()`'s five `*_range` parameters lose their `None` defaults for
+  the real ranges they always stood in for, and its long-dead `plot_filter=` parameter
+  (unconditionally overwritten two lines later) is gone.
+
+  **Plot selection is unchanged.** Every production filter now states all five ranges
+  explicitly, so the new permissive default cannot widen anything: the three direct
+  `PlotFilter(...)` sites that previously inherited a restrictive default
+  (`surface_result`'s `panel_range`, plus `repeats_range` in `video_summary` and
+  `rerun_summary`) spell those values out. No production filter had ever inherited the
+  match-nothing `float_range`/`cat_range` default. `volume_result`'s `cat_range` was
+  written `VarRange(-1, 0)`, whose negative lower bound was inert because `matches()`
+  rejects negative counts — it is now the `VarRange.exactly(0)` it always meant.
+  `pixi run generate-docs` produces a byte-identical output tree.
+
 - **`WorkerManager` holds one `WorkerState` instead of a not-set invariant** (plan 23 P9,
   C7). `worker_class_instance: ParametrizedSweep | type[ParametrizedSweep] | None` carried
   three different situations in one field — an instance, a declaration-only class, or

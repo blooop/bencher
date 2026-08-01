@@ -40,9 +40,9 @@ class ScatterResult(HoloviewResult):
         """
         return self.filter(
             self._to_scatter_ds,
-            float_range=VarRange(0, 0),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(1, 1),
+            float_range=VarRange.exactly(0),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.exactly(1),
             reduce=ReduceType.SQUEEZE,
             result_var=result_var,
             result_types=(ResultVar,),
