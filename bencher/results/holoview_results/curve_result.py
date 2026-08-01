@@ -38,9 +38,9 @@ class CurveResult(HoloviewResult):
         """
         return self.filter(
             self.to_curve_ds,
-            float_range=VarRange(1, 1),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(2, None),
+            float_range=VarRange.exactly(1),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.at_least(2),
             reduce=ReduceType.REDUCE,
             target_dimension=2,
             result_var=result_var,

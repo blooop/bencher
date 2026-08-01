@@ -623,7 +623,6 @@ class Bench(BenchPlotServer):
         with suppress(ValueError, AttributeError):
             for i in input_vars_in:
                 for c in const_vars_in:
-                    # print(i.hash_persistent())
                     if i.name == c[0].name:
                         const_vars_in.remove(c)
                         logger.info(f"removing {i.name} from constants")
@@ -986,30 +985,6 @@ class Bench(BenchPlotServer):
     def cache_results(self, bench_res: BenchResult, bench_cfg_hash: str) -> None:
         """Cache benchmark results to disk using the config hash as key."""
         self._collector.cache_results(bench_res, bench_cfg_hash, self.bench_cfg_hashes)
-
-    # def show(self, run_cfg: BenchRunCfg | None = None, pane: pn.panel = None) -> None:
-    #     """Launch a web server with plots of the benchmark results.
-    #
-    #     This method starts a Panel web server to display the benchmark results interactively.
-    #     It is a blocking call that runs until the server is terminated.
-    #
-    #     Args:
-    #         run_cfg (BenchRunCfg, optional): Configuration options for the web server,
-    #             such as the port number. If None, uses the instance's last_run_cfg
-    #             or creates a default one. Defaults to None.
-    #         pane (pn.panel, optional): A custom panel to display instead of the default
-    #             benchmark visualization. Defaults to None.
-    #
-    #     Returns:
-    #         None
-    #     """
-    #     if run_cfg is None:
-    #         if self.last_run_cfg is not None:
-    #             run_cfg = self.last_run_cfg
-    #         else:
-    #             run_cfg = BenchRunCfg()
-    #
-    #     return BenchPlotServer().plot_server(self.bench_name, run_cfg, pane)
 
     def load_history_cache(
         self,

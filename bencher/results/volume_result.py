@@ -63,8 +63,8 @@ class VolumeResult(BenchResultBase):
             return None
         return self.filter(
             self.to_volume_ds,
-            float_range=VarRange(3, 3),
-            cat_range=VarRange(-1, 0),
+            float_range=VarRange.exactly(3),
+            cat_range=VarRange.exactly(0),
             reduce=ReduceType.REDUCE,
             target_dimension=target_dimension,
             result_var=result_var,

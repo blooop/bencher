@@ -51,9 +51,9 @@ class DistributionResult(HoloviewResult):
         """
         return self.filter(
             plot_method,
-            float_range=VarRange(0, 0),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(2, None),
+            float_range=VarRange.exactly(0),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.at_least(2),
             reduce=ReduceType.NONE,
             target_dimension=self.plt_cnt_cfg.cat_cnt + 1,  # +1 cos we have a repeats dimension
             result_var=result_var,

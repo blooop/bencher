@@ -37,7 +37,6 @@ class TimeBase(SweepBase, Selector):
 
     def values(self) -> list[str]:
         """return all the values for a parameter sweep.  If debug is true return a reduced list"""
-        # print(self.sampling_str(debug))
         return self.objects
 
 

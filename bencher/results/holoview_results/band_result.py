@@ -38,10 +38,10 @@ class BandResult(HoloviewResult):
         kwargs.pop("agg_fn", None)
         return self.filter(
             self.to_band_ds,
-            float_range=VarRange(0, None),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(1, None),
-            input_range=VarRange(0, None),
+            float_range=VarRange.unbounded(),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.unbounded(),
             reduce=ReduceType.NONE,
             target_dimension=None,
             result_var=result_var,

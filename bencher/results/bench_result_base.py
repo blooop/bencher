@@ -53,6 +53,11 @@ from bencher.variables.results import (
 
 logger = logging.getLogger(__name__)
 
+# Shared defaults for BenchResultBase.filter(). VarRange is frozen, so a single
+# instance can back every call; module-level names also keep ruff's B008 happy.
+_ANY_COUNT = VarRange.unbounded()
+_AT_LEAST_ONE = VarRange.at_least(1)
+
 # todo add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
 # https://kaleidoescape.github.io/decorated-plugins/
@@ -131,7 +136,6 @@ def _accepts_keyword(callback: Callable, name: str) -> bool:
 class BenchResultBase:
     def __init__(self, bench_cfg: BenchCfg) -> None:
         self.bench_cfg = bench_cfg
-        # self.wrap_long_time_labels(bench_cfg)  # todo remove
         self.ds = xr.Dataset()
         self.object_index = []
         self.hmaps = defaultdict(dict)
@@ -143,12 +147,6 @@ class BenchResultBase:
         self.regression_report = None
         self.perf_report = None
         self._to_dataset_cache: dict = {}
-
-        # self.width=600/
-        # self.height=600
-
-        #   bench_res.objects.append(rv)
-        # bench_res.reference_index = len(bench_res.objects)
 
     def to_xarray(self) -> xr.Dataset:
         return self.ds
@@ -752,12 +750,11 @@ class BenchResultBase:
     def filter(
         self,
         plot_callback: Callable,
-        plot_filter=None,
-        float_range: VarRange | None = None,
-        cat_range: VarRange | None = None,
-        panel_range: VarRange | None = None,
-        repeats_range: VarRange | None = None,
-        input_range: VarRange | None = None,
+        float_range: VarRange = _ANY_COUNT,
+        cat_range: VarRange = _ANY_COUNT,
+        panel_range: VarRange = _ANY_COUNT,
+        repeats_range: VarRange = _AT_LEAST_ONE,
+        input_range: VarRange = _AT_LEAST_ONE,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
         result_var: ResultFloat | None = None,
@@ -770,17 +767,7 @@ class BenchResultBase:
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel | None:
-        # Initialize default filters if not provided to avoid shared mutable defaults
-        if float_range is None:
-            float_range = VarRange(0, None)
-        if cat_range is None:
-            cat_range = VarRange(0, None)
-        if panel_range is None:
-            panel_range = VarRange(0, None)
-        if repeats_range is None:
-            repeats_range = VarRange(1, None)
-        if input_range is None:
-            input_range = VarRange(1, None)
+        # VarRange is frozen, so these defaults are safe to share between calls.
         plot_filter = PlotFilter(
             float_range=float_range,
             cat_range=cat_range,

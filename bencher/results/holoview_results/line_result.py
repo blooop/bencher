@@ -72,17 +72,17 @@ class LineResult(HoloviewResult):
         # When over_time is active, also accept 0 float vars so a 0D benchmark
         # gets a time-series line (x=over_time, y=value).
         if self.bench_cfg.over_time:
-            float_range = VarRange(0, 1)
-            input_range = VarRange(0, None)
+            float_range = VarRange.at_most(1)
+            input_range = VarRange.unbounded()
         else:
-            float_range = VarRange(1, 1)
-            input_range = None
+            float_range = VarRange.exactly(1)
+            input_range = VarRange.at_least(1)
         return self.filter(
             line_cb,
             float_range=float_range,
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(1, 1),
-            panel_range=VarRange(0, None),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.exactly(1),
+            panel_range=VarRange.unbounded(),
             input_range=input_range,
             reduce=ReduceType.SQUEEZE,
             target_dimension=target_dimension,

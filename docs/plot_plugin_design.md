@@ -455,7 +455,7 @@ internally):
 
 ```python
 @bencher.plot_plugin(name="my.line", backend="user",
-                     match=PlotFilter(float_range=VarRange(1, 1)),
+                     match=PlotFilter(float_range=VarRange.exactly(1)),
                      priority=10,
                      requires={"optimizer_study"},  # optional
                      auto=True)                     # False = named-only
@@ -684,7 +684,7 @@ To start tier 1:
    from bencher.plugins import BenchData, PlotFilter, VarRange, plot_plugin
 
    @plot_plugin(name="holoviews.line", backend="holoviews",
-                match=PlotFilter(float_range=VarRange(1, 1), ...))
+                match=PlotFilter(float_range=VarRange.exactly(1), ...))
    def render_line(data: BenchData) -> pn.viewable.Viewable:
        # Move the rendering logic out of LineResult.to_line() into here.
        ...

@@ -362,7 +362,7 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         plugin = LegacyResultPlugin(
             name="fixed",
             backend="test",
-            match=PlotFilter.match_all(),
+            match=PlotFilter(),
             priority=0,
             requires=frozenset({"legacy_result"}),
             callback=fixed_callback,
@@ -388,7 +388,7 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         plugin = LegacyResultPlugin(
             name="kwargs",
             backend="test",
-            match=PlotFilter.match_all(),
+            match=PlotFilter(),
             priority=0,
             requires=frozenset({"legacy_result"}),
             callback=kwargs_callback,
@@ -415,7 +415,7 @@ class TestNamedOnlyPlugins(unittest.TestCase):
         plugin = LegacyResultPlugin(
             name="unhashable",
             backend="test",
-            match=PlotFilter.match_all(),
+            match=PlotFilter(),
             priority=0,
             requires=frozenset({"legacy_result"}),
             callback=UnhashableCallable(),
@@ -455,7 +455,7 @@ class TestLegacyResultPlugin(unittest.TestCase):
         plugin = LegacyResultPlugin(
             name="fake",
             backend="test",
-            match=PlotFilter.match_all(),
+            match=PlotFilter(),
             priority=0,
             requires=frozenset({"legacy_result"}),
             callback=fake_callback,

@@ -49,11 +49,11 @@ class BarResult(HoloviewResult):
         """
         # When over_time is active, allow 0 inputs so 0D+0cat+over_time can produce
         # a line chart.  Without over_time, require at least 1 input (the default).
-        input_range = VarRange(0, None) if self.bench_cfg.over_time else None
+        input_range = VarRange.unbounded() if self.bench_cfg.over_time else VarRange.at_least(1)
         common = {
-            "float_range": VarRange(0, 0),
-            "cat_range": VarRange(0, None),
-            "panel_range": VarRange(0, None),
+            "float_range": VarRange.exactly(0),
+            "cat_range": VarRange.unbounded(),
+            "panel_range": VarRange.unbounded(),
             "input_range": input_range,
             "target_dimension": target_dimension,
             "result_var": result_var,
@@ -63,12 +63,12 @@ class BarResult(HoloviewResult):
 
         scenarios = [
             {
-                "repeats_range": VarRange(1, 1),
+                "repeats_range": VarRange.exactly(1),
                 "reduce": ReduceType.SQUEEZE,
                 "result_types": (ResultFloat,),
             },
             {
-                "repeats_range": VarRange(2, None),
+                "repeats_range": VarRange.at_least(2),
                 "reduce": ReduceType.REDUCE,
                 "result_types": (ResultBool,),
             },
