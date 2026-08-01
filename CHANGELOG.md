@@ -132,7 +132,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   match-nothing `float_range`/`cat_range` default. `volume_result`'s `cat_range` was
   written `VarRange(-1, 0)`, whose negative lower bound was inert because `matches()`
   rejects negative counts — it is now the `VarRange.exactly(0)` it always meant.
-  `pixi run generate-docs` produces a byte-identical output tree.
+  Verified two ways: every removed `VarRange(lo, hi)` literal was paired with the
+  constructor that replaced it and their truth tables compared over counts 0..40 against
+  the pre-change implementation (29/29 identical); and `pixi run generate-docs` was run on
+  `main`, on this branch, and a second time on this branch as a noise floor. The reports
+  are *not* byte-comparable — they embed random UUIDs, wall-clock times and randomly
+  generated benchmark values, so two runs of identical code differ — but the plot skeleton
+  (the ordered sequence of Bokeh/Panel model types per report) is identical for 294 of 295
+  reports, the exception being `example_advanced_git_time_event`, which is keyed by the
+  current commit and also differs in the noise floor. All 231 plain-text gallery outputs
+  are byte-identical.
 
 - **`WorkerManager` holds one `WorkerState` instead of a not-set invariant** (plan 23 P9,
   C7). `worker_class_instance: ParametrizedSweep | type[ParametrizedSweep] | None` carried
