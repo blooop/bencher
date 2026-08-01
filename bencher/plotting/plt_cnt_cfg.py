@@ -35,8 +35,6 @@ class PltCntCfg(param.Parameterized):
     float_cnt = param.Integer(0, doc="The number of float variables to plot")
     cat_vars = param.List(doc="A list of categorical values to plot in order hue,row,col")
     cat_cnt = param.Integer(0, doc="The number of cat variables")
-    vector_len = param.Integer(1, doc="The vector length of the return variable , scalars = len 1")
-    result_vars = param.Integer(1, doc="The number result variables to plot")  # todo remove
     panel_vars = param.List(doc="A list of panel results")
     panel_cnt = param.Integer(0, doc="Number of results represent as panel panes")
     repeats = param.Integer(0, doc="The number of repeat samples")
@@ -132,7 +130,6 @@ class PltCntCfg(param.Parameterized):
             f"float_cnt: {self.float_cnt}\n"
             f"cat_cnt: {self.cat_cnt}\n"
             f"panel_cnt: {self.panel_cnt}\n"
-            f"vector_len: {self.vector_len}\n"
             f"has_time: {self.has_time}\n"
             f"time_steps: {self.time_steps}\n"
             f"result_kinds: {self.result_kinds}\n"

@@ -74,8 +74,6 @@ class PlotFilter:
 
     float_range: VarRange = field(default_factory=VarRange)
     cat_range: VarRange = field(default_factory=VarRange)
-    vector_len: VarRange = field(default_factory=lambda: VarRange(1, 1))
-    result_vars: VarRange = field(default_factory=lambda: VarRange(1, 1))
     panel_range: VarRange = field(default_factory=lambda: VarRange(0, 0))
     repeats_range: VarRange = field(default_factory=lambda: VarRange(1, None))
     input_range: VarRange = field(default_factory=lambda: VarRange(1, None))
@@ -91,8 +89,6 @@ class PlotFilter:
         return cls(
             float_range=anything(),
             cat_range=anything(),
-            vector_len=anything(),
-            result_vars=anything(),
             panel_range=anything(),
             repeats_range=anything(),
             input_range=anything(),
@@ -138,8 +134,6 @@ class PlotMatchesResult:
         match_candidates: list[tuple[VarRange, int, str]] = [
             (plot_filter.float_range, plt_cnt_cfg.float_cnt, "float"),
             (plot_filter.cat_range, plt_cnt_cfg.cat_cnt, "cat"),
-            (plot_filter.vector_len, plt_cnt_cfg.vector_len, "vec"),
-            (plot_filter.result_vars, plt_cnt_cfg.result_vars, "results"),
             (plot_filter.panel_range, plt_cnt_cfg.panel_cnt, "panels"),
             (plot_filter.repeats_range, plt_cnt_cfg.repeats, "repeats"),
             (plot_filter.input_range, plt_cnt_cfg.inputs_cnt, "inputs"),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import unittest
 from unittest.mock import patch
 
@@ -493,7 +494,7 @@ class TestPlotFilterMatchAll(unittest.TestCase):
         for cfg in (
             PltCntCfg(),
             PltCntCfg(float_cnt=3, cat_cnt=2, repeats=5, inputs_cnt=5),
-            PltCntCfg(panel_cnt=2, vector_len=4, result_vars=3),
+            PltCntCfg(panel_cnt=2),
         ):
             self.assertTrue(f.matches_result(cfg, "match_all", override=False).overall)
 
@@ -594,6 +595,47 @@ class TestEntryPointDiscovery(unittest.TestCase):
             ep_mock.return_value = [FakeEP()]
             names = sorted(p.name for p in reg.all())
             self.assertEqual(names, ["ep.one", "ep.two"])
+
+
+class TestDeletedPlotGates(unittest.TestCase):
+    """Plan 23 P6 (C4): ``vector_len`` and ``result_vars`` are gone.
+
+    They were declared on both ``PltCntCfg`` and ``PlotFilter`` and read on
+    every plot-selection pass, but nothing in the package ever assigned the
+    ``PltCntCfg`` side -- so both always held their default ``1`` and both
+    gates (``VarRange(1, 1)``) always passed. They could not filter anything,
+    including ``surface_result``'s "exactly one scalar result" intent, which
+    is why deleting them leaves plot selection byte-identical.
+
+    Populating them instead would have been the breaking option: with every
+    filter defaulting to ``VarRange(1, 1)``, a real ``vector_len`` would have
+    made *every* plot reject any sweep containing a ``ResultVec(size > 1)``,
+    and a real ``result_vars`` would have made every plot reject any sweep
+    with more than one result variable -- which is most of them.
+    """
+
+    def test_plt_cnt_cfg_no_longer_declares_them(self):
+        params = PltCntCfg.param.objects()
+        self.assertNotIn("vector_len", params)
+        self.assertNotIn("result_vars", params)
+
+    def test_plot_filter_no_longer_declares_them(self):
+        fields = {f.name for f in dataclasses.fields(PlotFilter)}
+        self.assertNotIn("vector_len", fields)
+        self.assertNotIn("result_vars", fields)
+
+    def test_selection_ignores_them(self):
+        # A sweep shape that the deleted gates would have rejected had they
+        # ever been populated still matches a permissive filter.
+        cfg = PltCntCfg(float_cnt=1, cat_cnt=0, panel_cnt=0, repeats=1, inputs_cnt=1)
+        res = PlotFilter(
+            float_range=VarRange(1, 1),
+            cat_range=VarRange(0, None),
+            panel_range=VarRange(0, None),
+            repeats_range=VarRange(1, None),
+            input_range=VarRange(1, None),
+        ).matches_result(cfg, "probe", False)
+        self.assertTrue(res.overall)
 
 
 if __name__ == "__main__":

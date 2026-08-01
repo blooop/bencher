@@ -117,8 +117,6 @@ class SurfaceResult(HoloviewResult):
         matches_res = PlotFilter(
             float_range=VarRange(2, 2),
             cat_range=VarRange(0, None),
-            vector_len=VarRange(1, 1),
-            result_vars=VarRange(1, 1),
         ).matches_result(self.plt_cnt_cfg, "to_surface_hv", override)
         if matches_res.overall:
             x = self.plt_cnt_cfg.float_vars[0]
