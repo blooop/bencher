@@ -35,12 +35,9 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # reference.
 myst_heading_anchors = 4
 
-# Markdown pages that are documentation *for the docs build* and are reachable
-# from the index toctree:
-#   how_to_use_bencher, intro, concepts, caching, over_time, examples_index,
-#   scorecard
-# `plot_plugin_design` is a design document kept in-tree but deliberately not
-# linked from the toctree.
+# `plot_plugin_design.md` is a design document kept in-tree but deliberately not
+# linked from the toctree, so sphinx reports it as "not included in any toctree".
+# That warning is expected.
 
 
 # -- Options for HTML output -------------------------------------------------

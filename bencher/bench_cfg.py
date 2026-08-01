@@ -300,14 +300,15 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     only_hash_tag: bool = param.Boolean(
         False,
-        doc="DEAD FLAG -- nothing reads this. The per-sample cache key is "
-        "unconditionally hash_sha1((sorted function inputs, tag)) (see "
-        "WorkerJob.function_input_signature_pure), so the tag-only behaviour "
-        "described below is always on and cannot be turned off; use distinct "
-        "run_tag values to isolate benchmarks instead. Tracked as W6 in "
-        "plans/architecture/A4-caching-architecture.md and scheduled for removal "
-        "in A5 phase 0. Historical doc follows. "
-        "By default when checking if a sample has been calculated before it includes the hash of the greater benchmarking context.  This is safer because it means that data generated from one benchmark will not affect data from another benchmark.  However, if you are careful it can be more flexible to ignore which benchmark generated the data and only use the tag hash to check if that data has been calculated before. ie, you can create two benchmarks that sample a subset of the problem during exploration and give them the same tag, and then afterwards create a larger benchmark that covers the cases you already explored.  If this value is true, the combined benchmark will use any data from other benchmarks with the same tag.",
+        doc="DEAD FLAG -- nothing reads this, and setting it changes nothing. The "
+        "per-sample cache key is unconditionally hash_sha1((sorted function inputs, "
+        "tag)) (see WorkerJob.function_input_signature_pure), so tag-only matching is "
+        "always on and cannot be turned off. Benchmarks sharing a tag therefore share "
+        "cached samples; use distinct run_tag values to isolate them. This flag "
+        "previously documented an opt-in to that behaviour, implying a safer "
+        "context-hashing default that does not exist -- see docs/caching.md. Tracked "
+        "as W6 in plans/architecture/A4-caching-architecture.md and scheduled for "
+        "removal in A5 phase 0.",
     )
 
     only_plot: bool = param.Boolean(

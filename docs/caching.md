@@ -57,10 +57,12 @@ run_cfg.run_tag = "experiment_a"   # isolates this run's samples from other tags
 `run_tag` is prefixed onto the benchmark's tag, so it is the practical lever for both
 isolating and deliberately sharing samples.
 
-> **`only_hash_tag` is a dead flag — do not rely on it.** Its parameter docstring claims
-> that by default the sample key "includes the hash of the greater benchmarking context",
-> so that "data generated from one benchmark will not affect data from another benchmark".
-> No such default exists. Nothing in the codebase reads the flag: `BenchRunner` sets it and
+> **`only_hash_tag` is a dead flag — do not rely on it.** Its parameter docstring used to
+> claim that by default the sample key "includes the hash of the greater benchmarking
+> context", so that "data generated from one benchmark will not affect data from another
+> benchmark". No such default ever existed, and the docstring has been corrected — but if
+> you are reading an older release, disregard it.
+> Nothing in the codebase reads the flag: `BenchRunner` sets it and
 > `BenchCfg` prints it into the sampling summary, and that is all. The tag-only key above is
 > unconditional. This is tracked as **W6** in
 > `plans/architecture/A4-caching-architecture.md`; `plans/architecture/A5-config-surface-reduction.md`
