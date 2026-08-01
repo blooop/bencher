@@ -1,3 +1,7 @@
+> ARCHIVED: implemented — `ParametrizedSweep.benchmark()`
+> (`bencher/variables/parametrised_sweep.py`) shipped in #864, and `__call__()` is
+> deprecated as described below. Kept for historical reference; do not execute.
+
 # Plan: Deprecate `__call__()` and Introduce `benchmark()` Method
 
 ## Context

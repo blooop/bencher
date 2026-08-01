@@ -1,3 +1,12 @@
+> ARCHIVED: snapshot of the save-performance investigation, written against v1.71.0
+> (2026-03). Partially addressed since; **not** the active direction. The plan's headline
+> lever — PR #830's fast static save path — was prototyped and **explicitly rejected** by
+> the owner on 2026-07-01 ("saving speed is no longer a problem"); see the addendum to
+> `plans/architecture/A1-rendering-backend-unification.md`, decision 1. Read this only for
+> its measurements: the cProfile table in section 1 and the `report.save()` findings are
+> the durable content, and their companion numbers live in
+> `plans/archive/SAVE_PERFORMANCE_REPORT.md`.
+
 # Performance Improvement Plan for Bencher
 
 This document identifies performance improvement opportunities across benchmark generation,

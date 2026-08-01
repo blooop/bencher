@@ -1,3 +1,9 @@
+> ARCHIVED, and only half of it is history. **Plan A (`bch` → `bn`) shipped** — the tree
+> now contains zero `import bencher as bch` and ~375 `import bencher as bn`, so its steps
+> are already done. **Plan B (package rename `bencher` → `holobench`) is deferred
+> indefinitely**: the PyPI name stays `holobench` and the import name stays `bencher`,
+> which is intentional (see `plans/README.md` ground rule 5) and must not be "fixed".
+
 # Rename Plans
 
 Two plans live here — the **simple alias rename** (`bch` → `bn`) that can ship now, and the **full package rename** (`bencher` → `holobench`) that is shelved for later.
