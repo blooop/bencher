@@ -199,7 +199,7 @@ class TestWorkerState(unittest.TestCase):
         self.assertEqual(self.manager.worker, instance.__call__)
 
     def test_runnable_instance_to_declared(self):
-        """Re-declaring drops the callable rather than leaving a stale one behind."""
+        """Redeclaring drops the callable rather than leaving a stale one behind."""
         self.manager.set_worker(ExampleBenchCfg())
         self.manager.set_worker_class(ExampleBenchCfg)
         self.assertEqual(self.manager.state, Declared(ExampleBenchCfg))
