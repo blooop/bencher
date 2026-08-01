@@ -59,6 +59,7 @@ from .report_export import (
     series_for_var,
 )
 from .results.composable_container.composable_container_base import (
+    Axis,
     ComposableContainerBase,
     ComposeType,
     PaneLayout,

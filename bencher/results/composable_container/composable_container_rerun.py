@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, assert_never
 
 from strenum import StrEnum
 
@@ -122,9 +122,60 @@ _VIEW_CLASS_NAMES = {
     RerunViewKind.state_timeline: "StateTimelineView",
 }
 
-_LAYOUT_CLASS_NAMES = {
-    ComposeType.right: "Horizontal",
-    ComposeType.down: "Vertical",
+
+@dataclass(frozen=True)
+class _SharedViewLayout:
+    """Every item is displayed in one shared view rooted at ``/``.
+
+    Args:
+        splice_in_time: whether the items are shifted so they play one after the
+            other (``sequence``) rather than all together (``overlay``).
+    """
+
+    splice_in_time: bool
+
+
+@dataclass(frozen=True)
+class _StackedViewLayout:
+    """Each item gets its own view, stacked by ``rrb.<layout_class_name>``.
+
+    ``rerun.blueprint`` is imported lazily, so the layout class is referenced by
+    attribute name rather than by value.
+    """
+
+    layout_class_name: str
+
+
+_RerunComposeSpec = _SharedViewLayout | _StackedViewLayout
+
+
+def _rerun_compose_spec(compose_method: ComposeType) -> _RerunComposeSpec:
+    """The one table mapping a compose method onto its Rerun presentation.
+
+    Before plan 23 P8 this was two tables -- a ``_shares_one_view`` predicate and a
+    ``_LAYOUT_CLASS_NAMES`` dict -- which had to stay exactly complementary with
+    nothing checking that they did.  The sum type makes "shares one view" and "has a
+    stacking layout class" mutually exclusive by construction, and the exhaustive
+    match makes a new ``ComposeType`` member a type error here rather than a
+    ``RuntimeError`` raised part-way through a render.
+    """
+    match compose_method:
+        case ComposeType.right:
+            return _StackedViewLayout(layout_class_name="Horizontal")
+        case ComposeType.down:
+            return _StackedViewLayout(layout_class_name="Vertical")
+        case ComposeType.overlay:
+            return _SharedViewLayout(splice_in_time=False)
+        case ComposeType.sequence:
+            return _SharedViewLayout(splice_in_time=True)
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+# Complete by construction: a ComposeType member that _rerun_compose_spec does not handle
+# is a `ty` error at the match above and an import-time failure here.
+_RERUN_COMPOSE_SPECS: dict[ComposeType, _RerunComposeSpec] = {
+    member: _rerun_compose_spec(member) for member in ComposeType
 }
 
 # Gap inserted between spliced recordings so consecutive items never share an index.
@@ -322,9 +373,13 @@ class ComposableContainerRerun(ComposableContainerBase):
         self.container.append(self._to_recording(obj, label=label, view_kinds=view_kinds))
 
     @property
-    def _shares_one_view(self) -> bool:
-        """Whether every item is displayed in the same view rooted at ``/``."""
-        return self.compose_method in (ComposeType.overlay, ComposeType.sequence)
+    def _spec(self) -> _RerunComposeSpec:
+        """How this compose method is presented in Rerun.
+
+        The value is normalized first, so an out-of-vocabulary one raises a ``ValueError``
+        naming it rather than a bare ``KeyError``.
+        """
+        return _RERUN_COMPOSE_SPECS[ComposeType(self.compose_method)]
 
     def _output_file(self) -> Path:
         if self.output_path is not None:
@@ -355,24 +410,24 @@ class ComposableContainerRerun(ComposableContainerBase):
 
     def _layout(self, rrb, items: list[_ComposedItem]):
         """Map the compose method onto a Blueprint layout of per-item views."""
-        if self._shares_one_view:
-            return self._views(
-                rrb,
-                set().union(*(item.view_kinds for item in items)),
-                origin="/",
-                label=self.name or self.compose_method.title(),
-            )
-
-        views = [
-            self._views(rrb, item.view_kinds, origin=item.prefix, label=item.label)
-            for item in items
-        ]
-        if len(views) == 1:
-            return views[0]
-        layout_class = _LAYOUT_CLASS_NAMES.get(self.compose_method)
-        if layout_class is None:
-            raise RuntimeError(f"Unsupported Rerun compose type: {self.compose_method}")
-        return getattr(rrb, layout_class)(*views, name=self.name)
+        match self._spec:
+            case _SharedViewLayout():
+                return self._views(
+                    rrb,
+                    set().union(*(item.view_kinds for item in items)),
+                    origin="/",
+                    label=self.name or self.compose_method.title(),
+                )
+            case _StackedViewLayout(layout_class_name=layout_class_name):
+                views = [
+                    self._views(rrb, item.view_kinds, origin=item.prefix, label=item.label)
+                    for item in items
+                ]
+                if len(views) == 1:
+                    return views[0]
+                return getattr(rrb, layout_class_name)(*views, name=self.name)
+            case _ as unreachable:
+                assert_never(unreachable)
 
     def _read_items(self) -> list[_ComposedItem]:
         items = []
@@ -430,7 +485,8 @@ class ComposableContainerRerun(ComposableContainerBase):
             make_thread_default=False,
         )
 
-        if self.compose_method == ComposeType.sequence:
+        spec = self._spec
+        if isinstance(spec, _SharedViewLayout) and spec.splice_in_time:
             self._send_spliced(recording, items)
         else:
             for item in items:

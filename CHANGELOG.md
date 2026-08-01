@@ -218,7 +218,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a public path (`Bench.clear_tag_from_sample_cache`) "nothing happened" must not read as
   "the tag was cleared".
 
+- **Flipping a composition direction lives on a two-member `Axis` type, so a partial flip
+  is unrepresentable** (plan 23 P8, C6). `ComposeType.flip()` raised
+  `RuntimeError("cannot flip this type")` on 2 of its 4 members, and that arm was reachable
+  from the public `compose_method_list_for_dims(first_compose_method=...)` /
+  `VideoSummaryResult.dataset_to_compose_list(first_compose_method=...)` — so a
+  `sequence`/`overlay` seed aborted a 2+-dimensional video or rerun composition part-way
+  through rendering, after the samples had already been collected. The new
+  `bencher.Axis` (`right | down`) owns `flip()`, which is total over its two members;
+  `ComposeType` keeps its four members and answers `as_axis() -> Axis | None`, so "has no
+  opposite" is a value rather than an exception. `compose_method_list_for_dims` accepts
+  either type and, for a seed with no axis, repeats it on every spatial level instead of
+  failing. Every input the old implementation answered returns a byte-identical list — the
+  test suite pins that against the pre-refactor algorithm.
+
+- **Composition `match` statements over `ComposeType` are exhaustively checked**
+  (plan 23 P8, C6). `ComposableContainerPanel.__post_init__` and
+  `ComposableContainerDataset.render` had no final arm, so a fifth `ComposeType` member
+  would have produced an `UnboundLocalError` three frames from the cause and a silent
+  `None` composition respectively. Both now end in `assert_never`; verified empirically by
+  seeding a fifth member and measuring `error[type-assertion-failure]` at all four match
+  sites. `ComposableContainerRerun`'s two tables that had to stay exactly complementary
+  (`_shares_one_view` and `_LAYOUT_CLASS_NAMES`) are merged into one exhaustive mapping
+  onto a `_SharedViewLayout | _StackedViewLayout` sum, which makes "shares one view" and
+  "has a stacking layout class" mutually exclusive by construction and retires the
+  `Unsupported Rerun compose type` raise as unreachable. The four
+  `bencher/results/composable_container/*` modules this touches join the strict `ty` list.
+
+- `ComposableContainerPanel._tabs` is declared on the class instead of being created only
+  by the `sequence` arm, and `append`/`render` read that one field rather than each
+  re-deriving "am I a tab strip?" from `compose_method`.
+  `ComposableContainerBase.label_formatter` is annotated `-> str | None` over
+  `str | None` inputs, which is what it has always accepted and returned.
+
 ### Removed
+- **`ComposableContainerPanel(horizontal=...)`**, which silently overwrote
+  `compose_method` — and did so *inverted* relative to the rest of the codebase
+  (`horizontal=True` meant a `pn.Column` here, while the same flag in
+  `BenchResultBase._to_panes_da` selects a row). Two spellings of one concept that
+  disagreed; only `compose_method` remains. No caller in the package used the kwarg
+  (plan 23 P8, C6).
+
+- **`ComposeType.flip()`** — superseded by `Axis.flip()`, see above. `ComposeType.as_axis()`
+  converts, and `Axis.to_compose_type()` converts back.
+
 - **BREAKING: dropped Python 3.10 support.** `requires-python` is now `>=3.11,<3.14`, and
   the CI matrix runs py311 + py313 (was py310 + py313). The `py310` pixi feature and
   environment are gone.
