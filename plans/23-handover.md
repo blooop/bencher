@@ -4,6 +4,27 @@
 fold anything still open into plan 23 §10). Everything here is actionable without the
 conversation that produced it.
 
+> **Status (P12b, Tier B fully enabled).** Not deleted yet, because deleting it now would
+> drop content nothing else carries. What has changed since it was written:
+>
+> - **§5 item 5 is discharged.** P12 enabled `invalid-return-type`, which is the rule that
+>   verifies `_resolve_auto` returns a member of `ResolvedReduceType`; the caveat comment
+>   at the alias is gone. See §10 P12 item 1.
+> - **§4's `pn.pane = None` defaults, `to_panes_multi_panel`, `run.py`'s `ty: ignore`, and
+>   the `test_extra_panels.py` gap** are now owned by plan 26 R9 §10 and R10 §3. Do them
+>   there, not here.
+> - **§4's plan 24 Q1** (ty ceiling, third probe) is plan 26 R10 §2.
+> - **§5 items 1–4 still have no owner** — the `map_plot_panes` reduction default, the
+>   `ReduceType.NONE` kdim-units loss, `plot_sweep`'s understated `input_vars` domain
+>   (which is why `identity.py` is still not strict-listed), and the `strenum` →
+>   `enum.StrEnum` value trap. **These four are the reason this file still exists.**
+> - **§6's traps all still apply**, in particular trap 1 (`--python`) and trap 3 (enumerate
+>   what satisfies neither arm when you change a discrimination predicate on a union).
+>   P12b added one: a synthetic probe that reports nothing is not evidence the rule does
+>   not fire — see §10 P12b item 10.
+> - **§2 remains the single most load-bearing thing here.** Read it before writing any
+>   `assert_never`.
+
 **State pinned to:** `main` @ `ee044f0e` plus PR #1026 (`plan/ty-enforcement-floor`,
 head `b9524867`). Per plans-README rule 7, re-confirm every `file:line` before relying on
 it; the symbol is the durable reference.

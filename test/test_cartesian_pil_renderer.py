@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import hashlib
 
+import pytest
 from PIL import Image, ImageDraw
 
 from bencher.results.manim_cartesian.cartesian_product_cfg import CartesianProductCfg, SweepVar
 from bencher.results.manim_cartesian.cartesian_product_scene import (
+    Cell,
+    Group,
     Shape,
     StrobeShape,
     TimelineShape,
@@ -43,22 +46,40 @@ def _simple_cfg() -> CartesianProductCfg:
 # ---------------------------------------------------------------------------
 
 
+class TestShapeConstruction:
+    """`Shape` is a sum type: `Cell` (leaf) or `Group` (one or more children)."""
+
+    def test_empty_group_is_rejected_at_construction(self):
+        """A group of nothing is not a drawable shape.
+
+        The pre-P12b encoding was one class with `children: list | None`, so
+        `Shape(children=[])` constructed happily and then died several frames into a
+        render inside `max()` on an empty sequence.
+        """
+        with pytest.raises(ValueError, match="at least one child"):
+            Group(children=[])
+
+    def test_only_cells_are_leaves(self):
+        assert Cell().is_leaf
+        assert not Group(children=[Cell()]).is_leaf
+
+
 class TestShapeSize:
     def test_leaf(self):
-        assert Shape().size() == (20, 20)
+        assert Cell().size() == (20, 20)
 
     def test_row_3(self):
-        row = Shape(children=[Shape() for _ in range(3)], direction="right", depth=0)
+        row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
         assert row.size() == (66, 20)  # 3*20 + 2*3
 
     def test_col_2(self):
-        col = Shape(children=[Shape() for _ in range(2)], direction="down", depth=0)
+        col = Group(children=[Cell() for _ in range(2)], direction="down", depth=0)
         assert col.size() == (20, 43)  # 2*20 + 1*3
 
     def test_grid_2x3(self):
-        grid = Shape(
+        grid = Group(
             children=[
-                Shape(children=[Shape() for _ in range(3)], direction="right", depth=0)
+                Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
                 for _ in range(2)
             ],
             direction="down",
@@ -67,7 +88,7 @@ class TestShapeSize:
         assert grid.size() == (66, 43)
 
     def test_stack_3(self):
-        stack = Shape(children=[Shape() for _ in range(3)], direction="stack", depth=2)
+        stack = Group(children=[Cell() for _ in range(3)], direction="stack", depth=2)
         assert stack.size() == (40, 36)  # 20 + 2*10, 20 + 2*8
 
 
@@ -78,32 +99,32 @@ class TestShapeSize:
 
 class TestExtrude:
     def test_child_count(self):
-        ext = Shape().extrude(4, "right", color_index=2)
+        ext = Cell().extrude(4, "right", color_index=2)
         assert len(ext.children) == 4
 
     def test_depth_increment(self):
-        ext = Shape().extrude(3, "down")
+        ext = Cell().extrude(3, "down")
         assert ext.depth == 1
 
     def test_color_propagation(self):
-        ext = Shape().extrude(3, "right", color_index=2)
+        ext = Cell().extrude(3, "right", color_index=2)
         for child in ext.children:
             assert child.color_index == 2
 
     def test_size_after_extrude(self):
-        ext = Shape().extrude(4, "right", color_index=2)
+        ext = Cell().extrude(4, "right", color_index=2)
         assert ext.size() == (89, 20)  # 4*20 + 3*3
 
     def test_copy_independence(self):
         """Mutating an extruded copy must not affect the original."""
-        original = Shape(color_index=0)
+        original = Cell(color_index=0)
         ext = original.extrude(2, "right", color_index=3)
         ext.children[0].color_index = 99
         assert original.color_index == 0
 
     def test_nested_extrude(self):
         """Two successive extrusions produce correct nesting."""
-        line = Shape().extrude(3, "right", color_index=0)
+        line = Cell().extrude(3, "right", color_index=0)
         grid = line.extrude(2, "down", color_index=1)
         assert len(grid.children) == 2
         assert len(grid.children[0].children) == 3
@@ -117,21 +138,21 @@ class TestExtrude:
 
 class TestTimelineShapeSize:
     def test_size(self):
-        tl = TimelineShape(Shape(), 3)
+        tl = TimelineShape(Cell(), 3)
         assert tl.size() == (404, 166)
 
     def test_not_leaf(self):
-        tl = TimelineShape(Shape(), 2)
+        tl = TimelineShape(Cell(), 2)
         assert not tl.is_leaf
 
 
 class TestStrobeShapeSize:
     def test_size(self):
-        st = StrobeShape(Shape(), 5, _simple_cfg())
+        st = StrobeShape(Cell(), 5, _simple_cfg())
         assert st.size() == (44, 60)
 
     def test_not_leaf(self):
-        st = StrobeShape(Shape(), 1, _simple_cfg())
+        st = StrobeShape(Cell(), 1, _simple_cfg())
         assert not st.is_leaf
 
 
@@ -149,16 +170,16 @@ class TestDrawRegression:
     """
 
     def test_leaf(self):
-        assert _render_hash(Shape()) == "fb8d871ea7cb6c19f9c7e54d837c687f"
+        assert _render_hash(Cell()) == "fb8d871ea7cb6c19f9c7e54d837c687f"
 
     def test_row3(self):
-        row = Shape(children=[Shape() for _ in range(3)], direction="right", depth=0)
+        row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
         assert _render_hash(row) == "a8c946ecb1dd581b21eed0e795e30885"
 
     def test_grid(self):
-        grid = Shape(
+        grid = Group(
             children=[
-                Shape(children=[Shape() for _ in range(3)], direction="right", depth=0)
+                Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
                 for _ in range(2)
             ],
             direction="down",
@@ -167,16 +188,16 @@ class TestDrawRegression:
         assert _render_hash(grid) == "ceae36e431bb2c991377ffcfa3006a85"
 
     def test_stack(self):
-        stack = Shape(children=[Shape() for _ in range(3)], direction="stack", depth=2)
+        stack = Group(children=[Cell() for _ in range(3)], direction="stack", depth=2)
         assert _render_hash(stack) == "f3fd7f1df0e288ad0165027b6aa83610"
 
     def test_strobe_with_flash(self):
-        row = Shape(children=[Shape() for _ in range(3)], direction="right", depth=0)
+        row = Group(children=[Cell() for _ in range(3)], direction="right", depth=0)
         st = StrobeShape(row, 3, _simple_cfg(), flash=0.8)
         assert _render_hash(st, 300, 200) == "9626250f8b66be862e0709f1c9814cad"
 
     def test_timeline(self):
-        tl = TimelineShape(Shape(), 3)
+        tl = TimelineShape(Cell(), 3)
         assert _render_hash(tl, 500, 200) == "c77e2b39b2cdc21008b7f7008955be3b"
 
 

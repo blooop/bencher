@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, overload
 
 import numpy as np
 import yaml
@@ -171,7 +171,12 @@ class SweepSelector(Selector, SweepBase):
             self.samples = len(new_list)  # type: ignore[attr-defined]
 
     def _sync_class_defaults(self, new_list: list[Any], candidate_default: Any) -> None:
-        if self.owner is None:
+        # `name is None` is checked alongside `owner is None` because both mean the same
+        # thing here -- an unbound descriptor with no class entry to sync. param sets the
+        # two together, so this adds no reachable path; it does stop `self.name` reaching
+        # `getattr(param_container, self.name, None)` as `str | None`, where a None would
+        # raise `TypeError: attribute name must be string` out of an except handler.
+        if self.owner is None or self.name is None:
             return
         owner_cls = getattr(self.owner, "__class__", None)
         param_container = getattr(owner_cls, "param", None)
@@ -690,6 +695,35 @@ def box(name: str, center: float, width: float) -> FloatSweep:
     var = FloatSweep(default=center, bounds=(center - width, center + width))
     var.name = name
     return var
+
+
+# The return type is decided entirely by the type of `name`, and the flat
+# `dict[str, Any] | SweepBase` annotation threw that correlation away: every caller
+# passing a literal string still got the union back, so `"max_level" not in cfg` was
+# not a legal expression on a value that is always a dict. The overloads state the
+# rule that the body has always followed; the runtime behaviour is unchanged.
+@overload
+def sweep(
+    name: str,
+    values: list[Any] | None = None,
+    *,
+    samples: int | None = None,
+    bounds: tuple[float, float] | None = None,
+    max_subsampling_divisions: int | None = None,
+    max_level: int | None = None,
+) -> dict[str, Any]: ...
+
+
+@overload
+def sweep(
+    name: SweepBase,
+    values: list[Any] | None = None,
+    *,
+    samples: int | None = None,
+    bounds: tuple[float, float] | None = None,
+    max_subsampling_divisions: int | None = None,
+    max_level: int | None = None,
+) -> SweepBase: ...
 
 
 def sweep(

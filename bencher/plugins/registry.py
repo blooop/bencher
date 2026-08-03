@@ -262,9 +262,14 @@ class PluginRegistry:
             # rather than propagating out of the report build (never crash mid-run).
             try:
                 missing = [cap for cap in plugin.requires if not data.has(cap)]
-            except ValueError as exc:
-                log.warning("Plugin %r has an invalid capability: %s", plugin.name, exc)
-                reject(plugin, f"invalid capability: {exc}")
+            except ValueError as cap_err:
+                # NOT `as exc`: `except ... as <name>` unbinds <name> on the way out of the
+                # handler, so catching into `exc` deleted the `exc = set(exclude)` binding
+                # above. The next loop iteration then died on `plugin.name in exc` with
+                # `NameError: name 'exc' is not defined` -- crashing mid-run out of the one
+                # branch whose whole purpose is to never crash mid-run.
+                log.warning("Plugin %r has an invalid capability: %s", plugin.name, cap_err)
+                reject(plugin, f"invalid capability: {cap_err}")
                 continue
             if missing:
                 reject(plugin, f"missing capability: {', '.join(sorted(missing))}")

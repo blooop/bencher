@@ -149,6 +149,55 @@ class TestRegistry(unittest.TestCase):
         reasons = [d.reason for d in self.reg.explain(data) if d.name == "mutated"]
         self.assertIn("invalid capability", reasons[0])
 
+    def test_a_bad_capability_does_not_break_the_plugins_after_it(self) -> None:
+        """The rejection handler must not take the rest of the loop down with it.
+
+        The handler caught into `exc`, the same name the enclosing scope used for the
+        exclude set. `except ... as <name>` unbinds <name> on the way out, so the
+        *next* iteration died on `plugin.name in exc` with `NameError: name 'exc' is
+        not defined` -- crashing mid-run out of the branch documented as never crashing
+        mid-run. The test above registered a single plugin, so there was no next
+        iteration and the bug was invisible; this one needs at least two, and needs the
+        bad one to sort first.
+        """
+
+        @plot_plugin(
+            name="aaa_mutated",
+            backend="t",
+            match=PlotFilter(
+                float_range=VarRange.unbounded(),
+                cat_range=VarRange.unbounded(),
+                repeats_range=VarRange.unbounded(),
+                input_range=VarRange.unbounded(),
+            ),
+            register=False,
+        )
+        def _bad(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("x")
+
+        @plot_plugin(
+            name="zzz_healthy",
+            backend="t",
+            match=PlotFilter(
+                float_range=VarRange.unbounded(),
+                cat_range=VarRange.unbounded(),
+                repeats_range=VarRange.unbounded(),
+                input_range=VarRange.unbounded(),
+            ),
+            register=False,
+        )
+        def _good(_: BenchData) -> pn.viewable.Viewable:
+            return _make_pane("y")
+
+        self.reg.register(_bad)
+        self.reg.register(_good)
+        _bad.requires = frozenset({"bogus_capability"})  # mutate after registration
+
+        data = _data_with_floats(1)
+        with self.assertLogs("bencher.plugins.registry", level="WARNING"):
+            selected = self.reg.select(data, exclude=["nothing_named_this"])
+        self.assertEqual([p.name for p in selected], ["zzz_healthy"])
+
     def test_register_valid_capability_strings_accepted(self) -> None:
         """External plugins passing valid plain strings keep working."""
 

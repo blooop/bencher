@@ -65,6 +65,7 @@ class TestBuildCurveOverlayGroupby:
         rv = _make_result_var("time")
 
         overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        assert overlay is not None, "_build_curve_overlay returned no overlay"
 
         curves = [el for el in overlay if isinstance(el, hv.Curve)]
         assert len(curves) == len(backends), f"Expected {len(backends)} curves, got {len(curves)}"
@@ -77,6 +78,7 @@ class TestBuildCurveOverlayGroupby:
         rv = _make_result_var("time")
 
         overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        assert overlay is not None, "_build_curve_overlay returned no overlay"
 
         labels = sorted(el.label for el in overlay if isinstance(el, hv.Curve))
         assert labels == sorted(backends)
@@ -89,6 +91,7 @@ class TestBuildCurveOverlayGroupby:
         rv = _make_result_var("time")
 
         overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        assert overlay is not None, "_build_curve_overlay returned no overlay"
 
         spreads = [el for el in overlay if isinstance(el, hv.Spread)]
         assert len(spreads) == len(backends), (
@@ -103,6 +106,7 @@ class TestBuildCurveOverlayGroupby:
         rv = _make_result_var("time")
 
         overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        assert overlay is not None, "_build_curve_overlay returned no overlay"
 
         spreads = [el for el in overlay if isinstance(el, hv.Spread)]
         assert len(spreads) == 0
@@ -123,6 +127,7 @@ class TestBuildCurveOverlayGroupby:
         rv = _make_result_var("time")
 
         overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        assert overlay is not None, "_build_curve_overlay returned no overlay"
 
         curves = [el for el in overlay if isinstance(el, hv.Curve)]
         # 2 backends × 3 algos = 6 curves
@@ -140,6 +145,7 @@ class TestBuildCurveOverlayGroupby:
         rv = _make_result_var("time")
 
         overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+        assert overlay is not None, "_build_curve_overlay returned no overlay"
 
         for el in overlay:
             if isinstance(el, hv.Curve):

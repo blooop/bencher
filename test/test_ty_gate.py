@@ -33,6 +33,14 @@ MUST_NOT_BE_IGNORED = {
     # silently downgrades that proof, which is exactly the state P1 shipped with and P12
     # was written to end.
     "invalid-return-type": "the ReduceType exhaustiveness proof (plan 23 P12)",
+    # The other four Tier-B rules, enabled in P12b. Each was paid for by fixing a
+    # representation rather than by adding annotations, so re-ignoring one does not just
+    # hide diagnostics -- it re-permits the shape that produced them.
+    "not-iterable": "optional-list fields that mean `[]` (plan 23 P12b)",
+    "no-matching-overload": "Tier B (plan 23 P12b)",
+    "unsupported-operator": "operations on optionals, incl. the registry `exc` shadow "
+    "(plan 23 P12b)",
+    "possibly-missing-attribute": "the total public surface for optional extras (plan 23 P12b)",
     # Tier A, enabled in P1. Each was measured at <=6 diagnostics, so a reappearance in
     # the ignore list is a regression rather than a pragmatic concession.
     "call-non-callable": "Tier A (plan 23 P1)",

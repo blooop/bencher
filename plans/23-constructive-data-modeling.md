@@ -599,10 +599,16 @@ and may be reordered or dropped individually.
 
 ### P12 — Tier-B ratchet
 
+**Shipped in two PRs.** P12 took `invalid-return-type` (29 diagnostics); **P12b** took the
+other four (100). Both are recorded in §10. Tier B is now fully enabled.
+
 - Re-enable the five Tier-B rules globally (~126 diagnostics at `4a13ab8e`, fewer
   after P2–P11). Note `invalid-return-type` doubles as the fallback exhaustiveness
   signal (§2.4), so this phase also hardens D2. Final strict-list review; record the
   Tier-C endgame decision (§6.6) as an open item for a future plan.
+- **Still open after P12b:** the Tier-C endgame decision (§6.6) is unrecorded, and eleven
+  of the fifteen files P12b touched are not strict-listed (counts in §10 P12b item 9, for
+  plan 26 R9 §3).
 
 ## 6. OWNER DECISIONS
 
@@ -1230,3 +1236,129 @@ than only a hygiene one — see item 1.
     switches the return type is an illegal state made representable, and no type checker
     will ever object to it. They are cheap to fix and blocked only on the deprecation, so
     they should lead the follow-up phase rather than trail it.
+
+### P12b (implemented — the remaining four Tier-B rules)
+
+**Tier B is now fully enabled**, so §9's "Tier A+B rules globally" is met. The four rules
+P12 left cost **100 diagnostics** measured against `47cc2577`, close to the P12 estimate
+(48/20/16/16 vs 43/21/16/16 — `not-iterable` grew by five as earlier phases added typed
+signatures for it to see through).
+
+Two representation defects accounted for **44 of the 100**, which is the finding worth
+carrying forward: the Tier-B rules were not annotation noise. Both fixes are behaviour
+changes, and both are recorded in the CHANGELOG as such.
+
+1. **`param.List(default=None)` on `BenchCfg`'s six variable lists produced 28 of the 48
+   `not-iterable` diagnostics** — measured, not estimated: 48 before the one-line default
+   change and 20 after. The default made the field `list | None`, so every reader
+   needed `or []`; eleven did not have it (`inputs_as_str`, `describe_sweep`'s four loops,
+   `PltCntCfg`'s four, `optuna_conversions`' three, ...). A `BenchCfg` constructed outside
+   `plot_sweep` therefore raised `TypeError: 'NoneType' object is not iterable` from
+   inside describe/plot code rather than at the declaration. Changed to `default=[]`
+   (param instantiates mutable defaults per instance — verified, not assumed).
+
+   **Verified cache-safe:** `hash_persistent` already folded all three hashed lists as
+   `x or []`, so `[]` and `None` hash identically. No `CACHE_VERSION` bump.
+
+   **One test changed meaning rather than being deleted.**
+   `test_properties_handle_none_input_vars` pinned exactly the None-tolerance being
+   removed; it is now two tests — `[]` gives empty partitions, and `None` is *rejected*.
+   That rejection is the breaking half: `BenchCfg(input_vars=None)` now raises from param
+   because `default=[]` implies `allow_None=False`. No first-party caller passed `None`
+   (checked: both `BenchCfg(...)` sites in `bencher.py` pass real lists, and every
+   `.input_vars = ` / `.result_vars = ` assignment in the tree assigns a list).
+
+2. **All 16 `possibly-missing-attribute` were one shape: the `bencher` namespace's rerun
+   exports existed only inside `try`/`except ModuleNotFoundError`.** The rule was telling
+   the truth — the public surface was *partial*, and the failure mode on an install
+   without `rerun-sdk` was `AttributeError: module 'bencher' has no attribute
+   'capture_rerun_window'`, which names neither the optional dependency nor how to get it.
+   The except branches now bind each name to a `_requires_rerun(name)` placeholder that
+   raises a branded `ImportError`. A class rather than a function, so `isinstance` against
+   the placeholder stays legal.
+
+   The except branch **cannot** be exercised in an environment that has `rerun-sdk`, which
+   both CI matrix entries do, so `test/test_optional_extra_exports.py` drives
+   `_requires_rerun` directly. Without that the fix would be untested code that only runs
+   on the installs least able to report a problem.
+
+3. **Three live bugs, each with a regression test that fails on the pre-fix code.**
+
+   - **`PluginRegistry.explain()` crashed the report build on the second plugin after a
+     bad capability.** The handler caught into `exc`, the same name the enclosing scope
+     used for `exc = set(exclude)`; `except ... as <name>` unbinds `<name>` on the way
+     out, so the next iteration hit `plugin.name in exc` and raised `NameError` — out of
+     the branch whose comment says "never crash mid-run". `ty` found this as
+     `unsupported-operator`: `in` between `str` and `set[str] | set[Unknown] | ValueError`.
+     **The existing test could not have caught it**: it registers one plugin, so there is
+     no next iteration. The new test needs two plugins with the bad one sorting first.
+   - **`BenchReport.publish()` on an unnamed report** fell through to `None += "_debug" if
+     debug else ""`, and `None += ""` raises too, so *both* debug settings died with
+     `TypeError: unsupported operand type(s) for +=`. Now a `ValueError` naming the two
+     ways to supply a branch.
+   - **`TimelineShape`/`StrobeShape` could not be extruded.** Both inherited
+     `_deep_copy_recolored`, which walks `self.children` — `None` on a wrapper — so
+     `TypeError: 'NoneType' object is not iterable`. Found by making `Shape` abstract:
+     the inherited method became a missing implementation, which is what it always was.
+
+4. **`Shape` became a real sum type (`Cell` | `Group`), and the pixel-hash tests made it
+   safe to do.** The docstring already said "either a leaf or a collection of sub-shapes";
+   the encoding did not. `test_cartesian_pil_renderer.py` asserts MD5s of rendered pixel
+   data for six shapes, so "no visual change" is checked rather than argued — all six
+   hashes are unchanged. `Group([])` — constructible before, then dead inside `max()` on
+   an empty sequence — is rejected at construction. The test file moved to `Cell()` /
+   `Group(children=...)`; `Shape` stays exported as the base type.
+
+5. **The two meta-generator config tables became frozen dataclasses.** `PLOT_CONFIGS` and
+   `BOOL_PLOT_CONFIGS` were `dict[str, dict[str, int | str | list[str] | None]]`, so
+   `cfg["repeats"] > 1` was not a legal comparison and nothing distinguished an optional
+   key from a mandatory one except finding a `.get()` somewhere. `pixi run generate-docs`
+   produces a **byte-identical tree** (verified: `git status` clean across
+   `bencher/example/generated/` afterwards).
+
+6. **`bencher.sweep()` got `@overload`s instead of a wider union.** Its
+   `dict[str, Any] | SweepBase` return is decided entirely by the type of `name`, which is
+   the §10-P12-item-10 shape. Overloads state that rule with no runtime change — worth
+   noting because the four unions tabled there are *not* all blocked on deprecations;
+   this one was blocked on nothing.
+
+7. **`get_name()` was the quiet version of the same lie.** It is annotated `-> str` and
+   returned `var.name`, which param types `str | None`. Now raises `ValueError` naming the
+   builders that name a parameter. `params_to_str` (which already existed) replaced a
+   hand-rolled `[i.name for i in ...]` at `bencher.py`'s title site.
+
+8. **Two `str()` coercions are honest, not papering over.** xarray types dimension names
+   as `Hashable`; bencher only makes string dims, but the values are being joined into a
+   *title*, so coercing at the boundary is correct rather than a suppression.
+
+9. **Strict-list: four of the fifteen files P12b touched came out Tier-C clean** and were
+   added (`plugins/registry.py`, `manim_cartesian/cartesian_product_scene.py`, and both
+   meta generators). The other eleven did not; their counts, so plan 26 R9 §3 can pick
+   them up without re-measuring:
+
+   | File | Tier-C diagnostics |
+   |---|---|
+   | `bench_cfg.py` | 64 |
+   | `bencher.py` | 30 |
+   | `results/holoview_results/holoview_result.py` | 17 |
+   | `results/bench_result_base.py` | 15 |
+   | `variables/inputs.py` | 10 |
+   | `__init__.py` | 8 |
+   | `bench_report.py` | 8 |
+   | `results/holoview_results/band_result.py` | 5 |
+   | `utils.py` | 3 |
+   | `results/composable_container/composable_container_video.py` | 1 |
+   | `results/holoview_results/xy_histogram_result.py` | 1 |
+
+   The last two are one diagnostic each and both are in the handover's §4 list
+   (`out.duration` as `Any | float | None`; `-> pn.panel` where `pn.panel` is a function,
+   not a type). They were left rather than swept in: the second is one instance of the
+   seven-site `pn.pane`/`pn.panel`-in-annotation-position family, and fixing one of seven
+   inside an unrelated PR is how that family stays half-migrated.
+
+10. **The gate was verified to bite on all four rules, not just configured to.** A seeded
+    probe module produced one diagnostic per rule and was deleted;
+    `possibly-missing-attribute` needed the `bencher/__init__.py` fix temporarily reverted
+    to reproduce, because no synthetic two-module probe triggered it — the first attempt
+    at such a probe reported nothing and reading that as "the rule does not fire" would
+    have been wrong. Revert the real fix, count, restore.

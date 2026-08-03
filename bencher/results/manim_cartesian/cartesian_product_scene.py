@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import functools
 import logging
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -97,30 +98,28 @@ def _get_font(size: int):
             return ImageFont.load_default()
 
 
-class Shape:
+class Shape(ABC):
     """Recursive shape representation for dimensional extrusion.
 
-    A Shape is either a leaf (single cell) or a collection of sub-shapes
-    arranged along an axis.  ``depth`` tracks nesting level so that
+    A Shape is either a :class:`Cell` (one leaf square) or a :class:`Group` of
+    sub-shapes arranged along an axis.  ``depth`` tracks nesting level so that
     higher-dimensional extrusions use wider gaps.
+
+    This was one concrete class with ``children: list[Shape] | None``, where ``None``
+    meant leaf (plan 23 P12b).  The docstring already said "either ... or", but the
+    encoding did not: ``Shape(children=[])`` was constructible and died inside
+    ``max()`` on an empty sequence, ``is_leaf`` was a predicate no checker could
+    narrow through, and every ``self.children`` read in a non-leaf branch was
+    statically an optional.  The two arms are now two classes, so the leaf branches
+    disappear from the group code instead of being re-tested in each method.
     """
 
-    def __init__(
-        self,
-        children: list[Shape] | None = None,
-        direction: str = "right",
-        depth: int = 0,
-        color_index: int = 0,
-    ):
-        self.children = children  # None = leaf cell
-        self.direction = direction  # right, down, stack
+    def __init__(self, depth: int = 0):
         self.depth = depth  # 0 = innermost (tight gap), higher = wider gap
-        self.color_index = color_index  # palette index for leaf cells
-        self._cached_size = None  # lazily populated by size()
 
     @property
     def is_leaf(self) -> bool:
-        return self.children is None
+        return isinstance(self, Cell)
 
     @property
     def gap(self) -> int:
@@ -134,13 +133,78 @@ class Shape:
             return CELL_GAP
         return GROUP_GAP * max(1, self.depth - 3)
 
+    @abstractmethod
+    def size(self) -> tuple[int, int]:
+        """Return (width, height) in pixels."""
+
+    @abstractmethod
+    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
+        """Draw this shape at position (x, y) on the image."""
+
+    @abstractmethod
+    def _deep_copy(self) -> Shape: ...
+
+    @abstractmethod
+    def _deep_copy_recolored(self, color_index: int) -> Shape:
+        """Copy and recolor in a single traversal."""
+
+    def extrude(self, n: int, direction: str, color_index: int | None = None) -> Group:
+        """Create a new shape by extruding this one n times along direction."""
+        if color_index is not None:
+            copies = [self._deep_copy_recolored(color_index) for _ in range(n)]
+        else:
+            copies = [self._deep_copy() for _ in range(n)]
+        return Group(children=copies, direction=direction, depth=self.depth + 1)
+
+
+class Cell(Shape):
+    """A single leaf square, coloured by palette index."""
+
+    def __init__(self, color_index: int = 0, depth: int = 0):
+        super().__init__(depth=depth)
+        self.color_index = color_index  # palette index for leaf cells
+
+    def size(self) -> tuple[int, int]:
+        return (CELL_SIZE, CELL_SIZE)
+
+    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
+        base = DIM_PALETTE[self.color_index % len(DIM_PALETTE)]
+        color = tuple(int(c * alpha) for c in base)
+        border = tuple(int(c * alpha) for c in CELL_BORDER)
+        img.rectangle([x, y, x + CELL_SIZE, y + CELL_SIZE], fill=color, outline=border)
+
+    def _deep_copy(self) -> Cell:
+        return Cell(color_index=self.color_index)
+
+    def _deep_copy_recolored(self, color_index: int) -> Cell:
+        return Cell(color_index=color_index)
+
+
+class Group(Shape):
+    """One or more sub-shapes laid out along ``direction``.
+
+    ``children`` must be non-empty: every layout below indexes or reduces over it,
+    and a group of nothing is not a shape this animation can draw. Rejecting it here
+    is what the old ``children=[]`` spelling deferred to a bare ``max()`` on an empty
+    sequence, several frames into a render.
+    """
+
+    def __init__(self, children: list[Shape], direction: str = "right", depth: int = 0):
+        if not children:
+            raise ValueError("Group needs at least one child shape; use Cell() for a leaf.")
+        super().__init__(depth=depth)
+        self.children = children
+        self.direction = direction  # right, down, stack
+        # Only Group memoises: a Cell's size is a constant and the two wrappers derive
+        # theirs from fixed chrome. Previously this lived on the shared base, where the
+        # three subclasses that never read it still carried the slot.
+        self._cached_size: tuple[int, int] | None = None
+
     def size(self) -> tuple[int, int]:
         """Return (width, height) in pixels.  Cached — tree structure is immutable."""
         if self._cached_size is not None:
             return self._cached_size
-        if self.is_leaf:
-            result = (CELL_SIZE, CELL_SIZE)
-        elif self.direction == "stack":
+        if self.direction == "stack":
             cw, ch = self.children[0].size()
             n = len(self.children)
             result = (cw + (n - 1) * DEPTH_DX, ch + (n - 1) * abs(DEPTH_DY))
@@ -157,14 +221,8 @@ class Shape:
         self._cached_size = result
         return result
 
-    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0):
+    def draw(self, img: ImageDraw.ImageDraw, x: int, y: int, alpha: float = 1.0) -> None:
         """Draw this shape at position (x, y) on the image."""
-        if self.is_leaf:
-            base = DIM_PALETTE[self.color_index % len(DIM_PALETTE)]
-            color = tuple(int(c * alpha) for c in base)
-            border = tuple(int(c * alpha) for c in CELL_BORDER)
-            img.rectangle([x, y, x + CELL_SIZE, y + CELL_SIZE], fill=color, outline=border)
-            return
         if self.direction == "stack":
             # Isometric 3D stack: back layers at top-right, front at bottom-left.
             # Draw back-to-front (painter's algorithm) with depth dimming.
@@ -187,28 +245,16 @@ class Shape:
                 child.draw(img, x, cy, alpha)
                 cy += child.size()[1] + g
 
-    def extrude(self, n: int, direction: str, color_index: int | None = None) -> Shape:
-        """Create a new shape by extruding this one n times along direction."""
-        if color_index is not None:
-            copies = [self._deep_copy_recolored(color_index) for _ in range(n)]
-        else:
-            copies = [self._deep_copy() for _ in range(n)]
-        return Shape(children=copies, direction=direction, depth=self.depth + 1)
-
-    def _deep_copy(self) -> Shape:
-        if self.is_leaf:
-            return Shape(color_index=self.color_index)
-        return Shape(
+    def _deep_copy(self) -> Group:
+        return Group(
             children=[c._deep_copy() for c in self.children],  # pylint: disable=protected-access
             direction=self.direction,
             depth=self.depth,
         )
 
-    def _deep_copy_recolored(self, color_index: int) -> Shape:
+    def _deep_copy_recolored(self, color_index: int) -> Group:
         """Copy and recolor in a single traversal."""
-        if self.is_leaf:
-            return Shape(color_index=color_index)
-        return Shape(
+        return Group(
             children=[c._deep_copy_recolored(color_index) for c in self.children],  # pylint: disable=protected-access
             direction=self.direction,
             depth=self.depth,
@@ -263,11 +309,7 @@ class TimelineShape(Shape):
         self.inner = inner
         self.count = count
         self._skip_labels = False  # when True, draw() skips frame labels (overlay mode)
-        super().__init__(children=None, direction="right", depth=0)
-
-    @property
-    def is_leaf(self) -> bool:
-        return False
+        super().__init__(depth=0)
 
     def _outer_frame_size(self) -> tuple[int, int]:
         """Size of each frame including padding."""
@@ -416,8 +458,19 @@ class TimelineShape(Shape):
                 font=font_label,
             )
 
-    def _deep_copy(self) -> Shape:
+    def _deep_copy(self) -> TimelineShape:
         return TimelineShape(self.inner._deep_copy(), self.count)  # pylint: disable=protected-access
+
+    def _deep_copy_recolored(self, color_index: int) -> TimelineShape:
+        # Recolours the wrapped shape and rewraps. The base class used to supply this
+        # by walking `self.children`, which is None on a wrapper, so extruding through
+        # a film strip raised `TypeError: 'NoneType' object is not iterable`. Making the
+        # sum type explicit turned that into a missing implementation, which is what it
+        # always was.
+        return TimelineShape(
+            self.inner._deep_copy_recolored(color_index),  # pylint: disable=protected-access
+            self.count,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -438,11 +491,7 @@ class StrobeShape(Shape):
         self.cfg = cfg
         self.flash = flash
         self._skip_tally = False  # when True, draw() skips tallies (overlay mode)
-        super().__init__(children=None, direction="right", depth=0)
-
-    @property
-    def is_leaf(self) -> bool:
-        return False
+        super().__init__(depth=0)
 
     def size(self) -> tuple[int, int]:
         iw, ih = self.inner.size()
@@ -587,8 +636,18 @@ class StrobeShape(Shape):
         tally_x = box_x + (box_w - tally_avail_w) // 2
         self.draw_tally_overlay(img, tally_x, tally_y, tally_avail_w)
 
-    def _deep_copy(self) -> Shape:
+    def _deep_copy(self) -> StrobeShape:
         return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)  # pylint: disable=protected-access
+
+    def _deep_copy_recolored(self, color_index: int) -> StrobeShape:
+        # See TimelineShape._deep_copy_recolored: inherited from the base this walked a
+        # None `children` and raised.
+        return StrobeShape(
+            self.inner._deep_copy_recolored(color_index),  # pylint: disable=protected-access
+            self.count,
+            self.cfg,
+            self.flash,
+        )
 
 
 def render_animation(
@@ -767,7 +826,7 @@ def render_animation(
         durations[-1] += max(min_hold, n) * frame_duration_ms
 
     # Start with point
-    shape = Shape()  # single cell
+    shape: Shape = Cell()  # single cell
     make_frame(shape, count_label="1 point")
     hold()
 

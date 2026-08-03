@@ -198,6 +198,15 @@ class ComposableContainerVideo(ComposableContainerBase):
         return deepcopy(self)
 
     def extend_clip(self, clip: VideoClip, desired_duration: float):
+        if clip.duration is None:
+            # render() gives every clip a duration before it gets here, so this states
+            # a precondition rather than reporting a reachable failure on that path.
+            # Called directly on an unbounded clip it used to die on `None < float`,
+            # which names neither the argument nor why it cannot be padded.
+            raise ValueError(
+                "extend_clip needs a clip with a known duration; got one whose duration "
+                "is None. Set clip.duration before padding it to a target length."
+            )
         if clip.duration < desired_duration:
             return concatenate_videoclips(
                 [

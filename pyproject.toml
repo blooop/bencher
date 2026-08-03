@@ -267,29 +267,23 @@ tmp_path_retention_count = 0
 #   Deliberately absent from this file: they are errors everywhere except the paths
 #   relaxed in [[tool.ty.overrides]] below.
 #
-# Tier B (~126 diagnostics, scheduled for plan 23 P12).
+# Tier B is FULLY ENABLED (plan 23 P12 took invalid-return-type; P12b took the other
+#   four). There is no Tier-B block below any more -- that is the point.
 # Tier C (~1068 diagnostics, dominated by param-descriptor dynamism and by test/).
 #   Enabled per-file via the strict override block below as modules are reworked;
 #   every plan 23 phase adds the files it touches.
 [tool.ty.rules]
 
-# --- Tier B: enable globally in plan 23 P12 -----------------------------------------
-# `invalid-return-type` is ENABLED (plan 23 P12, first of the five). It is the rule that
-# checks `_resolve_auto` really returns a member of `ResolvedReduceType`, so it is what
-# finally makes `to_dataset`'s `assert_never` a compile-time proof rather than a runtime
-# assertion (plan 23 section 2.4, and the caveat recorded at the alias in
-# bench_result_base.py). All 29 diagnostics it reported were genuine: see plan 23 section
-# 10 for the two live bugs among them.
+# --- Tier B: all five now enabled; do NOT re-add any of them here -------------------
+# invalid-return-type (plan 23 P12) is what makes `to_dataset`'s `assert_never` a
+# compile-time proof rather than a runtime assertion (plan 23 section 2.4).
 #
-# The remaining four Tier-B rules are still ignored, with their measured cost:
-#   not-iterable (43), no-matching-overload (21), unsupported-operator (16),
-#   possibly-missing-attribute (16).
-# Union types read as non-iterable / no matching overload / unsupported operator.
-not-iterable = "ignore"
-no-matching-overload = "ignore"
-unsupported-operator = "ignore"
-# Possibly missing attributes (union type issues).
-possibly-missing-attribute = "ignore"
+# not-iterable / no-matching-overload / unsupported-operator / possibly-missing-attribute
+# followed in P12b, 100 diagnostics between them. Their two dominant causes were both
+# representation defects rather than annotation noise: `param.List(default=None)` on the
+# six BenchCfg variable lists (31 of the 48 not-iterable), and `bencher`'s rerun exports
+# existing only inside a try/except (all 16 possibly-missing-attribute). See plan 23
+# section 10 for the three live bugs among them. test_ty_gate.py protects all five.
 
 # --- Tier C: param-descriptor dynamism; per-file via the strict block ---------------
 # param descriptors: a class-level `x = param.Number(1.0)` reads back as float on
@@ -339,6 +333,13 @@ include = [
     "bencher/results/composable_container/composable_container_panel.py",
     "bencher/results/composable_container/composable_container_dataframe.py",
     "bencher/results/composable_container/composable_container_rerun.py",
+    # Added by plan 23 P12b -- the files it reworked that came out Tier-C clean.
+    # The other eleven it touched did not, and their counts are recorded in plan 23
+    # section 10 so the R9 follow-up can pick them up rather than re-measure.
+    "bencher/plugins/registry.py",
+    "bencher/results/manim_cartesian/cartesian_product_scene.py",
+    "bencher/example/meta/generate_meta_plot_types.py",
+    "bencher/example/meta/generate_meta_bool_plot_types.py",
 ]
 [tool.ty.overrides.rules]
 invalid-assignment = "error"

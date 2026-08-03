@@ -14,6 +14,21 @@ class TestBenchReport(unittest.TestCase):
         bench_report = BenchReport(bench_name)
         self.assertEqual(bench_report.bench_name, bench_name)
 
+    def test_publish_without_a_name_says_what_is_missing(self):
+        """An unnamed report has no branch to publish to, on either debug setting.
+
+        This used to fall through to `None += "_debug" if debug else ""` and die with
+        `TypeError: unsupported operand type(s) for +=: 'NoneType' and 'str'` -- and
+        with `debug=False` too, since `None += ""` raises just the same (plan 23 P12b).
+        """
+        bench_report = BenchReport()
+        for debug in (False, True):
+            with self.subTest(debug=debug), self.assertRaises(ValueError) as ctx:
+                bench_report.publish(lambda _b: ("repo", "url"), debug=debug)
+            message = str(ctx.exception)
+            self.assertIn("branch_name", message)
+            self.assertIn("bench_name", message)
+
     # Tests that a Markdown pane with a custom name is appended to the BenchReport instance
     def test_append_markdown_with_custom_name(self):
         bench_report = BenchReport()

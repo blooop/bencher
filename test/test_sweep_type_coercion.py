@@ -17,10 +17,12 @@ class TestFloatSweepTypeCoercion:
 
     def test_mixed_bounds_coerced_to_float(self):
         fs = FloatSweep(bounds=[0, 5.0])
+        assert fs.softbounds is not None
         assert all(isinstance(b, float) for b in fs.softbounds)
 
     def test_all_int_bounds_coerced_to_float(self):
         fs = FloatSweep(bounds=[0, 5])
+        assert fs.softbounds is not None
         assert all(isinstance(b, float) for b in fs.softbounds)
 
     def test_int_sample_values_returned_as_float(self):
@@ -29,6 +31,7 @@ class TestFloatSweepTypeCoercion:
 
     def test_with_bounds_int_args_stored_as_float(self):
         fs = FloatSweep(bounds=[0.0, 5.0], samples=3).with_bounds(0, 10, 3)
+        assert fs.softbounds is not None
         assert all(isinstance(b, float) for b in fs.softbounds)
         assert all(isinstance(v, (float, np.floating)) for v in fs.values())
 
@@ -49,6 +52,7 @@ class TestIntSweepTypeCoercion:
 
     def test_with_bounds_float_args_stored_as_int(self):
         ints = IntSweep(bounds=[0, 5]).with_bounds(0.0, 10.0)
+        assert ints.softbounds is not None
         assert all(isinstance(b, int) for b in ints.softbounds)
 
     def test_samples_count_is_int_with_float_bounds(self):

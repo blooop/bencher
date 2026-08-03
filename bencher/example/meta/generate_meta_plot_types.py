@@ -4,6 +4,8 @@ Shows ``res.to_<plot_type>()`` for each plot type with appropriate data.
 Each generated example is fully self-contained with an inline class definition.
 """
 
+from dataclasses import dataclass
+
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -268,168 +270,177 @@ class ScatterJitterDemo(bn.ParametrizedSweep):
 # Plot configuration table
 # ---------------------------------------------------------------------------
 
-PLOT_CONFIGS = {
-    "bar": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 1,
-        "plot_call": "res.to_bar()",
-        "input_vars": '["backend"]',
-        "benchable_class": "CacheCompare",
-        "class_code": _CACHE_COMPARE_CODE,
-    },
-    "line": {
-        "float_dims": 1,
-        "cat_dims": 0,
-        "repeats": 1,
-        "plot_call": "res.to_line()",
-        "input_vars": '["load"]',
-        "benchable_class": "LatencyProfile",
-        "class_code": _LATENCY_PROFILE_CODE,
-    },
-    "curve": {
-        "float_dims": 1,
-        "cat_dims": 0,
-        "repeats": 5,
-        "plot_call": "res.to_curve()",
-        "input_vars": '["load"]',
-        "benchable_class": "LatencyNoisyProfile",
-        "class_code": _LATENCY_NOISY_PROFILE_CODE,
-    },
-    "scatter": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 1,
-        "plot_call": "res.to_scatter()",
-        "input_vars": '["backend"]',
-        "benchable_class": "ThroughputCompare",
-        "class_code": _THROUGHPUT_COMPARE_CODE,
-    },
-    "heatmap": {
-        "float_dims": 2,
-        "cat_dims": 0,
-        "repeats": 1,
-        "plot_call": "res.to_heatmap()",
-        "input_vars": '["x", "y"]',
-        "benchable_class": "HeatmapDemo",
-        "class_code": _HEATMAP_DEMO_CODE,
-    },
-    "surface": {
-        "float_dims": 2,
-        "cat_dims": 0,
-        "repeats": 1,
-        "plot_call": "res.to_surface()",
-        "input_vars": '["x", "y"]',
-        "benchable_class": "SurfaceDemo",
-        "class_code": _SURFACE_DEMO_CODE,
-    },
-    "volume": {
-        "float_dims": 3,
-        "cat_dims": 0,
-        "repeats": 1,
-        "plot_call": "res.to_volume()",
-        "input_vars": '["float1", "float2", "float3"]',
-    },
-    "image": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 1,
-        "plot_call": "res.to_panes()",
-        "input_vars": '["sides"]',
-        "benchable_class": "BenchableImageResult",
-        "benchable_module": _BENCHABLE_MODULE,
-        "result_vars": '["polygon"]',
-    },
-    "video": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 1,
-        "plot_call": "res.to_panes()",
-        "input_vars": '["sides"]',
-        "benchable_class": "BenchableVideoResult",
-        "benchable_module": _BENCHABLE_MODULE,
-        "result_vars": '["animation"]',
-    },
-    "box_whisker": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 10,
-        "plot_call": "res.to(BoxWhiskerResult)",
-        "extra_import": (
-            "from bencher.results.holoview_results.distribution_result"
-            ".box_whisker_result import BoxWhiskerResult"
-        ),
-        "input_vars": '["backend"]',
-        "benchable_class": "JitterDemo",
-        "class_code": _JITTER_DEMO_CODE,
-    },
-    "scatter_jitter": {
-        "float_dims": 0,
-        "cat_dims": 1,
-        "repeats": 10,
-        "plot_call": "res.to(ScatterJitterResult)",
-        "extra_import": (
-            "from bencher.results.holoview_results.distribution_result"
-            ".scatter_jitter_result import ScatterJitterResult"
-        ),
-        "input_vars": '["backend"]',
-        "benchable_class": "ScatterJitterDemo",
-        "class_code": _SCATTER_JITTER_DEMO_CODE,
-    },
-    # Both axes measured *within* one sample, unlike every other scatter here, so the
-    # result is a table per sample and the sweep input separates the clouds.
-    "xy_scatter": {
-        "float_dims": 1,
-        "cat_dims": 0,
-        "repeats": 1,
-        # The declared renderer replaces the raw payload in the normal result
-        # position, so the example needs no second, appended report-level plot.
-        "plot_call": None,
-        "input_vars": '["spread"]',
-        "result_vars": '["touches"]',
-        "benchable_class": "TouchCloud",
-        "class_code": _TOUCH_CLOUD_CODE,
-    },
-    # A series *inside* one sample, which curve/line cannot show: they have one
-    # value per sample, so the sweep input is their x axis rather than a column.
-    "xy_curve": {
-        "float_dims": 1,
-        "cat_dims": 0,
-        "repeats": 1,
-        # Declared, as for xy_scatter: the series is the result, not an extra plot.
-        "plot_call": None,
-        "input_vars": '["damping"]',
-        "result_vars": '["trace"]',
-        "benchable_class": "SettlingTrace",
-        "class_code": _SETTLING_TRACE_CODE,
-    },
-    # The distribution a single sample measured, unlike `histogram`, which bins one
-    # value per sample and so shows the spread of the repeats instead.
-    "xy_histogram": {
-        "float_dims": 0,
-        "cat_dims": 0,
-        "repeats": 1,
-        # Declared on the result var, so the histogram takes the raw table's place in
-        # the normal result position instead of being appended below it.
-        "plot_call": None,
-        "input_vars": '["concurrency"]',
-        "result_vars": '["latencies"]',
-        "benchable_class": "LatencySamples",
-        "class_code": _LATENCY_SAMPLES_CODE,
-    },
-    # Same axes as xy_scatter; at this many points the markers saturate and the
-    # shape of the distribution is what a scatter loses.
-    "xy_hexbin": {
-        "float_dims": 1,
-        "cat_dims": 0,
-        "repeats": 1,
-        # Declared, as for xy_scatter: the density is the result, not an extra plot.
-        "plot_call": None,
-        "input_vars": '["spread"]',
-        "result_vars": '["touches"]',
-        "benchable_class": "DenseCloud",
-        "class_code": _DENSE_CLOUD_CODE,
-    },
+
+@dataclass(frozen=True)
+class PlotConfig:
+    """One row of the plot-type table: what to generate, and from what.
+
+    This was a bare ``dict[str, int | str | None]`` until plan 23 P12b. Every read of a
+    numeric field then came back as the whole union, so ``cfg["repeats"] > 1`` was not a
+    legal comparison -- and no reader could tell an optional field from a mandatory one
+    except by finding a ``.get()`` somewhere. The defaults below are the ones the
+    consumer used to spell as ``.get(key, fallback)``.
+    """
+
+    float_dims: int
+    cat_dims: int
+    repeats: int
+    # None for the container-declaring examples, whose ResultDataSet renders itself and
+    # so emit no post-sweep line. Four of the fifteen rows.
+    plot_call: str | None
+    input_vars: str
+    benchable_class: str = _DEFAULT_CLASS
+    result_vars: str = '["distance"]'
+    # None = generate an import from `benchable_module` instead of inlining a class.
+    class_code: str | None = None
+    benchable_module: str = _DEFAULT_MODULE
+    extra_import: str | None = None
+
+
+PLOT_CONFIGS: dict[str, PlotConfig] = {
+    "bar": PlotConfig(
+        float_dims=0,
+        cat_dims=1,
+        repeats=1,
+        plot_call="res.to_bar()",
+        input_vars='["backend"]',
+        benchable_class="CacheCompare",
+        class_code=_CACHE_COMPARE_CODE,
+    ),
+    "line": PlotConfig(
+        float_dims=1,
+        cat_dims=0,
+        repeats=1,
+        plot_call="res.to_line()",
+        input_vars='["load"]',
+        benchable_class="LatencyProfile",
+        class_code=_LATENCY_PROFILE_CODE,
+    ),
+    "curve": PlotConfig(
+        float_dims=1,
+        cat_dims=0,
+        repeats=5,
+        plot_call="res.to_curve()",
+        input_vars='["load"]',
+        benchable_class="LatencyNoisyProfile",
+        class_code=_LATENCY_NOISY_PROFILE_CODE,
+    ),
+    "scatter": PlotConfig(
+        float_dims=0,
+        cat_dims=1,
+        repeats=1,
+        plot_call="res.to_scatter()",
+        input_vars='["backend"]',
+        benchable_class="ThroughputCompare",
+        class_code=_THROUGHPUT_COMPARE_CODE,
+    ),
+    "heatmap": PlotConfig(
+        float_dims=2,
+        cat_dims=0,
+        repeats=1,
+        plot_call="res.to_heatmap()",
+        input_vars='["x", "y"]',
+        benchable_class="HeatmapDemo",
+        class_code=_HEATMAP_DEMO_CODE,
+    ),
+    "surface": PlotConfig(
+        float_dims=2,
+        cat_dims=0,
+        repeats=1,
+        plot_call="res.to_surface()",
+        input_vars='["x", "y"]',
+        benchable_class="SurfaceDemo",
+        class_code=_SURFACE_DEMO_CODE,
+    ),
+    "volume": PlotConfig(
+        float_dims=3,
+        cat_dims=0,
+        repeats=1,
+        plot_call="res.to_volume()",
+        input_vars='["float1", "float2", "float3"]',
+    ),
+    "image": PlotConfig(
+        float_dims=0,
+        cat_dims=1,
+        repeats=1,
+        plot_call="res.to_panes()",
+        input_vars='["sides"]',
+        benchable_class="BenchableImageResult",
+        benchable_module=_BENCHABLE_MODULE,
+        result_vars='["polygon"]',
+    ),
+    "video": PlotConfig(
+        float_dims=0,
+        cat_dims=1,
+        repeats=1,
+        plot_call="res.to_panes()",
+        input_vars='["sides"]',
+        benchable_class="BenchableVideoResult",
+        benchable_module=_BENCHABLE_MODULE,
+        result_vars='["animation"]',
+    ),
+    "box_whisker": PlotConfig(
+        float_dims=0,
+        cat_dims=1,
+        repeats=10,
+        plot_call="res.to(BoxWhiskerResult)",
+        extra_import="from bencher.results.holoview_results.distribution_result"
+        ".box_whisker_result import BoxWhiskerResult",
+        input_vars='["backend"]',
+        benchable_class="JitterDemo",
+        class_code=_JITTER_DEMO_CODE,
+    ),
+    "scatter_jitter": PlotConfig(
+        float_dims=0,
+        cat_dims=1,
+        repeats=10,
+        plot_call="res.to(ScatterJitterResult)",
+        extra_import="from bencher.results.holoview_results.distribution_result"
+        ".scatter_jitter_result import ScatterJitterResult",
+        input_vars='["backend"]',
+        benchable_class="ScatterJitterDemo",
+        class_code=_SCATTER_JITTER_DEMO_CODE,
+    ),
+    "xy_scatter": PlotConfig(
+        float_dims=1,
+        cat_dims=0,
+        repeats=1,
+        plot_call=None,
+        input_vars='["spread"]',
+        result_vars='["touches"]',
+        benchable_class="TouchCloud",
+        class_code=_TOUCH_CLOUD_CODE,
+    ),
+    "xy_curve": PlotConfig(
+        float_dims=1,
+        cat_dims=0,
+        repeats=1,
+        plot_call=None,
+        input_vars='["damping"]',
+        result_vars='["trace"]',
+        benchable_class="SettlingTrace",
+        class_code=_SETTLING_TRACE_CODE,
+    ),
+    "xy_histogram": PlotConfig(
+        float_dims=0,
+        cat_dims=0,
+        repeats=1,
+        plot_call=None,
+        input_vars='["concurrency"]',
+        result_vars='["latencies"]',
+        benchable_class="LatencySamples",
+        class_code=_LATENCY_SAMPLES_CODE,
+    ),
+    "xy_hexbin": PlotConfig(
+        float_dims=1,
+        cat_dims=0,
+        repeats=1,
+        plot_call=None,
+        input_vars='["spread"]',
+        result_vars='["touches"]',
+        benchable_class="DenseCloud",
+        class_code=_DENSE_CLOUD_CODE,
+    ),
 }
 
 PLOT_NAMES = list(PLOT_CONFIGS.keys())
@@ -446,32 +457,31 @@ class MetaPlotTypes(MetaGeneratorBase):
         filename = function_name
         title = f"Plot Type: {self.plot_type.replace('_', ' ').title()}"
 
-        const_vars = '{"noise_scale": 0.15}' if cfg["repeats"] > 1 else None
-        extra_imports = [cfg["extra_import"]] if cfg.get("extra_import") else None
+        const_vars = '{"noise_scale": 0.15}' if cfg.repeats > 1 else None
+        extra_imports = [cfg.extra_import] if cfg.extra_import else None
 
-        sd = 2 if cfg["float_dims"] >= 2 else 3
+        sd = 2 if cfg.float_dims >= 2 else 3
         run_kwargs = {"subsampling_divisions": sd}
-        if cfg["repeats"] > 1:
-            run_kwargs["repeats"] = cfg["repeats"]
+        if cfg.repeats > 1:
+            run_kwargs["repeats"] = cfg.repeats
 
         # Use inline class_code when available, otherwise import from module
-        has_inline = "class_code" in cfg
-        benchable_module = None if has_inline else cfg.get("benchable_module", _DEFAULT_MODULE)
+        benchable_module = None if cfg.class_code is not None else cfg.benchable_module
 
         self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            benchable_class=cfg.get("benchable_class", _DEFAULT_CLASS),
+            benchable_class=cfg.benchable_class,
             benchable_module=benchable_module,
-            input_vars=cfg["input_vars"],
-            result_vars=cfg.get("result_vars", '["distance"]'),
+            input_vars=cfg.input_vars,
+            result_vars=cfg.result_vars,
             const_vars=const_vars,
-            post_sweep_line=cfg["plot_call"],
+            post_sweep_line=cfg.plot_call,
             extra_imports=extra_imports,
             run_kwargs=run_kwargs,
-            class_code=cfg.get("class_code"),
+            class_code=cfg.class_code,
         )
 
 

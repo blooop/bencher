@@ -139,6 +139,52 @@ from .variables.results import (
 from .variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, hash_sha1
 from .variables.time import TimeSnapshot
 
+
+class _MissingExtraMeta(type):
+    """Metaclass making *class-attribute* access on a placeholder raise too.
+
+    Two of the placeholders stand in for things used as namespaces rather than called
+    -- ``RerunViewKind`` is an enum, read as ``RerunViewKind.spatial_2d``. Without this,
+    those reads would raise ``AttributeError: type object 'RerunViewKind' has no
+    attribute 'spatial_2d'``, which is the same uninformative failure the placeholders
+    exist to replace, just one level down.
+    """
+
+    def __getattr__(cls, attr: str):
+        raise ImportError(cls._bencher_missing_extra_message)
+
+
+def _requires_rerun(name: str) -> type:
+    """Build a stand-in for a ``rerun``-only export that is not importable.
+
+    These names used to be bound only inside a ``try``/``except ModuleNotFoundError``,
+    so on an install without ``rerun-sdk`` they simply did not exist: ``bn.capture_rerun_rrd``
+    raised ``AttributeError: module 'bencher' has no attribute ...``, which names neither the
+    optional dependency nor how to get it. It also made ``bencher``'s public surface partial —
+    a state static analysis reports as ``possibly-missing-attribute`` and readers have no way
+    to discharge. The names now always exist; using one without the extra installed raises an
+    ``ImportError`` that says what to install. A class (rather than a function) is returned so
+    that ``isinstance`` checks against the placeholder stay legal too.
+    """
+    message = (
+        f"bencher.{name} requires the optional 'rerun-sdk' dependency, which is not "
+        "installed. Install it with `pip install rerun-sdk`."
+    )
+
+    def __init__(self, *_args, **_kwargs):
+        raise ImportError(message)
+
+    return _MissingExtraMeta(
+        name,
+        (),
+        {
+            "__init__": __init__,
+            "_bencher_missing_extra_message": message,
+            "__doc__": f"Placeholder for {name}; requires the optional 'rerun-sdk' package.",
+        },
+    )
+
+
 try:
     from .utils_rerun import (
         capture_rerun_rrd,
@@ -146,12 +192,14 @@ try:
         rerun_to_pane,
     )
 except ModuleNotFoundError:
-    pass
+    capture_rerun_rrd = _requires_rerun("capture_rerun_rrd")
+    capture_rerun_window = _requires_rerun("capture_rerun_window")
+    rerun_to_pane = _requires_rerun("rerun_to_pane")
 
 try:
     from .results.rerun_result import RerunResult
 except ModuleNotFoundError:
-    pass
+    RerunResult = _requires_rerun("RerunResult")
 
 try:
     from .results.composable_container.composable_container_rerun import (
@@ -161,7 +209,10 @@ try:
     )
     from .results.rerun_summary import RerunSummaryResult
 except ModuleNotFoundError:
-    pass
+    ComposableContainerRerun = _requires_rerun("ComposableContainerRerun")
+    RerunRecording = _requires_rerun("RerunRecording")
+    RerunViewKind = _requires_rerun("RerunViewKind")
+    RerunSummaryResult = _requires_rerun("RerunSummaryResult")
 
 
 from .cache_management import (

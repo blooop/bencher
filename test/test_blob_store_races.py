@@ -32,6 +32,7 @@ import os
 import pickle
 import threading
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
 
@@ -125,23 +126,35 @@ class TestConcurrentMaterialize:
         ``Path.replace`` at all, the hook never fires and this fails.
         """
         payload = frame(3.5, rows=256)
-        observed: dict[str, object] = {}
+
+        # A `dict[str, object]` bag here made every read `object`, so even
+        # `".tmp-" in observed["tmp_name"]` was not a legal expression. Three
+        # differently-typed observations are a record, not a mapping.
+        @dataclass
+        class Observed:
+            fired: bool = False
+            final_existed_before_rename: bool = True
+            tmp_name: str = ""
+            tmp_bytes: bytes = b""
+
+        observed = Observed()
         real_replace = Path.replace
 
         def watching_replace(self, target):
-            observed["final_existed_before_rename"] = Path(target).exists()
-            observed["tmp_name"] = self.name
-            observed["tmp_bytes"] = self.read_bytes()
+            observed.fired = True
+            observed.final_existed_before_rename = Path(target).exists()
+            observed.tmp_name = self.name
+            observed.tmp_bytes = self.read_bytes()
             return real_replace(self, target)
 
         with mock.patch.object(Path, "replace", watching_replace):
             path = Path(materialize_blob(payload, tmp_path))
 
-        assert observed, "blob was published without going through an atomic rename"
-        assert observed["final_existed_before_rename"] is False
-        assert ".tmp-" in observed["tmp_name"], "staged file is not a temp sibling"
+        assert observed.fired, "blob was published without going through an atomic rename"
+        assert observed.final_existed_before_rename is False
+        assert ".tmp-" in observed.tmp_name, "staged file is not a temp sibling"
         # The staged bytes were already complete before the name became visible.
-        assert observed["tmp_bytes"] == path.read_bytes()
+        assert observed.tmp_bytes == path.read_bytes()
         pd.testing.assert_frame_equal(load_blob(path), payload)
 
     def test_reader_racing_a_writer_never_sees_a_partial_blob(self, tmp_path):

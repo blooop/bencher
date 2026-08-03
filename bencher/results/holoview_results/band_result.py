@@ -102,7 +102,8 @@ class BandResult(HoloviewResult):
         # The band plot has over_time as its sole x-axis, so all other
         # dimensions (input vars, repeat) become samples whose distribution
         # is shown via percentile bands + scatter.
-        sample_dims = [d for d in da.dims if d != "over_time"]
+        # str(): xarray types dim names as `Hashable`, and these are joined into a title.
+        sample_dims = [str(d) for d in da.dims if d != "over_time"]
 
         if title is None:
             agg_names = [d for d in sample_dims if d != "repeat"]
@@ -166,7 +167,7 @@ class BandResult(HoloviewResult):
             return None
 
         x_dim = candidate_x[0]
-        sample_dims = [d for d in all_dims if d != x_dim]
+        sample_dims = [str(d) for d in all_dims if d != x_dim]
         if title is None:
             agg_names = [d for d in sample_dims if d != "repeat"]
             agg_str = ", ".join(agg_names) if agg_names else "repeat"
