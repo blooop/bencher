@@ -401,40 +401,54 @@ PLOT_CONFIGS: dict[str, PlotConfig] = {
         benchable_class="ScatterJitterDemo",
         class_code=_SCATTER_JITTER_DEMO_CODE,
     ),
+    # Both axes measured *within* one sample, unlike every other scatter here, so the
+    # result is a table per sample and the sweep input separates the clouds.
     "xy_scatter": PlotConfig(
         float_dims=1,
         cat_dims=0,
         repeats=1,
+        # The declared renderer replaces the raw payload in the normal result
+        # position, so the example needs no second, appended report-level plot.
         plot_call=None,
         input_vars='["spread"]',
         result_vars='["touches"]',
         benchable_class="TouchCloud",
         class_code=_TOUCH_CLOUD_CODE,
     ),
+    # A series *inside* one sample, which curve/line cannot show: they have one
+    # value per sample, so the sweep input is their x axis rather than a column.
     "xy_curve": PlotConfig(
         float_dims=1,
         cat_dims=0,
         repeats=1,
+        # Declared, as for xy_scatter: the series is the result, not an extra plot.
         plot_call=None,
         input_vars='["damping"]',
         result_vars='["trace"]',
         benchable_class="SettlingTrace",
         class_code=_SETTLING_TRACE_CODE,
     ),
+    # The distribution a single sample measured, unlike `histogram`, which bins one
+    # value per sample and so shows the spread of the repeats instead.
     "xy_histogram": PlotConfig(
         float_dims=0,
         cat_dims=0,
         repeats=1,
+        # Declared on the result var, so the histogram takes the raw table's place in
+        # the normal result position instead of being appended below it.
         plot_call=None,
         input_vars='["concurrency"]',
         result_vars='["latencies"]',
         benchable_class="LatencySamples",
         class_code=_LATENCY_SAMPLES_CODE,
     ),
+    # Same axes as xy_scatter; at this many points the markers saturate and the
+    # shape of the distribution is what a scatter loses.
     "xy_hexbin": PlotConfig(
         float_dims=1,
         cat_dims=0,
         repeats=1,
+        # Declared, as for xy_scatter: the density is the result, not an extra plot.
         plot_call=None,
         input_vars='["spread"]',
         result_vars='["touches"]',

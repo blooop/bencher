@@ -489,9 +489,13 @@ class HoloviewResult(PaneResult):
                 if num_inputs > 1:
                     kdims[input_vars[1].name] = state["y"]
 
-                # Fetched rather than hasattr-probed: `current_key` only exists on a
-                # HoloMap, and binding it once gives the zip a value with a type instead
-                # of a second attribute lookup on a union.
+                # Fetched rather than hasattr-probed, and the distinction is not
+                # cosmetic. `current_key` lives on `hv.DynamicMap` (`hv.HoloMap` has no
+                # such attribute at all) and is `None` until the map is first evaluated,
+                # so `hasattr` said True for a value that then fed `zip(kdims, None)` ->
+                # `TypeError: zip argument #2 must support iteration`. Binding it once
+                # covers both the absent and the not-yet-evaluated case, and gives the
+                # zip a value with a type instead of a second lookup on a union.
                 current_key = getattr(plot, "current_key", None)
                 if current_key is not None:
                     for d, k in zip(list(plot.kdims), list(current_key)):

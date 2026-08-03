@@ -64,8 +64,36 @@ def _global_rules() -> dict[str, str]:
     return _ty_config().get("rules", {})
 
 
+# Rules ty ships DISABLED by default. For these, "absent from [tool.ty.rules]" means
+# OFF, not "on at its default severity" -- so `!= "ignore"` is not evidence of anything
+# and the rule must be spelled out as "error".
+#
+# This list exists because P12b got it wrong: it "enabled" possibly-missing-attribute by
+# deleting its `= "ignore"` line, `pixi run ty` stayed green, and the seeded probe that
+# was supposed to confirm the fix passed `--error possibly-missing-attribute` on the
+# command line -- so it measured a rule the checked-in config did not have on. Every
+# surface signal agreed the gate was armed while it was not.
+#
+# Verify a candidate before adding it here: write a file violating the rule, run
+# `ty check` on it under a config that does NOT mention the rule, and see whether
+# anything is reported.
+OFF_BY_DEFAULT_IN_TY = {
+    "possibly-missing-attribute": "verified against ty 0.0.56 with a standalone probe",
+}
+
+
 class TestGateConfiguration:
     """Properties of the checked-in ty configuration."""
+
+    @pytest.mark.parametrize("rule", sorted(OFF_BY_DEFAULT_IN_TY))
+    def test_off_by_default_rule_is_explicitly_enabled(self, rule: str) -> None:
+        setting = _global_rules().get(rule)
+        assert setting == "error", (
+            f"`{rule}` is off by default in ty ({OFF_BY_DEFAULT_IN_TY[rule]}), so it must "
+            f"be set to 'error' in [tool.ty.rules] to be enforced -- currently {setting!r}. "
+            f"Merely leaving it out of the ignore list is what P12b did first, and the gate "
+            f"reported 'All checks passed!' with the rule switched off."
+        )
 
     @pytest.mark.parametrize("rule", sorted(MUST_NOT_BE_IGNORED))
     def test_rule_not_globally_ignored(self, rule: str) -> None:
@@ -211,6 +239,51 @@ def handle(k: Kind) -> str:
         assert "Kind.C" in output, (
             "ty flagged the incomplete match but did not name the missing variant, "
             f"which is what makes the diagnostic actionable. Output:\n{output}"
+        )
+
+    def test_repo_rule_table_actually_fires_on_a_seeded_violation(self, tmp_path: Path) -> None:
+        """Run a seeded violation under **this repo's** `[tool.ty.rules]`, not a minimal one.
+
+        The sibling probes here deliberately use a standalone config (see the class
+        docstring). That leaves one thing unchecked: whether the *checked-in* rule table
+        enables what it claims. It did not — P12b shipped `possibly-missing-attribute`
+        switched off while `pixi run ty` said "All checks passed!", because ty defaults
+        the rule to off and the PR only deleted its `"ignore"` line.
+
+        So this reconstructs the repo's rule table verbatim and asserts the rule bites.
+        Config assertions alone cannot catch a default that is not what you assumed.
+        """
+        rules = _global_rules()
+        rule_lines = "\n".join(f'{k} = "{v}"' for k, v in rules.items())
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "probe"\nversion = "0"\nrequires-python = ">=3.11"\n\n'
+            f"[tool.ty.rules]\n{rule_lines}\n"
+        )
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "opt.py").write_text("thing = 1\n")
+        (pkg / "__init__.py").write_text(
+            "try:\n    from pkg.opt import thing\nexcept ModuleNotFoundError:\n    pass\n"
+        )
+        (tmp_path / "use.py").write_text(
+            "import pkg\n\n\ndef go() -> object:\n    return pkg.thing\n"
+        )
+        result = subprocess.run(
+            ["ty", "check", "--python", sys.prefix, str(tmp_path)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert "possibly-missing-attribute" in output, (
+            "A name bound only inside `try: from ... except ModuleNotFoundError` was read "
+            "as a module attribute and this repo's rule table did not object. The rule is "
+            "off by default in ty, so it must be spelled `possibly-missing-attribute = "
+            f'"error"` in [tool.ty.rules]. Output:\n{output}'
+        )
+        assert result.returncode != 0, (
+            f"the diagnostic was reported but is not error-level, so CI would not fail:\n{output}"
         )
 
     def test_exhaustive_match_is_accepted(self, tmp_path: Path) -> None:

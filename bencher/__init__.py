@@ -140,31 +140,26 @@ from .variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, hash_sha1
 from .variables.time import TimeSnapshot
 
 
-class _MissingExtraMeta(type):
-    """Metaclass making *class-attribute* access on a placeholder raise too.
-
-    Two of the placeholders stand in for things used as namespaces rather than called
-    -- ``RerunViewKind`` is an enum, read as ``RerunViewKind.spatial_2d``. Without this,
-    those reads would raise ``AttributeError: type object 'RerunViewKind' has no
-    attribute 'spatial_2d'``, which is the same uninformative failure the placeholders
-    exist to replace, just one level down.
-    """
-
-    def __getattr__(cls, attr: str):
-        raise ImportError(cls._bencher_missing_extra_message)
-
-
 def _requires_rerun(name: str) -> type:
     """Build a stand-in for a ``rerun``-only export that is not importable.
 
-    These names used to be bound only inside a ``try``/``except ModuleNotFoundError``,
-    so on an install without ``rerun-sdk`` they simply did not exist: ``bn.capture_rerun_rrd``
-    raised ``AttributeError: module 'bencher' has no attribute ...``, which names neither the
-    optional dependency nor how to get it. It also made ``bencher``'s public surface partial —
-    a state static analysis reports as ``possibly-missing-attribute`` and readers have no way
-    to discharge. The names now always exist; using one without the extra installed raises an
-    ``ImportError`` that says what to install. A class (rather than a function) is returned so
-    that ``isinstance`` checks against the placeholder stay legal too.
+    ``bencher.utils_rerun`` is the one module in the package that imports ``rerun`` at
+    module scope, so it is the one whose names could go missing. They used to be bound
+    only inside a ``try``/``except ModuleNotFoundError``: on an install without
+    ``rerun-sdk`` they simply did not exist, and ``bn.capture_rerun_rrd`` raised
+    ``AttributeError: module 'bencher' has no attribute ...``, naming neither the
+    optional dependency nor how to get it. It also made ``bencher``'s public surface
+    partial -- the state ``ty`` reports as ``possibly-missing-attribute``, which a reader
+    has no way to discharge. The names now always exist; using one without the extra
+    raises an ``ImportError`` that says what to install.
+
+    A class rather than a function, so ``isinstance`` against the placeholder stays
+    legal. Deliberately a *plain* class: an earlier revision gave it a metaclass whose
+    ``__getattr__`` raised ``ImportError`` so attribute access would be branded too, but
+    ``hasattr`` and ``getattr(x, n, default)` only swallow ``AttributeError``, so that
+    turned every defensive feature probe into an uncatchable-by-idiom crash -- on exactly
+    the installs least able to diagnose it. All three names here are functions, called
+    rather than read, so there is nothing for such a hook to protect.
     """
     message = (
         f"bencher.{name} requires the optional 'rerun-sdk' dependency, which is not "
@@ -174,12 +169,11 @@ def _requires_rerun(name: str) -> type:
     def __init__(self, *_args, **_kwargs):
         raise ImportError(message)
 
-    return _MissingExtraMeta(
+    return type(
         name,
         (),
         {
             "__init__": __init__,
-            "_bencher_missing_extra_message": message,
             "__doc__": f"Placeholder for {name}; requires the optional 'rerun-sdk' package.",
         },
     )
@@ -196,25 +190,15 @@ except ModuleNotFoundError:
     capture_rerun_window = _requires_rerun("capture_rerun_window")
     rerun_to_pane = _requires_rerun("rerun_to_pane")
 
-try:
-    from .results.rerun_result import RerunResult
-except ModuleNotFoundError:
-    RerunResult = _requires_rerun("RerunResult")
-
-try:
-    from .results.composable_container.composable_container_rerun import (
-        ComposableContainerRerun,
-        RerunRecording,
-        RerunViewKind,
-    )
-    from .results.rerun_summary import RerunSummaryResult
-except ModuleNotFoundError:
-    ComposableContainerRerun = _requires_rerun("ComposableContainerRerun")
-    RerunRecording = _requires_rerun("RerunRecording")
-    RerunViewKind = _requires_rerun("RerunViewKind")
-    RerunSummaryResult = _requires_rerun("RerunSummaryResult")
-
-
+# Imported unconditionally, and that is a statement of fact rather than optimism: none of
+# these three modules imports `rerun` at module scope -- each defers it into the method
+# that needs it -- so `except ModuleNotFoundError` around them never fired in any
+# environment. Verified by importing `bencher` with a `sys.meta_path` hook blocking
+# `rerun`: all five names below resolve to the real objects, while the three above become
+# placeholders. `rerun_summary` could not have been optional anyway, since
+# `results/bench_result.py` imports it unconditionally and `BenchResult` inherits from it.
+# The dead handlers were worth deleting rather than keeping "just in case": a guard that
+# cannot fire still has to be read, and this one advertised a fallback that did not exist.
 from .cache_management import (
     DEFAULT_CACHE_SIZE_BYTES,
     BlobReachability,
@@ -243,9 +227,16 @@ from .regression import (
     method_cells,
 )
 from .results.bench_result import BenchResult
+from .results.composable_container.composable_container_rerun import (
+    ComposableContainerRerun,
+    RerunRecording,
+    RerunViewKind,
+)
 from .results.optimize_result import OptimizeResult
 from .results.pane_result import PaneResult
 from .results.render_failure import RenderFailedWarning
+from .results.rerun_result import RerunResult
+from .results.rerun_summary import RerunSummaryResult
 from .sample_order import SampleOrder
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton

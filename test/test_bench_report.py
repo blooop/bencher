@@ -23,11 +23,16 @@ class TestBenchReport(unittest.TestCase):
         """
         bench_report = BenchReport()
         for debug in (False, True):
-            with self.subTest(debug=debug), self.assertRaises(ValueError) as ctx:
-                bench_report.publish(lambda _b: ("repo", "url"), debug=debug)
-            message = str(ctx.exception)
-            self.assertIn("branch_name", message)
-            self.assertIn("bench_name", message)
+            # The message assertions stay *inside* the subTest. Hoisted out, a subtest
+            # that fails to raise is recorded and the loop continues straight into
+            # `ctx.exception`, which is unset -- so the real failure is buried under an
+            # AttributeError from the assertion meant to diagnose it.
+            with self.subTest(debug=debug):
+                with self.assertRaises(ValueError) as ctx:
+                    bench_report.publish(lambda _b: ("repo", "url"), debug=debug)
+                message = str(ctx.exception)
+                self.assertIn("branch_name", message)
+                self.assertIn("bench_name", message)
 
     # Tests that a Markdown pane with a custom name is appended to the BenchReport instance
     def test_append_markdown_with_custom_name(self):

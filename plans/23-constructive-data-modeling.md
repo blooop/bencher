@@ -1285,14 +1285,52 @@ changes, and both are recorded in the CHANGELOG as such.
    the truth — the public surface was *partial*, and the failure mode on an install
    without `rerun-sdk` was `AttributeError: module 'bencher' has no attribute
    'capture_rerun_window'`, which names neither the optional dependency nor how to get it.
-   The except branches now bind each name to a `_requires_rerun(name)` placeholder that
-   raises a branded `ImportError`. A class rather than a function, so `isinstance` against
-   the placeholder stays legal.
 
-   The except branch **cannot** be exercised in an environment that has `rerun-sdk`, which
-   both CI matrix entries do, so `test/test_optional_extra_exports.py` drives
-   `_requires_rerun` directly. Without that the fix would be untested code that only runs
-   on the installs least able to report a problem.
+   **But only three of the eight names could ever have been missing, and the first version
+   of this fix got that wrong.** `bencher.utils_rerun` is the one module in the package
+   that imports `rerun` at module scope; `rerun_result`, `composable_container_rerun` and
+   `rerun_summary` all defer `import rerun` into the methods that need it, so their
+   handlers never fired in any environment. Measured, not read: importing `bencher` behind
+   a `sys.meta_path` hook that blocks `rerun` yields placeholders for
+   `capture_rerun_rrd`/`capture_rerun_window`/`rerun_to_pane` and the **real** objects for
+   the other five. `RerunSummaryResult` could not have been optional at all —
+   `results/bench_result.py` imports it unconditionally and `BenchResult` inherits from it,
+   so a genuine failure there breaks `import bencher` long before `__init__.py`'s `try`.
+
+   So: the three live names get `_requires_rerun(name)` placeholders (a class rather than
+   a function, so `isinstance` stays legal), and the two dead handlers were **deleted** in
+   favour of unconditional imports — which satisfies the rule strictly better than a
+   placeholder does. The 16 diagnostics split **9 / 7** along that line (measured by
+   reverting each half separately under the repo config): 9 on the three genuinely
+   optional names, 7 on the five that never were. The second 7 were the rule correctly
+   reporting a partiality the *code* asserted and the runtime did not have — a guard
+   claiming an import might fail, for an import that cannot. Deleting the guard is the fix;
+   a placeholder would have been an answer to a question nobody was asking.
+
+   Two things this corrected on the way:
+
+   - A `_MissingExtraMeta` metaclass had been added so class-*attribute* access on a
+     placeholder would also raise the branded error, justified by `RerunViewKind` being an
+     enum. That name can never be a placeholder, so the metaclass was machinery for an
+     unreachable branch — and it was actively harmful: `hasattr` and
+     `getattr(x, n, default)` only swallow `AttributeError`, so raising `ImportError` from
+     `__getattr__` turned every defensive feature probe into an uncatchable-by-idiom crash
+     on exactly the installs least able to diagnose it. Deleted. The branded error belongs
+     at call time, where the caller meant to *use* the thing.
+   - The third handler bound four names but its `try` ran two import statements, so a
+     failure in the second would have clobbered three names the first had already bound
+     successfully. Moot once the handler is gone, but worth recording as the hazard of a
+     multi-import `try` with a multi-name handler.
+
+   The surviving except branch **cannot** be exercised in an environment that has
+   `rerun-sdk`, and every pixi environment here installs it — so a runtime
+   `assert hasattr(bn, name)` test would pass identically on the unfixed code. The first
+   version of `test/test_optional_extra_exports.py` did exactly that and was vacuous.
+   It now (a) parses `__init__.py` and asserts every name bound in a
+   `ModuleNotFoundError`-guarded `try` is also bound by its handler — the regression that
+   can actually recur — and (b) pins the fact that licenses the unconditional imports, by
+   asserting `utils_rerun` is still the only library module importing `rerun` at module
+   scope. Both were verified to fail when their premise is broken.
 
 3. **Three live bugs, each with a regression test that fails on the pre-fix code.**
 
@@ -1368,9 +1406,33 @@ changes, and both are recorded in the CHANGELOG as such.
    seven-site `pn.pane`/`pn.panel`-in-annotation-position family, and fixing one of seven
    inside an unrelated PR is how that family stays half-migrated.
 
-10. **The gate was verified to bite on all four rules, not just configured to.** A seeded
-    probe module produced one diagnostic per rule and was deleted;
-    `possibly-missing-attribute` needed the `bencher/__init__.py` fix temporarily reverted
-    to reproduce, because no synthetic two-module probe triggered it — the first attempt
-    at such a probe reported nothing and reading that as "the rule does not fire" would
-    have been wrong. Revert the real fix, count, restore.
+10. **`possibly-missing-attribute` was not enabled by deleting its `"ignore"` line, and
+    every surface signal said it was. This is the most reusable finding in P12b.**
+
+    Three of the four rules are error-by-default in `ty`, so removing their `"ignore"`
+    entries turns them on. The fourth ships **off**. Deleting its line left it disabled
+    while `pixi run ty` reported `All checks passed!`, the key was absent from
+    `[tool.ty.rules]` exactly like the three that had worked, and
+    `test_rule_not_globally_ignored` — which asserts `setting != "ignore"` — passed on
+    `None`. Three independent signals, all agreeing, all wrong.
+
+    **The seeded probe that was supposed to catch this instead confirmed the error**,
+    because it passed `--error possibly-missing-attribute` on the command line. That
+    measures ty's behaviour, not the repo's gate. This is handover §6 trap 1 wearing a
+    different hat: a probe run under anything other than the checked-in config proves
+    nothing about the checked-in config. It was caught by an adversarial review pass, not
+    by the work itself.
+
+    Fixed three ways, because the config fix alone would leave the trap armed for the
+    next rule: `possibly-missing-attribute = "error"` is spelled out with a comment saying
+    why; `OFF_BY_DEFAULT_IN_TY` in `test_ty_gate.py` requires an explicit `"error"` for
+    any rule in that set; and `test_repo_rule_table_actually_fires_on_a_seeded_violation`
+    reconstructs the repo's own rule table and asserts a seeded violation is reported —
+    the only check that cannot be fooled by a wrong assumption about a default.
+
+    **Re-measured honestly afterwards**, with the repo config and no CLI override: 16
+    diagnostics with the `__init__.py` fix reverted, 0 with it. The original count was
+    right; the verification of it was not.
+
+    When adding a rule to a checker's config, verify the default before assuming
+    "not ignored" means "enabled" — the two are the same only for error-by-default rules.

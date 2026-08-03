@@ -1,46 +1,125 @@
 """The ``rerun``-gated names on the ``bencher`` package are always present.
 
-Seven exports (``capture_rerun_rrd``, ``capture_rerun_window``, ``rerun_to_pane``,
-``RerunResult``, ``ComposableContainerRerun``, ``RerunRecording``, ``RerunViewKind``,
-``RerunSummaryResult``) used to be bound only inside ``try``/``except
-ModuleNotFoundError`` in ``bencher/__init__.py``. On an install without ``rerun-sdk``
-they simply did not exist, so ``bn.capture_rerun_rrd`` raised ``AttributeError: module
-'bencher' has no attribute ...`` -- a message naming neither the optional dependency nor
-how to install it -- and ``bencher``'s public surface was *partially defined*, which is
-what ty reports as ``possibly-missing-attribute`` (plan 23 P12b).
+``bencher.utils_rerun`` is the only module in the package that imports ``rerun`` at
+module scope, so its three exports (``capture_rerun_rrd``, ``capture_rerun_window``,
+``rerun_to_pane``) are the only ones that could go missing. They used to be bound only
+inside ``try``/``except ModuleNotFoundError`` in ``bencher/__init__.py``: without
+``rerun-sdk`` they did not exist, and ``bn.capture_rerun_rrd`` raised ``AttributeError:
+module 'bencher' has no attribute ...``, a message naming neither the optional
+dependency nor how to install it. That partial surface is what ty reports as
+``possibly-missing-attribute`` (plan 23 P12b).
 
-The except branch cannot be exercised in an environment that has ``rerun-sdk``
-installed, which this one does; these tests therefore drive ``_requires_rerun``
-directly. Without them the branch is untested code that only runs on the installs
-least able to report a problem.
+**Why these tests are shaped the way they are.** Every pixi environment in this repo
+installs the ``rerun`` feature, so there is no environment in which the ``except``
+branch runs -- an ``assert hasattr(bn, name)`` test would pass identically on the
+unfixed code and prove nothing. So:
+
+* ``test_gated_imports_bind_on_both_branches`` parses ``bencher/__init__.py`` and checks
+  the *structure*: every name bound in a ``ModuleNotFoundError``-guarded ``try`` must
+  also be bound by its handler. That is the regression that can actually recur -- a
+  fourth gated import added without a matching placeholder -- and it is checked without
+  needing an install that lacks the extra.
+* The rest drive ``_requires_rerun`` directly, because the placeholder is code that only
+  ever runs on the installs least able to report a problem.
 """
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 
-import bencher as bn
 from bencher import _requires_rerun
 
-# Every name bound in one of the three rerun-gated try/except blocks.
-RERUN_EXPORTS = [
-    "capture_rerun_rrd",
-    "capture_rerun_window",
-    "rerun_to_pane",
-    "RerunResult",
-    "ComposableContainerRerun",
-    "RerunRecording",
-    "RerunViewKind",
-    "RerunSummaryResult",
-]
+INIT_PY = Path(__file__).resolve().parent.parent / "bencher" / "__init__.py"
 
 
-@pytest.mark.parametrize("name", RERUN_EXPORTS)
-def test_export_exists_regardless_of_the_extra(name: str) -> None:
-    """The attribute is defined on both branches, so no caller has to probe for it."""
-    assert hasattr(bn, name), (
-        f"bencher.{name} is not defined. Every rerun-gated export must be bound on "
-        "both branches of its try/except so the public surface is total."
+def _gated_import_blocks() -> list[tuple[set[str], set[str]]]:
+    """(names bound by the try, names bound by the handler) per guarded import block."""
+    tree = ast.parse(INIT_PY.read_text())
+    blocks = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        guards_missing_module = any(
+            isinstance(h.type, ast.Name) and h.type.id == "ModuleNotFoundError"
+            for h in node.handlers
+        )
+        if not guards_missing_module:
+            continue
+        imported = {
+            alias.asname or alias.name.split(".")[0]
+            for stmt in node.body
+            if isinstance(stmt, (ast.Import, ast.ImportFrom))
+            for alias in stmt.names
+        }
+        bound_in_handler = {
+            target.id
+            for handler in node.handlers
+            for stmt in handler.body
+            if isinstance(stmt, ast.Assign)
+            for target in stmt.targets
+            if isinstance(target, ast.Name)
+        }
+        blocks.append((imported, bound_in_handler))
+    return blocks
+
+
+def test_gated_imports_bind_on_both_branches() -> None:
+    """A name that can fail to import must have a placeholder, or the surface is partial.
+
+    Structural, not behavioural, and deliberately so: every pixi environment here has
+    ``rerun-sdk``, so a runtime check of the fallback would be vacuous. This catches the
+    recurrence that matters -- someone adds a gated import and forgets the handler --
+    in the one environment we actually run.
+    """
+    blocks = _gated_import_blocks()
+    assert blocks, (
+        f"no ModuleNotFoundError-guarded import blocks found in {INIT_PY.name}. If the "
+        "last one was removed, delete this test with it; if the guard was respelled, "
+        "teach the parser the new spelling rather than leaving it matching nothing."
+    )
+    for imported, bound in blocks:
+        missing = imported - bound
+        assert not missing, (
+            f"{sorted(missing)} are imported inside a try/except ModuleNotFoundError in "
+            f"{INIT_PY.name} but are not bound by the handler, so on an install without "
+            "the optional dependency they vanish from the bencher namespace and reads "
+            "raise AttributeError. Bind each to _requires_rerun(<name>)."
+        )
+
+
+def test_the_gated_block_is_the_one_module_that_needs_it() -> None:
+    """Only ``utils_rerun`` imports ``rerun`` at module scope; the rest defer it.
+
+    Pins the fact that justifies importing the other five rerun exports unconditionally.
+    If someone hoists an ``import rerun`` to module scope in one of those files, that
+    import becomes genuinely optional and needs a guard -- this fails and says so.
+    """
+    package = INIT_PY.parent
+    module_scope_importers = set()
+    for path in package.rglob("*.py"):
+        # bencher/example/ is excluded on purpose: the rerun examples DO import rerun at
+        # module scope, and that is correct -- they are standalone scripts, run by name,
+        # not pulled in by `import bencher`. What this test constrains is the library
+        # tree, which is what __init__.py's unconditional imports actually reach.
+        if path.relative_to(package).parts[0] == "example":
+            continue
+        for node in ast.parse(path.read_text()).body:  # body = module scope only
+            names = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            if any(n == "rerun" or n.startswith("rerun.") for n in names):
+                module_scope_importers.add(path.relative_to(package).as_posix())
+    assert module_scope_importers == {"utils_rerun.py"}, (
+        f"modules importing `rerun` at module scope changed to {sorted(module_scope_importers)}. "
+        "bencher/__init__.py imports RerunResult, ComposableContainerRerun, RerunRecording, "
+        "RerunViewKind and RerunSummaryResult unconditionally *because* their modules defer "
+        "`import rerun` into the methods that need it. A new module-scope import makes one of "
+        "those genuinely optional, and it needs a guarded import with a placeholder."
     )
 
 
@@ -64,26 +143,32 @@ def test_placeholder_raises_on_any_call_signature() -> None:
 
 
 def test_placeholder_is_a_class_so_isinstance_stays_legal() -> None:
-    """Returned as a class, not a function: code doing ``isinstance(x, bn.RerunRecording)``
+    """Returned as a class, not a function: code doing ``isinstance(x, bn.rerun_to_pane)``
     on an install without the extra gets False, not ``TypeError: isinstance() arg 2 must
     be a type``."""
-    placeholder = _requires_rerun("RerunRecording")
+    placeholder = _requires_rerun("rerun_to_pane")
     assert isinstance(placeholder, type)
     assert not isinstance(object(), placeholder)
 
 
-def test_placeholder_attribute_access_also_names_the_dependency() -> None:
-    """``RerunViewKind`` is an enum -- read as a namespace, never called. Attribute
-    access must reach the same ImportError, not ``AttributeError: type object ... has no
-    attribute 'spatial_2d'``, which is the failure the placeholder exists to replace."""
-    placeholder = _requires_rerun("RerunViewKind")
-    with pytest.raises(ImportError, match="rerun-sdk"):
-        _ = placeholder.spatial_2d
+def test_placeholder_does_not_break_feature_probes() -> None:
+    """``hasattr`` and ``getattr(..., default)`` must keep working on a placeholder.
+
+    An earlier revision gave the placeholder a metaclass whose ``__getattr__`` raised
+    ``ImportError``, so attribute access would carry the branded message too. Both
+    builtins only swallow ``AttributeError``, so that turned every defensive probe --
+    autodoc, plugin discovery, ``getattr(x, "__wrapped__", None)`` -- into an
+    uncatchable-by-idiom crash, on precisely the installs least able to diagnose it.
+    The branded error belongs at call time, where the caller meant to *use* the thing.
+    """
+    placeholder = _requires_rerun("capture_rerun_rrd")
+    assert hasattr(placeholder, "nope") is False
+    assert getattr(placeholder, "nope", "DEFAULT") == "DEFAULT"
 
 
 def test_placeholder_keeps_its_own_identity_attributes() -> None:
-    """The metaclass hook must not swallow ordinary class introspection."""
-    placeholder = _requires_rerun("RerunViewKind")
-    assert placeholder.__name__ == "RerunViewKind"
+    """Ordinary class introspection still answers."""
+    placeholder = _requires_rerun("rerun_to_pane")
+    assert placeholder.__name__ == "rerun_to_pane"
     assert placeholder.__doc__ is not None
     assert "rerun-sdk" in placeholder.__doc__

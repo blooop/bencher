@@ -61,25 +61,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `assert_never` is now a compile-time proof rather than a runtime assertion.
 - **The `ty` gate now enforces all five Tier-B rules** (plan 23 P12b took the remaining
   four: `not-iterable`, `no-matching-overload`, `unsupported-operator`,
-  `possibly-missing-attribute`; 100 diagnostics). `test_ty_gate.py` protects each against
-  being re-ignored. The two dominant causes were representation defects, not annotation
-  noise, and both are behaviour changes:
+  `possibly-missing-attribute`; 100 diagnostics). Three of the four are error-by-default,
+  so dropping their `"ignore"` lines enables them; `possibly-missing-attribute` is **off**
+  by default and is now spelled `= "error"` explicitly. `test_ty_gate.py` protects each
+  against being re-ignored, and additionally runs a seeded violation through the repo's
+  own rule table, because "absent from the ignore list" is not evidence a rule is on. The
+  two dominant causes were representation defects, not annotation noise, and both are
+  behaviour changes:
   - **`BenchCfg`'s six variable-list fields default to `[]`, not `None`**
     (`input_vars`, `result_vars`, `const_vars`, `result_hmaps`, `meta_vars`, `all_vars`).
-    "No variables" is spelled `[]`; there is no second spelling. Eleven readers already
-    iterated these without the `or []` the None default required, so a `BenchCfg` built
-    outside `plot_sweep` raised `TypeError: 'NoneType' object is not iterable` from inside
-    describe/plot code. **`BenchCfg(input_vars=None)` is now rejected by param** — pass
-    `[]`. No persisted hash moves: `hash_persistent` already folded these as `x or []`.
-  - **The `rerun`-gated exports always exist on the `bencher` namespace.**
-    `capture_rerun_rrd`, `capture_rerun_window`, `rerun_to_pane`, `RerunResult`,
-    `ComposableContainerRerun`, `RerunRecording`, `RerunViewKind` and
-    `RerunSummaryResult` were bound only inside `try`/`except ModuleNotFoundError`, so on
-    an install without `rerun-sdk` they were simply absent and `bn.capture_rerun_rrd`
-    raised `AttributeError: module 'bencher' has no attribute ...`, naming neither the
-    dependency nor how to get it. Each name now resolves to a placeholder that raises
-    `ImportError: ... requires the optional 'rerun-sdk' dependency ... pip install
-    rerun-sdk`. Installs *with* the extra are unaffected.
+    "No variables" is spelled `[]`; there is no second spelling. 26 iteration sites across
+    eight modules already read these without the `or []` the None default required, so a
+    `BenchCfg` built outside `plot_sweep` raised `TypeError: 'NoneType' object is not
+    iterable` from inside describe/plot code. **`BenchCfg(input_vars=None)` is now rejected
+    by param** — pass `[]`. No persisted hash moves: verified by measurement, the default
+    config's digest is unchanged.
+  - **The three `rerun`-gated exports always exist on the `bencher` namespace.**
+    `capture_rerun_rrd`, `capture_rerun_window` and `rerun_to_pane` come from
+    `bencher.utils_rerun`, the one module in the package that imports `rerun` at module
+    scope. They were bound only inside `try`/`except ModuleNotFoundError`, so on an
+    install without `rerun-sdk` they were simply absent and `bn.capture_rerun_rrd` raised
+    `AttributeError: module 'bencher' has no attribute ...`, naming neither the dependency
+    nor how to get it. Each now resolves to a placeholder that raises `ImportError: ...
+    requires the optional 'rerun-sdk' dependency ... pip install rerun-sdk`. Installs
+    *with* the extra are unaffected.
+
+    `RerunResult`, `ComposableContainerRerun`, `RerunRecording`, `RerunViewKind` and
+    `RerunSummaryResult` are now imported **unconditionally**: their modules defer
+    `import rerun` into the methods that need it, so the `except ModuleNotFoundError`
+    around them never fired in any environment. (`RerunSummaryResult` could not have been
+    optional at all — `results/bench_result.py` imports it unconditionally and
+    `BenchResult` inherits from it.) Deleting those two dead handlers satisfies
+    `possibly-missing-attribute` strictly better than a placeholder would.
   - `bencher.sweep()` gained `@overload`s: passing a `str` returns a `dict`, passing a
     `SweepBase` returns a `SweepBase`. Runtime behaviour is unchanged; the correlation
     the body always followed is now visible to callers.

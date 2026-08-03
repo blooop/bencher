@@ -278,12 +278,19 @@ tmp_path_retention_count = 0
 # invalid-return-type (plan 23 P12) is what makes `to_dataset`'s `assert_never` a
 # compile-time proof rather than a runtime assertion (plan 23 section 2.4).
 #
-# not-iterable / no-matching-overload / unsupported-operator / possibly-missing-attribute
-# followed in P12b, 100 diagnostics between them. Their two dominant causes were both
-# representation defects rather than annotation noise: `param.List(default=None)` on the
-# six BenchCfg variable lists (31 of the 48 not-iterable), and `bencher`'s rerun exports
-# existing only inside a try/except (all 16 possibly-missing-attribute). See plan 23
-# section 10 for the three live bugs among them. test_ty_gate.py protects all five.
+# not-iterable / no-matching-overload / unsupported-operator followed in P12b. Those
+# three are error-by-default in ty, so deleting their `= "ignore"` lines is what enables
+# them and no entry here is needed.
+#
+# possibly-missing-attribute is DIFFERENT and must stay spelled out below: ty ships it
+# OFF by default, so removing its "ignore" line left it disabled while every surface
+# signal -- a clean `pixi run ty`, an absent key in [tool.ty.rules], a green
+# test_rule_not_globally_ignored -- said "enabled". Measured on a standalone probe:
+# a module attribute bound only inside `try: from x import y / except ModuleNotFoundError`
+# reports nothing under ty's defaults and reports `possibly-missing-attribute` with this
+# line present. "Not ignored" is not the same as "enabled"; test_ty_gate.py now proves
+# each Tier-A/B rule fires against a seeded violation rather than reading the config.
+possibly-missing-attribute = "error"
 
 # --- Tier C: param-descriptor dynamism; per-file via the strict block ---------------
 # param descriptors: a class-level `x = param.Number(1.0)` reads back as float on
