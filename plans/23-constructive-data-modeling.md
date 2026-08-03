@@ -1250,15 +1250,27 @@ changes, and both are recorded in the CHANGELOG as such.
 
 1. **`param.List(default=None)` on `BenchCfg`'s six variable lists produced 28 of the 48
    `not-iterable` diagnostics** — measured, not estimated: 48 before the one-line default
-   change and 20 after. The default made the field `list | None`, so every reader
-   needed `or []`; eleven did not have it (`inputs_as_str`, `describe_sweep`'s four loops,
-   `PltCntCfg`'s four, `optuna_conversions`' three, ...). A `BenchCfg` constructed outside
-   `plot_sweep` therefore raised `TypeError: 'NoneType' object is not iterable` from
-   inside describe/plot code rather than at the declaration. Changed to `default=[]`
-   (param instantiates mutable defaults per instance — verified, not assumed).
+   change and 20 after. The default made the field `list | None`, so every reader needed
+   `or []`, and **26 iteration sites across eight modules** did not have it (`bench_cfg`'s
+   own nine, `PltCntCfg`'s four, `optuna_conversions`' three, `holoview_result`'s three,
+   `bench_result_base`'s three, `result_collector`'s two, plus `heatmap_result` and
+   `optuna_result`). A `BenchCfg` constructed outside `plot_sweep` therefore raised
+   `TypeError: 'NoneType' object is not iterable` from inside describe/plot code rather
+   than at the declaration. Changed to `default=[]` (param instantiates mutable defaults
+   per instance — verified, not assumed).
 
-   **Verified cache-safe:** `hash_persistent` already folded all three hashed lists as
-   `x or []`, so `[]` and `None` hash identically. No `CACHE_VERSION` bump.
+   The drop is 28 rather than 26 because two `zip` unpackings in
+   `test_multiprocessing_executor.py` were reported as `_T_co@zip is not iterable` — a
+   diagnostic whose text names neither `BenchCfg` nor `None`. Typing the source made them
+   resolve. Worth knowing when triaging: a Tier-B count is not a count of *distinct*
+   causes, and the noisiest-looking diagnostics can be downstream of one field.
+
+   **Verified cache-safe by measurement, not by reading the code.** `hash_persistent`
+   already folded all three hashed lists as `x or []`, so `[]` and `None` should hash
+   identically — and `BenchCfg().hash_persistent(include_repeats=True)` was run against
+   the pre-change tree and this one, giving `67e6af25...` both times. No `CACHE_VERSION`
+   bump. (Reading the `or []` is the argument; running both trees is the evidence. §7's
+   general rule — no phase changes stored cell values or sentinels — holds.)
 
    **One test changed meaning rather than being deleted.**
    `test_properties_handle_none_input_vars` pinned exactly the None-tolerance being
