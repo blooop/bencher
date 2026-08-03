@@ -276,11 +276,26 @@ def handle(k: Kind) -> str:
             check=False,
         )
         output = result.stdout + result.stderr
-        assert "possibly-missing-attribute" in output, (
+        # Checked before the diagnostic assertion, and separately: ty reports an unknown
+        # rule name as `warning[unknown-rule]: ... Did you mean \`possibly-missing-attribute\`?`
+        # and exits 1. A bare substring test for the rule name plus `returncode != 0` is
+        # therefore satisfied by a config where the rule is MISSPELLED and so entirely
+        # off -- the suggestion text contains the name and the warning sets the exit code.
+        # ty has renamed a rule this repo uses before (unused-ignore-comment ->
+        # unused-type-ignore-comment), so this is a live path, not a hypothetical.
+        assert "unknown-rule" not in output, (
+            "ty does not recognise a rule name in this repo's [tool.ty.rules]. A renamed "
+            "or misspelled rule is silently unenforced -- ty warns and moves on. Fix the "
+            f"spelling in pyproject.toml. Output:\n{output}"
+        )
+        assert "error[possibly-missing-attribute]" in output, (
             "A name bound only inside `try: from ... except ModuleNotFoundError` was read "
-            "as a module attribute and this repo's rule table did not object. The rule is "
-            "off by default in ty, so it must be spelled `possibly-missing-attribute = "
-            f'"error"` in [tool.ty.rules]. Output:\n{output}'
+            "as a module attribute and this repo's rule table did not object at error "
+            "level. The rule is off by default in ty, so it must be spelled "
+            f'`possibly-missing-attribute = "error"` in [tool.ty.rules]. Output:\n{output}'
+        )
+        assert "use.py" in output, (
+            f"the diagnostic did not point at the seeded violation site:\n{output}"
         )
         assert result.returncode != 0, (
             f"the diagnostic was reported but is not error-level, so CI would not fail:\n{output}"

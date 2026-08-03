@@ -156,7 +156,7 @@ def _requires_rerun(name: str) -> type:
     A class rather than a function, so ``isinstance`` against the placeholder stays
     legal. Deliberately a *plain* class: an earlier revision gave it a metaclass whose
     ``__getattr__`` raised ``ImportError`` so attribute access would be branded too, but
-    ``hasattr`` and ``getattr(x, n, default)` only swallow ``AttributeError``, so that
+    ``hasattr`` and ``getattr(x, n, default)`` only swallow ``AttributeError``, so that
     turned every defensive feature probe into an uncatchable-by-idiom crash -- on exactly
     the installs least able to diagnose it. All three names here are functions, called
     rather than read, so there is nothing for such a hook to protect.
@@ -190,15 +190,6 @@ except ModuleNotFoundError:
     capture_rerun_window = _requires_rerun("capture_rerun_window")
     rerun_to_pane = _requires_rerun("rerun_to_pane")
 
-# Imported unconditionally, and that is a statement of fact rather than optimism: none of
-# these three modules imports `rerun` at module scope -- each defers it into the method
-# that needs it -- so `except ModuleNotFoundError` around them never fired in any
-# environment. Verified by importing `bencher` with a `sys.meta_path` hook blocking
-# `rerun`: all five names below resolve to the real objects, while the three above become
-# placeholders. `rerun_summary` could not have been optional anyway, since
-# `results/bench_result.py` imports it unconditionally and `BenchResult` inherits from it.
-# The dead handlers were worth deleting rather than keeping "just in case": a guard that
-# cannot fire still has to be read, and this one advertised a fallback that did not exist.
 from .cache_management import (
     DEFAULT_CACHE_SIZE_BYTES,
     BlobReachability,
@@ -227,6 +218,18 @@ from .regression import (
     method_cells,
 )
 from .results.bench_result import BenchResult
+
+# These five rerun names, and RerunResult/RerunSummaryResult a few lines down, are
+# imported unconditionally -- a statement of fact rather than optimism. None of their
+# three modules imports `rerun` at module scope; each defers it into the method that
+# needs it, so an `except ModuleNotFoundError` around them never fired in any
+# environment. Verified by importing `bencher` behind a `sys.meta_path` hook blocking
+# `rerun`: these resolve to the real objects while utils_rerun's three become
+# placeholders. `rerun_summary` could not have been optional anyway -- bench_result.py
+# imports it unconditionally and `BenchResult` inherits from it. The dead handlers were
+# worth deleting rather than keeping "just in case": a guard that cannot fire still has
+# to be read, and this one advertised a fallback that did not exist.
+# (Kept apart by import sorting; test_optional_extra_exports pins the premise.)
 from .results.composable_container.composable_container_rerun import (
     ComposableContainerRerun,
     RerunRecording,

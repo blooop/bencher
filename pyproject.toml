@@ -288,8 +288,14 @@ tmp_path_retention_count = 0
 # test_rule_not_globally_ignored -- said "enabled". Measured on a standalone probe:
 # a module attribute bound only inside `try: from x import y / except ModuleNotFoundError`
 # reports nothing under ty's defaults and reports `possibly-missing-attribute` with this
-# line present. "Not ignored" is not the same as "enabled"; test_ty_gate.py now proves
-# each Tier-A/B rule fires against a seeded violation rather than reading the config.
+# line present. "Not ignored" is not the same as "enabled".
+#
+# What guards this now, stated precisely: test_ty_gate.py's OFF_BY_DEFAULT_IN_TY requires
+# an explicit "error" for the rules listed there, and one seeded-violation probe runs
+# THIS table and asserts the rule fires. The other Tier-A/B rules are still covered by
+# config reads only -- they are error-by-default, so "not ignored" really does mean
+# "enabled" for them, but that is an argument, not a measurement. Adding a rule here
+# means checking its default first; OFF_BY_DEFAULT_IN_TY documents how.
 possibly-missing-attribute = "error"
 
 # --- Tier C: param-descriptor dynamism; per-file via the strict block ---------------

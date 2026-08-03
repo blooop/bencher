@@ -35,18 +35,52 @@ from bencher import _requires_rerun
 INIT_PY = Path(__file__).resolve().parent.parent / "bencher" / "__init__.py"
 
 
+def _handler_catches_import_failure(handler: ast.ExceptHandler) -> bool:
+    """True when *handler* would catch a failed import.
+
+    Matches the bare name, a tuple of names, a dotted spelling, and a bare ``except:``.
+    Deliberately generous: this predicate decides whether a block is *inspected at all*,
+    so anything it misses is a silent skip -- a false pass in the one direction that
+    matters. The first version required ``isinstance(h.type, ast.Name)`` with the exact
+    id ``ModuleNotFoundError``, so a block written ``except ImportError:`` (the more
+    common spelling of the two) or ``except (ModuleNotFoundError, ImportError):`` was
+    dropped from the scan entirely and the test reported green.
+    """
+    caught = ["ImportError", "ModuleNotFoundError", "Exception", "BaseException"]
+    if handler.type is None:  # bare `except:`
+        return True
+    nodes = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+    for node in nodes:
+        if isinstance(node, ast.Name) and node.id in caught:
+            return True
+        if isinstance(node, ast.Attribute) and node.attr in caught:  # builtins.ImportError
+            return True
+    return False
+
+
+def _bound_names(statements: list[ast.stmt]) -> set[str]:
+    """Names assigned at the top level of *statements* (``x = ...`` and ``x: T = ...``)."""
+    names = set()
+    for stmt in statements:
+        if isinstance(stmt, ast.Assign):
+            names |= {t.id for t in stmt.targets if isinstance(t, ast.Name)}
+        elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+            names.add(stmt.target.id)
+    return names
+
+
 def _gated_import_blocks() -> list[tuple[set[str], set[str]]]:
-    """(names bound by the try, names bound by the handler) per guarded import block."""
+    """(names bound by the try, names bound by its import-catching handlers) per block."""
     tree = ast.parse(INIT_PY.read_text())
     blocks = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Try):
             continue
-        guards_missing_module = any(
-            isinstance(h.type, ast.Name) and h.type.id == "ModuleNotFoundError"
-            for h in node.handlers
-        )
-        if not guards_missing_module:
+        # Only handlers that catch an import failure count as providing the fallback.
+        # Harvesting from *every* handler would let `except ValueError: x = ...` satisfy
+        # a block whose `except ModuleNotFoundError:` arm is a bare `pass`.
+        catching = [h for h in node.handlers if _handler_catches_import_failure(h)]
+        if not catching:
             continue
         imported = {
             alias.asname or alias.name.split(".")[0]
@@ -54,14 +88,7 @@ def _gated_import_blocks() -> list[tuple[set[str], set[str]]]:
             if isinstance(stmt, (ast.Import, ast.ImportFrom))
             for alias in stmt.names
         }
-        bound_in_handler = {
-            target.id
-            for handler in node.handlers
-            for stmt in handler.body
-            if isinstance(stmt, ast.Assign)
-            for target in stmt.targets
-            if isinstance(target, ast.Name)
-        }
+        bound_in_handler = set().union(*(_bound_names(h.body) for h in catching))
         blocks.append((imported, bound_in_handler))
     return blocks
 
@@ -76,17 +103,19 @@ def test_gated_imports_bind_on_both_branches() -> None:
     """
     blocks = _gated_import_blocks()
     assert blocks, (
-        f"no ModuleNotFoundError-guarded import blocks found in {INIT_PY.name}. If the "
-        "last one was removed, delete this test with it; if the guard was respelled, "
-        "teach the parser the new spelling rather than leaving it matching nothing."
+        f"no import-guarded try blocks found in {INIT_PY.name}. If the last one was "
+        "removed, delete this test with it; if the guard was respelled in a way "
+        "_handler_catches_import_failure does not recognise, teach it the new spelling "
+        "rather than leaving it matching nothing."
     )
     for imported, bound in blocks:
         missing = imported - bound
         assert not missing, (
-            f"{sorted(missing)} are imported inside a try/except ModuleNotFoundError in "
-            f"{INIT_PY.name} but are not bound by the handler, so on an install without "
-            "the optional dependency they vanish from the bencher namespace and reads "
-            "raise AttributeError. Bind each to _requires_rerun(<name>)."
+            f"{sorted(missing)} are imported inside an import-guarded try block in "
+            f"{INIT_PY.name} but are not bound by the handler that catches the failure, "
+            "so on an install without the optional dependency they vanish from the "
+            "bencher namespace and reads raise AttributeError. Bind each to "
+            "_requires_rerun(<name>)."
         )
 
 
@@ -100,20 +129,31 @@ def test_the_gated_block_is_the_one_module_that_needs_it() -> None:
     package = INIT_PY.parent
     module_scope_importers = set()
     for path in package.rglob("*.py"):
-        # bencher/example/ is excluded on purpose: the rerun examples DO import rerun at
-        # module scope, and that is correct -- they are standalone scripts, run by name,
-        # not pulled in by `import bencher`. What this test constrains is the library
-        # tree, which is what __init__.py's unconditional imports actually reach.
-        if path.relative_to(package).parts[0] == "example":
+        rel = path.relative_to(package).as_posix()
+        # The rerun *examples* import rerun at module scope, correctly -- they are
+        # standalone scripts run by name. `bencher/example/` is not wholly off the
+        # `import bencher` path (`__init__.py` pulls in `example.benchmark_data`), so the
+        # exemption is spelled per-file rather than per-tree: benchmark_data.py is the one
+        # example module the package imports, and it stays in scope.
+        if rel.startswith("example/") and rel != "example/benchmark_data.py":
             continue
         for node in ast.parse(path.read_text()).body:  # body = module scope only
             names = []
             if isinstance(node, ast.Import):
                 names = [a.name for a in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                names = [node.module]
-            if any(n == "rerun" or n.startswith("rerun.") for n in names):
-                module_scope_importers.add(path.relative_to(package).as_posix())
+            elif isinstance(node, ast.ImportFrom):
+                # `from . import utils_rerun` has module None and the name on the alias;
+                # `from .utils_rerun import x` has it on module. Both re-export the
+                # rerun-importing module into another module's scope, which breaks
+                # `import bencher` exactly as a direct `import rerun` would -- so both
+                # count. The first version matched only literal `rerun*` module names and
+                # skipped `node.module is None` outright, missing both forms.
+                names = [node.module or ""] + [a.name for a in node.names]
+            if any(
+                n == "rerun" or n.startswith("rerun.") or n.split(".")[-1] == "utils_rerun"
+                for n in names
+            ):
+                module_scope_importers.add(rel)
     assert module_scope_importers == {"utils_rerun.py"}, (
         f"modules importing `rerun` at module scope changed to {sorted(module_scope_importers)}. "
         "bencher/__init__.py imports RerunResult, ComposableContainerRerun, RerunRecording, "
