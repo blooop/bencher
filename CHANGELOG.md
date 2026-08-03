@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **One plugin with a bad capability no longer takes down the plugins after it**
+  (plan 23 P12b). `PluginRegistry.explain()` caught the capability error into `exc` — the
+  same name the enclosing scope used for the exclude set — and `except ... as <name>`
+  unbinds `<name>` on the way out of the handler. The *next* plugin in the loop then died
+  on `plugin.name in exc` with `NameError: name 'exc' is not defined`, crashing the report
+  build mid-run out of the one branch documented as never crashing mid-run. The existing
+  test registered a single plugin, so there was no next iteration to fail.
+- **`BenchReport.publish()` on an unnamed report says what is missing.** It fell through
+  to `None += "_debug" if debug else ""` and raised `TypeError: unsupported operand
+  type(s) for +=: 'NoneType' and 'str'` — on both debug settings, since `None += ""`
+  raises too. It now raises a `ValueError` naming `branch_name` and `bench_name`.
+- **Extruding a shape through the repeat or over_time wrapper** in the Cartesian-product
+  animation raised `TypeError: 'NoneType' object is not iterable`: `TimelineShape` and
+  `StrobeShape` inherited a `_deep_copy_recolored` that walked a `children` list they do
+  not have. Both now recolour their wrapped shape.
 - **`BenchResult.result_samples()` returns an `int`** (plan 23 P12). It was annotated
   `-> int` while returning `self.ds.count()`, an `xr.Dataset` of per-variable counts. The
   type was the smaller problem: comparing a Dataset yields a Dataset, and `bool(Dataset)`
@@ -43,13 +58,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   `invalid-return-type` is the rule that verifies `_resolve_auto` returns a member of
   `ResolvedReduceType`, so enabling it discharges the caveat P1 left: `to_dataset`'s
-  `assert_never` is now a compile-time proof rather than a runtime assertion. The other
-  four Tier-B rules remain ignored, with their measured costs recorded in plan 23 §10.
+  `assert_never` is now a compile-time proof rather than a runtime assertion.
 
   The four widened unions above (`values()`, `param_hash`, and the two `as_str`/`as_dict`
   flag-switched returns) are honest, not resolved — an argument that switches a return
   type is still an illegal state made representable, and no checker will object to it.
-  Each is tabled in plan 23 §10 with its blocker so a later phase can take it.
+  Each is tabled in plan 23 §10 with its blocker so a later phase can take it; the two
+  blocked on cache invalidation are also entries in the plan 27 cache-bump ledger.
+- **The `ty` gate now enforces all five Tier-B rules** (plan 23 P12b took the remaining
+  four: `not-iterable`, `no-matching-overload`, `unsupported-operator`,
+  `possibly-missing-attribute`; 100 diagnostics). Three of the four are error-by-default,
+  so dropping their `"ignore"` lines enables them; `possibly-missing-attribute` is **off**
+  by default and is now spelled `= "error"` explicitly. `test_ty_gate.py` protects each
+  against being re-ignored, and additionally runs a seeded violation through the repo's
+  own rule table, because "absent from the ignore list" is not evidence a rule is on. The
+  two dominant causes were representation defects, not annotation noise, and both are
+  behaviour changes:
+  - **`BenchCfg`'s six variable-list fields default to `[]`, not `None`**
+    (`input_vars`, `result_vars`, `const_vars`, `result_hmaps`, `meta_vars`, `all_vars`).
+    "No variables" is spelled `[]`; there is no second spelling. 26 iteration sites across
+    eight modules already read these without the `or []` the None default required, so a
+    `BenchCfg` built outside `plot_sweep` raised `TypeError: 'NoneType' object is not
+    iterable` from inside describe/plot code. **`BenchCfg(input_vars=None)` is now rejected
+    by param** — pass `[]`. No persisted hash moves: verified by measurement, the default
+    config's digest is unchanged.
+  - **The three `rerun`-gated exports always exist on the `bencher` namespace.**
+    `capture_rerun_rrd`, `capture_rerun_window` and `rerun_to_pane` come from
+    `bencher.utils_rerun`, the one module in the package that imports `rerun` at module
+    scope. They were bound only inside `try`/`except ModuleNotFoundError`, so on an
+    install without `rerun-sdk` they were simply absent and `bn.capture_rerun_rrd` raised
+    `AttributeError: module 'bencher' has no attribute ...`, naming neither the dependency
+    nor how to get it. Each now resolves to a placeholder that raises `ImportError: ...
+    requires the optional 'rerun-sdk' dependency ... pip install rerun-sdk`. Installs
+    *with* the extra are unaffected.
+
+    `RerunResult`, `ComposableContainerRerun`, `RerunRecording`, `RerunViewKind` and
+    `RerunSummaryResult` are now imported **unconditionally**: their modules defer
+    `import rerun` into the methods that need it, so the `except ModuleNotFoundError`
+    around them never fired in any environment. (`RerunSummaryResult` could not have been
+    optional at all — `results/bench_result.py` imports it unconditionally and
+    `BenchResult` inherits from it.) Deleting those two dead handlers satisfies
+    `possibly-missing-attribute` strictly better than a placeholder would.
+  - `bencher.sweep()` gained `@overload`s: passing a `str` returns a `dict`, passing a
+    `SweepBase` returns a `SweepBase`. Runtime behaviour is unchanged; the correlation
+    the body always followed is now visible to callers.
+  - `bencher.utils.get_name()` raises `ValueError` on a `param.Parameter` that was never
+    named, instead of returning the `None` its `-> str` denied could happen. Plan 19's
+    declaration check already rejects those before a sweep runs.
+  - `ComposableContainerVideo.extend_clip()` rejects a clip with no duration by name
+    rather than dying on `None < float`.
+  - The Cartesian-product animation's `Shape` is now a sum type — `Cell` (leaf) and
+    `Group` (non-empty children) — instead of one class with `children: list | None`.
+    Rendering is byte-identical (the pixel-hash tests are unchanged); `Group([])`, which
+    used to construct and then die inside `max()` on an empty sequence, is rejected at
+    construction.
+- `select_subsampling_divisions()` no longer prints every coordinate's dtype to stdout —
+  a debug leftover on a library filter path.
+- **Every fix deferred because it would invalidate persisted caches is now listed in one
+  place** — `plans/27-cache-version-bump-ledger.md`. The standing policy (any change to a
+  cache key is cache-busting, so bump `CACHE_VERSION` and say so) is sound but per-change,
+  so the cheap answer to "this fix would move a key" has always been "annotate around it and
+  record why" — and those records had spread across four plans, two architecture docs and a
+  dozen changelog entries. The cost of a bump is the same whether one deferred fix rides
+  along or ten, so the ledger exists to make sure the next bump drains them together instead
+  of paying the invalidation cost twice. Ten entries so far, including the two widened
+  unions above (`param_hash`, `values()`), the dual-generation sentinel readers plan 22
+  requires, and A4's `code_hash` — which already designates a bump as its precondition.
+  Pointers now sit at the four places someone actually stands when bumping:
+  `CACHE_VERSION` itself, `test_hash_persistent.py`'s golden-hash procedure, A4 §3.2, and
+  plans-README rule 0. A companion section records what a bump must **not** sweep in (the
+  `title` and `agg_fn` exclusions, `_hash_exclude` renderers, the input-order/result-set
+  asymmetry), so permission to change keys is not mistaken for a reason to.
 - `HoloviewResult.result_var_to_container` is annotated `type[pn.viewable.Viewable]`
   rather than a bare `type`, so `setup_results_and_containers`' declared container type
   is actually checked instead of being satisfied by an inferred `Any`.

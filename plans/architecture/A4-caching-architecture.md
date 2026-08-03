@@ -71,6 +71,13 @@ workers call out to unhashable external systems and who manage invalidation by t
 misses once. Bump `CACHE_VERSION` in the same release and put it in the changelog as
 a headline item.
 
+Because this phase *is* a bump, it is the natural carrier for everything else blocked on
+one: read [plan 27's ledger](../27-cache-version-bump-ledger.md) in full before shipping it
+(this entry is its L8), and land what it lists in the same release. Note also its L9 —
+plan 26 item 2's missing GC `CACHE_VERSION` guard must be fixed before or with any bump,
+since a stale cachedir plus a GC that reads it anyway yields an empty live set and deletes
+every blob.
+
 ### 3.3 Artifact manifests, not path conventions (fixes W2)
 
 Every sample-cache value gains an explicit manifest of the media files it produced

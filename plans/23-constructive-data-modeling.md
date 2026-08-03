@@ -599,10 +599,16 @@ and may be reordered or dropped individually.
 
 ### P12 — Tier-B ratchet
 
+**Shipped in two PRs.** P12 took `invalid-return-type` (29 diagnostics); **P12b** took the
+other four (100). Both are recorded in §10. Tier B is now fully enabled.
+
 - Re-enable the five Tier-B rules globally (~126 diagnostics at `4a13ab8e`, fewer
   after P2–P11). Note `invalid-return-type` doubles as the fallback exhaustiveness
   signal (§2.4), so this phase also hardens D2. Final strict-list review; record the
   Tier-C endgame decision (§6.6) as an open item for a future plan.
+- **Still open after P12b:** the Tier-C endgame decision (§6.6) is unrecorded, and eleven
+  of the fifteen files P12b touched are not strict-listed (counts in §10 P12b item 9, for
+  plan 26 R9 §3).
 
 ## 6. OWNER DECISIONS
 
@@ -652,6 +658,12 @@ and may be reordered or dropped individually.
   release.
 - **P7 (C5):** verify `HistoryEvent` is never persisted before enum-ifying.
 - **General rule:** no phase changes stored cell values or sentinels.
+- **Where the deferrals live:** the two annotations this plan left widened because
+  normalizing them would move a key (`param_hash`/`hash_persistent`, and `values()` — §10
+  P12 items 9/10), and the P4 sentinel-compatibility constraint above, are entries L1, L2
+  and L3 in [plan 27's `CACHE_VERSION` bump ledger](27-cache-version-bump-ledger.md). Record
+  any further cache-blocked deferral there as well as here, so a future bump can sweep them
+  all in one release instead of paying the invalidation cost twice.
 
 ## 8. Amendments to other plans (recorded here, implemented there)
 
@@ -1223,10 +1235,245 @@ than only a hygiene one — see item 1.
     |---|---|---|---|
     | `Bench.get_result_vars`, `WorkerManager.get_result_vars` | `list[str] \| list[Parameter]` switched on `as_str: bool` | split into `get_result_var_names()` and `get_result_vars()` | public API; needs a deprecation cycle for the flag |
     | `BenchResultBase.get_optimal_inputs` | `list[tuple[...]] \| dict[...]` switched on `as_dict: bool` | split into two methods | same |
-    | `SweepBase.values`, `FloatSweep.values` | `list[Any] \| np.ndarray` | one return type for every leaf | coercing changes what flows into hashing and dataset construction |
-    | `ParametrizedSweep.param_hash`, `hash_persistent` | `int \| str` (the `0` sentinel) | always a digest | invalidates persisted caches; needs a `CACHE_VERSION` bump (§7) |
+    | `SweepBase.values`, `FloatSweep.values` | `list[Any] \| np.ndarray` | one return type for every leaf | coercing changes what flows into hashing and dataset construction — **plan 27 ledger L2** |
+    | `ParametrizedSweep.param_hash`, `hash_persistent` | `int \| str` (the `0` sentinel) | always a digest | invalidates persisted caches; needs a `CACHE_VERSION` bump (§7) — **plan 27 ledger L1** |
 
     The first two are the shape this plan exists to remove — a boolean argument that
     switches the return type is an illegal state made representable, and no type checker
     will ever object to it. They are cheap to fix and blocked only on the deprecation, so
     they should lead the follow-up phase rather than trail it.
+
+### P12b (implemented — the remaining four Tier-B rules)
+
+**Tier B is now fully enabled**, so §9's "Tier A+B rules globally" is met. The four rules
+P12 left cost **100 diagnostics** measured against `47cc2577`, close to the P12 estimate
+(48/20/16/16 vs 43/21/16/16 — `not-iterable` grew by five as earlier phases added typed
+signatures for it to see through).
+
+Two representation defects accounted for **44 of the 100**, which is the finding worth
+carrying forward: the Tier-B rules were not annotation noise. Both fixes are behaviour
+changes, and both are recorded in the CHANGELOG as such.
+
+1. **`param.List(default=None)` on `BenchCfg`'s six variable lists produced 28 of the 48
+   `not-iterable` diagnostics** — measured, not estimated: 48 before the one-line default
+   change and 20 after. The default made the field `list | None`, so every reader needed
+   `or []`, and **26 iteration sites across eight modules** did not have it (`bench_cfg`'s
+   own nine, `PltCntCfg`'s four, `optuna_conversions`' three, `holoview_result`'s three,
+   `bench_result_base`'s three, `result_collector`'s two, plus `heatmap_result` and
+   `optuna_result`). A `BenchCfg` constructed outside `plot_sweep` therefore raised
+   `TypeError: 'NoneType' object is not iterable` from inside describe/plot code rather
+   than at the declaration. Changed to `default=[]` (param instantiates mutable defaults
+   per instance — verified, not assumed).
+
+   The drop is 28 rather than 26 because two `zip` unpackings in
+   `test_multiprocessing_executor.py` were reported as `_T_co@zip is not iterable` — a
+   diagnostic whose text names neither `BenchCfg` nor `None`. Typing the source made them
+   resolve. Worth knowing when triaging: a Tier-B count is not a count of *distinct*
+   causes, and the noisiest-looking diagnostics can be downstream of one field.
+
+   **Verified cache-safe by measurement, not by reading the code.** `hash_persistent`
+   already folded all three hashed lists as `x or []`, so `[]` and `None` should hash
+   identically — and `BenchCfg().hash_persistent(include_repeats=True)` was run against
+   the pre-change tree and this one, giving `67e6af25...` both times. No `CACHE_VERSION`
+   bump. (Reading the `or []` is the argument; running both trees is the evidence. §7's
+   general rule — no phase changes stored cell values or sentinels — holds.)
+
+   **One test changed meaning rather than being deleted.**
+   `test_properties_handle_none_input_vars` pinned exactly the None-tolerance being
+   removed; it is now two tests — `[]` gives empty partitions, and `None` is *rejected*.
+   That rejection is the breaking half: `BenchCfg(input_vars=None)` now raises from param
+   because `default=[]` implies `allow_None=False`. No first-party caller passed `None`
+   (checked: both `BenchCfg(...)` sites in `bencher.py` pass real lists, and every
+   `.input_vars = ` / `.result_vars = ` assignment in the tree assigns a list).
+
+2. **All 16 `possibly-missing-attribute` were one shape: the `bencher` namespace's rerun
+   exports existed only inside `try`/`except ModuleNotFoundError`.** The rule was telling
+   the truth — the public surface was *partial*, and the failure mode on an install
+   without `rerun-sdk` was `AttributeError: module 'bencher' has no attribute
+   'capture_rerun_window'`, which names neither the optional dependency nor how to get it.
+
+   **But only three of the eight names could ever have been missing, and the first version
+   of this fix got that wrong.** `bencher.utils_rerun` is the one module in the package
+   that imports `rerun` at module scope; `rerun_result`, `composable_container_rerun` and
+   `rerun_summary` all defer `import rerun` into the methods that need it, so their
+   handlers never fired in any environment. Measured, not read: importing `bencher` behind
+   a `sys.meta_path` hook that blocks `rerun` yields placeholders for
+   `capture_rerun_rrd`/`capture_rerun_window`/`rerun_to_pane` and the **real** objects for
+   the other five. `RerunSummaryResult` could not have been optional at all —
+   `results/bench_result.py` imports it unconditionally and `BenchResult` inherits from it,
+   so a genuine failure there breaks `import bencher` long before `__init__.py`'s `try`.
+
+   So: the three live names get `_requires_rerun(name)` placeholders (a class rather than
+   a function, so `isinstance` stays legal), and the two dead handlers were **deleted** in
+   favour of unconditional imports — which satisfies the rule strictly better than a
+   placeholder does. The 16 diagnostics split **9 / 7** along that line (measured by
+   reverting each half separately under the repo config): 9 on the three genuinely
+   optional names, 7 on the five that never were. The second 7 were the rule correctly
+   reporting a partiality the *code* asserted and the runtime did not have — a guard
+   claiming an import might fail, for an import that cannot. Deleting the guard is the fix;
+   a placeholder would have been an answer to a question nobody was asking.
+
+   Two things this corrected on the way:
+
+   - A `_MissingExtraMeta` metaclass had been added so class-*attribute* access on a
+     placeholder would also raise the branded error, justified by `RerunViewKind` being an
+     enum. That name can never be a placeholder, so the metaclass was machinery for an
+     unreachable branch — and it was actively harmful: `hasattr` and
+     `getattr(x, n, default)` only swallow `AttributeError`, so raising `ImportError` from
+     `__getattr__` turned every defensive feature probe into an uncatchable-by-idiom crash
+     on exactly the installs least able to diagnose it. Deleted. The branded error belongs
+     at call time, where the caller meant to *use* the thing.
+   - The third handler bound four names but its `try` ran two import statements, so a
+     failure in the second would have clobbered three names the first had already bound
+     successfully. Moot once the handler is gone, but worth recording as the hazard of a
+     multi-import `try` with a multi-name handler.
+
+   The surviving except branch **cannot** be exercised in an environment that has
+   `rerun-sdk`, and every pixi environment here installs it — so a runtime
+   `assert hasattr(bn, name)` test would pass identically on the unfixed code. The first
+   version of `test/test_optional_extra_exports.py` did exactly that and was vacuous.
+   It now (a) parses `__init__.py` and asserts every name bound in a
+   `ModuleNotFoundError`-guarded `try` is also bound by its handler — the regression that
+   can actually recur — and (b) pins the fact that licenses the unconditional imports, by
+   asserting `utils_rerun` is still the only library module importing `rerun` at module
+   scope. Both were verified to fail when their premise is broken.
+
+3. **Three live bugs, each with a regression test that fails on the pre-fix code.**
+
+   - **`PluginRegistry.explain()` crashed the report build on the second plugin after a
+     bad capability.** The handler caught into `exc`, the same name the enclosing scope
+     used for `exc = set(exclude)`; `except ... as <name>` unbinds `<name>` on the way
+     out, so the next iteration hit `plugin.name in exc` and raised `NameError` — out of
+     the branch whose comment says "never crash mid-run". `ty` found this as
+     `unsupported-operator`: `in` between `str` and `set[str] | set[Unknown] | ValueError`.
+     **The existing test could not have caught it**: it registers one plugin, so there is
+     no next iteration. The new test needs two plugins with the bad one sorting first.
+   - **`BenchReport.publish()` on an unnamed report** fell through to `None += "_debug" if
+     debug else ""`, and `None += ""` raises too, so *both* debug settings died with
+     `TypeError: unsupported operand type(s) for +=`. Now a `ValueError` naming the two
+     ways to supply a branch.
+   - **`TimelineShape`/`StrobeShape` could not be extruded.** Both inherited
+     `_deep_copy_recolored`, which walks `self.children` — `None` on a wrapper — so
+     `TypeError: 'NoneType' object is not iterable`. Found by making `Shape` abstract:
+     the inherited method became a missing implementation, which is what it always was.
+
+4. **`Shape` became a real sum type (`Cell` | `Group`), and the pixel-hash tests made it
+   safe to do.** The docstring already said "either a leaf or a collection of sub-shapes";
+   the encoding did not. `test_cartesian_pil_renderer.py` asserts MD5s of rendered pixel
+   data for six shapes, so "no visual change" is checked rather than argued — all six
+   hashes are unchanged. `Group([])` — constructible before, then dead inside `max()` on
+   an empty sequence — is rejected at construction. The test file moved to `Cell()` /
+   `Group(children=...)`; `Shape` stays exported as the base type.
+
+5. **The two meta-generator config tables became frozen dataclasses.** `PLOT_CONFIGS` and
+   `BOOL_PLOT_CONFIGS` were `dict[str, dict[str, int | str | list[str] | None]]`, so
+   `cfg["repeats"] > 1` was not a legal comparison and nothing distinguished an optional
+   key from a mandatory one except finding a `.get()` somewhere. `pixi run generate-docs`
+   produces a **byte-identical tree** (verified: `git status` clean across
+   `bencher/example/generated/` afterwards).
+
+6. **`bencher.sweep()` got `@overload`s instead of a wider union.** Its
+   `dict[str, Any] | SweepBase` return is decided entirely by the type of `name`, which is
+   the §10-P12-item-10 shape. Overloads state that rule with no runtime change — worth
+   noting because the four unions tabled there are *not* all blocked on deprecations;
+   this one was blocked on nothing.
+
+7. **`get_name()` was the quiet version of the same lie.** It is annotated `-> str` and
+   returned `var.name`, which param types `str | None`. Now raises `ValueError` naming the
+   builders that name a parameter. `params_to_str` (which already existed) replaced a
+   hand-rolled `[i.name for i in ...]` at `bencher.py`'s title site.
+
+8. **The `str()` coercions on xarray dim names are honest, not papering over** — but not
+   all for the same reason, and an earlier draft of this item claimed they were. xarray
+   types dimension names as `Hashable` and bencher only ever builds `str` dims, so `str()`
+   is the identity at every site. Where the value is only joined into a *title*
+   (`band_result._band_over_time`, `title_from_ds`) coercing at the boundary is plainly
+   correct. Two sites are **not** title-only and are commented as such:
+   `bench_result_base._to_panes_da` (feeds `dataset.sel()`) and
+   `band_result._band_static` (feeds `da.stack(sample=...)`). There the coercion lands on a
+   lookup key, so if a non-str Hashable dim ever became reachable the result is a
+   `KeyError` rather than a wrong render — the right failure, but worth stating rather than
+   filing under "it's just a title".
+
+9. **Strict-list: four of the fifteen files P12b touched came out Tier-C clean** and were
+   added (`plugins/registry.py`, `manim_cartesian/cartesian_product_scene.py`, and both
+   meta generators). The other eleven did not; their counts, so plan 26 R9 §3 can pick
+   them up without re-measuring:
+
+   | File | Tier-C diagnostics |
+   |---|---|
+   | `bench_cfg.py` | 64 |
+   | `bencher.py` | 30 |
+   | `results/holoview_results/holoview_result.py` | 17 |
+   | `results/bench_result_base.py` | 15 |
+   | `variables/inputs.py` | 10 |
+   | `__init__.py` | 8 |
+   | `bench_report.py` | 8 |
+   | `results/holoview_results/band_result.py` | 5 |
+   | `utils.py` | 3 |
+   | `results/composable_container/composable_container_video.py` | 1 |
+   | `results/holoview_results/xy_histogram_result.py` | 1 |
+
+   The last two are one diagnostic each and both are in the handover's §4 list
+   (`out.duration` as `Any | float | None`; `-> pn.panel` where `pn.panel` is a function,
+   not a type). They were left rather than swept in: the second is one instance of the
+   seven-site `pn.pane`/`pn.panel`-in-annotation-position family, and fixing one of seven
+   inside an unrelated PR is how that family stays half-migrated.
+
+10. **`possibly-missing-attribute` was not enabled by deleting its `"ignore"` line, and
+    every surface signal said it was. This is the most reusable finding in P12b.**
+
+    Three of the four rules are error-by-default in `ty`, so removing their `"ignore"`
+    entries turns them on. The fourth ships **off**. Deleting its line left it disabled
+    while `pixi run ty` reported `All checks passed!`, the key was absent from
+    `[tool.ty.rules]` exactly like the three that had worked, and
+    `test_rule_not_globally_ignored` — which asserts `setting != "ignore"` — passed on
+    `None`. Three independent signals, all agreeing, all wrong.
+
+    **The seeded probe that was supposed to catch this instead confirmed the error**,
+    because it passed `--error possibly-missing-attribute` on the command line. That
+    measures ty's behaviour, not the repo's gate. This is handover §6 trap 1 wearing a
+    different hat: a probe run under anything other than the checked-in config proves
+    nothing about the checked-in config. It was caught by an adversarial review pass, not
+    by the work itself.
+
+    Fixed three ways, because the config fix alone would leave the trap armed for the
+    next rule: `possibly-missing-attribute = "error"` is spelled out with a comment saying
+    why; `OFF_BY_DEFAULT_IN_TY` in `test_ty_gate.py` requires an explicit `"error"` for
+    any rule in that set; and `test_repo_rule_table_actually_fires_on_a_seeded_violation`
+    reconstructs the repo's own rule table and asserts a seeded violation is reported —
+    the only check that cannot be fooled by a wrong assumption about a default.
+
+    **Re-measured honestly afterwards**, with the repo config and no CLI override: 16
+    diagnostics with the `__init__.py` fix reverted, 0 with it. The original count was
+    right; the verification of it was not.
+
+    When adding a rule to a checker's config, verify the default before assuming
+    "not ignored" means "enabled" — the two are the same only for error-by-default rules.
+
+11. **Deferred by P12b, each with its reason** — none of these is an oversight, and none
+    was needed to get the four rules green.
+
+    - **`Group.direction` is still a stringly-typed three-value tag** (`"right"`, `"down"`,
+      `"stack"`), dispatched by `==` in `Group.size` and `Group.draw`. Making `Shape` a sum
+      type removed the leaf/branch illegal state; the *layout* axis is the same shape one
+      level down and wants an enum. Left out because it is an independent change with its
+      own pixel-hash re-verification, and bundling it would have made "rendering is
+      byte-identical" cover two claims instead of one.
+    - **`results/bench_result.py` carries a second, divergent placeholder convention for
+      the same optional dependency.** P12b unified `__init__.py`'s three; the other file
+      spells its own fallback differently. Both satisfy `possibly-missing-attribute`, so
+      the gate does not force convergence — a reader comparing the two still has to work
+      out whether the difference is meaningful. One convention, in one place, is the fix.
+    - **`Bench.input_vars`/`result_vars`/`const_vars` keep the `None`-means-infer
+      three-state that `BenchCfg` just lost.** `bencher.py`'s `Bench.__init__` sets all
+      three to `None`, and `plot_sweep` and `optimize` discriminate on `is None` to mean
+      "auto-detect from the worker class". So after P12b `bench.input_vars = None` is legal
+      and load-bearing while `BenchCfg(input_vars=None)` is a hard error, and
+      `bench.input_vars = []` silently means auto-detect rather than "no inputs" — the
+      empty list is unreachable as an *instruction*. This is pre-existing and was not
+      reported by any Tier-B rule (the reads are all guarded), but it is the same illegal
+      state one layer up, and the constructive fix is the same shape as elsewhere in this
+      plan: an explicit `Infer` sentinel or an `Auto | list` sum type, so "infer" and
+      "none" stop sharing a spelling. Sequence it with A5, which owns this entry-point
+      surface.

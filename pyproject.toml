@@ -267,29 +267,36 @@ tmp_path_retention_count = 0
 #   Deliberately absent from this file: they are errors everywhere except the paths
 #   relaxed in [[tool.ty.overrides]] below.
 #
-# Tier B (~126 diagnostics, scheduled for plan 23 P12).
+# Tier B is FULLY ENABLED (plan 23 P12 took invalid-return-type; P12b took the other
+#   four). There is no Tier-B block below any more -- that is the point.
 # Tier C (~1068 diagnostics, dominated by param-descriptor dynamism and by test/).
 #   Enabled per-file via the strict override block below as modules are reworked;
 #   every plan 23 phase adds the files it touches.
 [tool.ty.rules]
 
-# --- Tier B: enable globally in plan 23 P12 -----------------------------------------
-# `invalid-return-type` is ENABLED (plan 23 P12, first of the five). It is the rule that
-# checks `_resolve_auto` really returns a member of `ResolvedReduceType`, so it is what
-# finally makes `to_dataset`'s `assert_never` a compile-time proof rather than a runtime
-# assertion (plan 23 section 2.4, and the caveat recorded at the alias in
-# bench_result_base.py). All 29 diagnostics it reported were genuine: see plan 23 section
-# 10 for the two live bugs among them.
+# --- Tier B: all five now enabled; do NOT re-add any of them here -------------------
+# invalid-return-type (plan 23 P12) is what makes `to_dataset`'s `assert_never` a
+# compile-time proof rather than a runtime assertion (plan 23 section 2.4).
 #
-# The remaining four Tier-B rules are still ignored, with their measured cost:
-#   not-iterable (43), no-matching-overload (21), unsupported-operator (16),
-#   possibly-missing-attribute (16).
-# Union types read as non-iterable / no matching overload / unsupported operator.
-not-iterable = "ignore"
-no-matching-overload = "ignore"
-unsupported-operator = "ignore"
-# Possibly missing attributes (union type issues).
-possibly-missing-attribute = "ignore"
+# not-iterable / no-matching-overload / unsupported-operator followed in P12b. Those
+# three are error-by-default in ty, so deleting their `= "ignore"` lines is what enables
+# them and no entry here is needed.
+#
+# possibly-missing-attribute is DIFFERENT and must stay spelled out below: ty ships it
+# OFF by default, so removing its "ignore" line left it disabled while every surface
+# signal -- a clean `pixi run ty`, an absent key in [tool.ty.rules], a green
+# test_rule_not_globally_ignored -- said "enabled". Measured on a standalone probe:
+# a module attribute bound only inside `try: from x import y / except ModuleNotFoundError`
+# reports nothing under ty's defaults and reports `possibly-missing-attribute` with this
+# line present. "Not ignored" is not the same as "enabled".
+#
+# What guards this now, stated precisely: test_ty_gate.py's OFF_BY_DEFAULT_IN_TY requires
+# an explicit "error" for the rules listed there, and one seeded-violation probe runs
+# THIS table and asserts the rule fires. The other Tier-A/B rules are still covered by
+# config reads only -- they are error-by-default, so "not ignored" really does mean
+# "enabled" for them, but that is an argument, not a measurement. Adding a rule here
+# means checking its default first; OFF_BY_DEFAULT_IN_TY documents how.
+possibly-missing-attribute = "error"
 
 # --- Tier C: param-descriptor dynamism; per-file via the strict block ---------------
 # param descriptors: a class-level `x = param.Number(1.0)` reads back as float on
@@ -339,6 +346,13 @@ include = [
     "bencher/results/composable_container/composable_container_panel.py",
     "bencher/results/composable_container/composable_container_dataframe.py",
     "bencher/results/composable_container/composable_container_rerun.py",
+    # Added by plan 23 P12b -- the files it reworked that came out Tier-C clean.
+    # The other eleven it touched did not, and their counts are recorded in plan 23
+    # section 10 so the R9 follow-up can pick them up rather than re-measure.
+    "bencher/plugins/registry.py",
+    "bencher/results/manim_cartesian/cartesian_product_scene.py",
+    "bencher/example/meta/generate_meta_plot_types.py",
+    "bencher/example/meta/generate_meta_bool_plot_types.py",
 ]
 [tool.ty.overrides.rules]
 invalid-assignment = "error"

@@ -7,6 +7,19 @@ from hypothesis import strategies as st
 import bencher as bn
 
 
+def rendered_duration(clip) -> float:
+    """The duration render() gave *clip*.
+
+    moviepy types ``VideoClip.duration`` as ``float | None`` -- an unbounded clip has
+    none -- while ``ComposableContainerVideo.render()`` sets one on every path. Asserting
+    that here keeps the numeric comparisons below legal, and turns a regression that
+    dropped the duration into "no duration" rather than a comparison against None.
+    """
+    duration = clip.duration
+    assert duration is not None, "render() produced a clip with no duration"
+    return duration
+
+
 class TestComposableContainerVideo(unittest.TestCase):
     def small_img(self, size=None):
         if size is None:
@@ -107,7 +120,7 @@ class TestComposableContainerVideo(unittest.TestCase):
             vid.append(img)
             res = vid.render(bn.RenderCfg(compose_method=compose_type, duration=0.1))
             self.assertIsNotNone(res)
-            self.assertGreater(res.duration, 0)
+            self.assertGreater(rendered_duration(res), 0)
 
     def test_1px_overlay_pixel_values(self):
         """Overlay of two 1x1 images should blend pixel values via opacity."""
@@ -247,7 +260,7 @@ class TestComposableContainerVideo(unittest.TestCase):
             ccv.append(self.small_img())
 
         # still limited by target video duration
-        self.assertAlmostEqual(ccv.render().duration, 10.0)
+        self.assertAlmostEqual(rendered_duration(ccv.render()), 10.0)
 
     def test_composite_image_length(self):
         ccv = bn.ComposableContainerVideo()
@@ -293,7 +306,7 @@ class TestComposableContainerVideo(unittest.TestCase):
             ccv.append(self.small_video())
 
         # still concatted vid time
-        self.assertAlmostEqual(ccv.render().duration, 800.0)
+        self.assertAlmostEqual(rendered_duration(ccv.render()), 800.0)
 
     def test_render_no_stdout(self):
         """render() should not print debug output to stdout."""

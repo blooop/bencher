@@ -507,8 +507,23 @@ def get_name(var: Any) -> str:
 
     Returns:
         str: The name of the variable
+
+    Raises:
+        ValueError: If *var* is a Parameter that was never named.
     """
     if isinstance(var, param.Parameter):
+        if var.name is None:
+            # `param.Parameter.name` is None until the descriptor is bound to a class
+            # attribute (or named by a builder like bn.sweep()/bn.box()). Plan 19's
+            # declaration check rejects unnamed variables before a sweep runs, so this
+            # is a statement of that contract, not a reachable path through plot_sweep.
+            # Without it this function's `-> str` was simply untrue and every caller
+            # inherited a None it had no way to see.
+            raise ValueError(
+                f"{type(var).__name__} instance has no name. A param.Parameter is only "
+                "named once it is bound to a class attribute, or by a builder such as "
+                "bn.sweep() / bn.box(); declare it on your ParametrizedSweep subclass."
+            )
         return var.name
     return var
 

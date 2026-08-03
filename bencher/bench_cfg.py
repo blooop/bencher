@@ -222,7 +222,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     subsampling_divisions: int = param.Integer(
         default=0,
-        bounds=[0, 12],
+        bounds=(0, 12),
         doc="Controls sample count for every sweep variable at once. "
         "Subsampling Divisions 0 (default) uses each variable's own `samples` setting. "
         "Subsampling Divisions 1-12 override with geometrically increasing counts: "
@@ -405,7 +405,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     max_time_events: int | None = param.Integer(
         None,
-        bounds=[1, None],
+        bounds=(1, None),
         allow_None=True,
         doc="Maximum number of over_time events to retain. "
         "Oldest events are trimmed. Set to None for unlimited.",
@@ -413,7 +413,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     max_slider_points: int | None = param.Integer(
         10,
-        bounds=[2, None],
+        bounds=(2, None),
         allow_None=True,
         doc="Maximum number of time points shown in the over_time slider. "
         "Evenly subsampled (first and last always included). "
@@ -471,7 +471,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     regression_min_history: int = param.Integer(
         default=1,
-        bounds=[1, None],
+        bounds=(1, None),
         doc="Minimum number of historical over_time points a result variable "
         "needs before its regressions can *fail* the run. A variable with a "
         "younger baseline (freshly added, or restarted by a meaning_version "
@@ -779,28 +779,35 @@ class BenchCfg(BenchRunCfg):
               ``over_time`` axis.
     """
 
+    # These six declare *lists of variables*, and "no variables" is spelled `[]`, not
+    # `None`. They defaulted to None until plan 23 P12b. That default is what obliged every
+    # reader to carry an `or []`, and 26 iteration sites across eight modules did not, so
+    # `BenchCfg()` built outside `plot_sweep` raised `TypeError: 'NoneType' object is not
+    # iterable` from inside describe/plot code (the per-module breakdown is in plan 23 §10
+    # P12b item 1). param.List instantiates mutable defaults per instance -- verified, not
+    # assumed -- so `[]` is not shared state.
     input_vars = param.List(
-        default=None,
+        default=[],
         doc="A list of ParameterizedSweep variables to perform a parameter sweep over",
     )
     result_vars = param.List(
-        default=None,
+        default=[],
         doc="A list of ParameterizedSweep results collect and plot.",
     )
 
     const_vars = param.List(
-        default=None,
+        default=[],
         doc="Variables to keep constant but are different from the default value",
     )
 
-    result_hmaps = param.List(default=None, doc="a list of holomap results")
+    result_hmaps = param.List(default=[], doc="a list of holomap results")
 
     meta_vars = param.List(
-        default=None,
+        default=[],
         doc="Meta variables such as recording time and repeat id",
     )
     all_vars = param.List(
-        default=None,
+        default=[],
         doc="Stores a list of both the input_vars and meta_vars that are used to define a unique hash for the input",
     )
     iv_time = param.List(
@@ -943,6 +950,13 @@ class BenchCfg(BenchRunCfg):
                 hash_sha1(self.tag),
             )
         )
+        # The three `or []` folds here and below are unreachable since plan 23 P12b gave
+        # these fields `default=[]` -- param rejects None outright now. They are kept
+        # deliberately, because they are *why* that change could not move a stored digest:
+        # `[]` and `None` were already folded identically, so the pre- and post-change
+        # digests match (measured, not argued). Deleting them is a provable no-op and is
+        # logged as entry L7 of plans/27-cache-version-bump-ledger.md, to be swept with the
+        # next CACHE_VERSION bump rather than as a drive-by that removes the evidence.
         for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 

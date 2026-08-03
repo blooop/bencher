@@ -33,6 +33,14 @@ MUST_NOT_BE_IGNORED = {
     # silently downgrades that proof, which is exactly the state P1 shipped with and P12
     # was written to end.
     "invalid-return-type": "the ReduceType exhaustiveness proof (plan 23 P12)",
+    # The other four Tier-B rules, enabled in P12b. Each was paid for by fixing a
+    # representation rather than by adding annotations, so re-ignoring one does not just
+    # hide diagnostics -- it re-permits the shape that produced them.
+    "not-iterable": "optional-list fields that mean `[]` (plan 23 P12b)",
+    "no-matching-overload": "Tier B (plan 23 P12b)",
+    "unsupported-operator": "operations on optionals, incl. the registry `exc` shadow "
+    "(plan 23 P12b)",
+    "possibly-missing-attribute": "the total public surface for optional extras (plan 23 P12b)",
     # Tier A, enabled in P1. Each was measured at <=6 diagnostics, so a reappearance in
     # the ignore list is a regression rather than a pragmatic concession.
     "call-non-callable": "Tier A (plan 23 P1)",
@@ -56,8 +64,36 @@ def _global_rules() -> dict[str, str]:
     return _ty_config().get("rules", {})
 
 
+# Rules ty ships DISABLED by default. For these, "absent from [tool.ty.rules]" means
+# OFF, not "on at its default severity" -- so `!= "ignore"` is not evidence of anything
+# and the rule must be spelled out as "error".
+#
+# This list exists because P12b got it wrong: it "enabled" possibly-missing-attribute by
+# deleting its `= "ignore"` line, `pixi run ty` stayed green, and the seeded probe that
+# was supposed to confirm the fix passed `--error possibly-missing-attribute` on the
+# command line -- so it measured a rule the checked-in config did not have on. Every
+# surface signal agreed the gate was armed while it was not.
+#
+# Verify a candidate before adding it here: write a file violating the rule, run
+# `ty check` on it under a config that does NOT mention the rule, and see whether
+# anything is reported.
+OFF_BY_DEFAULT_IN_TY = {
+    "possibly-missing-attribute": "verified against ty 0.0.56 with a standalone probe",
+}
+
+
 class TestGateConfiguration:
     """Properties of the checked-in ty configuration."""
+
+    @pytest.mark.parametrize("rule", sorted(OFF_BY_DEFAULT_IN_TY))
+    def test_off_by_default_rule_is_explicitly_enabled(self, rule: str) -> None:
+        setting = _global_rules().get(rule)
+        assert setting == "error", (
+            f"`{rule}` is off by default in ty ({OFF_BY_DEFAULT_IN_TY[rule]}), so it must "
+            f"be set to 'error' in [tool.ty.rules] to be enforced -- currently {setting!r}. "
+            f"Merely leaving it out of the ignore list is what P12b did first, and the gate "
+            f"reported 'All checks passed!' with the rule switched off."
+        )
 
     @pytest.mark.parametrize("rule", sorted(MUST_NOT_BE_IGNORED))
     def test_rule_not_globally_ignored(self, rule: str) -> None:
@@ -203,6 +239,77 @@ def handle(k: Kind) -> str:
         assert "Kind.C" in output, (
             "ty flagged the incomplete match but did not name the missing variant, "
             f"which is what makes the diagnostic actionable. Output:\n{output}"
+        )
+
+    def test_repo_rule_table_actually_fires_on_a_seeded_violation(self, tmp_path: Path) -> None:
+        """Run a seeded violation under **this repo's** `[tool.ty.rules]`, not a minimal one.
+
+        The sibling probes here deliberately use a standalone config (see the class
+        docstring). That leaves one thing unchecked: whether the *checked-in* rule table
+        enables what it claims. It did not — P12b shipped `possibly-missing-attribute`
+        switched off while `pixi run ty` said "All checks passed!", because ty defaults
+        the rule to off and the PR only deleted its `"ignore"` line.
+
+        So this reconstructs the repo's rule table verbatim and asserts the rule bites.
+        Config assertions alone cannot catch a default that is not what you assumed.
+        """
+        rules = _global_rules()
+        # Every value in [tool.ty.rules] is a severity string today, and the round-trip
+        # below re-quotes it as one. Checked rather than assumed: a non-string value would
+        # still serialise into valid TOML (`x = "True"`), so the probe would silently run
+        # against a rule table that is not the repo's -- the exact class of false pass this
+        # test exists to close.
+        non_strings = {k: v for k, v in rules.items() if not isinstance(v, str)}
+        assert not non_strings, (
+            f"[tool.ty.rules] holds non-string values {non_strings!r}; this probe "
+            "re-serialises each value as a quoted string, so it would check a rule table "
+            "that differs from the checked-in one. Teach the serialisation the new shape."
+        )
+        rule_lines = "\n".join(f'{k} = "{v}"' for k, v in rules.items())
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "probe"\nversion = "0"\nrequires-python = ">=3.11"\n\n'
+            f"[tool.ty.rules]\n{rule_lines}\n"
+        )
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "opt.py").write_text("thing = 1\n")
+        (pkg / "__init__.py").write_text(
+            "try:\n    from pkg.opt import thing\nexcept ModuleNotFoundError:\n    pass\n"
+        )
+        (tmp_path / "use.py").write_text(
+            "import pkg\n\n\ndef go() -> object:\n    return pkg.thing\n"
+        )
+        result = subprocess.run(
+            ["ty", "check", "--python", sys.prefix, str(tmp_path)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        # Checked before the diagnostic assertion, and separately: ty reports an unknown
+        # rule name as `warning[unknown-rule]: ... Did you mean \`possibly-missing-attribute\`?`
+        # and exits 1. A bare substring test for the rule name plus `returncode != 0` is
+        # therefore satisfied by a config where the rule is MISSPELLED and so entirely
+        # off -- the suggestion text contains the name and the warning sets the exit code.
+        # ty has renamed a rule this repo uses before (unused-ignore-comment ->
+        # unused-type-ignore-comment), so this is a live path, not a hypothetical.
+        assert "unknown-rule" not in output, (
+            "ty does not recognise a rule name in this repo's [tool.ty.rules]. A renamed "
+            "or misspelled rule is silently unenforced -- ty warns and moves on. Fix the "
+            f"spelling in pyproject.toml. Output:\n{output}"
+        )
+        assert "error[possibly-missing-attribute]" in output, (
+            "A name bound only inside `try: from ... except ModuleNotFoundError` was read "
+            "as a module attribute and this repo's rule table did not object at error "
+            "level. The rule is off by default in ty, so it must be spelled "
+            f'`possibly-missing-attribute = "error"` in [tool.ty.rules]. Output:\n{output}'
+        )
+        assert "use.py" in output, (
+            f"the diagnostic did not point at the seeded violation site:\n{output}"
+        )
+        assert result.returncode != 0, (
+            f"the diagnostic was reported but is not error-level, so CI would not fail:\n{output}"
         )
 
     def test_exhaustive_match_is_accepted(self, tmp_path: Path) -> None:

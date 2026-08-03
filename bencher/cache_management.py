@@ -58,6 +58,11 @@ logger = logging.getLogger(__name__)
 # result/const var sets) and the history cache switched to schema-evolving
 # records (see bencher/history.py).
 CACHE_VERSION = "5"
+# Before bumping this: read plans/27-cache-version-bump-ledger.md in full and land what it
+# lists. A bump invalidates every on-disk benchmark-level and over_time entry, and that cost
+# is the same whether one deferred fix rides along or ten -- the ledger exists so the ones
+# already waiting are not left behind. The mechanical procedure (golden digests, changelog)
+# is at test/test_hash_persistent.py's "Golden hash regression" block.
 
 # Default cache size for benchmark results (100 GB).
 # Used by ResultCollector, SweepExecutor, and Bench.

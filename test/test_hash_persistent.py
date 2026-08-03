@@ -732,6 +732,12 @@ class TestSweepSlotCoverage:
 #   1. bumping ``CACHE_VERSION`` in bencher/cache_management.py
 #   2. updating the ``GOLDEN_BENCH_CFG_HASH_*`` values below
 #   3. documenting the break in CHANGELOG.md
+#   4. reading plans/27-cache-version-bump-ledger.md IN FULL and landing what it lists
+#
+# Step 4 is not paperwork. Several fixes are shipped as annotations-around-the-problem
+# purely because normalizing them would move a key; the bump is what unblocks them, and
+# its cost -- every on-disk benchmark and over_time entry -- is paid once whether one
+# entry rides along or ten. Bumping without draining that ledger means paying it twice.
 #
 # This test exists so incidental drift (e.g. someone adding a new field to
 # the hash tuple) fails CI loudly instead of silently stranding every

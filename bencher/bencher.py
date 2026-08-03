@@ -141,7 +141,11 @@ def _enforce_sample_error_policy(bench_res: BenchResult, policy: bool | float) -
     if not policy or not bench_res.n_failed:
         return
     n, frac = bench_res.n_failed, bench_res.failed_fraction
-    if policy is True:
+    # Branch on the *parsed* policy rather than re-testing `policy is True`: the two
+    # produce the same partition (the falsy policies already returned above, so True is
+    # the only remaining policy without a threshold), but only this spelling tells a
+    # reader -- or a type checker -- that `threshold` is a float below.
+    if threshold is None:
         raise SampleErrorPolicyError(
             f"{n} sample(s) failed and were caught; fail_on_sample_error=True"
         )
@@ -356,13 +360,15 @@ class Bench(BenchPlotServer):
         Returns:
             list[BenchResult]: A list of results from all the sweep runs
         """
-        if relationship_cb is None:
-            relationship_cb = combinations
+        # Bound to a fresh local rather than reassigning the parameter: rebinding a
+        # `Callable | None` to `combinations` leaves the union in place, so the call
+        # below reads as "call either an unknown callable or the combinations class".
+        group_cb: Callable = combinations if relationship_cb is None else relationship_cb
         if input_vars is None:
             input_vars = self.worker_class_instance.get_inputs_only()
         results = []
         for it in range(iterations):
-            for input_group in relationship_cb(input_vars, group_size):
+            for input_group in group_cb(input_vars, group_size):
                 title_gen = title + "Sweeping " + " vs ".join(params_to_str(input_group))
                 if iterations > 1:
                     title_gen += f" iteration:{it}"
@@ -588,7 +594,7 @@ class Bench(BenchPlotServer):
 
         if title is None:
             if len(input_vars_in) > 0:
-                title = "Sweeping " + " vs ".join([i.name for i in input_vars_in])
+                title = "Sweeping " + " vs ".join(params_to_str(input_vars_in))
             elif len(const_vars_in) > 0:
                 title = "Constant Value"
                 if len(const_vars_in) > 1:

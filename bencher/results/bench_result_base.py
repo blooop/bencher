@@ -597,12 +597,16 @@ class BenchResultBase:
         if "title" in kwargs:
             return kwargs["title"]
 
+        # xarray types dimension names as `Hashable`, not `str`, and both `DataArray.name`
+        # and `Parameter.name` are optional. `str()` is the identity on everything bencher
+        # actually produces here. Where it is not -- an unnamed DataArray -- this now
+        # renders "None" in a plot title instead of aborting the report build with
+        # `TypeError: sequence item 0: expected str instance, NoneType found`, which is
+        # the right trade for a display string.
         if isinstance(dataset, xr.DataArray):
-            tit = [dataset.name]
-            tit.extend(dataset.dims)
+            tit = [str(dataset.name), *(str(d) for d in dataset.dims)]
         else:
-            tit = [result_var.name]
-            tit.extend(list(dataset.sizes))
+            tit = [str(result_var.name), *(str(d) for d in dataset.sizes)]
 
         return " vs ".join(tit)
 
@@ -921,7 +925,9 @@ class BenchResultBase:
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel:
-        dims = list(dataset.sizes)
+        # str(), because xarray types dim names as `Hashable`: these feed both
+        # `dataset.sel()` (which takes either) and the container `name=` strings below.
+        dims = [str(d) for d in dataset.sizes]
 
         # over_time is handled by hvplot's groupby widget, not pane recursion
         if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
@@ -1421,15 +1427,20 @@ class BenchResultBase:
 
         see test_bench_result_base.py -> test_select_subsampling_divisions()
         """
+        # Hoisted out of the loop: listify() only returns None for a None input, so
+        # narrowing these once says what the old per-iteration
+        # `x is not None and ... listify(x)` pair said, without re-testing the same
+        # condition through a function whose None arm is unreachable by then.
+        allowed_dtypes = listify(include_types)
+        excluded_coords = listify(exclude_names)
         coords_no_repeat = {}
         for c, v in dataset.coords.items():
             if c != "repeat":
                 vals = v.to_numpy()
-                print(vals.dtype)
                 include = True
-                if include_types is not None and vals.dtype not in listify(include_types):
+                if allowed_dtypes is not None and vals.dtype not in allowed_dtypes:
                     include = False
-                if exclude_names is not None and c in listify(exclude_names):
+                if excluded_coords is not None and c in excluded_coords:
                     include = False
                 if include:
                     coords_no_repeat[c] = with_subsampling_divisions(

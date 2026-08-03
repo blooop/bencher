@@ -330,10 +330,22 @@ class TestPartitionInputVars:
         assert cfg.optimized_input_vars == [SweepCfg.param.theta]
         assert cfg.non_optimized_input_vars == [non_opt_var]
 
-    def test_properties_handle_none_input_vars(self):
-        cfg = make_bench_cfg(input_vars=None)
+    def test_properties_handle_empty_input_vars(self):
+        cfg = make_bench_cfg(input_vars=[])
         assert cfg.optimized_input_vars == []
         assert cfg.non_optimized_input_vars == []
+
+    def test_none_input_vars_is_rejected(self):
+        """Absence of input variables is spelled ``[]``; ``None`` is not a second spelling.
+
+        These fields defaulted to None until plan 23 P12b. That default is what obliged
+        every reader to carry an ``or []``, and 26 iteration sites across eight modules
+        did not, so a config built outside ``plot_sweep`` raised ``TypeError: 'NoneType'
+        object is not iterable`` from inside describe/plot code instead of at the
+        declaration.
+        """
+        with pytest.raises(ValueError, match="input_vars"):
+            make_bench_cfg(input_vars=None)
 
 
 class TestOptunaTargets:
