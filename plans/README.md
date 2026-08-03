@@ -52,6 +52,7 @@ without additional context. **Read the whole plan before starting it.**
 | 23 | [Constructive data modeling & type enforcement](23-constructive-data-modeling.md) | Low–Med | Medium (12 phased PRs) | P1–P3 (ty gate + live bug fixes) anytime; P4 (result-type registry) before A6 phase 2; P5–P11 independent |
 | 24 | [`assert_never` boundary discipline](24-assert-never-boundary-discipline.md) | Low | Small (amends 23) | **Read before 23-P1/P2/P11** — mostly DoD additions to plan 23; one small independent phase (Q1) |
 | 25 | [Grammar phase 2: channel vocabulary, `Plan` type, shadow planner](25-grammar-phase-2-channel-plan.md) | Medium | Medium (4 phased PRs) | Second PR of the A6 stack; additive and shadow-only (zero visual change). Needs 23-P4 (landed); gates A6 phase 3 |
+| 26 | [Post-merge audit remediation](26-post-merge-audit-remediation.md) | Low–Med (R1 is Medium) | Medium (13 phased items) | **R1 first** (history adoption can destroy over_time trends); R13's #760/CVE item is time-sensitive; R3 while #1022 is fresh |
 
 Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
 Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on
