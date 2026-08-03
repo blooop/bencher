@@ -620,8 +620,16 @@ def normalize_subsampling_divisions_kwargs(
     import warnings
 
     subsampling_divisions_was_set = subsampling_divisions is not UNSET
-    if subsampling_divisions is UNSET:
-        subsampling_divisions = default_subsampling_divisions
+    # `isinstance` rather than `is UNSET`: both express the same runtime test, but only
+    # the former discharges `_Unset` from the declared `int | _Unset`, which is what
+    # establishes the `int` in the return type. Coercing with `int()` at the return would
+    # also have satisfied the checker, but it would silently truncate a float handed in
+    # through the untyped `level` kwarg.
+    resolved: int = (
+        default_subsampling_divisions
+        if isinstance(subsampling_divisions, _Unset)
+        else subsampling_divisions
+    )
 
     if "level" in kwargs:
         if subsampling_divisions_was_set:
@@ -633,7 +641,7 @@ def normalize_subsampling_divisions_kwargs(
             DeprecationWarning,
             stacklevel=stacklevel,
         )
-        subsampling_divisions = kwargs.pop("level")
+        resolved = kwargs.pop("level")
         subsampling_divisions_was_set = True
     if "max_level" in kwargs:
         if max_subsampling_divisions is not None:
@@ -646,14 +654,7 @@ def normalize_subsampling_divisions_kwargs(
             stacklevel=stacklevel,
         )
         max_subsampling_divisions = kwargs.pop("max_level")
-    # int() rather than a cast: every path above either kept the caller's int or took a
-    # value out of **kwargs, which is untyped -- so this is the one place the declared
-    # `int` is actually established (plan 23 P12).
-    return (
-        int(subsampling_divisions),
-        max_subsampling_divisions,
-        subsampling_divisions_was_set,
-    )
+    return resolved, max_subsampling_divisions, subsampling_divisions_was_set
 
 
 def github_content(remote: str, branch_name: str, filename: str):  # pragma: no cover

@@ -13,10 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type was the smaller problem: comparing a Dataset yields a Dataset, and `bool(Dataset)`
   is `len(data_vars) > 0`, so **every** `result_samples() > 0` and `== n` assertion was
   vacuously true — it could not fail even if not one sample had been collected. It now
-  returns the greatest count across the result variables (max, not sum: two result
-  variables over two samples is 2 samples). Making it real immediately exposed a
-  test-isolation bug in the suite, where a shared class-level `samples` was left mutated
-  by an earlier test.
+  returns the greatest count across the data variables (max, not sum: two result
+  variables over two samples is 2 samples), counting *cells*, so the repeat dimension
+  multiplies it. Making it real immediately exposed a test-isolation bug in the suite,
+  where a shared class-level `samples` was left mutated by an earlier test.
 
 ### Changed
 - **Return annotations across the plotting and sweep APIs now describe what the functions
@@ -45,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ResolvedReduceType`, so enabling it discharges the caveat P1 left: `to_dataset`'s
   `assert_never` is now a compile-time proof rather than a runtime assertion. The other
   four Tier-B rules remain ignored, with their measured costs recorded in plan 23 §10.
+
+  The four widened unions above (`values()`, `param_hash`, and the two `as_str`/`as_dict`
+  flag-switched returns) are honest, not resolved — an argument that switches a return
+  type is still an illegal state made representable, and no checker will object to it.
+  Each is tabled in plan 23 §10 with its blocker so a later phase can take it.
+- `HoloviewResult.result_var_to_container` is annotated `type[pn.viewable.Viewable]`
+  rather than a bare `type`, so `setup_results_and_containers`' declared container type
+  is actually checked instead of being satisfied by an inferred `Any`.
+- `PlotResult` is exported from the top-level `bencher` namespace, so callers can name
+  the union that the `to_*_ds` renderers return.
 - **Scorecard and A/B verdicts now measure an improvement in the units the detector
   actually used** (plan 23 P3, B5). `RegressionResult.threshold` means a percent for
   `regression_method="percentage"`, but **MAD-sigma** for `"adaptive"`, an **absolute

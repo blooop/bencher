@@ -21,7 +21,7 @@ class TabulatorResult(HoloviewResult):
 
         Returns:
             pn.widgets.Tabulator | None: An interactive table widget, or ``None`` when
-            ``filter`` rejects the dataset (plan 23 P12: the ``| None`` was missing).
+            ``filter`` rejects the dataset.
         """
         return self.to_tabulator(**kwargs)
 

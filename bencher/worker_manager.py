@@ -339,8 +339,7 @@ class WorkerManager:
 
         Returns:
             list[str] | list[Parameter]: The result variables, as names or as the
-                ``param.Parameter`` descriptors themselves. Annotated
-                ``list[str | ParametrizedSweep]`` until plan 23 P12 -- ``get_results_only``
+                ``param.Parameter`` descriptors themselves -- ``get_results_only``
                 returns descriptors, not sweep instances.
 
         Raises:

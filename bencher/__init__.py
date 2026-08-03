@@ -215,7 +215,7 @@ from .plugins import (
     register_plugin,
     unregister_plugin,
 )
-from .results.holoview_results.holoview_result import HoloviewResult, ReduceType
+from .results.holoview_results.holoview_result import HoloviewResult, PlotResult, ReduceType
 from .run import run
 from .sweep_timings import SweepTimings
 from .video_writer import VideoWriter, add_image

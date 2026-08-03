@@ -211,20 +211,17 @@ class BenchResultBase:
         self._to_dataset_cache.clear()
 
     def result_samples(self) -> int:
-        """The number of samples recorded, for the most-populated result variable.
+        """The number of values recorded, for the most-populated data variable.
 
-        This was ``return self.ds.count()`` -- annotated ``-> int`` while returning an
-        ``xr.Dataset`` of per-variable counts (found by plan 23 P12 enabling
-        ``invalid-return-type``). The consequence was worse than a wrong type: every
-        ``result_samples() > 0`` and ``result_samples() == n`` assertion in the suite
-        was **vacuous**. Comparing a Dataset yields a Dataset of booleans, and
-        ``bool(Dataset)`` is defined as ``len(data_vars) > 0`` -- true whenever the
-        sweep declared any result variable, whether or not a single sample was
-        collected. Nine such assertions could not fail.
+        This counts *cells*, not sweep points: the repeat dimension multiplies it, so a
+        two-point sweep at ``repeats=3`` reports 6. Returns 0 for a dataset with no data
+        variables.
 
-        Max rather than sum: two result variables over two samples is 2 samples, not 4.
-        Max rather than the first variable's count: a variable whose samples partly
-        failed must not undercount the sweep.
+        Max across data variables, rather than sum or first:
+
+        - sum would double-count -- two result variables over two samples is 2, not 4;
+        - first would undercount a sweep whose other variables partly failed, since a
+          failed sample leaves a NaN that ``count()`` skips.
         """
         counts = self.ds.count()
         return max((int(counts[name].values) for name in counts.data_vars), default=0)
@@ -550,10 +547,9 @@ class BenchResultBase:
             as_dict (bool): return value as a dictionary
 
         Returns:
-            A list of ``(input_var, optimal_value)`` pairs, or that same mapping as a dict
-            when ``as_dict``. The previous annotation said a *bare* ``tuple`` and named
-            ``ParametrizedSweep`` where the elements are ``param.Parameter`` descriptors;
-            neither held (plan 23 P12).
+            A list of ``(input_var, optimal_value)`` pairs, or that same mapping as a
+            dict when ``as_dict``. The keys are ``param.Parameter`` descriptors, not
+            ``ParametrizedSweep`` instances.
         """
         da = self.get_optimal_value_indices(result_var)
         if keep_existing_consts:

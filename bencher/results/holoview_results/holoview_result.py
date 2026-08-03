@@ -261,8 +261,8 @@ class HoloviewResult(PaneResult):
         groupby is required.
 
         Returns ``None`` for a dataset with no dimensions -- there is nothing to put
-        on an axis. The ``| None`` was missing from the annotation until plan 23 P12;
-        callers that forward the result into an ``hv`` composition have to handle it.
+        on an axis, so callers forwarding the result into an ``hv`` composition have to
+        handle it.
         """
         var = result_var.name
         std_var = f"{var}_std"
@@ -561,14 +561,16 @@ class HoloviewResult(PaneResult):
             **kwargs,
         )
 
-    def result_var_to_container(self, result_var: Parameter) -> type:
+    def result_var_to_container(self, result_var: Parameter) -> type[pn.viewable.Viewable]:
         """Determine the appropriate container type for a given result variable.
 
         Args:
             result_var (Parameter): The result variable to find a container for.
 
         Returns:
-            type: The appropriate panel container type (PNG, Video, or Column).
+            The panel container type (PNG, Video, or Column). Narrower than a bare
+            ``type``, so that ``setup_results_and_containers`` calling it produces a
+            checked ``Viewable`` rather than an ``Any`` that satisfies any annotation.
         """
         if isinstance(result_var, ResultImage):
             return pn.pane.PNG
@@ -589,15 +591,13 @@ class HoloviewResult(PaneResult):
 
         Returns:
             A tuple of the result variables as a list, and one initialized container per
-            variable. A container entry is ``None`` when the caller passed an explicit
-            ``None`` in ``container``; ``result_var_to_container`` itself always yields a
-            class. The second element was annotated ``list[pn.pane.panel]`` until plan 23
-            P12 -- ``pn.pane.panel`` is a *function*, so it never named a type at all,
-            and the annotation also hid the ``None``.
+            variable. A container entry is ``None`` only when the caller passed an
+            explicit ``None`` in ``container``; ``result_var_to_container`` itself always
+            yields a class.
         """
         # A fresh name rather than rebinding the parameter: assigning back keeps the
         # declared `Parameter | list[Parameter]` as the type's upper bound, so the
-        # single-Parameter arm still leaks into the return (plan 23 P12).
+        # single-Parameter arm still leaks into the return.
         plots: list[Parameter] = listify(result_var_plots) or []
         if container is None:
             containers = [self.result_var_to_container(rv) for rv in plots]

@@ -101,14 +101,13 @@ class DistributionResult(HoloviewResult):
         Returns:
             An ``hv.Overlay`` of the requested plot class(es); for an over_time
             dataset, whatever ``_build_time_holomap_raw`` wraps it in (see
-            ``PlotResult``) -- measured as a ``pn.Column`` in practice.
+            ``PlotResult``) -- a ``pn.Column`` in practice.
 
-        Note the return type is **not** ``plot_class``, and was annotated
-        ``hv.Element`` until plan 23 P12 measured it. Two separate reasons it could
-        never hold: ``_build_distribution_overlay`` composes into an ``hv.Overlay``
-        unconditionally (it accepts a *list* of plot classes), and ``Overlay`` is not
-        an ``hv.Element`` subclass at all -- it descends from ``Dimensioned`` by a
-        different route. Callers wanting the bare element must index into the overlay.
+        The return type is **not** ``plot_class``, and is not even an ``hv.Element``:
+        ``_build_distribution_overlay`` composes into an ``hv.Overlay`` unconditionally
+        (it accepts a *list* of plot classes), and ``Overlay`` is not an ``hv.Element``
+        subclass -- it descends from ``Dimensioned`` by a different route. Callers
+        wanting the bare element must index into the overlay.
         """
         var_name = result_var.name
         title = self.title_from_ds(dataset[var_name], result_var, **kwargs)

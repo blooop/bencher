@@ -72,8 +72,7 @@ class BoxWhiskerResult(DistributionResult):
 
         Returns:
             An ``hv.Overlay`` wrapping the BoxWhisker, or a panel layout for an
-            over_time dataset (see ``PlotResult``). See ``_plot_distribution``
-            (plan 23 P12) for why the previous ``hv.BoxWhisker`` annotation was never
-            satisfied.
+            over_time dataset (see ``PlotResult``). Never a bare ``hv.BoxWhisker`` --
+            see ``_plot_distribution``.
         """
         return self._plot_distribution(dataset, result_var, hv.BoxWhisker, **kwargs)

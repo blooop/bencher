@@ -49,7 +49,7 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultHmap
 from bencher.variables.sweep_base import hash_sha1
-from bencher.variables.time import TimeEvent, TimeSnapshot
+from bencher.variables.time import TimeBase
 from bencher.worker_job import WorkerJob
 
 # Import helper classes
@@ -1032,7 +1032,7 @@ class Bench(BenchPlotServer):
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> list[IntSweep | TimeEvent | TimeSnapshot]:
+    ) -> list[IntSweep | TimeBase]:
         """Define meta variables (repeat count, timestamps) for benchmark tracking."""
         return self._collector.define_extra_vars(bench_cfg, repeats, time_src)
 
@@ -1294,8 +1294,7 @@ class Bench(BenchPlotServer):
 
         Returns:
             list[str] | list[Parameter]: The result variables, as names or as the
-                ``param.Parameter`` descriptors themselves (plan 23 P12: the previous
-                ``ParametrizedSweep`` named the wrong type).
+                ``param.Parameter`` descriptors themselves.
 
         Raises:
             RuntimeError: If the worker class instance is not set.

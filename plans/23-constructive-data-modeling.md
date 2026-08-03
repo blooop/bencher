@@ -1211,3 +1211,22 @@ than only a hygiene one — see item 1.
    digest would change the key for parameter-less sweeps and invalidate persisted caches
    (§7). Left for a phase that can bump `CACHE_VERSION`; recorded here so it is not
    mistaken for an oversight.
+
+10. **The honest unions P12 introduced are debt, not resolution.** `invalid-return-type`
+    can only check that an annotation matches what a function returns; it cannot say the
+    return *shape* is well modelled. Four annotations were made honest by widening, and
+    each widened union is now viral — every consumer must handle both arms. They are
+    listed here with their blocker so a later phase can take them, rather than reading as
+    finished work:
+
+    | Site | Union | Constructive fix | Blocker |
+    |---|---|---|---|
+    | `Bench.get_result_vars`, `WorkerManager.get_result_vars` | `list[str] \| list[Parameter]` switched on `as_str: bool` | split into `get_result_var_names()` and `get_result_vars()` | public API; needs a deprecation cycle for the flag |
+    | `BenchResultBase.get_optimal_inputs` | `list[tuple[...]] \| dict[...]` switched on `as_dict: bool` | split into two methods | same |
+    | `SweepBase.values`, `FloatSweep.values` | `list[Any] \| np.ndarray` | one return type for every leaf | coercing changes what flows into hashing and dataset construction |
+    | `ParametrizedSweep.param_hash`, `hash_persistent` | `int \| str` (the `0` sentinel) | always a digest | invalidates persisted caches; needs a `CACHE_VERSION` bump (§7) |
+
+    The first two are the shape this plan exists to remove — a boolean argument that
+    switches the return type is an illegal state made representable, and no type checker
+    will ever object to it. They are cheap to fix and blocked only on the deprecation, so
+    they should lead the follow-up phase rather than trail it.

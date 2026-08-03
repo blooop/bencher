@@ -25,6 +25,22 @@ class CountingWorker(bn.ParametrizedSweep):
         self.distance = float(self.float1)
 
 
+class PartlyMissingWorker(bn.ParametrizedSweep):
+    """One result variable always recorded, one recorded for a subset of samples.
+
+    Gives `result_samples()` a dataset whose per-variable counts differ, so max/sum/first
+    are all distinguishable.
+    """
+
+    idx = bn.IntSweep(default=0, bounds=[0, 4], samples=5)
+    full = bn.ResultFloat()
+    partial = bn.ResultFloat()
+
+    def benchmark(self):
+        self.full = float(self.idx)
+        self.partial = float(self.idx) if self.idx < 2 else float("nan")
+
+
 class TstBench(bn.ParametrizedSweep):
     float_var = bn.FloatSweep(default=0, bounds=[0, 4])
     cat_var = bn.StringSweep(["a", "b", "c", "d", "e"])
@@ -673,9 +689,32 @@ class TestBenchResultBase(unittest.TestCase):
             )
 
     def test_result_samples(self):
-        res = self._make_1d_result()
-        samples = res.result_samples()
-        self.assertIsNotNone(samples)
+        # `assertIsNotNone` used to be the whole test, which passes for any int and also
+        # passed for the xr.Dataset the method returned before it was fixed. Pin the
+        # number.
+        expected = len(BenchableObject.param.float1.values())
+        self.assertEqual(self._make_1d_result().result_samples(), expected)
+
+    def test_result_samples_counts_repeats(self):
+        """Repeats multiply the count -- it is cells recorded, not sweep points."""
+        expected = len(BenchableObject.param.float1.values()) * 3
+        self.assertEqual(self._make_1d_result(repeats=3).result_samples(), expected)
+
+    def test_result_samples_is_max_not_sum_across_result_vars(self):
+        """Two result variables over N samples is N samples, not 2N.
+
+        The partly-NaN variable is the point: `max` must report the most-populated
+        variable, so neither a `sum` (which would double-count) nor a first-variable
+        read (which would undercount at 2) passes this.
+        """
+        res = bn.Bench("result_samples_max", PartlyMissingWorker()).plot_sweep(
+            "max_not_sum",
+            input_vars=[PartlyMissingWorker.param.idx],
+            plot_callbacks=False,
+        )
+        counts = {name: int(res.ds.count()[name].values) for name in res.ds.data_vars}
+        self.assertEqual(counts, {"full": 5, "partial": 2})
+        self.assertEqual(res.result_samples(), 5)
 
     def test_to_dataset_cache_returns_same_object(self):
         """Identical args with deep=False should return the exact same cached object."""

@@ -65,11 +65,11 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the curve plot options.
 
         Returns:
-            An ``hv.Overlay`` of the curve plus optional standard-deviation spread,
-            or a panel layout when over_time wraps it for the time slider (see
-            ``PlotResult``); ``None`` for a dataset with no dimensions. Annotated
-            ``hv.Curve | None`` until plan 23 P12 -- a bare ``Curve`` is never
-            returned, because ``_build_curve_overlay`` always composes an Overlay.
+            An ``hv.Overlay`` of the curve plus optional standard-deviation spread, or a
+            panel layout when over_time wraps it for the time slider (see
+            ``PlotResult``); ``None`` for a dataset with no dimensions, since there is
+            nothing to put on an axis. Never a bare ``hv.Curve``:
+            ``_build_curve_overlay`` composes into an Overlay whenever it returns at all.
         """
         if self._use_holomap_for_time(dataset):
             var = result_var.name

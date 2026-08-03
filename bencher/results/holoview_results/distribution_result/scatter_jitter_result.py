@@ -93,9 +93,8 @@ class ScatterJitterResult(DistributionResult):
 
         Returns:
             An ``hv.Overlay`` wrapping the jittered Scatter, or a panel layout for an
-            over_time dataset (see ``PlotResult``). See ``_plot_distribution``
-            (plan 23 P12) for why the previous ``hv.Scatter`` annotation was never
-            satisfied.
+            over_time dataset (see ``PlotResult``). Never a bare ``hv.Scatter`` --
+            see ``_plot_distribution``.
         """
         # Prepare the data using the common method from the parent class
         return self._plot_distribution(dataset, result_var, hv.Scatter, jitter=jitter, **kwargs)

@@ -32,13 +32,12 @@ class ParametrizedSweep(Parameterized):
         Returns:
             int | str: ``hash_sha1``'s hex digest, or the literal ``0`` when nothing was
             hashed -- ``hash_value=False``, or a class declaring no parameters besides
-            ``name``. Annotated ``-> int`` until plan 23 P12, which is the one thing it
-            almost never returns.
+            ``name``.
 
-            The ``0`` is a sentinel of the kind this plan exists to remove, but
-            normalizing it to a digest would change the key for parameter-less sweeps and
-            so invalidate persisted caches (§7). Left as-is deliberately; a phase that
-            can bump ``CACHE_VERSION`` should fix it.
+            The ``0`` is a sentinel of the kind plan 23 exists to remove, but normalizing
+            it to a digest would change the key for parameter-less sweeps and so
+            invalidate persisted caches (plan 23 §7). Left as-is deliberately; fixing it
+            needs a phase that can bump ``CACHE_VERSION``.
         """
 
         curhash = 0
@@ -52,7 +51,7 @@ class ParametrizedSweep(Parameterized):
     def hash_persistent(self) -> int | str:
         """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run.
 
-        Inherits ``param_hash``'s ``0``-or-digest return; see there (plan 23 P12)."""
+        Inherits ``param_hash``'s ``0``-or-digest return; see there."""
         return ParametrizedSweep.param_hash(self, True)
 
     def update_params_from_kwargs(self, **kwargs) -> None:

@@ -158,10 +158,9 @@ def cfg_from_optuna_trial(
 ) -> ParametrizedSweep:
     """Build a worker config from an optuna trial's suggested values.
 
-    ``cfg_type`` is annotated ``type[ParametrizedSweep]``, not ``ParametrizedSweep``:
-    it is called to construct an instance. Under the old annotation ty resolved
-    ``cfg_type()`` through ``Parameterized.__call__`` and inferred a ``dict``, which is
-    what ``invalid-return-type`` flagged (plan 23 P12).
+    ``cfg_type`` is the worker *class*, not an instance -- it is called here to construct
+    one. Annotating it ``ParametrizedSweep`` makes a checker resolve ``cfg_type()``
+    through ``Parameterized.__call__`` and infer a ``dict``.
     """
     cfg = cfg_type()
     for iv in bench_cfg.input_vars:

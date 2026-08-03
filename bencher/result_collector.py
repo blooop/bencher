@@ -61,7 +61,7 @@ from bencher.variables.results import (
     ResultVec,
     result_missing_fill,
 )
-from bencher.variables.time import TimeEvent, TimeSnapshot
+from bencher.variables.time import TimeBase, TimeEvent, TimeSnapshot
 from bencher.worker_job import WorkerJob
 
 logger = logging.getLogger(__name__)
@@ -310,7 +310,7 @@ class ResultCollector:
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> list[IntSweep | TimeEvent | TimeSnapshot]:
+    ) -> list[IntSweep | TimeBase]:
         """Define extra meta variables for tracking benchmark execution details.
 
         This function creates variables that aren't passed to the worker function but are stored
@@ -335,7 +335,7 @@ class ResultCollector:
             optimize=False,
         )
         bench_cfg.iv_repeat.name = "repeat"
-        extra_vars: list[IntSweep | TimeEvent | TimeSnapshot] = [bench_cfg.iv_repeat]
+        extra_vars: list[IntSweep | TimeBase] = [bench_cfg.iv_repeat]
 
         if bench_cfg.over_time:
             if isinstance(time_src, str):

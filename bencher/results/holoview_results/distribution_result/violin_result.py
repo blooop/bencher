@@ -68,9 +68,8 @@ class ViolinResult(DistributionResult):
                       - bandwidth: Controls the smoothness of the density estimate
 
         Returns:
-            An ``hv.Overlay`` wrapping the Violin, or a panel layout for an
-            over_time dataset (see ``PlotResult``). Annotated ``hv.Violin`` until plan
-            23 P12 measured it: ``_plot_distribution`` always composes into an Overlay,
-            so the concrete-element annotation was never satisfied.
+            An ``hv.Overlay`` wrapping the Violin, or a panel layout for an over_time
+            dataset (see ``PlotResult``). Never a bare ``hv.Violin`` --
+            ``_plot_distribution`` always composes into an Overlay.
         """
         return self._plot_distribution(dataset, result_var, hv.Violin, **kwargs)
