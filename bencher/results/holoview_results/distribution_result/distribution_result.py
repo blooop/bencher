@@ -10,7 +10,7 @@ from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import HoloviewResult, PlotResult
 from bencher.utils import params_to_str
 from bencher.variables.results import ResultFloat
 
@@ -85,7 +85,7 @@ class DistributionResult(HoloviewResult):
         result_var: Parameter,
         plot_class: type[hv.Selection1DExpr],
         **kwargs: Any,
-    ) -> hv.Element:
+    ) -> PlotResult:
         """Prepares data for distribution plots and creates the plot.
 
         This method handles common operations needed for all distribution plot types,
@@ -99,7 +99,15 @@ class DistributionResult(HoloviewResult):
             **kwargs: Additional keyword arguments for plot customization.
 
         Returns:
-            A HoloViews Element representing the distribution plot.
+            An ``hv.Overlay`` of the requested plot class(es); for an over_time
+            dataset, whatever ``_build_time_holomap_raw`` wraps it in (see
+            ``PlotResult``) -- a ``pn.Column`` in practice.
+
+        The return type is **not** ``plot_class``, and is not even an ``hv.Element``:
+        ``_build_distribution_overlay`` composes into an ``hv.Overlay`` unconditionally
+        (it accepts a *list* of plot classes), and ``Overlay`` is not an ``hv.Element``
+        subclass -- it descends from ``Dimensioned`` by a different route. Callers
+        wanting the bare element must index into the overlay.
         """
         var_name = result_var.name
         title = self.title_from_ds(dataset[var_name], result_var, **kwargs)

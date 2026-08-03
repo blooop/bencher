@@ -10,6 +10,7 @@ from param import Parameter
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )
+from bencher.results.holoview_results.holoview_result import PlotResult
 
 
 class ViolinResult(DistributionResult):
@@ -51,7 +52,7 @@ class ViolinResult(DistributionResult):
             **kwargs,
         )
 
-    def to_violin_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any) -> hv.Violin:
+    def to_violin_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any) -> PlotResult:
         """Creates a violin plot from the provided dataset.
 
         Given a filtered dataset, this method generates a violin plot visualization showing
@@ -67,6 +68,8 @@ class ViolinResult(DistributionResult):
                       - bandwidth: Controls the smoothness of the density estimate
 
         Returns:
-            hv.Violin: A HoloViews Violin plot of the benchmark data.
+            An ``hv.Overlay`` wrapping the Violin, or a panel layout for an over_time
+            dataset (see ``PlotResult``). Never a bare ``hv.Violin`` --
+            ``_plot_distribution`` always composes into an Overlay.
         """
         return self._plot_distribution(dataset, result_var, hv.Violin, **kwargs)

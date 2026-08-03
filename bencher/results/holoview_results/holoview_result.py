@@ -27,6 +27,20 @@ from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 # directly via pn.pane.Plotly), and registering it eagerly costs ~6s at import.
 hv.extension("bokeh")
 
+# What a `to_*_ds` renderer actually hands back (plan 23 P12).
+#
+# Without over_time it is a holoviews object. *With* over_time the plot gets wrapped
+# for the time slider -- `_holomap_with_slider_bottom` returns a `pn.Column`, or a
+# `pn.Tabs` when `show_aggregated_time_tab` adds the aggregated tab, or the bare
+# `hv.HoloMap` if Panel produced no widgets to rearrange. So the return type crosses
+# the holoviews/panel boundary, which is why several of these methods were annotated
+# with a concrete `hv.Curve`/`hv.Violin` they could never return.
+#
+# Enumerated rather than collapsed to `Any`: the four shapes are exactly what a caller
+# has to handle, and `pn.Column`/`pn.Tabs` are the ones that surprise -- a caller doing
+# `.opts(...)` on the result works until someone enables over_time.
+PlotResult = hv.Overlay | hv.HoloMap | pn.Column | pn.Tabs
+
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
 
@@ -233,7 +247,7 @@ class HoloviewResult(PaneResult):
 
     def _build_curve_overlay(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> hv.Overlay:
+    ) -> hv.Overlay | None:
         """Build a Curve (+ optional Spread) overlay for a single time slice or aggregated data.
 
         When ``_std`` exists in the dataset the spread band is rendered
@@ -245,6 +259,10 @@ class HoloviewResult(PaneResult):
         groupby dimensions by constructing ``hv.Dataset`` directly from the
         xarray Dataset.  The heavier DataFrame path is only used when manual
         groupby is required.
+
+        Returns ``None`` for a dataset with no dimensions -- there is nothing to put
+        on an axis, so callers forwarding the result into an ``hv`` composition have to
+        handle it.
         """
         var = result_var.name
         std_var = f"{var}_std"
@@ -543,14 +561,16 @@ class HoloviewResult(PaneResult):
             **kwargs,
         )
 
-    def result_var_to_container(self, result_var: Parameter) -> type:
+    def result_var_to_container(self, result_var: Parameter) -> type[pn.viewable.Viewable]:
         """Determine the appropriate container type for a given result variable.
 
         Args:
             result_var (Parameter): The result variable to find a container for.
 
         Returns:
-            type: The appropriate panel container type (PNG, Video, or Column).
+            The panel container type (PNG, Video, or Column). Narrower than a bare
+            ``type``, so that ``setup_results_and_containers`` calling it produces a
+            checked ``Viewable`` rather than an ``Any`` that satisfies any annotation.
         """
         if isinstance(result_var, ResultImage):
             return pn.pane.PNG
@@ -561,7 +581,7 @@ class HoloviewResult(PaneResult):
         result_var_plots: Parameter | list[Parameter],
         container: type | list[type] | None = None,
         **kwargs,
-    ) -> tuple[list[Parameter], list[pn.pane.panel]]:
+    ) -> tuple[list[Parameter], list[pn.viewable.Viewable | None]]:
         """Set up appropriate containers for result variables.
 
         Args:
@@ -570,18 +590,22 @@ class HoloviewResult(PaneResult):
             **kwargs: Additional options to pass to the container constructors.
 
         Returns:
-            tuple[list[Parameter], list[pn.pane.panel]]: Tuple containing:
-                - List of result variables
-                - List of initialized container instances
+            A tuple of the result variables as a list, and one initialized container per
+            variable. A container entry is ``None`` only when the caller passed an
+            explicit ``None`` in ``container``; ``result_var_to_container`` itself always
+            yields a class.
         """
-        result_var_plots = listify(result_var_plots)
+        # A fresh name rather than rebinding the parameter: assigning back keeps the
+        # declared `Parameter | list[Parameter]` as the type's upper bound, so the
+        # single-Parameter arm still leaks into the return.
+        plots: list[Parameter] = listify(result_var_plots) or []
         if container is None:
-            containers = [self.result_var_to_container(rv) for rv in result_var_plots]
+            containers = [self.result_var_to_container(rv) for rv in plots]
         else:
-            containers = listify(container)
+            containers = listify(container) or []
 
         cont_instances = [c(**kwargs) if c is not None else None for c in containers]
-        return result_var_plots, cont_instances
+        return plots, cont_instances
 
     def to_error_bar(self, result_var: Parameter | str | None = None, **kwargs) -> hv.Bars:
         """Convert the dataset to an ErrorBars visualization for a specific result variable.

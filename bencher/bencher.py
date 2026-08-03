@@ -49,6 +49,7 @@ from bencher.variables.inputs import IntSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import ResultHmap
 from bencher.variables.sweep_base import hash_sha1
+from bencher.variables.time import TimeBase
 from bencher.worker_job import WorkerJob
 
 # Import helper classes
@@ -1031,7 +1032,7 @@ class Bench(BenchPlotServer):
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> list[IntSweep]:
+    ) -> list[IntSweep | TimeBase]:
         """Define meta variables (repeat count, timestamps) for benchmark tracking."""
         return self._collector.define_extra_vars(bench_cfg, repeats, time_src)
 
@@ -1282,7 +1283,7 @@ class Bench(BenchPlotServer):
         branch_name = f"{self.bench_name}_{self.run_cfg.run_tag}"
         return self.report.publish(remote_callback, branch_name=branch_name)
 
-    def get_result_vars(self, as_str: bool = True) -> list[str | ParametrizedSweep]:
+    def get_result_vars(self, as_str: bool = True) -> list[str] | list[Parameter]:
         """
         Retrieve the result variables from the worker class instance.
 
@@ -1292,14 +1293,17 @@ class Bench(BenchPlotServer):
                            Default is True.
 
         Returns:
-            list[str | ParametrizedSweep]: A list of result variables, either as strings or in their original form.
+            list[str] | list[Parameter]: The result variables, as names or as the
+                ``param.Parameter`` descriptors themselves.
 
         Raises:
             RuntimeError: If the worker class instance is not set.
         """
         if self.worker_class_instance is not None:
             if as_str:
-                return [i.name for i in self.worker_class_instance.get_results_only()]
+                # str(): see WorkerManager.get_results_only -- param types `name` as
+                # `str | None`, but a declared parameter always has one.
+                return [str(i.name) for i in self.worker_class_instance.get_results_only()]
             return self.worker_class_instance.get_results_only()
         raise RuntimeError("Worker class instance not set")
 

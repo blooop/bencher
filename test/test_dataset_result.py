@@ -125,7 +125,7 @@ OVER_TIME_RUNS = 3
 
 def run_sweep_over_time(
     worker: bn.ParametrizedSweep, name: str, runs: int = OVER_TIME_RUNS
-) -> bn.BenchResult:
+) -> bn.BenchResult | None:
     """Run one sweep `runs` times against a single history, as a nightly rig does.
 
     Only the first run clears the history, so from the second run on the rendered

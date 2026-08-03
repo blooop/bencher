@@ -10,6 +10,7 @@ from param import Parameter
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )
+from bencher.results.holoview_results.holoview_result import PlotResult
 
 
 class BoxWhiskerResult(DistributionResult):
@@ -54,7 +55,7 @@ class BoxWhiskerResult(DistributionResult):
 
     def to_boxplot_ds(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs: Any
-    ) -> hv.BoxWhisker:
+    ) -> PlotResult:
         """Creates a box and whisker plot from the provided dataset.
 
         Given a filtered dataset, this method generates a box and whisker visualization showing
@@ -70,6 +71,8 @@ class BoxWhiskerResult(DistributionResult):
                       - line_width: Width of lines in the plot
 
         Returns:
-            hv.BoxWhisker: A HoloViews BoxWhisker plot of the benchmark data.
+            An ``hv.Overlay`` wrapping the BoxWhisker, or a panel layout for an
+            over_time dataset (see ``PlotResult``). Never a bare ``hv.BoxWhisker`` --
+            see ``_plot_distribution``.
         """
         return self._plot_distribution(dataset, result_var, hv.BoxWhisker, **kwargs)

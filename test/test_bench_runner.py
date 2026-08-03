@@ -51,7 +51,7 @@ class TestBenchRunner(unittest.TestCase):
         bench_class = SimpleBenchClass()
         # bench = bn.Bench("test_bench", bench_class, run_cfg=run_cfg, report=report            )
 
-        def run_bench_class(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.BenchCfg:
+        def run_bench_class(run_cfg: bn.BenchRunCfg, report: bn.BenchReport) -> bn.Bench:
             bench = bn.Bench("test_bench1_cache", bench_class, run_cfg=run_cfg, report=report)
             bench.plot_sweep("bench_1")
             return bench

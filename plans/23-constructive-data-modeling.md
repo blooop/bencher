@@ -1122,3 +1122,111 @@ sweep written by `main`'s code and read by P5's → 6/6 hits). One MEDIUM findin
    `True`**, so it reaches any report built outside `to_auto()`. Rewording it would have
    been a user-visible change riding along on a type refactor; the sentinel it prints is
    now only a rendering, not a representable state.
+
+### P12 (partially implemented — `invalid-return-type` only)
+
+**Scope note:** P12 as written enables all five Tier-B rules. Measured after P2–P11 landed,
+Tier B is **125 diagnostics**, essentially unchanged from the ~126 estimated at
+`4a13ab8e` — the earlier phases fixed representations, not annotations. This PR delivers
+the first rule; the other four are measured and left. Costs, so the next phase can plan:
+
+| Rule | Diagnostics | State |
+|---|---|---|
+| `invalid-return-type` | 29 | **enabled** |
+| `not-iterable` | 43 | ignored |
+| `no-matching-overload` | 21 | ignored |
+| `unsupported-operator` | 16 | ignored |
+| `possibly-missing-attribute` | 16 | ignored |
+
+`invalid-return-type` was taken first because it is the one with a design payoff rather
+than only a hygiene one — see item 1.
+
+1. **P1's `ReduceType` caveat is discharged, and this was verified rather than assumed.**
+   `invalid-return-type` is the rule that checks `_resolve_auto` returns a member of
+   `ResolvedReduceType`, so `to_dataset`'s `assert_never` is now a compile-time proof in
+   *both* directions. Seeding `return ReduceType.AUTO` on the `None` path now gives
+   `expected Literal[SQUEEZE, REDUCE, MINMAX, NONE], found Literal[ReduceType.AUTO]`,
+   where before P12 it passed `pixi run ty` and failed at runtime. The caveat comment at
+   the alias is replaced by the discharge, and `test_ty_gate.py` now protects the rule
+   (verified to fail on a seeded re-ignore).
+
+   **A first probe of this was wrong and is recorded as such:** the seed was inserted
+   *after* the existing `if reduce is None: return ReduceType.NONE`, so it was
+   unreachable and ty correctly said nothing. Reading that as "the rule does not work"
+   would have been the wrong conclusion — an isolated probe showed ty rejects the pattern
+   fine. Seed on a *live* path.
+
+2. **`result_samples()` was annotated `-> int` and returned an `xr.Dataset`** — and the
+   consequence was much worse than a wrong type. `self.ds.count()` yields per-variable
+   counts, so **every** `result_samples() > 0` / `== n` assertion in the suite (nine of
+   them) was *vacuous*: comparing a Dataset yields a Dataset, and `bool(Dataset)` is
+   defined as `len(data_vars) > 0` — true whenever the sweep declared any result variable,
+   whether or not a single sample was collected. Now returns the max count across data
+   vars (max, not sum: two result variables over two samples is 2 samples, not 4).
+
+3. **Making those assertions real immediately found a test-isolation bug.**
+   `test_bencher.py::test_const_hashing` sets `ExampleBenchCfg.param.theta.samples = 5` on
+   a *class-level* param shared by the whole suite and never restored it, so every later
+   test relying on the default of 30 silently ran with 5. Two `test_plot_sweep_mutation`
+   tests asserting `result_samples() == 30` had been passing on the vacuous comparison.
+   Fixed with `setUp`/`tearDown` — deliberately not `addCleanup`, because that test is
+   hypothesis-driven and a cleanup registered inside the body captures the
+   already-mutated value on every example after the first.
+
+4. **Four annotations in the distribution-plot stack named types they could never
+   return.** `to_violin_ds`/`to_boxplot_ds`/`to_scatter_jitter_ds` each declared their
+   concrete element (`hv.Violin`, ...), but `_plot_distribution` composes through
+   `_build_distribution_overlay`, which returns an `hv.Overlay` unconditionally; and
+   `_plot_distribution` itself declared `hv.Element`, which `Overlay` **is not a subclass
+   of** at all. With over_time the value is a `pn.Column` — the return type crosses the
+   holoviews/panel boundary. Replaced by one enumerated alias, `PlotResult`.
+   Measured, not reasoned: a first attempt annotated them `hv.Overlay | hv.HoloMap`, which
+   was also wrong, because `_holomap_with_slider_bottom` wraps into panel objects.
+
+5. **`FloatSweep.values()` returns a numpy array, not a `list[float]`** — and annotating
+   the leaf honestly turned the diagnostic into a Tier-A `invalid-method-override`,
+   because `SweepBase.values()` (and its root declaration in `sweep_base.py`) promised
+   `list[Any]`. The root contract is now `list[Any] | np.ndarray`. Deliberately *not*
+   coerced with `list(...)`: the array flows into hashing and dataset construction, so
+   changing its runtime type is a behaviour change, not an annotation fix.
+
+6. **`ParametrizedSweep` was named where `param.Parameter` was meant, in four places** —
+   `get_result_vars` (twice, in `Bench` and `WorkerManager`), `get_inputs_only`, and
+   `get_optimal_inputs`, whose annotation also claimed a bare `tuple` where it returns a
+   *list* of pairs. A confusion between the sweep class and its parameter descriptors.
+
+7. **`cfg_from_optuna_trial` annotated `cfg_type: ParametrizedSweep` for a value it
+   calls.** Under that annotation ty resolved `cfg_type()` through
+   `Parameterized.__call__` and inferred `dict`; `type[ParametrizedSweep]` is what was
+   meant.
+
+8. **Two diagnostics are stub imprecision and carry scoped ignores with reasons**, per the
+   convention P1 set: `pn.serve` (returns `StoppableThread | Server`, where the annotation
+   said `Thread`) and `merged[keep]` in `history.py` (a list key returns a `Dataset` at
+   runtime, but xarray's `__getitem__` stub is typed for the str case and ty cannot narrow
+   by key type).
+
+9. **`param_hash` returns `0` or a sha1 digest**, declared `-> int` — the one thing it
+   almost never returns. Annotated `int | str` rather than normalized: making it always a
+   digest would change the key for parameter-less sweeps and invalidate persisted caches
+   (§7). Left for a phase that can bump `CACHE_VERSION`; recorded here so it is not
+   mistaken for an oversight.
+
+10. **The honest unions P12 introduced are debt, not resolution.** `invalid-return-type`
+    can only check that an annotation matches what a function returns; it cannot say the
+    return *shape* is well modelled. Four annotations were made honest by widening, and
+    each widened union is now viral — every consumer must handle both arms. They are
+    listed here with their blocker so a later phase can take them, rather than reading as
+    finished work:
+
+    | Site | Union | Constructive fix | Blocker |
+    |---|---|---|---|
+    | `Bench.get_result_vars`, `WorkerManager.get_result_vars` | `list[str] \| list[Parameter]` switched on `as_str: bool` | split into `get_result_var_names()` and `get_result_vars()` | public API; needs a deprecation cycle for the flag |
+    | `BenchResultBase.get_optimal_inputs` | `list[tuple[...]] \| dict[...]` switched on `as_dict: bool` | split into two methods | same |
+    | `SweepBase.values`, `FloatSweep.values` | `list[Any] \| np.ndarray` | one return type for every leaf | coercing changes what flows into hashing and dataset construction |
+    | `ParametrizedSweep.param_hash`, `hash_persistent` | `int \| str` (the `0` sentinel) | always a digest | invalidates persisted caches; needs a `CACHE_VERSION` bump (§7) |
+
+    The first two are the shape this plan exists to remove — a boolean argument that
+    switches the return type is an illegal state made representable, and no type checker
+    will ever object to it. They are cheap to fix and blocked only on the deprecation, so
+    they should lead the follow-up phase rather than trail it.

@@ -27,6 +27,12 @@ MUST_NOT_BE_IGNORED = {
     # The exhaustiveness mechanism. Silencing this turns every `assert_never` arm from a
     # compile-time proof into a runtime assertion, with no other signal.
     "type-assertion-failure": "exhaustive `match` checking (plan 23 D2)",
+    # Tier B's first rule, enabled in P12. This is what verifies `_resolve_auto` really
+    # returns a member of `ResolvedReduceType`, i.e. what makes `to_dataset`'s
+    # `assert_never` a compile-time proof instead of a runtime assertion. Re-ignoring it
+    # silently downgrades that proof, which is exactly the state P1 shipped with and P12
+    # was written to end.
+    "invalid-return-type": "the ReduceType exhaustiveness proof (plan 23 P12)",
     # Tier A, enabled in P1. Each was measured at <=6 diagnostics, so a reappearance in
     # the ignore list is a regression rather than a pragmatic concession.
     "call-non-callable": "Tier A (plan 23 P1)",

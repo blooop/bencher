@@ -179,7 +179,9 @@ class BenchPlotServer:
             "port": port,
         }
 
-        return pn.serve(plots_instance, **serve_kwargs)
+        # pn.serve returns a StoppableThread when threaded=True and a bokeh Server
+        # otherwise; `threading.Thread` named only the first (plan 23 P12).
+        return pn.serve(plots_instance, **serve_kwargs)  # ty: ignore[invalid-return-type]
 
     @staticmethod
     def _rrd_extra_patterns() -> list:

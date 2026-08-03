@@ -486,7 +486,10 @@ def project(merged: xr.Dataset, current_cols: dict[str, Any], columns_meta: dict
             served[name].attrs[BIRTH_ATTR] = birth
         else:
             served[name].attrs.pop(BIRTH_ATTR, None)
-    return served
+    # `merged[keep]` with a list key returns a Dataset at runtime; xarray's stub
+    # types __getitem__ as `Dataset | DataArray` for the str case, which ty cannot
+    # narrow by key type. Stub imprecision, not a defect here (plan 23 P12).
+    return served  # ty: ignore[invalid-return-type]
 
 
 def apply_policy(events: list[HistoryEvent], policy: OnHistoryReset | str) -> None:

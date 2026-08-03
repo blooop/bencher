@@ -73,10 +73,14 @@ class ReduceType(Enum):
 
 # ReduceType with AUTO excluded: the return type of _resolve_auto, so that the match in
 # to_dataset is exhaustive over four members rather than relying on a catch-all.
-# CAVEAT: this only *fully* holds once `invalid-return-type` is enabled (plan 23 P12).
-# That rule is what checks _resolve_auto actually returns a member of this Literal; until
-# it lands, adding a ReduceType member without updating both this alias and the match
-# passes ty and fails at runtime in assert_never instead of at check time.
+#
+# P1's caveat here is now DISCHARGED: plan 23 P12 enabled `invalid-return-type`, which is
+# the rule that checks _resolve_auto really returns a member of this Literal. The proof is
+# therefore complete at check time in both directions -- verified by seeding
+# `return ReduceType.AUTO` on the `None` path, which ty rejects with
+# `expected Literal[SQUEEZE, REDUCE, MINMAX, NONE], found Literal[ReduceType.AUTO]`.
+# Adding a ReduceType member without updating both this alias and the match now fails
+# `pixi run ty` rather than at runtime in assert_never.
 ResolvedReduceType = Literal[
     ReduceType.SQUEEZE, ReduceType.REDUCE, ReduceType.MINMAX, ReduceType.NONE
 ]
@@ -207,8 +211,20 @@ class BenchResultBase:
         self._to_dataset_cache.clear()
 
     def result_samples(self) -> int:
-        """The number of samples in the results dataframe"""
-        return self.ds.count()
+        """The number of values recorded, for the most-populated data variable.
+
+        This counts *cells*, not sweep points: the repeat dimension multiplies it, so a
+        two-point sweep at ``repeats=3`` reports 6. Returns 0 for a dataset with no data
+        variables.
+
+        Max across data variables, rather than sum or first:
+
+        - sum would double-count -- two result variables over two samples is 2, not 4;
+        - first would undercount a sweep whose other variables partly failed, since a
+          failed sample leaves a NaN that ``count()`` skips.
+        """
+        counts = self.ds.count()
+        return max((int(counts[name].values) for name in counts.data_vars), default=0)
 
     def to_hv_dataset(
         self,
@@ -522,7 +538,7 @@ class BenchResultBase:
         result_var: ParametrizedSweep,
         keep_existing_consts: bool = True,
         as_dict: bool = False,
-    ) -> tuple[ParametrizedSweep, Any] | dict[ParametrizedSweep, Any]:
+    ) -> list[tuple[Parameter, Any]] | dict[Parameter, Any]:
         """Get a list of tuples of optimal variable names and value pairs, that can be fed in as constant values to subsequent parameter sweeps
 
         Args:
@@ -531,11 +547,14 @@ class BenchResultBase:
             as_dict (bool): return value as a dictionary
 
         Returns:
-            tuple[bn.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
+            A list of ``(input_var, optimal_value)`` pairs, or that same mapping as a
+            dict when ``as_dict``. The keys are ``param.Parameter`` descriptors, not
+            ``ParametrizedSweep`` instances.
         """
         da = self.get_optimal_value_indices(result_var)
         if keep_existing_consts:
-            output = deepcopy(self.bench_cfg.const_vars)
+            # `or []`: const_vars is a param List, so it reads as `list | None`.
+            output = deepcopy(self.bench_cfg.const_vars) or []
         else:
             output = []
 
@@ -588,7 +607,12 @@ class BenchResultBase:
         return " vs ".join(tit)
 
     def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[Parameter]:
-        return self.bench_cfg.result_vars if result_var is None else listify(result_var)
+        if result_var is None:
+            # `or []`: result_vars is a param List, so it reads as `list | None`.
+            return self.bench_cfg.result_vars or []
+        # `or []` because listify returns None for a None input; unreachable here given
+        # the branch above, but the annotation has to hold without that reasoning.
+        return listify(result_var) or []
 
     def map_plots(
         self,

@@ -24,7 +24,7 @@ def trace_frame(duration: float) -> pd.DataFrame:
     return pd.DataFrame({"time": t, "signal": np.sin(t), "reference": np.cos(t)})
 
 
-def xarray_trace_frame(duration: float) -> pd.DataFrame:
+def xarray_trace_frame(duration: float) -> pd.DataFrame | pd.Series:
     """The same trace built the way xarray users build one.
 
     ``Dataset.to_pandas()`` leaves the dimension coordinate in the *index*, so the
@@ -32,6 +32,8 @@ def xarray_trace_frame(duration: float) -> pd.DataFrame:
     """
     t = np.linspace(0.0, duration, SAMPLES_PER_TRACE)
     signal = xr.DataArray(np.sin(t), dims=["time"], coords={"time": t})
+    # to_pandas() returns a Series for 1-D data and a DataFrame otherwise; ty sees the
+    # union, so name it rather than narrowing on a shape it cannot see (plan 23 P12).
     return xr.Dataset({"signal": signal}).to_pandas()
 
 
