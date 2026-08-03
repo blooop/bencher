@@ -1,48 +1,61 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 import warnings
-from datetime import datetime
+from collections.abc import Callable
 from concurrent.futures import as_completed
-from itertools import product, combinations
-
-from param import Parameter
-from typing import Callable, Any
-from copy import deepcopy
-import param
-import numpy as np
-import xarray as xr
 from contextlib import suppress
+from copy import deepcopy
+from datetime import datetime
 from functools import partial
-import panel as pn
+from itertools import combinations, product
+from pathlib import Path
+from typing import Any
 
+import numpy as np
 import optuna
-
-from bencher.worker_job import WorkerJob
-from bencher.results.optimize_result import OptimizeResult
-from bencher.optuna_conversions import sweep_var_to_suggest, sweep_var_to_optuna_dist
-from bencher.variables.sweep_base import hash_sha1
+import panel as pn
+import param
+import xarray as xr
+from param import Parameter
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
-
-from bencher.variables.inputs import IntSweep
-from bencher.variables.results import ResultHmap
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
+from bencher.history import OnHistoryReset
+from bencher.history import config_summary as history_config_summary
+from bencher.job import (
+    Executors,
+    FutureCache,
+    Job,
+    JobFuture,
+    Pending,
+    normalize_catch,
+    normalize_executor,
+)
+from bencher.optuna_conversions import sweep_var_to_optuna_dist, sweep_var_to_suggest
+from bencher.regression import RegressionError, detect_regressions
+from bencher.result_collector import ResultCollector
 from bencher.results.bench_result import BenchResult
-from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.job import Job, FutureCache, JobFuture, Executors
-from bencher.utils import params_to_str, resolve_aggregate
+from bencher.results.optimize_result import OptimizeResult
 from bencher.sample_order import SampleOrder
-from bencher.regression import detect_regressions, RegressionError
+from bencher.sweep_executor import SweepExecutor, validate_declared_vars, worker_kwargs_wrapper
 from bencher.sweep_timings import SweepTimings, phase_timer
+from bencher.utils import AGG_FN_MAP, AggFn, normalize_agg_fn, params_to_str, resolve_aggregate
+from bencher.variables.inputs import IntSweep
+from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import ResultHmap
+from bencher.variables.sweep_base import hash_sha1
+from bencher.variables.time import TimeBase
+from bencher.worker_job import WorkerJob
 
 # Import helper classes
 from bencher.worker_manager import WorkerManager
-from bencher.result_collector import ResultCollector
-from bencher.sweep_executor import SweepExecutor, worker_kwargs_wrapper
 
-from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
+logger = logging.getLogger(__name__)
 
 # Customize the formatter
 formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -51,6 +64,92 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 for handler in logging.root.handlers:
     handler.setFormatter(formatter)
+
+
+def _agg_job_args(kwargs, agg_vars, combo):
+    """Build job_args dict by merging Optuna-suggested kwargs with aggregate combo values."""
+    job_args = dict(kwargs)
+    if agg_vars:
+        for v, val in zip(agg_vars, combo):
+            job_args[v.name] = val
+    return job_args
+
+
+class SampleErrorPolicyError(Exception):
+    """Raised after a sweep completes when too many samples were caught.
+
+    Deliberately raised *after* the dataset and report are assembled, so the
+    partial results are still on disk when it fires; losing the artifact would
+    defeat the point of catching in the first place.
+    """
+
+
+def validate_sample_error_policy(policy: bool | float) -> float | None:
+    """Validate ``fail_on_sample_error`` and return its threshold, if it has one.
+
+    Returns ``None`` for the two policies that are not a fraction: off (falsy) and
+    ``True`` (fail on any failure). Called both from ``plot_sweep``, so a typo'd
+    threshold costs milliseconds rather than a whole sweep, and from
+    :func:`_enforce_sample_error_policy`, so the enforcement stays self-contained
+    for callers that reach it directly.
+    """
+    if not policy:  # False, None, 0, 0.0 -- the policy is simply off
+        return None
+    if policy is True:
+        return None
+    # bool is a subclass of int, so a bare 1 is truthy, is *not* True, and would
+    # otherwise silently become the 1.0 threshold -- "raise only if every sample
+    # failed", the near-opposite of the "raise if any failed" the caller almost
+    # certainly meant by writing 1. Both readings are defensible, which is why
+    # this refuses to pick one. Floats are unambiguous and stay allowed, so
+    # 1.0 still means 100%.
+    if isinstance(policy, int):
+        # ValueError, not the TypeError ruff's TRY004 suggests: int is inside this
+        # field's bool | float contract, so the type is fine and the *value* is what
+        # cannot be resolved to one meaning.
+        raise ValueError(  # noqa: TRY004
+            "fail_on_sample_error must be True/False or a float in (0, 1]; got the "
+            f"integer {policy!r}, which is ambiguous -- use True to fail on any "
+            f"failed sample, or {float(policy)!r} to fail at that failed fraction"
+        )
+    threshold = float(policy)
+    if not 0.0 < threshold <= 1.0:
+        raise ValueError(
+            f"fail_on_sample_error must be True/False or a float in (0, 1], got {policy!r}"
+        )
+    return threshold
+
+
+def _enforce_sample_error_policy(bench_res: BenchResult, policy: bool | float) -> None:
+    """Fail the run if ``fail_on_sample_error`` says the failures are the story.
+
+    ``True`` fails on any caught sample; a float in (0, 1] fails when the failed
+    fraction reaches it, which is what lets a project tolerate a flake and still
+    fail a run made of flakes. This is the half of plan 21 that makes ``catch=``
+    safe to use unattended.
+
+    Only called for a run that actually sampled: on a benchmark-result cache hit
+    the loaded result carries the *previous* run's failure counts, and failing the
+    current run on them would raise for a run whose worker never executed -- see
+    ``run_sweep``.
+    """
+    # The threshold is validated before the "did anything fail?" early return.
+    # Checking it afterwards means a typo'd threshold is inert on every clean run
+    # and only surfaces once a sample happens to fail -- reporting a *config*
+    # error at the one moment the caller is trying to read a *sample* failure.
+    threshold = validate_sample_error_policy(policy)
+    if not policy or not bench_res.n_failed:
+        return
+    n, frac = bench_res.n_failed, bench_res.failed_fraction
+    if policy is True:
+        raise SampleErrorPolicyError(
+            f"{n} sample(s) failed and were caught; fail_on_sample_error=True"
+        )
+    if frac >= threshold:
+        raise SampleErrorPolicyError(
+            f"{n} sample(s) failed ({frac:.0%} of those executed), which meets "
+            f"fail_on_sample_error={threshold}"
+        )
 
 
 class Bench(BenchPlotServer):
@@ -98,6 +197,13 @@ class Bench(BenchPlotServer):
         self._worker_mgr = WorkerManager()
         self._executor = SweepExecutor(cache_size=self.cache_size)
         self._collector = ResultCollector(cache_size=self.cache_size)
+
+        # The worker manager owns this state; these mirror it for backward
+        # compatibility and are refreshed by _expose_worker_attrs().
+        self.worker: Callable | None = None
+        # A *class* when attached via set_worker_class for declaration only.
+        self.worker_class_instance: ParametrizedSweep | type[ParametrizedSweep] | None = None
+        self.worker_input_cfg: ParametrizedSweep | None = None
 
         # Set worker using the manager
         self.set_worker(worker, worker_input_cfg)
@@ -186,10 +292,30 @@ class Bench(BenchPlotServer):
             RuntimeError: If worker is a class type instead of an instance.
         """
         self._worker_mgr.set_worker(worker, worker_input_cfg)
-        # Expose worker attributes for backward compatibility
+        self._expose_worker_attrs()
+
+    def _expose_worker_attrs(self) -> None:
+        """Mirror the worker manager's state onto self, for backward compatibility."""
         self.worker = self._worker_mgr.worker
         self.worker_class_instance = self._worker_mgr.worker_class_instance
         self.worker_input_cfg = self._worker_mgr.worker_input_cfg
+
+    def set_worker_class(self, worker_class: type[ParametrizedSweep]) -> None:
+        """Attach a worker class for declaration only, without a callable worker.
+
+        Delegates to :meth:`bencher.worker_manager.WorkerManager.set_worker_class`,
+        whose docstring explains why a class is enough to declare and hash a sweep but
+        not to run one. Used by :func:`bencher.identity.sweep_identity`.
+
+        Args:
+            worker_class: A ParametrizedSweep subclass. Never instantiated, never
+                called.
+
+        Raises:
+            RuntimeError: If given an instance rather than a class.
+        """
+        self._worker_mgr.set_worker_class(worker_class)
+        self._expose_worker_attrs()
 
     def sweep_sequential(
         self,
@@ -204,7 +330,7 @@ class Bench(BenchPlotServer):
         relationship_cb: Callable | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         aggregate: bool | int | list[str] | None = None,
-        agg_fn: str = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN.value,
     ) -> list[BenchResult]:
         """Run a sequence of benchmarks by sweeping through groups of input variables.
 
@@ -267,11 +393,13 @@ class Bench(BenchPlotServer):
         post_description: str | None = None,
         pass_repeat: bool = False,
         tag: str = "",
+        series_id: str | None = None,
         run_cfg: BenchRunCfg | None = None,
         plot_callbacks: list[Callable] | bool | None = None,
         sample_order: SampleOrder = SampleOrder.INORDER,
         aggregate: bool | int | list[str] | None = None,
-        agg_fn: str = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN.value,
+        auto_plot: bool | None = None,
     ) -> BenchResult:
         """The all-in-one function for benchmarking and results plotting.
 
@@ -309,6 +437,18 @@ class Bench(BenchPlotServer):
                 If a list, uses the provided callbacks. Defaults to None.
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
                 Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
+            auto_plot (bool, optional): Whether to build the holoviews/panel report
+                immediately after the sweep. ``None`` (default) respects ``run_cfg.auto_plot``
+                (itself ``True`` by default), so behaviour is unchanged unless a caller opts
+                out. ``False`` collects samples and computes regression detection WITHOUT
+                constructing any plotting objects — the returned BenchResult is fully populated
+                (dataset + regression_report) and can be rendered later, in a separate process,
+                via :func:`bencher.render_report`. Useful when the collecting process holds
+                foreign C-extension state (e.g. ROS/rclpy) that makes in-process holoviews/bokeh
+                garbage collection unsafe. See also :meth:`Bench.collect`. Because ``None``
+                defers to ``run_cfg``, setting ``run_cfg.auto_plot = False`` once disables
+                plotting for every ``plot_sweep`` call that uses that config — including calls
+                nested inside benchmark functions you don't control.
 
         Returns:
             BenchResult: An object containing all the benchmark data and results
@@ -323,7 +463,7 @@ class Bench(BenchPlotServer):
             if input_vars is not None:
                 input_vars_in = deepcopy(input_vars)
             else:
-                logging.info(
+                logger.info(
                     "No input variables passed, using all param variables in bench class as inputs"
                 )
                 if self.input_vars is None:
@@ -331,12 +471,12 @@ class Bench(BenchPlotServer):
                 else:
                     input_vars_in = deepcopy(self.input_vars)
                 for i in input_vars_in:
-                    logging.info(f"input var: {i.name}")
+                    logger.info(f"input var: {i.name}")
 
             if result_vars is not None:
                 result_vars_in = deepcopy(result_vars)
             else:
-                logging.info(
+                logger.info(
                     "No results variables passed, using all result variables in bench class:"
                 )
                 if self.result_vars is None:
@@ -359,13 +499,45 @@ class Bench(BenchPlotServer):
         if run_cfg is None:
             if self.run_cfg is None:
                 run_cfg = BenchRunCfg()
-                logging.info("Generate default run cfg")
+                logger.info("Generate default run cfg")
             else:
                 run_cfg = deepcopy(self.run_cfg)
-                logging.info("Copy run cfg from bench class")
+                logger.info("Copy run cfg from bench class")
+
+        # Normalize and validate both fault-tolerance knobs here, before any
+        # sampling happens. Deferring either check to the end of the run means a
+        # typo costs the whole sweep before it is reported -- and for a sweep whose
+        # samples are individually expensive, that is exactly the cost this feature
+        # exists to avoid paying. Both knobs live on run_cfg only -- run
+        # configuration already reaches plot_sweep as an object, and a second
+        # kwarg spelling would give each knob two homes to reconcile.
+        run_cfg.catch = normalize_catch(run_cfg.catch)
+        validate_sample_error_policy(run_cfg.fail_on_sample_error)
+        # Same reasoning for `executor` (C13): `param.Selector` accepts the bare
+        # string "SERIAL" because Executors is a StrEnum, and the field is then
+        # compared with both `==` and `is` further down. Assigning the member back
+        # makes the field's type true for every reader.
+        run_cfg.executor = normalize_executor(run_cfg.executor)
+        # Same reasoning again for `on_history_reset` (plan 23 P7): the policy is
+        # only consumed by load_history_cache, which runs *after*
+        # calculate_benchmark_results and before cache_results -- so parsing it
+        # there would raise on a bad value only once every sample had already been
+        # collected and (with cache_samples off by default) thrown away. Parsing
+        # here moves that config error ahead of all sampling. Assigning the member
+        # back also makes the field's type true for every downstream reader.
+        run_cfg.on_history_reset = OnHistoryReset(run_cfg.on_history_reset)
 
         if run_cfg.only_plot:
             run_cfg.cache_results = True
+
+        # auto_plot lives on BenchRunCfg (BenchCfg inherits it), so run_cfg
+        # values override the BenchCfg constructor via param.update in
+        # run_sweep. Apply an explicit plot_sweep(auto_plot=...) here so it
+        # survives that merge. auto_plot=None defers to run_cfg.auto_plot
+        # (default True) — this is what lets a caller set run_cfg.auto_plot
+        # once and have nested plot_sweep calls honour it.
+        if auto_plot is not None:
+            run_cfg.auto_plot = auto_plot
 
         self.last_run_cfg = run_cfg
 
@@ -397,7 +569,7 @@ class Bench(BenchPlotServer):
 
         for r in result_vars_in:
             r_name = getattr(r, "name", str(r))
-            logging.info("result var: %s", r_name)
+            logger.info("result var: %s", r_name)
 
         if isinstance(const_vars_in, dict):
             const_vars_in = list(const_vars_in.items())
@@ -407,6 +579,12 @@ class Bench(BenchPlotServer):
             cv_list = list(const_vars_in[i])
             cv_list[0] = self.convert_vars_to_params(cv_list[0], "const", run_cfg)
             const_vars_in[i] = cv_list
+
+        # One validation site, after conversion so comparison is on resolved names
+        # rather than the mixed bag of strings, dicts and objects the caller passed.
+        input_vars_in, result_vars_in, const_vars_in = validate_declared_vars(
+            input_vars_in, result_vars_in, const_vars_in
+        )
 
         if title is None:
             if len(input_vars_in) > 0:
@@ -424,32 +602,31 @@ class Bench(BenchPlotServer):
         if run_cfg.samples_per_var is not None:
             if len(input_vars_in) > 0:
                 input_vars_in = [i.with_samples(run_cfg.samples_per_var) for i in input_vars_in]
-                logging.info(
+                logger.info(
                     "samples_per_var=%d applied to %d input variable(s)",
                     run_cfg.samples_per_var,
                     len(input_vars_in),
                 )
-        elif run_cfg.level > 0:
+        elif run_cfg.subsampling_divisions > 0:
             inputs = []
-            logging.debug("Input vars prior to level adjustment: %s", input_vars_in)
+            logger.debug("Input vars prior to subsampling_divisions adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
-                    inputs.append(i.with_level(run_cfg.level))
+                    inputs.append(i.with_subsampling_divisions(run_cfg.subsampling_divisions))
                 input_vars_in = inputs
-                logging.info(
-                    "level=%d → %d samples per variable",
-                    run_cfg.level,
-                    BenchRunCfg.level_to_samples(run_cfg.level),
+                logger.info(
+                    "subsampling_divisions=%d → %d samples per variable",
+                    run_cfg.subsampling_divisions,
+                    BenchRunCfg.subsampling_divisions_to_samples(run_cfg.subsampling_divisions),
                 )
 
         # if any of the inputs have been include as constants, remove those variables from the list of constants
         with suppress(ValueError, AttributeError):
             for i in input_vars_in:
                 for c in const_vars_in:
-                    # print(i.hash_persistent())
                     if i.name == c[0].name:
                         const_vars_in.remove(c)
-                        logging.info(f"removing {i.name} from constants")
+                        logger.info(f"removing {i.name} from constants")
 
         result_hmaps = []
         result_vars_only = []
@@ -488,9 +665,12 @@ class Bench(BenchPlotServer):
             title=title,
             pass_repeat=pass_repeat,
             tag=run_cfg.run_tag + tag,
+            series_id=series_id,
             plot_callbacks=plot_callbacks,
             agg_over_dims=agg_over_dims,
             agg_fn=agg_fn,
+            # auto_plot is applied via run_cfg (above) so it survives the
+            # run_cfg -> bench_cfg param merge in run_sweep.
         )
         if run_cfg.dry_run:
             total = 1
@@ -504,7 +684,7 @@ class Bench(BenchPlotServer):
                 else:
                     summary_parts.append(f"  {iv.name}: 0 values")
             evals = total * run_cfg.repeats
-            logging.info(
+            logger.info(
                 "Dry run for '%s':\n%s\n  Total: %d combinations x %d repeats = %d evaluations",
                 title,
                 "\n".join(summary_parts) if summary_parts else "  (no input vars)",
@@ -515,6 +695,28 @@ class Bench(BenchPlotServer):
             return BenchResult(bench_cfg)
 
         return self.run_sweep(bench_cfg, run_cfg, time_src, sample_order)
+
+    def collect(self, *args, **kwargs) -> BenchResult:
+        """Run a sweep and collect results WITHOUT building any plots.
+
+        Equivalent to :meth:`plot_sweep` with ``auto_plot=False``: it executes the sweep,
+        merges over-time history, and computes regression detection, but constructs **no**
+        holoviews/panel/bokeh objects. The returned :class:`BenchResult` is fully populated
+        (dataset + ``regression_report``) and is the safe artifact to persist
+        (:func:`bencher.save_result`) and render later — in a separate, clean process —
+        via :func:`bencher.render_report`.
+
+        This is the collection half of a collect/render split, intended for callers whose
+        process holds foreign C-extension state (e.g. ROS/rclpy/DDS) where in-process
+        holoviews/bokeh allocation and the resulting garbage collection can segfault. Accepts
+        the same arguments as :meth:`plot_sweep` (``auto_plot`` is forced to ``False``).
+
+        Returns:
+            BenchResult: Fully-populated result with no plots built.
+        """
+        if "auto_plot" in kwargs:
+            raise TypeError("collect() forces auto_plot=False; do not pass auto_plot")
+        return self.plot_sweep(*args, auto_plot=False, **kwargs)
 
     @staticmethod
     def filter_overridable_params(
@@ -603,14 +805,14 @@ class Bench(BenchPlotServer):
         )
 
         if missing_keys:
-            logging.warning(
+            logger.warning(
                 "Run configuration contains parameters that do not exist on "
                 "the bench configuration and were ignored: %s",
                 sorted(missing_keys),
             )
 
         if constant_keys:
-            logging.warning(
+            logger.warning(
                 "Attempted to override constant bench parameters from run "
                 "configuration; these were ignored: %s",
                 sorted(constant_keys),
@@ -619,6 +821,12 @@ class Bench(BenchPlotServer):
         bench_cfg.param.update(run_cfg_values)
         bench_cfg_hash = bench_cfg.hash_persistent(True)
         bench_cfg.hash_value = bench_cfg_hash
+
+        # The over_time history is keyed WITHOUT result vars so metric-set
+        # changes reconcile per column instead of orphaning the whole history
+        # (see bencher.history). The benchmark-level result cache above stays
+        # strict: a cached single result must match the exact result-var set.
+        bench_cfg_history_hash = bench_cfg.hash_persistent(True, include_result_vars=False)
 
         # does not include repeats in hash as sample_hash already includes repeat as part of the per sample hash
         bench_cfg_sample_hash = bench_cfg.hash_persistent(False)
@@ -635,18 +843,18 @@ class Bench(BenchPlotServer):
             c = self._collector.get_benchmark_cache()
             if run_cfg.clear_cache:
                 c.delete(bench_cfg_hash)
-                logging.info("cleared cache")
+                logger.info("cleared cache")
             elif run_cfg.cache_results:
-                logging.info(
+                logger.info(
                     f"checking for previously calculated results with key: {bench_cfg_hash}"
                 )
                 if bench_cfg_hash in c:
-                    logging.info(f"loading cached results from key: {bench_cfg_hash}")
+                    logger.info(f"loading cached results from key: {bench_cfg_hash}")
                     bench_res = c[bench_cfg_hash]
                     # if not over_time:  # if over time we always want to calculate results
                     calculate_results = False
                 else:
-                    logging.info("did not detect results in cache")
+                    logger.info("did not detect results in cache")
                     if run_cfg.only_plot:
                         raise FileNotFoundError("Was not able to load the results to plot!")
         timings.cache_check_ms = elapsed()
@@ -666,10 +874,15 @@ class Bench(BenchPlotServer):
                 with phase_timer() as elapsed:
                     bench_res.ds = self.load_history_cache(
                         bench_res.ds,
-                        bench_cfg_hash,
+                        bench_cfg_history_hash,
                         run_cfg.clear_history,
                         run_cfg.max_time_events,
                         bench_cfg.result_vars,
+                        on_history_reset=run_cfg.on_history_reset,
+                        bench_name=bench_cfg.bench_name,
+                        series_id=bench_cfg.series,
+                        tag=bench_cfg.tag,
+                        config_summary=history_config_summary(bench_cfg),
                     )
                     # sync the over_time meta variable with the actual accumulated values
                     if bench_cfg.iv_time and "over_time" in bench_res.ds.coords:
@@ -684,14 +897,19 @@ class Bench(BenchPlotServer):
             if run_cfg.over_time and run_cfg.regression_detection:
                 bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
                 if bench_res.regression_report.has_regressions:
-                    logging.warning(bench_res.regression_report.summary())
-                    if run_cfg.regression_fail:
+                    logger.warning(bench_res.regression_report.summary())
+                    # young_baseline regressions (fewer than regression_min_history
+                    # points since the column's birth) warn but never fail the run.
+                    if (
+                        run_cfg.regression_fail
+                        and bench_res.regression_report.has_blocking_regressions
+                    ):
                         raise RegressionError(bench_res.regression_report.summary())
 
             self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
             self.cache_results(bench_res, bench_cfg_hash)
 
-        logging.info(self.sample_cache.stats())
+        logger.info(self.sample_cache.stats())
         self.sample_cache.close()
 
         with phase_timer() as elapsed:
@@ -700,14 +918,58 @@ class Bench(BenchPlotServer):
 
         if bench_cfg.auto_plot:
             with phase_timer() as elapsed:
-                self.report.append_result(bench_res)
+                if os.environ.get("BENCHER_FORCE_SPLIT_RENDER"):
+                    self._append_result_via_split(bench_res)
+                else:
+                    self.report.append_result(bench_res)
             timings.render_ms = elapsed()
 
         timings.total_ms = timings.compute_total()
         bench_res.timings = timings
 
         self.results.append(bench_res)
+        # Only for a run that actually sampled. On a benchmark-result cache hit
+        # bench_res is a *previous* run's result, unpickled with that run's
+        # failed_samples and n_attempted still on it -- enforcing there raises for
+        # a run whose worker never executed at all (and, since only_plot forces
+        # cache_results, for a pure re-plot). fail_on_sample_error is about errors
+        # this run hit; a caller who wants "does this artifact have holes" reads
+        # bench_res.n_failed, which is a different question.
+        if calculate_results:
+            _enforce_sample_error_policy(bench_res, run_cfg.fail_on_sample_error)
         return bench_res
+
+    def _append_result_via_split(self, bench_res: BenchResult) -> None:
+        """Append a result to the report through the collect/render split.
+
+        Used only when the ``BENCHER_FORCE_SPLIT_RENDER`` env var is set. Instead
+        of rendering ``bench_res`` in-process, it round-trips the result through
+        pickle (:func:`bencher.save_result` / :func:`bencher.load_result`) and
+        rebuilds the report tab from the *deserialized* copy — the same serialize
+        then render-from-loaded steps that :func:`bencher.render_report` performs
+        out of process.
+
+        This lets a dedicated CI job re-run the entire existing test/example suite
+        with the split pipeline forced on, so any divergence between in-process and
+        split rendering (unpicklable result types, render paths that relied on live
+        state) surfaces in the existing assertions. The round-trip stays in-process
+        here so the full suite remains fast; a separate test covers the subprocess
+        boundary.
+        """
+        # Local import keeps render (and its holoviews/panel imports) out of the
+        # hot path when the switch is off.
+        from bencher.render import load_result, save_result
+
+        with tempfile.TemporaryDirectory(prefix="bencher_force_split_") as tmp:
+            path = save_result(bench_res, Path(tmp) / "result.pkl")
+            loaded = load_result(path)
+        # render_report runs post_setup on a freshly-loaded result; mirror that
+        # so the forced path matches the real out-of-process render exactly.
+        loaded.post_setup()
+        # Register the live result for tab routing (so identity-based
+        # append_to_result, e.g. optimize(plot=True), still works) but render the
+        # tab pane from the deserialized copy — that copy is what we want to test.
+        self.report.append_result(bench_res, render_from=loaded)
 
     # TODO: Remove thin wrapper methods in major version bump - callers can use helpers directly
     def convert_vars_to_params(
@@ -725,30 +987,6 @@ class Bench(BenchPlotServer):
         """Cache benchmark results to disk using the config hash as key."""
         self._collector.cache_results(bench_res, bench_cfg_hash, self.bench_cfg_hashes)
 
-    # def show(self, run_cfg: BenchRunCfg | None = None, pane: pn.panel = None) -> None:
-    #     """Launch a web server with plots of the benchmark results.
-    #
-    #     This method starts a Panel web server to display the benchmark results interactively.
-    #     It is a blocking call that runs until the server is terminated.
-    #
-    #     Args:
-    #         run_cfg (BenchRunCfg, optional): Configuration options for the web server,
-    #             such as the port number. If None, uses the instance's last_run_cfg
-    #             or creates a default one. Defaults to None.
-    #         pane (pn.panel, optional): A custom panel to display instead of the default
-    #             benchmark visualization. Defaults to None.
-    #
-    #     Returns:
-    #         None
-    #     """
-    #     if run_cfg is None:
-    #         if self.last_run_cfg is not None:
-    #             run_cfg = self.last_run_cfg
-    #         else:
-    #             run_cfg = BenchRunCfg()
-    #
-    #     return BenchPlotServer().plot_server(self.bench_name, run_cfg, pane)
-
     def load_history_cache(
         self,
         dataset: xr.Dataset,
@@ -756,10 +994,30 @@ class Bench(BenchPlotServer):
         clear_history: bool,
         max_time_events: int | None = None,
         result_vars: list | None = None,
+        *,
+        on_history_reset: OnHistoryReset | str = OnHistoryReset.WARN,
+        bench_name: str | None = None,
+        tag: str | None = None,
+        series_id: str | None = None,
+        config_summary: dict | None = None,
     ) -> xr.Dataset:
-        """Load and concatenate historical benchmark data from cache."""
+        """Load, reconcile, and persist historical benchmark data from cache.
+
+        Raises:
+            ValueError: If ``on_history_reset`` is not an ``OnHistoryReset``
+                member or one of its values.
+        """
         return self._collector.load_history_cache(
-            dataset, bench_cfg_hash, clear_history, max_time_events, result_vars
+            dataset,
+            bench_cfg_hash,
+            clear_history,
+            max_time_events,
+            result_vars,
+            on_history_reset=on_history_reset,
+            bench_name=bench_name,
+            tag=tag,
+            series_id=series_id,
+            config_summary=config_summary,
         )
 
     def setup_dataset(
@@ -774,7 +1032,7 @@ class Bench(BenchPlotServer):
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> list[IntSweep]:
+    ) -> list[IntSweep | TimeBase]:
         """Define meta variables (repeat count, timestamps) for benchmark tracking."""
         return self._collector.define_extra_vars(bench_cfg, repeats, time_src)
 
@@ -840,7 +1098,6 @@ class Bench(BenchPlotServer):
             constant_inputs = self.define_const_inputs(bench_res.bench_cfg.const_vars)
         timings.dataset_setup_ms = elapsed()
 
-        results_list = []
         jobs = []
         cache_jobs = []
 
@@ -860,7 +1117,6 @@ class Bench(BenchPlotServer):
                     bench_cfg_sample_hash,
                     bench_tag,
                 )
-                job.setup_hashes()
                 jobs.append(job)
 
                 cache_jobs.append(
@@ -885,9 +1141,41 @@ class Bench(BenchPlotServer):
         rv_arrays = self._collector.precompute_result_arrays(bench_res)
 
         with phase_timer() as elapsed:
+            catch = normalize_catch(bench_run_cfg.catch)
+            # The denominator for failed_fraction is samples this run *executed*,
+            # which is not len(jobs): a cache hit never reached the worker, so
+            # counting it as an attempt makes the same fail_on_sample_error
+            # threshold loosen as the cache warms -- 1 failure out of 1 executed
+            # sample reads as 25% when the other 3 came from cache. FutureCache
+            # increments worker_fn_call_count exactly once per job that reaches the
+            # worker (before it runs, so a caught sample still counts), and a delta
+            # rather than the raw counter keeps it per-sweep on a bench that runs
+            # several.
+            executed_before = self.sample_cache.worker_fn_call_count
+            # Jobs that were actually submitted, paired with their futures. Kept
+            # explicitly rather than zipping jobs against a results list: a caught
+            # sample submits nothing, and a positional zip would then pair every
+            # later job with the wrong future.
+            submitted: list[tuple] = []
             for job, cache_job in zip(jobs, cache_jobs):
-                result = self.sample_cache.submit(cache_job, prefetched=prefetched)
-                results_list.append(result)
+                # No `if catch:` branch: `except ()` matches nothing, so the default
+                # empty tuple is already fail-fast. One call site rather than two
+                # identical ones that could drift apart.
+                try:
+                    result = self.sample_cache.submit(cache_job, prefetched=prefetched)
+                # catch is a runtime tuple of exception types, which pylint
+                # cannot see into.
+                # pylint: disable-next=catching-non-exception
+                except catch as exc:
+                    # The serial executor runs the worker *inside* submit(), so on
+                    # the default executor a raising sample never reaches
+                    # store_results at all -- catching only there would leave the
+                    # common path fail-fast while the pool path tolerated failures.
+                    self._collector.record_caught_sample(
+                        bench_res, cache_job.job_id, job.function_input, exc
+                    )
+                    continue
+                submitted.append((job, result))
                 # For serial execution, store results immediately so that
                 # completed results are cached to disk before later jobs
                 # may crash.
@@ -898,14 +1186,21 @@ class Bench(BenchPlotServer):
                 # can use as_completed() to overlap result storage with
                 # remaining computation.
                 pending = {}  # concurrent.futures.Future -> (WorkerJob, JobFuture)
-                for job, job_future in zip(jobs, results_list):
-                    if job_future.future is not None:
-                        pending[job_future.future] = (job, job_future)
-                    else:
-                        self.store_results(job_future, bench_res, job, bench_run_cfg, rv_arrays)
+                for job, job_future in submitted:
+                    # No assert_never arm: job_future arrives via an untyped tuple, so
+                    # exhaustiveness would be an assertion, not a proof (plan 24 A1);
+                    # the default arm is a real behavior anyway -- Ready (a cache hit)
+                    # and Broken (a fallen-back-to-serial worker that returned None,
+                    # recorded by store_results) are both stored immediately.
+                    match job_future.state:
+                        case Pending(future=future):
+                            pending[future] = (job, job_future)
+                        case _:
+                            self.store_results(job_future, bench_res, job, bench_run_cfg, rv_arrays)
                 for done in as_completed(pending):
                     worker_job, job_future = pending.pop(done)
                     self.store_results(job_future, bench_res, worker_job, bench_run_cfg, rv_arrays)
+            bench_res.n_attempted = self.sample_cache.worker_fn_call_count - executed_before
         timings.job_execution_ms = elapsed()
 
         for inp in bench_res.bench_cfg.all_vars:
@@ -988,7 +1283,7 @@ class Bench(BenchPlotServer):
         branch_name = f"{self.bench_name}_{self.run_cfg.run_tag}"
         return self.report.publish(remote_callback, branch_name=branch_name)
 
-    def get_result_vars(self, as_str: bool = True) -> list[str | ParametrizedSweep]:
+    def get_result_vars(self, as_str: bool = True) -> list[str] | list[Parameter]:
         """
         Retrieve the result variables from the worker class instance.
 
@@ -998,14 +1293,17 @@ class Bench(BenchPlotServer):
                            Default is True.
 
         Returns:
-            list[str | ParametrizedSweep]: A list of result variables, either as strings or in their original form.
+            list[str] | list[Parameter]: The result variables, as names or as the
+                ``param.Parameter`` descriptors themselves.
 
         Raises:
             RuntimeError: If the worker class instance is not set.
         """
         if self.worker_class_instance is not None:
             if as_str:
-                return [i.name for i in self.worker_class_instance.get_results_only()]
+                # str(): see WorkerManager.get_results_only -- param types `name` as
+                # `str | None`, but a declared parameter always has one.
+                return [str(i.name) for i in self.worker_class_instance.get_results_only()]
             return self.worker_class_instance.get_results_only()
         raise RuntimeError("Worker class instance not set")
 
@@ -1022,9 +1320,13 @@ class Bench(BenchPlotServer):
         n_trials: int = 100,
         sampler: optuna.samplers.BaseSampler | None = None,
         warm_start: bool = True,
+        aggregate: bool | int | list[str] | None = None,
+        agg_fn: AggFn | str = AggFn.MEAN.value,
+        repeats: int = 1,
         tag: str = "",
         run_cfg: BenchRunCfg | None = None,
         plot: bool = True,
+        catch: tuple[type[Exception], ...] = (),
     ) -> OptimizeResult | None:
         """Run optuna optimization directly — no full grid sweep required.
 
@@ -1037,9 +1339,28 @@ class Bench(BenchPlotServer):
             n_trials: Number of new optuna trials to run.
             sampler: Optuna sampler.  Defaults to ``TPESampler``.
             warm_start: Seed the study with previously cached evaluations.
+            aggregate: Dimensions to aggregate inside the objective function.
+                Same semantics as ``plot_sweep``: *True* aggregates all but the
+                first input dim, an *int N* aggregates the last N dims, or a
+                *list[str]* names specific dims.  Aggregated dims are looped
+                over internally so Optuna sees the aggregated value.
+            agg_fn: Aggregation function name — one of the values of
+                :class:`bencher.utils.AggFn` (``"mean"``, ``"sum"``, ``"max"``,
+                ``"min"``, ``"median"``).  Applied when *aggregate* is set or
+                *repeats* > 1.
+            repeats: Number of times to evaluate each parameter combination.
+                Each repeat uses a different ``repeat`` index and gets its own
+                cache key.  Results are aggregated with *agg_fn*.
             tag: Cache tag (same semantics as ``plot_sweep``).
             run_cfg: Run configuration.  Defaults to ``BenchRunCfg()``.
             plot: If *True*, append visualisation to ``self.report``.
+            catch: Exception types that should not abort the study.  Forwarded
+                to ``optuna.Study.optimize``: a trial whose worker raises one
+                of these is recorded as FAILED and the study continues with the
+                remaining trials.  Use for flaky or expensive workers
+                (simulator cold starts, network calls).  The default ``()``
+                preserves fail-fast behaviour: any worker exception aborts the
+                whole study.
 
         Returns:
             OptimizeResult wrapping the completed ``optuna.Study``.
@@ -1052,6 +1373,17 @@ class Bench(BenchPlotServer):
             input_vars, result_vars, const_vars, run_cfg
         )
         constant_inputs = self.define_const_inputs(const_vars_in) or {}
+
+        # --- resolve aggregation ----------------------------------------
+        optuna_vars, agg_vars = self._split_optuna_and_agg_vars(input_vars_in, aggregate)
+
+        needs_agg = bool(agg_vars) or repeats > 1
+        if needs_agg:
+            # normalize_agg_fn raises ValueError on an unknown value — the same
+            # behaviour this site always had, now shared with the plotting path.
+            agg_callable = AGG_FN_MAP[normalize_agg_fn(agg_fn)]
+        else:
+            agg_callable = None
 
         if title is None:
             title = "Optimize " + " vs ".join(iv.name for iv in input_vars_in)
@@ -1081,7 +1413,7 @@ class Bench(BenchPlotServer):
         # --- determine optimisation directions --------------------------
         targets = bench_cfg.optuna_targets(as_var=True)
         if not targets:
-            logging.warning(
+            logger.warning(
                 "No result variables with an optimization direction found. "
                 "Skipping optimization. Set direction=OptDir.minimize or "
                 "OptDir.maximize on your ResultFloat to enable optimization."
@@ -1108,12 +1440,18 @@ class Bench(BenchPlotServer):
 
         # --- run optimisation -------------------------------------------
         objective = self._make_optuna_objective(
-            input_vars_in, constant_inputs, target_names, bench_cfg.tag
+            optuna_vars,
+            constant_inputs,
+            target_names,
+            bench_cfg.tag,
+            agg_vars=agg_vars,
+            agg_callable=agg_callable,
+            repeats=repeats,
         )
-        study.optimize(objective, n_trials=n_trials)
+        study.optimize(objective, n_trials=n_trials, catch=catch)
 
         # --- clean up cache -------------------------------------------------
-        logging.info(self.sample_cache.stats())
+        logger.info(self.sample_cache.stats())
         self.sample_cache.close()
 
         result = OptimizeResult(
@@ -1218,7 +1556,7 @@ class Bench(BenchPlotServer):
                     study.add_trials(trials)
                     added += len(trials)
             except Exception:  # pylint: disable=broad-except
-                logging.debug("Failed to warm-start from result", exc_info=True)
+                logger.debug("Failed to warm-start from result", exc_info=True)
         return added
 
     def _warm_from_sample_cache(
@@ -1242,6 +1580,9 @@ class Bench(BenchPlotServer):
             try:
                 vals = list(iv.values())
             except Exception:  # pylint: disable=broad-except
+                # Not every sweep var can enumerate its values (e.g. dynamically
+                # populated selectors); skip it rather than aborting the whole grid.
+                logger.debug("Skipping input var %s: values() failed", iv.name, exc_info=True)
                 continue
             iv_grid_values.append(vals)
             iv_names.append(iv.name)
@@ -1283,7 +1624,7 @@ class Bench(BenchPlotServer):
                     study.add_trial(trial)
                     added += 1
                 except Exception:  # pylint: disable=broad-except
-                    logging.debug("Failed to warm-start trial from cache", exc_info=True)
+                    logger.debug("Failed to warm-start trial from cache", exc_info=True)
 
         return added
 
@@ -1302,31 +1643,84 @@ class Bench(BenchPlotServer):
         )
         return added
 
-    def _make_optuna_objective(self, input_vars, constant_inputs, target_names, tag):
+    @staticmethod
+    def _split_optuna_and_agg_vars(input_vars, aggregate):
+        """Partition *input_vars* into Optuna-tuned and aggregated lists."""
+        input_var_names = [iv.name for iv in input_vars]
+        agg_over_dims = resolve_aggregate(aggregate, input_var_names)
+        if agg_over_dims:
+            agg_set = set(agg_over_dims)
+            optuna_vars = [iv for iv in input_vars if iv.name not in agg_set]
+            agg_vars = [iv for iv in input_vars if iv.name in agg_set]
+        else:
+            optuna_vars = input_vars
+            agg_vars = []
+        return optuna_vars, agg_vars
+
+    def _run_optuna_job(self, trial, job_args, repeat, constant_inputs, tag):
+        """Submit a single worker evaluation and return the result dict."""
+        full_input = dict(job_args)
+        full_input.update(constant_inputs)
+        full_input["repeat"] = repeat
+
+        cache_key = self._build_cache_key(full_input, tag)
+        # Mirror the sweep path (WorkerJob.function_input): constants must reach the
+        # worker, not just the cache key. Collisions with input_vars are already
+        # stripped in _resolve_optimize_vars, so suggested values are never clobbered.
+        # deepcopy for the same mutation safety worker_kwargs_wrapper gives the sweep
+        # path: a worker mutating a mutable constant must not leak state across trials.
+        job = Job(
+            job_id=f"optimize:trial_{trial.number}",
+            function=self.worker,
+            job_args=deepcopy(dict(job_args) | constant_inputs),
+            job_key=cache_key,
+            tag=tag,
+        )
+        # Same boundary check as store_results: the optimize path consumes the result
+        # dict directly, so a worker returning None must fail here by name rather than
+        # as a downstream subscript error (B3, plan 23 P2). Since P5 the check lives
+        # inside `result()` itself, which is total and raises WorkerContractError for
+        # a worker that returned nothing -- on either executor path.
+        #
+        # Unlike the sweep path this one *is* inside a `catch=`, because the objective
+        # runs under `study.optimize(..., catch=catch)`. That asymmetry is pre-existing
+        # and not a behaviour change: with `catch=Exception` the old code was absorbed
+        # here too, as an AssertionError on serial and a `None` subscript TypeError on
+        # the pool. Only the message and the serial/parallel agreement improve. Making
+        # optuna's catch selective is its own decision, not B3's.
+        return self.sample_cache.submit(job).result()
+
+    def _make_optuna_objective(
+        self,
+        input_vars,
+        constant_inputs,
+        target_names,
+        tag,
+        agg_vars=None,
+        agg_callable: Callable | None = None,
+        repeats=1,
+    ):
         """Return an objective function compatible with ``study.optimize()``."""
 
         def objective(trial: optuna.trial.Trial):
-            kwargs = {}
-            for iv in input_vars:
-                kwargs[iv.name] = sweep_var_to_suggest(iv, trial)
+            kwargs = {iv.name: sweep_var_to_suggest(iv, trial) for iv in input_vars}
 
-            full_input = dict(kwargs)
-            full_input.update(constant_inputs)
-            full_input["repeat"] = 1
+            # Non-None exactly when `needs_agg` held at the caller (agg_vars or repeats>1),
+            # so testing it here narrows the type instead of duplicating that condition.
+            if agg_callable is not None:
+                agg_combos = list(product(*(v.values() for v in agg_vars))) if agg_vars else [()]
+                all_results = [
+                    self._run_optuna_job(
+                        trial, _agg_job_args(kwargs, agg_vars, combo), rep, constant_inputs, tag
+                    )
+                    for combo in agg_combos
+                    for rep in range(1, repeats + 1)
+                ]
+                output = [agg_callable([r[tn] for r in all_results]) for tn in target_names]
+            else:
+                result_dict = self._run_optuna_job(trial, kwargs, 1, constant_inputs, tag)
+                output = [result_dict[tn] for tn in target_names]
 
-            cache_key = self._build_cache_key(full_input, tag)
-
-            job = Job(
-                job_id=f"optimize:trial_{trial.number}",
-                function=self.worker,
-                job_args=kwargs,
-                job_key=cache_key,
-                tag=tag,
-            )
-            job_future = self.sample_cache.submit(job)
-            result_dict = job_future.result()
-
-            output = [result_dict[tn] for tn in target_names]
             return tuple(output) if len(output) > 1 else output[0]
 
         return objective

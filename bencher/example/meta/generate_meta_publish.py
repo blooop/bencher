@@ -69,7 +69,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_runner_publish(self):
@@ -103,7 +103,7 @@ bench.plot_sweep(
     "  runner = bn.BenchRunner('my_benchmarks', "
     "publisher=bn.GithubPagesCfg('user', 'repo', 'folder'))\\n"
     "  runner.add(my_benchmark_fn)\\n"
-    "  runner.run(level=3, publish=True)",
+    "  runner.run(subsampling_divisions=3, publish=True)",
 )
 
 # Uncomment to publish via BenchRunner:
@@ -112,7 +112,7 @@ bench.plot_sweep(
 #     publisher=bn.GithubPagesCfg("your_username", "your_reports_repo", "waves"),
 # )
 # runner.add_bench(WaveBenchmark())
-# runner.run(level=3, show=True, publish=True)
+# runner.run(subsampling_divisions=3, show=True, publish=True)
 """
         self.generate_example(
             title="BenchRunner Publishing with GithubPagesCfg",
@@ -122,7 +122,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
 

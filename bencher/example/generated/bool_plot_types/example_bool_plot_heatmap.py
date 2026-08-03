@@ -29,4 +29,4 @@ def example_bool_plot_heatmap(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
 
 
 if __name__ == "__main__":
-    bn.run(example_bool_plot_heatmap, level=2, repeats=10)
+    bn.run(example_bool_plot_heatmap, subsampling_divisions=2, repeats=10)

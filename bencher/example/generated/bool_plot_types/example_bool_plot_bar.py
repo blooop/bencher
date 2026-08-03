@@ -27,4 +27,4 @@ def example_bool_plot_bar(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_bool_plot_bar, level=3, repeats=30)
+    bn.run(example_bool_plot_bar, subsampling_divisions=3, repeats=30)

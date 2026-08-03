@@ -1,11 +1,9 @@
 import inspect
+import os
 import unittest
 
 import bencher as bn
-
 from bencher.example.meta.example_meta import example_meta
-
-import os
 
 
 class TestBenchExamples(unittest.TestCase):
@@ -19,7 +17,7 @@ class TestBenchExamples(unittest.TestCase):
         cfg = bn.BenchRunCfg()
         if not self.generate_all:
             cfg.repeats = 2
-            cfg.level = 2
+            cfg.subsampling_divisions = 2
         cfg.clear_cache = True
         return cfg
 

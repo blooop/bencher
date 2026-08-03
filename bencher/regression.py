@@ -9,13 +9,18 @@ suppression.
 from __future__ import annotations
 
 import logging
+import math
+import numbers
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import xarray as xr
 
-from bencher.variables.results import OptDir, SCALAR_RESULT_TYPES
+from bencher.history import BIRTH_ATTR
+from bencher.variables.results import SCALAR_RESULT_TYPES, OptDir
+
+logger = logging.getLogger(__name__)
 
 # Default thresholds per method — used when the user hasn't explicitly set a threshold.
 _METHOD_DEFAULTS = {
@@ -31,6 +36,10 @@ _DRIFT_FRAC = 0.85
 
 # Hampel filter cutoff (in MAD units) used to drop outliers from the slope fit.
 _HAMPEL_K = 5.0
+
+# Marker appended to a young-baseline regression's Variable cell in the markdown
+# table (young regressions are reported but never block — see young_baseline).
+_YOUNG_MARKER = "†"
 
 
 class RegressionError(Exception):
@@ -68,6 +77,10 @@ class RegressionResult:
     # ``over_time`` datetimes). Optional: falls back to integer indices.
     historical_x: np.ndarray | None = None
     current_x: np.ndarray | None = None
+    # True when the variable's baseline is younger than regression_min_history
+    # (freshly added column, or restarted by a meaning_version bump). Young
+    # regressions are reported but never trigger regression_fail.
+    young_baseline: bool = False
 
     def render_png(
         self,
@@ -90,6 +103,34 @@ class RegressionResult:
         """Build a :class:`holoviews.Overlay` of this result (see :func:`build_regression_overlay`)."""
         return build_regression_overlay(self, historical=historical, current=current)
 
+    def to_dict(self) -> dict:
+        """Return a JSON-serializable summary of this result.
+
+        Emits only scalar fields — the numpy ``historical``/``current_samples``
+        arrays (kept for replotting) are intentionally omitted. Non-finite
+        floats (NaN/inf, e.g. a zero-baseline percent change) become ``None``
+        so the output is strict, ``json.dumps``-able JSON.
+        """
+        out = {
+            "variable": self.variable,
+            "method": self.method,
+            "regressed": bool(self.regressed),
+            "current_value": _finite_or_none(self.current_value),
+            "baseline_value": _finite_or_none(self.baseline_value),
+            "change_percent": _finite_or_none(self.change_percent),
+            "threshold": _finite_or_none(self.threshold),
+            "direction": self.direction,
+            "details": self.details,
+        }
+        for band in ("band_lower", "band_upper", "percent_band_lower", "percent_band_upper"):
+            value = getattr(self, band)
+            if value is not None:
+                out[band] = _finite_or_none(value)
+        # Emitted only when set so the base JSON contract stays byte-stable.
+        if self.young_baseline:
+            out["young_baseline"] = True
+        return out
+
 
 @dataclass
 class RegressionReport:
@@ -100,6 +141,15 @@ class RegressionReport:
     @property
     def has_regressions(self) -> bool:
         return any(r.regressed for r in self.results)
+
+    @property
+    def has_blocking_regressions(self) -> bool:
+        """True when any regression has a mature baseline and may fail the run.
+
+        Regressions on young baselines (see ``regression_min_history``) are
+        notify-only: reported in the summary/export but never blocking.
+        """
+        return any(r.regressed and not r.young_baseline for r in self.results)
 
     @property
     def regressed_variables(self) -> list[RegressionResult]:
@@ -113,11 +163,10 @@ class RegressionReport:
         else:
             lines.append(f"Regressions detected in {len(regressed)} variable(s):")
             for r in regressed:
-                lines.append(
-                    f"  {r.variable}: {r.change_percent:+.2f}% change "
-                    f"(baseline={r.baseline_value:.4g}, current={r.current_value:.4g}, "
-                    f"method={r.method}, threshold={r.threshold})"
-                )
+                line = _format_summary_line(r)
+                if r.young_baseline:
+                    line += " [young baseline - notify only]"
+                lines.append(line)
         return "\n".join(lines)
 
     def to_markdown(self) -> str:
@@ -131,11 +180,10 @@ class RegressionReport:
             lines.append("| Variable | Change | Baseline | Current | Method | Threshold |")
             lines.append("|----------|-------:|----------:|--------:|--------|----------:|")
             for r in regressed:
-                lines.append(
-                    f"| {r.variable} | {r.change_percent:+.1f}% "
-                    f"| {r.baseline_value:.4g} | {r.current_value:.4g} "
-                    f"| {r.method} | {r.threshold} |"
-                )
+                lines.append(_format_markdown_row(r))
+            if any(r.young_baseline for r in regressed):
+                lines.append("")
+                lines.append(f"*{_YOUNG_MARKER} young baseline — notify only, does not block*")
         else:
             lines.append("**No regressions detected**\n")
 
@@ -148,6 +196,18 @@ class RegressionReport:
 
         return "\n".join(lines)
 
+    def to_dict(self) -> dict:
+        """Return a JSON-serializable summary of all regression results.
+
+        Mirrors :meth:`to_markdown`/:meth:`summary` but emits structured data
+        for agents and CI to consume instead of prose.
+        """
+        return {
+            "has_regressions": self.has_regressions,
+            "has_blocking_regressions": self.has_blocking_regressions,
+            "results": [r.to_dict() for r in self.results],
+        }
+
     def append_to_report(self, report) -> None:
         """Append a formatted regression summary to a :class:`BenchReport`."""
         report.append_markdown(self.to_markdown(), name="Regression Report")
@@ -158,6 +218,129 @@ class RegressionReport:
 
         md = pn.pane.Markdown(self.to_markdown(), name="Regression Report", width=800)
         report.prepend_to_result(bench_res, md)
+
+
+@dataclass(frozen=True)
+class MethodCells:
+    """Per-method rendering of a single regression result.
+
+    Each detector has a different gate — percent ratio, MAD-sigma, absolute
+    delta, hard limit — so the report cells must describe it in its own
+    units. This bundle is the single source of truth consumed by both the
+    built-in text summary and the markdown table, and is exposed as public
+    API so downstream report builders can produce their own layouts
+    (custom columns, non-markdown output, templated HTML, GitHub PR
+    comments with status decoration, etc.) without reimplementing method
+    dispatch and drifting when new detection methods are added.
+
+    Example — building a minimal custom row from a RegressionResult::
+
+        from bencher import method_cells
+        cells = method_cells(result)
+        row = f"{result.variable}: {cells.change} (gate {cells.threshold})"
+
+    Attributes:
+        change: Change column (markdown) — gated quantity in its own units.
+        baseline: Baseline column (markdown) — em-dash for absolute (no
+            historical baseline exists).
+        threshold: Threshold column (markdown) — carries the gate's native
+            units (``±T%``, ``Tσ``, ``±T``, or a direction-aware inequality).
+        summary_lead: First clause of the summary line, before the details
+            parenthesis. Captures the gated quantity in sentence form.
+        summary_standalone: When True, the summary line skips the
+            ``(baseline=…, current=…, threshold=…)`` tail because
+            ``summary_lead`` already contains the relevant values. Used by
+            the absolute method (no baseline, limit is in the lead).
+    """
+
+    change: str
+    baseline: str
+    threshold: str
+    summary_lead: str
+    summary_standalone: bool = False
+
+
+def method_cells(r: RegressionResult) -> MethodCells:
+    """Build the per-method cell bundle for a :class:`RegressionResult`.
+
+    Returns a :class:`MethodCells` with pre-rendered display strings for
+    the result's change, baseline, and threshold, plus the summary lead
+    clause. Dispatches on ``r.method`` so each gate describes itself in
+    its native units. Safe to call on any ``RegressionResult`` — unknown
+    methods fall back to the percentage-style rendering.
+
+    Intended for consumers that want to embed regression results in a
+    custom layout while staying consistent with how the built-in
+    :meth:`RegressionReport.summary` and :meth:`RegressionReport.to_markdown`
+    present each method.
+
+    Notes on the ``absolute`` branch: ``baseline_value`` and ``threshold``
+    both hold the limit for this detector (see :func:`detect_absolute`);
+    the code reads from ``threshold`` to make the intent ("this is the
+    gate value") explicit.
+    """
+    c, b, t = r.current_value, r.baseline_value, r.threshold
+    if r.method == "absolute":
+        if r.direction == OptDir.maximize.value:
+            ineq, label = "≥", "floor"
+        elif r.direction == OptDir.minimize.value:
+            ineq, label = "≤", "ceiling"
+        else:
+            ineq, label = "", "limit"
+        threshold_cell = f"{ineq} {t:.4g}" if ineq else f"{t:.4g}"
+        return MethodCells(
+            change="—",
+            baseline="—",
+            threshold=threshold_cell,
+            summary_lead=f"current={c:.4g} vs {label}={t:.4g}",
+            summary_standalone=True,
+        )
+    if r.method == "delta":
+        # The gate is in absolute units; percent change is informational at
+        # best and misleading at worst (scales with baseline magnitude).
+        delta = c - b
+        return MethodCells(
+            change=f"{delta:+.4g}",
+            baseline=f"{b:.4g}",
+            threshold=f"±{t:.4g}",
+            summary_lead=f"Δ={delta:+.4g}",
+        )
+    if r.method == "adaptive":
+        # Threshold is MAD-sigma units, not percent — flag σ so the threshold
+        # isn't read as a bare percent next to the change_percent value.
+        return MethodCells(
+            change=f"{r.change_percent:+.1f}%",
+            baseline=f"{b:.4g}",
+            threshold=f"{t:g}σ",
+            summary_lead=f"{r.change_percent:+.2f}% change",
+        )
+    # percentage and unknown-method fallback.
+    return MethodCells(
+        change=f"{r.change_percent:+.1f}%",
+        baseline=f"{b:.4g}",
+        threshold=f"±{t:g}%",
+        summary_lead=f"{r.change_percent:+.2f}% change",
+    )
+
+
+def _format_summary_line(r: RegressionResult) -> str:
+    cells = method_cells(r)
+    if cells.summary_standalone:
+        return f"  {r.variable}: {cells.summary_lead} (method={r.method})"
+    return (
+        f"  {r.variable}: {cells.summary_lead} "
+        f"(baseline={r.baseline_value:.4g}, current={r.current_value:.4g}, "
+        f"method={r.method}, threshold={cells.threshold})"
+    )
+
+
+def _format_markdown_row(r: RegressionResult) -> str:
+    cells = method_cells(r)
+    variable = f"{r.variable} {_YOUNG_MARKER}" if r.young_baseline else r.variable
+    return (
+        f"| {variable} | {cells.change} | {cells.baseline} | "
+        f"{r.current_value:.4g} | {r.method} | {cells.threshold} |"
+    )
 
 
 def _regression_plot_spec(
@@ -239,7 +422,16 @@ def _regression_plot_spec(
         x_current = 0
 
     verdict_color = "#d62728" if result.regressed else "#2ca02c"
-    verdict_label = "REGRESSED" if result.regressed else "OK"
+    if result.regressed:
+        # For adaptive, surface which sub-test triggered so drift-only
+        # regressions (where the current value may sit inside the step-test
+        # band) aren't visually confusing.
+        fired = ""
+        if "fired=" in result.details:
+            fired = result.details.split("fired=")[1].split(",")[0]
+        verdict_label = f"REGRESSED ({fired})" if fired else "REGRESSED"
+    else:
+        verdict_label = "OK"
 
     change_str = (
         f"{result.change_percent:+.1f}%"
@@ -279,19 +471,20 @@ def _regression_plot_spec(
 
     # Shared declarative band layers — both matplotlib and holoviews iterate
     # this list so the two backends render the same thing by construction.
-    # Each entry is (lo, hi, color, alpha, label). The acceptance band always
-    # shades green: it represents the *valid* region, not the pass/fail
-    # verdict (verdict colouring lives on the current marker + connector).
+    # Each entry is (lo, hi, color, alpha, label). The acceptance band shades
+    # green: it represents the *valid* region, not the pass/fail verdict
+    # (verdict colouring lives on the current marker + connector).
+    #
+    # When the detector produces two bands (adaptive's dual-band gate: MAD and
+    # percent), a value is acceptable iff it lies inside EITHER band, so the
+    # combined acceptance region is the union — [min(lows), max(highs)]. A
+    # single merged band keeps the plot readable.
     valid_color = "#2ca02c"
-    # Light blue for the secondary (percentage) band — clearly distinct from
-    # the green MAD band after alpha blending, and distinct from the darker
-    # blue (#1f77b4) used for the history line so it doesn't read as part of
-    # the data series.
-    valid_color_light = "#6baed6"
     band_layers: list[tuple[float, float, str, float, str]] = []
     if mad_band is not None and pct_band is not None:
-        band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "MAD band"))
-        band_layers.append((pct_band[0], pct_band[1], valid_color_light, 0.15, "percentage band"))
+        combined_lo = min(mad_band[0], pct_band[0])
+        combined_hi = max(mad_band[1], pct_band[1])
+        band_layers.append((combined_lo, combined_hi, valid_color, 0.15, "acceptance band"))
     elif mad_band is not None:
         band_layers.append((mad_band[0], mad_band[1], valid_color, 0.15, "acceptance band"))
     elif pct_band is not None:
@@ -730,6 +923,22 @@ def _clean_1d(a: np.ndarray) -> np.ndarray:
     return flat[~np.isnan(flat)]
 
 
+def _finite_or_none(value: float | None) -> float | None:
+    """Coerce a float to a strict-JSON-safe value: non-finite (NaN/inf) -> None.
+
+    An int too large to convert to a float (JSON integers are
+    arbitrary-precision) is not JSON-safe either, so it degrades to ``None``
+    rather than raising ``OverflowError`` out of ``to_dict``.
+    """
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except OverflowError:
+        return None
+    return value if np.isfinite(value) else None
+
+
 def _safe_change_percent(current: float, baseline: float) -> float:
     """Calculate percentage change, handling zero baseline gracefully."""
     if baseline == 0:
@@ -768,9 +977,17 @@ def detect_percentage(
     threshold_percent: float = 5.0,
     direction: OptDir = OptDir.minimize,
 ) -> RegressionResult:
-    """Compare current mean vs historical mean by percentage threshold."""
-    hist_mean = float(np.nanmean(historical))
-    curr_mean = float(np.nanmean(current))
+    """Compare current mean vs historical mean by percentage threshold.
+
+    Simple escape hatch: one directional rule comparing the current mean
+    against the historical mean. Same shape as :func:`detect_delta` and
+    :func:`detect_absolute`; contrast with :func:`detect_adaptive` which
+    layers noise modelling, drift test, and a dual-band AND gate.
+    """
+    hist_clean = _clean_1d(historical)
+    curr_clean = _clean_1d(current)
+    hist_mean = float(np.mean(hist_clean)) if len(hist_clean) else float("nan")
+    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
     change = _safe_change_percent(curr_mean, hist_mean)
 
     exceeds = _exceeds_directional_threshold(change, threshold_percent, direction)
@@ -828,7 +1045,8 @@ def detect_adaptive(
     direction: OptDir = OptDir.minimize,
     historical_samples: np.ndarray | None = None,
     regression_percentage: float | None = None,
-) -> RegressionResult:
+    sparse_fallback: bool = True,
+) -> RegressionResult | None:
     """Robust regression detection combining step and drift tests.
 
     The method estimates the metric's inherent noise from history using a
@@ -865,6 +1083,11 @@ def detect_adaptive(
             regression fires only when BOTH the MAD test and the percent
             change exceed their thresholds. Suppresses noise-floor false
             positives on metrics with few repeats or very tight history.
+        sparse_fallback: When history is too sparse for a robust MAD scale
+            (fewer than 4 points), fall back to a percentage check at
+            ``regression_percentage``. Override checks pass ``False`` so a
+            listed variable is never judged by a threshold outside its spec;
+            the check then returns ``None`` until history accumulates.
     """
     if drift_threshold is None:
         drift_threshold = _DRIFT_FRAC * regression_mad
@@ -877,6 +1100,8 @@ def detect_adaptive(
     # check. Use the full per-sample history when available so the fallback
     # behaves like a direct call to detect_percentage.
     if len(hist_clean) < 4:
+        if not sparse_fallback:
+            return None
         fallback_hist = (
             _clean_1d(historical_samples) if historical_samples is not None else hist_clean
         )
@@ -988,36 +1213,393 @@ def detect_adaptive(
     )
 
 
+def detect_delta(
+    variable: str,
+    historical_time_means: np.ndarray,
+    current: np.ndarray,
+    max_delta: float,
+    direction: OptDir = OptDir.minimize,
+) -> RegressionResult:
+    """Fail when the current mean's delta from history exceeds ``max_delta``.
+
+    Simple escape hatch: one directional rule on the absolute-unit delta
+    between the current mean and the mean of all historical per-time means.
+    ``minimize`` fails when ``curr - hist_mean > max_delta``; ``maximize``
+    fails when ``hist_mean - curr > max_delta``; ``none`` uses ``|delta|``.
+    Same shape as :func:`detect_percentage` and :func:`detect_absolute`;
+    contrast with :func:`detect_adaptive` which layers noise modelling and
+    drift testing. Selected via ``regression_method='delta'``.
+    """
+    hist_clean = _clean_1d(historical_time_means)
+    hist_mean = float(np.nanmean(hist_clean)) if len(hist_clean) else float("nan")
+    curr_clean = _clean_1d(current)
+    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
+    delta = curr_mean - hist_mean
+
+    if direction == OptDir.minimize:
+        regressed = delta > max_delta
+    elif direction == OptDir.maximize:
+        regressed = delta < -max_delta
+    else:
+        regressed = abs(delta) > max_delta
+
+    return RegressionResult(
+        variable=variable,
+        method="delta",
+        regressed=regressed,
+        current_value=curr_mean,
+        baseline_value=hist_mean,
+        change_percent=_safe_change_percent(curr_mean, hist_mean),
+        threshold=max_delta,
+        direction=direction.value,
+        details=f"delta={delta:+.4g} vs max |{max_delta}|",
+        band_lower=hist_mean - max_delta,
+        band_upper=hist_mean + max_delta,
+    )
+
+
+def detect_absolute(
+    variable: str,
+    current: np.ndarray,
+    limit: float,
+    direction: OptDir = OptDir.minimize,
+) -> RegressionResult | None:
+    """Fail when current mean violates an absolute limit in the direction of OptDir.
+
+    Simple escape hatch: one directional rule against a fixed limit — no
+    historical data required. For ``OptDir.minimize`` ``limit`` is a ceiling;
+    for ``OptDir.maximize`` it's a floor; ``OptDir.none`` has no direction to
+    check against, so the guard warns and returns ``None`` rather than
+    reporting a check that never ran. Same shape as
+    :func:`detect_percentage` and :func:`detect_delta`; contrast with
+    :func:`detect_adaptive` which needs history to estimate noise.
+    """
+    curr_clean = _clean_1d(current)
+    curr_mean = float(np.mean(curr_clean)) if len(curr_clean) else float("nan")
+
+    if direction == OptDir.minimize:
+        regressed = curr_mean > limit
+        detail = f"current={curr_mean:.4g} vs ceiling {limit}"
+    elif direction == OptDir.maximize:
+        regressed = curr_mean < limit
+        detail = f"current={curr_mean:.4g} vs floor {limit}"
+    else:
+        logger.warning(
+            f"absolute regression check skipped for '{variable}': OptDir.none has no direction"
+        )
+        return None
+
+    return RegressionResult(
+        variable=variable,
+        method="absolute",
+        regressed=regressed,
+        current_value=curr_mean,
+        baseline_value=float(limit),
+        change_percent=float("nan"),
+        threshold=float(limit),
+        direction=direction.value,
+        details=detail,
+    )
+
+
+def _compute_history_arrays(
+    da: xr.DataArray,
+) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+    """Aggregate history into per-time means + per-sample scatter arrays.
+
+    Returns ``(time_means, hist_samples_flat, hist_x_flat)`` or all-``None``
+    when there is no history to summarise. Per-time means collapse every
+    non-time dim into one scalar per run so detection and plotting both see
+    a 1-D series; the scatter arrays preserve per-repeat spread broadcast
+    against the historical over_time coords.
+    """
+    if da.sizes.get("over_time", 0) < 2:
+        return None, None, None
+
+    reduce_dims = [d for d in da.dims if d != "over_time"]
+    time_means = (
+        da.isel(over_time=slice(None, -1)).mean(dim=reduce_dims, skipna=True).values.astype(float)
+    )
+
+    hist_slice = da.isel(over_time=slice(None, -1))
+    if hist_slice.size == 0:
+        return time_means, None, None
+
+    hist_2d = np.moveaxis(
+        np.asarray(hist_slice.values, dtype=float),
+        list(hist_slice.dims).index("over_time"),
+        0,
+    ).reshape(hist_slice.sizes["over_time"], -1)
+    hist_samples_flat = hist_2d.ravel()
+    hist_x_flat = np.repeat(da["over_time"].values[:-1], hist_2d.shape[1])
+    return time_means, hist_samples_flat, hist_x_flat
+
+
+def _attach_plot_metadata(
+    result: RegressionResult,
+    *,
+    time_coord: np.ndarray,
+    current_samples: np.ndarray,
+    time_means: np.ndarray | None,
+    hist_samples_flat: np.ndarray | None,
+    hist_x_flat: np.ndarray | None,
+) -> None:
+    """Attach the history/current arrays a RegressionResult needs for replay plotting."""
+    result.current_x = time_coord[-1]
+    result.current_samples = current_samples
+    if time_means is not None:
+        result.historical = time_means
+        result.historical_x = time_coord[:-1]
+    if hist_samples_flat is not None and hist_x_flat is not None:
+        mask = ~np.isnan(hist_samples_flat)
+        result.historical_all = hist_samples_flat[mask]
+        result.historical_all_x = hist_x_flat[mask]
+
+
+# Single source of truth for the regression check methods: each method's
+# benchmark-wide threshold attribute on run_cfg, used both to resolve the
+# primary method into a {method: threshold} spec and to validate override
+# specs. Methods in _HISTORY_FREE_METHODS run from the very first recording;
+# all others skip until over_time history exists.
+_METHOD_THRESHOLD_ATTR = {
+    "percentage": "regression_percentage",
+    "adaptive": "regression_mad",
+    "delta": "regression_delta",
+    "absolute": "regression_absolute",
+}
+_HISTORY_FREE_METHODS = frozenset({"absolute"})
+
+
+def _valid_threshold(value) -> float | None:
+    """Return ``value`` as a finite float, or ``None`` if it isn't one.
+
+    Rejects bools (``True`` would silently become 1.0) and non-finite numbers
+    (a NaN threshold makes every comparison False, so the check would look
+    configured but could never fire). Accepts any real number, including
+    numpy scalars.
+    """
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return None
+    value = float(value)
+    return value if math.isfinite(value) else None
+
+
+def _normalize_overrides(overrides) -> tuple[dict, dict]:
+    """Validate ``run_cfg.regression_overrides`` into ``{var: {method: threshold}}``.
+
+    A bare number is shorthand for ``{"absolute": value}``. Malformed entries
+    are dropped with a warning, never raised: an unknown method key or a bad
+    threshold loses that one check, and a spec left with no valid checks
+    falls back to the benchmark-wide method (so a typo'd key can't silently
+    disable detection). Only a literal empty spec opts the variable out of
+    detection — the variable was explicitly listed with no checks.
+
+    A ``min_history`` key inside a spec is not a check: it is the per-variable
+    override of ``regression_min_history`` and is returned separately as the
+    second element ``{var: min_history}``. A spec containing only
+    ``min_history`` keeps the benchmark-wide method.
+    """
+    normalized: dict = {}
+    min_history: dict = {}
+    if not overrides:
+        return normalized, min_history
+    for var_name, spec in overrides.items():
+        shorthand = _valid_threshold(spec)
+        if shorthand is not None:
+            normalized[var_name] = {"absolute": shorthand}
+        elif isinstance(spec, dict):
+            valid = {}
+            has_min_history = False
+            for method, threshold in spec.items():
+                if method == "min_history":
+                    if (
+                        isinstance(threshold, int)
+                        and not isinstance(threshold, bool)
+                        and (threshold >= 1)
+                    ):
+                        min_history[var_name] = threshold
+                        has_min_history = True
+                    else:
+                        logger.warning(
+                            f"regression_overrides['{var_name}']: 'min_history' must be "
+                            f"an int >= 1, got {threshold!r}; ignored"
+                        )
+                    continue
+                if method not in _METHOD_THRESHOLD_ATTR:
+                    logger.warning(
+                        f"regression_overrides['{var_name}']: unknown method '{method}' ignored"
+                    )
+                    continue
+                valid_threshold = _valid_threshold(threshold)
+                if valid_threshold is None:
+                    logger.warning(
+                        f"regression_overrides['{var_name}']: '{method}' threshold must be "
+                        f"a finite number, got {threshold!r}; check ignored"
+                    )
+                    continue
+                valid[method] = valid_threshold
+            if valid or (not spec and not has_min_history):
+                normalized[var_name] = valid
+            elif not has_min_history:
+                logger.warning(
+                    f"regression_overrides['{var_name}']: no valid checks in spec; "
+                    "keeping the benchmark-wide method"
+                )
+        else:
+            logger.warning(
+                f"regression_overrides['{var_name}']: expected a finite number or "
+                f"{{method: threshold}} dict, got {spec!r}; ignored"
+            )
+    return normalized, min_history
+
+
+def _run_check(
+    check_method: str,
+    threshold: float,
+    *,
+    var_name: str,
+    direction: OptDir,
+    current_mean_scalar: np.ndarray,
+    time_means_arr: np.ndarray | None,
+    historical_clean: np.ndarray,
+    dual_band_percentage: float,
+    allow_sparse_fallback: bool,
+) -> RegressionResult | None:
+    """Dispatch one (method, threshold) check for a single variable.
+
+    Shared by the benchmark-wide method and per-variable overrides so both
+    paths stay in lockstep. ``dual_band_percentage`` is the adaptive method's
+    percent gate (always the benchmark-wide ``regression_percentage``; an
+    adaptive override's threshold is its MAD limit). ``allow_sparse_fallback``
+    is False for override checks: with sparse history the adaptive detector
+    would otherwise degrade to a percentage check at the benchmark-wide
+    threshold, contradicting the contract that a listed variable is checked
+    only by its spec. Callers must ensure history exists for every method
+    outside ``_HISTORY_FREE_METHODS``.
+    """
+    if check_method == "percentage":
+        return detect_percentage(
+            var_name, time_means_arr, current_mean_scalar, threshold, direction
+        )
+    if check_method == "adaptive":
+        return detect_adaptive(
+            var_name,
+            time_means_arr,
+            current_mean_scalar,
+            regression_mad=threshold,
+            direction=direction,
+            historical_samples=historical_clean,
+            regression_percentage=dual_band_percentage,
+            sparse_fallback=allow_sparse_fallback,
+        )
+    if check_method == "delta":
+        return detect_delta(
+            var_name, time_means_arr, current_mean_scalar, max_delta=threshold, direction=direction
+        )
+    if check_method == "absolute":
+        return detect_absolute(var_name, current_mean_scalar, limit=threshold, direction=direction)
+    raise ValueError(f"Unknown regression check method '{check_method}'")
+
+
+def _history_points_since_birth(dataset: xr.Dataset, da: xr.DataArray) -> int:
+    """Historical over_time points available for *da*, excluding the current run.
+
+    Counts from the column's birth coordinate (stamped by history
+    reconciliation on freshly added or meaning_version-restarted columns) so
+    NaN backfill before the column existed does not inflate its baseline age.
+    Columns without a birth marker — as old as the history itself, or a
+    dataset without over_time coordinates — count the full window. A birth
+    value no longer present in the coordinates means the birth has aged out
+    past max_time_events, so the whole (trimmed) window is real history.
+
+    When over_time labels are duplicated (a reused ``TimeEvent``), the birth
+    value can match more than one coordinate. We take the *last* occurrence:
+    if the column was truly born on the later duplicate this is exact, and if
+    it was born on an earlier one this undercounts history — erring toward
+    "younger", which is only ever notify-only and never a premature block.
+    """
+    n_time = int(dataset.sizes.get("over_time", 0))
+    birth = da.attrs.get(BIRTH_ATTR)
+    if birth is None or "over_time" not in dataset.coords:
+        return max(n_time - 1, 0)
+    matches = np.nonzero(dataset["over_time"].values == birth)[0]
+    start = int(matches[-1]) if len(matches) else 0
+    return max(n_time - start - 1, 0)
+
+
 def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionReport:
     """Run regression detection on a dataset with over_time dimension.
 
-    For each numeric result variable, splits the dataset at the last over_time index,
-    runs the configured detection method, and collects results into a report.
+    For each numeric result variable, dispatches to the detector chosen by
+    ``run_cfg.regression_method`` (``percentage``, ``adaptive``, ``delta``, or
+    ``absolute``). ``absolute`` runs even with a single over_time point since
+    it needs no baseline; every other method requires history.
+
+    Variables named in ``run_cfg.regression_overrides`` are instead checked by
+    exactly the methods in their spec (``{method: threshold}``, or a bare
+    number as shorthand for an absolute limit), so thresholds — and methods —
+    can differ per variable, including multiple independent checks on one
+    variable. History-needing override checks skip until history exists
+    (including adaptive overrides, which never fall back to a percentage
+    check); ``absolute`` checks fire from the first recording.
 
     Args:
-        dataset: xarray Dataset with over_time dimension.
-        bench_cfg: BenchCfg with result_vars list.
-        run_cfg: BenchRunCfg with regression_method, regression_threshold.
+        dataset: xarray Dataset with an over_time dimension.
+        bench_cfg: BenchCfg with ``result_vars`` list.
+        run_cfg: BenchRunCfg. Reads ``regression_method`` and its
+            method-specific threshold: ``regression_percentage`` for
+            ``percentage``; ``regression_mad`` (plus ``regression_percentage``
+            as a dual-band gate) for ``adaptive``; ``regression_delta`` for
+            ``delta``; ``regression_absolute`` for ``absolute``. Also reads
+            ``regression_overrides`` for per-variable specs.
 
     Returns:
-        RegressionReport with results for each variable.
+        RegressionReport with one result per variable per fired detector/guard.
     """
     report = RegressionReport()
 
     if "over_time" not in dataset.dims:
         return report
 
-    n_times = dataset.sizes["over_time"]
-    if n_times < 2:
-        return report
-
+    overrides, min_history_overrides = _normalize_overrides(
+        getattr(run_cfg, "regression_overrides", None)
+    )
+    default_min_history = getattr(run_cfg, "regression_min_history", 1) or 1
     method = run_cfg.regression_method
-    regression_mad = getattr(run_cfg, "regression_mad", None)
-    if regression_mad is None:
-        regression_mad = _METHOD_DEFAULTS["adaptive"]
+
     regression_percentage = getattr(run_cfg, "regression_percentage", None)
     if regression_percentage is None:
         regression_percentage = _METHOD_DEFAULTS["percentage"]
+
+    if method not in _METHOD_THRESHOLD_ATTR:
+        logger.warning(f"Unknown regression method '{method}', falling back to percentage")
+        method = "percentage"
+
+    # Resolve the benchmark-wide method into the same {method: threshold} spec
+    # shape as an override, so the loop below treats both paths identically. A
+    # method whose threshold is unset (and has no default) disables benchmark-
+    # wide detection with a warning — but never the overrides, which carry
+    # their own thresholds.
+    threshold_attr = _METHOD_THRESHOLD_ATTR[method]
+    primary_threshold = getattr(run_cfg, threshold_attr, None)
+    if primary_threshold is None:
+        primary_threshold = _METHOD_DEFAULTS.get(method)
+    if primary_threshold is None:
+        logger.warning(
+            f"regression_method='{method}' requires {threshold_attr} to be set; skipping detection"
+        )
+        primary_checks = {}
+    else:
+        primary_checks = {method: primary_threshold}
+
+    # With no history yet, only history-free checks can possibly run — skip
+    # the per-variable work entirely when no spec contains one.
+    if dataset.sizes["over_time"] < 2:
+        specs = [primary_checks, *overrides.values()]
+        if not any(m in _HISTORY_FREE_METHODS for spec in specs for m in spec):
+            return report
+
+    time_coord = dataset["over_time"].values
 
     for rv in bench_cfg.result_vars:
         if not isinstance(rv, SCALAR_RESULT_TYPES):
@@ -1027,83 +1609,67 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         if var_name not in dataset:
             continue
 
+        checks = overrides.get(var_name, primary_checks)
+        if not checks:
+            continue
+        is_override = var_name in overrides
+
         da = dataset[var_name]
         direction = rv.direction if hasattr(rv, "direction") else OptDir.none
 
+        # Points since the column's birth (history reconciliation stamps the
+        # birth coordinate on freshly added / meaning_version-restarted
+        # columns). A baseline younger than min_history downgrades this
+        # variable's history-based regressions to notify-only.
+        min_history = min_history_overrides.get(var_name, default_min_history)
+        history_points = _history_points_since_birth(dataset, da)
+
         # Split: historical = all but last, current = last
         current_clean = _clean_1d(da.isel(over_time=-1).values)
-        historical_clean = _clean_1d(da.isel(over_time=slice(None, -1)).values)
-
-        if len(current_clean) == 0 or len(historical_clean) == 0:
+        if len(current_clean) == 0:
             continue
 
-        # Aggregate every non-time dim (parameter grid, repeats) into a single
-        # scalar per time point before handing the series to any detector.
-        # Without this, a 2-D param sweep over time threads both detection and
-        # the history plot through parameter-grid structure — the line zigzags
-        # through cells instead of showing time drift, and the baseline/band
-        # end up wildly out of scale relative to individual cells.
-        reduce_dims = [d for d in da.dims if d != "over_time"]
-        time_means_arr = (
-            da.isel(over_time=slice(None, -1))
-            .mean(dim=reduce_dims, skipna=True)
-            .values.astype(float)
-        )
         current_mean_scalar = np.array([float(da.isel(over_time=-1).mean(skipna=True).values)])
 
-        if method == "percentage":
-            result = detect_percentage(
-                var_name,
-                time_means_arr,
-                current_mean_scalar,
-                regression_percentage,
-                direction,
-            )
-        elif method == "adaptive":
-            result = detect_adaptive(
-                var_name,
-                time_means_arr,
-                current_mean_scalar,
-                regression_mad=regression_mad,
-                direction=direction,
-                historical_samples=historical_clean,
-                regression_percentage=regression_percentage,
-            )
+        # History arrays are only needed by history-based checks; a spec of
+        # hard limits alone skips the (growing) history aggregation.
+        if any(m not in _HISTORY_FREE_METHODS for m in checks):
+            historical_clean = _clean_1d(da.isel(over_time=slice(None, -1)).values)
+            time_means_arr, hist_samples_flat, hist_x_flat = _compute_history_arrays(da)
+            history_available = time_means_arr is not None and len(historical_clean) > 0
         else:
-            logging.warning(f"Unknown regression method '{method}', falling back to percentage")
-            result = detect_percentage(
-                var_name,
-                time_means_arr,
-                current_mean_scalar,
-                regression_percentage,
-                direction,
+            historical_clean = np.array([])
+            time_means_arr = hist_samples_flat = hist_x_flat = None
+            history_available = False
+
+        for check_method, threshold in checks.items():
+            with_history = check_method not in _HISTORY_FREE_METHODS
+            # History-free checks run from the first recording; the rest need a baseline.
+            if with_history and not history_available:
+                continue
+            result = _run_check(
+                check_method,
+                threshold,
+                var_name=var_name,
+                direction=direction,
+                current_mean_scalar=current_mean_scalar,
+                time_means_arr=time_means_arr,
+                historical_clean=historical_clean,
+                dual_band_percentage=regression_percentage,
+                allow_sparse_fallback=not is_override,
             )
-
-        # Retain the arrays used for plotting so downstream consumers (reports,
-        # bot comments) can rebuild the diagnostic without re-running detection.
-        time_coord = dataset["over_time"].values
-        result.historical = time_means_arr
-        # Per-time means are aligned with over_time, one value per time point.
-        result.historical_x = time_coord[:-1]
-        result.current_x = time_coord[-1]
-        result.current_samples = current_clean
-
-        # Per-sample historical scatter: flatten the 2D slice (all repeats at
-        # every historical time point) and broadcast the time coords so the
-        # renderers can show every sample as a dot at its real x position.
-        hist_slice = da.isel(over_time=slice(None, -1))
-        if hist_slice.size > 0:
-            hist_2d = np.moveaxis(
-                np.asarray(hist_slice.values, dtype=float),
-                list(hist_slice.dims).index("over_time"),
-                0,
-            ).reshape(hist_slice.sizes["over_time"], -1)
-            hist_samples_flat = hist_2d.ravel()
-            hist_x_flat = np.repeat(time_coord[:-1], hist_2d.shape[1])
-            mask = ~np.isnan(hist_samples_flat)
-            result.historical_all = hist_samples_flat[mask]
-            result.historical_all_x = hist_x_flat[mask]
-
-        report.results.append(result)
+            if result is None:
+                continue
+            # History-free checks (hard limits) gate regardless of baseline age.
+            result.young_baseline = with_history and history_points < min_history
+            _attach_plot_metadata(
+                result,
+                time_coord=time_coord,
+                current_samples=current_clean,
+                time_means=time_means_arr if with_history else None,
+                hist_samples_flat=hist_samples_flat if with_history else None,
+                hist_x_flat=hist_x_flat if with_history else None,
+            )
+            report.results.append(result)
 
     return report

@@ -1,6 +1,7 @@
 """Auto-generated example: BenchRunner — run multiple benchmarks in one session."""
 
 import math
+
 import bencher as bn
 
 
@@ -22,7 +23,7 @@ def example_workflow_bench_runner(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
     #   runner = bn.BenchRunner("comparison")
     #   runner.add(sine_benchmark_fn)    # each fn returns a Bench
     #   runner.add(cosine_benchmark_fn)
-    #   runner.run(level=3)              # runs all, collects reports
+    #   runner.run(subsampling_divisions=3)              # runs all, collects reports
     #
     # BenchRunner is useful when you have separate benchmark functions
     # that you want to run together and compare side by side.
@@ -40,4 +41,4 @@ def example_workflow_bench_runner(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_workflow_bench_runner, level=3)
+    bn.run(example_workflow_bench_runner, subsampling_divisions=3)

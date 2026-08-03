@@ -1,16 +1,18 @@
 from __future__ import annotations
-from typing import Any
-import panel as pn
-import holoviews as hv
-from param import Parameter
-import xarray as xr
 
+from typing import Any
+
+import holoviews as hv
+import panel as pn
+import xarray as xr
+from param import Parameter
+
+from bencher.plotting.plot_filter import VarRange
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )
-
-from bencher.results.bench_result_base import ReduceType
-from bencher.plotting.plot_filter import VarRange
+from bencher.results.holoview_results.holoview_result import PlotResult
 from bencher.variables.results import ResultFloat
 
 
@@ -58,9 +60,9 @@ class ScatterJitterResult(DistributionResult):
             target_dimension = self.plt_cnt_cfg.cat_cnt + 1
         return self.filter(
             self.to_scatter_jitter_ds,
-            float_range=VarRange(0, 0),
-            cat_range=VarRange(0, 1),
-            repeats_range=VarRange(2, None),
+            float_range=VarRange.exactly(0),
+            cat_range=VarRange.at_most(1),
+            repeats_range=VarRange.at_least(2),
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
             result_var=result_var,
@@ -72,7 +74,7 @@ class ScatterJitterResult(DistributionResult):
 
     def to_scatter_jitter_ds(
         self, dataset: xr.Dataset, result_var: Parameter, jitter: float = 0.1, **kwargs: Any
-    ) -> hv.Scatter:
+    ) -> PlotResult:
         """Creates a scatter jitter plot from the provided dataset.
 
         Given a filtered dataset, this method generates a scatter visualization showing
@@ -90,7 +92,9 @@ class ScatterJitterResult(DistributionResult):
                       - marker: Shape of data points ('o', 's', 'd', etc.)
 
         Returns:
-            A HoloViews Scatter plot of the benchmark data with jittered points.
+            An ``hv.Overlay`` wrapping the jittered Scatter, or a panel layout for an
+            over_time dataset (see ``PlotResult``). Never a bare ``hv.Scatter`` --
+            see ``_plot_distribution``.
         """
         # Prepare the data using the common method from the parent class
         return self._plot_distribution(dataset, result_var, hv.Scatter, jitter=jitter, **kwargs)

@@ -9,60 +9,71 @@ from __future__ import annotations
 import logging
 import math
 import os
+import warnings
+from contextlib import suppress
 from datetime import datetime
 from itertools import product
-from typing import Any
+from pathlib import Path
+from typing import Any, Self
 
 import numpy as np
 import xarray as xr
 from diskcache import Cache
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
+from bencher.blob_store import materialize_blob
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
+from bencher.history import (
+    HISTORY_FORMAT,
+    HistoryEvent,
+    HistoryEventKind,
+    OnHistoryReset,
+    apply_policy,
+    column_meta,
+    current_time_value,
+    data_var_columns,
+    default_series_id,
+    diff_summaries,
+    incompatible_reason,
+    last_seen_key,
+    legacy_last_seen_key,
+    project,
+    reconcile,
+)
+from bencher.job import (
+    JobFuture,
+    SampleFailure,
+    WorkerContractError,
+    WorkerContractWarning,
+    WorkerReturnedNothingError,
+    normalize_catch,
+)
 from bencher.results.bench_result import BenchResult
 from bencher.variables.inputs import IntSweep
-from bencher.variables.time import TimeSnapshot, TimeEvent
 from bencher.variables.results import (
+    _MEDIA_RESULT_TYPES,
+    DATA_VAR_RESULT_TYPES,
     XARRAY_MULTIDIM_RESULT_TYPES,
-    SCALAR_RESULT_TYPES,
-    ResultFloat,
-    ResultVec,
-    ResultPath,
-    ResultVideo,
-    ResultImage,
-    ResultString,
-    ResultContainer,
-    ResultReference,
     ResultDataSet,
+    ResultFloat,
+    ResultReference,
     ResultRerun,
+    ResultVec,
+    result_missing_fill,
 )
+from bencher.variables.time import TimeBase, TimeEvent, TimeSnapshot
 from bencher.worker_job import WorkerJob
-from bencher.job import JobFuture
-
-from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
-
-_MEDIA_RESULT_TYPES = (ResultPath, ResultVideo, ResultImage, ResultContainer, ResultRerun)
 
 
 def _sentinel_for_result_var(rv):
     """Return the sentinel value used for 'missing' entries of this result type.
 
-    ResultVolume falls through to the default np.nan — it is numeric, not
-    file-backed, so no media cleanup is needed even when max_time_events is set.
+    Thin wrapper over the single source of truth in ``bencher.variables.results``
+    (``result_missing_fill``); kept as a local alias for the over_time aging path.
     """
-    if isinstance(rv, SCALAR_RESULT_TYPES):
-        return np.nan
-    if isinstance(rv, (ResultReference, ResultDataSet)):
-        return -1
-    if isinstance(
-        rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer, ResultRerun)
-    ):
-        return "NAN"
-    if isinstance(rv, ResultVec):
-        return np.nan
-    # ResultVolume and any future numeric types default to NaN.
-    return np.nan
+    return result_missing_fill(rv)[0]
 
 
 def _null_old_entries(dataset, rv, var_limit):
@@ -127,7 +138,7 @@ def set_xarray_multidim(
 
 
 def _set_result_value(
-    bench_res: "BenchResult",
+    bench_res: BenchResult,
     rv_arrays: dict[str, np.ndarray] | None,
     name: str,
     idx: tuple,
@@ -138,6 +149,56 @@ def _set_result_value(
         rv_arrays[name][idx] = value
     else:
         set_xarray_multidim(bench_res.ds[name], idx, value)
+
+
+def _materialize_result_value(rv, value):
+    """Convert deferred result artifacts into their cacheable stored representation."""
+    if isinstance(rv, ResultRerun):
+        from bencher.results.composable_container.composable_container_rerun import (
+            ComposableContainerRerun,
+        )
+
+        if isinstance(value, ComposableContainerRerun):
+            return value.render()
+    return value
+
+
+def _materialize_dataset_value(result_value) -> str:
+    """Reduce a worker-returned ``ResultDataSet`` sample to a blob path (plan 22, D2).
+
+    The payload is serialized under ``cachedir/blobs/`` and the returned path
+    string is what the dataset cell stores — self-describing in any process that
+    shares the cache filesystem, exactly like the image/video/rerun path cells.
+    The literal ``cachedir`` root is the same canonical location the rest of
+    collection uses (``gen_path``, ``cachedir/rrd``, the diskcaches above).
+
+    A per-sample ``container=`` attached inside ``benchmark()`` has to travel
+    with the payload to keep the declared-container precedence chain intact, so
+    a wrapper carrying one is materialized whole (pickled); otherwise the bare
+    payload gets its structured blob format (parquet/netCDF/...).  A wrapper
+    whose container cannot be pickled (a lambda, a closure) never fails the
+    sweep: the bare payload is stored instead and the per-sample container is
+    dropped, with the class-level container still applying at render.
+    """
+    cache_dir = Path("cachedir").absolute()
+    payload = result_value
+    if isinstance(payload, ResultDataSet):
+        if getattr(payload, "container", None) is None:
+            payload = payload.obj
+        else:
+            try:
+                return materialize_blob(payload, cache_dir)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "ResultDataSet sample: per-sample container %r could not be "
+                    "pickled (%s: %s); storing the bare payload without it — a "
+                    "class-level container still applies at render",
+                    payload.container,
+                    type(exc).__name__,
+                    exc,
+                )
+                payload = payload.obj
+    return materialize_blob(payload, cache_dir)
 
 
 class ResultCollector:
@@ -183,7 +244,7 @@ class ResultCollector:
             self._history_cache.close()
             self._history_cache = None
 
-    def __enter__(self) -> "ResultCollector":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc_info) -> None:
@@ -228,22 +289,16 @@ class ResultCollector:
         dataset_list = []
 
         for rv in bench_cfg.result_vars:
-            if isinstance(rv, SCALAR_RESULT_TYPES):
-                result_data = np.full(dims_cfg.dims_size, np.nan, dtype=float)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(rv, (ResultReference, ResultDataSet)):
-                result_data = np.full(dims_cfg.dims_size, -1, dtype=int)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-            if isinstance(
-                rv, (ResultPath, ResultVideo, ResultImage, ResultString, ResultContainer)
-            ):
-                result_data = np.full(dims_cfg.dims_size, "NAN", dtype=object)
-                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
-
-            elif type(rv) is ResultVec:
+            if type(rv) is ResultVec:
+                # ResultVec expands to one column per vector element.
+                fill, dtype = result_missing_fill(rv)
                 for i in range(rv.size):
-                    result_data = np.full(dims_cfg.dims_size, np.nan)
+                    result_data = np.full(dims_cfg.dims_size, fill, dtype=dtype)
                     data_vars[rv.index_name(i)] = (dims_cfg.dims_name, result_data)
+            elif isinstance(rv, DATA_VAR_RESULT_TYPES):
+                fill, dtype = result_missing_fill(rv)
+                result_data = np.full(dims_cfg.dims_size, fill, dtype=dtype)
+                data_vars[rv.name] = (dims_cfg.dims_name, result_data)
 
         bench_res = BenchResult(bench_cfg)
         bench_res.ds = xr.Dataset(data_vars=data_vars, coords=dims_cfg.coords)
@@ -255,7 +310,7 @@ class ResultCollector:
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> list[IntSweep]:
+    ) -> list[IntSweep | TimeBase]:
         """Define extra meta variables for tracking benchmark execution details.
 
         This function creates variables that aren't passed to the worker function but are stored
@@ -280,7 +335,7 @@ class ResultCollector:
             optimize=False,
         )
         bench_cfg.iv_repeat.name = "repeat"
-        extra_vars = [bench_cfg.iv_repeat]
+        extra_vars: list[IntSweep | TimeBase] = [bench_cfg.iv_repeat]
 
         if bench_cfg.over_time:
             if isinstance(time_src, str):
@@ -309,6 +364,53 @@ class ResultCollector:
                 rv_arrays[rv.name] = bench_res.ds[rv.name].values
         return rv_arrays
 
+    @staticmethod
+    def record_caught_sample(
+        bench_res: BenchResult, job_id: str, inputs: dict, exc: BaseException
+    ) -> None:
+        """Record one tolerated sample failure.
+
+        No write to the dataset is needed: ``setup_dataset`` already filled every
+        result variable with its missing-value sentinel, so the failed coordinate
+        *is* the fill and the dataset shape is unchanged -- downstream consumers
+        need no special case. Nothing was written to the sample cache either,
+        because the exception escaped before the cache write in both execution
+        paths, so a transient flake cannot become a permanent cached failure.
+        """
+        failure = SampleFailure.from_exception(job_id, inputs, exc)
+        bench_res.failed_samples.append(failure)
+        logger.warning(
+            "sample failed and was caught (%s): %s",
+            ", ".join(f"{k}={v}" for k, v in failure.inputs.items()) or "no inputs",
+            failure.exception,
+        )
+
+    @staticmethod
+    def record_contract_violation(
+        bench_res: BenchResult, job_id: str, inputs: dict, exc: WorkerContractError
+    ) -> None:
+        """Record a broken worker contract without aborting the sweep.
+
+        Owner decision amending plan 23 §6.2 (2026-07-31): a sweep must never
+        crash mid-run and lose the expensive samples already collected, so a
+        contract violation (worker returned ``None``, wrong-shape ``ResultVec``)
+        is recorded like a caught sample — the cell keeps its missing sentinel,
+        ``n_failed`` counts it, ``fail_on_sample_error`` sees it, and the report
+        shows it in the failed-samples summary — but *louder*: an ERROR log and
+        a :class:`WorkerContractWarning`, unconditionally. ``catch=`` plays no
+        part in this (plan 23 decision 2 still holds): the violation is recorded
+        with or without it, so ``catch=Exception`` cannot restore the old silent
+        skip, and leaving ``catch`` unset cannot turn it back into a crash.
+        """
+        failure = SampleFailure.from_exception(job_id, inputs, exc)
+        bench_res.failed_samples.append(failure)
+        logger.error(
+            "worker contract violation (%s): %s",
+            ", ".join(f"{k}={v}" for k, v in failure.inputs.items()) or "no inputs",
+            exc,
+        )
+        warnings.warn(str(exc), WorkerContractWarning, stacklevel=2)
+
     def store_results(
         self,
         job_result: JobFuture,
@@ -332,57 +434,144 @@ class ResultCollector:
                 precompute_result_arrays(). Falls back to dataset lookup if None.
 
         Raises:
-            RuntimeError: If an unsupported result variable type is encountered
+            TypeError: If an unsupported result variable type is encountered (a
+                bencher-internal invariant; worker-contract violations are
+                recorded and warned instead of raised — see
+                ``record_contract_violation``).
         """
-        result = job_result.result()
-        if result is not None:
-            logger.info(f"{job_result.job.job_id}:")
-            if bench_res.bench_cfg.print_bench_inputs:
-                for k, v in worker_job.function_input.items():
-                    logger.info(f"\t {k}:{v}")
+        # No `if catch:` branch: `except ()` matches nothing, so the default empty
+        # tuple is already fail-fast, and result() keeps a single call site.
+        # Normalized here as well as in plot_sweep, because store_results is also
+        # reachable with a hand-built BenchRunCfg that never passed through it.
+        catch = normalize_catch(getattr(bench_run_cfg, "catch", ()))
+        try:
+            result = job_result.result()
+        # Ordered *before* `except catch`, deliberately: a worker that returned
+        # nothing is a harness-contract error, not a sample fault, so `catch=` must
+        # not decide its fate (plan 23 decision 2) -- WorkerReturnedNothingError
+        # subclasses TypeError, so a later `except catch` with catch=Exception would
+        # otherwise absorb it. Since P5, JobFuture.result() is total
+        # (Ready|Pending|Broken) and raises this itself on either executor path,
+        # replacing the separate require_worker_result step that used to live after
+        # the try -- see require_worker_result for the full B3 story. The violation
+        # is recorded and warned, never raised through the sweep (plan 23 §6.2 as
+        # amended): the cells keep their missing sentinel, and the failed-samples
+        # summary makes that visible.
+        #
+        # The narrow subclass, NOT WorkerContractError: that base class is public, so
+        # a worker or plugin can raise it, and catching it here would silently
+        # tolerate a worker-raised one on the pooled path even with catch=() --
+        # raising on SERIAL but completing on MULTIPROCESSING, exactly the
+        # executor-dependent divergence B3 exists to kill. A worker-raised
+        # WorkerContractError falls through to `except catch` below instead, which is
+        # what it did before P5.
+        except WorkerReturnedNothingError as exc:
+            self.record_contract_violation(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
+        # catch is a runtime tuple of exception types, which pylint cannot see into.
+        # pylint: disable-next=catching-non-exception
+        except catch as exc:
+            self.record_caught_sample(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
+        logger.info(f"{job_result.job.job_id}:")
+        if bench_res.bench_cfg.print_bench_inputs:
+            for k, v in worker_job.function_input.items():
+                logger.info(f"\t {k}:{v}")
 
-            result_dict = result if isinstance(result, dict) else result.param.values()
-            idx = worker_job.index_tuple
+        result_dict = result if isinstance(result, dict) else result.param.values()
+        idx = worker_job.index_tuple
 
-            for rv in bench_res.bench_cfg.result_vars:
-                try:
-                    result_value = result_dict[rv.name]
-                except KeyError:
-                    available = list(result_dict.keys())
-                    raise KeyError(
-                        f"Result variable '{rv.name}' was not set by the "
-                        f"benchmark function. Available keys: {available}. "
-                        f"Make sure your benchmark() method sets "
-                        f"self.{rv.name}."
-                    ) from None
-                if bench_run_cfg.print_bench_results:
-                    logger.info(f"{rv.name}: {result_value}")
+        try:
+            self._store_result_vars(bench_res, result_dict, idx, bench_run_cfg, rv_arrays)
+        except WorkerContractError as exc:
+            # Record-and-continue, like the None-return check above. Result vars
+            # stored before the violating one keep their values; the violating
+            # one (and any after it) keep the missing sentinel, and the failure
+            # record names the sample.
+            self.record_contract_violation(
+                bench_res, job_result.job.job_id, worker_job.function_input, exc
+            )
+            return
+        for rv in bench_res.result_hmaps:
+            bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
 
-                if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
-                    _set_result_value(bench_res, rv_arrays, rv.name, idx, result_value)
-                elif isinstance(rv, ResultDataSet):
-                    bench_res.dataset_list.append(result_value)
-                    _set_result_value(
-                        bench_res, rv_arrays, rv.name, idx, len(bench_res.dataset_list) - 1
+    @staticmethod
+    def _store_result_vars(
+        bench_res: BenchResult,
+        result_dict: dict,
+        idx: tuple,
+        bench_run_cfg: BenchRunCfg,
+        rv_arrays: dict[str, np.ndarray] | None,
+    ) -> None:
+        """Write one sample's result variables into the dataset (see store_results)."""
+        for rv in bench_res.bench_cfg.result_vars:
+            try:
+                result_value = result_dict[rv.name]
+            except KeyError:
+                # Same contract-error shape as the ResultVec checks below: only a
+                # worker returning a raw dict can omit a declared result var
+                # (benchmark() always emits every declared key), and aborting the
+                # sweep for it would lose the samples already collected.
+                available = list(result_dict.keys())
+                raise WorkerContractError(
+                    f"Result variable '{rv.name}' was not set by the "
+                    f"benchmark function. Available keys: {available}. "
+                    f"Make sure your benchmark() method sets "
+                    f"self.{rv.name}."
+                ) from None
+            result_value = _materialize_result_value(rv, result_value)
+            if bench_run_cfg.print_bench_results:
+                logger.info(f"{rv.name}: {result_value}")
+
+            if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):
+                _set_result_value(bench_res, rv_arrays, rv.name, idx, result_value)
+            elif isinstance(rv, ResultDataSet):
+                # Plan 22 (D2): the cell stores a blob path, not an index into
+                # dataset_list.  The list attribute stays, empty, as the read
+                # path for results collected before path-backed cells.
+                _set_result_value(
+                    bench_res, rv_arrays, rv.name, idx, _materialize_dataset_value(result_value)
+                )
+            elif isinstance(rv, ResultReference):
+                bench_res.object_index.append(result_value)
+                _set_result_value(
+                    bench_res, rv_arrays, rv.name, idx, len(bench_res.object_index) - 1
+                )
+
+            elif isinstance(rv, ResultVec):
+                # B2 (plan 23 P2): these two conditions used to guard the store with
+                # no `else`, so a vector of the wrong length was silently dropped and
+                # the cell kept its NaN fill -- indistinguishable, downstream, from
+                # "never sampled". The sibling arms of this ladder all raise.
+                #
+                # The accepted set is deliberately left as-is rather than widened: a
+                # `tuple` would work fine positionally, but which types each result
+                # variable accepts is P4's (the result-type registry) call, not a
+                # side effect of making the drop loud. It now says so instead of
+                # silently NaN-ing.
+                if not isinstance(result_value, (list, np.ndarray)):
+                    raise WorkerContractError(
+                        f"Result variable '{rv.name}' is a ResultVec(size={rv.size}), "
+                        f"so the benchmark function must set it to a list or numpy "
+                        f"array; got {type(result_value).__name__} ({result_value!r})."
                     )
-                elif isinstance(rv, ResultReference):
-                    bench_res.object_index.append(result_value)
-                    _set_result_value(
-                        bench_res, rv_arrays, rv.name, idx, len(bench_res.object_index) - 1
+                if len(result_value) != rv.size:
+                    raise WorkerContractError(
+                        f"Result variable '{rv.name}' is a ResultVec(size={rv.size}), "
+                        f"but the benchmark function returned {len(result_value)} "
+                        f"element(s): {result_value!r}. Each element is stored in its "
+                        f"own dataset column, so every sample must return exactly "
+                        f"{rv.size} of them."
                     )
+                for i in range(rv.size):
+                    _set_result_value(bench_res, rv_arrays, rv.index_name(i), idx, result_value[i])
 
-                elif isinstance(rv, ResultVec):
-                    if isinstance(result_value, (list, np.ndarray)):
-                        if len(result_value) == rv.size:
-                            for i in range(rv.size):
-                                _set_result_value(
-                                    bench_res, rv_arrays, rv.index_name(i), idx, result_value[i]
-                                )
-
-                else:
-                    raise RuntimeError("Unsupported result type")
-            for rv in bench_res.result_hmaps:
-                bench_res.hmaps[rv.name][worker_job.canonical_input] = result_dict[rv.name]
+            else:
+                raise TypeError(f"Unsupported result type: {type(rv).__name__}")
 
     def cache_results(
         self, bench_res: BenchResult, bench_cfg_hash: str, bench_cfg_hashes: list[str]
@@ -413,6 +602,124 @@ class ResultCollector:
         logger.info(f"saving benchmark: {bench_res.bench_cfg.bench_name}")
         c[bench_res.bench_cfg.bench_name] = bench_cfg_hashes
 
+    def _read_last_seen(
+        self, cache: Cache, series_id: str, bench_name: str | None, tag: str | None
+    ) -> dict | None:
+        """The last-seen index entry for *series_id*, falling back to the legacy key.
+
+        Ordered: the series key first, then the pre-``series_id`` ``(bench_name,
+        tag)`` key, so the first run after upgrade finds its predecessor. A legacy
+        hit needs no explicit migration -- this run's write lands under the new key
+        at the end of ``load_history_cache``. The two keys are the *same string*
+        unless a ``series_id`` was declared, so the fallback only does work where it
+        has to.
+        """
+        entry = cache.get(last_seen_key(series_id))
+        if entry is not None or bench_name is None:
+            return entry
+        return cache.get(legacy_last_seen_key(bench_name, tag))
+
+    def _adopt_or_report_reset(
+        self,
+        cache: Cache,
+        bench_cfg_hash: str,
+        *,
+        series_id: str,
+        bench_name: str | None,
+        tag: str | None,
+        config_summary: dict | None,
+        events: list[HistoryEvent],
+    ) -> dict | None:
+        """Classify a history-key miss under a known series: adopt, or report a reset.
+
+        A key can move for two very different reasons, and until the series was
+        named independently of the key there was no way to tell them apart. The
+        stored ``config_summary`` decides:
+
+        * **identical** -- the declaration did not change, so only ``bench_name``
+          or ``tag`` moved: a pure rename. The stored record is re-keyed to the new
+          hash and a non-lossy ``history_renamed`` event is emitted. Safe precisely
+          because the summary covers every field that shapes the dataset -- same
+          dimensions, same coordinates, same columns -- and the record is *moved*,
+          never concatenated with an incompatible one.
+        * **differs** -- a genuinely different experiment, which is the existing
+          ``full_reset`` with its diff.
+
+        Returns the adopted record, or None to continue as a fresh series.
+        """
+        last = self._read_last_seen(cache, series_id, bench_name, tag)
+        if not last or last.get("key") == bench_cfg_hash:
+            return None
+
+        old_key = last.get("key")
+        diff = diff_summaries(last.get("summary"), config_summary)
+        stored_summary = last.get("summary")
+        renamed = (
+            stored_summary is not None
+            and config_summary is not None
+            and stored_summary == config_summary
+        )
+        if renamed:
+            adopted = self._load_history_record(cache, old_key) if old_key else None
+            if adopted is not None:
+                events.append(
+                    HistoryEvent(
+                        HistoryEventKind.HISTORY_RENAMED,
+                        f"over_time history adopted for series '{series_id}': the "
+                        f"history key moved from {old_key} to {bench_cfg_hash} with an "
+                        f"unchanged declaration (benchmark '{bench_name}', tag "
+                        f"'{tag}'), so the existing "
+                        f"{last.get('events', '?')} events were carried over",
+                    )
+                )
+                with suppress(KeyError, OSError):
+                    del cache[old_key]
+                return adopted
+
+        detail = (
+            f"over_time history reset for benchmark '{bench_name}' "
+            f"(tag '{tag}'): the history key changed"
+            + (": " + "; ".join(diff) if diff else "")
+            + f"; {last.get('events', '?')} historical events are "
+            f"orphaned under the old key"
+        )
+        events.append(HistoryEvent(HistoryEventKind.FULL_RESET, detail))
+        return None
+
+    def _load_history_record(self, cache: Cache, bench_cfg_hash: str) -> dict | None:
+        """Fetch and normalize one history record, or None when absent/unreadable.
+
+        Bare ``xr.Dataset`` values (hand-seeded or pre-record entries) are
+        wrapped into the record shape with no column metadata, which the
+        reconciler treats as adopt-in-place.
+        """
+        try:
+            record = cache[bench_cfg_hash]
+        except KeyError:
+            return None
+        except (AttributeError, TypeError, ModuleNotFoundError, ImportError) as exc:
+            logger.warning(
+                "Failed to deserialize cached history (%s: %s). "
+                "Discarding stale cache entry and continuing with fresh data.",
+                type(exc).__name__,
+                exc,
+            )
+            try:
+                del cache[bench_cfg_hash]
+            except (OSError, KeyError) as del_exc:
+                logger.debug("Could not remove stale cache entry: %s", del_exc)
+            return None
+        if isinstance(record, xr.Dataset):
+            return {"format": 0, "dataset": record, "columns": {}, "retired": {}}
+        if isinstance(record, dict) and isinstance(record.get("dataset"), xr.Dataset):
+            return record
+        logger.warning("Unrecognized history record shape; discarding stale entry")
+        try:
+            del cache[bench_cfg_hash]
+        except (OSError, KeyError) as del_exc:
+            logger.debug("Could not remove stale cache entry: %s", del_exc)
+        return None
+
     def load_history_cache(
         self,
         dataset: xr.Dataset,
@@ -420,83 +727,145 @@ class ResultCollector:
         clear_history: bool,
         max_time_events: int | None = None,
         result_vars: list | None = None,
+        *,
+        on_history_reset: OnHistoryReset | str = OnHistoryReset.WARN,
+        bench_name: str | None = None,
+        tag: str | None = None,
+        series_id: str | None = None,
+        config_summary: dict | None = None,
     ) -> xr.Dataset:
-        """Load historical data from a cache if over_time is enabled.
+        """Load, reconcile, and persist historical benchmark data.
 
-        This method is used to retrieve and concatenate historical benchmark data from the cache
-        when tracking performance over time. If clear_history is True, it will clear any existing
-        historical data instead of loading it.
+        The history key excludes result variables, so the stored record is a
+        *superset* of every column ever measured under this benchmark's input
+        space; result-var differences are reconciled per column (retained,
+        retired, resumed, or born — see :mod:`bencher.history`) and consumers
+        receive a projection onto exactly the current ``result_vars`` columns.
+        If clear_history is True, existing history is ignored (a fresh series
+        starts and is written back).
 
         Args:
             dataset (xr.Dataset): Freshly calculated benchmark data for the current run
-            bench_cfg_hash (str): Hash of the input variables used to identify cached data
+            bench_cfg_hash (str): History key — the benchmark identity hash computed
+                with ``include_result_vars=False``
             clear_history (bool): If True, clears historical data instead of loading it
             max_time_events (int | None): Maximum number of over_time events to retain.
                 Oldest events are trimmed. None means unlimited.
-            result_vars (list | None): Result variable instances. When a variable has a
-                per-variable ``max_time_events`` smaller than the dataset's over_time
-                size, older entries are set to sentinel and media files are deleted.
+            result_vars (list | None): Result variable instances defining the served
+                columns. Also used for per-variable ``max_time_events`` aging. When
+                None, column reconciliation and projection are skipped entirely.
+            on_history_reset (OnHistoryReset | str): Policy for loss-y schema
+                events — "warn", "error" (raise HistoryResetError before
+                persisting), or "ignore". Any other value raises ValueError
+                at the parse, before the cache is touched.
+            bench_name (str | None): Benchmark name, used in event messages and as
+                half of the legacy index key read during the one-release upgrade.
+            tag (str | None): Benchmark tag, same two uses as bench_name.
+            series_id (str | None): The series this run appends to
+                (``BenchCfg.series``). Keys the last-seen index, which is what lets
+                a pure rename be adopted rather than silently orphaned. When None
+                the series falls back to ``bench_name:tag``, so the index is still
+                consulted and reset detection is unchanged for callers that declare
+                nothing; the index is skipped only when ``bench_name`` is None too.
+            config_summary (dict | None): ``bencher.history.config_summary`` of the
+                current config, stored in the last-seen index and diffed on resets.
 
         Returns:
-            xr.Dataset: Combined dataset with both historical and current benchmark data,
-                or just the current data if no history exists or history is cleared
+            xr.Dataset: The current config's view of the accumulated history —
+                historical plus current data, projected onto the current columns.
         """
+        # Parse the policy up front: it arrives as user config (a trust
+        # boundary), so an unknown value must raise here — before any cache
+        # read or write — instead of silently meaning "ignore" as it used to.
+        policy = OnHistoryReset(on_history_reset)
         c = self.get_history_cache()
+        # An explicit series_id wins; otherwise the series is bench_name:tag, which
+        # is what the index was keyed on before series_id existed. Deriving it here
+        # rather than requiring it keeps every existing caller's reset detection.
+        series = series_id or (
+            default_series_id(bench_name, tag) if bench_name is not None else None
+        )
+        current_cols = data_var_columns(result_vars)
+        events: list[HistoryEvent] = []
+        merged = dataset
+        birth_val = current_time_value(dataset)
+        columns_meta = {name: column_meta(rv, name, birth_val) for name, rv in current_cols.items()}
+        retired: dict = {}
+
         if clear_history:
             logger.info("clearing history")
         else:
             logger.info(f"checking historical key: {bench_cfg_hash}")
-            try:
-                ds_old = c[bench_cfg_hash]
-            except KeyError:
-                logger.info("did not detect any historical data")
-            except (
-                AttributeError,
-                TypeError,
-                ModuleNotFoundError,
-                ImportError,
-            ) as exc:
-                logger.warning(
-                    "Failed to deserialize cached history (%s: %s). "
-                    "Discarding stale cache entry and continuing with fresh data.",
-                    type(exc).__name__,
-                    exc,
+            record = self._load_history_record(c, bench_cfg_hash)
+            if record is None and series is not None:
+                record = self._adopt_or_report_reset(
+                    c,
+                    bench_cfg_hash,
+                    series_id=series,
+                    bench_name=bench_name,
+                    tag=tag,
+                    config_summary=config_summary,
+                    events=events,
                 )
-                try:
-                    del c[bench_cfg_hash]
-                except (OSError, KeyError) as del_exc:
-                    logger.debug("Could not remove stale cache entry: %s", del_exc)
+            if record is None:
+                logger.info("did not detect any historical data")
             else:
                 logger.info("loading historical data from cache")
-                if (
-                    "over_time" in ds_old.dims
-                    and "over_time" in dataset.dims
-                    and ds_old["over_time"].dtype != dataset["over_time"].dtype
-                ):
-                    logger.warning(
-                        "Discarding incompatible historical data "
-                        "(over_time dtype changed: "
-                        f"{ds_old['over_time'].dtype} -> {dataset['over_time'].dtype})"
+                ds_old = record["dataset"]
+                incompatible = incompatible_reason(ds_old, dataset)
+                if incompatible:
+                    events.append(
+                        HistoryEvent(
+                            HistoryEventKind.HISTORY_DISCARDED,
+                            f"Discarding incompatible historical data ({incompatible})",
+                        )
                     )
+                elif current_cols:
+                    merged, columns_meta, retired, reconcile_events = reconcile(
+                        record, dataset, current_cols
+                    )
+                    events.extend(reconcile_events)
                 else:
-                    dataset = xr.concat([ds_old, dataset], "over_time")
+                    # No column information (result_vars not supplied): plain
+                    # append, preserving whatever metadata the record carries.
+                    merged = xr.concat([ds_old, dataset], "over_time")
+                    columns_meta = record.get("columns") or {}
+                    retired = record.get("retired") or {}
 
-        if max_time_events is not None and "over_time" in dataset.dims:
-            if dataset.sizes["over_time"] > max_time_events:
-                dataset = dataset.isel(over_time=slice(-max_time_events, None))
+        # Policy runs before anything is persisted so on_history_reset="error"
+        # leaves the stored history untouched for the next (acknowledged) run.
+        apply_policy(events, policy)
+
+        if (
+            max_time_events is not None
+            and "over_time" in merged.dims
+            and merged.sizes["over_time"] > max_time_events
+        ):
+            merged = merged.isel(over_time=slice(-max_time_events, None))
 
         # Per-variable max_time_events: null out older entries for variables
         # with a per-variable limit smaller than the dataset's over_time size.
         # File deletion is deferred until after the cache write succeeds.
         pending_deletes = []
-        if result_vars and "over_time" in dataset.dims:
+        if result_vars and "over_time" in merged.dims:
             for rv in result_vars:
                 var_limit = getattr(rv, "max_time_events", None)
                 if var_limit is not None:
-                    pending_deletes.extend(_null_old_entries(dataset, rv, var_limit))
+                    pending_deletes.extend(_null_old_entries(merged, rv, var_limit))
 
         logger.info("saving data to history cache")
-        c[bench_cfg_hash] = dataset
+        c[bench_cfg_hash] = {
+            "format": HISTORY_FORMAT,
+            "dataset": merged,
+            "columns": columns_meta,
+            "retired": retired,
+        }
+        if series is not None:
+            c[last_seen_key(series)] = {
+                "key": bench_cfg_hash,
+                "summary": config_summary,
+                "events": int(merged.sizes.get("over_time", 0)),
+            }
 
         for fpath in pending_deletes:
             try:
@@ -505,7 +874,9 @@ class ResultCollector:
             except OSError as exc:
                 logger.warning("Failed to delete media file %s: %s", fpath, exc)
 
-        return dataset
+        if current_cols:
+            return project(merged, current_cols, columns_meta)
+        return merged
 
     def add_metadata_to_dataset(self, bench_res: BenchResult, input_var: Any) -> None:
         """Add variable metadata to the xarray dataset for improved visualization.

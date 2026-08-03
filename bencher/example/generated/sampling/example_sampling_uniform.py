@@ -29,4 +29,4 @@ def example_sampling_uniform(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_sampling_uniform, level=4)
+    bn.run(example_sampling_uniform, subsampling_divisions=4)

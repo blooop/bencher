@@ -1,7 +1,6 @@
 import bencher as bn
-from bencher.example.example_video import example_video
 from bencher.example.example_image import example_image
-
+from bencher.example.example_video import example_video
 
 if __name__ == "__main__":
     runner = bn.BenchRunner("example_docs")
@@ -9,4 +8,4 @@ if __name__ == "__main__":
     runner.add(example_image)
     runner.add(example_video)
 
-    runner.run(level=2, grouped=True, show=True, cache_samples=False)
+    runner.run(subsampling_divisions=2, grouped=True, show=True, cache_samples=False)

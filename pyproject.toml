@@ -1,35 +1,39 @@
 [project]
 name = "holobench"
-version = "1.88.0"
+version = "1.117.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
 readme = "README.md"
 license = "MIT"
 
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 
 dependencies = [
-    "holoviews>=1.15,<=1.22.1",
-    "numpy>=1.0,<=2.4.1",
-    "param>=1.13.0,<=2.3.3",
+    "holoviews>=1.15,<=1.23.1",
+    "numpy>=1.0,<=2.5.1",
+    "param>=2.0,<=2.4.1",
     "hvplot>=0.12.0,<=0.12.2",
-    "panel>=1.3.6,<=1.8.10",
+    "panel>=1.9.0,<=1.9.3",
     "diskcache>=5.6,<=5.6.3",
-    "optuna>=3.2,<=4.8.0",
-    "xarray>=2023.7,<=2025.6.1",
-    "plotly>=5.15,<=6.7.0",
-    "pandas>=2.0,<=3.0.0",
+    "optuna>=3.2,<=4.9.0",
+    "xarray>=2023.7,<=2026.7.0",
+    "plotly>=5.15,<=6.9.0",
+    "pandas>=2.0,<=3.0.5",
     "strenum>=0.4.0,<=0.4.15",
-    "scikit-learn>=1.2,<=1.7.2",
+    "scikit-learn>=1.2,<=1.9.0",
     "moviepy>=2.1.2,<=2.2.1",
-    "matplotlib>=3.7,<=3.10.8",
+    "matplotlib>=3.7,<=3.11.1",
+    "jinja2>=3.0,<=3.1.6",
 ]
 
 [project.urls]
 Repository = "https://github.com/blooop/bencher"
 Home = "https://github.com/blooop/bencher"
 Documentation = "https://bencher.readthedocs.io/en/latest/"
+
+[project.scripts]
+bencher = "bencher.render:main"
 
 [tool.pixi.workspace]
 channels = ["conda-forge", "https://prefix.dev/blooop"]
@@ -39,16 +43,13 @@ platforms = ["linux-64"]
 libc = "2.31"
 
 [tool.pixi.dependencies]
-python = ">=3.10"
+python = ">=3.11"
 sqlite = "==3.48.0"
 shellcheck = ">=0.10.0,<0.11"
 devpod = ">=0.8.0,<0.9"
 gh = ">=2.83.0,<3.0"
-ralph-orchestrator = ">=2.6.0,<2.7.0"
 playwright = ">=1.50,<2"
 
-[tool.pixi.feature.py310.dependencies]
-python = "3.10.*"
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
 [tool.pixi.feature.py312.dependencies]
@@ -62,23 +63,34 @@ holobench = { path = ".", editable = true }
 [project.optional-dependencies]
 test = [
     "nbformat",
-    "nbclient>=0.7,<=0.10.4",
+    "nbclient>=0.7,<=0.11.0",
     "ipykernel",
     "pip",
     "jupyter_bokeh",
-    "pylint>=3.2.5,<=4.0.5",
+    "pylint>=3.2.5,<=4.0.6",
     "pytest-cov>=4.1,<=7.1.0",
-    "pytest>=7.4,<=9.0.3",
-    "hypothesis>=6.104.2,<=6.152.1",
-    "ruff>=0.5.0,<=0.15.11",
+    "pytest>=7.4,<=9.1.1",
+    "hypothesis>=6.104.2,<=6.163.0",
+    "ruff>=0.5.0,<=0.16.0",
     "sphinxcontrib-mermaid>=1.0,<3.0",
-    "coverage>=7.5.4,<=7.13.5",
-    "prek>=0.2.28,<0.4.0",
-    "ty>=0.0.13,<=0.0.31",
+    "coverage>=7.5.4,<=7.15.2",
+    "prek>=0.2.28,<0.5.0",
+    "ty>=0.0.13,<=0.0.65",
+]
+
+docs = [
+    "sphinx>=7.0,<=9.1.0",
+    "myst-parser",
+    "sphinxcontrib-napoleon",
+    "sphinx-rtd-theme",
+    "sphinx-autoapi",
+    "sphinx-copybutton",
+    "playwright",
+    "Pillow",
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.31.1,<=0.31.3", "rerun-notebook>=0.31.1,<=0.31.3"]
+rerun = ["rerun-sdk>=0.32.0,<=0.35.0", "rerun-notebook>=0.32.0,<=0.35.0"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
@@ -93,7 +105,7 @@ include = ["bencher", "CHANGELOG.md"]
 # Environments
 [tool.pixi.environments]
 default = { features = ["test", "rerun"], solve-group = "default" }
-py310 = ["py310", "test", "rerun"]
+docs = { features = ["test", "rerun", "docs"], solve-group = "default" }
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
 py313 = ["py313", "test", "rerun"]
@@ -131,11 +143,20 @@ format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-ty = "ty check --respect-ignore-files ."
+# --python $CONDA_PREFIX points ty at the *active* pixi environment, so `-e py311` and
+# `-e py313` each type-check against their own interpreter and installed packages.
+# Without it ty resolves no third-party import at all (param, panel, numpy, xarray all
+# read as unresolved), which silently degrades every rule that depends on knowing a
+# third-party type. See plans/23-constructive-data-modeling.md P1.
+ty = { cmd = "ty check --respect-ignore-files --python \"$CONDA_PREFIX\" ." }
 lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
+# Re-run the whole suite with the collect/render split forced on: every auto_plot
+# report build is routed through save_result -> load_result -> render so any
+# pickle / render-from-loaded divergence surfaces in the existing assertions.
+test-split = { cmd = "pytest", env = { BENCHER_FORCE_SPLIT_RENDER = "1" } }
 coverage = "coverage run -m pytest && coverage xml -o coverage.xml"
 coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"
@@ -168,6 +189,15 @@ generate-docs = "python bencher/example/meta/generate_examples.py"
 docs = { cmd = "rm -rf docs/builtdocs; sphinx-build -b html docs docs/builtdocs", depends-on = [
     "generate-docs",
 ] }
+# Quick docs rebuild (skip example generation) + local server for debugging
+docs-quick = "rm -rf docs/builtdocs && python -m sphinx -b html docs docs/builtdocs"
+docs-serve = { cmd = "python -m http.server 8000 -d docs/builtdocs", depends-on = ["docs-quick"] }
+# Regenerate only the representative examples used by the scrollbar checks (fast)
+docs-subset = "python bencher/example/meta/generate_examples.py --only example_sweep_1_float_0_cat_no_repeats,example_stats_repeats_comparison,example_sweep_0_float_0_cat_over_time,example_plot_heatmap,example_sweep_3_float_2_cat_with_repeats --skip-thumbnails"
+# Verify built docs pages show a single scrollbar (requires docs/builtdocs)
+docs-check = "pytest test/test_docs_scrollbars.py -v"
+# NOTE: docs, docs-quick, docs-serve, docs-subset, and docs-check require the 'docs' environment:
+#   pixi run -e docs docs-serve
 
 
 #cache management
@@ -175,6 +205,16 @@ cache-stats = "python -c 'from bencher.cache_management import print_cache_stats
 cache-clear = "python -c 'from bencher.cache_management import clear_all; clear_all()'"
 cache-clear-media = "python -c 'from bencher.cache_management import clear_media; clear_media()'"
 cache-clean-orphans = "python -c 'from bencher.cache_management import clean_orphaned_media; clean_orphaned_media(dry_run=False)'"
+# Reachability GC for the content-addressed blob store. Report first (blobs are
+# primary storage, so a mistaken delete is data loss), then reclaim.
+# The reclaim task passes a one-hour grace period. Blob mtime means "last
+# referenced" (a dedup content hit refreshes it), so the grace period protects
+# blobs a concurrent sweep wrote OR deduplicated onto within the window — sound
+# as long as no sweep runs longer than an hour between materializing a payload
+# and recording its reference. For longer sweeps, raise it or run GC between
+# sessions.
+cache-blob-orphans = "python -c 'from bencher.cache_management import print_orphaned_blobs; print_orphaned_blobs()'"
+cache-blob-gc = "python -c 'from bencher.cache_management import print_orphaned_blobs; print_orphaned_blobs(dry_run=False, min_age_seconds=3600)'"
 
 #demos
 benchmark-save = "python scripts/benchmark_save.py"
@@ -193,13 +233,14 @@ jobs = 16                                                  #detect number of cor
 ignore-paths = ["docs/.*", "bencher/example/generated/.*"]
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = "C,logging-fstring-interpolation,line-too-long,fixme,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,duplicate-code,too-many-public-methods,too-many-nested-blocks,cyclic-import,too-many-positional-arguments"
+disable = "C,logging-fstring-interpolation,line-too-long,fixme,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,duplicate-code,too-many-public-methods,too-many-nested-blocks,cyclic-import,too-many-positional-arguments,too-many-ancestors"
 enable = "no-else-return,consider-using-in"
 
 [tool.coverage.run]
 omit = ["*/test/*", "__init__.py"]
 
 [tool.coverage.report]
+fail_under = 85
 exclude_also = [
     "def __repr__",
     "if False:",
@@ -214,43 +255,94 @@ exclude_also = [
 [tool.pytest.ini_options]
 tmp_path_retention_count = 0
 
+# Type-check gate. See plans/23-constructive-data-modeling.md D1 for the tier design.
+#
+# The rules below are grouped into tiers by measured cost, and the list is a RATCHET:
+# rules move out of it over time and never back in. Two rules are exempt by design and
+# stay forever (see "Permanently ignored").
+#
+# Tier A (enabled -- plan 23 P1): call-non-callable, call-top-callable, inconsistent-mro,
+#   invalid-method-override, invalid-parameter-default, missing-argument,
+#   too-many-positional-arguments, unresolved-import, unresolved-reference.
+#   Deliberately absent from this file: they are errors everywhere except the paths
+#   relaxed in [[tool.ty.overrides]] below.
+#
+# Tier B (~126 diagnostics, scheduled for plan 23 P12).
+# Tier C (~1068 diagnostics, dominated by param-descriptor dynamism and by test/).
+#   Enabled per-file via the strict override block below as modules are reworked;
+#   every plan 23 phase adds the files it touches.
 [tool.ty.rules]
-# Ignore type errors related to param library descriptors
-invalid-assignment = "ignore"
-# Ignore argument type mismatches (many false positives with param library)
-invalid-argument-type = "ignore"
-# Ignore unresolved attributes (param descriptors create dynamic attributes)
-unresolved-attribute = "ignore"
-# Ignore invalid type forms (pn.panel is a function, not a type)
-invalid-type-form = "ignore"
-# Ignore return type mismatches
-invalid-return-type = "ignore"
-# Ignore not-subscriptable errors
-not-subscriptable = "ignore"
-# Ignore possibly missing attributes (Union type issues)
-possibly-missing-attribute = "ignore"
-# Ignore unsupported operator errors
-unsupported-operator = "ignore"
-# Ignore positional argument count errors
-too-many-positional-arguments = "ignore"
-missing-argument = "ignore"
-# Ignore not-iterable errors (Union types)
+
+# --- Tier B: enable globally in plan 23 P12 -----------------------------------------
+# `invalid-return-type` is ENABLED (plan 23 P12, first of the five). It is the rule that
+# checks `_resolve_auto` really returns a member of `ResolvedReduceType`, so it is what
+# finally makes `to_dataset`'s `assert_never` a compile-time proof rather than a runtime
+# assertion (plan 23 section 2.4, and the caveat recorded at the alias in
+# bench_result_base.py). All 29 diagnostics it reported were genuine: see plan 23 section
+# 10 for the two live bugs among them.
+#
+# The remaining four Tier-B rules are still ignored, with their measured cost:
+#   not-iterable (43), no-matching-overload (21), unsupported-operator (16),
+#   possibly-missing-attribute (16).
+# Union types read as non-iterable / no matching overload / unsupported operator.
 not-iterable = "ignore"
-# Ignore overload matching errors
 no-matching-overload = "ignore"
-# Ignore call-non-callable errors
-call-non-callable = "ignore"
-# Ignore call-top-callable errors (callable() guard + call on union types)
-call-top-callable = "ignore"
-# Ignore method override errors
-invalid-method-override = "ignore"
-# Ignore import/reference resolution errors
-unresolved-import = "ignore"
-unresolved-reference = "ignore"
-# Ignore parameter default errors (param library StrEnum/enum descriptors resolve as Unknown)
-invalid-parameter-default = "ignore"
-# Ignore MRO errors (param base classes resolve as Unknown)
-inconsistent-mro = "ignore"
-# Ignore unused type: ignore comments (needed for other type checkers)
+unsupported-operator = "ignore"
+# Possibly missing attributes (union type issues).
+possibly-missing-attribute = "ignore"
+
+# --- Tier C: param-descriptor dynamism; per-file via the strict block ---------------
+# param descriptors: a class-level `x = param.Number(1.0)` reads back as float on
+# instances, which no static checker models. bench_cfg.py alone accounts for 63.
+invalid-assignment = "ignore"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+# pn.panel is a function used in annotation position, not a type.
+invalid-type-form = "ignore"
+not-subscriptable = "ignore"
+
+# --- Permanently ignored: not debt, do not "fix" ------------------------------------
+# The repo carries 8 `# type: ignore` comments for OTHER type checkers (mypy/pyright).
+# ty considers them unused; that is expected and must stay silenced.
 unused-ignore-comment = "ignore"
 unused-type-ignore-comment = "ignore" # same rule, renamed in ty >= 0.0.14
+
+# Optional imports, scoped to the exact files rather than whole trees. Neither can be
+# annotated inline: ruff reflows the import past the line limit and the comment lands
+# where pylint's own import-error pragma stops applying.
+#   - playwright is optional tooling, needed only on the standalone screenshot path.
+# (A third entry, the vestigial `setup.py` setuptools shim, was dropped when plan 03
+# deleted that file along with setup.cfg and MANIFEST.in.)
+[[tool.ty.overrides]]
+include = [
+    "bencher/example/meta/generate_examples.py",
+    "test/test_docs_scrollbars.py",
+]
+[tool.ty.overrides.rules]
+unresolved-import = "ignore"
+
+# STRICT RATCHET. Files here are held to Tier C as well. Only ever append.
+# Every plan 23 phase adds the modules it reworks as part of its Definition of Done;
+# a file is added only once it is clean, so this block can never regress the gate.
+[[tool.ty.overrides]]
+include = [
+    "bencher/sample_order.py",
+    "bencher/sweep_timings.py",
+    "bencher/blob_store.py",
+    "bencher/variables/results.py",
+    "bencher/history.py",
+    "bencher/job.py",
+    "bencher/worker_job.py",
+    "bencher/result_collector.py",
+    "bencher/worker_manager.py",
+    "bencher/results/composable_container/composable_container_base.py",
+    "bencher/results/composable_container/composable_container_panel.py",
+    "bencher/results/composable_container/composable_container_dataframe.py",
+    "bencher/results/composable_container/composable_container_rerun.py",
+]
+[tool.ty.overrides.rules]
+invalid-assignment = "error"
+invalid-argument-type = "error"
+unresolved-attribute = "error"
+invalid-type-form = "error"
+not-subscriptable = "error"

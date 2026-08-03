@@ -70,8 +70,8 @@ class MetaConstVars(MetaGeneratorBase):
             class_code=SERVER_BENCHMARK_CLASS_CODE,
             input_vars='["cpu_load", "memory_pct"]',
             result_vars='["latency"]',
-            const_vars="dict(disk_io=0.5)",
-            run_kwargs={"level": 3},
+            const_vars='{"disk_io": 0.5}',
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _gen_compare(self):
@@ -84,7 +84,7 @@ class MetaConstVars(MetaGeneratorBase):
             '        title=f"cpu_load sweep with memory_pct={mem_val}",\n'
             '        input_vars=["cpu_load"],\n'
             '        result_vars=["latency"],\n'
-            "        const_vars=dict(memory_pct=mem_val, disk_io=0.5),\n"
+            '        const_vars={"memory_pct": mem_val, "disk_io": 0.5},\n'
             "    )\n"
         )
         self.generate_example(
@@ -95,7 +95,7 @@ class MetaConstVars(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=SERVER_BENCHMARK_CLASS_CODE,
-            run_kwargs={"level": 4},
+            run_kwargs={"subsampling_divisions": 4},
         )
 
     def _gen_categorical(self):
@@ -107,13 +107,13 @@ class MetaConstVars(MetaGeneratorBase):
             '    title="Sweep cpu_load x backend, with cache_enabled=True",\n'
             '    input_vars=["cpu_load", "backend"],\n'
             '    result_vars=["latency"],\n'
-            "    const_vars=dict(cache_enabled=True),\n"
+            '    const_vars={"cache_enabled": True},\n'
             ")\n"
             "bench.plot_sweep(\n"
             '    title="Sweep cpu_load x backend, with cache_enabled=False",\n'
             '    input_vars=["cpu_load", "backend"],\n'
             '    result_vars=["latency"],\n'
-            "    const_vars=dict(cache_enabled=False),\n"
+            '    const_vars={"cache_enabled": False},\n'
             ")\n"
         )
         self.generate_example(
@@ -124,7 +124,7 @@ class MetaConstVars(MetaGeneratorBase):
             imports=imports,
             body=body,
             class_code=SERVER_BENCHMARK_CLASS_CODE,
-            run_kwargs={"level": 4},
+            run_kwargs={"subsampling_divisions": 4},
         )
 
     def _gen_noise(self):
@@ -139,8 +139,8 @@ class MetaConstVars(MetaGeneratorBase):
             class_code=SERVER_BENCHMARK_CLASS_CODE,
             input_vars='["cpu_load", "memory_pct"]',
             result_vars='["latency", "throughput"]',
-            const_vars="dict(noise_scale=0.3)",
-            run_kwargs={"level": 3},
+            const_vars='{"noise_scale": 0.3}',
+            run_kwargs={"subsampling_divisions": 3},
         )
 
 

@@ -7,7 +7,6 @@ import pytest
 
 import bencher as bn
 
-
 GENERATED_DIR = Path("bencher/example/generated")
 
 
@@ -26,6 +25,18 @@ if not _examples:
     )
 
 
+def test_generated_example_filenames_globally_unique():
+    """Every generated example basename must be unique across the whole tree.
+
+    The doc builder uses basenames as RST page stems and thumbnail ids, so a
+    duplicate basename in a different subdirectory silently shadows a page.
+    """
+    generated_dir = Path(__file__).parent.parent / "bencher" / "example" / "generated"
+    basenames = [p.name for p in generated_dir.rglob("*.py") if p.name != "__init__.py"]
+    duplicates = sorted({b for b in basenames if basenames.count(b) > 1})
+    assert not duplicates, f"Duplicate generated example filenames: {duplicates}"
+
+
 @pytest.mark.parametrize(
     "example_path",
     _examples,
@@ -42,7 +53,7 @@ def test_generated_example(example_path):
     assert example_fns, f"No example_* function found in {example_path}"
 
     run_cfg = bn.BenchRunCfg()
-    run_cfg.level = 2
+    run_cfg.subsampling_divisions = 2
     run_cfg.repeats = 2
     result = example_fns[0](run_cfg)
     assert result is not None

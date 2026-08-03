@@ -1,9 +1,10 @@
 """Auto-generated example: 2 Float, 0 Categorical (over time)."""
 
-import random
 import math
-import bencher as bn
+import random
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class CompressionBench(bn.ParametrizedSweep):
@@ -47,4 +48,4 @@ def example_sweep_2_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_2_float_0_cat_over_time, level=4, over_time=True)
+    bn.run(example_sweep_2_float_0_cat_over_time, subsampling_divisions=4, over_time=True)

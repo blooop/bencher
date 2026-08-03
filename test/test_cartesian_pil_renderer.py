@@ -18,7 +18,6 @@ from bencher.results.manim_cartesian.cartesian_product_scene import (
     render_animation,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

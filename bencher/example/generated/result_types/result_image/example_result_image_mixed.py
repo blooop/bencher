@@ -1,9 +1,11 @@
 """Auto-generated example: ResultImage: Mixed Image and Scalar Results."""
 
-import bencher as bn
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):
@@ -55,4 +57,4 @@ def example_result_image_mixed(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_mixed, level=3)
+    bn.run(example_result_image_mixed, subsampling_divisions=3)

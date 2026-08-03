@@ -1,21 +1,27 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 from copy import deepcopy
+
 import panel as pn
 import xarray as xr
 from param import Parameter
+
+from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
-from bencher.variables.results import ResultImage
-from bencher.plotting.plot_filter import VarRange, PlotFilter
-from bencher.utils import callable_name, int_to_col, color_tuple_to_255
-from bencher.video_writer import VideoWriter
-from bencher.results.video_controls import VideoControls
+from bencher.results.composable_container.composable_container_base import (
+    Axis,
+    compose_method_list_for_dims,
+)
 from bencher.results.composable_container.composable_container_video import (
     ComposableContainerVideo,
     ComposeType,
     RenderCfg,
 )
+from bencher.results.video_controls import VideoControls
+from bencher.utils import callable_name, color_tuple_to_255, int_to_col
+from bencher.variables.results import ResultImage
+from bencher.video_writer import VideoWriter
 
 
 class VideoSummaryResult(BenchResultBase):
@@ -56,10 +62,11 @@ class VideoSummaryResult(BenchResultBase):
             pn.panel | None: a panel pane with a video of all results concatenated together
         """
         plot_filter = PlotFilter(
-            float_range=VarRange(0, None),
-            cat_range=VarRange(0, None),
-            panel_range=VarRange(1, None),
-            input_range=VarRange(1, None),
+            float_range=VarRange.unbounded(),
+            cat_range=VarRange.unbounded(),
+            panel_range=VarRange.at_least(1),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.at_least(1),
         )
         matches_res = plot_filter.matches_result(
             self.plt_cnt_cfg, callable_name(self.to_video_grid_ds), override=False
@@ -148,39 +155,30 @@ class VideoSummaryResult(BenchResultBase):
     def dataset_to_compose_list(
         self,
         dataset: xr.Dataset,
-        first_compose_method: ComposeType = ComposeType.down,
+        first_compose_method: ComposeType | Axis = ComposeType.down,
         time_sequence_dimension: int = 0,
     ) -> list[ComposeType]:
         """ "Given a dataset, chose an order for composing the results.  By default will flip between right and down and the last dimension will be a time sequence.
 
         Args:
             dataset (xr.Dataset): the dataset to render
-            first_compose_method (ComposeType, optional): the direction of the first composition method. Defaults to ComposeType.right.
+            first_compose_method (ComposeType | Axis, optional): the direction of the first composition method. Defaults to ComposeType.down.  Only ``right`` and ``down`` alternate; ``sequence``/``overlay`` have no opposite and are repeated on every spatial level.
             time_sequence_dimension (int, optional): The dimension to start time sequencing instead of composing in space. Defaults to 0.
 
         Returns:
             list[ComposeType]: A list of composition methods for composing the dataset result
         """
 
-        num_dims = len(dataset.sizes)
-        if time_sequence_dimension == -1:  # use time sequence for everything
-            compose_method_list = [ComposeType.sequence] * (num_dims + 1)
-        else:
-            compose_method_list = [first_compose_method]
-            compose_method_list.extend(
-                ComposeType.flip(compose_method_list[-1]) for _ in range(num_dims - 1)
-            )
-            compose_method_list.append(ComposeType.sequence)
-
-            for i in range(min(len(compose_method_list), time_sequence_dimension + 1)):
-                compose_method_list[i] = ComposeType.sequence
-
-        return compose_method_list
+        return compose_method_list_for_dims(
+            len(dataset.sizes),
+            first_compose_method=first_compose_method,
+            time_sequence_dimension=time_sequence_dimension,
+        )
 
     def _to_video_panes_ds(
         self,
         dataset: xr.Dataset,
-        plot_callback: Callable | None = None,
+        plot_callback: Callable,
         target_dimension=0,
         compose_method=ComposeType.right,
         compose_method_list=None,
@@ -192,7 +190,7 @@ class VideoSummaryResult(BenchResultBase):
         **kwargs,
     ) -> pn.panel:
         num_dims = len(dataset.sizes)
-        dims = list(d for d in dataset.sizes)
+        dims = list(dataset.sizes)
         if reverse:
             dims = list(reversed(dims))
 
@@ -203,8 +201,6 @@ class VideoSummaryResult(BenchResultBase):
             compose_method_list = self.dataset_to_compose_list(
                 dataset, compose_method, time_sequence_dimension=time_sequence_dimension
             )
-
-            # print(compose_method_list)
 
         compose_method_list_pop = deepcopy(compose_method_list)
         if len(compose_method_list_pop) > 1:

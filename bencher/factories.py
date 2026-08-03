@@ -10,10 +10,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bencher.bencher import Bench
-    from bencher.bench_runner import BenchRunner
     from bencher.bench_cfg import BenchRunCfg
     from bencher.bench_report import BenchReport
+    from bencher.bench_runner import BenchRunner
+    from bencher.bencher import Bench
     from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 
@@ -52,7 +52,7 @@ def create_bench_runner(
     """Create a BenchRunner instance from a ParametrizedSweep.
 
     Enables fluent chaining like:
-        MyConfig().to_bench_runner().add(func).run(level=2, max_level=4)
+        MyConfig().to_bench_runner().add(func).run(subsampling_divisions=2, max_subsampling_divisions=4)
 
     Args:
         sweep: The ParametrizedSweep instance to use as the benchmark class.
@@ -62,8 +62,8 @@ def create_bench_runner(
     Returns:
         A configured BenchRunner instance.
     """
-    from bencher.bench_runner import BenchRunner
     from bencher.bench_cfg import BenchRunCfg
+    from bencher.bench_runner import BenchRunner
 
     if run_cfg is None:
         run_cfg = BenchRunCfg()

@@ -8,12 +8,14 @@ from datetime import datetime
 from unittest import mock
 
 import numpy as np
+import pandas as pd
 import xarray as xr
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
+from bencher.bench_cfg import BenchCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.result_collector import ResultCollector, set_xarray_multidim
-from bencher.bench_cfg import BenchCfg
 
 
 class TestResultCollector(unittest.TestCase):
@@ -521,6 +523,7 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
     def test_per_variable_deletes_media_files(self):
         """Nulling a media entry should delete the referenced file from disk."""
         import os
+
         from bencher.variables.results import ResultImage
 
         # Create real temp files
@@ -554,6 +557,58 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
             self.assertFalse(os.path.exists(paths[1]))
             self.assertTrue(os.path.exists(paths[2]))
             self.assertTrue(os.path.exists(paths[3]))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_per_variable_never_deletes_dataset_blobs(self):
+        """Aging a ResultDataSet cell nulls it but must NEVER delete its blob.
+
+        Blobs are content-addressed, so identical payloads at different time points
+        deduplicate to one file: here the aged-out event at index 0 and the still-live
+        event at index 3 carry the same payload and therefore the same path. Deleting
+        the file when the old cell ages out would break the live one, which is why
+        ResultDataSet is excluded from ``_MEDIA_RESULT_TYPES``.
+        """
+        import os
+
+        from bencher.blob_store import materialize_blob
+        from bencher.variables.results import ResultDataSet
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            # Payload of event 3 repeats event 0's, so both cells hold one shared blob.
+            payloads = [
+                pd.DataFrame({"v": [0.0]}),
+                pd.DataFrame({"v": [1.0]}),
+                pd.DataFrame({"v": [2.0]}),
+                pd.DataFrame({"v": [0.0]}),
+            ]
+            paths = [materialize_blob(p, tmpdir) for p in payloads]
+            self.assertEqual(paths[0], paths[3], "content addressing should dedup these")
+
+            slices = [
+                xr.Dataset({"table": (["x", "over_time"], np.array([[p]], dtype=object))})
+                for p in paths
+            ]
+            dataset = xr.concat(slices, "over_time")
+
+            rv = ResultDataSet(max_time_events=2, doc="table")
+            rv.name = "table"
+
+            unique_hash = f"pervar-blob-{uuid.uuid4()}"
+            result = self.collector.load_history_cache(
+                dataset, unique_hash, clear_history=False, result_vars=[rv]
+            )
+
+            # The cells age exactly like any other path-valued result...
+            cells = list(result["table"].values[0])
+            self.assertEqual(cells[:2], ["NAN", "NAN"])
+            self.assertEqual(cells[2:], [paths[2], paths[3]])
+
+            # ...but every blob survives, including the one the aged cell shared with
+            # the live event at index 3, and the one no live cell references at all.
+            for path in paths:
+                self.assertTrue(os.path.exists(path), f"aging deleted blob {path}")
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -745,15 +800,15 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c = self.collector.get_history_cache()
         c[unique_hash] = dataset
 
-        with mock.patch.object(
-            type(c),
-            "__getitem__",
-            side_effect=AttributeError("'List' object has no attribute 'class_'"),
+        with (
+            mock.patch.object(
+                type(c),
+                "__getitem__",
+                side_effect=AttributeError("'List' object has no attribute 'class_'"),
+            ),
+            self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs,
         ):
-            with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-                result = self.collector.load_history_cache(
-                    dataset, unique_hash, clear_history=False
-                )
+            result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)
@@ -769,15 +824,15 @@ class TestStaleCacheRecovery(unittest.TestCase):
         c = self.collector.get_history_cache()
         c[unique_hash] = dataset
 
-        with mock.patch.object(
-            type(c),
-            "__getitem__",
-            side_effect=ModuleNotFoundError("No module named 'old_dep'"),
+        with (
+            mock.patch.object(
+                type(c),
+                "__getitem__",
+                side_effect=ModuleNotFoundError("No module named 'old_dep'"),
+            ),
+            self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs,
         ):
-            with self.assertLogs("bencher.result_collector", level="WARNING") as captured_logs:
-                result = self.collector.load_history_cache(
-                    dataset, unique_hash, clear_history=False
-                )
+            result = self.collector.load_history_cache(dataset, unique_hash, clear_history=False)
 
         self.assertTrue(
             any("Failed to deserialize cached history" in msg for msg in captured_logs.output)

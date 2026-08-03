@@ -2,7 +2,6 @@ import unittest
 
 from bencher.example.benchmark_data import AllSweepVars
 
-
 # def get_sweep_hash_isolated_process() -> str:
 #     """get has values from a separate process as by default hashes across process are not the same"""
 #     os.system(

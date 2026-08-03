@@ -91,4 +91,4 @@ def example_regression_tuning_noise(run_cfg: bn.BenchRunCfg | None = None) -> bn
 
 
 if __name__ == "__main__":
-    bn.run(example_regression_tuning_noise, level=3)
+    bn.run(example_regression_tuning_noise, subsampling_divisions=3)

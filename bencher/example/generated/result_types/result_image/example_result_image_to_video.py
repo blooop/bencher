@@ -1,9 +1,11 @@
 """Auto-generated example: ResultImage: Image Sweep to Video Grid."""
 
-import bencher as bn
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):
@@ -62,4 +64,4 @@ def example_result_image_to_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_to_video, level=3)
+    bn.run(example_result_image_to_video, subsampling_divisions=3)

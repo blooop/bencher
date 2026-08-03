@@ -1,20 +1,26 @@
-/* Widen RTD content area. */
+/* Force RTD content area to full width. Note: no overflow rules here — an
+   overflow scroll container on this ancestor would break position:sticky for
+   the .bencher-hscroll proxy scrollbar. Wide report content is handled
+   per-report by .bencher-report-wrap. */
 .wy-nav-content {
     max-width: none !important;
-    overflow-x: auto;
-    overflow-y: auto;
-    height: 99vh;
-}
-
-/* Wrap long lines inside code blocks instead of scrolling.
-   Selector matches RTD theme specificity so this rule wins (loaded later). */
-.rst-content div[class^=highlight] pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
 }
 
 /* --- Gallery overview page --- */
+
+/* Thumbnail display geometry lives here — these two values control how big the gallery
+   cards are and what shape their thumbnails are shown in. They are independent of the
+   captured PNGs, which are cropped tightly around each report's plots and simply fitted
+   into whatever box these define (see THUMB_MAX_W/THUMB_MAX_H in
+   bencher/example/meta/generate_examples.py for the source resolution cap).
+
+   Square is the default because most Bench results are square Bokeh figures; a 4:3 box
+   letterboxes them and shrinks the plot for no gain. */
+:root {
+    --gallery-thumb-aspect: 1 / 1;
+    --gallery-card-min-width: 240px;
+}
+
 .gallery-container {
     max-width: 1400px;
 }
@@ -30,7 +36,7 @@
 
 .gallery-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--gallery-card-min-width), 1fr));
     gap: 16px;
     margin-bottom: 16px;
 }
@@ -52,16 +58,26 @@
     transform: translateY(-2px);
 }
 
+/* Thumbnails are cropped to each report's result plots, so their dimensions vary.
+   Centre them in a fixed-aspect box to keep the grid uniform without distorting or
+   cropping the plot. */
 .gallery-thumb-wrap {
     width: 100%;
+    aspect-ratio: var(--gallery-thumb-aspect);
     overflow: hidden;
     background: #fafafa;
     border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .gallery-thumb {
-    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
     height: auto;
+    object-fit: contain;
     display: block;
 }
 
@@ -71,4 +87,85 @@
     line-height: 1.3;
     color: #333;
     padding: 10px 8px;
+}
+
+/* --- Bencher report iframes (sized by bencher-embed.js from the natural
+       content size the reports post themselves) --- */
+iframe.bencher-report {
+    min-height: 400px;
+    width: 100%;
+    border: none;
+    overflow: hidden;
+    display: block;
+}
+
+/* Wide reports keep their natural scale; this wrapper scrolls horizontally.
+   Its native scrollbar is hidden — scrolling is driven by the sticky
+   .bencher-hscroll proxy below, which stays visible at the viewport bottom
+   while a tall report is on screen. overflow-y stays hidden so the page
+   keeps a single vertical scrollbar. */
+.bencher-report-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    scrollbar-width: none;
+}
+
+.bencher-report-wrap::-webkit-scrollbar {
+    display: none;
+}
+
+/* Sticky proxy scrollbar (synced with .bencher-report-wrap by
+   bencher-embed.js). Hidden unless the report is wider than the page. */
+.bencher-hscroll {
+    position: sticky;
+    bottom: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: none;
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.bencher-hscroll-inner {
+    height: 1px;
+}
+
+/* Escape hatch above each embedded report (useful when wide reports are
+   scaled down to fit) */
+.bencher-report-link {
+    display: block;
+    text-align: right;
+    font-size: 0.85em;
+    margin: 4px 0;
+}
+
+/* --- Line wrapping for code blocks --- */
+.rst-content pre {
+    white-space: pre-wrap !important;
+    word-wrap: break-word;
+}
+
+/* --- Collapsible source code section --- */
+details.bencher-source {
+    margin-top: 16px;
+}
+
+details.bencher-source > summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 8px 12px;
+    background: #f0f2f5;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    user-select: none;
+}
+
+details.bencher-source[open] > summary {
+    border-radius: 4px 4px 0 0;
+    margin-bottom: 0;
+}
+
+details.bencher-source[open] > .highlight-python {
+    margin-top: 0;
+    border-top: none;
 }

@@ -36,7 +36,7 @@ import panel as pn
 # Must be at top level before any bencher imports that trigger rendering
 pn.extension()
 
-import bencher as bn  # noqa: E402
+import bencher as bn
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -187,7 +187,8 @@ FIXTURE_DEFS = {
 def build_fixture(fixture_type: str, variant: FixtureVariant) -> bn.Bench:
     """Build a benchmark fixture and return the Bench with populated report."""
     fdef = FIXTURE_DEFS[fixture_type]
-    benchable = fdef["cls"]()
+    # FIXTURE_DEFS values are heterogeneous, so ty widens fdef["cls"] beyond `type`.
+    benchable = fdef["cls"]()  # ty: ignore[call-non-callable]
     run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = fdef["over_time"]
     run_cfg.repeats = fdef["repeats"]

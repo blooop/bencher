@@ -87,4 +87,4 @@ def example_cartesian_animation(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
 
 
 if __name__ == "__main__":
-    bn.run(example_cartesian_animation, level=3, cache_samples=False)
+    bn.run(example_cartesian_animation, subsampling_divisions=3, cache_samples=False)

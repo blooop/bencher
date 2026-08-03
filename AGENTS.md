@@ -76,6 +76,18 @@ Bencher is a benchmarking framework built around these core concepts:
 - `bencher/results/` - Result containers and visualization classes
 - `test/` - Test suite
 
+### Repository Layout
+- `plans/` - Current improvement plans (read `plans/README.md` first); `plans/archive/`
+  holds historical ones, each with an `ARCHIVED:` header saying why — never execute those.
+- `scripts/` - Developer/CI shell and profiling scripts, invoked from Pixi tasks.
+- `resource/` - Vestigial ROS ament index marker (`resource/bencher`, zero bytes). No code
+  reads it; it lands in the wheel only because hatchling's `include = ["bencher", ...]`
+  pattern matches any path named `bencher` at any depth.
+- `ralph.yml` + `PROMPT.md` - Config and task prompt for the Ralph agent orchestrator
+  (`pixi run ralph`, used by the `agent-iterate` flows).
+- `rockerc.yaml` - rocker/docker dev-container configuration.
+- The build is hatchling via `pyproject.toml` only; there is no setuptools shim.
+
 ### Configuration Files
 - `pyproject.toml` - Project dependencies and Pixi task definitions
 - `ruff.toml` - Code formatting/linting configuration (100 char line length)
@@ -86,6 +98,14 @@ Bencher is a benchmarking framework built around these core concepts:
 - Coverage reporting with coverage.py
 - Examples serve as integration tests
 - Meta-generated examples in `bencher/example/meta/`
+- **Collect/render split coverage** (`bencher/render.py`): three layers guard the
+  out-of-process render pipeline against divergence from the normal `plot_sweep` path —
+  (A) parity tests in `test/test_render.py` assert `collect()` computes the same dataset
+  as `plot_sweep()`; (B) `test/test_split_render_examples.py` round-trips every result
+  type through save → load → render; (C) setting `BENCHER_FORCE_SPLIT_RENDER=1` reroutes
+  every auto_plot report build through that serialize/render-from-loaded path, so
+  `pixi run test-split` re-runs the *entire* suite over the split pipeline (its own CI
+  job, `ci-split`).
 
 ### Generated Example Naming Convention
 

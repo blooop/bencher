@@ -1,26 +1,45 @@
 from __future__ import annotations
-import panel as pn
-import holoviews as hv
-import numpy as np
-from param import Parameter
+
 from functools import partial
 from itertools import product as iterproduct
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
+import holoviews as hv
+import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
+import numpy as np
+import panel as pn
+import xarray as xr
+from param import Parameter
+
+from bencher.results.bench_result_base import ReduceType
+from bencher.results.pane_result import PaneResult
 from bencher.utils import (
+    get_nearest_coords,
     get_nearest_coords1D,
     hmap_canonical_input,
-    get_nearest_coords,
+    label_with_units,
     listify,
 )
-from bencher.results.video_result import VideoResult
-from bencher.results.bench_result_base import ReduceType
-
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
-hv.extension("bokeh", "plotly")
+# NOTE: plotly is intentionally NOT registered here. Nothing in bencher renders
+# through the holoviews plotly backend (Surface/Volume use plotly.graph_objs
+# directly via pn.pane.Plotly), and registering it eagerly costs ~6s at import.
+hv.extension("bokeh")
+
+# What a `to_*_ds` renderer actually hands back (plan 23 P12).
+#
+# Without over_time it is a holoviews object. *With* over_time the plot gets wrapped
+# for the time slider -- `_holomap_with_slider_bottom` returns a `pn.Column`, or a
+# `pn.Tabs` when `show_aggregated_time_tab` adds the aggregated tab, or the bare
+# `hv.HoloMap` if Panel produced no widgets to rearrange. So the return type crosses
+# the holoviews/panel boundary, which is why several of these methods were annotated
+# with a concrete `hv.Curve`/`hv.Violin` they could never return.
+#
+# Enumerated rather than collapsed to `Any`: the four shapes are exactly what a caller
+# has to handle, and `pn.Column`/`pn.Tabs` are the ones that surprise -- a caller doing
+# `.opts(...)` on the result works until someone enables over_time.
+PlotResult = hv.Overlay | hv.HoloMap | pn.Column | pn.Tabs
 
 # Flag to enable or disable tap tool functionality in visualizations
 use_tap = True
@@ -28,7 +47,23 @@ use_tap = True
 _AGG_TITLE = "All Time Points (aggregated)"
 
 
-class HoloviewResult(VideoResult):
+class HoloviewResult(PaneResult):
+    # Element types that carry the shared default figure size. Centralized here (rather
+    # than inline in set_default_opts) so tests can assert coverage stays in sync as new
+    # element types are added. HeatMap/GridSpace are excluded because they take extra opts.
+    DEFAULT_SIZED_ELEMENTS = (
+        hv.Curve,
+        hv.Points,
+        hv.Bars,
+        hv.Scatter,
+        hv.BoxWhisker,
+        hv.Violin,
+        hv.Histogram,
+        hv.Area,
+        hv.ErrorBars,
+        hv.HexTiles,
+    )
+
     @staticmethod
     def set_default_opts(width: int = 600, height: int = 600) -> dict:
         """Set default options for HoloViews visualizations.
@@ -42,12 +77,10 @@ class HoloviewResult(VideoResult):
         """
         width_height = {"width": width, "height": height, "tools": ["hover"]}
         hv.opts.defaults(
-            hv.opts.Curve(**width_height),
-            hv.opts.Points(**width_height),
-            hv.opts.Bars(**width_height),
-            hv.opts.Scatter(**width_height),
-            hv.opts.BoxWhisker(**width_height),
-            hv.opts.Violin(**width_height),
+            *(
+                getattr(hv.opts, element.__name__)(**width_height)
+                for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS
+            ),
             hv.opts.HeatMap(cmap="plasma", **width_height, colorbar=True),
             # hv.opts.Surface(**width_heigh),
             hv.opts.GridSpace(plot_size=400),
@@ -138,15 +171,32 @@ class HoloviewResult(VideoResult):
 
     @staticmethod
     def _apply_opts(plot, **opts_kwargs):
-        """Apply .opts() to a plot, handling panel.pane.HoloViews wrappers.
+        """Apply .opts() to a plot, handling panel wrappers and layout containers.
 
-        When hvplot is called with widget_location, it returns a panel pane
-        whose underlying .object is the actual holoviews element.
+        hvplot may return any of:
+          (a) a bare HoloViews element/DynamicMap/Overlay (has ``.opts``),
+          (b) a ``pn.pane.HoloViews`` wrapper whose underlying ``.object`` is the
+              actual holoviews element, or
+          (c) a panel layout container (``Row``/``Column``/``WidgetBox``) — this
+              happens when ``widget_location`` splits the plot from its widgets,
+              e.g. an over_time time-series line with a categorical ``by`` widget.
+              The HoloViews pane is then nested inside ``.objects``.
+
+        Without the container case, options such as ``xrotation``, ``title`` and
+        ``ylabel`` were silently dropped for those split plots (the over_time
+        x-axis kept its default horizontal labels). Recurse into containers so
+        the options reach the nested pane.
         """
-        if hasattr(plot, "opts"):
-            return plot.opts(**opts_kwargs)
+        # Panel layout containers expose .objects (panes/elements never do).
+        if hasattr(plot, "objects") and not hasattr(plot, "object"):
+            for child in plot.objects:
+                HoloviewResult._apply_opts(child, **opts_kwargs)
+            return plot
         if hasattr(plot, "object") and hasattr(plot.object, "opts"):
             plot.object = plot.object.opts(**opts_kwargs)
+            return plot
+        if hasattr(plot, "opts"):
+            return plot.opts(**opts_kwargs)
         return plot
 
     @staticmethod
@@ -197,7 +247,7 @@ class HoloviewResult(VideoResult):
 
     def _build_curve_overlay(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> hv.Overlay:
+    ) -> hv.Overlay | None:
         """Build a Curve (+ optional Spread) overlay for a single time slice or aggregated data.
 
         When ``_std`` exists in the dataset the spread band is rendered
@@ -209,6 +259,10 @@ class HoloviewResult(VideoResult):
         groupby dimensions by constructing ``hv.Dataset`` directly from the
         xarray Dataset.  The heavier DataFrame path is only used when manual
         groupby is required.
+
+        Returns ``None`` for a dataset with no dimensions -- there is nothing to put
+        on an axis, so callers forwarding the result into an ``hv`` composition have to
+        handle it.
         """
         var = result_var.name
         std_var = f"{var}_std"
@@ -221,6 +275,12 @@ class HoloviewResult(VideoResult):
             return None
         kdims = [d for d in ds_dims if d in float_names] or ds_dims[:1]
         groupby = [d for d in ds_dims if d not in kdims]
+
+        # Show units on both axes: x from the float input var, y from the result var
+        kwargs.setdefault("ylabel", label_with_units(result_var))
+        x_var = next((fv for fv in self.plt_cnt_cfg.float_vars if fv.name == kdims[0]), None)
+        if x_var is not None:
+            kwargs.setdefault("xlabel", label_with_units(x_var))
 
         vdims = [var, std_var] if has_spread else [var]
 
@@ -403,7 +463,7 @@ class HoloviewResult(VideoResult):
 
         input_vars = self.bench_cfg.input_vars
         num_inputs = self.plt_cnt_cfg.inputs_cnt
-        state = dict(x=None, y=None, update=False)
+        state = {"x": None, "y": None, "update": False}
 
         def _on_pointer(x, y):  # pragma: no cover
             x_nearest = get_nearest_coords1D(x, dataset.coords[input_vars[0].name].data)
@@ -501,14 +561,16 @@ class HoloviewResult(VideoResult):
             **kwargs,
         )
 
-    def result_var_to_container(self, result_var: Parameter) -> type:
+    def result_var_to_container(self, result_var: Parameter) -> type[pn.viewable.Viewable]:
         """Determine the appropriate container type for a given result variable.
 
         Args:
             result_var (Parameter): The result variable to find a container for.
 
         Returns:
-            type: The appropriate panel container type (PNG, Video, or Column).
+            The panel container type (PNG, Video, or Column). Narrower than a bare
+            ``type``, so that ``setup_results_and_containers`` calling it produces a
+            checked ``Viewable`` rather than an ``Any`` that satisfies any annotation.
         """
         if isinstance(result_var, ResultImage):
             return pn.pane.PNG
@@ -519,7 +581,7 @@ class HoloviewResult(VideoResult):
         result_var_plots: Parameter | list[Parameter],
         container: type | list[type] | None = None,
         **kwargs,
-    ) -> tuple[list[Parameter], list[pn.pane.panel]]:
+    ) -> tuple[list[Parameter], list[pn.viewable.Viewable | None]]:
         """Set up appropriate containers for result variables.
 
         Args:
@@ -528,18 +590,22 @@ class HoloviewResult(VideoResult):
             **kwargs: Additional options to pass to the container constructors.
 
         Returns:
-            tuple[list[Parameter], list[pn.pane.panel]]: Tuple containing:
-                - List of result variables
-                - List of initialized container instances
+            A tuple of the result variables as a list, and one initialized container per
+            variable. A container entry is ``None`` only when the caller passed an
+            explicit ``None`` in ``container``; ``result_var_to_container`` itself always
+            yields a class.
         """
-        result_var_plots = listify(result_var_plots)
+        # A fresh name rather than rebinding the parameter: assigning back keeps the
+        # declared `Parameter | list[Parameter]` as the type's upper bound, so the
+        # single-Parameter arm still leaks into the return.
+        plots: list[Parameter] = listify(result_var_plots) or []
         if container is None:
-            containers = [self.result_var_to_container(rv) for rv in result_var_plots]
+            containers = [self.result_var_to_container(rv) for rv in plots]
         else:
-            containers = listify(container)
+            containers = listify(container) or []
 
         cont_instances = [c(**kwargs) if c is not None else None for c in containers]
-        return result_var_plots, cont_instances
+        return plots, cont_instances
 
     def to_error_bar(self, result_var: Parameter | str | None = None, **kwargs) -> hv.Bars:
         """Convert the dataset to an ErrorBars visualization for a specific result variable.

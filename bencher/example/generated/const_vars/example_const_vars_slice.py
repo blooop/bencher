@@ -39,11 +39,11 @@ def example_const_vars_slice(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Const Vars: Slicing a 3D Space."""
     bench = ServerBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
-        input_vars=["cpu_load", "memory_pct"], result_vars=["latency"], const_vars=dict(disk_io=0.5)
+        input_vars=["cpu_load", "memory_pct"], result_vars=["latency"], const_vars={"disk_io": 0.5}
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_const_vars_slice, level=3)
+    bn.run(example_const_vars_slice, subsampling_divisions=3)

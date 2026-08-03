@@ -85,4 +85,4 @@ def example_regression_tuning_step(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_regression_tuning_step, level=3)
+    bn.run(example_regression_tuning_step, subsampling_divisions=3)

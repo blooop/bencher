@@ -5,6 +5,7 @@ performance tracking across commits via the documentation gallery.
 """
 
 import inspect
+
 import bencher as bn
 from bencher.example.example_self_benchmark import BencherSelfBenchmark, TrivialWorkload
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase

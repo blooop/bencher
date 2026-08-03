@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import holoviews as hv
 import numpy as np
-from param import Parameter
 import xarray as xr
+from param import Parameter
 
-from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import SCALAR_RESULT_TYPES
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.variables.results import SCALAR_RESULT_TYPES
 
 
 class BandResult(HoloviewResult):
@@ -38,10 +38,10 @@ class BandResult(HoloviewResult):
         kwargs.pop("agg_fn", None)
         return self.filter(
             self.to_band_ds,
-            float_range=VarRange(0, None),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(1, None),
-            input_range=VarRange(0, None),
+            float_range=VarRange.unbounded(),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.unbounded(),
             reduce=ReduceType.NONE,
             target_dimension=None,
             result_var=result_var,

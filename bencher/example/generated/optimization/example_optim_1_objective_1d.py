@@ -31,7 +31,7 @@ def example_optim_1_objective_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
     bench.plot_sweep(
         input_vars=["cpu_cores"],
         result_vars=["performance"],
-        const_vars=dict(noise_scale=0.1),
+        const_vars={"noise_scale": 0.1},
         description="Single-objective optimization over 1D input space using Optuna. The optimizer searches for the parameter combination that maximizes performance.",
         post_description="The Optuna importance plot shows which input parameters most affect the objective.",
     )
@@ -40,4 +40,4 @@ def example_optim_1_objective_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
 
 
 if __name__ == "__main__":
-    bn.run(example_optim_1_objective_1d, level=3, repeats=3, optimise=30)
+    bn.run(example_optim_1_objective_1d, subsampling_divisions=3, repeats=3, optimise=30)

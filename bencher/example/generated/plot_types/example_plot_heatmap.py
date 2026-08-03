@@ -1,8 +1,8 @@
 """Auto-generated example: Plot Type: Heatmap."""
 
-import bencher as bn
-
 import math
+
+import bencher as bn
 
 
 class HeatmapDemo(bn.ParametrizedSweep):
@@ -27,4 +27,4 @@ def example_plot_heatmap(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_plot_heatmap, level=2)
+    bn.run(example_plot_heatmap, subsampling_divisions=2)

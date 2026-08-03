@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import warnings
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from enum import Enum
@@ -7,9 +9,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from param import Integer, Number, Selector
 import yaml
-from bencher.variables.sweep_base import SweepBase, shared_slots
+from param import Integer, Number, Selector
+
+from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, SweepBase, shared_slots
+
+logger = logging.getLogger(__name__)
 
 
 # Sentinel value used to indicate that the actual selectable values for a SweepSelector
@@ -52,11 +57,14 @@ class SweepSelector(Selector, SweepBase):
             self.samples = samples
         self.optimize = optimize
 
-    def values(self) -> list[Any]:
+    def values(self) -> list[Any] | np.ndarray:
         """Return all the values for the parameter sweep.
 
         Returns:
-            list[Any]: A list of parameter values to sweep through
+            list[Any] | np.ndarray: The parameter values to sweep through. The union is
+            inherited from the base contract, which has to admit the numpy array
+            ``FloatSweep.values`` returns; narrowing it would make that override an LSP
+            violation.
         """
         return self.indices_to_samples(self.samples, self.objects)
 
@@ -187,9 +195,7 @@ class SweepSelector(Selector, SweepBase):
         try:
             owner_param.update(**{self.name: candidate_default})
         except (ValueError, TypeError) as e:  # pragma: no cover - param validation edge case
-            import logging
-
-            logging.warning(
+            logger.warning(
                 "Failed to update param '%s' with value %r: %s", self.name, candidate_default, e
             )
 
@@ -266,7 +272,7 @@ class StringSweep(SweepSelector):
         units: str = "ul",
         doc: str | None = None,
         **params,
-    ) -> "StringSweep":
+    ) -> StringSweep:
         """Create a StringSweep intended for later population.
 
         Parameters
@@ -360,7 +366,7 @@ class YamlSelection(str):
     def __repr__(self) -> str:
         return f"YamlSelection(key={self.key()!r}, value={self.value()!r})"
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, YamlSelection):
             return (self.key(), self.value()) == (other.key(), other.value())
         if isinstance(other, str):
@@ -417,7 +423,9 @@ class YamlSweep(SweepSelector):
 
         entries = self._load_yaml(path)
         if not isinstance(entries, Mapping):
-            raise ValueError(
+            # ValueError, not TypeError: this is the documented contract exercised by
+            # test_yaml_sweep_requires_mapping, and matches the other YamlSweep raises.
+            raise ValueError(  # noqa: TRY004
                 "YamlSweep requires the YAML file to contain a mapping at the top level"
             )
 
@@ -557,22 +565,24 @@ class IntSweep(Integer, SweepBase):
         return self.indices_to_samples(self.samples, sample_values)
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
-    def _validate_value(self, val, allow_None):
-        if callable(val):
+    def _validate_value(self, value, allow_None):
+        if callable(value):
             return
 
-        if allow_None and val is None:
+        if allow_None and value is None:
             return
 
-        if not isinstance(val, (int, np.integer)):
-            raise ValueError(
-                "Integer parameter %r must be an integer, not type %r." % (self.name, type(val))
+        if not isinstance(value, (int, np.integer)):
+            # ValueError, not TypeError: mirrors param.Integer._validate_value so that
+            # IntSweep validation stays indistinguishable from the param base class.
+            raise ValueError(  # noqa: TRY004
+                f"Integer parameter {self.name!r} must be an integer, not type {type(value)!r}."
             )
 
     ###THESE ARE COPIES OF INTEGER VALIDATION BUT ALSO ALLOW NUMPY INT TYPES
     def _validate_step(self, val, step):
         if step is not None and not isinstance(step, (int, np.integer)):
-            raise ValueError("Step can only be None or an integer value, not type %r" % type(step))
+            raise ValueError(f"Step can only be None or an integer value, not type {type(step)!r}")
 
 
 class FloatSweep(Number, SweepBase):
@@ -629,14 +639,18 @@ class FloatSweep(Number, SweepBase):
         sample_values = tuple(self.sample_values) if self.sample_values is not None else None
         return super()._sweep_identity() + (self.sweep_bounds, sample_values, self.step)
 
-    def values(self) -> list[float]:
+    def values(self) -> list[float] | np.ndarray:
         """Return all the values for the parameter sweep.
 
         If sample_values is provided, returns those values. Otherwise generates values
         within the specified bounds, either using linspace (when step is None) or arange.
 
         Returns:
-            list[float]: A list of float values to sweep through
+            list[float] | np.ndarray: The values to sweep through -- a list only when
+            they came from ``sample_values``; the generated paths return the numpy array
+            from ``linspace``/``arange`` directly. Deliberately not coerced with
+            ``list(...)``: the array flows into hashing and dataset construction, so
+            changing its runtime type is a behaviour change, not an annotation fix.
         """
         samps = self.samples
         if self.sample_values is None:
@@ -646,10 +660,16 @@ class FloatSweep(Number, SweepBase):
                     "Use FloatSweep(bounds=[lo, hi]) or "
                     "FloatSweep(sample_values=[...])."
                 )
+            lo, hi = self.sweep_bounds[0], self.sweep_bounds[1]
+            # A zero-width range has one distinct value.  Neither generator gives
+            # that: linspace would return `samps` copies of it, and arange an
+            # empty array.
+            if lo == hi:
+                return np.array([float(lo)])
             if self.step is None:
-                return np.linspace(self.sweep_bounds[0], self.sweep_bounds[1], samps)
+                return np.linspace(lo, hi, samps)
 
-            return np.arange(self.sweep_bounds[0], self.sweep_bounds[1], self.step, dtype=float)
+            return np.arange(lo, hi, self.step, dtype=float)
         return self.sample_values
 
 
@@ -678,6 +698,7 @@ def sweep(
     *,
     samples: int | None = None,
     bounds: tuple[float, float] | None = None,
+    max_subsampling_divisions: int | None = None,
     max_level: int | None = None,
 ) -> dict[str, Any] | SweepBase:
     """Create a parameter specification for use in plot_sweep input_vars.
@@ -698,13 +719,25 @@ def sweep(
         values: A list of values for the parameter.
         samples: The number of samples. Must be > 0 if provided.
         bounds: ``(low, high)`` tuple to override the sweep range.
-        max_level: The maximum level. Must be > 0 if provided.
+        max_subsampling_divisions: The maximum subsampling_divisions. Must be > 0 if provided.
 
     Returns:
         dict[str, Any] | SweepBase: A parameter dict (for string names) or configured sweep object.
     """
-    if max_level is not None and max_level <= 0:
-        raise ValueError("max_level must be greater than 0")
+    if max_level is not None:
+        if max_subsampling_divisions is not None:
+            raise TypeError(
+                "Cannot pass both 'max_level' and 'max_subsampling_divisions'; use 'max_subsampling_divisions' only."
+            )
+        warnings.warn(
+            "The 'max_level' parameter is deprecated; use 'max_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        max_subsampling_divisions = max_level
+
+    if max_subsampling_divisions is not None and max_subsampling_divisions <= 0:
+        raise ValueError("max_subsampling_divisions must be greater than 0")
 
     if samples is not None and samples <= 0:
         raise ValueError("samples must be greater than 0")
@@ -715,12 +748,17 @@ def sweep(
             "Use values alone, or bounds/samples together."
         )
 
+    # Validate the range here rather than leaving it to resolution time: for the
+    # deferred string form that is mid-run, long after the spec was declared.
+    if bounds is not None and bounds[0] > bounds[1]:
+        raise ValueError(f"bounds low must not exceed high, got bounds={tuple(bounds)}")
+
     # If a SweepBase param object is passed, delegate to its methods directly
     if isinstance(name, SweepBase):
-        if max_level is not None:
+        if max_subsampling_divisions is not None:
             raise ValueError(
-                "max_level is not supported when passing a SweepBase object to sweep(). "
-                "Use the string-based API instead: sweep('param_name', max_level=N)"
+                "max_subsampling_divisions is not supported when passing a SweepBase object to sweep(). "
+                "Use the string-based API instead: sweep('param_name', max_subsampling_divisions=N)"
             )
         if values is not None:
             return name.with_sample_values(values)
@@ -733,7 +771,7 @@ def sweep(
     return {
         "name": name,
         "values": values,
-        "max_level": max_level,
+        "max_subsampling_divisions": max_subsampling_divisions,
         "samples": samples,
         "bounds": bounds,
     }
@@ -745,29 +783,44 @@ def p(
     *,
     samples: int | None = None,
     bounds: tuple[float, float] | None = None,
-    max_level: int | None = None,
+    max_subsampling_divisions: int | None = None,
 ) -> dict[str, Any] | SweepBase:
     """Deprecated: use ``bn.sweep()`` instead."""
-    import warnings
-
     warnings.warn("bn.p() is deprecated, use bn.sweep() instead", DeprecationWarning, stacklevel=2)
-    return sweep(name, values, samples=samples, bounds=bounds, max_level=max_level)
+    return sweep(
+        name,
+        values,
+        samples=samples,
+        bounds=bounds,
+        max_subsampling_divisions=max_subsampling_divisions,
+    )
 
 
-def with_level(arr: list, level: int) -> list:
-    """Apply level-based sampling to a list of values.
+def with_subsampling_divisions(arr: list, subsampling_divisions: int) -> list:
+    """Apply subsampling_divisions-based sampling to a list of values.
 
-    Uses the same level→sample-count table as SweepBase.with_level and picks
+    Uses the same subsampling_divisions→sample-count table as SweepBase.with_subsampling_divisions and picks
     evenly spaced items from *arr* by index.
 
     Args:
         arr (list): list of values to sample from
-        level (int): The sampling level to apply (higher levels provide more samples)
+        subsampling_divisions (int): The sampling subsampling_divisions to apply (higher subsampling_divisions provides more samples)
 
     Returns:
-        list: The level-sampled values
+        list: The subsampling_divisions-sampled values
     """
-    assert level >= 1
-    level_samples = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
-    n = level_samples[min(12, level)]
+    if subsampling_divisions < 1:
+        raise ValueError(f"subsampling_divisions must be >= 1, got {subsampling_divisions}")
+    max_index = len(SUBSAMPLING_DIVISIONS_SAMPLES) - 1
+    n = SUBSAMPLING_DIVISIONS_SAMPLES[min(max_index, subsampling_divisions)]
     return SweepBase.indices_to_samples(None, n, list(arr))
+
+
+def with_level(arr: list, level: int) -> list:
+    """Deprecated: use :func:`with_subsampling_divisions` instead."""
+    warnings.warn(
+        "'with_level' is deprecated; use 'with_subsampling_divisions' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return with_subsampling_divisions(arr, subsampling_divisions=level)

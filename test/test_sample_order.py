@@ -1,4 +1,5 @@
 import unittest
+
 import bencher as bn
 
 
@@ -12,10 +13,11 @@ class OrderExample(bn.ParametrizedSweep):
     call_index = bn.ResultFloat()
 
     def benchmark(self):
-        # Maintain a per-instance counter to reflect traversal order
+        # Maintain a per-instance counter to reflect traversal order. Set lazily rather
+        # than in __init__ so the param base class stays in charge of construction.
         idx = getattr(self, "_call_counter", 0)
         self.call_index = idx
-        setattr(self, "_call_counter", idx + 1)
+        self._call_counter = idx + 1  # pylint: disable=attribute-defined-outside-init
 
 
 class TestSampleOrder(unittest.TestCase):
@@ -36,7 +38,7 @@ class TestSampleOrder(unittest.TestCase):
             cache_results=False,
             cache_samples=False,
             executor=bn.Executors.SERIAL,
-            level=2,  # keep dataset small and consistent without mutating class defaults
+            subsampling_divisions=2,  # keep dataset small and consistent without mutating class defaults
         )
 
         res_in = bench1.plot_sweep(

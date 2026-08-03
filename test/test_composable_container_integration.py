@@ -1,14 +1,14 @@
-import pytest
 import numpy as np
-import xarray as xr
 import panel as pn
+import pytest
+import xarray as xr
 
 from bencher.results.composable_container import (
-    ComposeType,
     ComposableContainerBase,
-    ComposableContainerVideo,
-    ComposableContainerPanel,
     ComposableContainerDataset,
+    ComposableContainerPanel,
+    ComposableContainerVideo,
+    ComposeType,
     RenderCfg,
 )
 

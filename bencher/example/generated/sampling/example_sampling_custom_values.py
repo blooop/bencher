@@ -1,6 +1,7 @@
 """Auto-generated example: Sampling: Custom Values."""
 
 import math
+
 import bencher as bn
 
 
@@ -45,4 +46,4 @@ def example_sampling_custom_values(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_sampling_custom_values, level=3)
+    bn.run(example_sampling_custom_values, subsampling_divisions=3)

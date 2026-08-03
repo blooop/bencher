@@ -1,8 +1,9 @@
 """Auto-generated example: 0 Float, 2 Categorical (over time repeats)."""
 
 import random
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class NetworkConfig(bn.ParametrizedSweep):
@@ -48,4 +49,4 @@ def example_sweep_0_float_2_cat_over_time_repeats(
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_0_float_2_cat_over_time_repeats, level=4, over_time=True)
+    bn.run(example_sweep_0_float_2_cat_over_time_repeats, subsampling_divisions=4, over_time=True)

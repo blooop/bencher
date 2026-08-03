@@ -1,8 +1,10 @@
 """Auto-generated example: Composable Panel: ComposeType.down."""
 
 import math
+
 import numpy as np
 from PIL import Image, ImageDraw
+
 import bencher as bn
 
 
@@ -70,4 +72,4 @@ def example_composable_panel_down(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_composable_panel_down, level=2)
+    bn.run(example_composable_panel_down, subsampling_divisions=2)

@@ -16,4 +16,4 @@ def example_container_tab_tabs(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
 
 
 if __name__ == "__main__":
-    bn.run(example_container_tab_tabs, level=2)
+    bn.run(example_container_tab_tabs, subsampling_divisions=2)

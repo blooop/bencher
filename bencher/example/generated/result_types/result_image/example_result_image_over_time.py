@@ -1,10 +1,12 @@
 """Auto-generated example: ResultImage: Over Time Slider."""
 
-import bencher as bn
-from datetime import datetime, timedelta
 import math
+from datetime import datetime, timedelta
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+import bencher as bn
 
 
 def _polygon_points(radius, sides, start_angle=0.0):
@@ -66,4 +68,4 @@ def example_result_image_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_result_image_over_time, level=3, over_time=True)
+    bn.run(example_result_image_over_time, subsampling_divisions=3, over_time=True)

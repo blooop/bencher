@@ -1,51 +1,62 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import os
-from typing import Any, Literal, Callable
+from collections import defaultdict
+from collections.abc import Callable
+from copy import deepcopy
 from enum import Enum, auto
+from functools import partial
+from textwrap import wrap
+from typing import Any, Literal, assert_never
+
+import holoviews as hv
 import numpy as np
+import pandas as pd
+import panel as pn
 import xarray as xr
 from param import Parameter
-import holoviews as hv
-from functools import partial
-import panel as pn
-from textwrap import wrap
 
-from bencher.utils import int_to_col, color_tuple_to_css, callable_name
-
-from bencher.variables.parametrised_sweep import ParametrizedSweep
-from bencher.variables.inputs import with_level
-
-from bencher.variables.results import OptDir
-from copy import deepcopy
-from bencher.variables.results import ResultFloat, ResultBool
-from bencher.plotting.plot_filter import VarRange, PlotFilter
-from bencher.utils import listify
-
-from bencher.variables.results import (
-    ResultReference,
-    ResultDataSet,
-    ResultVideo,
-    ResultImage,
-    ResultRerun,
+from bencher.bench_cfg import BenchCfg
+from bencher.plotting.plot_filter import PlotFilter, VarRange
+from bencher.plotting.plt_cnt_cfg import PltCntCfg
+from bencher.results.composable_container.composable_container_base import (
+    ComposableContainerBase,
+    ComposeType,
+    PaneLayout,
 )
-
 from bencher.results.composable_container.composable_container_panel import (
     ComposableContainerPanel,
 )
-from bencher.results.composable_container.composable_container_base import (
-    ComposeType,
-    ComposableContainerBase,
-    PaneLayout,
+from bencher.utils import (
+    AggFn,
+    callable_name,
+    color_tuple_to_css,
+    int_to_col,
+    listify,
+    normalize_agg_fn,
+)
+from bencher.variables.inputs import with_subsampling_divisions
+from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.results import (
+    OptDir,
+    ResultBool,
+    ResultDataSet,
+    ResultFloat,
+    ResultImage,
+    ResultReference,
+    ResultRerun,
+    ResultVideo,
+    result_is_missing,
 )
 
-from collections import defaultdict
+logger = logging.getLogger(__name__)
 
-import pandas as pd
-
-from bencher.bench_cfg import BenchCfg
-from bencher.plotting.plt_cnt_cfg import PltCntCfg
+# Shared defaults for BenchResultBase.filter(). VarRange is frozen, so a single
+# instance can back every call; module-level names also keep ruff's B008 happy.
+_ANY_COUNT = VarRange.unbounded()
+_AT_LEAST_ONE = VarRange.at_least(1)
 
 # todo add plugins
 # https://gist.github.com/dorneanu/cce1cd6711969d581873a88e0257e312
@@ -58,6 +69,21 @@ class ReduceType(Enum):
     REDUCE = auto()  # get the mean and std dev of the data along the "repeat" dimension
     MINMAX = auto()  # get the minimum and maximum of data along the "repeat" dimension
     NONE = auto()  # don't reduce
+
+
+# ReduceType with AUTO excluded: the return type of _resolve_auto, so that the match in
+# to_dataset is exhaustive over four members rather than relying on a catch-all.
+#
+# P1's caveat here is now DISCHARGED: plan 23 P12 enabled `invalid-return-type`, which is
+# the rule that checks _resolve_auto really returns a member of this Literal. The proof is
+# therefore complete at check time in both directions -- verified by seeding
+# `return ReduceType.AUTO` on the `None` path, which ty rejects with
+# `expected Literal[SQUEEZE, REDUCE, MINMAX, NONE], found Literal[ReduceType.AUTO]`.
+# Adding a ReduceType member without updating both this alias and the match now fails
+# `pixi run ty` rather than at runtime in assert_never.
+ResolvedReduceType = Literal[
+    ReduceType.SQUEEZE, ReduceType.REDUCE, ReduceType.MINMAX, ReduceType.NONE
+]
 
 
 class EmptyContainer:
@@ -93,10 +119,27 @@ def convert_dataset_bool_dims_to_str(dataset: xr.Dataset) -> xr.Dataset:
     return dataset
 
 
+def _accepts_keyword(callback: Callable, name: str) -> bool:
+    """True when *callback* can be called with the *name* keyword.
+
+    ``plot_callback`` is a public extension point: a caller may pass any callable
+    to ``map_plot_panes``, including one whose signature is exactly
+    ``(dataset, result_var)``.  Render-internal keywords must therefore be
+    offered rather than imposed — a callback that does not declare the keyword
+    (and has no ``**kwargs`` to absorb it) is called the way it always was
+    instead of raising ``TypeError``.  Uninspectable callables (C builtins) are
+    treated as not accepting it, which is the safe direction.
+    """
+    try:
+        params = inspect.signature(callback).parameters
+    except (TypeError, ValueError):
+        return False
+    return name in params or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+
 class BenchResultBase:
     def __init__(self, bench_cfg: BenchCfg) -> None:
         self.bench_cfg = bench_cfg
-        # self.wrap_long_time_labels(bench_cfg)  # todo remove
         self.ds = xr.Dataset()
         self.object_index = []
         self.hmaps = defaultdict(dict)
@@ -108,12 +151,6 @@ class BenchResultBase:
         self.regression_report = None
         self.perf_report = None
         self._to_dataset_cache: dict = {}
-
-        # self.width=600/
-        # self.height=600
-
-        #   bench_res.objects.append(rv)
-        # bench_res.reference_index = len(bench_res.objects)
 
     def to_xarray(self) -> xr.Dataset:
         return self.ds
@@ -168,22 +205,34 @@ class BenchResultBase:
         return bench_cfg
 
     def post_setup(self):
-        self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg)
+        self.plt_cnt_cfg = PltCntCfg.generate_plt_cnt_cfg(self.bench_cfg, self.ds)
         self.bench_cfg = self.wrap_long_time_labels(self.bench_cfg)
         self.ds = convert_dataset_bool_dims_to_str(self.ds)
         self._to_dataset_cache.clear()
 
     def result_samples(self) -> int:
-        """The number of samples in the results dataframe"""
-        return self.ds.count()
+        """The number of values recorded, for the most-populated data variable.
+
+        This counts *cells*, not sweep points: the repeat dimension multiplies it, so a
+        two-point sweep at ``repeats=3`` reports 6. Returns 0 for a dataset with no data
+        variables.
+
+        Max across data variables, rather than sum or first:
+
+        - sum would double-count -- two result variables over two samples is 2, not 4;
+        - first would undercount a sweep whose other variables partly failed, since a
+          failed sample leaves a NaN that ``count()`` skips.
+        """
+        counts = self.ds.count()
+        return max((int(counts[name].values) for name in counts.data_vars), default=0)
 
     def to_hv_dataset(
         self,
-        reduce: ReduceType = ReduceType.AUTO,
+        reduce: ReduceType | None = ReduceType.AUTO,
         result_var: ResultFloat | None = None,
-        level: int | None = None,
+        subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
+        agg_fn: AggFn | str | None = None,
     ) -> hv.Dataset:
         """Generate a holoviews dataset from the xarray dataset.
 
@@ -198,7 +247,7 @@ class BenchResultBase:
             ds_out = self.to_dataset(
                 reduce,
                 result_var=result_var,
-                level=level,
+                subsampling_divisions=subsampling_divisions,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
@@ -210,16 +259,32 @@ class BenchResultBase:
             self.to_dataset(
                 reduce,
                 result_var=result_var,
-                level=level,
+                subsampling_divisions=subsampling_divisions,
                 agg_over_dims=agg_over_dims,
                 agg_fn=agg_fn,
                 deep=False,
             )
         )
 
-    def _resolve_auto(self, reduce: ReduceType) -> ReduceType:
-        """Resolve AUTO to a concrete ReduceType based on repeat count."""
-        if reduce == ReduceType.AUTO:
+    def _resolve_auto(self, reduce: ReduceType | None) -> ResolvedReduceType:
+        """Resolve AUTO (and the legacy `None` sentinel) to a concrete ReduceType.
+
+        `reduce=None` reaches here from public methods that declare
+        `reduce: ReduceType | None` and forward it unchanged (`map_plot_panes`,
+        `filter`, ...). It has always meant "no reduction": it used to fall through
+        `to_dataset`'s catch-all arm. Mapping it *here* rather than at the callers
+        matters, because `to_hv_dataset` branches on `reduce == ReduceType.NONE`
+        beforehand and `None` deliberately does not match that, which preserves the
+        unit-carrying kdims of its generic arm.
+
+        NOTE (plan 23): `None` and `AUTO` meaning different things on one field is the
+        sentinel smell this plan exists to remove, and `map_plot_panes` defaulting to
+        "no reduction" disagrees with `to_hv_dataset`'s AUTO. Both are behaviour changes
+        that need a phase which can own them.
+        """
+        if reduce is None:
+            return ReduceType.NONE
+        if reduce is ReduceType.AUTO:
             return ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
         return reduce
 
@@ -227,26 +292,40 @@ class BenchResultBase:
         self,
         reduce: ReduceType,
         result_var: ResultFloat | str | None,
-        level: int | None,
+        subsampling_divisions: int | None,
         agg_over_dims: list[str] | None,
-        agg_fn: str | None,
+        agg_fn: AggFn | str | None,
     ) -> tuple:
-        """Build a hashable cache key from normalized to_dataset() arguments."""
+        """Build a hashable cache key from normalized to_dataset() arguments.
+
+        Raises:
+            ValueError: If ``agg_fn`` is outside the ``AggFn`` vocabulary. Validating
+                here is deliberate and load-bearing, not a side effect of key building:
+                ``to_dataset`` returns on a cache hit before reaching its ``match``, so
+                this is the only ``agg_fn`` check on the warm-cache path.
+        """
         reduce = self._resolve_auto(reduce)
         rv_key = result_var.name if isinstance(result_var, Parameter) else result_var
         # Normalize dimension order so aggregation over the same set shares cache entries
         dims_key = tuple(sorted(agg_over_dims)) if agg_over_dims else None
-        # fn is irrelevant when no agg dims — aggregation is skipped entirely
-        fn_key = (agg_fn or "mean").lower() if agg_over_dims else None
-        return (reduce, rv_key, level, dims_key, fn_key)
+        # Validate unconditionally, even though the *key* only needs fn when there are
+        # agg dims (without them aggregation is skipped entirely, so every fn collapses
+        # to the same dataset — hence the None below, which keeps those calls sharing one
+        # cache entry). Gating the *validation* on agg_over_dims would make an unknown
+        # agg_fn raise or not depending on the data ("does this dim exist in the
+        # dataset?"), which is exactly the data-dependent validation plan 23 exists to
+        # remove. normalize_agg_fn is cheap, idempotent and total (None -> MEAN).
+        fn = normalize_agg_fn(agg_fn)
+        fn_key = fn if agg_over_dims else None
+        return (reduce, rv_key, subsampling_divisions, dims_key, fn_key)
 
     def to_dataset(
         self,
-        reduce: ReduceType = ReduceType.AUTO,
+        reduce: ReduceType | None = ReduceType.AUTO,
         result_var: ResultFloat | str | None = None,
-        level: int | None = None,
+        subsampling_divisions: int | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] | None = None,
+        agg_fn: AggFn | str | None = None,
         deep: bool = True,
     ) -> xr.Dataset:
         """Generate a summarised xarray dataset.
@@ -265,7 +344,13 @@ class BenchResultBase:
             a deep copy is returned so callers can safely mutate the result. Internal
             hot paths pass ``deep=False`` to reuse the cached object directly.
         """
-        cache_key = self._to_dataset_cache_key(reduce, result_var, level, agg_over_dims, agg_fn)
+        # NOTE: this call validates agg_fn (normalize_agg_fn, inside), and that is
+        # load-bearing rather than redundant with the match further down: on a cache
+        # hit we return two lines below and never reach the match, so this is the
+        # *only* validation on the warm-cache path. Do not "optimize" it away.
+        cache_key = self._to_dataset_cache_key(
+            reduce, result_var, subsampling_divisions, agg_over_dims, agg_fn
+        )
         if cache_key in self._to_dataset_cache:
             cached = self._to_dataset_cache[cache_key]
             return cached.copy(deep=True) if deep else cached
@@ -297,22 +382,26 @@ class BenchResultBase:
 
         match reduce:
             case ReduceType.REDUCE:
-                ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
-                ds_reduce_std = ds_out.std(dim="repeat", keep_attrs=False)
-                # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std
-                n_repeats = ds_out.sizes["repeat"]
+                ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
+                ds_reduce_std = ds_out.std(dim="repeat", skipna=True, keep_attrs=False)
+                # For ResultBool: use binomial SE sqrt(p*(1-p)/n) instead of sample std.
+                # n is the per-cell count of *valid* (non-NaN) repeats, not the full
+                # repeat dim size: NaN is the "missing" sentinel (see ResultBool /
+                # ResultFloat.__init__) and p above is a skipna mean, so dividing by the
+                # full dim size would understate the SE when any repeat is missing.
                 for rv in self.bench_cfg.result_vars:
                     if isinstance(rv, ResultBool) and rv.name in ds_reduce_std.data_vars:
                         p = ds_reduce_mean[rv.name]
-                        ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_repeats)
+                        n_valid = ds_out[rv.name].notnull().sum(dim="repeat")
+                        ds_reduce_std[rv.name] = np.sqrt(p * (1 - p) / n_valid)
                 # Assign std vars directly onto mean dataset (avoids xr.merge copy)
                 for var in ds_reduce_std.data_vars:
                     ds_reduce_mean[f"{var}_std"] = ds_reduce_std[var]
                 ds_out = ds_reduce_mean
             case ReduceType.MINMAX:  # TODO, need to pass mean, center of minmax, and minmax
-                ds_reduce_mean = ds_out.mean(dim="repeat", keep_attrs=True)
-                ds_reduce_min = ds_out.min(dim="repeat")
-                ds_reduce_max = ds_out.max(dim="repeat")
+                ds_reduce_mean = ds_out.mean(dim="repeat", skipna=True, keep_attrs=True)
+                ds_reduce_min = ds_out.min(dim="repeat", skipna=True)
+                ds_reduce_max = ds_out.max(dim="repeat", skipna=True)
                 # Assign range vars directly onto mean dataset (avoids xr.merge copy)
                 ds_range = ds_reduce_max - ds_reduce_min
                 for var in ds_range.data_vars:
@@ -327,9 +416,11 @@ class BenchResultBase:
                     ds_out = ds_out.squeeze("repeat", drop=True).copy(deep=True)
                 else:
                     ds_out = ds_out.squeeze(drop=True).copy(deep=True)
-            case _:
-                # ReduceType.NONE — deep copy for mutation safety
+            case ReduceType.NONE:
+                # deep copy for mutation safety
                 ds_out = ds_out.copy(deep=True)
+            case _ as unreachable:
+                assert_never(unreachable)
 
         # Optional aggregation across non-repeat dimensions (e.g., categorical)
         if agg_over_dims:
@@ -339,52 +430,59 @@ class BenchResultBase:
                 # If some requested dims are missing, log an info for visibility
                 missing = [d for d in agg_over_dims if d not in dims_present]
                 if missing:
-                    logging.info(
+                    logger.info(
                         "Aggregation requested for dims %s but only found %s in dataset dims %s",
                         agg_over_dims,
                         dims_present,
                         list(ds_out.dims),
                     )
 
-                # Support basic aggregations; default to mean
-                fn = (agg_fn or "mean").lower()
-                if fn == "sum":
-                    ds_out = ds_out.sum(dim=dims_present, skipna=True)
-                elif fn == "mean":
-                    ds_agg_mean = ds_out.mean(dim=dims_present, skipna=True)
-                    non_std_vars = [v for v in ds_out.data_vars if not v.endswith("_std")]
-                    if non_std_vars:
-                        ds_agg_std = ds_out[non_std_vars].std(dim=dims_present, skipna=True)
-                        ds_agg_std = rename_ds(ds_agg_std, "std")
-                        # Drop pre-existing _std vars that will be replaced by the
-                        # aggregation std (e.g. from repeat reduction) to avoid merge conflicts.
-                        expected_std = {f"{v}_std" for v in non_std_vars}
-                        old_std = [v for v in ds_agg_mean.data_vars if v in expected_std]
-                        if old_std:
-                            ds_agg_mean = ds_agg_mean.drop_vars(old_std)
-                        ds_out = xr.merge([ds_agg_mean, ds_agg_std])
-                    else:
-                        ds_out = ds_agg_mean
-                elif fn == "max":
-                    ds_out = ds_out.max(dim=dims_present, skipna=True)
-                elif fn == "min":
-                    ds_out = ds_out.min(dim=dims_present, skipna=True)
-                elif fn == "median":
-                    ds_out = ds_out.median(dim=dims_present, skipna=True)
-                else:
-                    # Fall back to mean if unknown string provided
-                    ds_out = ds_out.mean(dim=dims_present, skipna=True)
+                # Normalize at the boundary (raises on an unknown value — no more
+                # silent fall-back to mean), then match exhaustively (plan 24 A2/A3).
+                # This is the second normalize_agg_fn call on this path (the first is in
+                # _to_dataset_cache_key above) and both are needed: that one is the only
+                # validation when the cache hits and this one is the only thing that
+                # gives the match subject a type ty can check. Neither substitutes for
+                # the other; the function is idempotent, so calling it twice is free.
+                match normalize_agg_fn(agg_fn):
+                    case AggFn.MEAN:
+                        ds_agg_mean = ds_out.mean(dim=dims_present, skipna=True)
+                        non_std_vars = [v for v in ds_out.data_vars if not v.endswith("_std")]
+                        if non_std_vars:
+                            ds_agg_std = ds_out[non_std_vars].std(dim=dims_present, skipna=True)
+                            ds_agg_std = rename_ds(ds_agg_std, "std")
+                            # Drop pre-existing _std vars that will be replaced by the
+                            # aggregation std (e.g. from repeat reduction) to avoid merge conflicts.
+                            expected_std = {f"{v}_std" for v in non_std_vars}
+                            old_std = [v for v in ds_agg_mean.data_vars if v in expected_std]
+                            if old_std:
+                                ds_agg_mean = ds_agg_mean.drop_vars(old_std)
+                            ds_out = xr.merge([ds_agg_mean, ds_agg_std])
+                        else:
+                            ds_out = ds_agg_mean
+                    case AggFn.SUM:
+                        ds_out = ds_out.sum(dim=dims_present, skipna=True)
+                    case AggFn.MAX:
+                        ds_out = ds_out.max(dim=dims_present, skipna=True)
+                    case AggFn.MIN:
+                        ds_out = ds_out.min(dim=dims_present, skipna=True)
+                    case AggFn.MEDIAN:
+                        ds_out = ds_out.median(dim=dims_present, skipna=True)
+                    case _ as unreachable:
+                        assert_never(unreachable)
             else:
-                logging.warning(
+                logger.warning(
                     "Aggregation requested for dims %s but none were found in dataset dims %s; returning unaggregated dataset",
                     agg_over_dims,
                     list(ds_out.dims),
                 )
-        if level is not None:
+        if subsampling_divisions is not None:
             coords_no_repeat = {}
             for c, v in ds_out.coords.items():
                 if c != "repeat":
-                    coords_no_repeat[c] = with_level(v.to_numpy(), level)
+                    coords_no_repeat[c] = with_subsampling_divisions(
+                        v.to_numpy(), subsampling_divisions
+                    )
             ds_out = ds_out.sel(coords_no_repeat)
         self._to_dataset_cache[cache_key] = ds_out
         return ds_out.copy(deep=True) if deep else ds_out
@@ -412,9 +510,9 @@ class BenchResultBase:
                 # use [()] to convert from a 0d numpy array to a scalar
                 output.append(da.coords[iv.name].values[()])
             else:
-                logging.warning(f"values size: {da.coords[iv.name].values.size}")
+                logger.warning(f"values size: {da.coords[iv.name].values.size}")
                 output.append(max(da.coords[iv.name].values[()]))
-            logging.info(f"Maximum value of {iv.name}: {output[-1]}")
+            logger.info(f"Maximum value of {iv.name}: {output[-1]}")
         return output
 
     def get_optimal_value_indices(self, result_var: ParametrizedSweep) -> xr.DataArray:
@@ -432,7 +530,7 @@ class BenchResultBase:
         else:
             opt_val = result_da.min()
         indices = result_da.where(result_da == opt_val, drop=True).squeeze()
-        logging.info(f"optimal value of {result_var.name}: {opt_val.values}")
+        logger.info(f"optimal value of {result_var.name}: {opt_val.values}")
         return indices
 
     def get_optimal_inputs(
@@ -440,7 +538,7 @@ class BenchResultBase:
         result_var: ParametrizedSweep,
         keep_existing_consts: bool = True,
         as_dict: bool = False,
-    ) -> tuple[ParametrizedSweep, Any] | dict[ParametrizedSweep, Any]:
+    ) -> list[tuple[Parameter, Any]] | dict[Parameter, Any]:
         """Get a list of tuples of optimal variable names and value pairs, that can be fed in as constant values to subsequent parameter sweeps
 
         Args:
@@ -449,11 +547,14 @@ class BenchResultBase:
             as_dict (bool): return value as a dictionary
 
         Returns:
-            tuple[bn.ParametrizedSweep, Any]|[ParametrizedSweep, Any]: Tuples of variable name and optimal values
+            A list of ``(input_var, optimal_value)`` pairs, or that same mapping as a
+            dict when ``as_dict``. The keys are ``param.Parameter`` descriptors, not
+            ``ParametrizedSweep`` instances.
         """
         da = self.get_optimal_value_indices(result_var)
         if keep_existing_consts:
-            output = deepcopy(self.bench_cfg.const_vars)
+            # `or []`: const_vars is a param List, so it reads as `list | None`.
+            output = deepcopy(self.bench_cfg.const_vars) or []
         else:
             output = []
 
@@ -464,10 +565,10 @@ class BenchResultBase:
                 # use [()] to convert from a 0d numpy array to a scalar
                 output.append((iv, da.coords[iv.name].values[()]))
             else:
-                logging.warning(f"values size: {da.coords[iv.name].values.size}")
+                logger.warning(f"values size: {da.coords[iv.name].values.size}")
                 output.append((iv, max(da.coords[iv.name].values[()])))
 
-            logging.info(f"Maximum value of {iv.name}: {output[-1][1]}")
+            logger.info(f"Maximum value of {iv.name}: {output[-1][1]}")
         if as_dict:
             return dict(output)
         return output
@@ -498,8 +599,7 @@ class BenchResultBase:
 
         if isinstance(dataset, xr.DataArray):
             tit = [dataset.name]
-            for d in dataset.dims:
-                tit.append(d)
+            tit.extend(dataset.dims)
         else:
             tit = [result_var.name]
             tit.extend(list(dataset.sizes))
@@ -507,7 +607,12 @@ class BenchResultBase:
         return " vs ".join(tit)
 
     def get_results_var_list(self, result_var: ParametrizedSweep | None = None) -> list[Parameter]:
-        return self.bench_cfg.result_vars if result_var is None else listify(result_var)
+        if result_var is None:
+            # `or []`: result_vars is a param List, so it reads as `list | None`.
+            return self.bench_cfg.result_vars or []
+        # `or []` because listify returns None for a None input; unreachable here given
+        # the branch above, but the annotation has to hold without that reasoning.
+        return listify(result_var) or []
 
     def map_plots(
         self,
@@ -542,7 +647,7 @@ class BenchResultBase:
         for a in zip(*panel_list):
             row = pn.Row(**container_args)
             row.append(a[0][0])
-            for a1 in range(0, len(a)):
+            for a1 in range(len(a)):
                 row.append(a[a1][1])
             out.append(row)
         return out
@@ -561,10 +666,44 @@ class BenchResultBase:
             return primary
         return panel_list
 
+    def map_sample_panes(
+        self,
+        result_types,
+        container: Callable | None = None,
+        result_var: Parameter | None = None,
+        hv_dataset=None,
+        target_dimension: int = 0,
+        subsampling_divisions: int | None = None,
+        **kwargs,
+    ) -> pn.pane.panel | None:
+        """One pane per sample of every result whose type is in *result_types*.
+
+        The single place the per-sample render path is spelled out: squeeze to one
+        value per sample, then map ``ds_to_container`` (which applies *container*,
+        the per-sample container, or the one declared on the result var) over each.
+        Callers differ only in which result types they claim — ``result_types`` is
+        the parameter rather than a subclass hook so a renderer can be a plain
+        function over any result object.
+        """
+        if hv_dataset is None:
+            hv_dataset = self.to_hv_dataset(
+                ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions
+            )
+        elif not isinstance(hv_dataset, hv.Dataset):
+            hv_dataset = hv.Dataset(hv_dataset)
+        return self.map_plot_panes(
+            partial(self.ds_to_container, container=container),
+            hv_dataset=hv_dataset,
+            target_dimension=target_dimension,
+            result_var=result_var,
+            result_types=result_types,
+            **kwargs,
+        )
+
     def map_plot_panes(
         self,
         plot_callback: Callable,
-        hv_dataset: hv.Dataset = None,
+        hv_dataset: hv.Dataset | None = None,
         target_dimension: int = 2,
         result_var: ResultFloat | None = None,
         result_types=None,
@@ -635,14 +774,11 @@ class BenchResultBase:
     def filter(
         self,
         plot_callback: Callable,
-        plot_filter=None,
-        float_range: VarRange | None = None,
-        cat_range: VarRange | None = None,
-        vector_len: VarRange | None = None,
-        result_vars: VarRange | None = None,
-        panel_range: VarRange | None = None,
-        repeats_range: VarRange | None = None,
-        input_range: VarRange | None = None,
+        float_range: VarRange = _ANY_COUNT,
+        cat_range: VarRange = _ANY_COUNT,
+        panel_range: VarRange = _ANY_COUNT,
+        repeats_range: VarRange = _AT_LEAST_ONE,
+        input_range: VarRange = _AT_LEAST_ONE,
         reduce: ReduceType = ReduceType.AUTO,
         target_dimension: int = 2,
         result_var: ResultFloat | None = None,
@@ -651,30 +787,14 @@ class BenchResultBase:
         override=False,
         hv_dataset: hv.Dataset | None = None,
         agg_over_dims: list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN,
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel | None:
-        # Initialize default filters if not provided to avoid shared mutable defaults
-        if float_range is None:
-            float_range = VarRange(0, None)
-        if cat_range is None:
-            cat_range = VarRange(0, None)
-        if vector_len is None:
-            vector_len = VarRange(1, 1)
-        if result_vars is None:
-            result_vars = VarRange(1, 1)
-        if panel_range is None:
-            panel_range = VarRange(0, None)
-        if repeats_range is None:
-            repeats_range = VarRange(1, None)
-        if input_range is None:
-            input_range = VarRange(1, None)
+        # VarRange is frozen, so these defaults are safe to share between calls.
         plot_filter = PlotFilter(
             float_range=float_range,
             cat_range=cat_range,
-            vector_len=vector_len,
-            result_vars=result_vars,
             panel_range=panel_range,
             repeats_range=repeats_range,
             input_range=input_range,
@@ -692,12 +812,21 @@ class BenchResultBase:
                 float_cnt=len(adj_float),
                 cat_vars=adj_cat,
                 cat_cnt=len(adj_cat),
-                vector_len=self.plt_cnt_cfg.vector_len,
-                result_vars=self.plt_cnt_cfg.result_vars,
                 panel_vars=list(self.plt_cnt_cfg.panel_vars),
                 panel_cnt=self.plt_cnt_cfg.panel_cnt,
                 repeats=self.plt_cnt_cfg.repeats,
                 inputs_cnt=len(adj_float) + len(adj_cat),
+                # signature facts carry over; cat_levels drops the collapsed dims
+                # to stay consistent with adj_cat
+                has_time=self.plt_cnt_cfg.has_time,
+                time_steps=self.plt_cnt_cfg.time_steps,
+                result_kinds=dict(self.plt_cnt_cfg.result_kinds),
+                cat_levels={
+                    name: levels
+                    for name, levels in self.plt_cnt_cfg.cat_levels.items()
+                    if name not in agg_set
+                },
+                samples_per_point=self.plt_cnt_cfg.samples_per_point,
                 print_debug=self.plt_cnt_cfg.print_debug,
             )
         matches_res = plot_filter.matches_result(check_cfg, callable_name(plot_callback), override)
@@ -709,17 +838,23 @@ class BenchResultBase:
                     hv_dataset = self.to_hv_dataset(
                         reduce=reduce, agg_over_dims=agg_dims, agg_fn=agg_fn
                     )
-            return self.map_plot_panes(
-                plot_callback=plot_callback,
-                hv_dataset=hv_dataset,
-                target_dimension=target_dimension,
-                result_var=result_var,
-                result_types=result_types,
-                pane_collection=pane_collection,
-                reduce=reduce,
-                pane_layout=pane_layout,
-                **kwargs,
-            )
+            prev_cfg = self.plt_cnt_cfg
+            if agg_over_dims:
+                self.plt_cnt_cfg = check_cfg
+            try:
+                return self.map_plot_panes(
+                    plot_callback=plot_callback,
+                    hv_dataset=hv_dataset,
+                    target_dimension=target_dimension,
+                    result_var=result_var,
+                    result_types=result_types,
+                    pane_collection=pane_collection,
+                    reduce=reduce,
+                    pane_layout=pane_layout,
+                    **kwargs,
+                )
+            finally:
+                self.plt_cnt_cfg = prev_cfg
         return matches_res.to_panel()
 
     def to_panes_multi_panel(
@@ -779,14 +914,14 @@ class BenchResultBase:
     def _to_panes_da(
         self,
         dataset: xr.Dataset,
-        plot_callback: Callable | None = None,
+        plot_callback: Callable,
         target_dimension=1,
         horizontal=False,
         result_var=None,
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel:
-        dims = list(d for d in dataset.sizes)
+        dims = list(dataset.sizes)
 
         # over_time is handled by hvplot's groupby widget, not pane recursion
         if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
@@ -848,11 +983,21 @@ class BenchResultBase:
                 self.bench_cfg.over_time
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
-                and isinstance(result_var, (ResultVideo, ResultImage, ResultRerun))
             ):
                 if isinstance(result_var, ResultRerun):
                     return self._pane_over_time_grid(dataset, result_var)
-                return self._pane_over_time_slider(dataset, result_var)
+                if isinstance(result_var, (ResultVideo, ResultImage)):
+                    return self._pane_over_time_slider(dataset, result_var)
+                if isinstance(result_var, ResultDataSet):
+                    # Path-backed cells (plan 22) make historical payloads loadable
+                    # from any run, so every time point renders like the other blob
+                    # types.  Legacy index cells are only trusted at the final time
+                    # index — dataset_list belongs to the final run, so an in-range
+                    # historical index would silently render the *current* payload
+                    # under a historical label; those render a labelled placeholder.
+                    return self._pane_over_time_dataset(
+                        dataset, result_var, plot_callback, **kwargs
+                    )
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.render()
@@ -871,6 +1016,7 @@ class BenchResultBase:
         callback to avoid Panel's ImportedStyleSheet document-ownership errors.
         """
         import base64
+
         from bokeh.models import CustomJS, Div
         from bokeh.models.widgets import Slider as BokehSlider
 
@@ -891,9 +1037,8 @@ class BenchResultBase:
         )
         html_list = []
         for idx, _t in enumerate(time_vals):
-            ds_t = dataset.isel(over_time=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if filepath == "NAN" or not os.path.isfile(filepath):
+            filepath = self._over_time_filepath(dataset, result_var, idx)
+            if filepath is None:
                 html_list.append(_NO_DATA_HTML)
                 continue
             if is_rerun:
@@ -924,7 +1069,7 @@ class BenchResultBase:
             title=f"over_time: {labels[default_idx]}",
         )
         callback = CustomJS(
-            args=dict(div=div, html_list=html_list, labels=labels, slider=bokeh_slider),
+            args={"div": div, "html_list": html_list, "labels": labels, "slider": bokeh_slider},
             code=(
                 "div.text = html_list[slider.value];"
                 " slider.title = 'over_time: ' + labels[slider.value];"
@@ -933,6 +1078,21 @@ class BenchResultBase:
         bokeh_slider.js_on_change("value", callback)
 
         return pn.Column(pn.pane.Bokeh(div), pn.pane.Bokeh(bokeh_slider))
+
+    def _over_time_filepath(self, dataset: xr.Dataset, result_var, idx: int) -> str | None:
+        """Resolve the on-disk filepath for a file-backed result var at an over_time index.
+
+        Returns None when the entry is missing/unrecorded (per ``result_is_missing``)
+        or when the stored path does not point at an existing file.
+        """
+        ds_t = dataset.isel(over_time=idx)
+        value = self.zero_dim_da_to_val(ds_t[result_var.name])
+        if result_is_missing(result_var, value):
+            return None
+        filepath = str(value)
+        if not os.path.isfile(filepath):
+            return None
+        return filepath
 
     def _pane_over_time_grid(
         self,
@@ -943,95 +1103,323 @@ class BenchResultBase:
 
         Used for ResultRerun because rerun iframes do not work inside a
         Bokeh JS slider swap (the viewer fails to re-initialise).
-        """
-        from bencher.utils_rrd import rrd_file_to_pane
 
+        A container declared on the result var wins over the rerun viewer, the
+        same way it does on the single-run path in ``ds_to_container``: a renderer
+        that only applied while history was off would draw one thing on the first
+        run and something else on the second.
+        """
         time_vals = list(dataset.coords["over_time"].values)
         over_time_dtype = dataset.coords["over_time"].dtype
         is_datetime = np.issubdtype(over_time_dtype, np.datetime64)
         labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
 
+        render = self.declared_container(result_var)
+        if render is None:
+            # Imported only when it is actually the renderer, so a declared
+            # container does not drag in the rerun viewer stack.
+            from bencher.utils_rrd import rrd_file_to_pane
+
+            render = partial(rrd_file_to_pane, width=result_var.width, height=result_var.height)
+
         items = []
         for idx, label in enumerate(labels):
-            ds_t = dataset.isel(over_time=idx)
-            filepath = str(self.zero_dim_da_to_val(ds_t[result_var.name]))
-            if filepath == "NAN" or not os.path.isfile(filepath):
+            filepath = self._over_time_filepath(dataset, result_var, idx)
+            if filepath is None:
                 continue
-            pane = rrd_file_to_pane(filepath, width=result_var.width, height=result_var.height)
-            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), render(filepath)))
 
         if not items:
             return pn.pane.Markdown("*No rerun data available*")
+        return pn.Row(*items)
+
+    def _pane_over_time_dataset(
+        self,
+        dataset: xr.Dataset,
+        result_var,
+        plot_callback: Callable,
+        **kwargs,
+    ) -> pn.Row | None:
+        """Render ``ResultDataSet`` over_time as a grid of labelled per-time panes.
+
+        Path-backed cells are meaningful in any process, so history points render
+        instead of being cut down to the latest event (the pre-plan-22
+        ``isel(over_time=-1)`` workaround).  A time point whose cell is missing
+        (either generation's sentinel) is skipped.  A legacy index cell is only
+        trusted at the *final* time index: ``dataset_list`` holds the final run's
+        payloads alone, so a pre-plan history with in-range indices at every time
+        point would otherwise render the current payload under historical labels.
+        Untrusted legacy cells render as a labelled placeholder instead.
+
+        ``legacy_trusted`` is only *offered* to *plot_callback*: it is a
+        render-internal keyword, and ``plot_callback`` is a public extension
+        point that a caller may satisfy with a plain ``(dataset, result_var)``
+        function.  Passing it unconditionally would turn such a callback into a
+        ``TypeError`` the moment its result went over_time, so a callback that
+        cannot name it is called exactly as it was before this path existed.
+        """
+        time_vals = list(dataset.coords["over_time"].values)
+        is_datetime = np.issubdtype(dataset.coords["over_time"].dtype, np.datetime64)
+        labels = [str(pd.to_datetime(t)) if is_datetime else str(t) for t in time_vals]
+
+        pass_trust = _accepts_keyword(plot_callback, "legacy_trusted")
+        items = []
+        final_idx = len(labels) - 1
+        for idx, label in enumerate(labels):
+            trust_kwargs = {"legacy_trusted": idx == final_idx} if pass_trust else {}
+            pane = plot_callback(
+                dataset=dataset.isel(over_time=idx),
+                result_var=result_var,
+                **trust_kwargs,
+                **kwargs,
+            )
+            if pane is None:
+                continue
+            items.append(pn.Column(pn.pane.Markdown(f"**{label}**"), pane))
+
+        if not items:
+            return None
         return pn.Row(*items)
 
     def zero_dim_da_to_val(self, da_ds: xr.DataArray | xr.Dataset) -> Any:
         # todo this is really horrible, need to improve
         dim = None
         if isinstance(da_ds, xr.Dataset):
-            dim = list(da_ds.keys())[0]
+            dim = next(iter(da_ds.keys()))
             da = da_ds[dim]
         else:
             da = da_ds
 
-        for k in da.coords.keys():
-            dim = k
-            break
-        if dim is None:
-            return da_ds.values.squeeze().item()
+        # Callers hand this a single point, so collapse any length-1 dimension it
+        # still carries; keep the coordinates, they are what expand_dims below uses.
+        if any(size == 1 for size in da.sizes.values()):
+            da = da.squeeze(drop=False)
+
+        # expand_dims needs a name that is not a dimension yet.  Picking one that is
+        # still live raises "Dimension <name> already exists", which points at the
+        # coordinate rather than at the caller that failed to reduce it.
+        for k in da.coords:
+            if k not in da.dims:
+                dim = k
+                break
+        if dim is None or dim in da.dims:
+            return da.values.squeeze().item()
         return da.expand_dims(dim).values[0]
 
-    def ds_to_container(  # pylint: disable=too-many-return-statements
-        self, dataset: xr.Dataset, result_var: Parameter, container, **kwargs
+    @staticmethod
+    def _unreduced_dims(da: xr.DataArray) -> dict[str, int]:
+        """Dimensions of a supposedly-single point that still hold several values."""
+        return {str(d): int(da.sizes[d]) for d in da.dims if da.sizes[d] > 1}
+
+    @staticmethod
+    def declared_container(*sources: Any) -> Any:
+        """The first container declared by *sources*, in the order given.
+
+        A "declared" container is the single-argument renderer a result variable
+        carries: attached to one stored sample inside ``benchmark()``, or declared
+        once on the class. It is distinct from the ``container=`` a *renderer* passes
+        in, which is a panel pane constructor and takes styling keywords — see
+        :meth:`ds_to_container`.
+
+        ``getattr``, not attribute access: a result pickled before a type gained the
+        slot unpickles without it, and reports of old runs still have to render.
+        """
+        for source in sources:
+            candidate = getattr(source, "container", None) if source is not None else None
+            if candidate is not None:
+                return candidate
+        return None
+
+    def _dataset_sample_to_container(  # pylint: disable=too-many-return-statements
+        self, val: Any, result_var: Parameter, container, legacy_trusted: bool = True
     ) -> Any:
+        """Render one stored ``ResultDataSet`` cell, whichever generation stored it.
+
+        Three cell shapes exist (plan 22, D3):
+
+        1. a ``str`` blob path (collected after plan 22) — loaded with
+           ``load_blob``; a payload materialized with a per-sample container is a
+           pickled ``ResultDataSet`` wrapper, so the full precedence chain
+           (renderer-supplied → sample's → class's → raw object) still applies;
+           a blob that cannot be loaded (deleted, corrupt) renders as a labelled
+           placeholder — never a crash;
+        2. an ``int`` index (a result pickled or cached before plan 22) — looked
+           up in ``dataset_list`` when this result still carries the list that
+           produced it *and* the cell is trusted (see below), and rendered as a
+           labelled placeholder otherwise (an old cell without its list is
+           honestly unrecoverable — never a crash);
+        3. the missing sentinel of either generation (``"NAN"`` / ``-1``) →
+           ``None``, which pane composition skips.
+
+        ``legacy_trusted`` guards the over_time case: ``dataset_list`` holds only
+        the *final* run's payloads, so a legacy int at a historical time index is
+        in range yet points at the wrong run's payload.  The over_time render
+        path passes ``legacy_trusted=False`` for every non-final time index;
+        every other call site keeps the default ``True``.
+        """
+        if result_is_missing(result_var, val):
+            return None
+        if isinstance(val, str):
+            from bencher.blob_store import load_blob
+
+            try:
+                payload = load_blob(val)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "ResultDataSet '%s': failed to load blob %r (%s: %s)",
+                    result_var.name,
+                    val,
+                    type(exc).__name__,
+                    exc,
+                )
+                return pn.pane.Markdown(
+                    f"*'{result_var.name}': stored blob could not be loaded "
+                    "and is no longer recoverable from this result*"
+                )
+            sample = payload if isinstance(payload, ResultDataSet) else None
+            if sample is not None:
+                payload = sample.obj
+            # Renderer-supplied container wins, then the sample's, then the class's.
+            resolved = container or self.declared_container(sample, result_var)
+            return resolved(payload) if resolved is not None else payload
+        # Legacy int cell.  Over_time concat can promote the old int column to
+        # float, so integral floats are legacy indices too.
+        try:
+            idx = int(val)
+        except (TypeError, ValueError):
+            logger.warning(
+                "ResultDataSet '%s': unrecognised cell %r (neither a blob path nor a legacy index)",
+                result_var.name,
+                val,
+            )
+            return pn.pane.Markdown(
+                f"*'{result_var.name}': stored cell is not renderable ({type(val).__name__})*"
+            )
+        if not legacy_trusted:
+            logger.warning(
+                "ResultDataSet '%s': legacy cell %r at a historical time point; "
+                "dataset_list only holds the final run's payloads, so the "
+                "historical payload is unrecoverable",
+                result_var.name,
+                val,
+            )
+            return pn.pane.Markdown(
+                f"*'{result_var.name}': stored payload predates the path-backed format; "
+                "only the final time event's payload is recoverable from this result*"
+            )
+        dataset_list = getattr(self, "dataset_list", None)
+        if not dataset_list or not 0 <= idx < len(dataset_list):
+            logger.warning(
+                "ResultDataSet '%s': cell %r indexes a dataset_list of length %d; the "
+                "payload predates path-backed storage and its run's list is gone",
+                result_var.name,
+                val,
+                len(dataset_list) if dataset_list else 0,
+            )
+            return pn.pane.Markdown(
+                f"*'{result_var.name}': stored payload predates the path-backed format "
+                "and is no longer recoverable from this result*"
+            )
+        ref = dataset_list[idx]
+        if ref is None:
+            return None
+        # Renderer-supplied container wins, then the sample's, then the class's.
+        resolved = container or self.declared_container(ref, result_var)
+        return resolved(ref.obj) if resolved is not None else ref.obj
+
+    def ds_to_container(  # pylint: disable=too-many-return-statements
+        self,
+        dataset: xr.Dataset,
+        result_var: Parameter,
+        container,
+        legacy_trusted: bool = True,
+        **kwargs,
+    ) -> Any:
+        """Render one sample of *result_var* out of *dataset*.
+
+        ``legacy_trusted`` is threaded through to
+        :meth:`_dataset_sample_to_container` for ``ResultDataSet`` cells; the
+        over_time render path passes ``False`` for historical time indices whose
+        legacy int cells cannot be resolved against the final run's
+        ``dataset_list`` (see that method).
+
+        Two kinds of container can apply, and they are different contracts:
+
+        * the ``container`` argument, supplied by a renderer — a panel pane
+          constructor, called with the value plus styling and layout keywords (this
+          is what ``PaneResult.to_panes`` and ``video_container`` rely on);
+        * a *declared* container, carried by the result variable or the stored
+          sample — called with the object alone, so a single-argument renderer such
+          as an ``xy_scatter`` spec works unchanged.
+
+        A declared container beats the type's built-in ``to_container()``, which is
+        what makes it possible to render a path as its contents rather than as a
+        download widget.
+        """
+        if isinstance(result_var, (ResultDataSet, ResultReference)):
+            # These two store a per-sample lookup key (a blob path, or a legacy /
+            # object index into a side list), so a value that is still an array
+            # fails several frames from the cause. Name the dimension the caller
+            # did not reduce instead.
+            unreduced = self._unreduced_dims(dataset[result_var.name])
+            if unreduced:
+                raise ValueError(
+                    f"cannot render one {type(result_var).__name__} sample for "
+                    f"'{result_var.name}': dimension(s) {unreduced} were neither "
+                    "selected nor reduced, so there is no single value to look up"
+                )
         val = self.zero_dim_da_to_val(dataset[result_var.name])
         if isinstance(result_var, ResultDataSet):
-            ref = self.dataset_list[val]
-            if ref is not None:
-                if container is not None:
-                    return container(ref.obj)
-                return ref.obj
-            return None
+            return self._dataset_sample_to_container(val, result_var, container, legacy_trusted)
         if isinstance(result_var, ResultReference):
             ref = self.object_index[val]
             if ref is not None:
                 val = ref.obj
-                if ref.container is not None:
-                    return ref.container(val, **kwargs)
+                # The sample's container, then the class's. Called with the object
+                # alone, matching ResultDataSet, so one spec serves both.
+                resolved = self.declared_container(ref, result_var)
+                if resolved is not None:
+                    return resolved(val)
         if container is not None:
             return container(val, styles={"background": "white"}, **kwargs)
+        # A container declared on the result var beats the type's built-in default,
+        # so a ResultPath can render its contents rather than a download widget.
+        resolved = self.declared_container(result_var)
+        if resolved is not None:
+            return resolved(val)
         try:
-            container = result_var.to_container()
-            if container is not None:
-                return container(val)
+            to_container = result_var.to_container()
+            if to_container is not None:
+                return to_container(val)
         except AttributeError as _:
             # TODO make sure all vars have to_container method
             pass
         return val
 
     @staticmethod
-    def select_level(
+    def select_subsampling_divisions(
         dataset: xr.Dataset,
-        level: int,
+        subsampling_divisions: int,
         include_types: list[type] | None = None,
         exclude_names: list[str] | None = None,
     ) -> xr.Dataset:
-        """Given a dataset, return a reduced dataset that only contains data from a specified level.  By default all types of variables are filtered at the specified level.  If you only want to get a reduced level for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
+        """Given a dataset, return a reduced dataset that only contains data from a specified subsampling_divisions.  By default all types of variables are filtered at the specified subsampling_divisions.  If you only want to get a reduced subsampling_divisions for some types of data you can pass in a list of types to get filtered, You can also pass a list of variables names to exclude from getting filtered
         Args:
             dataset (xr.Dataset): dataset to filter
-            level (int): desired data resolution level
+            subsampling_divisions (int): desired data resolution subsampling_divisions
             include_types (list[type], optional): Only filter data of these types. Defaults to None.
             exclude_names (list[str], optional): Only filter data with these variable names. Defaults to None.
 
         Returns:
-            xr.Dataset: A reduced dataset at the specified level
+            xr.Dataset: A reduced dataset at the specified subsampling_divisions
 
         Example:  a dataset with float_var: [1,2,3,4,5] cat_var: [a,b,c,d,e]
 
-        select_level(ds,2) -> [1,5] [a,e]
-        select_level(ds,2,(float)) -> [1,5] [a,b,c,d,e]
-        select_level(ds,2,exclude_names=["cat_var]) -> [1,5] [a,b,c,d,e]
+        select_subsampling_divisions(ds,2) -> [1,5] [a,e]
+        select_subsampling_divisions(ds,2,(float)) -> [1,5] [a,b,c,d,e]
+        select_subsampling_divisions(ds,2,exclude_names=["cat_var]) -> [1,5] [a,b,c,d,e]
 
-        see test_bench_result_base.py -> test_select_level()
+        see test_bench_result_base.py -> test_select_subsampling_divisions()
         """
         coords_no_repeat = {}
         for c, v in dataset.coords.items():
@@ -1044,8 +1432,32 @@ class BenchResultBase:
                 if exclude_names is not None and c in listify(exclude_names):
                     include = False
                 if include:
-                    coords_no_repeat[c] = with_level(v.to_numpy(), level)
+                    coords_no_repeat[c] = with_subsampling_divisions(
+                        v.to_numpy(), subsampling_divisions
+                    )
         return dataset.sel(coords_no_repeat)
+
+    @staticmethod
+    def select_level(
+        dataset: xr.Dataset,
+        level: int,
+        include_types: list[type] | None = None,
+        exclude_names: list[str] | None = None,
+    ) -> xr.Dataset:
+        """Deprecated: use :meth:`select_subsampling_divisions` instead."""
+        import warnings
+
+        warnings.warn(
+            "'select_level' is deprecated; use 'select_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return BenchResultBase.select_subsampling_divisions(
+            dataset,
+            subsampling_divisions=level,
+            include_types=include_types,
+            exclude_names=exclude_names,
+        )
 
     # MAPPING TO LOWER LEVEL BENCHCFG functions so they are available at a top level.
     def to_sweep_summary(self, **kwargs):

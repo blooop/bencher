@@ -1,6 +1,7 @@
 """Auto-generated example: Publish Report to GitHub Pages."""
 
 import math
+
 import bencher as bn
 
 
@@ -42,4 +43,4 @@ def example_publish_report_gh_pages(run_cfg: bn.BenchRunCfg | None = None) -> bn
 
 
 if __name__ == "__main__":
-    bn.run(example_publish_report_gh_pages, level=3)
+    bn.run(example_publish_report_gh_pages, subsampling_divisions=3)

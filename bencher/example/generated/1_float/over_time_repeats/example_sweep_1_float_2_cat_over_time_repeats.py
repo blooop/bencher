@@ -1,9 +1,10 @@
 """Auto-generated example: 1 Float, 2 Categorical (over time repeats)."""
 
-import random
 import math
-import bencher as bn
+import random
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class SortAnalysis(bn.ParametrizedSweep):
@@ -53,4 +54,4 @@ def example_sweep_1_float_2_cat_over_time_repeats(
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_1_float_2_cat_over_time_repeats, level=4, over_time=True)
+    bn.run(example_sweep_1_float_2_cat_over_time_repeats, subsampling_divisions=4, over_time=True)

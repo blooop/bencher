@@ -1,8 +1,9 @@
 """Example: view an .rrd file locally or publish it to a git branch."""
 
-import rerun as rr
-import bencher as bn
 import panel as pn
+import rerun as rr
+
+import bencher as bn
 
 
 def example_rerun2_local():

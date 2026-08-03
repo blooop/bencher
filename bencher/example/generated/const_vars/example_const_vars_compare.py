@@ -43,11 +43,11 @@ def example_const_vars_compare(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
             title=f"cpu_load sweep with memory_pct={mem_val}",
             input_vars=["cpu_load"],
             result_vars=["latency"],
-            const_vars=dict(memory_pct=mem_val, disk_io=0.5),
+            const_vars={"memory_pct": mem_val, "disk_io": 0.5},
         )
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_const_vars_compare, level=4)
+    bn.run(example_const_vars_compare, subsampling_divisions=4)

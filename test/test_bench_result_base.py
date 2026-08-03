@@ -1,11 +1,44 @@
 import unittest
-import bencher as bn
-import numpy as np
+
 import holoviews as hv
+import numpy as np
 import panel as pn
 
+import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.bench_result_base import ReduceType
+from bencher.utils import AGG_FN_MAP, AggFn
+
+
+class CountingWorker(bn.ParametrizedSweep):
+    """Counts benchmark invocations, so a test can assert sampling never started."""
+
+    float1 = bn.FloatSweep(default=0, bounds=[0, 4], samples=3)
+    distance = bn.ResultFloat()
+
+    calls = 0
+
+    def benchmark(self):
+        # Instance attribute: each test builds its own worker, so counts do not
+        # leak between tests the way a class-level counter would.
+        self.calls += 1
+        self.distance = float(self.float1)
+
+
+class PartlyMissingWorker(bn.ParametrizedSweep):
+    """One result variable always recorded, one recorded for a subset of samples.
+
+    Gives `result_samples()` a dataset whose per-variable counts differ, so max/sum/first
+    are all distinguishable.
+    """
+
+    idx = bn.IntSweep(default=0, bounds=[0, 4], samples=5)
+    full = bn.ResultFloat()
+    partial = bn.ResultFloat()
+
+    def benchmark(self):
+        self.full = float(self.idx)
+        self.partial = float(self.idx) if self.idx < 2 else float("nan")
 
 
 class TstBench(bn.ParametrizedSweep):
@@ -200,10 +233,180 @@ class TestAggOverDimsStd(unittest.TestCase):
         ds = self.res_1d_1rep.to_dataset()
         self.assertNotIn("distance_std", ds.data_vars)
 
-    def test_case_insensitive_agg_fn(self):
-        """agg_fn should be case-insensitive."""
-        ds = self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
-        self.assertIn("distance_std", ds.data_vars)
+    def test_uppercase_agg_fn_raises(self):
+        """The vocabulary is exactly AggFn's lowercase values (case-sensitive).
+
+        Plan 23 P11: the old aggregation ladder lowercased agg_fn before
+        dispatch, so "MEAN" used to be accepted here. That leniency was one
+        more spelling of the vocabulary and is gone — optimize() and
+        BenchCfg.agg_fn always rejected "MEAN".
+        """
+        with self.assertRaises(ValueError):
+            self.res_1d_1rep.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
+
+
+class TestAggFnVocabulary(unittest.TestCase):
+    """Plan 23 P11 (C11): one AggFn vocabulary; unknown aggregation raises.
+
+    Plan 24 A3: BenchCfg.agg_fn is a param.ObjectSelector whose objects are raw
+    strings, so these tests drive raw strings through the param field into the
+    shipped code path rather than only calling enum-typed functions directly.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.bench = BenchableObject().to_bench()
+        cls.res = cls.bench.plot_sweep(
+            "agg_fn_vocab",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+        )
+
+    def test_agg_fn_map_covers_every_member(self):
+        """AGG_FN_MAP's keys derive from (and must stay in sync with) AggFn."""
+        self.assertEqual(set(AGG_FN_MAP), set(AggFn))
+        # Set equality alone would still pass if AGG_FN_MAP reverted to raw-string
+        # keys, because AggFn is a StrEnum and "mean" == AggFn.MEAN. Pin the key
+        # *type* so the derivation cannot silently regress to a fifth spelling.
+        self.assertTrue(all(isinstance(k, AggFn) for k in AGG_FN_MAP))
+
+    def test_bench_cfg_objects_are_agg_fn_values(self):
+        """The ObjectSelector's accepted strings are exactly AggFn's values."""
+        objects = bn.BenchCfg.param.agg_fn.objects
+        self.assertEqual(objects, [m.value for m in AggFn])
+        self.assertEqual(bn.BenchCfg.param.agg_fn.default, AggFn.MEAN.value)
+        # Plain str, not AggFn members: the descriptor's objects are what gets
+        # stored on and serialized out of BenchCfg, so the shape is pinned here
+        # (and is why readers must construct the enum — plan 24 A3).
+        self.assertTrue(all(type(o) is str for o in objects))
+        self.assertIs(type(bn.BenchCfg.param.agg_fn.default), str)
+
+    def test_unknown_agg_fn_raises_instead_of_silently_meaning_mean(self):
+        """Before plan 23 P11 the ladder's terminal else silently meant mean."""
+        with self.assertRaises(ValueError) as ctx:
+            self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
+        msg = str(ctx.exception)
+        self.assertIn("bogus", msg)
+        for member in AggFn:
+            self.assertIn(member.value, msg)
+
+    def test_each_member_aggregates_as_before(self):
+        """Every valid agg_fn (member or raw string) matches the numpy result."""
+        raw = self.res.to_dataset()["distance"].values
+        expected = {
+            AggFn.MEAN: np.nanmean,
+            AggFn.SUM: np.nansum,
+            AggFn.MAX: np.nanmax,
+            AggFn.MIN: np.nanmin,
+            AggFn.MEDIAN: np.nanmedian,
+        }
+        self.assertEqual(set(expected), set(AggFn))
+        for member, np_fn in expected.items():
+            for spelling in (member, member.value):
+                ds = self.res.to_dataset(agg_over_dims=["float1"], agg_fn=spelling)
+                np.testing.assert_allclose(
+                    float(ds["distance"].values), float(np_fn(raw)), rtol=1e-10
+                )
+
+    # --- plan 24 A3 DoD: drive the raw string through the param field ---
+
+    def test_unknown_agg_fn_through_plot_sweep_raises_before_any_sampling(self):
+        """plot_sweep routes agg_fn into BenchCfg's ObjectSelector, which rejects
+        an out-of-vocabulary string at config acceptance.
+
+        The claim that matters is *when*: the raise must land before any sample is
+        collected, so this raise can never lose expensive already-collected data
+        (plan 23 owner decision 2). Asserting only ValueError would still pass if
+        BenchCfg construction moved after sampling, so count worker calls.
+        """
+        worker = CountingWorker()
+        bench = worker.to_bench()
+        with self.assertRaises(ValueError):
+            bench.plot_sweep(
+                "agg_fn_bogus",
+                input_vars=[CountingWorker.param.float1],
+                result_vars=[CountingWorker.param.distance],
+                run_cfg=bn.BenchRunCfg(repeats=1),
+                plot_callbacks=False,
+                aggregate=["float1"],
+                agg_fn="bogus",
+            )
+        self.assertEqual(worker.calls, 0, "config was rejected only after sampling")
+
+        # Control: the identical sweep with a valid agg_fn *does* sample, proving
+        # the zero above is the raise's doing and not a sweep that never runs.
+        bench.plot_sweep(
+            "agg_fn_ok",
+            input_vars=[CountingWorker.param.float1],
+            result_vars=[CountingWorker.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+            aggregate=["float1"],
+            agg_fn="mean",
+        )
+        self.assertGreater(worker.calls, 0)
+
+    def test_uppercase_agg_fn_error_names_the_lowercase_spelling(self):
+        """The break is small but the fix should not need guessing."""
+        with self.assertRaises(ValueError) as ctx:
+            self.res.to_dataset(agg_over_dims=["float1"], agg_fn="MEAN")
+        msg = str(ctx.exception)
+        self.assertIn("lowercase", msg)
+        self.assertIn("'mean'", msg)
+
+    def test_unknown_agg_fn_raises_without_agg_over_dims(self):
+        """Validation must not be data-dependent.
+
+        The cache key only needs agg_fn when there are agg dims, but gating the
+        *validation* on that would make an unknown value raise or pass depending
+        on the dataset's dims -- the shape plan 23 exists to remove.
+        """
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_fn="bogus")
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_over_dims=[], agg_fn="bogus")
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_over_dims=["nonexistent"], agg_fn="bogus")
+
+    def test_unknown_agg_fn_raises_on_a_warm_cache(self):
+        """The cache-key call is the only validation once _to_dataset_cache hits."""
+        self.res.to_dataset(agg_over_dims=["float1"], agg_fn="mean")
+        with self.assertRaises(ValueError):
+            self.res.to_dataset(agg_over_dims=["float1"], agg_fn="bogus")
+
+    def test_unknown_agg_fn_param_assignment_raises(self):
+        """Assigning through the param descriptor is also boundary-checked."""
+        with self.assertRaises(ValueError):
+            self.res.bench_cfg.agg_fn = "bogus"
+
+    def test_valid_raw_string_through_param_field_reaches_shipped_path(self):
+        """A valid raw string stored by param (a plain str, not an AggFn
+        member) must survive the shipped read of bench_cfg.agg_fn into the
+        normalize+match pipeline and aggregate correctly."""
+        res = self.bench.plot_sweep(
+            "agg_fn_median_param",
+            input_vars=[BenchableObject.param.float1],
+            result_vars=[BenchableObject.param.distance],
+            run_cfg=bn.BenchRunCfg(repeats=1),
+            plot_callbacks=False,
+            aggregate=["float1"],
+            agg_fn="median",
+        )
+        # param stores the raw string, not an enum member: this is exactly why
+        # normalize_agg_fn must construct the enum at the boundary (plan 24 A3).
+        self.assertIs(type(res.bench_cfg.agg_fn), str)
+        raw = res.to_dataset()["distance"].values
+        ds = res.to_dataset(agg_over_dims=res.bench_cfg.agg_over_dims, agg_fn=res.bench_cfg.agg_fn)
+        np.testing.assert_allclose(
+            float(ds["distance"].values), float(np.nanmedian(raw)), rtol=1e-10
+        )
+        # The shipped consumer itself (reads bench_cfg.agg_fn internally);
+        # calling the private method is the point of this plan-24 A3 test.
+        summary = res._scalar_aggregate_summary()  # pylint: disable=protected-access
+        self.assertIsInstance(summary, pn.pane.Markdown)
+        self.assertNotIn("No result variables found", summary.object)
 
 
 class TestBenchResultBase(unittest.TestCase):
@@ -242,12 +445,12 @@ class TestBenchResultBase(unittest.TestCase):
 
         # bm.__call__(float_vars=1, sample_with_repeats=1)
 
-    def test_select_level(self):
+    def test_select_subsampling_divisions(self):
         bench = TstBench().to_bench()
 
         res = bench.plot_sweep(
             input_vars=["float_var", "cat_var"],
-            run_cfg=bn.BenchRunCfg(level=4),
+            run_cfg=bn.BenchRunCfg(subsampling_divisions=4),
             plot_callbacks=False,
         )
 
@@ -260,13 +463,13 @@ class TestBenchResultBase(unittest.TestCase):
         ds_raw = res.to_dataset()
         asserts(ds_raw, [0, 1, 2, 3, 4], ["a", "b", "c", "d", "e"])
 
-        ds_filtered_all = res.select_level(ds_raw, 2)
+        ds_filtered_all = res.select_subsampling_divisions(ds_raw, 2)
         asserts(ds_filtered_all, [0, 4], ["a", "e"])
 
-        ds_filtered_types = res.select_level(ds_raw, 2, float)
+        ds_filtered_types = res.select_subsampling_divisions(ds_raw, 2, float)
         asserts(ds_filtered_types, [0, 4], ["a", "b", "c", "d", "e"])
 
-        ds_filtered_names = res.select_level(ds_raw, 2, exclude_names="cat_var")
+        ds_filtered_names = res.select_subsampling_divisions(ds_raw, 2, exclude_names="cat_var")
         asserts(ds_filtered_names, [0, 4], ["a", "b", "c", "d", "e"])
 
     def _make_1d_result(self, repeats=1):
@@ -486,9 +689,32 @@ class TestBenchResultBase(unittest.TestCase):
             )
 
     def test_result_samples(self):
-        res = self._make_1d_result()
-        samples = res.result_samples()
-        self.assertIsNotNone(samples)
+        # `assertIsNotNone` used to be the whole test, which passes for any int and also
+        # passed for the xr.Dataset the method returned before it was fixed. Pin the
+        # number.
+        expected = len(BenchableObject.param.float1.values())
+        self.assertEqual(self._make_1d_result().result_samples(), expected)
+
+    def test_result_samples_counts_repeats(self):
+        """Repeats multiply the count -- it is cells recorded, not sweep points."""
+        expected = len(BenchableObject.param.float1.values()) * 3
+        self.assertEqual(self._make_1d_result(repeats=3).result_samples(), expected)
+
+    def test_result_samples_is_max_not_sum_across_result_vars(self):
+        """Two result variables over N samples is N samples, not 2N.
+
+        The partly-NaN variable is the point: `max` must report the most-populated
+        variable, so neither a `sum` (which would double-count) nor a first-variable
+        read (which would undercount at 2) passes this.
+        """
+        res = bn.Bench("result_samples_max", PartlyMissingWorker()).plot_sweep(
+            "max_not_sum",
+            input_vars=[PartlyMissingWorker.param.idx],
+            plot_callbacks=False,
+        )
+        counts = {name: int(res.ds.count()[name].values) for name in res.ds.data_vars}
+        self.assertEqual(counts, {"full": 5, "partial": 2})
+        self.assertEqual(res.result_samples(), 5)
 
     def test_to_dataset_cache_returns_same_object(self):
         """Identical args with deep=False should return the exact same cached object."""
@@ -519,11 +745,11 @@ class TestBenchResultBase(unittest.TestCase):
         ds_str = res.to_dataset(result_var=rv_param.name, deep=False)
         self.assertIs(ds_param, ds_str)
 
-    def test_to_dataset_cache_different_levels(self):
-        """Different level values should produce different cache entries."""
+    def test_to_dataset_cache_different_fidelities(self):
+        """Different subsampling_divisions values should produce different cache entries."""
         res = self._make_1d_result()
-        ds_none = res.to_dataset(level=None, deep=False)
-        ds_1 = res.to_dataset(level=1, deep=False)
+        ds_none = res.to_dataset(subsampling_divisions=None, deep=False)
+        ds_1 = res.to_dataset(subsampling_divisions=1, deep=False)
         self.assertIsNot(ds_none, ds_1)
 
     def test_to_dataset_deep_default_returns_copy(self):

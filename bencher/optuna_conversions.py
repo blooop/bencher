@@ -5,15 +5,16 @@ import logging
 import optuna
 import panel as pn
 import param
-from optuna.visualization import plot_param_importances
 
+# NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
+# import). It is only needed by param_importance(), so import it lazily there.
 from bencher.bench_cfg import BenchCfg
-
-
-from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
-from bencher.variables.time import TimeSnapshot, TimeEvent
-
+from bencher.results.render_failure import report_render_failure
+from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.time import TimeEvent, TimeSnapshot
+
+logger = logging.getLogger(__name__)
 
 
 # BENCH_CFG
@@ -52,6 +53,8 @@ def optuna_grid_search(bench_cfg: BenchCfg, trial_vars: list | None = None) -> o
 def param_importance(
     bench_cfg: BenchCfg, study: optuna.Study, plot_width: int | None = None
 ) -> pn.Column:
+    from optuna.visualization import plot_param_importances
+
     col_importance = pn.Column()
     for idx, tgt in enumerate(bench_cfg.optuna_targets()):
 
@@ -151,8 +154,14 @@ def sweep_var_to_suggest(iv: ParametrizedSweep, trial: optuna.trial) -> object:
 
 
 def cfg_from_optuna_trial(
-    trial: optuna.trial, bench_cfg: BenchCfg, cfg_type: ParametrizedSweep
+    trial: optuna.trial, bench_cfg: BenchCfg, cfg_type: type[ParametrizedSweep]
 ) -> ParametrizedSweep:
+    """Build a worker config from an optuna trial's suggested values.
+
+    ``cfg_type`` is the worker *class*, not an instance -- it is called here to construct
+    one. Annotating it ``ParametrizedSweep`` makes a checker resolve ``cfg_type()``
+    through ``Parameterized.__call__`` and infer a ``dict``.
+    """
     cfg = cfg_type()
     for iv in bench_cfg.input_vars:
         if getattr(iv, "optimize", True):
@@ -163,14 +172,46 @@ def cfg_from_optuna_trial(
     return cfg
 
 
+# The failure modes optuna's plotting functions are known to raise: a bad or
+# empty study (ValueError), a plotly/optuna version mismatch (AttributeError,
+# TypeError), or a backend that refuses to render (RuntimeError). These get an
+# error pane and nothing more -- report_render_failure already logs at ERROR
+# and warns.
+_EXPECTED_PLOT_FAILURES = (RuntimeError, ValueError, TypeError, AttributeError)
+
+
+def _plot_failure_pane(plot_fn, exc: Exception, *, unexpected: bool = False):
+    """Build the error pane that replaces a plot that failed to render.
+
+    *unexpected* marks an exception outside ``_EXPECTED_PLOT_FAILURES``; it gets
+    an extra ERROR log naming the type, because an unanticipated type here is a
+    signal that the expected-failure tuple has fallen out of date.
+    """
+    fn_name = getattr(plot_fn, "__name__", str(plot_fn))
+    if unexpected:
+        logger.error(
+            "Unexpected %s while rendering optuna plot '%s'; rendering an error pane instead",
+            type(exc).__name__,
+            fn_name,
+            exc_info=exc,
+        )
+    return report_render_failure(f"Optuna plot '{fn_name}'", exc)
+
+
 def _append_safe(row, plot_fn, *args, **kwargs):
-    """Append a plot to *row*, logging any exception instead of propagating."""
+    """Append a plot to *row*, surfacing any exception instead of propagating.
+
+    Nothing is ever re-raised: this runs while the report is being built, after
+    the sweep has already paid for every sample, so a crash here would throw
+    away the whole run's results to report one missing plot. A visible error
+    pane costs nothing and keeps the rest of the report.
+    """
     try:
         row.append(plot_fn(*args, **kwargs))
-    except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
-        fn_name = getattr(plot_fn, "__name__", str(plot_fn))
-        row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))
+    except _EXPECTED_PLOT_FAILURES as exc:
+        row.append(_plot_failure_pane(plot_fn, exc))
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))
 
 
 def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
@@ -180,7 +221,7 @@ def _append_safe_sized(row, plot_fn, width, *args, **kwargs):
         if hasattr(fig, "update_layout"):
             fig.update_layout(width=width)
         row.append(fig)
-    except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
-        fn_name = getattr(plot_fn, "__name__", str(plot_fn))
-        row.append(pn.pane.Markdown(f"**Plot failed** (`{fn_name}`): {e}"))
+    except _EXPECTED_PLOT_FAILURES as exc:
+        row.append(_plot_failure_pane(plot_fn, exc))
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        row.append(_plot_failure_pane(plot_fn, exc, unexpected=True))

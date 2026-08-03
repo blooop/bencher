@@ -6,12 +6,22 @@ import bencher as bn
 
 
 class TimeseriesCollector(bn.ParametrizedSweep):
-    """Collects a timeseries and returns it as an xarray dataset."""
+    """Collects a timeseries and returns it as an xarray dataset.
+
+    The declared container is what turns the collected rows into a curve. Without
+    it a ResultDataSet renders as a table of raw rows; with it, every sample is
+    drawn in result_vars order alongside the other results. Note that
+    Dataset.to_pandas() leaves the "time" coordinate in the index rather than a
+    column — xy_curve promotes a named index, so it is still usable as x.
+    """
 
     duration = bn.FloatSweep(default=5.0, bounds=[1.0, 10.0], doc="Collection duration")
     sample_rate = bn.FloatSweep(default=1.0, bounds=[0.5, 2.0], doc="Samples per second")
 
-    result_ds = bn.ResultDataSet(doc="Collected timeseries dataset")
+    result_ds = bn.ResultDataSet(
+        container=bn.xy_curve(x="time", y="result_ds", markers=True),
+        doc="Collected timeseries dataset",
+    )
 
     def benchmark(self):
         import xarray as xr
@@ -38,4 +48,4 @@ def example_result_dataset_2d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
 
 
 if __name__ == "__main__":
-    bn.run(example_result_dataset_2d, level=2)
+    bn.run(example_result_dataset_2d, subsampling_divisions=2)

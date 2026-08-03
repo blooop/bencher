@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 from copy import deepcopy
 from itertools import product as iter_product
@@ -7,27 +8,25 @@ import numpy as np
 import optuna
 import panel as pn
 
-
-from optuna.visualization import (
-    plot_param_importances,
-    plot_pareto_front,
-    plot_optimization_history,
-)
-from bencher.utils import hmap_canonical_input
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.inputs import BoolSweep
-from bencher.results.bench_result_base import BenchResultBase, ReduceType
-
 # from bencher.results.bench_result_base import BenchResultBase
 from bencher.optuna_conversions import (
     _append_safe,
     _append_safe_sized,
-    sweep_var_to_optuna_dist,
-    summarise_trial,
-    param_importance,
     optuna_grid_search,
+    param_importance,
+    summarise_trial,
+    sweep_var_to_optuna_dist,
     sweep_var_to_suggest,
 )
+from bencher.results.bench_result_base import BenchResultBase, ReduceType
+
+# NOTE: `optuna.visualization` pulls in sklearn's fANOVA evaluator (~3s at
+# import). It is only used inside collect_optuna_plots(), so import it lazily there.
+from bencher.utils import hmap_canonical_input
+from bencher.variables.inputs import BoolSweep
+from bencher.variables.time import TimeEvent, TimeSnapshot
+
+logger = logging.getLogger(__name__)
 
 
 def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
@@ -49,7 +48,7 @@ def _evaluate_over_non_optimized(worker, opt_kwargs, non_opt_vars, result_vars):
                 f"Result variable '{rv.name}' must be numeric to aggregate over "
                 f"non-optimized variable combinations, but got dtype {arr.dtype}"
             )
-        aggregated.append(float(np.mean(arr)))
+        aggregated.append(float(np.nanmean(arr)))
     return tuple(aggregated)
 
 
@@ -161,7 +160,7 @@ class OptunaResult(BenchResultBase):
         df.dropna(inplace=True)
         rows_after = len(df)
         if rows_after == 0 and rows_before > 0:
-            logging.warning(
+            logger.warning(
                 "All %d rows dropped due to NaN values — optuna study will have no trials",
                 rows_before,
             )
@@ -245,19 +244,24 @@ class OptunaResult(BenchResultBase):
         Returns:
             pn.pane.panel: A panel with optuna visualisations.
         """
+        from optuna.visualization import (
+            plot_optimization_history,
+            plot_param_importances,
+            plot_pareto_front,
+        )
 
         try:
             self.studies = [self.bench_result_to_study(True)]
         except Exception as e:  # pylint: disable=broad-except
-            logging.exception(e)
+            logger.exception("Optuna study creation failed")
             return pn.Column(pn.pane.Markdown(f"**Optuna study creation failed**: {e}"))
         tab_names = ["Analysis"]
         if self.bench_cfg.repeats > 1:
             try:
                 self.studies.append(self.bench_result_to_study(False))
                 tab_names = ["With Repeats", "Without Repeats"]
-            except Exception as e:  # pylint: disable=broad-except
-                logging.exception(e)
+            except Exception:  # pylint: disable=broad-except
+                logger.exception("Optuna without-repeats study creation failed")
                 tab_names = ["Analysis (without-repeats study failed)"]
 
         plot_w = self.bench_cfg.plot_width or self.bench_cfg.plot_size or 600
@@ -292,7 +296,7 @@ class OptunaResult(BenchResultBase):
                     try:
                         study_pane.append(param_importance(self.bench_cfg, study, plot_w))
                     except RuntimeError as e:
-                        study_pane.append(f"Error generating parameter importance: {str(e)}")
+                        study_pane.append(f"Error generating parameter importance: {e!s}")
 
                 # --- Pareto Front ---
                 if self.bench_cfg.post_description:
@@ -361,21 +365,6 @@ class OptunaResult(BenchResultBase):
         if len(study_panes) == 1:
             return study_panes[0][1]
         return pn.Tabs(*study_panes)
-
-    # def extract_study_to_dataset(study: optuna.Study, bench_cfg: BenchCfg) -> BenchCfg:
-    #     """Extract an optuna study into an xarray dataset for easy plotting
-
-    #     Args:
-    #         study (optuna.Study): The result of a gridsearch
-    #         bench_cfg (BenchCfg): Options for the grid search
-
-    #     Returns:
-    #         BenchCfg: An updated config with the results included
-    #     """
-    #     for t in study.trials:
-    #         for it, rv in enumerate(bench_cfg.result_vars):
-    #             bench_cfg.ds[rv.name].loc[t.params] = t.values[it]
-    #     return bench_cfg
 
     def deep(self) -> OptunaResult:  # pragma: no cover
         """Return a deep copy of these results"""

@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 import panel as pn
-from param import Parameter
 import plotly.graph_objs as go
 import xarray as xr
+from param import Parameter
 
-from bencher.results.bench_result_base import ReduceType
 from bencher.plotting.plot_filter import PlotFilter, VarRange
-from bencher.variables.results import ResultFloat
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.variables.results import ResultFloat
 
 
 def _da_to_sorted_grid(da: xr.DataArray, x_name: str, y_name: str):
@@ -75,9 +76,9 @@ class SurfaceResult(HoloviewResult):
         """
         return self.filter(
             self.to_surface_ds,
-            float_range=VarRange(2, None),
-            cat_range=VarRange(0, None),
-            input_range=VarRange(1, None),
+            float_range=VarRange.at_least(2),
+            cat_range=VarRange.unbounded(),
+            input_range=VarRange.at_least(1),
             reduce=ReduceType.REDUCE,
             target_dimension=target_dimension,
             result_var=result_var,
@@ -114,10 +115,11 @@ class SurfaceResult(HoloviewResult):
                                otherwise returns filter match results.
         """
         matches_res = PlotFilter(
-            float_range=VarRange(2, 2),
-            cat_range=VarRange(0, None),
-            vector_len=VarRange(1, 1),
-            result_vars=VarRange(1, 1),
+            float_range=VarRange.exactly(2),
+            cat_range=VarRange.unbounded(),
+            panel_range=VarRange.exactly(0),
+            repeats_range=VarRange.at_least(1),
+            input_range=VarRange.at_least(1),
         ).matches_result(self.plt_cnt_cfg, "to_surface_hv", override)
         if matches_res.overall:
             x = self.plt_cnt_cfg.float_vars[0]
@@ -132,7 +134,7 @@ class SurfaceResult(HoloviewResult):
                     y=y_vals,
                     z=z_vals,
                     colorscale="Viridis",
-                    colorbar=dict(title=f"{result_var.name} [{result_var.units}]"),
+                    colorbar={"title": f"{result_var.name} [{result_var.units}]"},
                 )
             ]
 
@@ -158,15 +160,15 @@ class SurfaceResult(HoloviewResult):
                 title=f"{result_var.name} vs ({x.name} and {y.name})",
                 width=width,
                 height=height,
-                margin=dict(t=50, b=50, r=50, l=50),
-                scene=dict(
-                    xaxis_title=f"{x.name} [{x.units}]",
-                    yaxis_title=f"{y.name} [{y.units}]",
-                    zaxis_title=f"{result_var.name} [{result_var.units}]",
-                ),
+                margin={"t": 50, "b": 50, "r": 50, "l": 50},
+                scene={
+                    "xaxis_title": f"{x.name} [{x.units}]",
+                    "yaxis_title": f"{y.name} [{y.units}]",
+                    "zaxis_title": f"{result_var.name} [{result_var.units}]",
+                },
             )
 
-            fig = dict(data=data, layout=layout)
+            fig = {"data": data, "layout": layout}
             return pn.pane.Plotly(fig, name="surface_plotly")
 
         return matches_res.to_panel()

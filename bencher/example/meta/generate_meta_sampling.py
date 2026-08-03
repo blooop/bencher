@@ -73,7 +73,7 @@ class MetaSampling(MetaGeneratorBase):
                     "Uniform sampling distributes points evenly across the parameter bounds. "
                     "The number of samples is controlled by the level parameter."
                 ),
-                run_kwargs={"level": 4},
+                run_kwargs={"subsampling_divisions": 4},
             )
         elif self.strategy == "custom_values":
             imports = "import math\nimport bencher as bn"
@@ -118,7 +118,7 @@ class MetaSampling(MetaGeneratorBase):
                 imports=imports,
                 body=body,
                 class_code=_CUSTOM_CLASS_CODE,
-                run_kwargs={"level": 3},
+                run_kwargs={"subsampling_divisions": 3},
             )
         else:  # int_vs_float
             self.generate_sweep_example(
@@ -136,7 +136,7 @@ class MetaSampling(MetaGeneratorBase):
                     "Integer sweeps produce discrete steps while float sweeps produce "
                     "continuous curves. Compare how the plot changes between the two types."
                 ),
-                run_kwargs={"level": 3},
+                run_kwargs={"subsampling_divisions": 3},
             )
 
 

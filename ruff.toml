@@ -1,10 +1,28 @@
 line-length = 100
 
+[format]
+# ruff 0.16 began formatting python code blocks embedded in markdown. The docs and
+# plans are hand-aligned prose, so keep the formatter to real source files.
+exclude = ["*.md"]
+
 [lint]
 # E501: Lines too long (maximum of 79 characters).
 ignore = [
     "E501", # Long line that exceeds maximum allowed length.
     "F841", # Local variable referenced before assignment, this is annoying during development.
+    # DTZ001/DTZ005: bencher's time axis is deliberately naive local wall-clock time.
+    # The `over_time` dimension is stored as a numpy datetime64 xarray coordinate, which
+    # has no timezone concept — passing tz-aware datetimes degrades the coordinate to
+    # `object` dtype and breaks over_time slicing, sorting and plotting. Naive and aware
+    # datetimes also cannot be compared, so a partial migration would be worse than none.
+    "DTZ001", # `datetime.datetime()` without tzinfo.
+    "DTZ005", # `datetime.datetime.now()` without tz.
+    # RUF023: `__slots__` order is load-bearing, not cosmetic. `_hash_slots` in
+    # bencher/variables/results.py hashes slot values in declaration order, so sorting
+    # __slots__ silently changes every BenchCfg.hash_persistent() value and strands all
+    # on-disk benchmark and over_time cache entries. See the golden hash guard in
+    # test/test_hash_persistent.py.
+    "RUF023", # Unsorted `__slots__`.
 ]
 
 # Allow unused variables when underscore-prefixed.

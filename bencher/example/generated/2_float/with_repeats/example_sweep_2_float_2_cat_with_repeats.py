@@ -1,7 +1,7 @@
 """Auto-generated example: 2 Float, 2 Categorical (with repeats)."""
 
-import random
 import math
+import random
 
 import bencher as bn
 
@@ -42,4 +42,4 @@ def example_sweep_2_float_2_cat_with_repeats(run_cfg: bn.BenchRunCfg | None = No
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_2_float_2_cat_with_repeats, level=4, repeats=3)
+    bn.run(example_sweep_2_float_2_cat_with_repeats, subsampling_divisions=4, repeats=3)

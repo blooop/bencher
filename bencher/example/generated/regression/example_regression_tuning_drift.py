@@ -91,4 +91,4 @@ def example_regression_tuning_drift(run_cfg: bn.BenchRunCfg | None = None) -> bn
 
 
 if __name__ == "__main__":
-    bn.run(example_regression_tuning_drift, level=3)
+    bn.run(example_regression_tuning_drift, subsampling_divisions=3)

@@ -1,8 +1,9 @@
 """Auto-generated example: 0 Float, 3 Categorical (over time)."""
 
 import random
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class DeploymentConfig(bn.ParametrizedSweep):
@@ -49,4 +50,4 @@ def example_sweep_0_float_3_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_0_float_3_cat_over_time, level=4, over_time=True)
+    bn.run(example_sweep_0_float_3_cat_over_time, subsampling_divisions=4, over_time=True)

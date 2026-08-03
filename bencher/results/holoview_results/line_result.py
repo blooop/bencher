@@ -1,15 +1,18 @@
 from __future__ import annotations
-import panel as pn
-from param import Parameter
-from functools import partial
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
-from bencher.results.bench_result_base import ReduceType
+from functools import partial
+
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
+import panel as pn
+import xarray as xr
+from param import Parameter
+
 from bencher.plotting.plot_filter import VarRange
-from bencher.variables.results import SCALAR_RESULT_TYPES
+from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
+from bencher.utils import label_with_units
+from bencher.variables.results import SCALAR_RESULT_TYPES
 
 
 class LineResult(HoloviewResult):
@@ -69,17 +72,17 @@ class LineResult(HoloviewResult):
         # When over_time is active, also accept 0 float vars so a 0D benchmark
         # gets a time-series line (x=over_time, y=value).
         if self.bench_cfg.over_time:
-            float_range = VarRange(0, 1)
-            input_range = VarRange(0, None)
+            float_range = VarRange.at_most(1)
+            input_range = VarRange.unbounded()
         else:
-            float_range = VarRange(1, 1)
-            input_range = None
+            float_range = VarRange.exactly(1)
+            input_range = VarRange.at_least(1)
         return self.filter(
             line_cb,
             float_range=float_range,
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(1, 1),
-            panel_range=VarRange(0, None),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.exactly(1),
+            panel_range=VarRange.unbounded(),
             input_range=input_range,
             reduce=ReduceType.SQUEEZE,
             target_dimension=target_dimension,
@@ -123,6 +126,7 @@ class LineResult(HoloviewResult):
             ):
                 return None
             title = self.title_from_ds(da_plot, result_var, **kwargs)
+            kwargs.setdefault("ylabel", label_with_units(result_var))
             plot = da_plot.hvplot.line(
                 x="over_time",
                 y=da_plot.name,
@@ -142,6 +146,9 @@ class LineResult(HoloviewResult):
         if self.plt_cnt_cfg.cat_cnt >= 1:
             by = self.plt_cnt_cfg.cat_vars[0].name
         title = self.title_from_ds(da_plot, result_var, **kwargs)
+        # Show units on both axes: x from the float input var, y from the result var
+        kwargs.setdefault("xlabel", label_with_units(self.plt_cnt_cfg.float_vars[0]))
+        kwargs.setdefault("ylabel", label_with_units(result_var))
 
         if self._use_holomap_for_time(dataset):
 
@@ -190,6 +197,9 @@ class LineResult(HoloviewResult):
         if self.plt_cnt_cfg.cat_cnt >= 1:
             by = self.plt_cnt_cfg.cat_vars[0].name
         title = self.title_from_ds(da_plot, result_var, **kwargs)
+        # Show units on both axes: x from the float input var, y from the result var
+        kwargs.setdefault("xlabel", label_with_units(self.plt_cnt_cfg.float_vars[0]))
+        kwargs.setdefault("ylabel", label_with_units(result_var))
         plot = da_plot.hvplot.line(x=x, by=by, title=title, **kwargs).opts(
             tools=["hover"], xrotation=30
         )

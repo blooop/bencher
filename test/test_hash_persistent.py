@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 import textwrap
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from enum import Enum
@@ -26,20 +27,19 @@ import param
 import pytest
 
 import bencher.variables.results as results_module
+from bencher.bench_cfg import BenchCfg
 from bencher.variables.results import (
+    _PARAM_MODULES,
     ResultContainer,
     ResultDataSet,
+    ResultFloat,
     ResultImage,
     ResultPath,
     ResultReference,
     ResultString,
-    ResultFloat,
     ResultVec,
     ResultVideo,
-    ResultVolume,
-    _PARAM_MODULES,
 )
-from bencher.bench_cfg import BenchCfg
 
 
 def _discover_all_result_classes():
@@ -57,9 +57,13 @@ def _discover_all_result_classes():
 
 def _make_instance(cls):
     """Create an instance of a result class with sensible defaults."""
-    if cls is ResultVec:
-        return cls(size=3, units="ul", doc="test")
-    return cls(doc="test")
+    with warnings.catch_warnings():
+        # Deprecated classes (e.g. ResultHmap) warn on instantiation but their
+        # hashes must stay pinned until they are actually removed.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        if cls is ResultVec:
+            return cls(size=3, units="ul", doc="test")
+        return cls(doc="test")
 
 
 def _collect_mro_slots(cls):
@@ -169,7 +173,6 @@ class TestHashPersistentDifferentiation:
             (ResultContainer, "container", "custom"),
             (ResultReference, "container", "custom"),
             (ResultDataSet, "dataset", "custom"),
-            (ResultVolume, "container", "custom"),
         ],
         ids=lambda x: x.__name__ if isinstance(x, type) else x,
     )
@@ -276,7 +279,6 @@ class TestBenchCfgHashStability:
             cfg.result_vars = [
                 ResultReference(obj=obj_payload, doc="ref"),
                 ResultDataSet(obj=obj_payload, doc="ds"),
-                ResultVolume(obj=obj_payload, doc="vol"),
             ]
             cfg.const_vars = []
             return cfg
@@ -736,8 +738,10 @@ class TestSweepSlotCoverage:
 # on-disk benchmark-level and over_time entry in the field.
 # ---------------------------------------------------------------------------
 
-GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "afbbadba143168305abeaab3e2e53ea9c429c2a5"
-GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "6093b4560b17af4dab2f14f5609b7b945499df63"
+GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "6a2b022e6f72ac6c536a118c88065a30b788eca1"
+GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "5aa01b2f3c3ad8e1022c4c8cf027397a3204ba47"
+# The over_time history key: include_result_vars=False.
+GOLDEN_BENCH_CFG_HASH_HISTORY = "ec8e1d72fb6137e20156499c505547933e534ac0"
 
 
 def _build_golden_bench_cfg():
@@ -783,6 +787,13 @@ class TestGoldenBenchCfgHash:
         assert cfg.hash_persistent(include_repeats=False) == (
             GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS
         )
+
+    def test_golden_hash_history_key(self):
+        """The history key (include_result_vars=False) is a distinct golden value."""
+        cfg = _build_golden_bench_cfg()
+        history = cfg.hash_persistent(include_repeats=True, include_result_vars=False)
+        assert history == GOLDEN_BENCH_CFG_HASH_HISTORY
+        assert history != GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS
 
     def test_title_change_does_not_affect_golden_hash(self):
         cfg = _build_golden_bench_cfg()

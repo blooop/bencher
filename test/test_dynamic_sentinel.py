@@ -1,5 +1,6 @@
-import bencher as bn
 import param
+
+import bencher as bn
 
 
 class DynCfg(param.Parameterized):

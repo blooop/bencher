@@ -28,4 +28,4 @@ def example_bool_plot_curve(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_bool_plot_curve, level=3, repeats=20)
+    bn.run(example_bool_plot_curve, subsampling_divisions=3, repeats=20)

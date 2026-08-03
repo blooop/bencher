@@ -1,20 +1,20 @@
 # pylint: skip-file  #this is experimental still
 
 
-from bokeh.models import HoverTool
-import pandas as pd
-from hvplot import pandas  # noqa
 import holoviews as hv
+import pandas as pd
 import panel as pn
+from bokeh.models import HoverTool
+from hvplot import pandas  # noqa
 
-datadict = dict(
-    x=[1, 5],
-    y=[4, 10],
-    img=[
+datadict = {
+    "x": [1, 5],
+    "y": [4, 10],
+    "img": [
         "https://raw.githubusercontent.com/holoviz/panel/master/doc/_static/logo_horizontal.png",
         "https://raw.githubusercontent.com/holoviz/panel/master/doc/_static/logo_stacked.png",
     ],
-)
+}
 
 
 hover = HoverTool(

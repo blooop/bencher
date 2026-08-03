@@ -1,25 +1,39 @@
 from __future__ import annotations
-from typing import Any
-from copy import deepcopy
 
+import warnings
+from copy import deepcopy
+from typing import Any
+
+import holoviews as hv
 import numpy as np
+import panel as pn
 import param
 from param import Parameterized
-import holoviews as hv
-import panel as pn
+
 from bencher.utils import hash_sha1
 
 # slots that are shared across all Sweep classes
 # param and slots don't work easily with multiple inheritance so define here
 shared_slots = ["units", "samples", "optimize"]
 
-# Mapping from level index to number of samples per variable.
-# Level 0 means "use the variable's own samples setting".
-# Levels 1-13 produce geometrically increasing sample counts:
-#   level 1 →  1,  level 2 →  2,  level 3 →  3,  level 4 →  5,
-#   level 5 →  9,  level 6 → 17,  level 7 → 33,  level 8 → 65,
-#   level 9 → 129, level 10 → 257, level 11 → 513, level 12 → 1025, level 13 → 2049
-LEVEL_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+# Mapping from subsampling_divisions index to number of samples per variable.
+# Subsampling Divisions 0 means "use the variable's own samples setting".
+# Subsampling Divisions 1-13 produce geometrically increasing sample counts:
+#   subsampling_divisions 1 →  1,  subsampling_divisions 2 →  2,  subsampling_divisions 3 →  3,  subsampling_divisions 4 →  5,
+#   subsampling_divisions 5 →  9,  subsampling_divisions 6 → 17,  subsampling_divisions 7 → 33,  subsampling_divisions 8 → 65,
+#   subsampling_divisions 9 → 129, subsampling_divisions 10 → 257, subsampling_divisions 11 → 513, subsampling_divisions 12 → 1025, subsampling_divisions 13 → 2049
+SUBSAMPLING_DIVISIONS_SAMPLES = [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513, 1025, 2049]
+
+
+def __getattr__(name: str):
+    if name == "LEVEL_SAMPLES":
+        warnings.warn(
+            "'LEVEL_SAMPLES' is deprecated; use 'SUBSAMPLING_DIVISIONS_SAMPLES' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return SUBSAMPLING_DIVISIONS_SAMPLES
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def describe_variable(
@@ -39,15 +53,13 @@ def describe_variable(
     sampling_str = []
     sampling_str.append(f"{v.name}:")
     if include_samples:
-        # sampling_str.append(f"{indent}{v.sampling_str(debug)}")
         sampling_str.append(f"{indent}number of samples: {len(v.values())}")
         sampling_str.append(f"{indent}sample values: {[str(v) for v in v.values()]}")
 
     if value is not None:
         sampling_str.append(f"{indent}value: {value}")
-    if hasattr(v, "units"):
-        if v.units != "ul" and len(v.units) > 0:
-            sampling_str.append(f"{indent}units: [{v.units}]")
+    if hasattr(v, "units") and v.units != "ul" and len(v.units) > 0:
+        sampling_str.append(f"{indent}units: [{v.units}]")
     if v.doc is not None:
         sampling_str.append(f"{indent}docs: {v.doc}")
     for i in range(len(sampling_str)):
@@ -56,12 +68,6 @@ def describe_variable(
 
 
 class SweepBase(param.Parameter):
-    # def __init__(self, **params):
-    # super().__init__(**params)
-    # self.units = ""
-    # slots = ["units", "samples"]
-    # __slots__ = shared_slots
-
     @property
     def sweep_bounds(self) -> tuple | None:
         """Return the sweep range (low, high).
@@ -80,11 +86,14 @@ class SweepBase(param.Parameter):
 
     def values(
         self,
-    ) -> list[Any]:
+    ) -> list[Any] | np.ndarray:
         """All sweep classes must implement this method. This generates sample values from based on the parameters bounds and sample number.
 
         Returns:
-            list[Any]: A list of samples from the variable
+            list[Any] | np.ndarray: The samples from the variable. The numpy arm is not
+            optional politeness -- ``FloatSweep.values`` returns the array from
+            ``linspace``/``arange`` directly, so declaring ``list[Any]`` here would make
+            that override an LSP violation.
         """
         raise NotImplementedError
 
@@ -108,14 +117,19 @@ class SweepBase(param.Parameter):
         will silently serve stale data for a reshaped sweep.
 
         The class name is included so that different Sweep subclasses with
-        the same identity tuple do not collide.
+        the same identity tuple do not collide.  The variable *name* is also
+        included: the stored history keys its dims/coords by name, so two
+        same-shaped sweeps with different names are different experiments —
+        without the name in the key, renaming an input var would silently
+        concat a fresh dataset against history whose dimension no longer
+        exists, broadcasting both dims and fabricating never-measured points.
 
         Note: the sample cache is keyed solely by concrete input values
         (see :class:`bencher.worker_job.WorkerJob`) and is unaffected by
         this hash, so widening a sweep range still reuses per-sample cache
         entries for overlapping inputs.
         """
-        return (type(self).__name__, self.units, self.samples)  # pylint: disable=no-member
+        return (type(self).__name__, self.name, self.units, self.samples)  # pylint: disable=no-member
 
     def hash_persistent(self) -> str:
         """Deterministic hash based on :meth:`_sweep_identity`.
@@ -142,7 +156,7 @@ class SweepBase(param.Parameter):
         Returns:
             pn.widgets.slider.DiscreteSlider: A panel slider with the values() of the sweep variable
         """
-        return pn.widgets.slider.DiscreteSlider(name=self.name, options=list(self.values()))
+        return pn.widgets.slider.DiscreteSlider(label=self.name, options=list(self.values()))
 
     def as_dim(self, compute_values=False) -> hv.Dimension:
         """Takes a sweep variable and turns it into a holoview dimension
@@ -165,7 +179,7 @@ class SweepBase(param.Parameter):
             params["default"] = self.default
 
         if hasattr(self, "step"):
-            params["step"] = getattr(self, "step")
+            params["step"] = self.step
 
         # TODO investigate why this stopped working after a holoviews update
         # if hasattr(self, "units"):
@@ -207,11 +221,24 @@ class SweepBase(param.Parameter):
         Returns:
             SweepBase: A new sweep with the specified bounds.
 
+        A zero-width range (*low* == *high*) is legal and yields a single sample at
+        that value, so a caller whose range is computed at run time does not need to
+        switch representation when it collapses.  Switching to ``sample_values``
+        would change the sweep's identity tuple and silently move the benchmark to
+        a different cache and history series.
+
         Raises:
-            ValueError: If *low* >= *high* or the sweep has no bounds attributes.
+            ValueError: If *low* > *high*, if *samples* > 1 is requested for a
+                zero-width range, or the sweep has no bounds attributes.
         """
-        if low >= high:
-            raise ValueError(f"low must be less than high, got low={low}, high={high}")
+        if low > high:
+            raise ValueError(f"low must not exceed high, got low={low}, high={high}")
+        if low == high and samples is not None and samples > 1:
+            raise ValueError(
+                f"samples={samples} was requested for the zero-width range "
+                f"[{low}, {high}], which has exactly one distinct value. Pass "
+                f"samples=1 or omit it."
+            )
         low, high = self._coerce_bound(low), self._coerce_bound(high)
         output = deepcopy(self)
         if hasattr(output, "softbounds"):
@@ -287,12 +314,28 @@ class SweepBase(param.Parameter):
         """
         return (deepcopy(self), const_value)
 
-    def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
-        assert level >= 1
-        # TODO work out if the order can be returned in level order always
-        sampled = self.with_samples(LEVEL_SAMPLES[min(max_level, level)])
+    def with_subsampling_divisions(
+        self, subsampling_divisions: int = 1, max_subsampling_divisions: int = 12
+    ) -> SweepBase:
+        if subsampling_divisions < 1:
+            raise ValueError(f"subsampling_divisions must be >= 1, got {subsampling_divisions}")
+        # TODO work out if the order can be returned in subsampling_divisions order always
+        sampled = self.with_samples(
+            SUBSAMPLING_DIVISIONS_SAMPLES[min(max_subsampling_divisions, subsampling_divisions)]
+        )
         # list() is required because SweepSelector.values() may return a param
         # ListProxy that holds a circular reference back to the original parameter
         # via ListProxy._parameter, which breaks pickle (and therefore multiprocessing).
         out = self.with_sample_values(list(sampled.values()))
         return out
+
+    def with_level(self, level: int = 1, max_level: int = 12) -> SweepBase:
+        """Deprecated: use :meth:`with_subsampling_divisions` instead."""
+        warnings.warn(
+            "'with_level' is deprecated; use 'with_subsampling_divisions' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.with_subsampling_divisions(
+            subsampling_divisions=level, max_subsampling_divisions=max_level
+        )

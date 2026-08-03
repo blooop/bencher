@@ -1,14 +1,14 @@
 from __future__ import annotations
-import panel as pn
-from param import Parameter
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import hvplot.pandas  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
-from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
+import panel as pn
+import xarray as xr
+from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
+from bencher.results.bench_result_base import ReduceType
+from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.variables.results import ResultFloat
 
 
@@ -40,9 +40,9 @@ class HistogramResult(HoloviewResult):
         self_snapshot.ds = ds
         return self_snapshot.filter(
             self.to_histogram_ds,
-            float_range=VarRange(0, 0),
-            cat_range=VarRange(0, None),
-            input_range=VarRange(0, 0),
+            float_range=VarRange.exactly(0),
+            cat_range=VarRange.unbounded(),
+            input_range=VarRange.exactly(0),
             reduce=ReduceType.NONE,
             target_dimension=target_dimension,
             result_var=result_var,
@@ -52,9 +52,12 @@ class HistogramResult(HoloviewResult):
 
     def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
         """Render a single histogram from a dataset (no over_time handling)."""
+        units = getattr(result_var, "units", "") or ""
+        xlabel = f"{result_var.name} [{units}]" if units else result_var.name
         plot = dataset.hvplot(
             kind="hist",
             y=[result_var.name],
+            xlabel=xlabel,
             ylabel="count",
             legend="bottom_right",
             title=f"{result_var.name} vs Count",

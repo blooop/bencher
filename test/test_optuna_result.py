@@ -1,9 +1,10 @@
 """Tests for bencher/results/optuna_result.py"""
 
 import unittest
+
 import numpy as np
-import panel as pn
 import optuna
+import panel as pn
 
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject

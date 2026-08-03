@@ -1,0 +1,339 @@
+"""Tests for machine-readable result export (bencher.report_export)."""
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import numpy as np
+import xarray as xr
+
+from bencher import (
+    Bench,
+    BenchRunCfg,
+    compare_results,
+    comparison_to_json,
+    result_to_dict,
+    result_to_json,
+    series_for_var,
+)
+from bencher.example.benchmark_data import ExampleBenchCfg
+from bencher.regression import RegressionReport, RegressionResult
+
+
+def _make_bench() -> Bench:
+    return Bench("test_export", ExampleBenchCfg())
+
+
+def _collect(offset: float = 0.0, result_vars=None):
+    """Collect a deterministic theta sweep of out_sin at a constant offset."""
+    if result_vars is None:
+        result_vars = [ExampleBenchCfg.param.out_sin]
+    return _make_bench().collect(
+        input_vars=[ExampleBenchCfg.param.theta],
+        result_vars=result_vars,
+        const_vars=[(ExampleBenchCfg.param.offset, offset)],
+        run_cfg=BenchRunCfg(repeats=1),
+        title=f"export_offset_{offset}",
+    )
+
+
+def _is_jsonable(obj) -> bool:
+    """True if the object round-trips through strict JSON (no NaN/inf/numpy)."""
+    try:
+        json.loads(json.dumps(obj, allow_nan=False))
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+class TestResultToDict(unittest.TestCase):
+    def test_schema_and_metrics(self):
+        res = _collect()
+        data = result_to_dict(res)
+        self.assertEqual(data["schema_version"], 1)
+        self.assertEqual(data["bench_name"], "test_export")
+        self.assertFalse(data["over_time"])
+        names = {m["variable"] for m in data["metrics"]}
+        self.assertIn("out_sin", names)
+        out_sin = next(m for m in data["metrics"] if m["variable"] == "out_sin")
+        self.assertEqual(out_sin["units"], "v")
+        self.assertEqual(out_sin["direction"], "minimize")
+
+    def test_no_regressions_without_over_time(self):
+        data = result_to_dict(_collect())
+        self.assertFalse(data["regressions"]["has_regressions"])
+        self.assertEqual(data["regressions"]["results"], [])
+
+    def test_output_is_strict_json(self):
+        # The whole contract (including any zero-baseline percent -> None) must
+        # be strict JSON: no NaN/inf tokens, no numpy scalars.
+        self.assertTrue(_is_jsonable(result_to_dict(_collect())))
+
+    def test_result_to_json_writes_file(self):
+        res = _collect()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = result_to_json(res, Path(tmp) / "sub" / "result.json")
+            self.assertTrue(path.exists())
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(loaded["bench_name"], "test_export")
+
+
+class TestRegressionDataclassToDict(unittest.TestCase):
+    def test_regression_result_to_dict_fields(self):
+        r = RegressionResult(
+            variable="latency",
+            method="percentage",
+            regressed=True,
+            current_value=12.0,
+            baseline_value=10.0,
+            change_percent=20.0,
+            threshold=10.0,
+            direction="minimize",
+            details="…",
+            band_lower=9.0,
+            band_upper=11.0,
+        )
+        d = r.to_dict()
+        self.assertEqual(d["variable"], "latency")
+        self.assertTrue(d["regressed"])
+        self.assertEqual(d["change_percent"], 20.0)
+        self.assertEqual(d["band_lower"], 9.0)
+        # Numpy replay arrays must never leak into the dict.
+        self.assertNotIn("historical", d)
+        self.assertNotIn("current_samples", d)
+
+    def test_non_finite_becomes_none(self):
+        r = RegressionResult(
+            variable="x",
+            method="percentage",
+            regressed=False,
+            current_value=1.0,
+            baseline_value=0.0,
+            change_percent=float("inf"),  # zero-baseline division
+            threshold=10.0,
+            direction="minimize",
+            details="",
+        )
+        self.assertIsNone(r.to_dict()["change_percent"])
+
+    def test_oversized_int_becomes_none(self):
+        # JSON ints are arbitrary-precision; float(10**400) raises OverflowError,
+        # which must not escape to_dict.
+        r = RegressionResult(
+            variable="x",
+            method="percentage",
+            regressed=False,
+            current_value=10**400,
+            baseline_value=1.0,
+            change_percent=0.0,
+            threshold=10.0,
+            direction="minimize",
+            details="",
+        )
+        self.assertIsNone(r.to_dict()["current_value"])
+
+    def test_report_to_dict_parity_with_markdown(self):
+        regressed = RegressionResult(
+            "a", "percentage", True, 12.0, 10.0, 20.0, 10.0, "minimize", ""
+        )
+        passed = RegressionResult("b", "percentage", False, 10.0, 10.0, 0.0, 10.0, "minimize", "")
+        report = RegressionReport(results=[regressed, passed])
+        d = report.to_dict()
+        self.assertTrue(d["has_regressions"])
+        self.assertEqual(len(d["results"]), 2)
+        # Every variable named in the markdown table appears in the dict.
+        md = report.to_markdown()
+        for r in report.results:
+            self.assertIn(r.variable, md)
+            self.assertIn(r.variable, {x["variable"] for x in d["results"]})
+
+
+class TestVerdictMethodUnits(unittest.TestCase):
+    """_verdict must measure improvements in each method's own threshold units
+    (percent / absolute delta / MAD band), driven by real detector output."""
+
+    def test_delta_verdict_uses_absolute_units(self):
+        from bencher.regression import detect_delta
+        from bencher.report_export import _verdict
+        from bencher.variables.results import OptDir
+
+        hist = np.full(6, 10.0)
+        # Improvement of 3 absolute units (-30%): below max_delta=5 -> unchanged,
+        # even though |change_percent| (30) dwarfs the threshold number (5).
+        small = detect_delta("m", hist, np.array([7.0]), max_delta=5.0, direction=OptDir.minimize)
+        self.assertFalse(small.regressed)
+        self.assertEqual(_verdict(small.to_dict()), "unchanged")
+        # Improvement of 6 absolute units clears max_delta=5 -> improved.
+        big = detect_delta("m", hist, np.array([4.0]), max_delta=5.0, direction=OptDir.minimize)
+        self.assertEqual(_verdict(big.to_dict()), "improved")
+
+    def test_adaptive_verdict_uses_mad_band(self):
+        from bencher.regression import detect_adaptive
+        from bencher.report_export import _verdict
+        from bencher.variables.results import OptDir
+
+        rng = np.random.default_rng(42)
+        hist = 100.0 + rng.normal(0.0, 0.01, size=20)
+        # A -1% move is tiny in percent terms but far outside the MAD band of a
+        # near-noiseless history -> improved despite |change| < the sigma number.
+        improved = detect_adaptive(
+            "m", hist, np.array([99.0]), regression_mad=3.5, direction=OptDir.minimize
+        )
+        self.assertFalse(improved.regressed)
+        self.assertLess(abs(improved.change_percent), improved.threshold)
+        self.assertEqual(_verdict(improved.to_dict()), "improved")
+        # A beneficial move inside a wide MAD band must not be called improved
+        # just because |change_percent| exceeds the sigma threshold number.
+        noisy = 100.0 + rng.normal(0.0, 10.0, size=20)
+        inside = detect_adaptive(
+            "m", noisy, np.array([95.0]), regression_mad=3.5, direction=OptDir.minimize
+        )
+        self.assertFalse(inside.regressed)
+        d = inside.to_dict()
+        self.assertGreaterEqual(d["band_upper"], 95.0)
+        self.assertLessEqual(d["band_lower"], 95.0)
+        self.assertEqual(_verdict(d), "unchanged")
+
+    def test_absolute_verdict_abstains(self):
+        from bencher.regression import detect_absolute
+        from bencher.report_export import _verdict
+        from bencher.variables.results import OptDir
+
+        res = detect_absolute("m", np.array([40.0]), limit=50.0, direction=OptDir.minimize)
+        self.assertFalse(res.regressed)
+        self.assertEqual(_verdict(res.to_dict()), "unchanged")
+
+
+class TestCompareResults(unittest.TestCase):
+    def test_regression_detected(self):
+        # offset shifts out_sin upward; direction=minimize => increase regresses.
+        cmp = compare_results(_collect(offset=0.0), _collect(offset=0.2))
+        out_sin = next(m for m in cmp["metrics"] if m["variable"] == "out_sin")
+        self.assertEqual(out_sin["verdict"], "regressed")
+        self.assertTrue(out_sin["regressed"])
+        self.assertGreater(out_sin["change_percent"], 0)
+        self.assertEqual(cmp["summary"]["regressed"], 1)
+
+    def test_improvement_detected(self):
+        cmp = compare_results(_collect(offset=0.2), _collect(offset=0.0))
+        out_sin = next(m for m in cmp["metrics"] if m["variable"] == "out_sin")
+        self.assertEqual(out_sin["verdict"], "improved")
+        self.assertFalse(out_sin["regressed"])
+        self.assertEqual(cmp["summary"]["improved"], 1)
+
+    def test_unchanged(self):
+        cmp = compare_results(_collect(offset=0.1), _collect(offset=0.1))
+        out_sin = next(m for m in cmp["metrics"] if m["variable"] == "out_sin")
+        self.assertEqual(out_sin["verdict"], "unchanged")
+        self.assertEqual(cmp["summary"]["unchanged"], 1)
+
+    def test_no_shared_metric_raises(self):
+        base = _collect(result_vars=[ExampleBenchCfg.param.out_sin])
+        cand = _collect(result_vars=[ExampleBenchCfg.param.out_cos])
+        with self.assertRaises(ValueError):
+            compare_results(base, cand)
+
+    def test_comparison_is_strict_json(self):
+        cmp = compare_results(_collect(offset=0.0), _collect(offset=0.2))
+        self.assertTrue(_is_jsonable(cmp))
+
+    def test_comparison_to_json_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = comparison_to_json(
+                _collect(offset=0.0), _collect(offset=0.2), Path(tmp) / "cmp.json"
+            )
+            self.assertTrue(path.exists())
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(loaded["schema_version"], 1)
+            self.assertIn("summary", loaded)
+
+
+def _over_time_ds(rows, labels) -> xr.Dataset:
+    """Build a synthetic (over_time, repeat) dataset for one metric."""
+    return xr.Dataset(
+        {"m": (("over_time", "repeat"), np.array(rows, dtype=float))},
+        coords={"over_time": labels, "repeat": list(range(len(rows[0])))},
+    )
+
+
+class TestSeriesForVar(unittest.TestCase):
+    def test_mean_std_n_per_event(self):
+        ds = _over_time_ds([[1.0, 1.0], [2.0, 4.0]], ["t0", "t1"])
+        series = series_for_var(ds, "m")
+        self.assertEqual([p["time_event"] for p in series], ["t0", "t1"])
+        self.assertEqual([p["mean"] for p in series], [1.0, 3.0])
+        self.assertEqual(series[0]["std"], 0.0)  # [1,1]
+        self.assertEqual(series[1]["std"], 1.0)  # population std of [2,4]
+        self.assertEqual([p["n"] for p in series], [2, 2])
+
+    def test_strips_embedded_newlines_from_labels(self):
+        ds = _over_time_ds([[1.0, 1.0]], ["2026-06-10\n09:00 abc"])
+        self.assertEqual(series_for_var(ds, "m")[0]["time_event"], "2026-06-10 09:00 abc")
+
+    def test_all_nan_event_is_none_with_zero_n(self):
+        ds = _over_time_ds([[np.nan, np.nan], [2.0, 4.0]], ["t0", "t1"])
+        series = series_for_var(ds, "m")
+        self.assertIsNone(series[0]["mean"])
+        self.assertIsNone(series[0]["std"])
+        self.assertEqual(series[0]["n"], 0)
+        self.assertEqual(series[1]["mean"], 3.0)
+
+    def test_single_event(self):
+        ds = _over_time_ds([[5.0, 5.0]], ["only"])
+        series = series_for_var(ds, "m")
+        self.assertEqual(len(series), 1)
+        self.assertEqual(series[0]["mean"], 5.0)
+
+    def test_series_is_strict_json(self):
+        ds = _over_time_ds([[np.nan, np.nan], [2.0, 4.0]], ["t0", "t1"])
+        self.assertTrue(_is_jsonable(series_for_var(ds, "m")))
+
+
+class TestResultToDictSeries(unittest.TestCase):
+    def _collect_over_time(self):
+        run_cfg = BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 2
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+        bench = Bench("test_series_e2e", ExampleBenchCfg(), run_cfg=run_cfg)
+        kwargs = {
+            "input_vars": [ExampleBenchCfg.param.theta],
+            "result_vars": [ExampleBenchCfg.param.out_sin],
+            "plot_callbacks": False,
+        }
+        bench.plot_sweep(**kwargs)
+        bench.sample_cache = None
+        return bench.plot_sweep(**kwargs)
+
+    def test_include_series_attaches_series(self):
+        res = self._collect_over_time()
+        data = result_to_dict(res, include_series=True)
+        out_sin = next(m for m in data["metrics"] if m["variable"] == "out_sin")
+        self.assertIn("series", out_sin)
+        self.assertGreaterEqual(len(out_sin["series"]), 1)
+        self.assertEqual(set(out_sin["series"][0]), {"time_event", "mean", "std", "n"})
+        self.assertTrue(_is_jsonable(data))
+
+    def test_default_omits_series(self):
+        # A non-over_time result: include_series is a graceful no-op, and the
+        # default keeps the base contract free of a series key.
+        res = _collect(offset=0.0)
+        self.assertNotIn("series", result_to_dict(res)["metrics"][0])
+        self.assertNotIn("series", result_to_dict(res, include_series=True)["metrics"][0])
+
+    def test_result_to_json_include_series_strict_json(self):
+        # The include_series flag must wire through result_to_json to
+        # result_to_dict, and the file it writes must be strict JSON (no
+        # NaN/Inf) that reads back with a series on at least one metric.
+        res = self._collect_over_time()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = result_to_json(res, Path(tmp) / "result.json", include_series=True)
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertTrue(_is_jsonable(loaded))
+        self.assertTrue(any("series" in m for m in loaded["metrics"]))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,13 +1,14 @@
 from __future__ import annotations
-import holoviews as hv
-from param import Parameter
-import hvplot.xarray  # noqa pylint: disable=duplicate-code,unused-import
-import xarray as xr
 
-from bencher.results.bench_result_base import ReduceType
+import holoviews as hv
+import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
+import xarray as xr
+from param import Parameter
+
 from bencher.plotting.plot_filter import VarRange
+from bencher.results.bench_result_base import ReduceType
+from bencher.results.holoview_results.holoview_result import HoloviewResult, PlotResult
 from bencher.variables.results import SCALAR_RESULT_TYPES
-from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 class CurveResult(HoloviewResult):
@@ -37,9 +38,9 @@ class CurveResult(HoloviewResult):
         """
         return self.filter(
             self.to_curve_ds,
-            float_range=VarRange(1, 1),
-            cat_range=VarRange(0, None),
-            repeats_range=VarRange(2, None),
+            float_range=VarRange.exactly(1),
+            cat_range=VarRange.unbounded(),
+            repeats_range=VarRange.at_least(2),
             reduce=ReduceType.REDUCE,
             target_dimension=2,
             result_var=result_var,
@@ -48,7 +49,9 @@ class CurveResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_curve_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs) -> hv.Curve | None:
+    def to_curve_ds(
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+    ) -> PlotResult | None:
         """Creates a curve plot from the provided dataset.
 
         Generates a curve with optional standard deviation spread overlay.
@@ -62,7 +65,11 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the curve plot options.
 
         Returns:
-            hv.Curve | None: A curve plot with optional standard deviation spread.
+            An ``hv.Overlay`` of the curve plus optional standard-deviation spread, or a
+            panel layout when over_time wraps it for the time slider (see
+            ``PlotResult``); ``None`` for a dataset with no dimensions, since there is
+            nothing to put on an axis. Never a bare ``hv.Curve``:
+            ``_build_curve_overlay`` composes into an Overlay whenever it returns at all.
         """
         if self._use_holomap_for_time(dataset):
             var = result_var.name

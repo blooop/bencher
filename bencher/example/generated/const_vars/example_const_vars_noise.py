@@ -41,11 +41,11 @@ def example_const_vars_noise(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     bench.plot_sweep(
         input_vars=["cpu_load", "memory_pct"],
         result_vars=["latency", "throughput"],
-        const_vars=dict(noise_scale=0.3),
+        const_vars={"noise_scale": 0.3},
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_const_vars_noise, level=3)
+    bn.run(example_const_vars_noise, subsampling_divisions=3)

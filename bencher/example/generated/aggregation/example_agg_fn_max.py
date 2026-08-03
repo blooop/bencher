@@ -37,4 +37,4 @@ def example_agg_fn_max(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_agg_fn_max, level=4)
+    bn.run(example_agg_fn_max, subsampling_divisions=4)

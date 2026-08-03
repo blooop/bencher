@@ -1,6 +1,7 @@
 """Tests for bencher/results/holoview_results/surface_result.py"""
 
 import unittest
+
 import panel as pn
 
 import bencher as bn

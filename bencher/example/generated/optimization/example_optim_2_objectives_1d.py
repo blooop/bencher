@@ -31,7 +31,7 @@ def example_optim_2_objectives_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
     bench.plot_sweep(
         input_vars=["cpu_cores"],
         result_vars=["performance", "cost"],
-        const_vars=dict(noise_scale=0.1),
+        const_vars={"noise_scale": 0.1},
         description="Multi-objective optimization over 1D input space using Optuna. The optimizer finds the Pareto front trading off performance vs cost.",
         post_description="The Pareto front shows optimal trade-offs — no point can improve one objective without worsening the other.",
     )
@@ -40,4 +40,4 @@ def example_optim_2_objectives_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_optim_2_objectives_1d, level=3, repeats=3, optimise=30)
+    bn.run(example_optim_2_objectives_1d, subsampling_divisions=3, repeats=3, optimise=30)

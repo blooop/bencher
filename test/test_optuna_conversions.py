@@ -1,23 +1,26 @@
 """Tests for bencher/optuna_conversions.py"""
 
 import unittest
-from unittest.mock import MagicMock
+import warnings
 from enum import auto
-from strenum import StrEnum
+from unittest.mock import MagicMock
 
 import optuna
 import panel as pn
 import param
+from strenum import StrEnum
 
 import bencher as bn
 from bencher.optuna_conversions import (
-    sweep_var_to_optuna_dist,
-    sweep_var_to_suggest,
-    summarise_trial,
+    _append_safe,
+    _append_safe_sized,
     optuna_grid_search,
     param_importance,
+    summarise_trial,
+    sweep_var_to_optuna_dist,
+    sweep_var_to_suggest,
 )
-from bencher.variables.inputs import IntSweep, FloatSweep, StringSweep, EnumSweep, BoolSweep
+from bencher.variables.inputs import BoolSweep, EnumSweep, FloatSweep, IntSweep, StringSweep
 from bencher.variables.time import TimeSnapshot
 
 
@@ -85,6 +88,7 @@ class TestOptimizeFlag(unittest.TestCase):
 
     def test_yaml_sweep_optimize_default_and_override(self):
         from pathlib import Path
+
         from bencher.variables.inputs import YamlSweep
 
         yaml_path = Path(__file__).resolve().parent.parent / "bencher/example/yaml_sweep_list.yaml"
@@ -301,3 +305,67 @@ class TestOptunaGridSearch(unittest.TestCase):
         search_space = study.sampler._search_space  # pylint: disable=protected-access
         self.assertIn("repeat", search_space)
         self.assertIn("float_var", search_space)
+
+
+class _UnexpectedPlotError(Exception):
+    """An exception type outside _EXPECTED_PLOT_FAILURES."""
+
+
+def _boom_expected():
+    raise ValueError("expected boom")
+
+
+def _boom_unexpected():
+    raise _UnexpectedPlotError("unexpected boom")
+
+
+class TestAppendSafe(unittest.TestCase):
+    """A failed optuna plot must never abort report building.
+
+    By the time these run the sweep has already paid for every sample, so a
+    propagating exception would discard the whole run to report one missing
+    plot. Both handlers append a visible pane instead.
+    """
+
+    def _panes(self, append_fn, plot_fn):
+        row = pn.Row()
+        with (
+            self.assertLogs(level="ERROR") as captured,
+            warnings.catch_warnings(record=True),
+        ):
+            warnings.simplefilter("always")
+            append_fn(row, plot_fn)
+        return row, "\n".join(captured.output)
+
+    def test_expected_failure_appends_pane(self):
+        row, logs = self._panes(_append_safe, _boom_expected)
+        self.assertEqual(1, len(row))
+        self.assertIn("_boom_expected", row[0].object)
+        self.assertIn("expected boom", logs)
+        # The expected path adds no "Unexpected" log of its own.
+        self.assertNotIn("Unexpected", logs)
+
+    def test_unexpected_failure_also_appends_pane_and_logs(self):
+        row, logs = self._panes(_append_safe, _boom_unexpected)
+        self.assertEqual(1, len(row))
+        self.assertIn("_boom_unexpected", row[0].object)
+        self.assertIn("Unexpected _UnexpectedPlotError", logs)
+
+    def test_sized_variant_handles_both_paths(self):
+        for plot_fn in (_boom_expected, _boom_unexpected):
+            with self.subTest(plot_fn=plot_fn.__name__):
+                row = pn.Row()
+                with (
+                    self.assertLogs(level="ERROR"),
+                    warnings.catch_warnings(record=True),
+                ):
+                    warnings.simplefilter("always")
+                    _append_safe_sized(row, plot_fn, 400)
+                self.assertEqual(1, len(row))
+                self.assertIn(plot_fn.__name__, row[0].object)
+
+    def test_successful_plot_is_appended_unchanged(self):
+        row = pn.Row()
+        marker = pn.pane.Markdown("ok")
+        _append_safe(row, lambda: marker)
+        self.assertIs(marker, row[0])

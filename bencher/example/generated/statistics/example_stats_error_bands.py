@@ -10,11 +10,11 @@ def example_stats_error_bands(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench
     bench.plot_sweep(
         input_vars=["float1"],
         result_vars=["distance", "sample_noise"],
-        const_vars=dict(noise_scale=0.3),
+        const_vars={"noise_scale": 0.3},
     )
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_stats_error_bands, level=4, repeats=10)
+    bn.run(example_stats_error_bands, subsampling_divisions=4, repeats=10)

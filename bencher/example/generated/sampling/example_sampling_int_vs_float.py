@@ -30,4 +30,4 @@ def example_sampling_int_vs_float(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
 
 
 if __name__ == "__main__":
-    bn.run(example_sampling_int_vs_float, level=3)
+    bn.run(example_sampling_int_vs_float, subsampling_divisions=3)

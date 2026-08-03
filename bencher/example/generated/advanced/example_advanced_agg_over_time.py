@@ -1,8 +1,9 @@
 """Auto-generated example: Aggregate Over Time — 2D sweep to scalar curve with error bounds."""
 
 import math
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class ThermalPlate(bn.ParametrizedSweep):
@@ -60,4 +61,4 @@ def example_advanced_agg_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_agg_over_time, level=4, over_time=True)
+    bn.run(example_advanced_agg_over_time, subsampling_divisions=4, over_time=True)

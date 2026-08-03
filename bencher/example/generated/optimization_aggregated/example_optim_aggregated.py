@@ -39,4 +39,4 @@ def example_optim_aggregated(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_optim_aggregated, level=3, repeats=3, optimise=30)
+    bn.run(example_optim_aggregated, subsampling_divisions=3, repeats=3, optimise=30)

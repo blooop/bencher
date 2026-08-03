@@ -1,6 +1,7 @@
 """Auto-generated example: BenchRunner Publishing with GithubPagesCfg."""
 
 import math
+
 import bencher as bn
 
 
@@ -34,7 +35,7 @@ def example_publish_runner_gh_pages(run_cfg: bn.BenchRunCfg | None = None) -> bn
         "  runner = bn.BenchRunner('my_benchmarks', "
         "publisher=bn.GithubPagesCfg('user', 'repo', 'folder'))\n"
         "  runner.add(my_benchmark_fn)\n"
-        "  runner.run(level=3, publish=True)",
+        "  runner.run(subsampling_divisions=3, publish=True)",
     )
 
     # Uncomment to publish via BenchRunner:
@@ -43,10 +44,10 @@ def example_publish_runner_gh_pages(run_cfg: bn.BenchRunCfg | None = None) -> bn
     #     publisher=bn.GithubPagesCfg("your_username", "your_reports_repo", "waves"),
     # )
     # runner.add_bench(WaveBenchmark())
-    # runner.run(level=3, show=True, publish=True)
+    # runner.run(subsampling_divisions=3, show=True, publish=True)
 
     return bench
 
 
 if __name__ == "__main__":
-    bn.run(example_publish_runner_gh_pages, level=3)
+    bn.run(example_publish_runner_gh_pages, subsampling_divisions=3)

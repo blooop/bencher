@@ -2,23 +2,69 @@ from __future__ import annotations
 
 import argparse
 import logging
-
-from typing import Any, TypeVar
-
-import param
-import panel as pn
-from datetime import datetime
+import warnings
 from copy import deepcopy
+from datetime import datetime
+from enum import auto
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from bencher.variables.sweep_base import hash_sha1, describe_variable, LEVEL_SAMPLES
-from bencher.variables.time import TimeSnapshot, TimeEvent
-from bencher.variables.results import OptDir
-from bencher.results.composable_container.composable_container_base import PaneLayout
-from bencher.job import Executors
+import panel as pn
+import param
+from strenum import LowercaseStrEnum
+
 from bencher.cache_management import CACHE_VERSION
+from bencher.history import OnHistoryReset
+from bencher.job import Executors
+from bencher.results.composable_container.composable_container_base import PaneLayout
 from bencher.results.laxtex_result import to_latex
+from bencher.utils import AggFn
+from bencher.variables.results import OptDir
+from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, describe_variable, hash_sha1
+from bencher.variables.time import TimeEvent, TimeSnapshot
+
+if TYPE_CHECKING:
+    # Runtime import would be circular: identity imports this module.
+    from bencher.identity import SweepIdentity
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")  # Generic type variable
+
+
+class ShowMode(LowercaseStrEnum):
+    """Display mode for benchmark reports."""
+
+    LIVE = auto()
+    HTML = auto()
+    PUBLISHED = auto()
+    NONE = auto()
+
+
+_SHOW_ALIASES: dict[bool | None | str, ShowMode] = {
+    True: ShowMode.LIVE,
+    False: ShowMode.NONE,
+    None: ShowMode.NONE,
+    "static": ShowMode.HTML,
+}
+
+
+def normalize_show(value: bool | str | ShowMode | None) -> ShowMode:
+    """Normalize a ``show`` argument to a :class:`ShowMode`.
+
+    Accepts ``True``/``False``/``None``, any :class:`ShowMode` member, or
+    the corresponding string value.  Raises :class:`ValueError` for
+    anything else.
+    """
+    try:
+        v = _SHOW_ALIASES.get(value, value)
+    except TypeError:
+        v = value
+    try:
+        return ShowMode(v)
+    except ValueError:
+        raise ValueError(
+            f"show must be one of {[m.value for m in ShowMode]} or bool, got {value!r}"
+        ) from None
 
 
 class BenchPlotSrvCfg(param.Parameterized):
@@ -31,7 +77,12 @@ class BenchPlotSrvCfg(param.Parameterized):
         port (int): The port to launch panel with
         allow_ws_origin (bool): Add the port to the whitelist (warning will disable remote
                                access if set to true)
-        show (bool): Open the served page in a web browser
+        show (bool | str | ShowMode): Where to view the report.
+            ``True``/``ShowMode.LIVE`` (default) starts a Panel server and blocks.
+            ``ShowMode.HTML`` saves an embedded HTML file and opens it in the browser,
+            returning immediately.  ``ShowMode.PUBLISHED`` opens the published URL after
+            ``publish=True`` (requires publish).  ``False``/``ShowMode.NONE`` displays
+            nothing.
     """
 
     port: int | None = param.Integer(None, doc="The port to launch panel with")
@@ -39,7 +90,16 @@ class BenchPlotSrvCfg(param.Parameterized):
         False,
         doc="Add the port to the whitelist, (warning will disable remote access if set to true)",
     )
-    show: bool = param.Boolean(True, doc="Open the served page in a web browser")
+    show = param.ObjectSelector(
+        True,
+        objects=[True, False, None, "live", "static", "published", "none"],
+        doc=(
+            "Where to view the report. True/ShowMode.LIVE (default) starts a Panel server "
+            "and blocks. ShowMode.HTML saves an embedded HTML file and opens it in the "
+            "browser, returning immediately. ShowMode.PUBLISHED opens the published URL "
+            "after publish=True (requires publish=True). False/ShowMode.NONE displays nothing."
+        ),
+    )
 
 
 class BenchRunCfg(BenchPlotSrvCfg):
@@ -55,23 +115,23 @@ class BenchRunCfg(BenchPlotSrvCfg):
         # Use defaults — each variable uses its own ``samples`` setting:
         run_cfg = BenchRunCfg()
 
-        # Set a sampling level (geometrically increasing sample counts):
-        run_cfg = BenchRunCfg(level=5)        # 9 samples per variable
-        run_cfg = BenchRunCfg(level=8)        # 65 samples per variable
+        # Set a sampling subsampling_divisions (geometrically increasing sample counts):
+        run_cfg = BenchRunCfg(subsampling_divisions=5)        # 9 samples per variable
+        run_cfg = BenchRunCfg(subsampling_divisions=8)        # 65 samples per variable
 
         # Or set an exact sample count directly:
         run_cfg = BenchRunCfg(samples_per_var=20)
 
-    Level-to-samples mapping
-    ~~~~~~~~~~~~~~~~~~~~~~~~
-    ====== ======= ====== ======= ====== =======
-    Level  Samples Level  Samples Level  Samples
-    ====== ======= ====== ======= ====== =======
-    1      1       5      9       9      129
-    2      2       6      17      10     257
-    3      3       7      33      11     513
-    4      5       8      65      12     1025
-    ====== ======= ====== ======= ====== =======
+    Subsampling Divisions-to-samples mapping
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ========= ======= ========= ======= ========= =======
+    Subsampling Divisions  Samples Subsampling Divisions  Samples Subsampling Divisions  Samples
+    ========= ======= ========= ======= ========= =======
+    1         1       5         9       9         129
+    2         2       6         17      10        257
+    3         3       7         33      11        513
+    4         5       8         65      12        1025
+    ========= ======= ========= ======= ========= =======
 
     Attributes:
         repeats (int): The number of times to sample the inputs
@@ -110,8 +170,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
         time_event (str): String representation of a sequence over time
         headless (bool): Run the benchmarks headlessly
         dry_run (bool): Preview sweep grid without executing the benchmark function
-        level (int): Method of defining the number of samples to sweep over
-        samples_per_var (int | None): Explicit sample count per variable (overrides level)
+        subsampling_divisions (int): Method of defining the number of samples to sweep over
+        samples_per_var (int | None): Explicit sample count per variable (overrides subsampling_divisions)
         run_tag (str): Tag for isolating cached results
         run_date (datetime): Date the benchmark run was performed
         executor (Executors): Executor for running the benchmark
@@ -125,14 +185,49 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     repeats: int = param.Integer(1, doc="The number of times to sample the inputs")
 
-    level: int = param.Integer(
+    catch: tuple[type[BaseException], ...] = param.Parameter(
+        (),
+        doc="Exception types a single sample may raise without aborting the sweep. "
+        "Default () keeps today's fail-fast behaviour. Spelled exactly as on "
+        "Bench.optimize(catch=...), which has had this knob since #962. A caught "
+        "sample leaves the missing-value sentinel at its coordinate, is logged at "
+        "WARNING, and is recorded in BenchResult.failed_samples; nothing is written "
+        "to the sample cache for it, so a transient flake cannot become permanent. "
+        "A bare exception type is accepted and wrapped, so catch=RuntimeError and "
+        "catch=(RuntimeError,) are the same; anything that is not an exception type "
+        "raises TypeError at the start of the run rather than from inside the "
+        "sampling loop. Use with fail_on_sample_error -- they are a pair, not "
+        "independent "
+        "knobs: catch alone turns real breakage into a green run over an "
+        "all-sentinel dataset.",
+    )
+
+    fail_on_sample_error: bool | float = param.Parameter(
+        False,
+        doc="Fail the run after the fact if samples were caught. True raises when "
+        "any sample failed; a float in (0, 1] raises when the failed *fraction* "
+        "reaches it, so a flake is tolerated but a run made of flakes is not. The "
+        "fraction is over samples this run *executed*, not over every coordinate: "
+        "a cache hit never reached the worker and so could not have failed, and "
+        "counting it would make one threshold mean different things on a cold and a "
+        "warm cache. A truthy integer is rejected rather than guessed at: 1 could "
+        "mean True or 100%, so write True or 1.0. Falsy values (False, 0, 0.0) mean "
+        "off; out-of-range thresholds are rejected before sampling starts. The "
+        "raise happens after the dataset and report are assembled, so the partial "
+        "results survive it -- losing the artifact would defeat catching in the "
+        "first place. It fires only for a run that actually sampled: on a "
+        "benchmark-result cache hit the loaded result carries a previous run's "
+        "failure counts, which are not this run's errors (read n_failed for that).",
+    )
+
+    subsampling_divisions: int = param.Integer(
         default=0,
         bounds=[0, 12],
         doc="Controls sample count for every sweep variable at once. "
-        "Level 0 (default) uses each variable's own `samples` setting. "
-        "Levels 1-12 override with geometrically increasing counts: "
+        "Subsampling Divisions 0 (default) uses each variable's own `samples` setting. "
+        "Subsampling Divisions 1-12 override with geometrically increasing counts: "
         "1→1, 2→2, 3→3, 4→5, 5→9, 6→17, 7→33, 8→65, 9→129, 10→257, 11→513, 12→1025. "
-        "Use `BenchRunCfg.level_to_samples(level)` to query programmatically, "
+        "Use `BenchRunCfg.subsampling_divisions_to_samples(subsampling_divisions)` to query programmatically, "
         "or set `samples_per_var` for a direct sample count.",
     )
 
@@ -141,7 +236,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
         allow_None=True,
         bounds=(1, None),
         doc="Explicit number of samples per sweep variable. "
-        "When set, takes precedence over `level`. "
+        "When set, takes precedence over `subsampling_divisions`. "
         "Example: samples_per_var=20 gives exactly 20 samples for every input variable.",
     )
 
@@ -294,6 +389,20 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     clear_history: bool = param.Boolean(False, doc="Clear historical results")
 
+    on_history_reset: str = param.Selector(
+        default=OnHistoryReset.WARN,
+        objects=list(OnHistoryReset),
+        doc="Policy for history-affecting schema changes detected at history-load "
+        "time (a result column removed or redefined, or the whole history "
+        "orphaned by an input/const change). 'warn' (default): log a WARNING "
+        "naming the change and continue. 'error': raise HistoryResetError so a "
+        "CI run can never silently lose a baseline; use 'warn'/'ignore' for one "
+        "run (or clear_history) to acknowledge a deliberate change. 'ignore': "
+        "log at DEBUG only. Retained data is never deleted by any policy — "
+        "removed columns stay dormant in the stored history and resume if the "
+        "variable returns with the same identity.",
+    )
+
     max_time_events: int | None = param.Integer(
         None,
         bounds=[1, None],
@@ -352,9 +461,25 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     regression_method: str = param.Selector(
         default="adaptive",
-        objects=["percentage", "adaptive"],
-        doc="Detection method: 'percentage' (mean comparison) or "
-        "'adaptive' (robust MAD-based step + drift test for noisy metrics).",
+        objects=["percentage", "adaptive", "delta", "absolute"],
+        doc="Detection method. 'percentage': mean comparison vs historical mean. "
+        "'adaptive': robust MAD-based step + drift test for noisy metrics. "
+        "'delta': absolute-unit change vs historical mean (uses regression_delta). "
+        "'absolute': hard directional threshold, no history required (uses "
+        "regression_absolute).",
+    )
+
+    regression_min_history: int = param.Integer(
+        default=1,
+        bounds=[1, None],
+        doc="Minimum number of historical over_time points a result variable "
+        "needs before its regressions can *fail* the run. A variable with a "
+        "younger baseline (freshly added, or restarted by a meaning_version "
+        "bump) still runs detection and reports regressions, but they are "
+        "marked young_baseline and never trigger regression_fail — warn-only "
+        "until the baseline matures. The default of 1 preserves the previous "
+        "behavior (any history gates). Override per variable with a "
+        "'min_history' key in regression_overrides.",
     )
 
     regression_mad: float = param.Number(
@@ -375,6 +500,52 @@ class BenchRunCfg(BenchPlotSrvCfg):
         "collapse to zero.",
     )
 
+    regression_delta: float = param.Number(
+        default=None,
+        allow_None=True,
+        doc="Threshold for regression_method='delta'. Largest acceptable "
+        "absolute-unit delta of the current run's mean from the mean of all "
+        "historical per-time means, respecting the result variable's OptDir "
+        "(minimize: curr - hist must not exceed; maximize: hist - curr must "
+        "not exceed). Ignored when regression_method is not 'delta'.",
+    )
+
+    regression_absolute: float = param.Number(
+        default=None,
+        allow_None=True,
+        doc="Threshold for regression_method='absolute'. Hard directional limit "
+        "the current run's mean must not violate in the direction of the result "
+        "variable's OptDir (minimize: ceiling; maximize: floor). No history "
+        "required — fires on the first recording. Ignored when regression_method "
+        "is not 'absolute'.",
+    )
+
+    regression_overrides: dict = param.Dict(
+        default=None,
+        allow_None=True,
+        doc="Per-variable regression check overrides. Maps result variable name "
+        "to either a bare number — shorthand for {'absolute': value}, a hard "
+        "directional limit (minimize: ceiling; maximize: floor) — or a dict of "
+        "{method: threshold} drawn from 'percentage', 'adaptive', 'delta' and "
+        "'absolute'. A listed variable is checked by exactly the methods in "
+        "its spec instead of the benchmark-wide regression_method, so a "
+        "threshold can be loosened or tightened per variable; multiple "
+        "entries run as independent checks (e.g. {'percentage': 15.0, "
+        "'absolute': 1.0} tracks the trend and holds a hard floor). An empty "
+        "dict opts the variable out of regression detection entirely. "
+        "'absolute' checks need no history and fire from the very first "
+        "recording; the other methods skip until history exists. An adaptive "
+        "override's threshold is its MAD limit; the dual-band percent gate "
+        "still comes from regression_percentage, and while history is too "
+        "sparse for MAD the check skips rather than falling back to a "
+        "percentage check. Malformed entries are dropped with a warning, "
+        "never raised; a spec left with no valid checks keeps the "
+        "benchmark-wide method. Variables not listed keep the benchmark-wide "
+        "method, and override names matching no scalar result variable are "
+        "silently skipped, so one override map can be shared across "
+        "benchmarks with different result_vars.",
+    )
+
     regression_fail: bool = param.Boolean(
         False,
         doc="If True, raise RegressionError when a regression is detected. "
@@ -383,6 +554,13 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     def __init__(self, **params: Any) -> None:
         """Initialize BenchRunCfg with current datetime if not provided."""
+        if "level" in params:
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            params.setdefault("subsampling_divisions", params.pop("level"))
         if "run_date" not in params:
             params["run_date"] = datetime.now()
         super().__init__(**params)
@@ -440,27 +618,43 @@ class BenchRunCfg(BenchPlotSrvCfg):
         return BenchRunCfg(**vars(parser.parse_args()))
 
     @staticmethod
-    def level_to_samples(level: int, max_level: int = 12) -> int:
-        """Return the number of samples-per-variable for a given *level*.
+    def subsampling_divisions_to_samples(
+        subsampling_divisions: int, max_subsampling_divisions: int = 12
+    ) -> int:
+        """Return the number of samples-per-variable for a given *subsampling_divisions*.
 
         Args:
-            level: Sampling level (1-12).
-            max_level: Cap applied before lookup. Defaults to 12.
+            subsampling_divisions: Sampling subsampling_divisions (1-12).
+            max_subsampling_divisions: Cap applied before lookup. Defaults to 12.
 
         Returns:
-            The sample count for this level.
+            The sample count for this subsampling_divisions.
 
         Raises:
-            ValueError: If *level* is out of range.
+            ValueError: If *subsampling_divisions* is out of range.
 
         Example::
 
-            >>> BenchRunCfg.level_to_samples(5)
+            >>> BenchRunCfg.subsampling_divisions_to_samples(5)
             9
         """
-        if level < 1 or level >= len(LEVEL_SAMPLES):
-            raise ValueError(f"level must be between 1 and {len(LEVEL_SAMPLES) - 1}, got {level}")
-        return LEVEL_SAMPLES[min(max_level, level)]
+        if subsampling_divisions < 1 or subsampling_divisions >= len(SUBSAMPLING_DIVISIONS_SAMPLES):
+            raise ValueError(
+                f"subsampling_divisions must be between 1 and {len(SUBSAMPLING_DIVISIONS_SAMPLES) - 1}, got {subsampling_divisions}"
+            )
+        return SUBSAMPLING_DIVISIONS_SAMPLES[min(max_subsampling_divisions, subsampling_divisions)]
+
+    @staticmethod
+    def level_to_samples(level: int, max_level: int = 12) -> int:
+        """Deprecated: use :meth:`subsampling_divisions_to_samples` instead."""
+        warnings.warn(
+            "'level_to_samples' is deprecated; use 'subsampling_divisions_to_samples' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return BenchRunCfg.subsampling_divisions_to_samples(
+            subsampling_divisions=level, max_subsampling_divisions=max_level
+        )
 
     def deep(self):
         return deepcopy(self)
@@ -476,11 +670,18 @@ class BenchRunCfg(BenchPlotSrvCfg):
         mutated.  This lets benchmark functions declare sensible defaults while still
         allowing callers to override::
 
-            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, level=4)
+            run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5, subsampling_divisions=4)
 
         Raises:
             ValueError: If any key in *defaults* is not a recognised parameter.
         """
+        if "level" in defaults:
+            warnings.warn(
+                "The 'level' parameter is deprecated; use 'subsampling_divisions' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            defaults.setdefault("subsampling_divisions", defaults.pop("level"))
         unknown = set(defaults) - set(cls.param)
         if unknown:
             raise ValueError(f"Unknown BenchRunCfg parameter(s): {', '.join(sorted(unknown))}")
@@ -525,6 +726,57 @@ class BenchCfg(BenchRunCfg):
         tag (str): Tags for grouping different benchmarks
         hash_value (str): Stored hash value of the config
         plot_callbacks (list): Callables that take a BenchResult and return panel representation
+
+    Parameter interactions:
+        The caching and history knobs below are declared on ``BenchRunCfg`` and
+        inherited here; the ``run_cfg`` passed to ``plot_sweep`` is merged onto
+        the ``BenchCfg`` before the run, so a run_cfg value wins over the one
+        stored on the config (except for parameters declared constant, which are
+        skipped with a warning).
+
+        Benchmark-level result cache (``cache_results``, ``clear_cache``):
+            * The *write* is unconditional. Whenever a sweep actually runs, the
+              finished ``BenchResult`` is stored under the config hash regardless
+              of ``cache_results`` — so a later run with ``cache_results=True``
+              can hit an entry left by a run that had it off.
+            * ``cache_results`` controls only the *read*: with it True, a stored
+              result under the same config hash is loaded and the entire sweep is
+              skipped.
+            * ``clear_cache=True`` takes precedence over ``cache_results``: the
+              entry is deleted and no read is attempted, so the sweep always
+              re-runs (and repopulates the entry at the end).
+            * ``only_plot=True`` forces ``cache_results=True``, and turns a cache
+              miss into ``FileNotFoundError`` instead of a re-run.
+
+        Per-sample cache (``cache_samples``, ``overwrite_sample_cache``,
+        ``clear_sample_cache``):
+            * Independent of the benchmark-level cache: this one caches individual
+              benchmark-function calls rather than the finished result.
+            * With ``cache_samples=False`` no sample cache is opened at all, so
+              nothing is read or written per sample and the other two flags have
+              nothing to act on — clearing a tag then logs a warning rather than
+              letting "nothing happened" look like "the tag was cleared".
+            * ``overwrite_sample_cache=True`` keeps writing but stops reading:
+              every sample is recomputed and its stored value replaced.
+            * ``clear_sample_cache=True`` evicts this benchmark's ``tag`` from the
+              sample cache before any sampling starts.
+
+        History and ``over_time`` (``clear_history``, ``max_time_events``):
+            * History is only loaded, merged and written back when
+              ``over_time=True``. With it False the run is a single snapshot and
+              neither ``clear_history`` nor ``max_time_events`` does anything.
+            * The history key deliberately excludes result variables, so adding or
+              removing a metric reconciles per column instead of orphaning the
+              whole series. The benchmark-level result cache above stays strict —
+              a hit there requires the exact result-var set.
+            * ``clear_history=True`` skips the load: a fresh series starts from
+              this run and is written back.
+            * ``max_time_events`` trims the merged dataset after reconciliation,
+              keeping the newest N events and dropping older ones; ``None`` means
+              unlimited. A result variable may additionally carry its own
+              ``max_time_events``, which nulls that variable's older cells (and
+              deletes any media files they owned) without shortening the shared
+              ``over_time`` axis.
     """
 
     input_vars = param.List(
@@ -589,6 +841,19 @@ class BenchCfg(BenchRunCfg):
         doc="Use tags to group different benchmarks together. By default benchmarks are considered distinct from each other and are identified by the hash of their name and inputs, constants and results and tag, but you can optionally change the hash value to only depend on the tag.  This way you can have multiple unrelated benchmarks share values with each other based only on the tag value.",
     )
 
+    series_id: str = param.String(
+        None,
+        allow_None=True,
+        doc="Names the over_time *trend* this benchmark appends to, independently of "
+        "what identifies its configuration. tag partitions storage; series_id names "
+        "the trend. Deliberately NOT part of hash_persistent: two benchmarks with the "
+        "same name, tag, inputs and consts stay one cache entry whatever their "
+        "series_id, and folding it in would re-key every existing cache and history "
+        "on upgrade. Declare it to keep a trend across a rename of the worker class "
+        "or a change of cache tag; leave it unset and the series is bench_name:tag, "
+        "exactly as before.",
+    )
+
     hash_value: str = param.String(
         "",
         doc="store the hash value of the config to avoid having to hash multiple times",
@@ -605,9 +870,13 @@ class BenchCfg(BenchRunCfg):
         "When set, run_sweep will automatically append CurveResult (mean +/- std) "
         "and BandResult (percentile bands) with these dims collapsed.",
     )
+    # The objects derive from AggFn (the single source of the vocabulary, plan 23
+    # C11/P11) but stay plain strings: param stores whatever the caller assigns, so
+    # readers of this field must construct the enum at the boundary via
+    # normalize_agg_fn before matching on it (plan 24 A2/A3).
     agg_fn = param.ObjectSelector(
-        default="mean",
-        objects=["mean", "sum", "max", "min", "median"],
+        default=AggFn.MEAN.value,
+        objects=[m.value for m in AggFn],
         doc="Aggregation function to use when agg_over_dims is set.",
     )
 
@@ -622,7 +891,7 @@ class BenchCfg(BenchRunCfg):
         self.hmap_kdims = None
         self.iv_repeat = None
 
-    def hash_persistent(self, include_repeats: bool) -> str:
+    def hash_persistent(self, include_repeats: bool, include_result_vars: bool = True) -> str:
         """Generate a persistent hash for the benchmark configuration.
 
         Overrides the default hash function because the default hash function does not
@@ -630,9 +899,22 @@ class BenchCfg(BenchRunCfg):
         variables that are consistent across instances of BenchCfg with the same
         configuration.
 
+        ``input_vars`` are folded in list order because their order determines the
+        dimension layout of the result arrays. ``result_vars`` and ``const_vars``
+        contribute as an *unordered set* (their per-var digests are sorted before
+        hashing): result vars become name-keyed xarray data variables and const
+        order only affects the title string, so reordering either is a
+        presentation change that must not move the cache key.
+
         Args:
             include_repeats (bool): Whether to include repeats as part of the hash
                                    (True by default except when using the sample cache)
+            include_result_vars (bool): Whether result variables contribute to the
+                hash. True for the benchmark-level result cache, where a cached
+                result must match the exact result-var set. False for the
+                over_time history key, so the history survives result-var
+                changes and per-column reconciliation can retain, retire, or
+                backfill individual columns (see ``bencher.history``).
 
         Returns:
             str: A persistent hash value for the benchmark configuration
@@ -661,14 +943,54 @@ class BenchCfg(BenchRunCfg):
                 hash_sha1(self.tag),
             )
         )
-        all_vars = (self.input_vars or []) + (self.result_vars or [])
-        for v in all_vars:
+        for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 
-        for v in self.const_vars or []:
-            hash_val = hash_sha1((hash_val, v[0].hash_persistent(), hash_sha1(v[1])))
+        # Folded as sets -- sorted *unique* digests -- so that a variable appearing twice
+        # cannot move the key, which is what "unordered set" above has always claimed.
+        # A sorted tuple delivered the ordering half of that contract but not the
+        # uniqueness half: a repeat appeared twice in the hashed sequence, while the
+        # dataset's data_vars and history's per-column metadata are keyed by name and
+        # collapsed it. That disagreement is the bug plan 20 documents.
+        # validate_declared_vars rejects or dedupes duplicates before they reach here on
+        # the plot_sweep path; deduping here too keeps identity correct on the paths that
+        # bypass it -- a BenchCfg built or deserialized directly. Configurations without a
+        # duplicate hash exactly as before, since sorted(set(xs)) == sorted(xs) when xs is
+        # already unique.
+        if include_result_vars:
+            result_hashes = tuple(sorted({v.hash_persistent() for v in self.result_vars or []}))
+        else:
+            result_hashes = ()
 
-        return hash_val
+        const_hashes = tuple(
+            sorted(
+                {
+                    hash_sha1((v[0].hash_persistent(), hash_sha1(v[1])))
+                    for v in self.const_vars or []
+                }
+            )
+        )
+
+        return hash_sha1((hash_val, result_hashes, const_hashes))
+
+    def identity(self, run_cfg: BenchRunCfg | None = None) -> SweepIdentity:
+        """This config's cache/history/sample keys as an inspectable value.
+
+        *run_cfg* replays the merge :meth:`bencher.bencher.Bench.run_sweep`
+        performs before hashing; pass it for a config that has not been run, whose
+        ``repeats`` and ``over_time`` are still the class defaults. The replay runs
+        against a copy, so asking for an identity never reconfigures *self*.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self, run_cfg)
+
+    @property
+    def series(self) -> str:
+        """The series this run appends to: the declared ``series_id`` or the default."""
+        from bencher.history import default_series_id
+
+        return self.series_id or default_series_id(self.bench_name, self.tag)
 
     def inputs_as_str(self) -> list[str]:
         """Get a list of input variable names.
@@ -702,12 +1024,10 @@ class BenchCfg(BenchRunCfg):
 
             cfg = from_bench_cfg(self)
             return render_animation(cfg, width=350, height=250)
-        except (ImportError, AttributeError, ValueError, RuntimeError, OSError) as e:
+        except (ImportError, AttributeError, ValueError, RuntimeError, OSError):
             # Log the exception so failures remain diagnosable while preserving
             # the existing graceful fallback behavior.
-            logging.getLogger(__name__).exception(
-                "Failed to render Cartesian animation for bench config %r: %s", self, e
-            )
+            logger.exception("Failed to render Cartesian animation for bench config %r", self)
             return None
 
     def describe_sweep(
@@ -789,8 +1109,10 @@ class BenchCfg(BenchRunCfg):
         benchmark_sampling_str.append(f"    run date: {self.run_date}")
         if self.run_tag:
             benchmark_sampling_str.append(f"    run tag: {self.run_tag}")
-        if self.level is not None:
-            benchmark_sampling_str.append(f"    bench level: {self.level}")
+        if self.subsampling_divisions is not None:
+            benchmark_sampling_str.append(
+                f"    bench subsampling_divisions: {self.subsampling_divisions}"
+            )
         benchmark_sampling_str.append(f"    cache_results: {self.cache_results}")
         benchmark_sampling_str.append(f"    cache_samples {self.cache_samples}")
         benchmark_sampling_str.append(f"    only_hash_tag: {self.only_hash_tag}")
@@ -946,7 +1268,7 @@ class DimsCfg:
         self.dim_ranges_str: list[str] = [f"{s}\n" for s in self.dim_ranges]
         self.coords: dict[str, list[Any]] = dict(zip(self.dims_name, self.dim_ranges))
 
-        logging.debug(f"dims_name: {self.dims_name}")
-        logging.debug(f"dim_ranges {self.dim_ranges_str}")
-        logging.debug(f"dim_ranges_index {self.dim_ranges_index}")
-        logging.debug(f"coords: {self.coords}")
+        logger.debug(f"dims_name: {self.dims_name}")
+        logger.debug(f"dim_ranges {self.dim_ranges_str}")
+        logger.debug(f"dim_ranges_index {self.dim_ranges_index}")
+        logger.debug(f"coords: {self.coords}")

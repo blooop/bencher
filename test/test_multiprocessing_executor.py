@@ -23,7 +23,7 @@ from strenum import StrEnum
 
 import bencher as bn
 from bencher.bench_cfg import BenchCfg
-from bencher.job import Job, run_job, FutureCache, Executors
+from bencher.job import Executors, FutureCache, Job, run_job
 from bencher.sweep_executor import worker_kwargs_wrapper
 from bencher.worker_job import WorkerJob
 
@@ -116,7 +116,7 @@ def _simple_worker(**kwargs) -> dict:
 
 def _run_job_in_subprocess(job_bytes: bytes) -> dict:
     """Unpickle a Job and run it inside a subprocess."""
-    job = pickle.loads(job_bytes)  # noqa: S301
+    job = pickle.loads(job_bytes)
     return run_job(job)
 
 
@@ -187,13 +187,13 @@ class TestJobPickle:
         assert run_job(restored) == run_job(job)
 
     def test_job_with_mutated_input_vars_in_bench_cfg(self):
-        """BenchCfg containing with_level'd sweeps must pickle inside a Job."""
+        """BenchCfg containing with_subsampling_divisions'd sweeps must pickle inside a Job."""
         input_vars = [
-            bn.StringSweep(["a", "b", "c"]).with_level(3),
-            bn.EnumSweep(Color).with_level(2),
-            bn.BoolSweep().with_level(2),
-            bn.IntSweep(default=0, bounds=(0, 10)).with_level(3),
-            bn.FloatSweep(default=0.5, bounds=(0, 1), samples=5).with_level(3),
+            bn.StringSweep(["a", "b", "c"]).with_subsampling_divisions(3),
+            bn.EnumSweep(Color).with_subsampling_divisions(2),
+            bn.BoolSweep().with_subsampling_divisions(2),
+            bn.IntSweep(default=0, bounds=(0, 10)).with_subsampling_divisions(3),
+            bn.FloatSweep(default=0.5, bounds=(0, 1), samples=5).with_subsampling_divisions(3),
         ]
         cfg = self._make_bench_cfg(input_vars)
         job = self._make_job(cfg, {"label": "a", "color": Color.RED, "flag": True})
@@ -209,10 +209,10 @@ class TestJobPickle:
         restored = pickle.loads(pickle.dumps(job))
         assert run_job(restored) == run_job(job)
 
-    def test_job_with_const_vars_after_with_level(self):
-        """const_vars containing with_level'd sweeps must pickle."""
+    def test_job_with_const_vars_after_with_subsampling_divisions(self):
+        """const_vars containing with_subsampling_divisions'd sweeps must pickle."""
         sw = bn.FloatSweep(default=0.5, bounds=(0, 1), samples=5)
-        const_sw = bn.StringSweep(["a", "b", "c"]).with_level(2)
+        const_sw = bn.StringSweep(["a", "b", "c"]).with_subsampling_divisions(2)
         cfg = self._make_bench_cfg([sw], const_vars=[(const_sw, "a")])
         job = self._make_job(cfg, {"ratio": 0.5})
         restored = pickle.loads(pickle.dumps(job))
@@ -247,7 +247,7 @@ class TestJobMultiprocessing:
 
     def test_string_sweep_values_in_subprocess(self):
         job = self._make_job_with_cfg(
-            [bn.StringSweep(["a", "b"]).with_level(2)],
+            [bn.StringSweep(["a", "b"]).with_subsampling_divisions(2)],
             {"label": "a"},
         )
         result = self._submit_job(job)
@@ -255,7 +255,7 @@ class TestJobMultiprocessing:
 
     def test_enum_sweep_values_in_subprocess(self):
         job = self._make_job_with_cfg(
-            [bn.EnumSweep(Color).with_level(2)],
+            [bn.EnumSweep(Color).with_subsampling_divisions(2)],
             {"color": Color.GREEN},
         )
         result = self._submit_job(job)
@@ -263,7 +263,7 @@ class TestJobMultiprocessing:
 
     def test_bool_sweep_values_in_subprocess(self):
         job = self._make_job_with_cfg(
-            [bn.BoolSweep().with_level(2)],
+            [bn.BoolSweep().with_subsampling_divisions(2)],
             {"flag": False},
         )
         result = self._submit_job(job)
@@ -272,11 +272,11 @@ class TestJobMultiprocessing:
     def test_mixed_sweep_types_in_subprocess(self):
         """All sweep types together in one Job, sent to subprocess."""
         input_vars = [
-            bn.StringSweep(["x", "y", "z"]).with_level(2),
-            bn.EnumSweep(Color).with_level(2),
-            bn.BoolSweep().with_level(2),
-            bn.IntSweep(default=0, bounds=(0, 5)).with_level(2),
-            bn.FloatSweep(default=0.0, bounds=(0, 1), samples=3).with_level(2),
+            bn.StringSweep(["x", "y", "z"]).with_subsampling_divisions(2),
+            bn.EnumSweep(Color).with_subsampling_divisions(2),
+            bn.BoolSweep().with_subsampling_divisions(2),
+            bn.IntSweep(default=0, bounds=(0, 5)).with_subsampling_divisions(2),
+            bn.FloatSweep(default=0.0, bounds=(0, 1), samples=3).with_subsampling_divisions(2),
         ]
         job = self._make_job_with_cfg(
             input_vars,
@@ -288,19 +288,25 @@ class TestJobMultiprocessing:
     def test_many_string_values_in_subprocess(self):
         """Large number of string values — tests ListProxy edge cases."""
         strings = [f"val_{i}" for i in range(50)]
-        sw = bn.StringSweep(strings).with_level(5)
+        sw = bn.StringSweep(strings).with_subsampling_divisions(5)
         job = self._make_job_with_cfg([sw], {"label": "val_0"})
         result = self._submit_job(job)
         assert result == run_job(job)
 
 
 # ---------------------------------------------------------------------------
-# 3. WorkerJob hash + pickle (the dataclass sent alongside the Job)
+# 3. WorkerJob hash + pickle (the dataclass that accompanies the Job in-process)
 # ---------------------------------------------------------------------------
 
 
 class TestWorkerJobPickle:
-    """WorkerJob dataclass must be picklable with all value types."""
+    """WorkerJob dataclass must be picklable with all value types.
+
+    Note a ``WorkerJob`` is **not** actually sent to an executor -- only ``Job``
+    (function + ``job_args``) crosses the process boundary, and the ``WorkerJob``
+    is built and consumed in the parent. This is a property test on the dataclass
+    (it must hold every value type a sweep can produce without one of them
+    breaking pickling), not a test of a production serialization path."""
 
     def _make_worker_job(self, dims_name, function_input_vars, constant_inputs=None):
         job = WorkerJob(
@@ -311,7 +317,9 @@ class TestWorkerJobPickle:
             bench_cfg_sample_hash="abc123",
             tag="test",
         )
-        job.setup_hashes()
+        # Touch the derived hashes so the pickle round-trip below covers them as
+        # populated cached_property values, not just lazy recomputation.
+        assert job.function_input_signature_pure
         return job
 
     def test_worker_job_with_string_values(self):
@@ -390,13 +398,13 @@ class TestBenchCfgPickle:
         for orig, rest in zip(cfg.input_vars, restored.input_vars):
             assert str(orig.values()) == str(rest.values())
 
-    def test_bench_cfg_with_leveled_sweeps(self):
+    def test_bench_cfg_with_fidelitied_sweeps(self):
         """The exact scenario from PR #854."""
         cfg = self._make_cfg(
             [
-                bn.StringSweep(["a", "b", "c"]).with_level(3),
-                bn.EnumSweep(Color).with_level(2),
-                bn.BoolSweep().with_level(2),
+                bn.StringSweep(["a", "b", "c"]).with_subsampling_divisions(3),
+                bn.EnumSweep(Color).with_subsampling_divisions(2),
+                bn.BoolSweep().with_subsampling_divisions(2),
             ]
         )
         restored = pickle.loads(pickle.dumps(cfg))
@@ -426,7 +434,7 @@ class TestBenchCfgPickle:
             assert rest.values() == orig.values()
 
     def test_bench_cfg_with_const_vars_containing_selectors(self):
-        sw = bn.StringSweep(["a", "b", "c"]).with_level(2)
+        sw = bn.StringSweep(["a", "b", "c"]).with_subsampling_divisions(2)
         cfg = self._make_cfg(
             [bn.FloatSweep(default=0, bounds=(0, 1), samples=3)],
             const_vars=[(sw, "a")],
@@ -445,7 +453,7 @@ class TestWorkerWrapperPickle:
 
     def test_partial_with_module_function(self):
         cfg = BenchCfg(
-            input_vars=[bn.StringSweep(["a", "b"]).with_level(2)],
+            input_vars=[bn.StringSweep(["a", "b"]).with_subsampling_divisions(2)],
             result_vars=[],
             const_vars=[],
             bench_name="test",
@@ -460,7 +468,7 @@ class TestWorkerWrapperPickle:
         """ParametrizedSweep.__call__ as worker must be picklable."""
         instance = StringOnlyConfig()
         cfg = BenchCfg(
-            input_vars=[StringOnlyConfig.param.algorithm.with_level(3)],
+            input_vars=[StringOnlyConfig.param.algorithm.with_subsampling_divisions(3)],
             result_vars=[],
             const_vars=[],
             bench_name="test",
@@ -508,7 +516,7 @@ class TestFutureCacheMultiprocessing:
             cache_samples=False,
         )
         cfg = BenchCfg(
-            input_vars=[bn.StringSweep(["a", "b"]).with_level(2)],
+            input_vars=[bn.StringSweep(["a", "b"]).with_subsampling_divisions(2)],
             result_vars=[],
             const_vars=[],
             bench_name="test",
@@ -529,7 +537,7 @@ class TestFutureCacheMultiprocessing:
             cache_samples=False,
         )
         cfg = BenchCfg(
-            input_vars=[bn.EnumSweep(Color).with_level(2)],
+            input_vars=[bn.EnumSweep(Color).with_subsampling_divisions(2)],
             result_vars=[],
             const_vars=[],
             bench_name="test",
@@ -547,17 +555,17 @@ class TestFutureCacheMultiprocessing:
         assert all("result" in r for r in results)
         cache.close()
 
-    def test_submit_with_with_level_sweep_in_cfg(self):
-        """The BenchCfg inside the partial has with_level'd sweeps."""
+    def test_submit_with_with_subsampling_divisions_sweep_in_cfg(self):
+        """The BenchCfg inside the partial has with_subsampling_divisions'd sweeps."""
         cache = FutureCache(
             executor=Executors.MULTIPROCESSING,
             overwrite=True,
             cache_samples=False,
         )
         input_vars = [
-            bn.StringSweep(["x", "y", "z"]).with_level(3),
-            bn.EnumSweep(Color).with_level(2),
-            bn.BoolSweep().with_level(2),
+            bn.StringSweep(["x", "y", "z"]).with_subsampling_divisions(3),
+            bn.EnumSweep(Color).with_subsampling_divisions(2),
+            bn.BoolSweep().with_subsampling_divisions(2),
         ]
         cfg = BenchCfg(
             input_vars=input_vars,
@@ -613,7 +621,7 @@ class TestBenchMultiprocessingEndToEnd:
         worker = StringOnlyConfig()
         res = self._run_bench(
             worker,
-            [StringOnlyConfig.param.algorithm.with_level(3)],
+            [StringOnlyConfig.param.algorithm.with_subsampling_divisions(3)],
         )
         assert res.result_samples() > 0
 
@@ -621,7 +629,7 @@ class TestBenchMultiprocessingEndToEnd:
         worker = EnumOnlyConfig()
         res = self._run_bench(
             worker,
-            [EnumOnlyConfig.param.algo.with_level(3)],
+            [EnumOnlyConfig.param.algo.with_subsampling_divisions(3)],
         )
         assert res.result_samples() > 0
 
@@ -629,7 +637,7 @@ class TestBenchMultiprocessingEndToEnd:
         worker = BoolOnlyConfig()
         res = self._run_bench(
             worker,
-            [BoolOnlyConfig.param.flag.with_level(2)],
+            [BoolOnlyConfig.param.flag.with_subsampling_divisions(2)],
         )
         assert res.result_samples() > 0
 
@@ -639,10 +647,10 @@ class TestBenchMultiprocessingEndToEnd:
         res = self._run_bench(
             worker,
             [
-                MixedSelectorConfig.param.color.with_level(2),
-                MixedSelectorConfig.param.label.with_level(2),
-                MixedSelectorConfig.param.active.with_level(2),
-                MixedSelectorConfig.param.weight.with_level(2),
+                MixedSelectorConfig.param.color.with_subsampling_divisions(2),
+                MixedSelectorConfig.param.label.with_subsampling_divisions(2),
+                MixedSelectorConfig.param.active.with_subsampling_divisions(2),
+                MixedSelectorConfig.param.weight.with_subsampling_divisions(2),
             ],
         )
         assert res.result_samples() > 0
@@ -653,15 +661,15 @@ class TestBenchMultiprocessingEndToEnd:
         res = self._run_bench(
             worker,
             [
-                MultiTypeConfig.param.color.with_level(2),
-                MultiTypeConfig.param.label.with_level(2),
-                MultiTypeConfig.param.count.with_level(2),
+                MultiTypeConfig.param.color.with_subsampling_divisions(2),
+                MultiTypeConfig.param.label.with_subsampling_divisions(2),
+                MultiTypeConfig.param.count.with_subsampling_divisions(2),
             ],
         )
         assert res.result_samples() > 0
 
     def test_with_samples_multiprocessing(self):
-        """with_samples (not with_level) under multiprocessing."""
+        """with_samples (not with_subsampling_divisions) under multiprocessing."""
         worker = StringOnlyConfig()
         res = self._run_bench(
             worker,
@@ -691,7 +699,7 @@ class TestBenchMultiprocessingEndToEnd:
         run_cfg.print_bench_results = False
         res = bench.plot_sweep(
             "mp_repeat_sweep",
-            input_vars=[StringOnlyConfig.param.algorithm.with_level(2)],
+            input_vars=[StringOnlyConfig.param.algorithm.with_subsampling_divisions(2)],
             run_cfg=run_cfg,
             plot_callbacks=False,
         )
@@ -710,7 +718,7 @@ class TestBenchMultiprocessingEndToEnd:
         run_cfg.print_bench_results = False
         res = bench.plot_sweep(
             "mp_const_sweep",
-            input_vars=[MixedSelectorConfig.param.weight.with_level(3)],
+            input_vars=[MixedSelectorConfig.param.weight.with_subsampling_divisions(3)],
             const_vars=[
                 MixedSelectorConfig.param.color.with_const(Color.RED),
                 MixedSelectorConfig.param.label.with_const("x"),
@@ -739,7 +747,7 @@ class TestBenchRunnerMultiprocessing:
         run_cfg.print_bench_results = False
         bench_run = bn.BenchRunner("mp_runner_test", run_cfg=run_cfg)
         bench_run.add_bench(StringOnlyConfig())
-        bench_run.run(level=2)
+        bench_run.run(subsampling_divisions=2)
 
     def test_bench_runner_multi_type(self):
         run_cfg = bn.BenchRunCfg()
@@ -750,7 +758,7 @@ class TestBenchRunnerMultiprocessing:
         run_cfg.print_bench_results = False
         bench_run = bn.BenchRunner("mp_runner_multi_test", run_cfg=run_cfg)
         bench_run.add_bench(MultiTypeConfig())
-        bench_run.run(level=2)
+        bench_run.run(subsampling_divisions=2)
 
 
 # ---------------------------------------------------------------------------
@@ -764,9 +772,9 @@ class TestBenchCfgDeepcopy:
     def test_deepcopy_preserves_values(self):
         cfg = BenchCfg(
             input_vars=[
-                bn.StringSweep(["a", "b", "c"]).with_level(3),
-                bn.EnumSweep(Color).with_level(2),
-                bn.BoolSweep().with_level(2),
+                bn.StringSweep(["a", "b", "c"]).with_subsampling_divisions(3),
+                bn.EnumSweep(Color).with_subsampling_divisions(2),
+                bn.BoolSweep().with_subsampling_divisions(2),
             ],
             result_vars=[],
             const_vars=[],
@@ -780,8 +788,8 @@ class TestBenchCfgDeepcopy:
     def test_deepcopy_then_pickle(self):
         cfg = BenchCfg(
             input_vars=[
-                bn.StringSweep(["a", "b"]).with_level(2),
-                bn.EnumSweep(Color).with_level(2),
+                bn.StringSweep(["a", "b"]).with_subsampling_divisions(2),
+                bn.EnumSweep(Color).with_subsampling_divisions(2),
             ],
             result_vars=[],
             const_vars=[],
@@ -795,7 +803,7 @@ class TestBenchCfgDeepcopy:
 
     def test_multiple_deepcopies(self):
         """Simulates the chain of deepcopies that happens in real execution."""
-        sw = bn.StringSweep(["a", "b", "c"]).with_level(3)
+        sw = bn.StringSweep(["a", "b", "c"]).with_subsampling_divisions(3)
         copy1 = deepcopy(sw)
         copy2 = deepcopy(copy1)
         copy3 = deepcopy(copy2)
@@ -813,14 +821,14 @@ class TestEdgeCases:
 
     def test_single_value_string_sweep(self):
         sw = bn.StringSweep(["only_one"])
-        mutated = sw.with_level(1)
+        mutated = sw.with_subsampling_divisions(1)
         data = pickle.dumps(mutated)
         restored = pickle.loads(data)
         assert restored.values() == ["only_one"]
 
     def test_single_value_enum_sweep(self):
         sw = bn.EnumSweep([Color.RED])
-        mutated = sw.with_level(1)
+        mutated = sw.with_subsampling_divisions(1)
         data = pickle.dumps(mutated)
         restored = pickle.loads(data)
         assert restored.values() == [Color.RED]
@@ -828,14 +836,14 @@ class TestEdgeCases:
     def test_large_string_sweep(self):
         """Large number of values should not cause issues."""
         strings = [f"item_{i:04d}" for i in range(200)]
-        sw = bn.StringSweep(strings).with_level(6)
+        sw = bn.StringSweep(strings).with_subsampling_divisions(6)
         data = pickle.dumps(sw)
         restored = pickle.loads(data)
         assert restored.values() == sw.values()
 
     def test_string_sweep_with_special_characters(self):
         sw = bn.StringSweep(["hello world", "foo/bar", "baz\\qux", "a=b&c=d"])
-        mutated = sw.with_level(3)
+        mutated = sw.with_subsampling_divisions(3)
         data = pickle.dumps(mutated)
         restored = pickle.loads(data)
         assert restored.values() == mutated.values()

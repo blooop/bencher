@@ -88,12 +88,12 @@ def _get_font(size: int):
     """Get a font, falling back to default if no TTF available."""
     try:
         return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
-    except (OSError, IOError):
+    except OSError:
         try:
             return ImageFont.truetype(
                 "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", size
             )
-        except (OSError, IOError):
+        except OSError:
             return ImageFont.load_default()
 
 
@@ -107,7 +107,7 @@ class Shape:
 
     def __init__(
         self,
-        children: list["Shape"] | None = None,
+        children: list[Shape] | None = None,
         direction: str = "right",
         depth: int = 0,
         color_index: int = 0,
@@ -187,7 +187,7 @@ class Shape:
                 child.draw(img, x, cy, alpha)
                 cy += child.size()[1] + g
 
-    def extrude(self, n: int, direction: str, color_index: int | None = None) -> "Shape":
+    def extrude(self, n: int, direction: str, color_index: int | None = None) -> Shape:
         """Create a new shape by extruding this one n times along direction."""
         if color_index is not None:
             copies = [self._deep_copy_recolored(color_index) for _ in range(n)]
@@ -195,7 +195,7 @@ class Shape:
             copies = [self._deep_copy() for _ in range(n)]
         return Shape(children=copies, direction=direction, depth=self.depth + 1)
 
-    def _deep_copy(self) -> "Shape":
+    def _deep_copy(self) -> Shape:
         if self.is_leaf:
             return Shape(color_index=self.color_index)
         return Shape(
@@ -204,7 +204,7 @@ class Shape:
             depth=self.depth,
         )
 
-    def _deep_copy_recolored(self, color_index: int) -> "Shape":
+    def _deep_copy_recolored(self, color_index: int) -> Shape:
         """Copy and recolor in a single traversal."""
         if self.is_leaf:
             return Shape(color_index=color_index)
@@ -416,7 +416,7 @@ class TimelineShape(Shape):
                 font=font_label,
             )
 
-    def _deep_copy(self) -> "Shape":
+    def _deep_copy(self) -> Shape:
         return TimelineShape(self.inner._deep_copy(), self.count)  # pylint: disable=protected-access
 
 
@@ -587,7 +587,7 @@ class StrobeShape(Shape):
         tally_x = box_x + (box_w - tally_avail_w) // 2
         self.draw_tally_overlay(img, tally_x, tally_y, tally_avail_w)
 
-    def _deep_copy(self) -> "Shape":
+    def _deep_copy(self) -> Shape:
         return StrobeShape(self.inner._deep_copy(), self.count, self.cfg, self.flash)  # pylint: disable=protected-access
 
 

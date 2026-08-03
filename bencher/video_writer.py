@@ -1,9 +1,12 @@
-import numpy as np
+from pathlib import Path
+
 import moviepy.video.io.ImageSequenceClip
 import moviepy.video.io.VideoFileClip
-from pathlib import Path
-from .utils import gen_video_path, gen_image_path
+import moviepy.video.VideoClip
+import numpy as np
 from PIL import Image, ImageDraw
+
+from .utils import gen_image_path, gen_video_path
 
 
 class VideoWriter:

@@ -72,9 +72,8 @@ def _has_holomap_column(plots):
         if isinstance(p, pn.Column):
             # Check children for HoloMap-based pane (rendered as HoloViews pane)
             for child in p:
-                if isinstance(child, pn.pane.HoloViews):
-                    if isinstance(child.object, hv.HoloMap):
-                        return True
+                if isinstance(child, pn.pane.HoloViews) and isinstance(child.object, hv.HoloMap):
+                    return True
     return False
 
 

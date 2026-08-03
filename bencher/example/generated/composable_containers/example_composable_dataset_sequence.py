@@ -10,8 +10,8 @@ class TimeseriesCollector(bn.ParametrizedSweep):
     result_ds = bn.ResultDataSet(doc="Collected time-series dataset")
 
     def benchmark(self):
-        import xarray as xr
         import numpy as np
+        import xarray as xr
 
         n = int(self.duration * 10)
         t = np.linspace(0, self.duration, n)
@@ -29,4 +29,4 @@ def example_composable_dataset_sequence(run_cfg: bn.BenchRunCfg | None = None) -
 
 
 if __name__ == "__main__":
-    bn.run(example_composable_dataset_sequence, level=3)
+    bn.run(example_composable_dataset_sequence, subsampling_divisions=3)

@@ -1,8 +1,8 @@
 """Auto-generated example: Plot Type: Surface."""
 
-import bencher as bn
-
 import math
+
+import bencher as bn
 
 
 class SurfaceDemo(bn.ParametrizedSweep):
@@ -27,4 +27,4 @@ def example_plot_surface(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_plot_surface, level=2)
+    bn.run(example_plot_surface, subsampling_divisions=2)

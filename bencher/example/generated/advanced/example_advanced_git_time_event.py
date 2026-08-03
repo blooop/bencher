@@ -1,6 +1,7 @@
 """Auto-generated example: Git Time Event — date + commit hash slider labels."""
 
 import random
+from typing import ClassVar
 
 import bencher as bn
 
@@ -18,7 +19,11 @@ class ServerLatency(bn.ParametrizedSweep):
 
     latency = bn.ResultFloat(units="ms", doc="Response latency", direction=bn.OptDir.minimize)
 
-    _BASE = {"/api/users": 48.0, "/api/orders": 125.0, "/api/health": 8.0}
+    _BASE: ClassVar[dict[str, float]] = {
+        "/api/users": 48.0,
+        "/api/orders": 125.0,
+        "/api/health": 8.0,
+    }
 
     def benchmark(self):
         base = self._BASE[self.endpoint]
@@ -50,4 +55,4 @@ def example_advanced_git_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_git_time_event, level=3, over_time=True)
+    bn.run(example_advanced_git_time_event, subsampling_divisions=3, over_time=True)

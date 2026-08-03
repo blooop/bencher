@@ -42,4 +42,4 @@ def example_agg_int(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_agg_int, level=4)
+    bn.run(example_agg_int, subsampling_divisions=4)

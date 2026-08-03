@@ -1,11 +1,14 @@
 from __future__ import annotations
-from typing import Any, Literal
-from collections.abc import Callable, Sequence
+
 import logging
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
+
 import panel as pn
 from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
+from bencher.results.render_failure import report_render_failure
 
 try:
     from bencher.results.rerun_result import RerunResult
@@ -15,32 +18,56 @@ except ModuleNotFoundError:
         pass
 
 
-from bencher.results.video_summary import VideoSummaryResult
-from bencher.results.video_result import VideoResult
-from bencher.results.volume_result import VolumeResult
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.plugins.bench_data import BenchData, RunMeta
+from bencher.plugins.builtins import (
+    CALLBACK_TO_PLUGIN,
+    PANES_PLUGIN_NAME,
+    register_builtin_plugins,
+)
+from bencher.plugins.registry import decisions_to_table, get_registry
+from bencher.results.dataset_result import DataSetResult
+from bencher.results.histogram_result import HistogramResult
+from bencher.results.holoview_results.band_result import BandResult
+from bencher.results.holoview_results.bar_result import BarResult
+from bencher.results.holoview_results.curve_result import CurveResult
 
 # Updated imports for distribution result classes
 from bencher.results.holoview_results.distribution_result.box_whisker_result import BoxWhiskerResult
-from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
-from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.distribution_result.scatter_jitter_result import (
     ScatterJitterResult,
 )
-from bencher.results.holoview_results.bar_result import BarResult
-from bencher.results.holoview_results.line_result import LineResult
-from bencher.results.holoview_results.curve_result import CurveResult
-from bencher.results.holoview_results.band_result import BandResult
+from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
+from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.line_result import LineResult
+from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
-from bencher.results.histogram_result import HistogramResult
+from bencher.results.holoview_results.table_result import TableResult
+from bencher.results.holoview_results.tabulator_result import TabulatorResult
+from bencher.results.holoview_results.xy_curve_result import XYCurveResult
+from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult
+from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult
+from bencher.results.holoview_results.xy_scatter_result import XYScatterResult
 from bencher.results.optuna_result import OptunaResult
-from bencher.results.dataset_result import DataSetResult
-from bencher.utils import listify, resolve_aggregate
+from bencher.results.pane_result import PaneResult
+from bencher.results.rerun_summary import RerunSummaryResult
+from bencher.results.video_summary import VideoSummaryResult
+from bencher.results.volume_result import VolumeResult
+from bencher.utils import AggFn, listify, resolve_aggregate
+
+if TYPE_CHECKING:
+    # Runtime import would be circular: identity imports bench_cfg, which this
+    # module's own import chain pulls in.
+    from bencher.identity import SweepIdentity
+
+logger = logging.getLogger(__name__)
 
 
 class BenchResult(
-    RerunResult,
+    # RerunResult resolves to either the real class or a fallback stub via the
+    # try/except import above; ty sees that union and can't compute an MRO, but at
+    # runtime exactly one definition is bound.
+    RerunResult,  # ty: ignore[unsupported-base]
     VolumeResult,
     BoxWhiskerResult,
     ViolinResult,
@@ -53,11 +80,22 @@ class BenchResult(
     BandResult,
     SurfaceResult,
     HistogramResult,
+    # Late in the base list (but before their base HoloviewResult) so they never
+    # shadow the earlier renderers; BenchResult must inherit them for the named-only
+    # plugin callbacks (TabulatorResult.to_plot -> self.to_tabulator) to be callable
+    # unbound on a BenchResult.
+    TableResult,
+    TabulatorResult,
+    XYScatterResult,
+    XYCurveResult,
+    XYHistogramResult,
+    XYHexbinResult,
     HoloviewResult,
     VideoSummaryResult,
+    RerunSummaryResult,
     DataSetResult,
     OptunaResult,
-):  # noqa pylint: disable=too-many-ancestors
+):  # pylint: disable=too-many-ancestors
     """Contains the results of the benchmark and has methods to cast the results to various datatypes and graphical representations"""
 
     def __init__(self, bench_cfg) -> None:
@@ -70,6 +108,83 @@ class BenchResult(
         HoloviewResult.__init__(self, bench_cfg)
         # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
+        # Samples that failed without aborting the sweep: raised and tolerated
+        # because of run_cfg.catch, or dropped for breaking the worker contract
+        # (None return / wrong-shape ResultVec — recorded unconditionally).
+        self.failed_samples: list = []
+        # Samples this run actually executed, set by calculate_benchmark_results.
+        # Needed because neither the dataset's own size nor the job count is the
+        # answer: the former grows once over_time history is merged in, and the
+        # latter counts cache hits that never reached the worker.
+        self.n_attempted: int = 0
+
+    @property
+    def n_failed(self) -> int:
+        """How many samples raised and were tolerated.
+
+        Tolerance without accounting is worse than fail-fast: without this a run
+        in which *every* sample failed would produce an all-sentinel dataset, a
+        valid-looking report and a successful exit.
+        """
+        # getattr, not self.failed_samples: BenchResult objects are pickled into
+        # the benchmark cache, and unpickling restores __dict__ without calling
+        # __init__ -- so a result cached by a pre-plan-21 bencher has no such
+        # attribute at all. Reading it directly turns "upgrade, then set
+        # fail_on_sample_error, then hit a warm cache" into an AttributeError.
+        return len(getattr(self, "failed_samples", ()))
+
+    @property
+    def failed_fraction(self) -> float:
+        """Failed samples as a fraction of the samples this run *executed*.
+
+        Cache hits are excluded from the denominator deliberately: they never
+        reached the worker and so could not have failed. Counting them would make
+        one ``fail_on_sample_error`` threshold mean different things on a cold and
+        a warm cache -- the single failure in a 4-sample sweep whose other 3 came
+        from cache is 100% of what ran, not 25%.
+        """
+        attempted = getattr(self, "n_attempted", 0)  # absent on pre-plan-21 pickles
+        return self.n_failed / attempted if attempted else 0.0
+
+    def failed_samples_markdown(self, max_rows: int = 20) -> str:
+        """Markdown summary of this run's failed samples, for the report.
+
+        Bencher's contract is that a failing or contract-breaking sample never
+        aborts a sweep (the expensive samples already collected must survive),
+        so the report has to carry the loudness instead: this block is
+        auto-inserted by :meth:`to_auto_plots` whenever ``n_failed > 0``.
+        """
+        attempted = getattr(self, "n_attempted", 0)
+        of_attempted = f" of {attempted} executed" if attempted else ""
+        lines = [
+            "### ⚠ Failed samples\n",
+            (
+                f"**{self.n_failed}{of_attempted} sample(s) failed.** Their cells hold "
+                f"the missing-value sentinel and are excluded from reductions.\n"
+            ),
+            "| Inputs | Error |",
+            "|--------|-------|",
+        ]
+        failures = getattr(self, "failed_samples", ())
+        for failure in failures[:max_rows]:
+            inputs = ", ".join(f"{k}={v}" for k, v in failure.inputs.items()) or "—"
+            # First line of the exception repr; the full traceback is in the log.
+            error = failure.exception.splitlines()[0] if failure.exception else "—"
+            lines.append(f"| {inputs} | {error} |")
+        if len(failures) > max_rows:
+            lines.append(f"\n*… and {len(failures) - max_rows} more (see the run log).*")
+        return "\n".join(lines)
+
+    @property
+    def identity(self) -> SweepIdentity:
+        """The keys this result was stored under, as an inspectable value.
+
+        The config has already been through ``run_sweep``'s run_cfg merge, so no
+        run config is needed here.
+        """
+        from bencher.identity import identity_of
+
+        return identity_of(self.bench_cfg)
 
     @classmethod
     def from_existing(cls, original: BenchResult) -> BenchResult:
@@ -88,7 +203,7 @@ class BenchResult(
         reduce: ReduceType | None = None,
         # Aggregation controls (applied in filter())
         aggregate: bool | int | list[str] | None = None,
-        agg_fn: Literal["mean", "sum", "max", "min", "median"] = "mean",
+        agg_fn: AggFn | str = AggFn.MEAN,
         **kwargs: Any,
     ) -> BenchResult:
         """Return the current instance of BenchResult.
@@ -102,15 +217,17 @@ class BenchResult(
         result_instance = result_type(self.bench_cfg)
         result_instance.ds = self.ds
         result_instance.plt_cnt_cfg = self.plt_cnt_cfg
-        result_instance.dataset_list = self.dataset_list
+        # getattr: a result pickled before dataset_list existed (or with it stripped)
+        # must still render — the legacy read path degrades to a placeholder instead.
+        result_instance.dataset_list = getattr(self, "dataset_list", [])
         result_instance.regression_report = self.regression_report
         # Build kwargs for the plot call, only include reduce if explicitly set
-        plot_kwargs = dict(
-            result_var=result_var,
-            override=override,
-            agg_over_dims=agg_over_dims,
-            agg_fn=agg_fn,
-        )
+        plot_kwargs = {
+            "result_var": result_var,
+            "override": override,
+            "agg_over_dims": agg_over_dims,
+            "agg_fn": agg_fn,
+        }
         if reduce is not None:
             plot_kwargs["reduce"] = reduce
         plot_kwargs.update(kwargs)
@@ -138,7 +255,7 @@ class BenchResult(
             HistogramResult.to_plot,
             VolumeResult.to_plot,
             # PanelResult.to_video,
-            VideoResult.to_panes,
+            PaneResult.to_panes,
         ]
 
     @staticmethod
@@ -163,53 +280,161 @@ class BenchResult(
             return pn.Column(*[cb(self) for cb in self.bench_cfg.plot_callbacks])
         return None
 
+    def to_bench_data(self, render_kwargs: dict | None = None) -> BenchData:
+        """Snapshot this result as the frozen plugin data contract.
+
+        The transitional ``legacy_result``/``render_kwargs`` fields carry the live
+        result object and the plot kwargs for the wrapped built-in renderers; they
+        disappear once renderers consume BenchData directly.
+
+        Returns:
+            BenchData: The frozen data handle plot plugins receive.
+        """
+        return BenchData(
+            dataset=self.ds,
+            input_vars=tuple(self.bench_cfg.input_vars),
+            result_vars=tuple(self.bench_cfg.result_vars),
+            plt_cnt_cfg=self.plt_cnt_cfg,
+            run_meta=RunMeta(name=self.bench_cfg.bench_name or ""),
+            legacy_result=self,
+            render_kwargs=render_kwargs if render_kwargs is not None else {},
+        )
+
     def to_auto(
         self,
-        plot_list: list[callable] | None = None,
-        remove_plots: list[callable] | None = None,
+        plot_list: list[callable | str] | None = None,
+        remove_plots: list[callable | str] | None = None,
         default_container=pn.Column,
         override: bool = False,  # false so that plots that are not supported are not shown
+        numeric_only: bool = False,
+        backend: str | None = None,
         **kwargs,
     ) -> list[pn.panel]:
-        """Automatically generate plots based on the provided plot callbacks.
+        """Automatically generate plots by dispatching through the plot plugin registry.
+
+        Every registered plugin whose match rule fits this sweep renders, in
+        priority order — the built-in chart types (registered in
+        :mod:`bencher.plugins.builtins`) plus any user plugins registered with
+        ``bencher.register_plugin`` / ``@bencher.plot_plugin`` or discovered via
+        the ``bencher.plot_plugins`` entry-point group.
 
         Args:
-            plot_list (list[callable], optional): List of plot callback functions to use. Defaults to None.
-            remove_plots (list[callable], optional): List of plot callback functions to exclude. Defaults to None.
+            plot_list (list[callable | str], optional): Restrict to these plots. Entries are
+                plugin names ("line", "heatmap", ...) or, for backward compatibility, legacy
+                plot callbacks (e.g. ``LineResult.to_plot``); unrecognized callables are
+                invoked directly as before. Defaults to None (all matching plugins).
+            remove_plots (list[callable | str], optional): Plots to exclude, same entry
+                forms as plot_list. Defaults to None.
             default_container (type, optional): Default container type for the plots. Defaults to pn.Column.
             override (bool, optional): Whether to override unsupported plots. Defaults to False.
+            numeric_only (bool, optional): When True, skip the pane-type result plugin
+                (images, videos, rerun, etc.) that cannot be numerically aggregated.
+                Defaults to False.
+            backend (str, optional): Preferred rendering backend. Chart types the
+                preferred backend implements render through it; the rest keep their
+                best other implementation. Defaults to None (highest priority wins).
             **kwargs: Additional keyword arguments for plot configuration.
 
         Returns:
             list[pn.panel]: A list of panel objects containing the generated plots.
         """
         self.plt_cnt_cfg.print_debug = False
-        plot_list = listify(plot_list)
-        remove_plots = listify(remove_plots)
-
-        if plot_list is None:
-            plot_list = BenchResult.default_plot_callbacks()
-        if remove_plots is not None:
-            for p in remove_plots:
-                plot_list.remove(p)
+        include_names, extra_callbacks = self._normalize_plot_list(listify(plot_list))
+        exclude_names, extra_callbacks = self._plot_exclusions(
+            listify(remove_plots), extra_callbacks, numeric_only
+        )
 
         kwargs = self.set_plot_size(**kwargs)
+        data = self.to_bench_data(render_kwargs=dict(override=override, **kwargs))
 
         row = EmptyContainer(default_container())
-        for plot_callback in plot_list:
-            if self.plt_cnt_cfg.print_debug:
-                print(f"checking: {plot_callback.__name__}")
-            # the callbacks are passed from the static class definition, so self needs to be
-            # passed before the plotting callback can be called
+        for plugin in get_registry().select(
+            data, include=include_names, exclude=exclude_names or None, backend=backend
+        ):
+            try:
+                row.append(plugin.render(data))
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                row.append(report_render_failure(f"Plot plugin '{plugin.name}'", exc))
+        for plot_callback in extra_callbacks:
             try:
                 row.append(plot_callback(self, override=override, **kwargs))
-            except Exception:  # pylint: disable=broad-except
-                logging.error("Plot callback %s failed", plot_callback.__name__, exc_info=True)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                row.append(report_render_failure(f"Plot callback '{plot_callback.__name__}'", exc))
 
         self.plt_cnt_cfg.print_debug = True
         if len(row.pane) == 0:
             row.append(pn.pane.Markdown("No Plotters are able to represent these results"))
         return row.pane
+
+    def explain_selection(
+        self,
+        plot_list: list[callable | str] | None = None,
+        remove_plots: list[callable | str] | None = None,
+        numeric_only: bool = False,
+        backend: str | None = None,
+    ) -> str:
+        """Why each registered plugin would or wouldn't render for this result.
+
+        Runs the same selection `to_auto` uses (same plot_list/remove_plots
+        normalization) and renders the full decision table — chosen plugins first,
+        each rejected one with the first gate that dropped it (named-only, missing
+        capability, shape-filter mismatch, superseded backend, ...).
+
+        Returns:
+            str: A text table, one row per registered plugin.
+        """
+        include_names, _ = self._normalize_plot_list(listify(plot_list))
+        exclude_names, _ = self._plot_exclusions(listify(remove_plots), [], numeric_only)
+        decisions = get_registry().explain(
+            self.to_bench_data(),
+            include=include_names,
+            exclude=exclude_names or None,
+            backend=backend,
+        )
+        return decisions_to_table(decisions)
+
+    @staticmethod
+    def _normalize_plot_list(
+        plot_list: list[callable | str] | None,
+    ) -> tuple[list[str] | None, list[callable]]:
+        """Split a to_auto plot_list into registry names and legacy callables.
+
+        Known callbacks translate to their plugin names; unknown callables keep
+        working through the legacy direct-call path. None means "no restriction"
+        (all registered plugins participate)."""
+        if plot_list is None:
+            return None, []
+        include_names: list[str] = []
+        extra_callbacks: list[callable] = []
+        for entry in plot_list:
+            if isinstance(entry, str):
+                include_names.append(entry)
+            elif entry in CALLBACK_TO_PLUGIN:
+                include_names.append(CALLBACK_TO_PLUGIN[entry])
+            else:
+                extra_callbacks.append(entry)
+        return include_names, extra_callbacks
+
+    @staticmethod
+    def _plot_exclusions(
+        remove_plots: list[callable | str] | None,
+        extra_callbacks: list[callable],
+        numeric_only: bool,
+    ) -> tuple[set[str], list[callable]]:
+        """Compute the plugin names to exclude and drop removed legacy callables."""
+        exclude_names: set[str] = set()
+        if numeric_only:
+            exclude_names.add(PANES_PLUGIN_NAME)
+        kept_callbacks = list(extra_callbacks)
+        if remove_plots is not None:
+            for entry in remove_plots:
+                if isinstance(entry, str):
+                    exclude_names.add(entry)
+                elif entry in CALLBACK_TO_PLUGIN:
+                    exclude_names.add(CALLBACK_TO_PLUGIN[entry])
+                elif entry in kept_callbacks:
+                    kept_callbacks.remove(entry)
+        return exclude_names, kept_callbacks
 
     def to_auto_plots(
         self,
@@ -231,30 +456,57 @@ class BenchResult(
         plot_cols = pn.Column()
         plot_cols.append(self.to_sweep_summary(name="Plots View"))
 
+        # --- Failed samples (auto-inserted whenever any sample failed) ---
+        # Failures never abort a sweep (caught samples and worker-contract
+        # violations alike), so the report is where they must be impossible to
+        # miss — a log line is not a surface anyone reads after the fact.
+        if self.n_failed:
+            plot_cols.append(
+                pn.pane.Markdown(
+                    self.failed_samples_markdown(),
+                    name="Failed Samples",
+                    width=800,
+                )
+            )
+
         # --- Regression report (auto-inserted when regression detection is enabled) ---
+        # Summary table surfaces whenever a regression fires (including the
+        # absolute-method case which has no history and therefore no overlay).
         has_multiple_times = "over_time" in self.ds.dims and self.ds.sizes["over_time"] > 1
+        if self.regression_report is not None and self.regression_report.has_regressions:
+            plot_cols.append(
+                pn.pane.Markdown(
+                    self.regression_report.to_markdown(),
+                    name="Regression Report",
+                    width=800,
+                )
+            )
         if self.regression_report is not None and has_multiple_times:
             for r in self.regression_report.results:
                 if r.historical is None or len(r.historical) == 0:
                     continue
                 try:
                     plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
-                except Exception:  # pylint: disable=broad-except
-                    logging.error(
-                        "Failed to render regression overlay for %s", r.variable, exc_info=True
+                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                    plot_cols.append(
+                        report_render_failure(f"Regression overlay for '{r.variable}'", exc)
                     )
 
         # --- Extra panels (user-injected) ---
         if extra_panels:
             for ep in extra_panels:
                 try:
-                    if callable(ep):
+                    # Call only genuine factories. Excluding Viewable keeps a Viewable
+                    # that defined __call__ from being invoked, while objects that are
+                    # neither callable nor Viewable (a str, an hv element, a DataFrame)
+                    # still fall through to append, where Column.append coerces them.
+                    if callable(ep) and not isinstance(ep, pn.viewable.Viewable):
                         plot_cols.append(ep(self))
                     else:
                         plot_cols.append(ep)
-                except Exception:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                     name = getattr(ep, "__name__", repr(ep))
-                    logging.error("Extra panel %s failed", name, exc_info=True)
+                    plot_cols.append(report_render_failure(f"Extra panel '{name}'", exc))
 
         # --- Dimension aggregation (orthogonal to over_time) ---
         if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
@@ -279,6 +531,7 @@ class BenchResult(
                 }
                 plot_cols.append(
                     self.to_auto(
+                        numeric_only=True,
                         agg_over_dims=self.bench_cfg.agg_over_dims,
                         agg_fn=self.bench_cfg.agg_fn,
                         **agg_kwargs,
@@ -330,3 +583,9 @@ class BenchResult(
         return pn.pane.Markdown(
             f"{header}\n" + "\n".join(rows) if rows else "No result variables found."
         )
+
+
+# The built-in chart set dispatches through the plugin registry (see to_auto);
+# register it as soon as the result classes exist so any import path that can
+# construct a BenchResult also has the registry populated.
+register_builtin_plugins()

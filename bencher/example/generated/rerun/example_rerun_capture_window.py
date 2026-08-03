@@ -1,7 +1,9 @@
 """Auto-generated example: Rerun Capture — embed spatial visualizations in sweep reports."""
 
 import math
+
 import rerun as rr
+
 import bencher as bn
 
 
@@ -43,4 +45,4 @@ def example_rerun_capture_window(run_cfg: bn.BenchRunCfg | None = None) -> bn.Be
 
 
 if __name__ == "__main__":
-    bn.run(example_rerun_capture_window, level=3)
+    bn.run(example_rerun_capture_window, subsampling_divisions=3)

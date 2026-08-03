@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import warnings
+from collections import namedtuple
+from copy import deepcopy
 from functools import partial
 from typing import Any
-from param import Parameter, Parameterized
+
 import holoviews as hv
 import panel as pn
-from copy import deepcopy
+from param import Parameter, Parameterized
 
-from collections import namedtuple
-
+from bencher.factories import create_bench, create_bench_runner
 from bencher.utils import hash_sha1
 from bencher.variables.results import ALL_RESULT_TYPES, ResultHmap
-from bencher.factories import create_bench, create_bench_runner
 
-_InputResult = namedtuple("inputresult", ["inputs", "results"])
+_InputResult = namedtuple("_InputResult", ["inputs", "results"])
 _input_result_cache: dict[tuple, _InputResult] = {}
 
 
@@ -22,16 +22,22 @@ class ParametrizedSweep(Parameterized):
     """Parent class for all Sweep types that need a custom hash"""
 
     @staticmethod
-    def param_hash(param_type: Parameterized, hash_value: bool = True) -> int:
-        """A custom hash function for parametrised types with options for hashing the value of the type and hashing metadata
+    def param_hash(param_type: Parameterized, hash_value: bool = True) -> int | str:
+        """A custom hash function for parametrised types with an option for hashing the value of the type
 
         Args:
             param_type (Parameterized): A parameter
             hash_value (bool, optional): use the value as part of the hash. Defaults to True.
-            # hash_meta (bool, optional): use metadata as part of the hash. Defaults to False.
 
         Returns:
-            int: a hash
+            int | str: ``hash_sha1``'s hex digest, or the literal ``0`` when nothing was
+            hashed -- ``hash_value=False``, or a class declaring no parameters besides
+            ``name``.
+
+            The ``0`` is a sentinel of the kind plan 23 exists to remove, but normalizing
+            it to a digest would change the key for parameter-less sweeps and so
+            invalidate persisted caches (plan 23 §7). Left as-is deliberately; fixing it
+            needs a phase that can bump ``CACHE_VERSION``.
         """
 
         curhash = 0
@@ -40,25 +46,20 @@ class ParametrizedSweep(Parameterized):
                 if k != "name":
                     curhash = hash_sha1((curhash, hash_sha1(v)))
 
-        # if hash_meta:
-        #     for k, v in param_type.param.objects().items():
-        #         if k != "name":
-        #             print(f"key:{k}, hash:{hash_sha1(k)}")
-        #             print(f"value:{v}, hash:{hash_sha1(v)}")
-        #             curhash = hash_sha1((curhash, hash_sha1(k), hash_sha1(v)))
         return curhash
 
-    def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+    def hash_persistent(self) -> int | str:
+        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run.
+
+        Inherits ``param_hash``'s ``0``-or-digest return; see there."""
         return ParametrizedSweep.param_hash(self, True)
 
     def update_params_from_kwargs(self, **kwargs) -> None:
         """Given a dictionary of kwargs, set the parameters of the passed class 'self' to the values in the dictionary."""
         used_params = {}
-        for key in self.param.objects().keys():
-            if key in kwargs:
-                if key != "name":
-                    used_params[key] = kwargs[key]
+        for key in self.param.objects():
+            if key in kwargs and key != "name":
+                used_params[key] = kwargs[key]
 
         self.param.update(**used_params)
 
@@ -87,6 +88,18 @@ class ParametrizedSweep(Parameterized):
             ):
                 results[k] = v
             else:
+                # A parameter class defined in the results module but absent
+                # from RESULT_SPECS would otherwise silently classify as an
+                # *input* variable — the hole that made the old ResultVolume
+                # class a trap (declared, unstorable, KeyError far from cause).
+                if type(v).__module__ == "bencher.variables.results":
+                    raise TypeError(
+                        f"'{k}' is declared as {type(v).__name__}, which is defined in "
+                        f"bencher.variables.results but is not registered in RESULT_SPECS, "
+                        f"so it cannot be classified as a result variable (and refusing "
+                        f"to treat it as an input). Add a ResultSpec entry for it in "
+                        f"bencher/variables/results.py."
+                    )
                 inputs[k] = v
 
         if not include_name:
@@ -140,9 +153,11 @@ class ParametrizedSweep(Parameterized):
     @classmethod
     def get_input_defaults_override(cls, **kwargs) -> dict[str, Any]:
         inp = cls.get_inputs_only()
-        defaults = {}
+        defaults: dict[str, Any] = {}
         for i in inp:
-            defaults[i.name] = deepcopy(i.default)
+            # str(): param types `Parameter.name` as `str | None`, but a declared
+            # parameter always has one (plan 23 P12).
+            defaults[str(i.name)] = deepcopy(i.default)
 
         for k, v in kwargs.items():
             defaults[k] = v
@@ -203,7 +218,7 @@ class ParametrizedSweep(Parameterized):
         )
         main.show()
 
-    def to_holomap(self, callback, remove_dims: str | list[str] | None = None) -> hv.DynamicMap:
+    def to_holomap(self, callback, remove_dims: str | list[str] | None = None) -> hv.HoloMap:
         return hv.HoloMap(
             hv.DynamicMap(
                 callback=callback,
@@ -266,6 +281,6 @@ class ParametrizedSweep(Parameterized):
         """Create a BenchRunner instance from this ParametrizedSweep.
 
         Enables fluent chaining like:
-            MyConfig().to_bench_runner().add(func).run(level=2, max_level=4)
+            MyConfig().to_bench_runner().add(func).run(subsampling_divisions=2, max_subsampling_divisions=4)
         """
         return create_bench_runner(self, run_cfg=run_cfg, name=name)

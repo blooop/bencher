@@ -1,8 +1,9 @@
-import bencher as bn
-import numpy as np
-from PIL import Image
 import colorcet as cc
+import numpy as np
 import numpy.typing as npt
+from PIL import Image
+
+import bencher as bn
 
 
 def apply_colormap(data: npt.NDArray) -> npt.NDArray:
@@ -120,4 +121,4 @@ def example_video_tap(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:  # pra
 
 
 if __name__ == "__main__":
-    bn.run(example_video_tap, level=2)
+    bn.run(example_video_tap, subsampling_divisions=2)

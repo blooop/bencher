@@ -82,7 +82,7 @@ bench = NoisySensor().to_bench(run_cfg)
 bench.plot_sweep(
     input_vars=["temperature"],
     result_vars=["reading"],
-    const_vars=dict(noise_scale=0.3),
+    const_vars={"noise_scale": 0.3},
     description="Demonstrates cache_samples and run_tag for reliable benchmarking. "
     "cache_samples=True stores every function call individually so data is not "
     "lost if the run crashes. run_tag partitions the cache between experiments.",
@@ -98,7 +98,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "repeats": 5},
+            run_kwargs={"subsampling_divisions": 3, "repeats": 5},
         )
 
     def _generate_time_event(self):
@@ -157,12 +157,12 @@ for i, event_name in enumerate(events):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_git_time_event(self):
         """Git commit time event example."""
-        imports = "import random\n\nimport bencher as bn"
+        imports = "import random\nfrom typing import ClassVar\n\nimport bencher as bn"
         class_code = '''\
 class ServerLatency(bn.ParametrizedSweep):
     """Simulates server latency measurements across endpoints.
@@ -179,7 +179,11 @@ class ServerLatency(bn.ParametrizedSweep):
 
     latency = bn.ResultFloat(units="ms", doc="Response latency", direction=bn.OptDir.minimize)
 
-    _BASE = {"/api/users": 48.0, "/api/orders": 125.0, "/api/health": 8.0}
+    _BASE: ClassVar[dict[str, float]] = {
+        "/api/users": 48.0,
+        "/api/orders": 125.0,
+        "/api/health": 8.0,
+    }
 
     def benchmark(self):
         base = self._BASE[self.endpoint]
@@ -212,7 +216,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_max_time_events(self):
@@ -275,7 +279,7 @@ for i in range(5):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3, "over_time": True},
+            run_kwargs={"subsampling_divisions": 3, "over_time": True},
         )
 
     def _generate_report_save(self):
@@ -316,7 +320,7 @@ bench.report.append_markdown("## Custom Section\\n\\nYou can add **markdown** co
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_agg_over_time(self):
@@ -381,7 +385,7 @@ for i, offset in enumerate(time_offsets):
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "over_time": True},
+            run_kwargs={"subsampling_divisions": 4, "over_time": True},
         )
 
     def _generate_share_axis(self):
@@ -425,7 +429,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 3},
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_cartesian_animation(self):
@@ -506,7 +510,7 @@ bench.plot_sweep(
             imports=imports,
             body=body,
             class_code=class_code,
-            run_kwargs={"level": 4, "cache_samples": False},
+            run_kwargs={"subsampling_divisions": 4, "cache_samples": False},
         )
 
 

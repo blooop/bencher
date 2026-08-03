@@ -1,8 +1,9 @@
 """Auto-generated example: 0 Float, 0 Categorical (over time repeats)."""
 
 import random
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class BaselineCheck(bn.ParametrizedSweep):
@@ -44,4 +45,4 @@ def example_sweep_0_float_0_cat_over_time_repeats(
 
 
 if __name__ == "__main__":
-    bn.run(example_sweep_0_float_0_cat_over_time_repeats, level=4, over_time=True)
+    bn.run(example_sweep_0_float_0_cat_over_time_repeats, subsampling_divisions=4, over_time=True)

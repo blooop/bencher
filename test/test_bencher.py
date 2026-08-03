@@ -1,19 +1,21 @@
-import os
-import subprocess
-import pytest
-import unittest
-import random
-from shutil import rmtree
-from copy import deepcopy
 import logging
-
-from hypothesis import given, settings, strategies as st
-
+import os
+import random
+import subprocess
+import unittest
+from copy import deepcopy
 from datetime import datetime
-from diskcache import Cache
+from shutil import rmtree
 
-from bencher.example.benchmark_data import ExampleBenchCfg
+import pytest
+from diskcache import Cache
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from bencher import Bench, BenchCfg, BenchRunCfg
+from bencher.example.benchmark_data import ExampleBenchCfg
+
+logger = logging.getLogger(__name__)
 
 
 def get_hash_isolated_process() -> bytes:
@@ -34,7 +36,7 @@ def clear_autofig_folder() -> None:
     try:
         rmtree("autofig")
     except FileNotFoundError as e:
-        logging.debug(e)
+        logger.debug(e)
     os.mkdir("autofig")
 
 
@@ -75,6 +77,17 @@ result_var_permutations = [
 
 
 class TestBencher(unittest.TestCase):
+    def setUp(self) -> None:
+        # ExampleBenchCfg.param.theta is a *class-level* param shared by the whole
+        # suite, and test_const_hashing overwrites `samples`. Restoring it in tearDown
+        # rather than via addCleanup because that test is hypothesis-driven: the body
+        # runs once per example, so a cleanup registered inside it would capture the
+        # already-mutated value on every example after the first.
+        self._theta_samples = ExampleBenchCfg.param.theta.samples
+
+    def tearDown(self) -> None:
+        ExampleBenchCfg.param.theta.samples = self._theta_samples
+
     def create_bench(self) -> Bench:
         return Bench("test_bencher", ExampleBenchCfg())
 
@@ -201,8 +214,9 @@ class TestBencher(unittest.TestCase):
             ),
         )
 
-    # TODO There are still name collisions when run on all possible inputs, but at the moment the name collisions end up plotting an identical graph anyway so it doesn't matter that much. Future work is to enable this test to confirm that all graph names are fully unique even if they have the same pixels.
-    @pytest.mark.skip()
+    @pytest.mark.skip(
+        reason="name collisions across input permutations; see plans/05-test-coverage.md task 4"
+    )
     @settings(deadline=10000)
     @given(
         input_vars=st.sampled_from(input_var_cat_permutations),
@@ -249,11 +263,10 @@ class TestBencher(unittest.TestCase):
             bench_repr = bench_cfg.__repr__()
             plots = bench_cfg.to_auto_plots()
             for p in plots:
-                if p.name is not None:
-                    if p.name in name_cache:
-                        self.fail(
-                            f"this name already exists: \n\n\nA:{p.name}\n\n\nreprA:{bench_cfg.__repr__()}\n\n\nB:{name_cache[p.name]}",
-                        )
+                if p.name is not None and p.name in name_cache:
+                    self.fail(
+                        f"this name already exists: \n\n\nA:{p.name}\n\n\nreprA:{bench_cfg.__repr__()}\n\n\nB:{name_cache[p.name]}",
+                    )
                 name_cache[p.name] = bench_cfg.__repr__()
             name_cache[bench_repr] = True
 
@@ -314,9 +327,13 @@ class TestBencher(unittest.TestCase):
     def test_const_hashing(self, noisy) -> None:
         """check that const variables are hashed correctly. This test was created because setting a const variable was resulting in a hash value that changed over time even though the inputs were not changing.  The source of the problem was that the input config had a native param instead of a paramSweep object.  The native param objects don't have a constant hash because they include the .name field which changes for every instance of the param.  the paramSweep objects have the .name field removed from the hash so that hashes for the same inputs remain constant"""
 
+        # Restored by tearDown. Left unrestored this leaked samples=5 into every later
+        # test relying on the default of 30 -- unnoticed because the assertions that
+        # would have caught it compare `result_samples()`, which returned an xr.Dataset
+        # whose `bool()` is always True (plan 23 P12).
         ExampleBenchCfg.param.theta.samples = 5
 
-        logging.info(f"starting with const value noisy:{noisy}")
+        logger.info(f"starting with const value noisy:{noisy}")
 
         bench = self.create_bench()
 
@@ -335,7 +352,7 @@ class TestBencher(unittest.TestCase):
             ExampleBenchCfg.param.theta.samples,
             "no cache used so the function should sample again",
         )
-        logging.info("re-run and attempt to load from cache")
+        logger.info("re-run and attempt to load from cache")
 
         bench2 = self.create_bench()
         # run again without caching, the function should be called again
@@ -433,27 +450,27 @@ class TestBenchRunCfgWithDefaults(unittest.TestCase):
     """Tests for BenchRunCfg.with_defaults merging behavior."""
 
     def test_none_creates_fresh_instance(self):
-        cfg = BenchRunCfg.with_defaults(None, repeats=5, level=4)
+        cfg = BenchRunCfg.with_defaults(None, repeats=5, subsampling_divisions=4)
         self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(cfg.level, 4)
+        self.assertEqual(cfg.subsampling_divisions, 4)
 
     def test_defaults_applied_to_param_default_fields(self):
         cfg = BenchRunCfg()
-        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, level=4)
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, subsampling_divisions=4)
         self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(cfg.level, 4)
+        self.assertEqual(cfg.subsampling_divisions, 4)
 
     def test_caller_set_fields_not_overwritten(self):
         cfg = BenchRunCfg(repeats=10)
-        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, level=4)
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, subsampling_divisions=4)
         self.assertEqual(cfg.repeats, 10)  # caller's value preserved
-        self.assertEqual(cfg.level, 4)  # default still applied
+        self.assertEqual(cfg.subsampling_divisions, 4)  # default still applied
 
     def test_multiple_defaults_in_one_call(self):
-        cfg = BenchRunCfg(level=2)
-        cfg = BenchRunCfg.with_defaults(cfg, repeats=3, level=7, headless=True)
+        cfg = BenchRunCfg(subsampling_divisions=2)
+        cfg = BenchRunCfg.with_defaults(cfg, repeats=3, subsampling_divisions=7, headless=True)
         self.assertEqual(cfg.repeats, 3)  # was at default, so applied
-        self.assertEqual(cfg.level, 2)  # caller set, so preserved
+        self.assertEqual(cfg.subsampling_divisions, 2)  # caller set, so preserved
         self.assertTrue(cfg.headless)  # was at default, so applied
 
     def test_does_not_mutate_original(self):

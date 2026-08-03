@@ -14,4 +14,4 @@ def example_plot_video(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 
 
 if __name__ == "__main__":
-    bn.run(example_plot_video, level=3)
+    bn.run(example_plot_video, subsampling_divisions=3)

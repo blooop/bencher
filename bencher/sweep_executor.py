@@ -7,16 +7,39 @@ job creation, and cache management in benchmark runs.
 from __future__ import annotations
 
 import logging
+import warnings
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any
 
 import param
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.job import FutureCache
 from bencher.variables.parametrised_sweep import ParametrizedSweep
+from bencher.variables.sweep_base import hash_sha1
 
-from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
+
+def _unnamed_parameter_error(var_type: str, name: str, owner: str, actual) -> TypeError:
+    """The error for a Parameter that never received a name from param's metaclass.
+
+    param assigns ``Parameter.name`` in the metaclass of the class that *declares*
+    the parameter, so a parameter declared on a plain (non-Parameterized) mixin is
+    found by param's MRO scan but keeps ``name=None``.  It resolves here without
+    complaint and fails much later, where ``.name`` is used as a dataset variable
+    name or as the key into the worker's result dict -- a symptom with no path back
+    to the declaration.  Name the cause instead.
+    """
+    return TypeError(
+        f"{var_type.capitalize()} variable '{name}' on {owner} has no name "
+        f"(param.name={actual!r}). This happens when the variable is declared on a "
+        f"base class that is not a param.Parameterized subclass: param assigns a "
+        f"Parameter's name in the metaclass of the class that declares it, and a "
+        f"plain mixin has no such metaclass. Make that base subclass "
+        f"bn.ParametrizedSweep (or param.Parameterized) and the variable will "
+        f"register correctly."
+    )
 
 
 def _resolve_param(
@@ -33,7 +56,135 @@ def _resolve_param(
             f"{type(worker).__name__}. "
             f"Available parameters: {available}"
         ) from None
-    return all_params[name]
+    resolved = all_params[name]
+    # Found under key *name*, so a disagreeing .name means param never named it.
+    if getattr(resolved, "name", None) != name:
+        raise _unnamed_parameter_error(
+            var_type, name, type(worker).__name__, getattr(resolved, "name", None)
+        )
+    return resolved
+
+
+def _validate_input_vars(input_vars: list[param.Parameter]) -> list[param.Parameter]:
+    """Reject an input variable declared more than once, returning the list unchanged.
+
+    Each input variable is one dataset dimension, so a repeat has no valid
+    interpretation. Left alone it does not even reliably fail: whether xarray
+    rejects the broadcast or quietly collapses the repeat into a single dimension
+    depends on the sweep's shape, and when it does fail the message comes from
+    deep inside xarray with no reference to the declaration that caused it.
+
+    Every position is named, not just the offending pair, because the fix is to
+    delete all but one of them.
+    """
+    seen: set[str] = set()
+    for var in input_vars:
+        if var.name in seen:
+            # Only walked on the error path, so the happy path stays a single pass.
+            positions = [i for i, v in enumerate(input_vars) if v.name == var.name]
+            raise ValueError(
+                f"Input variable '{var.name}' is declared {len(positions)} times "
+                f"(positions {positions}). Each input variable defines one dataset "
+                f"dimension, so it may appear only once."
+            )
+        seen.add(var.name)
+    return input_vars
+
+
+def _dedupe_result_vars(result_vars: list[param.Parameter]) -> list[param.Parameter]:
+    """Drop result variables repeated by name, keeping the first, and warn.
+
+    The deduped set is already what bencher stores: the dataset's ``data_vars``
+    and history's per-column metadata are both keyed by name, so a repeat
+    collapses there. Only ``BenchCfg.hash_persistent`` disagreed, folding the
+    per-variable digests as a sorted *tuple* so a repeat appeared twice and moved
+    the key -- the benchmark ran, reported correct numbers, and appended to a
+    trend line other than the one it appeared to belong to. Deduping makes cache
+    and history identity agree with the data that was already being written,
+    which is why this warns rather than raising.
+    """
+    kept: list[param.Parameter] = []
+    first_seen: dict[str, int] = {}
+    for index, var in enumerate(result_vars):
+        if var.name in first_seen:
+            warnings.warn(
+                f"Result variable '{var.name}' is declared twice (positions "
+                f"{first_seen[var.name]} and {index}); the duplicate is ignored. "
+                f"Result variables are a set keyed by name -- declare each metric "
+                f"once. Until now the repeat moved the cache and history key "
+                f"without changing the data.",
+                UserWarning,
+                # here -> validate_declared_vars -> plot_sweep -> the caller to blame
+                stacklevel=4,
+            )
+            continue
+        first_seen[var.name] = index
+        kept.append(var)
+    return kept
+
+
+def _const_values_conflict(first: Any, second: Any) -> bool:
+    """Whether two values declared for the same constant disagree.
+
+    Compared by ``hash_sha1`` rather than ``!=`` so that "the same constant"
+    means exactly what ``hash_persistent`` means by it -- identity is what the
+    dedupe is protecting. It also copes with the values that actually turn up
+    here, which are arbitrary: unhashable containers, and objects whose ``__eq__``
+    is elementwise rather than a bool (numpy arrays) or missing entirely.
+    """
+    return hash_sha1(first) != hash_sha1(second)
+
+
+def _dedupe_const_vars(const_vars: list[list]) -> list[list]:
+    """Drop constants repeated with an equal value; raise when the values differ.
+
+    A repeated constant with two different values is a contradiction in the
+    declaration, and which one won depended on iteration order.
+    """
+    kept: list[list] = []
+    first_seen: dict[str, tuple[int, Any]] = {}
+    for index, entry in enumerate(const_vars):
+        var, value = entry[0], entry[1]
+        if var.name in first_seen:
+            prev_index, prev_value = first_seen[var.name]
+            if _const_values_conflict(prev_value, value):
+                raise ValueError(
+                    f"Constant '{var.name}' is declared twice with different values: "
+                    f"{prev_value!r} at position {prev_index} and {value!r} at "
+                    f"position {index}. Which one applied depended on iteration "
+                    f"order, so declare it once with the value you mean."
+                )
+            continue
+        first_seen[var.name] = (index, value)
+        kept.append(entry)
+    return kept
+
+
+def validate_declared_vars(
+    input_vars: list[param.Parameter],
+    result_vars: list[param.Parameter],
+    const_vars: list[list],
+) -> tuple[list[param.Parameter], list[param.Parameter], list[list]]:
+    """Reject or normalise variables declared more than once in one sweep.
+
+    The one validation site, called after conversion so comparison is on resolved
+    ``name``: the string, spec-dict and object declaration forms are all covered,
+    and so is a mixture of them. The three kinds get three answers because the
+    data model gives them three meanings, not out of leniency -- each helper
+    documents its own. Inputs are checked first, so a config with both a repeated
+    input and a conflicting constant reports the input.
+
+    Returns:
+        The three lists, with duplicate result and const entries removed.
+
+    Raises:
+        ValueError: On a duplicate input variable, or a duplicate constant with
+            conflicting values.
+    """
+    input_vars = _validate_input_vars(input_vars)
+    result_vars = _dedupe_result_vars(result_vars)
+    const_vars = _dedupe_const_vars(const_vars)
+    return input_vars, result_vars, const_vars
 
 
 # Metadata keys that must never be forwarded to the worker function.
@@ -105,7 +256,7 @@ class SweepExecutor:
             variable (param.Parameter | str | dict | tuple): The variable to convert, can be:
                 - param.Parameter: Already a parameter object
                 - str: Name of a parameter in the worker_class_instance
-                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_level'
+                - dict: Configuration with 'name' and optional 'values', 'samples', 'max_subsampling_divisions'
                 - tuple: Tuple that can be converted to a parameter
             var_type (str): Type of variable ('input', 'result', or 'const') for error messages
             run_cfg (BenchRunCfg | None): Run configuration for level settings
@@ -119,12 +270,11 @@ class SweepExecutor:
         Raises:
             TypeError: If the variable cannot be converted to a param.Parameter
         """
-        if isinstance(variable, (str, dict)):
-            if worker_class_instance is None:
-                raise TypeError(
-                    f"Cannot convert {var_type}_vars from string/dict without a worker class instance. "
-                    f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
-                )
+        if isinstance(variable, (str, dict)) and worker_class_instance is None:
+            raise TypeError(
+                f"Cannot convert {var_type}_vars from string/dict without a worker class instance. "
+                f"Use param.Parameter objects directly or provide a ParametrizedSweep worker."
+            )
         if isinstance(variable, str):
             variable = _resolve_param(variable, worker_class_instance, var_type)
         if isinstance(variable, dict):
@@ -137,15 +287,23 @@ class SweepExecutor:
                 param_var = param_var.with_bounds(b[0], b[1], variable.get("samples"))
             elif variable.get("samples"):
                 param_var = param_var.with_samples(variable["samples"])
-            if variable.get("max_level"):
-                if run_cfg is not None:
-                    param_var = param_var.with_level(run_cfg.level, variable["max_level"])
+            if variable.get("max_subsampling_divisions") and run_cfg is not None:
+                param_var = param_var.with_subsampling_divisions(
+                    run_cfg.subsampling_divisions, variable["max_subsampling_divisions"]
+                )
             variable = param_var
         if not isinstance(variable, param.Parameter):
             raise TypeError(
                 f"You need to use {var_type}_vars =[{worker_input_cfg}.param.your_variable], "
                 f"instead of {var_type}_vars =[{worker_input_cfg}.your_variable]"
             )
+        # Object path: only ``name is None`` is checkable. A Parameter passed
+        # directly need not correspond to any attribute on the worker -- bn.box()
+        # and bn.sweep() build named copies that are legitimately absent from the
+        # class namespace -- so there is no key to compare against here.
+        if variable.name is None:
+            owner = type(worker_class_instance).__name__ if worker_class_instance else "the worker"
+            raise _unnamed_parameter_error(var_type, f"<{type(variable).__name__}>", owner, None)
         return variable
 
     def define_const_inputs(self, const_vars: list[tuple[param.Parameter, Any]]) -> dict | None:

@@ -1,8 +1,9 @@
 """Auto-generated example: Max Time Events — cap over_time history."""
 
 import random
-import bencher as bn
 from datetime import datetime, timedelta
+
+import bencher as bn
 
 
 class LatencyMonitor(bn.ParametrizedSweep):
@@ -58,4 +59,4 @@ def example_advanced_max_time_events(run_cfg: bn.BenchRunCfg | None = None) -> b
 
 
 if __name__ == "__main__":
-    bn.run(example_advanced_max_time_events, level=3, over_time=True)
+    bn.run(example_advanced_max_time_events, subsampling_divisions=3, over_time=True)
