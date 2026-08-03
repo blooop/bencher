@@ -338,10 +338,11 @@ class TestPartitionInputVars:
     def test_none_input_vars_is_rejected(self):
         """Absence of input variables is spelled ``[]``; ``None`` is not a second spelling.
 
-        These fields defaulted to None until plan 23 P12b, which made every reader
-        carry an ``or []`` -- and eleven readers did not, so a config built outside
-        ``plot_sweep`` raised ``TypeError: 'NoneType' object is not iterable`` from
-        inside describe/plot code instead of at the declaration.
+        These fields defaulted to None until plan 23 P12b. That default is what obliged
+        every reader to carry an ``or []``, and 26 iteration sites across eight modules
+        did not, so a config built outside ``plot_sweep`` raised ``TypeError: 'NoneType'
+        object is not iterable`` from inside describe/plot code instead of at the
+        declaration.
         """
         with pytest.raises(ValueError, match="input_vars"):
             make_bench_cfg(input_vars=None)

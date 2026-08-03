@@ -167,6 +167,12 @@ class BandResult(HoloviewResult):
             return None
 
         x_dim = candidate_x[0]
+        # str(): xarray types dim names as `Hashable`. Unlike the title-only coercion in
+        # `_band_over_time`, these also feed `da.stack(sample=...)` below, so this is a
+        # coercion on a *lookup* key, not just a display string. It is identity on every
+        # dim bencher builds (all str); a non-str Hashable dim would turn a working stack
+        # into a KeyError rather than silently mis-rendering, which is the failure mode to
+        # prefer if that ever becomes reachable.
         sample_dims = [str(d) for d in all_dims if d != x_dim]
         if title is None:
             agg_names = [d for d in sample_dims if d != "repeat"]

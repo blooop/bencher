@@ -6,6 +6,10 @@ without additional context. **Read the whole plan before starting it.**
 
 ## Ground rules for every plan
 
+0. **Deferring a fix because it would invalidate persisted caches?** Record it in
+   [plan 27's ledger](27-cache-version-bump-ledger.md) in the same PR, not only in your
+   plan's findings section. And read that file in full before bumping `CACHE_VERSION` —
+   the bump is what unblocks every entry in it, and it is only paid for once.
 1. **Always use the pixi environment**: prefix every command with `pixi run`
    (e.g. `pixi run pytest`, `pixi run python ...`). Never run tools directly.
 2. **Run `pixi run ci` before committing.** It must pass (format, lint, type check, tests).
@@ -53,6 +57,7 @@ without additional context. **Read the whole plan before starting it.**
 | 24 | [`assert_never` boundary discipline](24-assert-never-boundary-discipline.md) | Low | Small (amends 23) | **Read before 23-P1/P2/P11** — mostly DoD additions to plan 23; one small independent phase (Q1) |
 | 25 | [Grammar phase 2: channel vocabulary, `Plan` type, shadow planner](25-grammar-phase-2-channel-plan.md) | Medium | Medium (4 phased PRs) | Second PR of the A6 stack; additive and shadow-only (zero visual change). Needs 23-P4 (landed); gates A6 phase 3 |
 | 26 | [Post-merge audit remediation](26-post-merge-audit-remediation.md) | Low–Med (R1 is Medium) | Medium (13 phased items) | **R1 first** (history adoption can destroy over_time trends); R13's #760/CVE item is time-sensitive; R3 while #1022 is fresh |
+| 27 | [`CACHE_VERSION` bump ledger](27-cache-version-bump-ledger.md) | — | — | **Standing, never "done".** Read in full before bumping `CACHE_VERSION`; add to it in the same PR whenever a fix is deferred for cache reasons |
 
 Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
 Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on

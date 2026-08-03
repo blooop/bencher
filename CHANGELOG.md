@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `invalid-return-type` is the rule that verifies `_resolve_auto` returns a member of
   `ResolvedReduceType`, so enabling it discharges the caveat P1 left: `to_dataset`'s
   `assert_never` is now a compile-time proof rather than a runtime assertion.
+
+  The four widened unions above (`values()`, `param_hash`, and the two `as_str`/`as_dict`
+  flag-switched returns) are honest, not resolved — an argument that switches a return
+  type is still an illegal state made representable, and no checker will object to it.
+  Each is tabled in plan 23 §10 with its blocker so a later phase can take it; the two
+  blocked on cache invalidation are also entries in the plan 27 cache-bump ledger.
 - **The `ty` gate now enforces all five Tier-B rules** (plan 23 P12b took the remaining
   four: `not-iterable`, `no-matching-overload`, `unsupported-operator`,
   `possibly-missing-attribute`; 100 diagnostics). Three of the four are error-by-default,
@@ -108,11 +114,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     construction.
 - `select_subsampling_divisions()` no longer prints every coordinate's dtype to stdout —
   a debug leftover on a library filter path.
-
-  The four widened unions above (`values()`, `param_hash`, and the two `as_str`/`as_dict`
-  flag-switched returns) are honest, not resolved — an argument that switches a return
-  type is still an illegal state made representable, and no checker will object to it.
-  Each is tabled in plan 23 §10 with its blocker so a later phase can take it.
+- **Every fix deferred because it would invalidate persisted caches is now listed in one
+  place** — `plans/27-cache-version-bump-ledger.md`. The standing policy (any change to a
+  cache key is cache-busting, so bump `CACHE_VERSION` and say so) is sound but per-change,
+  so the cheap answer to "this fix would move a key" has always been "annotate around it and
+  record why" — and those records had spread across four plans, two architecture docs and a
+  dozen changelog entries. The cost of a bump is the same whether one deferred fix rides
+  along or ten, so the ledger exists to make sure the next bump drains them together instead
+  of paying the invalidation cost twice. Ten entries so far, including the two widened
+  unions above (`param_hash`, `values()`), the dual-generation sentinel readers plan 22
+  requires, and A4's `code_hash` — which already designates a bump as its precondition.
+  Pointers now sit at the four places someone actually stands when bumping:
+  `CACHE_VERSION` itself, `test_hash_persistent.py`'s golden-hash procedure, A4 §3.2, and
+  plans-README rule 0. A companion section records what a bump must **not** sweep in (the
+  `title` and `agg_fn` exclusions, `_hash_exclude` renderers, the input-order/result-set
+  asymmetry), so permission to change keys is not mistaken for a reason to.
 - `HoloviewResult.result_var_to_container` is annotated `type[pn.viewable.Viewable]`
   rather than a bare `type`, so `setup_results_and_containers`' declared container type
   is actually checked instead of being satisfied by an inferred `Any`.

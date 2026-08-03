@@ -498,7 +498,7 @@ class HoloviewResult(PaneResult):
                 # zip a value with a type instead of a second lookup on a union.
                 current_key = getattr(plot, "current_key", None)
                 if current_key is not None:
-                    for d, k in zip(list(plot.kdims), list(current_key)):
+                    for d, k in zip(plot.kdims, current_key):
                         kdims[d.name] = k
                 for rv, cont in zip(result_var_plots, cont_instances):
                     val = dataset[rv.name].sel(**kdims)

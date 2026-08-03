@@ -254,6 +254,17 @@ def handle(k: Kind) -> str:
         Config assertions alone cannot catch a default that is not what you assumed.
         """
         rules = _global_rules()
+        # Every value in [tool.ty.rules] is a severity string today, and the round-trip
+        # below re-quotes it as one. Checked rather than assumed: a non-string value would
+        # still serialise into valid TOML (`x = "True"`), so the probe would silently run
+        # against a rule table that is not the repo's -- the exact class of false pass this
+        # test exists to close.
+        non_strings = {k: v for k, v in rules.items() if not isinstance(v, str)}
+        assert not non_strings, (
+            f"[tool.ty.rules] holds non-string values {non_strings!r}; this probe "
+            "re-serialises each value as a quoted string, so it would check a rule table "
+            "that differs from the checked-in one. Teach the serialisation the new shape."
+        )
         rule_lines = "\n".join(f'{k} = "{v}"' for k, v in rules.items())
         (tmp_path / "pyproject.toml").write_text(
             '[project]\nname = "probe"\nversion = "0"\nrequires-python = ">=3.11"\n\n'

@@ -54,6 +54,20 @@ def _make_result_var(name):
     return rv
 
 
+def _overlay(stub, ds, rv) -> hv.Overlay:
+    """Build the overlay and assert it exists.
+
+    ``_build_curve_overlay`` returns ``hv.Overlay | None`` -- ``None`` for a dataset with
+    no dimensions. Every case below supplies dimensions, so ``None`` here means the
+    function stopped doing its job, not that the test set up an edge case. Asserting once
+    keeps that failure legible instead of surfacing as ``TypeError: 'NoneType' is not
+    iterable`` from the comprehension in each caller.
+    """
+    overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
+    assert overlay is not None, "_build_curve_overlay returned no overlay"
+    return overlay
+
+
 class TestBuildCurveOverlayGroupby:
     """Tests for the groupby path in _build_curve_overlay."""
 
@@ -64,8 +78,7 @@ class TestBuildCurveOverlayGroupby:
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
-        assert overlay is not None, "_build_curve_overlay returned no overlay"
+        overlay = _overlay(stub, ds, rv)
 
         curves = [el for el in overlay if isinstance(el, hv.Curve)]
         assert len(curves) == len(backends), f"Expected {len(backends)} curves, got {len(curves)}"
@@ -77,8 +90,7 @@ class TestBuildCurveOverlayGroupby:
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
-        assert overlay is not None, "_build_curve_overlay returned no overlay"
+        overlay = _overlay(stub, ds, rv)
 
         labels = sorted(el.label for el in overlay if isinstance(el, hv.Curve))
         assert labels == sorted(backends)
@@ -90,8 +102,7 @@ class TestBuildCurveOverlayGroupby:
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
-        assert overlay is not None, "_build_curve_overlay returned no overlay"
+        overlay = _overlay(stub, ds, rv)
 
         spreads = [el for el in overlay if isinstance(el, hv.Spread)]
         assert len(spreads) == len(backends), (
@@ -105,8 +116,7 @@ class TestBuildCurveOverlayGroupby:
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
-        assert overlay is not None, "_build_curve_overlay returned no overlay"
+        overlay = _overlay(stub, ds, rv)
 
         spreads = [el for el in overlay if isinstance(el, hv.Spread)]
         assert len(spreads) == 0
@@ -126,8 +136,7 @@ class TestBuildCurveOverlayGroupby:
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
-        assert overlay is not None, "_build_curve_overlay returned no overlay"
+        overlay = _overlay(stub, ds, rv)
 
         curves = [el for el in overlay if isinstance(el, hv.Curve)]
         # 2 backends × 3 algos = 6 curves
@@ -144,8 +153,7 @@ class TestBuildCurveOverlayGroupby:
         stub = _make_result_stub(["size"])
         rv = _make_result_var("time")
 
-        overlay = HoloviewResult._build_curve_overlay(stub, ds, rv)
-        assert overlay is not None, "_build_curve_overlay returned no overlay"
+        overlay = _overlay(stub, ds, rv)
 
         for el in overlay:
             if isinstance(el, hv.Curve):

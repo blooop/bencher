@@ -219,10 +219,10 @@ from .regression import (
 )
 from .results.bench_result import BenchResult
 
-# These five rerun names, and RerunResult/RerunSummaryResult a few lines down, are
-# imported unconditionally -- a statement of fact rather than optimism. None of their
-# three modules imports `rerun` at module scope; each defers it into the method that
-# needs it, so an `except ModuleNotFoundError` around them never fired in any
+# These three rerun names, plus RerunResult/RerunSummaryResult a few lines down -- five in
+# all -- are imported unconditionally, which is a statement of fact rather than optimism.
+# None of their three modules imports `rerun` at module scope; each defers it into the
+# method that needs it, so an `except ModuleNotFoundError` around them never fired in any
 # environment. Verified by importing `bencher` behind a `sys.meta_path` hook blocking
 # `rerun`: these resolve to the real objects while utils_rerun's three become
 # placeholders. `rerun_summary` could not have been optional anyway -- bench_result.py

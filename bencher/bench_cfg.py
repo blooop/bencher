@@ -780,10 +780,12 @@ class BenchCfg(BenchRunCfg):
     """
 
     # These six declare *lists of variables*, and "no variables" is spelled `[]`, not
-    # `None`. They defaulted to None until plan 23 P12b, which made every reader carry an
-    # `or []` -- and eleven readers did not, so `BenchCfg()` built outside `plot_sweep`
-    # raised `TypeError: 'NoneType' object is not iterable` from inside describe/plot code.
-    # param.List instantiates mutable defaults per instance, so `[]` is not shared state.
+    # `None`. They defaulted to None until plan 23 P12b. That default is what obliged every
+    # reader to carry an `or []`, and 26 iteration sites across eight modules did not, so
+    # `BenchCfg()` built outside `plot_sweep` raised `TypeError: 'NoneType' object is not
+    # iterable` from inside describe/plot code (the per-module breakdown is in plan 23 §10
+    # P12b item 1). param.List instantiates mutable defaults per instance -- verified, not
+    # assumed -- so `[]` is not shared state.
     input_vars = param.List(
         default=[],
         doc="A list of ParameterizedSweep variables to perform a parameter sweep over",
@@ -948,6 +950,13 @@ class BenchCfg(BenchRunCfg):
                 hash_sha1(self.tag),
             )
         )
+        # The three `or []` folds here and below are unreachable since plan 23 P12b gave
+        # these fields `default=[]` -- param rejects None outright now. They are kept
+        # deliberately, because they are *why* that change could not move a stored digest:
+        # `[]` and `None` were already folded identically, so the pre- and post-change
+        # digests match (measured, not argued). Deleting them is a provable no-op and is
+        # logged as entry L7 of plans/27-cache-version-bump-ledger.md, to be swept with the
+        # next CACHE_VERSION bump rather than as a drive-by that removes the evidence.
         for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 

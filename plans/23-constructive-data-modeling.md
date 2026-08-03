@@ -658,6 +658,12 @@ other four (100). Both are recorded in §10. Tier B is now fully enabled.
   release.
 - **P7 (C5):** verify `HistoryEvent` is never persisted before enum-ifying.
 - **General rule:** no phase changes stored cell values or sentinels.
+- **Where the deferrals live:** the two annotations this plan left widened because
+  normalizing them would move a key (`param_hash`/`hash_persistent`, and `values()` — §10
+  P12 items 9/10), and the P4 sentinel-compatibility constraint above, are entries L1, L2
+  and L3 in [plan 27's `CACHE_VERSION` bump ledger](27-cache-version-bump-ledger.md). Record
+  any further cache-blocked deferral there as well as here, so a future bump can sweep them
+  all in one release instead of paying the invalidation cost twice.
 
 ## 8. Amendments to other plans (recorded here, implemented there)
 
@@ -1229,8 +1235,8 @@ than only a hygiene one — see item 1.
     |---|---|---|---|
     | `Bench.get_result_vars`, `WorkerManager.get_result_vars` | `list[str] \| list[Parameter]` switched on `as_str: bool` | split into `get_result_var_names()` and `get_result_vars()` | public API; needs a deprecation cycle for the flag |
     | `BenchResultBase.get_optimal_inputs` | `list[tuple[...]] \| dict[...]` switched on `as_dict: bool` | split into two methods | same |
-    | `SweepBase.values`, `FloatSweep.values` | `list[Any] \| np.ndarray` | one return type for every leaf | coercing changes what flows into hashing and dataset construction |
-    | `ParametrizedSweep.param_hash`, `hash_persistent` | `int \| str` (the `0` sentinel) | always a digest | invalidates persisted caches; needs a `CACHE_VERSION` bump (§7) |
+    | `SweepBase.values`, `FloatSweep.values` | `list[Any] \| np.ndarray` | one return type for every leaf | coercing changes what flows into hashing and dataset construction — **plan 27 ledger L2** |
+    | `ParametrizedSweep.param_hash`, `hash_persistent` | `int \| str` (the `0` sentinel) | always a digest | invalidates persisted caches; needs a `CACHE_VERSION` bump (§7) — **plan 27 ledger L1** |
 
     The first two are the shape this plan exists to remove — a boolean argument that
     switches the return type is an illegal state made representable, and no type checker
@@ -1377,9 +1383,17 @@ changes, and both are recorded in the CHANGELOG as such.
    builders that name a parameter. `params_to_str` (which already existed) replaced a
    hand-rolled `[i.name for i in ...]` at `bencher.py`'s title site.
 
-8. **Two `str()` coercions are honest, not papering over.** xarray types dimension names
-   as `Hashable`; bencher only makes string dims, but the values are being joined into a
-   *title*, so coercing at the boundary is correct rather than a suppression.
+8. **The `str()` coercions on xarray dim names are honest, not papering over** — but not
+   all for the same reason, and an earlier draft of this item claimed they were. xarray
+   types dimension names as `Hashable` and bencher only ever builds `str` dims, so `str()`
+   is the identity at every site. Where the value is only joined into a *title*
+   (`band_result._band_over_time`, `title_from_ds`) coercing at the boundary is plainly
+   correct. Two sites are **not** title-only and are commented as such:
+   `bench_result_base._to_panes_da` (feeds `dataset.sel()`) and
+   `band_result._band_static` (feeds `da.stack(sample=...)`). There the coercion lands on a
+   lookup key, so if a non-str Hashable dim ever became reachable the result is a
+   `KeyError` rather than a wrong render — the right failure, but worth stating rather than
+   filing under "it's just a title".
 
 9. **Strict-list: four of the fifteen files P12b touched came out Tier-C clean** and were
    added (`plugins/registry.py`, `manim_cartesian/cartesian_product_scene.py`, and both
@@ -1436,3 +1450,30 @@ changes, and both are recorded in the CHANGELOG as such.
 
     When adding a rule to a checker's config, verify the default before assuming
     "not ignored" means "enabled" — the two are the same only for error-by-default rules.
+
+11. **Deferred by P12b, each with its reason** — none of these is an oversight, and none
+    was needed to get the four rules green.
+
+    - **`Group.direction` is still a stringly-typed three-value tag** (`"right"`, `"down"`,
+      `"stack"`), dispatched by `==` in `Group.size` and `Group.draw`. Making `Shape` a sum
+      type removed the leaf/branch illegal state; the *layout* axis is the same shape one
+      level down and wants an enum. Left out because it is an independent change with its
+      own pixel-hash re-verification, and bundling it would have made "rendering is
+      byte-identical" cover two claims instead of one.
+    - **`results/bench_result.py` carries a second, divergent placeholder convention for
+      the same optional dependency.** P12b unified `__init__.py`'s three; the other file
+      spells its own fallback differently. Both satisfy `possibly-missing-attribute`, so
+      the gate does not force convergence — a reader comparing the two still has to work
+      out whether the difference is meaningful. One convention, in one place, is the fix.
+    - **`Bench.input_vars`/`result_vars`/`const_vars` keep the `None`-means-infer
+      three-state that `BenchCfg` just lost.** `bencher.py`'s `Bench.__init__` sets all
+      three to `None`, and `plot_sweep` and `optimize` discriminate on `is None` to mean
+      "auto-detect from the worker class". So after P12b `bench.input_vars = None` is legal
+      and load-bearing while `BenchCfg(input_vars=None)` is a hard error, and
+      `bench.input_vars = []` silently means auto-detect rather than "no inputs" — the
+      empty list is unreachable as an *instruction*. This is pre-existing and was not
+      reported by any Tier-B rule (the reads are all guarded), but it is the same illegal
+      state one layer up, and the constructive fix is the same shape as elsewhere in this
+      plan: an explicit `Infer` sentinel or an `Auto | list` sum type, so "infer" and
+      "none" stop sharing a spelling. Sequence it with A5, which owns this entry-point
+      surface.
