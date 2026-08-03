@@ -86,11 +86,16 @@ class SweepBase(param.Parameter):
 
     def values(
         self,
-    ) -> list[Any]:
+    ) -> list[Any] | np.ndarray:
         """All sweep classes must implement this method. This generates sample values from based on the parameters bounds and sample number.
 
         Returns:
-            list[Any]: A list of samples from the variable
+            list[Any] | np.ndarray: The samples from the variable. The numpy arm is not
+            optional politeness -- ``FloatSweep.values`` returns the array from
+            ``linspace``/``arange`` directly, so declaring ``list[Any]`` here made that
+            override an LSP violation. Found by plan 23 P12 enabling
+            ``invalid-return-type``, which surfaced as ``invalid-method-override`` once
+            the leaf was annotated honestly.
         """
         raise NotImplementedError
 

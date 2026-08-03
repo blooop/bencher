@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from functools import partial
 from typing import assert_never
 
+from param import Parameter
+
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 
 logger = logging.getLogger(__name__)
@@ -327,7 +329,7 @@ class WorkerManager:
                 )
         logger.info(f"setting worker class {worker_class} for declaration only")
 
-    def get_result_vars(self, as_str: bool = True) -> list[str | ParametrizedSweep]:
+    def get_result_vars(self, as_str: bool = True) -> list[str] | list[Parameter]:
         """Retrieve the result variables from the worker class instance.
 
         Args:
@@ -336,22 +338,26 @@ class WorkerManager:
                            Default is True.
 
         Returns:
-            list[str | ParametrizedSweep]: A list of result variables, either as strings
-                or in their original form.
+            list[str] | list[Parameter]: The result variables, as names or as the
+                ``param.Parameter`` descriptors themselves. Annotated
+                ``list[str | ParametrizedSweep]`` until plan 23 P12 -- ``get_results_only``
+                returns descriptors, not sweep instances.
 
         Raises:
             RuntimeError: If no ParametrizedSweep is attached (see :meth:`_declaring`).
         """
         declaring = self._declaring()
         if as_str:
-            return [i.name for i in declaring.get_results_only()]
+            # str() because param types `Parameter.name` as `str | None`; a declared
+            # parameter always has one, assigned when the owning class is created.
+            return [str(i.name) for i in declaring.get_results_only()]
         return declaring.get_results_only()
 
-    def get_inputs_only(self) -> list[ParametrizedSweep]:
+    def get_inputs_only(self) -> list[Parameter]:
         """Retrieve the input variables from the worker class instance.
 
         Returns:
-            list[ParametrizedSweep]: A list of input variables.
+            list[Parameter]: The input variables, as ``param.Parameter`` descriptors.
 
         Raises:
             RuntimeError: If no ParametrizedSweep is attached (see :meth:`_declaring`).

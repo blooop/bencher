@@ -57,11 +57,14 @@ class SweepSelector(Selector, SweepBase):
             self.samples = samples
         self.optimize = optimize
 
-    def values(self) -> list[Any]:
+    def values(self) -> list[Any] | np.ndarray:
         """Return all the values for the parameter sweep.
 
         Returns:
-            list[Any]: A list of parameter values to sweep through
+            list[Any] | np.ndarray: The parameter values to sweep through. The union is
+            the base class admitting what ``FloatSweep`` actually returns -- a numpy
+            array straight from ``linspace``/``arange`` (plan 23 P12). Narrowing it back
+            would make that override an LSP violation, which is how this was found.
         """
         return self.indices_to_samples(self.samples, self.objects)
 
@@ -636,14 +639,19 @@ class FloatSweep(Number, SweepBase):
         sample_values = tuple(self.sample_values) if self.sample_values is not None else None
         return super()._sweep_identity() + (self.sweep_bounds, sample_values, self.step)
 
-    def values(self) -> list[float]:
+    def values(self) -> list[float] | np.ndarray:
         """Return all the values for the parameter sweep.
 
         If sample_values is provided, returns those values. Otherwise generates values
         within the specified bounds, either using linspace (when step is None) or arange.
 
         Returns:
-            list[float]: A list of float values to sweep through
+            list[float] | np.ndarray: The values to sweep through -- a list only when
+            they came from ``sample_values``; the generated paths return the numpy array
+            from ``linspace``/``arange`` directly. Annotated ``list[float]`` until plan 23
+            P12. Deliberately not coerced with ``list(...)``: the array flows into
+            hashing and dataset construction, so changing its type is a behaviour change
+            rather than an annotation fix
         """
         samps = self.samples
         if self.sample_values is None:

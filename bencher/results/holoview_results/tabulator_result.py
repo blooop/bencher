@@ -10,7 +10,7 @@ from bencher.results.holoview_results.holoview_result import HoloviewResult
 
 
 class TabulatorResult(HoloviewResult):
-    def to_plot(self, **kwargs) -> pn.widgets.Tabulator:  # pylint:disable=unused-argument
+    def to_plot(self, **kwargs) -> pn.widgets.Tabulator | None:  # pylint:disable=unused-argument
         """Create an interactive table visualization of the data.
 
         Passes the data to the panel Tabulator type to display an interactive table.
@@ -20,11 +20,14 @@ class TabulatorResult(HoloviewResult):
             **kwargs: Additional parameters to pass to the Tabulator constructor.
 
         Returns:
-            pn.widgets.Tabulator: An interactive table widget.
+            pn.widgets.Tabulator | None: An interactive table widget, or ``None`` when
+            ``filter`` rejects the dataset (plan 23 P12: the ``| None`` was missing).
         """
         return self.to_tabulator(**kwargs)
 
-    def to_tabulator(self, result_var: Parameter | None = None, **kwargs) -> pn.widgets.Tabulator:
+    def to_tabulator(
+        self, result_var: Parameter | None = None, **kwargs
+    ) -> pn.widgets.Tabulator | None:
         """Generates a Tabulator widget from benchmark data.
 
         This is a convenience method that calls to_tabulator_ds() with the same parameters.
@@ -44,7 +47,7 @@ class TabulatorResult(HoloviewResult):
 
     def to_tabulator_ds(
         self, dataset: xr.Dataset, result_var: Parameter, **kwargs
-    ) -> pn.widgets.Tabulator:
+    ) -> pn.widgets.Tabulator | None:
         """Creates a Tabulator widget from the provided dataset.
 
         Given a filtered dataset, this method generates an interactive table visualization.

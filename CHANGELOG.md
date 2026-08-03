@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`BenchResult.result_samples()` returns an `int`** (plan 23 P12). It was annotated
+  `-> int` while returning `self.ds.count()`, an `xr.Dataset` of per-variable counts. The
+  type was the smaller problem: comparing a Dataset yields a Dataset, and `bool(Dataset)`
+  is `len(data_vars) > 0`, so **every** `result_samples() > 0` and `== n` assertion was
+  vacuously true — it could not fail even if not one sample had been collected. It now
+  returns the greatest count across the result variables (max, not sum: two result
+  variables over two samples is 2 samples). Making it real immediately exposed a
+  test-isolation bug in the suite, where a shared class-level `samples` was left mutated
+  by an earlier test.
+
+### Changed
+- **Return annotations across the plotting and sweep APIs now describe what the functions
+  actually return** (plan 23 P12, enabling `ty`'s `invalid-return-type`). All 29
+  diagnostics were genuine. The user-visible ones:
+  - `to_violin_ds`, `to_boxplot_ds` and `to_scatter_jitter_ds` declared `hv.Violin` /
+    `hv.BoxWhisker` / `hv.Scatter`, which they never return — the distribution stack always
+    composes an `hv.Overlay`, and under `over_time` the value is a **`pn.Column`**, not a
+    holoviews object at all. They now share one enumerated alias, `PlotResult`.
+    `_plot_distribution`'s own `hv.Element` was also impossible: `hv.Overlay` is not an
+    `hv.Element` subclass.
+  - `to_curve_ds` declared `hv.Curve | None`; it returns an Overlay, a panel layout, or
+    `None`.
+  - `to_tabulator`/`to_plot` (Tabulator) gained the `| None` that `filter` can return.
+  - `SweepBase.values()` and `FloatSweep.values()` admit `np.ndarray`, which
+    `linspace`/`arange` have always returned. Not coerced to a list: the array flows into
+    hashing and dataset construction.
+  - `Bench.get_result_vars`, `WorkerManager.get_result_vars`/`get_inputs_only` and
+    `get_optimal_inputs` said `ParametrizedSweep` where they yield `param.Parameter`
+    descriptors; `get_optimal_inputs` also said a bare `tuple` for a list of pairs.
+  - `ParametrizedSweep.param_hash`/`hash_persistent` are `int | str`: the digest, or the
+    literal `0` when nothing was hashed. Annotated rather than normalized, because
+    normalizing would change the key for parameter-less sweeps and invalidate caches.
+
+  `invalid-return-type` is the rule that verifies `_resolve_auto` returns a member of
+  `ResolvedReduceType`, so enabling it discharges the caveat P1 left: `to_dataset`'s
+  `assert_never` is now a compile-time proof rather than a runtime assertion. The other
+  four Tier-B rules remain ignored, with their measured costs recorded in plan 23 §10.
 - **Scorecard and A/B verdicts now measure an improvement in the units the detector
   actually used** (plan 23 P3, B5). `RegressionResult.threshold` means a percent for
   `regression_method="percentage"`, but **MAD-sigma** for `"adaptive"`, an **absolute

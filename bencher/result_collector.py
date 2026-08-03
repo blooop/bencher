@@ -310,7 +310,7 @@ class ResultCollector:
 
     def define_extra_vars(
         self, bench_cfg: BenchCfg, repeats: int, time_src: datetime | str
-    ) -> list[IntSweep]:
+    ) -> list[IntSweep | TimeEvent | TimeSnapshot]:
         """Define extra meta variables for tracking benchmark execution details.
 
         This function creates variables that aren't passed to the worker function but are stored
@@ -335,7 +335,7 @@ class ResultCollector:
             optimize=False,
         )
         bench_cfg.iv_repeat.name = "repeat"
-        extra_vars = [bench_cfg.iv_repeat]
+        extra_vars: list[IntSweep | TimeEvent | TimeSnapshot] = [bench_cfg.iv_repeat]
 
         if bench_cfg.over_time:
             if isinstance(time_src, str):

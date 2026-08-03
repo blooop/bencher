@@ -77,6 +77,17 @@ result_var_permutations = [
 
 
 class TestBencher(unittest.TestCase):
+    def setUp(self) -> None:
+        # ExampleBenchCfg.param.theta is a *class-level* param shared by the whole
+        # suite, and test_const_hashing overwrites `samples`. Restoring it in tearDown
+        # rather than via addCleanup because that test is hypothesis-driven: the body
+        # runs once per example, so a cleanup registered inside it would capture the
+        # already-mutated value on every example after the first.
+        self._theta_samples = ExampleBenchCfg.param.theta.samples
+
+    def tearDown(self) -> None:
+        ExampleBenchCfg.param.theta.samples = self._theta_samples
+
     def create_bench(self) -> Bench:
         return Bench("test_bencher", ExampleBenchCfg())
 
@@ -316,6 +327,10 @@ class TestBencher(unittest.TestCase):
     def test_const_hashing(self, noisy) -> None:
         """check that const variables are hashed correctly. This test was created because setting a const variable was resulting in a hash value that changed over time even though the inputs were not changing.  The source of the problem was that the input config had a native param instead of a paramSweep object.  The native param objects don't have a constant hash because they include the .name field which changes for every instance of the param.  the paramSweep objects have the .name field removed from the hash so that hashes for the same inputs remain constant"""
 
+        # Restored by tearDown. Left unrestored this leaked samples=5 into every later
+        # test relying on the default of 30 -- unnoticed because the assertions that
+        # would have caught it compare `result_samples()`, which returned an xr.Dataset
+        # whose `bool()` is always True (plan 23 P12).
         ExampleBenchCfg.param.theta.samples = 5
 
         logger.info(f"starting with const value noisy:{noisy}")

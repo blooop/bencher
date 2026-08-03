@@ -12,6 +12,7 @@ from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.distribution_result.distribution_result import (
     DistributionResult,
 )
+from bencher.results.holoview_results.holoview_result import PlotResult
 from bencher.variables.results import ResultFloat
 
 
@@ -73,7 +74,7 @@ class ScatterJitterResult(DistributionResult):
 
     def to_scatter_jitter_ds(
         self, dataset: xr.Dataset, result_var: Parameter, jitter: float = 0.1, **kwargs: Any
-    ) -> hv.Scatter:
+    ) -> PlotResult:
         """Creates a scatter jitter plot from the provided dataset.
 
         Given a filtered dataset, this method generates a scatter visualization showing
@@ -91,7 +92,10 @@ class ScatterJitterResult(DistributionResult):
                       - marker: Shape of data points ('o', 's', 'd', etc.)
 
         Returns:
-            A HoloViews Scatter plot of the benchmark data with jittered points.
+            An ``hv.Overlay`` wrapping the jittered Scatter, or a panel layout for an
+            over_time dataset (see ``PlotResult``). See ``_plot_distribution``
+            (plan 23 P12) for why the previous ``hv.Scatter`` annotation was never
+            satisfied.
         """
         # Prepare the data using the common method from the parent class
         return self._plot_distribution(dataset, result_var, hv.Scatter, jitter=jitter, **kwargs)

@@ -646,7 +646,14 @@ def normalize_subsampling_divisions_kwargs(
             stacklevel=stacklevel,
         )
         max_subsampling_divisions = kwargs.pop("max_level")
-    return subsampling_divisions, max_subsampling_divisions, subsampling_divisions_was_set
+    # int() rather than a cast: every path above either kept the caller's int or took a
+    # value out of **kwargs, which is untyped -- so this is the one place the declared
+    # `int` is actually established (plan 23 P12).
+    return (
+        int(subsampling_divisions),
+        max_subsampling_divisions,
+        subsampling_divisions_was_set,
+    )
 
 
 def github_content(remote: str, branch_name: str, filename: str):  # pragma: no cover

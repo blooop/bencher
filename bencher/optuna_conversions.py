@@ -154,8 +154,15 @@ def sweep_var_to_suggest(iv: ParametrizedSweep, trial: optuna.trial) -> object:
 
 
 def cfg_from_optuna_trial(
-    trial: optuna.trial, bench_cfg: BenchCfg, cfg_type: ParametrizedSweep
+    trial: optuna.trial, bench_cfg: BenchCfg, cfg_type: type[ParametrizedSweep]
 ) -> ParametrizedSweep:
+    """Build a worker config from an optuna trial's suggested values.
+
+    ``cfg_type`` is annotated ``type[ParametrizedSweep]``, not ``ParametrizedSweep``:
+    it is called to construct an instance. Under the old annotation ty resolved
+    ``cfg_type()`` through ``Parameterized.__call__`` and inferred a ``dict``, which is
+    what ``invalid-return-type`` flagged (plan 23 P12).
+    """
     cfg = cfg_type()
     for iv in bench_cfg.input_vars:
         if getattr(iv, "optimize", True):

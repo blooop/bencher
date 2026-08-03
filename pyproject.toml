@@ -274,9 +274,16 @@ tmp_path_retention_count = 0
 [tool.ty.rules]
 
 # --- Tier B: enable globally in plan 23 P12 -----------------------------------------
-# Return type mismatches. Also the signal a degraded assert_never falls back to, so
-# enabling this hardens the exhaustiveness gate (plan 23 section 2.4).
-invalid-return-type = "ignore"
+# `invalid-return-type` is ENABLED (plan 23 P12, first of the five). It is the rule that
+# checks `_resolve_auto` really returns a member of `ResolvedReduceType`, so it is what
+# finally makes `to_dataset`'s `assert_never` a compile-time proof rather than a runtime
+# assertion (plan 23 section 2.4, and the caveat recorded at the alias in
+# bench_result_base.py). All 29 diagnostics it reported were genuine: see plan 23 section
+# 10 for the two live bugs among them.
+#
+# The remaining four Tier-B rules are still ignored, with their measured cost:
+#   not-iterable (43), no-matching-overload (21), unsupported-operator (16),
+#   possibly-missing-attribute (16).
 # Union types read as non-iterable / no matching overload / unsupported operator.
 not-iterable = "ignore"
 no-matching-overload = "ignore"

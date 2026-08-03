@@ -7,7 +7,7 @@ from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import HoloviewResult, PlotResult
 from bencher.variables.results import SCALAR_RESULT_TYPES
 
 
@@ -49,7 +49,9 @@ class CurveResult(HoloviewResult):
             **kwargs,
         )
 
-    def to_curve_ds(self, dataset: xr.Dataset, result_var: Parameter, **kwargs) -> hv.Curve | None:
+    def to_curve_ds(
+        self, dataset: xr.Dataset, result_var: Parameter, **kwargs
+    ) -> PlotResult | None:
         """Creates a curve plot from the provided dataset.
 
         Generates a curve with optional standard deviation spread overlay.
@@ -63,7 +65,11 @@ class CurveResult(HoloviewResult):
             **kwargs: Additional keyword arguments passed to the curve plot options.
 
         Returns:
-            hv.Curve | None: A curve plot with optional standard deviation spread.
+            An ``hv.Overlay`` of the curve plus optional standard-deviation spread,
+            or a panel layout when over_time wraps it for the time slider (see
+            ``PlotResult``); ``None`` for a dataset with no dimensions. Annotated
+            ``hv.Curve | None`` until plan 23 P12 -- a bare ``Curve`` is never
+            returned, because ``_build_curve_overlay`` always composes an Overlay.
         """
         if self._use_holomap_for_time(dataset):
             var = result_var.name

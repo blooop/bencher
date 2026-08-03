@@ -22,7 +22,7 @@ class ParametrizedSweep(Parameterized):
     """Parent class for all Sweep types that need a custom hash"""
 
     @staticmethod
-    def param_hash(param_type: Parameterized, hash_value: bool = True) -> int:
+    def param_hash(param_type: Parameterized, hash_value: bool = True) -> int | str:
         """A custom hash function for parametrised types with an option for hashing the value of the type
 
         Args:
@@ -30,7 +30,15 @@ class ParametrizedSweep(Parameterized):
             hash_value (bool, optional): use the value as part of the hash. Defaults to True.
 
         Returns:
-            int: a hash
+            int | str: ``hash_sha1``'s hex digest, or the literal ``0`` when nothing was
+            hashed -- ``hash_value=False``, or a class declaring no parameters besides
+            ``name``. Annotated ``-> int`` until plan 23 P12, which is the one thing it
+            almost never returns.
+
+            The ``0`` is a sentinel of the kind this plan exists to remove, but
+            normalizing it to a digest would change the key for parameter-less sweeps and
+            so invalidate persisted caches (§7). Left as-is deliberately; a phase that
+            can bump ``CACHE_VERSION`` should fix it.
         """
 
         curhash = 0
@@ -41,8 +49,10 @@ class ParametrizedSweep(Parameterized):
 
         return curhash
 
-    def hash_persistent(self) -> str:
-        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run"""
+    def hash_persistent(self) -> int | str:
+        """A hash function that avoids the PYTHONHASHSEED 'feature' which returns a different hash value each time the program is run.
+
+        Inherits ``param_hash``'s ``0``-or-digest return; see there (plan 23 P12)."""
         return ParametrizedSweep.param_hash(self, True)
 
     def update_params_from_kwargs(self, **kwargs) -> None:
@@ -144,9 +154,11 @@ class ParametrizedSweep(Parameterized):
     @classmethod
     def get_input_defaults_override(cls, **kwargs) -> dict[str, Any]:
         inp = cls.get_inputs_only()
-        defaults = {}
+        defaults: dict[str, Any] = {}
         for i in inp:
-            defaults[i.name] = deepcopy(i.default)
+            # str(): param types `Parameter.name` as `str | None`, but a declared
+            # parameter always has one (plan 23 P12).
+            defaults[str(i.name)] = deepcopy(i.default)
 
         for k, v in kwargs.items():
             defaults[k] = v
@@ -207,7 +219,7 @@ class ParametrizedSweep(Parameterized):
         )
         main.show()
 
-    def to_holomap(self, callback, remove_dims: str | list[str] | None = None) -> hv.DynamicMap:
+    def to_holomap(self, callback, remove_dims: str | list[str] | None = None) -> hv.HoloMap:
         return hv.HoloMap(
             hv.DynamicMap(
                 callback=callback,
