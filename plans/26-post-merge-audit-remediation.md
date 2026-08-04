@@ -322,11 +322,30 @@ this list, and fold the small fixes in where the files are already being touched
    raising a `TypeError` that names the six named constructors.
 2. **P8's DoD is unmet at the fifth match site:**
    `composable_container_video.py:158-161` still ends `match render_cfg.compose_method` with
-   `case _: raise RuntimeError`, and the file isn't strict-listed. `assert_never` arm +
-   strict-list.
-3. **Strict-list additions** so the new `assert_never`s stop being decorative: `plot_filter.py`,
-   `utils.py`, `plugins/bench_data.py`, `results/bench_result_base.py` (the statement-form AggFn
-   ladder is not caught by P12's global `invalid-return-type`).
+   `case _: raise RuntimeError`. Replace it with an `assert_never` arm. **Do the arm only — the
+   "+ strict-list" half of this item is unnecessary**, for the reason recorded under item 3: the
+   arm takes effect the moment it is written, with no override entry.
+3. ~~**Strict-list additions** so the new `assert_never`s stop being decorative: `plot_filter.py`,
+   `utils.py`, `plugins/bench_data.py`, `results/bench_result_base.py`.~~ **SUPERSEDED by plan 28**
+   (the Tier-C global ratchet), which covers all four files by rule rather than by file.
+
+   **The premise above was wrong, and is recorded here so it is not re-derived.** Those
+   `assert_never`s were never decorative. A non-exhaustive `assert_never` is caught by
+   `type-assertion-failure`, which is **not** one of the five Tier-C rules and is not ignored
+   anywhere (plan 23 §9 requires exactly that) — so it fires on every file under `bencher/`,
+   strict-listed or not. Verified by seeding an incomplete `match` at a non-listed path under
+   `bencher/` and running the repo's own unmodified pixi task argv from the repo root; it
+   reported `error[type-assertion-failure]`. Strict-listing changed nothing about it.
+
+   What the additions would actually have bought is interim Tier-C regression protection for
+   those files. Measured on `5da6f213` (ty 0.0.66): `plot_filter.py` and `plugins/bench_data.py`
+   are already at **0** Tier-C diagnostics, `utils.py` has 3 and `results/bench_result_base.py`
+   has 15 — and **315 of 387** files under `bencher/` are already clean, against 17 strict-listed.
+   Protecting two more of 315 encodes nothing but which files this item happened to name.
+
+   Decided in
+   [Does plan 26 R9 section 3's strict-list work still happen?](https://github.com/blooop/bencher/issues/1062),
+   a ticket on the [ty adoption map](https://github.com/blooop/bencher/issues/1056).
 4. `HistoryEvent` is not frozen (`bencher/history.py:99-100`) — `event.kind = "typo"` bypasses
    the `__post_init__` parse; freeze it.
 5. **`IntSweep.with_bounds` coercion bypasses both plan-17 guards** (verified):
