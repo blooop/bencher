@@ -84,16 +84,16 @@ def _over_time_dataset(var_name: str, values) -> xr.Dataset:
     )
 
 
-def _render(result_var, values) -> _Spy:
+def _render(result_var, values) -> tuple[_Spy, object]:
     spy = _Spy()
     dataset = _over_time_dataset(result_var.name, values)
-    spy._to_panes_da(  # pylint: disable=protected-access
+    rendered = spy._to_panes_da(  # pylint: disable=protected-access
         dataset,
         plot_callback=spy.callback,
         target_dimension=0,
         result_var=result_var,
     )
-    return spy
+    return spy, rendered
 
 
 @pytest.mark.parametrize("result_type", PANEL_TYPES, ids=lambda t: t.__name__)
@@ -103,12 +103,19 @@ def test_pane_types_never_see_an_unreduced_over_time(result_type):
     result_var.name = "v"
     # Strings for every type: the spy replaces the renderer that would interpret
     # them, so what matters is the dataset's shape, not what the cells mean.
-    spy = _render(result_var, ["a", "b"])
+    spy, rendered = _render(result_var, ["a", "b"])
 
     if issubclass(result_type, _SELF_RESOLVING):
         assert not spy.seen, (
             f"{result_type.__name__} resolves its own values, so plot_callback "
             "should not be called; it now is, and this test no longer checks it"
+        )
+        # "never called the spy" is also true of a branch that returned nothing,
+        # so pin that these types reached a layout rather than falling off the
+        # dispatch — otherwise this parametrisation checks nothing at all.
+        assert rendered is not None, (
+            f"{result_type.__name__} took no over_time layout: it neither called "
+            "the per-sample renderer nor produced a viewable of its own"
         )
         return
 
@@ -132,7 +139,7 @@ def test_pane_types_render_every_time_point(result_type):
         pytest.skip(f"{result_type.__name__} has a layout of its own with its own test")
     result_var = result_type()
     result_var.name = "v"
-    spy = _render(result_var, ["a", "b"])
+    spy, _ = _render(result_var, ["a", "b"])
     assert len(spy.seen) == _TIME_POINTS, (
         f"{result_type.__name__} rendered {len(spy.seen)} of {_TIME_POINTS} time "
         "points; a report that drops history silently is the failure mode the "

@@ -17,6 +17,7 @@ code.
 import warnings
 from datetime import datetime, timedelta
 
+import holoviews as hv
 import pandas as pd
 import panel as pn
 import pytest
@@ -64,7 +65,31 @@ class StringOnlySweep(bn.ParametrizedSweep):
         self.note = f"run-{self.run_id}"
 
 
-def _run_over_time(worker, result_vars, runs=_RUNS):
+class SweptScalarSweep(bn.ParametrizedSweep):
+    """The same history with an ordinary swept input, for the numeric half.
+
+    Separate from the sweeps above rather than folded into them, because the two
+    shapes exercise different things and swapping one for the other silently costs
+    coverage.  With no input vars a pane type at over_time > 1 *raises*, which is
+    what the tests above pin.  Add an input var and the very same defect stops
+    raising: ``phase`` survives the pane recursion as a scalar coordinate, so
+    ``zero_dim_da_to_val`` takes its ``expand_dims`` branch instead of ``.item()``
+    and returns the whole two-element array, which renders as one ``Str(ndarray)``
+    pane holding both time points and labelled with neither.  Silent-wrong, not
+    loud-wrong.  Only the content assertions catch it in that shape.
+    """
+
+    phase = bn.IntSweep(default=0, bounds=[0, 1], doc="one ordinary swept input")
+
+    score = bn.ResultFloat(units="pt", doc="a plain scalar, which keeps its series")
+
+    run_id = 0
+
+    def benchmark(self):
+        self.score = float(self.run_id + self.phase)
+
+
+def _run_over_time(worker, result_vars, runs=_RUNS, input_vars=()):
     """Sample *worker* once per run against one history, as a CI report does."""
     run_cfg = bn.BenchRunCfg()
     run_cfg.over_time = True
@@ -78,7 +103,7 @@ def _run_over_time(worker, result_vars, runs=_RUNS):
         run_cfg.clear_history = run == 0
         result = bench.plot_sweep(
             "over_time_panes",
-            input_vars=[],
+            input_vars=list(input_vars),
             result_vars=result_vars,
             run_cfg=run_cfg,
             time_src=_BASE_TIME + timedelta(seconds=run),
@@ -91,6 +116,13 @@ def _mixed(tmp_path, monkeypatch):
     """A two-run history of a string beside a dataset, from a scratch cache dir."""
     monkeypatch.chdir(tmp_path)
     return _run_over_time(StringAndDataSetSweep(), ["note", "table", "score"])
+
+
+@pytest.fixture(name="swept")
+def _swept(tmp_path, monkeypatch):
+    """A two-run history of a scalar over a swept input — see ``SweptScalarSweep``."""
+    monkeypatch.chdir(tmp_path)
+    return _run_over_time(SweptScalarSweep(), ["score"], input_vars=["phase"])
 
 
 def _markdown_text(viewable) -> list[str]:
@@ -133,7 +165,10 @@ def test_auto_report_reports_no_pane_render_failure(mixed):
     # Scoped to the panes plugin rather than to any failure: a sweep with no input
     # vars also trips hvplot's numeric path ("no valid index for a 0-dimensional
     # object"), which is a separate defect and would make this test fail for the
-    # wrong reason.
+    # wrong reason.  Widening the scope by giving the fixture an input var is not
+    # the trade it looks like — see ``SweptScalarSweep``: with an input var the
+    # pane defect stops raising at all, so this assertion would gain a plugin and
+    # lose its subject.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         auto = mixed.to_auto()
@@ -146,7 +181,32 @@ def test_auto_report_reports_no_pane_render_failure(mixed):
     assert not [t for t in _markdown_text(auto) if "panes" in t and "failed to render" in t]
 
 
-def test_scalar_keeps_its_over_time_series(mixed):
+def _holomaps(viewable) -> list:
+    """Every HoloMap in a rendered panel object."""
+    return [
+        pane.object
+        for pane in viewable.select(pn.pane.HoloViews)
+        if isinstance(pane.object, hv.HoloMap)
+    ]
+
+
+def test_scalar_keeps_its_over_time_series(swept):
     # Rendering panes per event must not cost the scalars their series — that
     # series is what regression detection reads.
-    assert mixed.to_dataset()["score"].sizes["over_time"] == _RUNS
+    #
+    # Asserted on the *rendered* curve, not on to_dataset(): the dataset is built
+    # before any dispatch decision, so a version of this that read to_dataset()
+    # alone would pass no matter what _to_panes_da did with the dimension, and so
+    # could not guard the half of the rule it names.
+    score = next(rv for rv in swept.get_results_var_list() if rv.name == "score")
+    curve = swept.to_curve(result_var=score)
+    assert curve is not None
+
+    hmaps = _holomaps(curve)
+    assert hmaps, f"a numeric var over_time must render an hv.HoloMap: {curve!r}"
+    # over_time reaches the plot as a HoloMap *key dimension* with one key per
+    # run: that is the slider hvplot builds from the whole dimension, and it is
+    # exactly what pre-selecting a time point in _to_panes_da would flatten away.
+    hmap = hmaps[0]
+    assert "over_time" in [d.name for d in hmap.kdims], hmap.kdims
+    assert len(hmap.keys()) == _RUNS, hmap.keys()

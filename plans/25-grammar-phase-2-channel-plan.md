@@ -152,9 +152,9 @@ budget for them. **Only the first postdates the A6 commit** (`cead5fff`,
 distinction, so this plan claims "A6 did not enumerate them", never "the surface grew":
 
 - **A tenth member of the over-time-grid family, genuinely post-A6:**
-  `_pane_over_time_samples` (`bench_result_base.py`), added
+  `_pane_over_time_samples` (`bench_result_base.py:1151`), added
   2026-07-31 (`48b64798`) by plan 22 D4 for blob-backed `ResultDataSet` history —
-  dispatched from `_to_panes_da`. Phase 1 created it as
+  dispatched from `_to_panes_da` at `:998-1011`. Phase 1 created it as
   `_pane_over_time_dataset`; it was since renamed and made the *default* over_time
   layout for every pane type that does not opt into one of its own, so it is no
   longer a `ResultDataSet` specialisation.

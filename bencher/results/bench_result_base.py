@@ -1004,14 +1004,8 @@ class BenchResultBase:
                     # renderer asking that for one value raises. A pane type
                     # without a bespoke over_time layout must still get a correct
                     # one, including one added after this line was written.
-                    #
-                    # For ResultDataSet specifically, path-backed cells (plan 22)
-                    # make historical payloads loadable from any run, so every time
-                    # point renders like the other blob types. Legacy index cells
-                    # are only trusted at the final time index — dataset_list
-                    # belongs to the final run, so an in-range historical index
-                    # would silently render the *current* payload under a
-                    # historical label; those render a labelled placeholder.
+                    # Per-type concerns (ResultDataSet's legacy index cells) belong
+                    # to the layout, not to this branch — see the method's docstring.
                     return self._pane_over_time_samples(
                         dataset, result_var, plot_callback, **kwargs
                     )
