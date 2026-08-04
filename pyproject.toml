@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.117.0"
+version = "1.118.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -37,10 +37,7 @@ bencher = "bencher.render:main"
 
 [tool.pixi.workspace]
 channels = ["conda-forge", "https://prefix.dev/blooop"]
-platforms = ["linux-64"]
-
-[tool.pixi.system-requirements]
-libc = "2.31"
+platforms = [{ platform = "linux-64", glibc = "2.31" }]
 
 [tool.pixi.dependencies]
 python = ">=3.11"
