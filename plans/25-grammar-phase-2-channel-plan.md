@@ -152,9 +152,12 @@ budget for them. **Only the first postdates the A6 commit** (`cead5fff`,
 distinction, so this plan claims "A6 did not enumerate them", never "the surface grew":
 
 - **A tenth member of the over-time-grid family, genuinely post-A6:**
-  `_pane_over_time_dataset` (`bench_result_base.py:1105-1151`), added
+  `_pane_over_time_samples` (`bench_result_base.py:1151`), added
   2026-07-31 (`48b64798`) by plan 22 D4 for blob-backed `ResultDataSet` history —
-  dispatched from `_to_panes_da` at `:960-969`. Phase 1 created it.
+  dispatched from `_to_panes_da` at `:998-1011`. Phase 1 created it as
+  `_pane_over_time_dataset`; it was since renamed and made the *default* over_time
+  layout for every pane type that does not opt into one of its own, so it is no
+  longer a `ResultDataSet` specialisation.
 - **The `TabularSpec` family** (`holoview_results/tabular_spec.py:167`, `.build` at
   `:202`) with four xy result classes (`xy_scatter_result.py:56-74` builds `hv.Points`;
   siblings `xy_curve_result.py`, `xy_hexbin_result.py`, `xy_histogram_result.py`) —
@@ -306,7 +309,7 @@ clarifications. None of the seven affects A6's reasoning.
    must plan around live hmaps (D3).
 6. A6's "nine pathways" and "three dialects" are correct for what they count. Three
    further pathways sit outside the list of nine (§2.2) and one selection ladder sits
-   beside the three shape dialects (§2.3) — but only `_pane_over_time_dataset` postdates
+   beside the three shape dialects (§2.3) — but only `_pane_over_time_samples` postdates
    A6, and the ladder predates it by months. "A6 did not enumerate them" is the true
    claim; "the surface grew" and "A6's count predates it" are not, and are withdrawn.
 7. Law 5's entry-point group name is **right** (`plugins/registry.py:14`
