@@ -1,20 +1,21 @@
 """Meta-tests for the ``ty`` type-check gate itself.
 
 The gate is configuration, so it can be weakened by a one-line edit to
-``pyproject.toml`` without any test noticing. Before plan 23 P1 the gate ignored 21
-rules and was effectively a no-op that still reported "All checks passed!". These tests
-assert the *properties that make it a gate*, so that regression cannot happen silently
-again.
+``pyproject.toml`` without any test noticing. These tests assert the *properties that
+make it a gate* -- including, in :class:`TestEffectiveGateConfig`, by running the real
+command on a seeded violation rather than reading config.
 
-See ``plans/23-constructive-data-modeling.md`` sections D1/D2 and P1.
+See ``plans/23-constructive-data-modeling.md`` sections D1/D2 for the tier design.
 """
 
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 import sys
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -24,25 +25,19 @@ PYPROJECT = REPO_ROOT / "pyproject.toml"
 
 # Rules that must never be silenced globally, with the reason each one matters.
 MUST_NOT_BE_IGNORED = {
-    # The exhaustiveness mechanism. Silencing this turns every `assert_never` arm from a
-    # compile-time proof into a runtime assertion, with no other signal.
+    # Silencing this turns every `assert_never` arm from a compile-time proof into a
+    # runtime assertion, with no other signal.
     "type-assertion-failure": "exhaustive `match` checking (plan 23 D2)",
-    # Tier B's first rule, enabled in P12. This is what verifies `_resolve_auto` really
-    # returns a member of `ResolvedReduceType`, i.e. what makes `to_dataset`'s
-    # `assert_never` a compile-time proof instead of a runtime assertion. Re-ignoring it
-    # silently downgrades that proof, which is exactly the state P1 shipped with and P12
-    # was written to end.
+    # Tier B. Each was paid for by fixing a representation rather than by annotating, so
+    # re-ignoring one re-permits the shape that produced the diagnostics.
     "invalid-return-type": "the ReduceType exhaustiveness proof (plan 23 P12)",
-    # The other four Tier-B rules, enabled in P12b. Each was paid for by fixing a
-    # representation rather than by adding annotations, so re-ignoring one does not just
-    # hide diagnostics -- it re-permits the shape that produced them.
     "not-iterable": "optional-list fields that mean `[]` (plan 23 P12b)",
     "no-matching-overload": "Tier B (plan 23 P12b)",
     "unsupported-operator": "operations on optionals, incl. the registry `exc` shadow "
     "(plan 23 P12b)",
     "possibly-missing-attribute": "the total public surface for optional extras (plan 23 P12b)",
-    # Tier A, enabled in P1. Each was measured at <=6 diagnostics, so a reappearance in
-    # the ignore list is a regression rather than a pragmatic concession.
+    # Tier A. Each sits at <=6 diagnostics, so a reappearance here is a regression rather
+    # than a pragmatic concession.
     "call-non-callable": "Tier A (plan 23 P1)",
     "call-top-callable": "Tier A (plan 23 P1)",
     "inconsistent-mro": "Tier A (plan 23 P1)",
@@ -64,21 +59,15 @@ def _global_rules() -> dict[str, str]:
     return _ty_config().get("rules", {})
 
 
-# Rules ty ships DISABLED by default. For these, "absent from [tool.ty.rules]" means
-# OFF, not "on at its default severity" -- so `!= "ignore"` is not evidence of anything
-# and the rule must be spelled out as "error".
+# Rules ty ships DISABLED by default: absent from [tool.ty.rules] means OFF, so
+# `!= "ignore"` proves nothing and the rule must be spelled out as "error".
 #
-# This list exists because P12b got it wrong: it "enabled" possibly-missing-attribute by
-# deleting its `= "ignore"` line, `pixi run ty` stayed green, and the seeded probe that
-# was supposed to confirm the fix passed `--error possibly-missing-attribute` on the
-# command line -- so it measured a rule the checked-in config did not have on. Every
-# surface signal agreed the gate was armed while it was not.
-#
-# Verify a candidate before adding it here: write a file violating the rule, run
-# `ty check` on it under a config that does NOT mention the rule, and see whether
-# anything is reported.
+# To add one, first verify it: write a file violating the rule, run `ty check` under a
+# config that does not mention it, and see whether anything is reported. Re-run this file
+# whenever the ty pin moves -- a renamed rule is silently unenforced (ty warns
+# `unknown-rule` and continues).
 OFF_BY_DEFAULT_IN_TY = {
-    "possibly-missing-attribute": "verified against ty 0.0.56 with a standalone probe",
+    "possibly-missing-attribute": "verified with a standalone probe",
 }
 
 
@@ -91,8 +80,8 @@ class TestGateConfiguration:
         assert setting == "error", (
             f"`{rule}` is off by default in ty ({OFF_BY_DEFAULT_IN_TY[rule]}), so it must "
             f"be set to 'error' in [tool.ty.rules] to be enforced -- currently {setting!r}. "
-            f"Merely leaving it out of the ignore list is what P12b did first, and the gate "
-            f"reported 'All checks passed!' with the rule switched off."
+            f"Leaving it out of the ignore list is not enough: the gate reports 'All checks "
+            f"passed!' with the rule switched off."
         )
 
     @pytest.mark.parametrize("rule", sorted(MUST_NOT_BE_IGNORED))
@@ -130,9 +119,11 @@ class TestGateConfiguration:
         """The global ignore table is not the only way to disable a rule.
 
         An ``[[tool.ty.overrides]]`` block with a broad ``include`` silences rules just
-        as effectively, and asserting only on ``[tool.ty.rules]`` would not notice. This
-        caught a real hole in review: a block covering ``bencher/example/**`` had
-        ``missing-argument`` off across the corpus that doubles as integration tests.
+        as effectively, and asserting only on ``[tool.ty.rules]`` would not notice.
+
+        Complements :class:`TestEffectiveGateConfig`: that probe covers more routes but
+        only reports *that* first-party code went unchecked, while this one names the
+        offending pattern and rule, and needs no ty binary.
         """
         offenders = []
         for block in _ty_config().get("overrides", []):
@@ -173,19 +164,139 @@ def _load_ty_task() -> str:
     return task["cmd"] if isinstance(task, dict) else task
 
 
+def _repo_ty_argv() -> list[str]:
+    """The repo's own ty invocation, with ``$CONDA_PREFIX`` resolved to this interpreter.
+
+    Read from the pixi task so the probe follows the gate CI runs, rather than a
+    hardcoded copy that can drift from it.
+    """
+    argv = shlex.split(_load_ty_task())
+    return [sys.prefix if arg == "$CONDA_PREFIX" else arg for arg in argv]
+
+
+# Seeded-violation sites for the effective-config probe below. Removed in the fixture's
+# teardown; neither is importable from `bencher/__init__.py`.
+_PKG_PROBE = REPO_ROOT / "bencher" / "_ty_gate_probe.py"
+_NB_PROBE = REPO_ROOT / "docs" / "reference" / "_ty_gate_probe_nb" / "probe.ipynb"
+
+# `invalid-parameter-default` is Tier A and error-by-default in ty, so it fires without a
+# rule-table entry. If the gate does not report this, it is not reading the file at all.
+_TIER_A_VIOLATION = 'def probe(x: int = "not an int") -> int:\n    return x\n'
+_TIER_A_VIOLATION_NB = (
+    '{"cells":[{"cell_type":"code","execution_count":null,"metadata":{},"outputs":[],'
+    '"source":["def probe(x: int = \\"not an int\\") -> int:\\n","    return x\\n"]}],'
+    '"metadata":{},"nbformat":4,"nbformat_minor":5}'
+)
+
+
+@pytest.fixture(scope="module")
+def seeded_repo_gate_run() -> Iterator[tuple[str, int]]:
+    """Run the repo's real ty gate over a tree seeded with two known violations.
+
+    One run (~5s) shared by both assertions below. They test opposite halves of the same
+    effective config — package code must be checked, generated notebooks must not gate —
+    so a single invocation is cheaper, and stricter than two runs that could disagree
+    about the state of the tree.
+    """
+    if shutil.which("ty") is None:  # pragma: no cover - mirrors the class-level skipif
+        pytest.skip("ty binary not on PATH")
+    created_dirs = []
+    parent = _NB_PROBE.parent
+    if not parent.exists():
+        created_dirs.append(parent)
+        parent.mkdir(parents=True)
+    _PKG_PROBE.write_text(_TIER_A_VIOLATION)
+    _NB_PROBE.write_text(_TIER_A_VIOLATION_NB)
+    try:
+        result = subprocess.run(
+            [*_repo_ty_argv(), "--output-format", "concise"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            check=False,
+        )
+        yield result.stdout + result.stderr, result.returncode
+    finally:
+        # Unconditional: a leftover probe under `bencher/` fails the real gate for every
+        # later run, including the next `pixi run ty`.
+        _PKG_PROBE.unlink(missing_ok=True)
+        _NB_PROBE.unlink(missing_ok=True)
+        for path in reversed(created_dirs):
+            path.rmdir()
+
+
+@pytest.mark.skipif(shutil.which("ty") is None, reason="ty binary not on PATH")
+class TestEffectiveGateConfig:
+    """Does the gate, *as configured*, actually check first-party package code?
+
+    Reading config cannot answer that. `[tool.ty.rules]` is not the only lever: the gate
+    can be switched off for `bencher/` via a broad `[[tool.ty.overrides]]` include, an
+    exclude-only override block, `[tool.ty.src].exclude`, or a `.gitignore`/`.ignore`
+    entry (the task runs `--respect-ignore-files`). The last two suppress a seeded
+    diagnostic completely, and none of the four is visible to
+    `test_rule_not_ignored_for_the_package_via_overrides`, which inspects include patterns.
+
+    Running the real command in the real repo root closes all four at once, by asking the
+    only question that matters — is a violation in `bencher/` reported? — instead of
+    enumerating the ways the answer could be no.
+    """
+
+    def test_gate_reports_a_tier_a_violation_in_first_party_code(
+        self,
+        seeded_repo_gate_run: tuple[str, int],  # pylint: disable=redefined-outer-name
+    ) -> None:
+        output, returncode = seeded_repo_gate_run
+        assert "_ty_gate_probe.py" in output, (
+            "first-party package code is not being type-checked: a seeded "
+            "`invalid-parameter-default` in bencher/_ty_gate_probe.py went unreported. "
+            "Something excludes it -- a broad `[[tool.ty.overrides]]` include, an "
+            "exclude-only override block, `[tool.ty.src].exclude`, or a "
+            f"`.gitignore`/`.ignore` entry. Command: {_repo_ty_argv()}\nOutput:\n{output}"
+        )
+        assert "invalid-parameter-default" in output, (
+            "the seeded file was reported, but not for the rule seeded in it; "
+            f"`invalid-parameter-default` may be renamed or downgraded:\n{output}"
+        )
+        assert returncode != 0, (
+            f"the seeded violation was reported but ty exited 0, so CI would pass:\n{output}"
+        )
+
+    def test_generated_notebooks_do_not_gate_the_type_check(
+        self,
+        seeded_repo_gate_run: tuple[str, int],  # pylint: disable=redefined-outer-name
+    ) -> None:
+        """`pixi run ty` must not depend on whether docs have been built.
+
+        ty type-checks `.ipynb`, `generate-docs` writes notebooks under
+        `docs/reference/<section>/`, and only `docs/reference/meta/` is gitignored — so
+        without an exclusion the gate's answer changes after a docs build. CI escapes it
+        only by task ordering (`ty` before `generate-examples`), which nothing enforces.
+
+        Asserts that notebooks are excluded, not *which* mechanism does it, so the config
+        is free to change. Note ty does not read `.tyignore`, so that is not an option.
+        """
+        output, _ = seeded_repo_gate_run
+        assert "probe.ipynb" not in output, (
+            "A violation seeded in a generated-style notebook under docs/reference/ was "
+            "reported by the gate, so `pixi run ty` now passes or fails depending on "
+            "whether `generate-docs` has been run. Exclude notebooks in a mechanism ty "
+            "actually reads -- `[tool.ty.src].exclude` works; a `.tyignore` file is "
+            f"silently ignored by ty.\nOutput:\n{output}"
+        )
+
+
 @pytest.mark.skipif(shutil.which("ty") is None, reason="ty binary not on PATH")
 class TestGateActuallyFires:
     """Proof that `ty` itself enforces exhaustiveness, under a minimal config.
 
-    Scope note: these run against a *standalone* minimal config, so they verify the
-    mechanism plan 23 D2 depends on rather than this repo's full gate. The repo-level
-    properties are asserted by TestGateConfiguration above.
+    These run ty against seeded violations under a *minimal standalone* config, so they
+    verify the mechanism plan 23 D2 depends on rather than this repo's gate. The standalone
+    config is deliberate: under the repo config the Tier-C rules are ignored, so a seeded
+    Tier-C probe passes and measures nothing.
 
-    Configuration assertions above can pass while the checker itself is misconfigured,
-    so these run ty against seeded violations. They deliberately use a *minimal
-    standalone* config rather than the repo's: under the repo config the Tier-C rules
-    are ignored and a seeded probe passes, which is exactly the trap that made the
-    original measurements for this plan wrong.
+    The exception is ``test_repo_rule_table_actually_fires_on_a_seeded_violation``, which
+    reconstructs this repo's ``[tool.ty.rules]``. Repo-level properties otherwise belong to
+    TestGateConfiguration (reads config) and TestEffectiveGateConfig (runs the real gate).
     """
 
     @staticmethod
@@ -244,21 +355,14 @@ def handle(k: Kind) -> str:
     def test_repo_rule_table_actually_fires_on_a_seeded_violation(self, tmp_path: Path) -> None:
         """Run a seeded violation under **this repo's** `[tool.ty.rules]`, not a minimal one.
 
-        The sibling probes here deliberately use a standalone config (see the class
-        docstring). That leaves one thing unchecked: whether the *checked-in* rule table
-        enables what it claims. It did not — P12b shipped `possibly-missing-attribute`
-        switched off while `pixi run ty` said "All checks passed!", because ty defaults
-        the rule to off and the PR only deleted its `"ignore"` line.
-
-        So this reconstructs the repo's rule table verbatim and asserts the rule bites.
-        Config assertions alone cannot catch a default that is not what you assumed.
+        The sibling probes use a standalone config, which leaves the checked-in rule table
+        unchecked: config assertions cannot catch a rule whose default is not what you
+        assumed. This reconstructs the table verbatim and asserts the rule bites.
         """
         rules = _global_rules()
-        # Every value in [tool.ty.rules] is a severity string today, and the round-trip
-        # below re-quotes it as one. Checked rather than assumed: a non-string value would
-        # still serialise into valid TOML (`x = "True"`), so the probe would silently run
-        # against a rule table that is not the repo's -- the exact class of false pass this
-        # test exists to close.
+        # The round-trip below re-quotes each value as a string. A non-string would still
+        # serialise into valid TOML (`x = "True"`), so the probe would silently check a
+        # rule table that is not the repo's.
         non_strings = {k: v for k, v in rules.items() if not isinstance(v, str)}
         assert not non_strings, (
             f"[tool.ty.rules] holds non-string values {non_strings!r}; this probe "
@@ -292,8 +396,8 @@ def handle(k: Kind) -> str:
         # and exits 1. A bare substring test for the rule name plus `returncode != 0` is
         # therefore satisfied by a config where the rule is MISSPELLED and so entirely
         # off -- the suggestion text contains the name and the warning sets the exit code.
-        # ty has renamed a rule this repo uses before (unused-ignore-comment ->
-        # unused-type-ignore-comment), so this is a live path, not a hypothetical.
+        # ty renames rules (unused-ignore-comment -> unused-type-ignore-comment), so this
+        # is a live path.
         assert "unknown-rule" not in output, (
             "ty does not recognise a rule name in this repo's [tool.ty.rules]. A renamed "
             "or misspelled rule is silently unenforced -- ty warns and moves on. Fix the "
@@ -344,24 +448,19 @@ def handle(k: Kind) -> str:
     def test_untyped_ingress_into_complete_match_is_clean(self, tmp_path: Path) -> None:
         """Pins the gate's *boundary*: what an exhaustive `match` does NOT prove.
 
-        This probe asserts CURRENT `ty` behavior, not desired behavior (plan 24 A5,
-        decision 3). A complete `match` over a closed union is type-clean even when the
-        value reaching it comes from an unannotated helper that actually returns the raw
-        string ``"SERIAL"`` — the annotation on ``handle``'s parameter is trusted, the
-        call site passes `Unknown`, and no rule fires (not even
-        ``invalid-argument-type``, per plan 24 section 2.1). At runtime the same code
-        raises ``AssertionError: Expected code to be unreachable, but got: 'SERIAL'``.
+        A complete `match` over a closed union is type-clean even when the value reaching
+        it comes from an unannotated helper returning the raw string ``"SERIAL"``: the
+        parameter annotation is trusted, the call site passes `Unknown`, and no rule fires
+        (not even ``invalid-argument-type``). At runtime the same code raises
+        ``AssertionError: Expected code to be unreachable, but got: 'SERIAL'``.
 
-        This is the gradual-typing ingress hole that NO checker in the field closes
-        (plan 24 section 2.5 measured ty, pyrefly, pyright, basedpyright, mypy, zuban) —
-        it is why plan 24 A1 requires normalizing `param`-sourced values at the boundary
-        before any `assert_never` downstream of them.
+        No checker in the field closes this gradual-typing ingress hole (plan 24 §2.5), so
+        plan 24 A1 requires normalizing `param`-sourced values at the boundary before any
+        `assert_never` downstream of them.
 
-        Asserted clean (not xfail) deliberately: if a future `ty` release starts
-        rejecting this, the failure lands HERE with this explanation attached, telling
-        us the gate's boundary moved — an xfail that quietly flips to xpass would be a
-        silent improvement nobody notices, and the boundary comments elsewhere in the
-        tree would silently go stale.
+        Asserts CURRENT ty behaviour, not desired behaviour, and clean rather than xfail:
+        if a release starts rejecting this, the failure lands here with the explanation
+        attached instead of an xpass nobody notices.
         """
         output, returncode = self._run_ty(
             tmp_path,

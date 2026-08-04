@@ -75,7 +75,10 @@ test = [
     "sphinxcontrib-mermaid>=1.0,<3.0",
     "coverage>=7.5.4,<=7.15.2",
     "prek>=0.2.28,<0.5.0",
-    "ty>=0.0.13,<=0.0.65",
+    # Pinned exactly: ty is pre-1.0 and the gate's meaning depends on per-rule defaults
+    # (see test_ty_gate.py's OFF_BY_DEFAULT_IN_TY). On a bump: `pixi update ty`, then
+    # re-run test/test_ty_gate.py.
+    "ty>=0.0.66,<=0.0.66",
 ]
 
 docs = [
@@ -269,9 +272,19 @@ tmp_path_retention_count = 0
 #
 # Tier B is FULLY ENABLED (plan 23 P12 took invalid-return-type; P12b took the other
 #   four). There is no Tier-B block below any more -- that is the point.
-# Tier C (~1068 diagnostics, dominated by param-descriptor dynamism and by test/).
-#   Enabled per-file via the strict override block below as modules are reworked;
-#   every plan 23 phase adds the files it touches.
+# Tier C: 1036 diagnostics, dominated by param-descriptor dynamism and by test/
+#   (invalid-argument-type 501, unresolved-attribute 286, invalid-assignment 115,
+#   invalid-type-form 76, not-subscriptable 58; test/ 632, bencher/ 400, scripts/ 4).
+#   Enabled per-file via the strict override block below as modules are reworked.
+
+# ty type-checks .ipynb, and `generate-docs` writes notebooks under
+# docs/reference/<section>/ where only docs/reference/meta/ is gitignored -- so without
+# this, `pixi run ty` gives different answers before and after a docs build. Note ty does
+# not read `.tyignore`; `--respect-ignore-files` covers `.gitignore` and `.ignore` only.
+# docs/ itself stays checked (docs/conf.py is the only tracked .py there).
+[tool.ty.src]
+exclude = ["**/*.ipynb"]
+
 [tool.ty.rules]
 
 # --- Tier B: all five now enabled; do NOT re-add any of them here -------------------

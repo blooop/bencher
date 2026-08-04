@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`pixi run ty` no longer gives different answers before and after a docs build**
+  (plan 26 R10). ty type-checks `.ipynb`, `generate-docs` writes notebooks under
+  `docs/reference/<section>/`, and only `docs/reference/meta/` is gitignored, so the gate's
+  result depended on whether docs had been built. Notebooks are now excluded via
+  `[tool.ty.src].exclude`; the previous `.tyignore` file did nothing, as ty does not read
+  that filename. `docs/` itself is still checked (`docs/conf.py` passes) and no tracked
+  notebook exists, so this removes a false exemption rather than narrowing coverage.
+- **CI and local runs now type-check with the same ty** (plan 26 R10). CI runs `pixi update`
+  before `pixi run ci`, resolving to the constraint ceiling, while local runs use the
+  committed lock — so the two used different checkers, and a diagnostic from a newer ty
+  could only be seen where it could not be reproduced. ty is now pinned exactly to `0.0.66`
+  and locked there in all five environments, with the gate's probes re-run against it. An
+  exact pin rather than a range because ty is pre-1.0 and the gate's meaning depends on
+  per-rule defaults: `possibly-missing-attribute` ships off, so a range can resolve to a ty
+  where the rule does not exist and is silently unenforced.
 - **One plugin with a bad capability no longer takes down the plugins after it**
   (plan 23 P12b). `PluginRegistry.explain()` caught the capability error into `exc` — the
   same name the enclosing scope used for the exclude set — and `except ... as <name>`
@@ -34,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where a shared class-level `samples` was left mutated by an earlier test.
 
 ### Changed
+- **The type gate is now verified by running it, not by reading its configuration**
+  (plan 26 R10). A new probe seeds a Tier-A violation under `bencher/`, runs the repo's own
+  pixi task, and requires it to be reported. Reading `[[tool.ty.overrides]]` include
+  patterns cannot see three other ways to switch the gate off for the package: an
+  exclude-only override block, `[tool.ty.src].exclude`, or a `.gitignore`/`.ignore` entry
+  (the task runs `--respect-ignore-files`). The pattern-matching test is kept alongside —
+  it names the offending pattern, so it says what to edit.
 - **Return annotations across the plotting and sweep APIs now describe what the functions
   actually return** (plan 23 P12, enabling `ty`'s `invalid-return-type`). All 29
   diagnostics were genuine. The user-visible ones:

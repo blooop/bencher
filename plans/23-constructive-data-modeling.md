@@ -78,8 +78,7 @@ Out of scope (recorded as amendments in §8, do not implement here):
    `test/test_docs_scrollbars.py:28`), `scoop` (`job.py:18`), `setuptools`
    (`setup.py`, dead per plan 03).
 
-2. **ty 0.0.56** (resolved from the pin `ty>=0.0.13,<=0.0.64`, `pyproject.toml:80`)
-   supports `[[tool.ty.overrides]]` blocks with `include=` globs that relax or
+2. **ty** supports `[[tool.ty.overrides]]` blocks with `include=` globs that relax or
    re-enable rules per path. Verified in a scratch project. No checker change needed.
 
 3. **Exhaustiveness enforcement — `assert_never` comes from the stdlib.** ty derives its
