@@ -37,10 +37,7 @@ bencher = "bencher.render:main"
 
 [tool.pixi.workspace]
 channels = ["conda-forge", "https://prefix.dev/blooop"]
-platforms = ["linux-64"]
-
-[tool.pixi.system-requirements]
-libc = "2.31"
+platforms = [{ platform = "linux-64", glibc = "2.31" }]
 
 [tool.pixi.dependencies]
 python = ">=3.11"
