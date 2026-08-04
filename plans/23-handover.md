@@ -127,13 +127,18 @@ methods.
 
 Each is independent and none blocks P2.
 
-- **Plan 24 Q1** (small, self-contained): raise the `ty` ceiling to `<=0.0.65`
-  (`pyproject.toml:80`; env resolves 0.0.56, behaviour identical across 0.0.56/0.0.64/
-  0.0.65), and add plan 24 A5's third probe to `test/test_ty_gate.py` — a **complete**
+- **Plan 24 Q1** (small, self-contained). The pin half is **done** (plan 26 R10,
+  2026-08-04): ty is pinned exactly to 0.0.66 and locked there in all five environments,
+  which also closed a CI/local version split the ceiling-raise framing here did not
+  anticipate — see plan 26 §11 R10 item 2.
+
+  Still open: add plan 24 A5's third probe to `test/test_ty_gate.py` — a **complete**
   match fed from an unannotated helper asserted *type-clean*. Comment it as pinning
   current `ty` behaviour, not desired behaviour, so that a future `ty` release closing the
   hole becomes a test failure that tells us rather than a silent improvement. **P1 did not
-  add this probe.**
+  add this probe**, and R10 did not either. Note that the boundary it would pin is still
+  open on 0.0.66: `test_untyped_ingress_into_complete_match_is_clean` passes there, so the
+  probe would land green today.
 - **Plan 24 A4** was not applied to plan 23 §9: add the DoD line "every `assert_never` in
   the tree either has a subject `ty` can type, or is preceded by a normalizing parse that
   is covered by a test", plus a grep check that no `assert_never` subject is an attribute

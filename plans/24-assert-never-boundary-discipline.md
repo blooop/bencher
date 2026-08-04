@@ -10,16 +10,18 @@ decision was originally made without.
 
 **Status:** amendment, not a replacement. Plan 23's P1, P3–P10 and P12 are unchanged.
 Two DoD additions land inside 23-P2 and 23-P11; one small independent phase (Q1) is
-new.
+new. **Q1 is half-landed** as of 2026-08-04: plan 26 R10 did the pin (exactly 0.0.66,
+locked in every environment); A5's third probe is still not written.
 
 **Citations pinned to:** `main` @ `fa28ba73` (the plan 23 merge, PR #1023, 2026-07-31).
 Per plans-README rule 7, confirm each `file:line` against the current tree before
 relying on it; the symbol is the durable reference.
 
-**Tool versions all facts below were measured with:** `ty` 0.0.56 (what
-`.pixi/envs/default` resolves from the pin `ty>=0.0.13,<=0.0.64`,
-`pyproject.toml:80`), `typing_extensions` 4.16.0, py310 target. Cross-checked on `ty`
-0.0.64 and 0.0.65, and on `pyrefly` 1.1.1.
+**Tool versions all facts below were measured with:** `ty` 0.0.56 (what the pin resolved
+to when this plan was written), `typing_extensions` 4.16.0, py310 target. Cross-checked on
+`ty` 0.0.64 and 0.0.65, and on `pyrefly` 1.1.1. The repo now pins `ty` **exactly to
+0.0.66** (plan 26 R10); the boundary finding below still holds there — the gate's
+`test_untyped_ingress_into_complete_match_is_clean` probe passes on 0.0.66.
 
 **Re-verified after the 3.11 floor raise:** the floor is now
 `requires-python = ">=3.11,<3.14"` (`pyproject.toml:10`), so `assert_never` comes from
@@ -78,7 +80,7 @@ alternative checkers (§4).
    | Same, but `invalid-argument-type = "error"` | `All checks passed!` |
 
    Runtime: `AssertionError: Expected code to be unreachable, but got: 'SERIAL'`.
-   Identical on `ty` 0.0.56, 0.0.64 and 0.0.65.
+   Identical on `ty` 0.0.56, 0.0.64, 0.0.65 and 0.0.66.
 
 2. **The repo's own config documents the ingress vector.** `pyproject.toml:281`:
    "param library StrEnum/enum descriptors resolve as **Unknown**". Every `match` whose
@@ -102,9 +104,15 @@ alternative checkers (§4).
    is a property of gradual typing at an untyped boundary, and it is not fixable by
    checker choice.
 
-6. **Pin is one release stale.** `ty>=0.0.13,<=0.0.64` (`pyproject.toml:80`); 0.0.65 is
-   the latest published version; the env resolves 0.0.56. Behavior on every probe in
-   this plan is identical across all three.
+6. **Pin is one release stale.** `ty>=0.0.13,<=0.0.64`; 0.0.65 is the latest published
+   version; the env resolves 0.0.56. Behavior on every probe in this plan is identical
+   across all three.
+
+   **Resolved** by plan 26 R10 (2026-08-04), which also found the framing here too narrow:
+   a stale *ceiling* was not the whole problem. CI runs bare `pixi update` before
+   `pixi run ci`, so it resolved to the ceiling while the committed lock gave developers
+   0.0.56 — the two ran different checkers. ty is now pinned exactly to 0.0.66, so
+   "resolves" and "is pinned to" are the same statement.
 
 ## 3. Amendments to plan 23
 
@@ -231,10 +239,14 @@ Reading:
 
 ## 5. Phases
 
-### Q1 — pin ceiling + gate-boundary probe (independent, small)
+### Q1 — pin ceiling + gate-boundary probe (independent, small) — **pin done, probe open**
 
-- Raise the `ty` ceiling to `<=0.0.65` (`pyproject.toml:80`).
-- Add A5's third probe to `test/test_ty_gate.py`.
+- ~~Raise the `ty` ceiling to `<=0.0.65`.~~ **Done** in plan 26 R10 (2026-08-04), which
+  went further: ty is pinned *exactly* to 0.0.66 and locked there in every environment,
+  because a range let CI (which runs bare `pixi update`) and local runs use different
+  checkers.
+- Add A5's third probe to `test/test_ty_gate.py`. **Still open** — neither 23-P1 nor R10
+  added it.
 - **Ordering:** depends on 23-P1 having created `test/test_ty_gate.py`. If Q1 lands
   first, it carries the pin bump only and A5 folds into P1.
 - **DoD:** `pixi run ci` green on py311 and py313 (the post-floor-raise matrix); the new probe documents, in a

@@ -423,6 +423,12 @@ findings the original write-up did not have.
    are load-bearing that is not a risk worth carrying for the convenience of a floating bump.
    0.0.56 (P12b), 0.0.65 and 0.0.66 (here) have all had the probes run against them.
 
+   **This discharges the pin half of plan 24 Q1** ("raise the ty ceiling to `<=0.0.65`"), which
+   was also carried as an open item in `plans/23-handover.md` §4. Both are annotated. Q1's other
+   half — A5's third probe, a complete `match` fed from an unannotated helper asserted
+   type-clean — is **still not written**; neither 23-P1 nor R10 added it. Worth noting for
+   whoever does: the boundary it pins is still open on 0.0.66, so the probe lands green today.
+
    **Correction to this item as originally written.** "The ceiling raise changed nothing that
    runs" is true only of local runs. `.github/workflows/ci.yml:28` runs `pixi update` — with no
    package argument, so it re-resolves everything to the maximum the constraints allow —
