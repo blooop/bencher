@@ -40,6 +40,7 @@ from bencher.utils import (
 from bencher.variables.inputs import with_subsampling_divisions
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import (
+    PANEL_TYPES,
     OptDir,
     ResultBool,
     ResultDataSet,
@@ -994,16 +995,30 @@ class BenchResultBase:
                     return self._pane_over_time_grid(dataset, result_var)
                 if isinstance(result_var, (ResultVideo, ResultImage)):
                     return self._pane_over_time_slider(dataset, result_var)
-                if isinstance(result_var, ResultDataSet):
-                    # Path-backed cells (plan 22) make historical payloads loadable
-                    # from any run, so every time point renders like the other blob
-                    # types.  Legacy index cells are only trusted at the final time
-                    # index — dataset_list belongs to the final run, so an in-range
-                    # historical index would silently render the *current* payload
-                    # under a historical label; those render a labelled placeholder.
-                    return self._pane_over_time_dataset(
+                if isinstance(result_var, PANEL_TYPES):
+                    # Every *other* pane type renders one labelled pane per time
+                    # point.  Catching the whole family rather than listing members
+                    # is the point: for these, the fall-through below is not a
+                    # different layout, it is a crash — it hands `plot_callback` a
+                    # dataset that still carries over_time, and a per-sample
+                    # renderer asking that for one value raises. A pane type
+                    # without a bespoke over_time layout must still get a correct
+                    # one, including one added after this line was written.
+                    #
+                    # For ResultDataSet specifically, path-backed cells (plan 22)
+                    # make historical payloads loadable from any run, so every time
+                    # point renders like the other blob types. Legacy index cells
+                    # are only trusted at the final time index — dataset_list
+                    # belongs to the final run, so an in-range historical index
+                    # would silently render the *current* payload under a
+                    # historical label; those render a labelled placeholder.
+                    return self._pane_over_time_samples(
                         dataset, result_var, plot_callback, **kwargs
                     )
+                # Numeric callbacks (line, bar, heatmap) are the ones that *must*
+                # keep the whole over_time dimension: they build the slider
+                # themselves via hvplot groupby / hv.HoloMap, and pre-selecting a
+                # time point here would flatten the series they exist to show.
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.render()
@@ -1139,19 +1154,28 @@ class BenchResultBase:
             return pn.pane.Markdown("*No rerun data available*")
         return pn.Row(*items)
 
-    def _pane_over_time_dataset(
+    def _pane_over_time_samples(
         self,
         dataset: xr.Dataset,
         result_var,
         plot_callback: Callable,
         **kwargs,
     ) -> pn.Row | None:
-        """Render ``ResultDataSet`` over_time as a grid of labelled per-time panes.
+        """Render a pane-typed result over_time as a row of labelled per-time panes.
 
-        Path-backed cells are meaningful in any process, so history points render
-        instead of being cut down to the latest event (the pre-plan-22
-        ``isel(over_time=-1)`` workaround).  A time point whose cell is missing
-        (either generation's sentinel) is skipped.  A legacy index cell is only
+        The general over_time layout for pane types, and the only one that reduces
+        the dimension before the per-sample renderer sees it: it selects one time
+        index at a time, so ``plot_callback`` is handed the single value its
+        contract is written for. ``ResultRerun`` and ``ResultVideo``/
+        ``ResultImage`` opt out into layouts of their own; every other pane type
+        arrives here, including any added later.
+
+        A time point whose value is missing is skipped, so a variable that a
+        historical run did not record leaves a gap rather than a broken pane.
+
+        For ``ResultDataSet``, path-backed cells are meaningful in any process, so
+        history points render instead of being cut down to the latest event (the
+        pre-plan-22 ``isel(over_time=-1)`` workaround). A legacy index cell is only
         trusted at the *final* time index: ``dataset_list`` holds the final run's
         payloads alone, so a pre-plan history with in-range indices at every time
         point would otherwise render the current payload under historical labels.
