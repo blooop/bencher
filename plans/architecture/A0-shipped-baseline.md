@@ -26,6 +26,18 @@ dispositions downstream of this document branch on facts none of those lines car
 | **OPEN** | No code in the tree addresses it. The claim stands as written. |
 | **STALE** | The claim's *evidence* no longer matches the tree, independent of whether its conclusion still holds. |
 
+Two conventions on top of that vocabulary:
+
+- **Qualified verdicts.** A verdict word may carry an em-dash or parenthetical rider
+  (`SHIPPED (different mechanism)`, `PARTIAL — materially improved`,
+  `OPEN — confirmed as written`). The rider is commentary; the **leading word is the
+  verdict**, and it is the leading word that §9 tallies. `FIXED` and the `STILL …` forms
+  (`STILL DEAD`, `STILL THREE`, `STILL PRESENT`) are emphatic spellings of `SHIPPED` and
+  `OPEN` respectively, used where the claim is phrased as a complaint rather than a goal.
+- **§7 uses a second axis.** A6 §6 findings are defects, not deliverables, so they are
+  scored `REPRODUCES` / `PARTIAL` / `FIXED` against the finding's own text. In §9 a
+  reproducing finding counts as `OPEN`.
+
 ---
 
 ## 1. A6 Law 1 — canonical self-describing dataset (what #1021 actually shipped)
@@ -40,7 +52,7 @@ merged 2026-07-31) is real and substantial. A6's "No implementation yet" line
 | L1.2 | `ResultDataSet` payloads materialize **at collect** | **SHIPPED** | `_materialize_dataset_value()` (`result_collector.py:166`), called from `ResultCollector.store_results` at `result_collector.py:537`. The cell stores the path string. |
 | L1.3 | No run-local indices for dataset payloads | **PARTIAL** | True for `ResultDataSet` (L1.2). `ResultReference` (`variables/results.py:466`) still stores a run-local `object_index` slot — but Law 1 *keeps* it as the documented same-process escape hatch, so this is by design, not a gap. |
 | L1.4 | Blob store deduplicates across repeats/time points | **SHIPPED** | Content addressing is the mechanism; a content hit refreshes mtime rather than rewriting (`blob_store.py:188-199`). Note the deliberate 64-bit truncated-digest collision risk documented at `blob_store.py:48-59`. |
-| L1.5 | `isel(over_time=-1)` hack is killed | **OPEN** | Nine live sites remain. Legitimate history reads: `regression.py:1628`, `result_collector.py:844`. **Illegitimate (the hack Law 1 names):** `results/histogram_result.py:37` (see finding #12, §8), `plotting/plt_cnt_cfg.py:171` (inside `_samples_per_point`), `report_export.py:186` (`_snapshot_ds`). |
+| L1.5 | `isel(over_time=-1)` hack is killed | **OPEN** | Five live call sites remain (the three other grep hits — `bencher.py:902`, `bench_result_base.py:1153`, `variables/results.py:898` — are a comment and two docstrings; the `isel(over_time=slice(None, -1))` history slices in `regression.py:1321,1324,1334` and `history.py:280` are a different construct and are not counted). Legitimate history reads: `regression.py:1628`, `:1632`. **Illegitimate (the hack Law 1 names):** `results/histogram_result.py:37` (see finding #12, §7), `plotting/plt_cnt_cfg.py:171` (inside `_samples_per_point`), `report_export.py:186` (`_snapshot_ds`). |
 | L1.6 | `result_is_missing()` is the single missingness oracle | **PARTIAL** | The function exists (`variables/results.py:914`) and is used by the rerun and pane paths (`results/rerun_result.py:310,329,348,374`, `results/rerun_summary.py:260`, `results/bench_result_base.py:1096,1266`). It is **not** used by the numeric/holoviews reduction path, which still tests NaN directly, nor by `plt_cnt_cfg._missing_mask` (`plotting/plt_cnt_cfg.py:150-177`, a second implementation matched to `result_vars` by name). Two oracles, not one. |
 | L1.7 | `ResultHmap` is deprecated and removed | **PARTIAL** | Deprecated: a `DeprecationWarning` naming the A6 migration fires at `variables/results.py:271`. **Not removed** — still exported (`bencher/__init__.py:128`), still special-cased in `Bench.plot_sweep` (`bencher.py:637-641`, `bencher.py:1430-1436`), still a `BenchCfg` field (`bench_cfg.py:824` `result_hmaps`), still rendered (`results/holoview_results/holoview_result.py:663,689`), still the reason `hmap_kdims` exists (`bencher.py:1103`). |
 | L1.8 | The `.pkl` escape in the blob store is acknowledged debt | **SHIPPED (as debt)** | `blob_store.py:26-30` names A3 as the owner of tightening it. This is the pickle surface A3 §3 wants gone; it is now *concentrated in one function* rather than scattered, which is a real reduction in A3's blast radius. |
@@ -79,8 +91,8 @@ consequences and is exactly the case A6's Notes flag for `/ubiquitous-language`.
 | C3.1 | A manifest exists per cache value | **OPEN** | `grep -rn "manifest" bencher/` returns **zero** hits. No `ArtifactManifest`, no per-value artifact list. |
 | C3.2 | Eviction deletes through the manifest | **OPEN** | Follows from C3.1. |
 | C3.3 | What #1022 actually shipped | **SHIPPED (different mechanism)** | *Reachability* GC by scanning, not manifests: `blob_reachability()` (`cache_management.py:625`), `clean_orphaned_blobs()` (`:724`), `print_orphaned_blobs()` (`:807`). It walks the `benchmark_inputs` and `history` caches (`_BLOB_REFERENCE_CACHES`, `:448`) collecting blob *names* out of values (`_walk_blob_references`, `:533`, depth-capped at `_MAX_REF_WALK_DEPTH = 8`, `:462`) and deletes unreferenced files under `blobs/`. |
-| C3.4 | `clean_orphaned_media` survives | **YES** | `cache_management.py:367`, still the path-convention walk over `_MEDIA_FOLDERS = ("img","vid","rrd","generic")` (`:78`), keyed off `_collect_sample_cache_keys` (`:352`). It is the *mechanism* for media, not a backstop. Media and blobs are two separate, differently-designed GCs. |
-| C3.5 | Plan 27 L9 / plan 26 R2: the GC's missing `CACHE_VERSION` guard | **STILL PRESENT** | `ensure_cache_version()` (`cache_management.py:119`) has exactly one caller: `Bench.__init__` (`bencher.py:197`). Neither `blob_reachability`, `clean_orphaned_blobs`, nor `clean_orphaned_media` calls it. A stale cachedir plus a GC that reads it anyway still yields an empty live set. **A6's map Notes are correct that this must be fixed before or with any `CACHE_VERSION` bump.** |
+| C3.4 | `clean_orphaned_media` survives | **OPEN — confirmed as written** | `cache_management.py:367`, still the path-convention walk over `_MEDIA_FOLDERS = ("img","vid","rrd","generic")` (`:78`), keyed off `_collect_sample_cache_keys` (`:352`). It is the *mechanism* for media, not a backstop. Media and blobs are two separate, differently-designed GCs. |
+| C3.5 | Plan 27 L9 / plan 26 R2: the GC's missing `CACHE_VERSION` guard | **STILL PRESENT** | `ensure_cache_version()` (`cache_management.py:119`) has exactly one call site inside `bencher/`: `Bench.__init__` (`bencher.py:197`). (It is also re-exported at `bencher/__init__.py:205`, so external callers are possible; nothing in-tree uses it that way.) Neither `blob_reachability`, `clean_orphaned_blobs`, nor `clean_orphaned_media` calls it. A stale cachedir plus a GC that reads it anyway still yields an empty live set. **A6's map Notes are correct that this must be fixed before or with any `CACHE_VERSION` bump.** |
 
 **Net:** C3 is **not** partly shipped by #1022. #1022 solved the same *problem* (blob
 orphaning) with the *opposite* mechanism (scan-and-reach vs. declare-and-delete). The A4
