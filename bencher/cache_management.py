@@ -320,7 +320,7 @@ def clear_all(cachedir: str = "cachedir") -> None:
 def clear_media(cachedir: str = "cachedir") -> tuple[int, int]:
     """Delete all files in media and content-addressed store directories.
 
-    Cells that referenced a deleted file (an image path, a blob path) render as
+    Cells that referenced a deleted file (an image path, a blob name) render as
     a placeholder afterwards rather than raising — this reclaims space at the
     cost of the payloads, it does not corrupt a stored result.
 
@@ -437,15 +437,17 @@ def clean_orphaned_media(cachedir: str = "cachedir", dry_run: bool = True) -> tu
 # which is the payload *before* materialization: blobs are written by
 # ``ResultCollector._materialize_dataset_value`` at the moment the value is
 # placed in the result dataset, so a sample-cache value holds a DataFrame or a
-# ``ResultDataSet`` wrapper, never a blob path.  A payload still in the sample
-# cache also re-materializes to the *same* content-addressed path on the next
+# ``ResultDataSet`` wrapper, never a blob reference.  A payload still in the
+# sample cache also re-materializes to the *same* content-addressed name on the next
 # cache hit, so collecting its blob is recoverable rather than lossy — the one
 # place in this module where that is true (see the warning in
 # ``clean_orphaned_blobs``).
 #
 # ``benchmark_inputs`` stores whole pickled ``BenchResult`` objects and
 # ``history`` stores over_time records; both carry datasets whose cells are blob
-# path strings, so both are roots.
+# references — names now, absolute paths before that became the cell format — so
+# both are roots.  ``blob_name`` accepts either, which is why one predicate covers
+# a mixed-generation history.
 _BLOB_REFERENCE_CACHES = ("benchmark_inputs", "history")
 
 # Recursion bound for the reference walk.  Every real root is shallow (a history
@@ -513,7 +515,7 @@ def _walk_blob_references(value, names: set[str], seen: set[int], depth: int = 0
     xarray objects, numpy arrays, and the instance dicts of bencher-owned
     objects (``BenchResult``, ``BenchCfg``, ...).  Objects from other packages
     are leaves — walking param/numpy internals would cost far more than it could
-    find, since a blob path only ever lives in a dataset cell.
+    find, since a blob reference only ever lives in a dataset cell.
     """
     if depth > _MAX_REF_WALK_DEPTH or isinstance(
         value, (bool, int, float, bytes, bytearray, type(None))

@@ -21,9 +21,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the basename precisely so a moved cache dir does not read as garbage — extended to the
   render path, and that predicate is now shared by both instead of defined twice.
 
+  A name is a complete *identity* but not a complete *address*, so the result also records
+  the cache dir it was collected under (`blob_store.BLOB_CACHE_DIR_ATTR`, one dataset
+  attribute, not a directory per cell) and `resolve_blob` tries it after the active one.
+  Otherwise dropping the directory would have traded the moved-cache failure for a moved-
+  *reader* one: a bare name resolves against the reading process's own `./cachedir`, so
+  `bencher <result.pkl> <out_dir>` — the documented collect/render split, which runs in a
+  fresh process from whatever directory the user invoked it in — would have rendered every
+  `ResultDataSet` cell as a placeholder while the cache dir sat untouched where the sweep
+  left it. Media cells (`gen_path` returns absolute paths) never had that failure mode.
+
   No cache version bump: `resolve_blob` accepts either cell generation, and an absolute
   path from a 1.118.0 cache is *repaired* by its content name when the recorded directory
   is gone, so existing histories keep rendering and get the fix retroactively.
+
+### Changed
+- `blob_store` blob formats now come from one table (`_BLOB_FORMATS`): the extension list,
+  the blob-name pattern and `load_blob`'s dispatch are all derived from it instead of being
+  restated in four places, and `load_blob` parses the reference once — so the extension it
+  dispatches on is the one the name check already accepted, and the "unreachable" unknown-
+  extension raise that guarded the drift between those copies is gone.
 
 ## [1.118.0] - 2026-08-04
 

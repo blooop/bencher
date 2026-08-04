@@ -263,8 +263,11 @@ class TestLoadBlobFailureModes:
         assert load_blob(blob, tmp_path) == b""
 
     def test_missing_file_raises_filenotfound(self, tmp_path):
+        # Explicit cache dir: with the default the first candidate is the cwd's
+        # own ``cachedir``, which would make this assertion depend on where the
+        # suite runs from.
         with pytest.raises((FileNotFoundError, OSError)):
-            load_blob(tmp_path / "blobs" / "abcdef0123456789.parquet")
+            load_blob(tmp_path / "blobs" / "abcdef0123456789.parquet", tmp_path)
 
     @pytest.mark.parametrize("name", ["x.txt", "x", "x.parquet.gz", "x.nc.old"])
     def test_non_blob_name_raises_valueerror_not_something_vaguer(self, tmp_path, name):

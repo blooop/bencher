@@ -607,7 +607,7 @@ class ResultSpec:
             "missing" on READ. This can be wider than ``{missing_fill}``
             because missingness is not a pure function of the fill:
             ``ResultDataSet`` accepts both its cell generations (``"NAN"``
-            blob paths from plan 22 onwards, ``-1`` indices before)
+            blob references from plan 22 onwards, ``-1`` indices before)
             permanently. NaN/``None`` missingness is dtype-generic and handled
             in :func:`result_is_missing`, not listed here (NaN has no useful
             equality semantics in a set).
@@ -862,7 +862,7 @@ def result_kind(result_var) -> str:
 #   - index-backed reference types (reference)               -> -1    (int)
 #   - object/file/string types (path/video/image/string/...) -> "NAN" (object)
 #
-# ResultDataSet cells are blob paths since plan 22 (grammar phase 1), so its
+# ResultDataSet cells are blob references since plan 22 (grammar phase 1), so its
 # fill is the blob-family "NAN"; results collected before that change store -1
 # int indices, and ``result_is_missing`` accepts BOTH generations permanently —
 # a mixed-generation over_time history contains cells of each kind.

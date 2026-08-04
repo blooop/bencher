@@ -1247,7 +1247,9 @@ class BenchResultBase:
            name, or an absolute path from a cache dir collected before names
            became the cell format; either resolves through ``load_blob``, which
            looks in the *active* cache dir first so a cache tarred on one machine
-           and restored at another path still renders.  A payload materialized
+           and restored at another path still renders, then in the cache dir this
+           result recorded at collect time so rendering from a different working
+           directory than the sweep ran in still finds them.  A payload materialized
            with a per-sample container is a pickled ``ResultDataSet`` wrapper, so
            the full precedence chain (renderer-supplied → sample's → class's →
            raw object) still applies; a blob that cannot be loaded (deleted,
@@ -1269,10 +1271,10 @@ class BenchResultBase:
         if result_is_missing(result_var, val):
             return None
         if isinstance(val, str):
-            from bencher.blob_store import load_blob
+            from bencher.blob_store import blob_cache_dir_hints, load_blob
 
             try:
-                payload = load_blob(val)
+                payload = load_blob(val, fallback_cache_dirs=blob_cache_dir_hints(self.ds))
             except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 logger.warning(
                     "ResultDataSet '%s': failed to load blob %r (%s: %s)",
@@ -1297,7 +1299,7 @@ class BenchResultBase:
             idx = int(val)
         except (TypeError, ValueError):
             logger.warning(
-                "ResultDataSet '%s': unrecognised cell %r (neither a blob path nor a legacy index)",
+                "ResultDataSet '%s': unrecognised cell %r (neither a blob reference nor a legacy index)",
                 result_var.name,
                 val,
             )
@@ -1366,7 +1368,7 @@ class BenchResultBase:
         download widget.
         """
         if isinstance(result_var, (ResultDataSet, ResultReference)):
-            # These two store a per-sample lookup key (a blob path, or a legacy /
+            # These two store a per-sample lookup key (a blob reference, or a legacy /
             # object index into a side list), so a value that is still an array
             # fails several frames from the cause. Name the dimension the caller
             # did not reduce instead.
