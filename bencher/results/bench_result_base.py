@@ -1243,12 +1243,15 @@ class BenchResultBase:
 
         Three cell shapes exist (plan 22, D3):
 
-        1. a ``str`` blob path (collected after plan 22) — loaded with
-           ``load_blob``; a payload materialized with a per-sample container is a
-           pickled ``ResultDataSet`` wrapper, so the full precedence chain
-           (renderer-supplied → sample's → class's → raw object) still applies;
-           a blob that cannot be loaded (deleted, corrupt) renders as a labelled
-           placeholder — never a crash;
+        1. a ``str`` blob reference (collected after plan 22) — a content-hash
+           name, or an absolute path from a cache dir collected before names
+           became the cell format; either resolves through ``load_blob``, which
+           looks in the *active* cache dir first so a cache tarred on one machine
+           and restored at another path still renders.  A payload materialized
+           with a per-sample container is a pickled ``ResultDataSet`` wrapper, so
+           the full precedence chain (renderer-supplied → sample's → class's →
+           raw object) still applies; a blob that cannot be loaded (deleted,
+           corrupt) renders as a labelled placeholder — never a crash;
         2. an ``int`` index (a result pickled or cached before plan 22) — looked
            up in ``dataset_list`` when this result still carries the list that
            produced it *and* the cell is trusted (see below), and rendered as a
@@ -1279,8 +1282,8 @@ class BenchResultBase:
                     exc,
                 )
                 return pn.pane.Markdown(
-                    f"*'{result_var.name}': stored blob could not be loaded "
-                    "and is no longer recoverable from this result*"
+                    f"*'{result_var.name}': stored blob could not be loaded; "
+                    "see the log for the locations tried*"
                 )
             sample = payload if isinstance(payload, ResultDataSet) else None
             if sample is not None:

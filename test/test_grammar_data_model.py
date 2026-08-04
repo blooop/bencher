@@ -28,7 +28,7 @@ import pandas as pd
 import panel as pn
 
 import bencher as bn
-from bencher.blob_store import load_blob, materialize_blob
+from bencher.blob_store import load_blob, materialize_blob, resolve_blob
 from bencher.results.dataset_result import DataSetResult
 from bencher.variables.results import (
     ResultDataSet,
@@ -204,13 +204,16 @@ class TestPathBackedCells(unittest.TestCase):
     def setUpClass(cls):
         cls.res = run_sweep(PathCellSweep(), "test_grammar_path_cells")
 
-    def test_cells_are_blob_paths_that_round_trip(self):
+    def test_cells_are_blob_names_that_round_trip(self):
         ds = self.res.to_dataset()
         for scale in SCALES:
             cell = ds["table"].sel(scale=scale).values.item()
             with self.subTest(scale=scale):
                 self.assertIsInstance(cell, str)
-                self.assertTrue(Path(cell).is_file())
+                # A name, not a path: it must carry no directory, and resolve
+                # against the active cache dir rather than a recorded location.
+                self.assertEqual(cell, Path(cell).name)
+                self.assertTrue(resolve_blob(cell).is_file())
                 pd.testing.assert_frame_equal(load_blob(cell), expected_frame(scale))
 
     def test_nothing_appended_to_dataset_list(self):
@@ -440,7 +443,7 @@ class TestSerializationRobustness(unittest.TestCase):
         self.assertEqual(res.dataset_list, [])
         cell = res.to_dataset()["table"].sel(scale=SCALES[0]).values.item()
         self.assertIsInstance(cell, str)
-        self.assertTrue(Path(cell).is_file())
+        self.assertTrue(resolve_blob(cell).is_file())
         pd.testing.assert_frame_equal(load_blob(cell), expected_frame(SCALES[0]))
         rv = res.bench_cfg.result_vars[0]
         pane = res.ds_to_container(res.to_dataset().sel(scale=SCALES[0]), rv, container=None)

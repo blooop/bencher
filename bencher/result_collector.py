@@ -164,13 +164,15 @@ def _materialize_result_value(rv, value):
 
 
 def _materialize_dataset_value(result_value) -> str:
-    """Reduce a worker-returned ``ResultDataSet`` sample to a blob path (plan 22, D2).
+    """Reduce a worker-returned ``ResultDataSet`` sample to a blob name (plan 22, D2).
 
-    The payload is serialized under ``cachedir/blobs/`` and the returned path
-    string is what the dataset cell stores — self-describing in any process that
-    shares the cache filesystem, exactly like the image/video/rerun path cells.
-    The literal ``cachedir`` root is the same canonical location the rest of
-    collection uses (``gen_path``, ``cachedir/rrd``, the diskcaches above).
+    The payload is serialized under ``cachedir/blobs/`` and the returned blob
+    name is what the dataset cell stores — self-describing in any process that
+    can see *a* copy of the cache, not only one that mounts it at the same
+    absolute path, since the name is the payload's content hash. The literal
+    ``cachedir`` root is the same canonical location the rest of collection uses
+    (``gen_path``, ``cachedir/rrd``, the diskcaches above); render resolves the
+    name against whichever cache dir is active then (``blob_store.resolve_blob``).
 
     A per-sample ``container=`` attached inside ``benchmark()`` has to travel
     with the payload to keep the declared-container precedence chain intact, so

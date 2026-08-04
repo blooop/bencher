@@ -30,8 +30,10 @@ class TestMaterializeRoundTrip:
         path = materialize_blob(df, tmp_path)
         assert isinstance(path, str)
         assert path.endswith(".parquet")
-        assert Path(path).parent == tmp_path / "blobs"
-        pd.testing.assert_frame_equal(load_blob(path), df)
+        # A bare content-hash name, no directory: see blob_store's module docstring.
+        assert path == Path(path).name
+        assert (tmp_path / "blobs" / path).is_file()
+        pd.testing.assert_frame_equal(load_blob(path, tmp_path), df)
 
     def test_xarray_dataset_netcdf(self, tmp_path):
         # int32 coords: int64 is not netCDF3-safe and would take the pickle path.
@@ -41,14 +43,14 @@ class TestMaterializeRoundTrip:
         )
         path = materialize_blob(ds, tmp_path)
         assert path.endswith(".nc")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         xr.testing.assert_identical(loaded, ds)
 
     def test_xarray_dataarray_netcdf(self, tmp_path):
         da = xr.DataArray([1.0, 2.0], dims=["x"], name="metric")
         path = materialize_blob(da, tmp_path)
         assert path.endswith(".da.nc")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         # F4: DataArrays keep their identity — loaded back as a DataArray
         # with .name preserved, not as a single-variable Dataset.
         assert isinstance(loaded, xr.DataArray)
@@ -59,7 +61,7 @@ class TestMaterializeRoundTrip:
         da = xr.DataArray([3.5, 4.5], dims=["x"])
         path = materialize_blob(da, tmp_path)
         assert path.endswith(".da.nc")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         assert isinstance(loaded, xr.DataArray)
         assert loaded.name is None
         xr.testing.assert_identical(loaded, da)
@@ -68,45 +70,46 @@ class TestMaterializeRoundTrip:
         payload = b"\x00\x01raw bytes\xff"
         path = materialize_blob(payload, tmp_path)
         assert path.endswith(".bin")
-        assert load_blob(path) == payload
+        assert load_blob(path, tmp_path) == payload
 
     def test_picklable_dataclass_pkl(self, tmp_path):
         obj = ArbitraryPayload(name="test", value=1.5)
         path = materialize_blob(obj, tmp_path)
         assert path.endswith(".pkl")
-        assert load_blob(path) == obj
+        assert load_blob(path, tmp_path) == obj
 
     def test_netcdf_blob_is_rereadable(self, tmp_path):
         """load_blob must close the netCDF handle so the file can be read again."""
         ds = xr.Dataset({"a": ("x", [1.0])})
         path = materialize_blob(ds, tmp_path)
-        first = load_blob(path)
-        second = load_blob(path)
+        first = load_blob(path, tmp_path)
+        second = load_blob(path, tmp_path)
         xr.testing.assert_identical(first, second)
 
 
 class TestContentAddressing:
-    def test_identical_payloads_identical_paths(self, tmp_path):
+    def test_identical_payloads_identical_names(self, tmp_path):
         df = pd.DataFrame({"a": [1, 2]})
-        path1 = materialize_blob(df, tmp_path)
-        path2 = materialize_blob(df.copy(), tmp_path)
-        assert path1 == path2
-        assert _blob_files(tmp_path) == [Path(path1)]
+        name1 = materialize_blob(df, tmp_path)
+        name2 = materialize_blob(df.copy(), tmp_path)
+        assert name1 == name2
+        assert _blob_files(tmp_path) == [tmp_path / "blobs" / name1]
 
     def test_file_written_once_but_mtime_refreshed_on_hit(self, tmp_path):
         """The bytes are written once; a content hit refreshes mtime (it is a new
         reference — the GC grace period reads mtime as "last referenced").
         ``test_blob_store_races.py`` pins the no-rewrite half on the mechanism."""
         payload = b"same content"
-        path1 = materialize_blob(payload, tmp_path)
+        name1 = materialize_blob(payload, tmp_path)
+        blob = tmp_path / "blobs" / name1
         backdated = 1_000_000_000
-        os.utime(path1, (backdated, backdated))
-        path2 = materialize_blob(payload, tmp_path)
-        assert path1 == path2
-        assert Path(path2).read_bytes() == payload  # bytes intact
-        assert Path(path2).stat().st_mtime > backdated  # hit refreshed mtime
+        os.utime(blob, (backdated, backdated))
+        name2 = materialize_blob(payload, tmp_path)
+        assert name1 == name2
+        assert blob.read_bytes() == payload  # bytes intact
+        assert blob.stat().st_mtime > backdated  # hit refreshed mtime
 
-    def test_differing_payloads_differing_paths(self, tmp_path):
+    def test_differing_payloads_differing_names(self, tmp_path):
         path1 = materialize_blob(b"payload one", tmp_path)
         path2 = materialize_blob(b"payload two", tmp_path)
         assert path1 != path2
@@ -132,8 +135,8 @@ class TestStringPayloadPickled:
         path = materialize_blob(str(existing), tmp_path)
         assert path != str(existing)
         assert path.endswith(".pkl")
-        assert Path(path).parent == tmp_path / "blobs"
-        loaded = load_blob(path)
+        assert path == Path(path).name
+        loaded = load_blob(path, tmp_path)
         assert isinstance(loaded, str)
         assert loaded == str(existing)
 
@@ -142,13 +145,13 @@ class TestStringPayloadPickled:
         existing.write_bytes(b"data")
         path = materialize_blob(existing, tmp_path)
         assert path.endswith(".pkl")
-        assert load_blob(path) == existing
+        assert load_blob(path, tmp_path) == existing
 
     def test_nonexistent_path_string_is_pickled(self, tmp_path):
         """A str that is not an existing file is an ordinary picklable payload."""
         path = materialize_blob("/no/such/file.parquet", tmp_path)
         assert path.endswith(".pkl")
-        assert load_blob(path) == "/no/such/file.parquet"
+        assert load_blob(path, tmp_path) == "/no/such/file.parquet"
 
 
 class TestSerializationFallbacks:
@@ -159,13 +162,13 @@ class TestSerializationFallbacks:
         df = pd.DataFrame({"a": [{"nested": 1}, [1, 2]]})
         path = materialize_blob(df, tmp_path)
         assert path.endswith(".pkl")
-        pd.testing.assert_frame_equal(load_blob(path), df)
+        pd.testing.assert_frame_equal(load_blob(path, tmp_path), df)
 
     def test_plain_float_dataframe_still_parquet(self, tmp_path):
         df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
         path = materialize_blob(df, tmp_path)
         assert path.endswith(".parquet")
-        pd.testing.assert_frame_equal(load_blob(path), df)
+        pd.testing.assert_frame_equal(load_blob(path, tmp_path), df)
 
     def test_int64_dataset_round_trips_exactly_via_pickle(self, tmp_path):
         """scipy netCDF3 silently narrows int64→int32 (or raises); pickle preserves it."""
@@ -175,7 +178,7 @@ class TestSerializationFallbacks:
         )
         path = materialize_blob(ds, tmp_path)
         assert path.endswith(".pkl")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         assert loaded["count"].dtype == np.dtype("int64")
         assert loaded["x"].dtype == np.dtype("int64")
         xr.testing.assert_identical(loaded, ds)
@@ -186,14 +189,14 @@ class TestSerializationFallbacks:
         assert ds["x"].dtype == np.dtype("int64")
         path = materialize_blob(ds, tmp_path)
         assert path.endswith(".pkl")
-        xr.testing.assert_identical(load_blob(path), ds)
+        xr.testing.assert_identical(load_blob(path, tmp_path), ds)
 
     def test_str_coord_dataset_pickled(self, tmp_path):
         """netCDF3 loads <U coords back as object dtype, so they take the pickle path."""
         ds = xr.Dataset({"v": ("x", [1.0, 2.0])}, coords={"x": np.array(["a", "b"])})
         path = materialize_blob(ds, tmp_path)
         assert path.endswith(".pkl")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         assert loaded["x"].dtype == ds["x"].dtype
         xr.testing.assert_identical(loaded, ds)
 
@@ -201,7 +204,7 @@ class TestSerializationFallbacks:
         da = xr.DataArray(np.array([-(2**35), 5], dtype="int64"), dims=["x"], name="metric")
         path = materialize_blob(da, tmp_path)
         assert path.endswith(".pkl")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         assert isinstance(loaded, xr.DataArray)
         assert loaded.dtype == np.dtype("int64")
         xr.testing.assert_identical(loaded, da)
@@ -211,16 +214,16 @@ class TestLoadBlobDispatch:
     def test_unknown_extension_raises(self, tmp_path):
         weird = tmp_path / "blob.xyz"
         weird.write_bytes(b"data")
-        with pytest.raises(ValueError, match=r"unknown blob extension '\.xyz'"):
-            load_blob(weird)
+        with pytest.raises(ValueError, match="is not a blob reference"):
+            load_blob(weird, tmp_path)
 
     def test_no_extension_raises(self, tmp_path):
         bare = tmp_path / "blob"
         bare.write_bytes(b"data")
-        with pytest.raises(ValueError, match="unknown blob extension"):
-            load_blob(bare)
+        with pytest.raises(ValueError, match="is not a blob reference"):
+            load_blob(bare, tmp_path)
 
     def test_accepts_str_and_path(self, tmp_path):
         path = materialize_blob(b"data", tmp_path)
-        assert load_blob(path) == b"data"
-        assert load_blob(Path(path)) == b"data"
+        assert load_blob(path, tmp_path) == b"data"
+        assert load_blob(Path(path), tmp_path) == b"data"

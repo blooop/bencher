@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A `ResultDataSet` history no longer loses every event but the newest when its cache
+  dir moves.** A cell stored the blob's absolute path, resolved against the working
+  directory at collect time, so a cache dir tarred on one machine and restored at another
+  path — a CI cache round-trip, a copy between checkouts, an offline cull working on a
+  downloaded tarball — left every historical cell pointing at a directory that no longer
+  existed. The blob itself was restored intact under the same content-addressed name, so
+  the payload was reachable and only the reference was not: a three-event history rendered
+  one plot and two "could not be loaded" placeholders. Cells now store the blob **name**,
+  and the new `blob_store.resolve_blob` resolves it against the *active* cache dir. This is
+  the rule `cache_management` already applied to reachability GC — `blob_name` matches on
+  the basename precisely so a moved cache dir does not read as garbage — extended to the
+  render path, and that predicate is now shared by both instead of defined twice.
+
+  No cache version bump: `resolve_blob` accepts either cell generation, and an absolute
+  path from a 1.118.0 cache is *repaired* by its content name when the recorded directory
+  is gone, so existing histories keep rendering and get the fix retroactively.
+
 ## [1.118.0] - 2026-08-04
 
 ### Fixed
