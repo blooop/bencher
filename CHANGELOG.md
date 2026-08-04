@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.118.0] - 2026-08-04
+
 ### Fixed
 - **`pixi run ty` no longer gives different answers before and after a docs build**
   (plan 26 R10). ty type-checks `.ipynb`, `generate-docs` writes notebooks under
