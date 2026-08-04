@@ -40,6 +40,9 @@ Bencher assumes your function is a stochastic pure function — given the same i
 
 ## Tracking Over Time
 
+See [Tracking Results Over Time](over_time.md) for the full guide — history keying,
+snapshot recording, regression detection, and known limitations. The summary:
+
 Enable `over_time` to record time-series snapshots that can be scrubbed via a slider:
 
 ```python

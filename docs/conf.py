@@ -29,6 +29,16 @@ extensions = [
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
+# Generate anchors for headings h1-h4 in markdown pages so that intra- and
+# cross-page links of the form `[text](page.md#some-heading)` resolve. Without
+# this myst emits no heading ids at all and every such link is a broken
+# reference.
+myst_heading_anchors = 4
+
+# `plot_plugin_design.md` is a design document kept in-tree but deliberately not
+# linked from the toctree, so sphinx reports it as "not included in any toctree".
+# That warning is expected.
+
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
