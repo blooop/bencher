@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`pixi run ty` no longer gives different answers before and after a docs build**
+  (plan 26 R10). ty type-checks `.ipynb` files, `generate-docs` writes notebooks under
+  `docs/reference/<section>/`, and only `docs/reference/meta/` is gitignored — so the type
+  gate's result depended on whether the developer had built docs. The repo *intended* to
+  exclude notebooks via a `.tyignore` file, but ty does not read that filename: a violation
+  seeded under `docs/` was reported with the file in place, so both of its lines had been
+  doing nothing since they were added. Replaced with `[tool.ty.src].exclude = ["**/*.ipynb"]`,
+  which is verified to work. `docs/` itself is still checked (`docs/conf.py` passes), and no
+  tracked notebook exists, so this removes a false exemption rather than narrowing coverage.
+  CI was unaffected only because the `ci` task happens to run `ty` before
+  `generate-examples`; nothing declared that ordering.
+- **CI and local runs now type-check with the same ty** (plan 26 R10). The pin was
+  `ty>=0.0.13,<=0.0.65` while `pixi.lock` resolved 0.0.56 in every environment, because
+  `pixi lock` resolves conservatively and widening a ceiling does not move an already-valid
+  lock. CI, however, runs `pixi update` before `pixi run ci`, re-resolving to the maximum the
+  constraints allow — so CI was checking with 0.0.65 and developers with 0.0.56. A diagnostic
+  introduced by a newer ty could only be seen in CI, where it could not be reproduced
+  locally. Re-locked to 0.0.66 (latest) across all five environments, with the gate's probes re-run
+  against it first, and the pin narrowed to exactly `0.0.66` rather than a range. ty is pre-1.0
+  and the gate's meaning depends on per-rule defaults — `possibly-missing-attribute` ships off,
+  and under the old `>=0.0.13` floor a resolver could pick a ty predating the rule entirely,
+  where ty emits `unknown-rule` and continues. An exact pin makes every ty change an explicit,
+  reviewable step with the gate's probes re-run against it.
 - **One plugin with a bad capability no longer takes down the plugins after it**
   (plan 23 P12b). `PluginRegistry.explain()` caught the capability error into `exc` — the
   same name the enclosing scope used for the exclude set — and `except ... as <name>`
@@ -34,6 +57,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where a shared class-level `samples` was left mutated by an earlier test.
 
 ### Changed
+- **The type gate is now verified by running it, not by reading its configuration**
+  (plan 26 R10). A new probe seeds a Tier-A violation under `bencher/`, runs the repo's own
+  pixi task, and requires it to be reported. The previous meta-test inspected
+  `[[tool.ty.overrides]]` include patterns, which cannot see three other ways to switch the
+  gate off for the package: an exclude-only override block, `[tool.ty.src].exclude`, or a
+  `.gitignore`/`.ignore` entry (the task runs `--respect-ignore-files`). The latter two were
+  confirmed to suppress a seeded diagnostic completely. The pattern-matching test is kept
+  alongside it — it names the offending pattern, so it says what to edit, while the probe
+  only reports that first-party code went unchecked.
 - **Return annotations across the plotting and sweep APIs now describe what the functions
   actually return** (plan 23 P12, enabling `ty`'s `invalid-return-type`). All 29
   diagnostics were genuine. The user-visible ones:
