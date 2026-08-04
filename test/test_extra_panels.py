@@ -43,18 +43,15 @@ class TestExtraPanels(unittest.TestCase):
     def test_extra_panels_plain_string(self):
         """A plain `str` is neither callable nor Viewable, so it must be appended as-is.
 
-        `to_auto_plots` splits on `callable(ep) and not isinstance(ep, Viewable)`. A str
+        `to_auto_plots` splits on `callable(ep) and not isinstance(ep, Viewable)`; a str
         takes the else branch and reaches `Column.append`, which coerces it to a pane.
-        Untested until plan 26 R10: the covered arms were a callable and a
-        `pn.pane.Markdown`, i.e. both sides of the `isinstance` check but only the
-        already-a-pane half of the else branch.
         """
         res = self._make_result()
         plots = res.to_auto_plots(extra_panels=["## A plain markdown string"])
         objs = [str(getattr(p, "object", "")) for p in plots]
-        # Checked first and separately: a failure pane names the panel it could not
-        # render, and `repr(ep)` of a str *contains the string*, so the content assertion
-        # below is satisfied by the very failure this test exists to rule out.
+        # Checked first and separately: a failure pane names the panel via `repr(ep)`,
+        # which for a str contains the string, so the assertion below would be satisfied
+        # by the very failure this test rules out.
         self.assertFalse(
             any("failed to render" in o for o in objs),
             f"the plain string was routed into the failure path rather than appended: {objs}",
@@ -67,10 +64,9 @@ class TestExtraPanels(unittest.TestCase):
     def test_extra_panels_holoviews_element(self):
         """An `hv` element is also neither callable nor Viewable.
 
-        Worth pinning rather than assuming: holoviews Elements have carried a `__call__`
-        (historically an alias for `.opts()`) and if one ever becomes callable again the
-        `callable(ep)` branch would invoke it with the BenchResult and surface a failure
-        pane instead of a plot. Verified non-callable on the current pin.
+        Pinned rather than assumed: holoviews Elements can carry a `__call__` aliasing
+        `.opts()`, and a callable element would be invoked with the BenchResult and yield
+        a failure pane instead of a plot.
         """
         res = self._make_result()
         curve = hv.Curve([(0, 0), (1, 1)], label="ExtraPanelCurve")

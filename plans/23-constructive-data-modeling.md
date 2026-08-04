@@ -79,9 +79,7 @@ Out of scope (recorded as amendments in §8, do not implement here):
    (`setup.py`, dead per plan 03).
 
 2. **ty** supports `[[tool.ty.overrides]]` blocks with `include=` globs that relax or
-   re-enable rules per path. Verified in a scratch project on 0.0.56, which is what the
-   pin resolved to when this was written; still true on 0.0.66, which plan 26 R10 pinned
-   the repo to exactly. No checker change needed.
+   re-enable rules per path. Verified in a scratch project. No checker change needed.
 
 3. **Exhaustiveness enforcement — `assert_never` comes from the stdlib.** ty derives its
    target Python version from `requires-python`, which is now `>=3.11,<3.14`

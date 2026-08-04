@@ -361,104 +361,61 @@ this list, and fold the small fixes in where the files are already being touched
 
 ## 11. R10 — ty gate hardening (from #1026/#1033) — **LANDED 2026-08-04**
 
-All three items done. Every claim below was measured against the installed ty, not read off
-the config — which is the whole point of this phase, and is how items 1 and 2 turned up
-findings the original write-up did not have.
+All three items done. Each was verified by running the installed ty, not by reading config.
 
-1. **The override meta-test is porous.** `test/test_ty_gate.py` only flags
-   `[[tool.ty.overrides]]` blocks whose include pattern starts with `bencher/`. Uncovered bypass
-   routes: `include = ["**"]`, exclude-only blocks, `[tool.ty.src].exclude`, and a new `.ignore`
-   file (the task runs `--respect-ignore-files`). Replace TOML pattern-matching with an
-   effective-config probe: seed a Tier-A violation in a temp file under `bencher/`, run
-   `ty check` with the repo config, require nonzero exit. Closes all four routes at once.
+1. **Effective-config probe** — `TestEffectiveGateConfig` in `test/test_ty_gate.py`. It runs
+   the repo's own pixi task argv (read from `[tool.pixi.tasks].ty`, `$CONDA_PREFIX` resolved to
+   `sys.prefix`) from the repo root against a seeded Tier-A violation under `bencher/` and
+   requires it to be reported.
 
-   **Done** as `TestEffectiveGateConfig`. It runs the repo's *own* pixi task argv (parsed from
-   `[tool.pixi.tasks].ty`, `$CONDA_PREFIX` resolved to `sys.prefix`) from the repo root against
-   two seeded violations, so it follows the gate rather than a reconstruction of it. Routes 3
-   and 4 were confirmed live to suppress a seeded `invalid-parameter-default` completely — for
-   route 4 both `.gitignore` and `.ignore` work. Mutation-checked in both directions:
-   excluding `bencher/` fails the first assertion, dropping the notebook exclusion fails the
-   second, and neither mutation disturbs the other 37 tests in the file.
+   This is the only assertion that covers the four ways to switch the gate off for the package:
+   a broad `[[tool.ty.overrides]]` include, an exclude-only override block,
+   `[tool.ty.src].exclude`, and a `.gitignore`/`.ignore` entry (the task runs
+   `--respect-ignore-files`). The last two suppress a seeded diagnostic completely.
+   `test_rule_not_ignored_for_the_package_via_overrides` is kept alongside it: it covers fewer
+   routes but names the offending pattern and rule, so it says what to edit, and needs no ty
+   binary.
 
-   The old pattern-matching test is **kept, not replaced.** The probe subsumes its coverage but
-   loses its diagnosis: the pattern test names the offending pattern and rule (so it says what
-   to edit) and needs no ty binary. Both docstrings now say which does which.
+   Mutation-checked both ways — excluding `bencher/` fails the first-party assertion, dropping
+   the notebook exclusion fails the notebook one, and neither disturbs the file's other tests.
 
-   **Finding not in the original write-up: the repo's `.tyignore` was dead config.** It listed
-   `docs/` and `*.ipynb`, added by two commits whose messages claim they "exclude auto-generated
-   docs from type checking". ty does not read that filename — a violation seeded under `docs/`
-   was reported with the file in place. Its `*.ipynb` intent is also real and was unmet: ty
-   **does** type-check notebooks (measured on 0.0.56 and again on 0.0.66), `generate-docs`
-   writes them under `docs/reference/<section>/`, and only `docs/reference/meta/` is gitignored.
-   So `pixi run ty` gave different answers before and after a docs build, and CI escaped it
-   only because the `ci` task happens to order `ty`
-   before `generate-examples` — nothing declares or enforces that. Replaced with
-   `[tool.ty.src].exclude = ["**/*.ipynb"]` (verified to work, and verified not to shadow the
-   `bencher/` probe), with `docs/` left checked since `docs/conf.py` is the only tracked `.py`
-   there and it passes. Zero tracked `.ipynb` exist, so the exclusion costs no coverage today.
-   The guarding test asserts the *outcome*, not the spelling, so moving back to an ignore file ty
-   genuinely reads is free.
+2. **Notebooks are excluded via `[tool.ty.src].exclude`.** ty type-checks `.ipynb`,
+   `generate-docs` writes notebooks under `docs/reference/<section>/`, and only
+   `docs/reference/meta/` is gitignored — so without this the gate's answer changes after a docs
+   build. CI escapes that only by task ordering (`ty` before `generate-examples`), which nothing
+   enforces. `docs/` itself stays checked; `docs/conf.py` is the only tracked `.py` there and it
+   passes, and no tracked `.ipynb` exists, so the exclusion costs no coverage.
 
-   Note the ordering that made this safe: adding a `[tool.ty.src].exclude` is itself bypass
-   route 3, so it is only defensible *because* the probe landed in the same change and proves
-   `bencher/` is still checked.
+   ty does not read `.tyignore` — the file this replaces had no effect. The guarding test asserts
+   the outcome rather than the spelling, so switching to a mechanism ty does read is free.
 
-2. **The #1033 ceiling raise changed nothing that runs:** `pixi.lock` still resolves ty 0.0.56 in
-   every environment. Re-lock to 0.0.65 and raise the floor to the version the probes pin
-   (`ty>=0.0.13` is meaningless).
+   Adding a `[tool.ty.src].exclude` is itself one of the four bypass routes above, so it is only
+   safe because item 1's probe proves `bencher/` is still checked.
 
-   **Done.** Pin is now exactly `ty>=0.0.66,<=0.0.66` and all five environments (default,
-   docs, py311, py312, py313) resolve 0.0.66 -- the latest release, not merely the old ceiling.
-   Re-verified under both 0.0.65 and 0.0.66 *before* moving the pin: the full gate
-   is clean and all of `test_ty_gate.py` passes, including the two probes that pin ty behaviour
-   rather than ours — `possibly-missing-attribute` is still off by default (so the explicit
-   `= "error"` is still load-bearing) and the plan-24 untyped-ingress hole is still open.
+3. **ty is pinned exactly to 0.0.66** and locked there in all five environments (default, docs,
+   py311, py312, py313), with the gate clean and all of `test_ty_gate.py` passing on it —
+   including the probes that pin ty's behaviour rather than ours: `possibly-missing-attribute` is
+   off by default (so the explicit `= "error"` is load-bearing) and the plan-24 untyped-ingress
+   hole is open.
 
-   **Mechanism worth remembering:** editing the pin was not enough. `pixi lock` resolves
-   conservatively, so 0.0.56 continued to satisfy the widened range and stayed locked; only
-   `pixi update ty` moved it. Any future ty ceiling bump therefore needs an explicit update
-   plus a `test_ty_gate.py` re-run, or the lock will not follow it. The floor now records
-   measurement rather than installability, and is now an *exact* pin: a range invites a resolver
-   to pick a ty nobody ran the probes against, and for a pre-1.0 checker whose per-rule defaults
-   are load-bearing that is not a risk worth carrying for the convenience of a floating bump.
-   0.0.56 (P12b), 0.0.65 and 0.0.66 (here) have all had the probes run against them.
+   An exact pin, not a range: ty is pre-1.0 and the gate's meaning depends on per-rule defaults,
+   so a range can resolve to a version where a rule does not exist and is silently unenforced.
 
-   **This discharges the pin half of plan 24 Q1** ("raise the ty ceiling to `<=0.0.65`"), which
-   was also carried as an open item in `plans/23-handover.md` §4. Both are annotated. Q1's other
-   half — A5's third probe, a complete `match` fed from an unannotated helper asserted
-   type-clean — is **still not written**; neither 23-P1 nor R10 added it. Worth noting for
-   whoever does: the boundary it pins is still open on 0.0.66, so the probe lands green today.
+   Two mechanisms to know when bumping. `pixi lock` will not move an already-valid lock, so
+   changing the constraint alone does nothing — use `pixi update ty`. And CI runs bare
+   `pixi update` before `pixi run ci` (`.github/workflows/ci.yml`), resolving to the ceiling, so
+   a range makes CI and local runs use different checkers. That also means the committed lock is
+   advisory for CI generally, not just for ty — left to R12's bookkeeping.
 
-   **Correction to this item as originally written.** "The ceiling raise changed nothing that
-   runs" is true only of local runs. `.github/workflows/ci.yml:28` runs `pixi update` — with no
-   package argument, so it re-resolves everything to the maximum the constraints allow —
-   *before* `pixi run -e {py311,py313} ci`. CI has therefore been type-checking with the
-   ceiling version while the committed lock gave developers 0.0.56.
+4. **`test/test_extra_panels.py` covers the static non-`Viewable` arms** of
+   `to_auto_plots(extra_panels=…)`: plain `str` and `hv` element. Both assert *no failure pane*
+   first and separately, because a failure pane names the panel via `repr(ep)`, which for a str
+   contains the string the content assertion looks for. Mutation-checked by dropping the
+   `callable()` guard: both new tests fail, the six pre-existing ones do not.
 
-   That split is worse than either version alone, and is the real defect here: a diagnostic
-   introduced by a newer ty appears only in CI, where the developer cannot reproduce it with
-   `pixi run ty`, and the reverse — a rule the newer ty stopped emitting — silently weakens CI's
-   gate while the local one still catches it. Re-locking to the ceiling closes the split. It
-   also means the committed lock is advisory for CI generally, not just for ty; that is a
-   broader hygiene question (it is also why `pixi.lock` shows drift on any `pixi run` whenever
-   a dependabot bound merges without a lock update) and is left for R12's bookkeeping rather
-   than changed here.
-
-3. The extra_panels regression class (the one that already slipped through CI once) still has no
-   pin for its static non-`Viewable` arm: `test/test_extra_panels.py` covers callables and
-   `pn.pane.Markdown` only — add plain-`str` and `hv` element cases (two lines each).
-
-   **Done**, and it needed more than two lines each. `to_auto_plots` splits on
-   `callable(ep) and not isinstance(ep, Viewable)`; the existing tests covered both sides of the
-   `isinstance` check but only the already-a-pane half of the else branch. The plain-`str` case
-   has a false-pass trap the naive assertion walks into: a failure pane names the panel via
-   `repr(ep)`, and for a str that *contains the string being asserted on*, so "content appears
-   in the output" is satisfied by the exact failure the test exists to exclude. Both new tests
-   therefore assert no failure pane first and separately. Mutation-checked by dropping the
-   `callable()` guard (a plausible "simplify the condition" edit): both new tests fail, none of
-   the six pre-existing ones do. `hv` elements are non-callable on the current pin — pinned
-   deliberately, since holoviews Elements have historically carried a `__call__` aliasing
-   `.opts()`, and a return to that would route them into the factory branch.
+**Still open:** plan 24 Q1's second half — A5's third probe, a complete `match` fed from an
+unannotated helper asserted type-clean. Neither 23-P1 nor R10 wrote it. The boundary it pins is
+open on 0.0.66, so it lands green today.
 
 ## 12. R11 — Small verified-bug batch (one PR)
 
