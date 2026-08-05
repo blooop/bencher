@@ -84,6 +84,7 @@ def render_report(
     in_html_folder: bool = False,
     portable: bool = False,
     emit_json: bool | str = False,
+    cache_dir: str | Path | None = None,
 ) -> Path:
     """Render a collected result to an HTML report.
 
@@ -106,6 +107,13 @@ def render_report(
         portable: Forwarded to :meth:`BenchReport.save` (base64-inline assets).
         emit_json: Forwarded to :meth:`BenchReport.save`; when truthy also writes
             a machine-readable ``result.json`` next to the HTML.
+        cache_dir: Where to find the ``cachedir`` holding this result's
+            ``ResultDataSet`` blob payloads. Defaults to ``BENCHER_CACHE_DIR``,
+            then to ``./cachedir``, then to the cache dir recorded on the result
+            at collect time. Pass it when neither inference can be right — a
+            cache dir restored to a new path *and* rendered from somewhere else
+            again, such as an offline cull working on a downloaded tarball.
+            Without it those cells render as placeholders.
 
     Returns:
         The path to the saved report.
@@ -113,6 +121,7 @@ def render_report(
     bench_res = (
         result_or_path if isinstance(result_or_path, BenchResult) else load_result(result_or_path)
     )
+    bench_res.blob_cache_dir = cache_dir
 
     # post_setup is normally run by run_sweep before the auto_plot gate; it only
     # touches the dataset/metadata. Re-run defensively in case the result was
@@ -160,6 +169,17 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="json_path",
         metavar="PATH",
         help="Also write a machine-readable result.json to PATH",
+    )
+    parser.add_argument(
+        "--cachedir",
+        dest="cache_dir",
+        metavar="DIR",
+        help=(
+            "Cache dir holding this result's blob payloads. Defaults to "
+            "$BENCHER_CACHE_DIR, then ./cachedir, then the dir recorded at "
+            "collect time. Needed when the cache dir moved AND you are "
+            "rendering from somewhere other than where the sweep ran."
+        ),
     )
     return parser
 
@@ -225,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     Invoke via the installed ``bencher`` console script, or equivalently with
     ``python -m bencher.render`` when running from a source checkout.
 
-    Render: ``bencher <result.pkl> <output_dir> [--json PATH]``
+    Render: ``bencher <result.pkl> <output_dir> [--json PATH] [--cachedir DIR]``
     Compare: ``bencher compare <a.pkl> <b.pkl> --json PATH``
     """
     argv = sys.argv[1:] if argv is None else argv
@@ -237,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.result_path or not args.output_dir:
         print(
-            f"Usage: {_prog()} <result_path> <output_dir> [--json PATH]",
+            f"Usage: {_prog()} <result_path> <output_dir> [--json PATH] [--cachedir DIR]",
             file=sys.stderr,
         )
         return 2
@@ -245,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
     if bench_res is None:
         return code
     try:
-        out = render_report(bench_res, args.output_dir)
+        out = render_report(bench_res, args.output_dir, cache_dir=args.cache_dir)
         if args.json_path:
             from bencher.report_export import result_to_json
 

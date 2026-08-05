@@ -151,6 +151,12 @@ class BenchResultBase:
         self.dataset_list = []
         self.regression_report = None
         self.perf_report = None
+        # Where *this reader* should look for blob payloads, when it has been
+        # told (``render_report(cache_dir=)`` / ``--cachedir``).  A render-time
+        # override, not a property of the result: it is deliberately not carried
+        # by pickling, because the next reader may sit somewhere else again.
+        # None means "work it out" -- see ``blob_store.active_cache_dir``.
+        self.blob_cache_dir = None
         self._to_dataset_cache: dict = {}
 
     def to_xarray(self) -> xr.Dataset:
@@ -1264,8 +1270,9 @@ class BenchResultBase:
         1. a ``str`` blob reference (collected after plan 22) — a content-hash
            name, or an absolute path from a cache dir collected before names
            became the cell format; either resolves through ``load_blob``, which
-           looks in the *active* cache dir first so a cache tarred on one machine
-           and restored at another path still renders, then in the cache dir this
+           looks in the active cache dir first — what this reader was told via
+           ``blob_cache_dir``, else its own — so a cache tarred on one machine and
+           restored at another path still renders, then in the cache dir this
            result recorded at collect time so rendering from a different working
            directory than the sweep ran in still finds them.  A payload materialized
            with a per-sample container is a pickled ``ResultDataSet`` wrapper, so
@@ -1289,10 +1296,14 @@ class BenchResultBase:
         if result_is_missing(result_var, val):
             return None
         if isinstance(val, str):
-            from bencher.blob_store import blob_cache_dir_hints, load_blob
+            from bencher.blob_store import blob_cache_dir_hints, blob_name, load_blob
 
             try:
-                payload = load_blob(val, fallback_cache_dirs=blob_cache_dir_hints(self.ds))
+                payload = load_blob(
+                    val,
+                    getattr(self, "blob_cache_dir", None),
+                    fallback_cache_dirs=blob_cache_dir_hints(self.ds),
+                )
             except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 logger.warning(
                     "ResultDataSet '%s': failed to load blob %r (%s: %s)",
@@ -1301,9 +1312,13 @@ class BenchResultBase:
                     type(exc).__name__,
                     exc,
                 )
+                # Name the blob and the way out in the pane itself: a rendered
+                # report is routinely read by someone who does not have the log,
+                # and "could not be loaded" alone tells them nothing to do next.
                 return pn.pane.Markdown(
-                    f"*'{result_var.name}': stored blob could not be loaded; "
-                    "see the log for the locations tried*"
+                    f"*'{result_var.name}': blob `{blob_name(val) or val}` was not found "
+                    "in any known cache dir — point at the right one with "
+                    "`--cachedir` (see the log for every location tried)*"
                 )
             sample = payload if isinstance(payload, ResultDataSet) else None
             if sample is not None:

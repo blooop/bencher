@@ -152,6 +152,26 @@ Ordered by how much each one costs to keep, not by size.
   dangerous, not less — a stale cachedir plus a GC that reads it anyway yields an empty
   live set and deletes every blob. **Fix item 2 before or with any bump**, not after.
 
+### L11 — `ResultDataSet` blob cells read two generations
+
+- **Compromise:** the cell format changed from an absolute blob *path* to the bare blob
+  *name* without a bump, so `blob_name` accepts both — it matches on the basename, which
+  repairs a path-shaped cell against whatever cache dir is active now.
+- **Where:** `blob_store.blob_name` / `_parse_blob_ref`; shipped in #1081, narrowed in the
+  follow-up that added `--cachedir` (which deleted the other half of the compromise: a
+  path-shaped cell is no longer *read out of* the directory it names, only identified by
+  its basename).
+- **Blocker:** none that a bump removes, strictly — path-shaped cells only exist in caches
+  written by 1.118.0, which had no consumers. The dual read survives because `blob_name` is
+  shared with reachability GC, which needs basename matching regardless of cell generation
+  (a walked object can hold a path from anywhere).
+- **At bump:** nothing is forced. Optionally tighten `_parse_blob_ref` to reject a
+  reference carrying any directory, which would make "a cell is a name" a type-level fact
+  rather than a convention — but keep `blob_name`'s basename matching for the GC, which is
+  the reason it exists.
+- **Note:** this entry exists because #1081 deferred without recording, which is the exact
+  failure §1 describes. It is closer to "struck" than "waiting"; do not treat it as work.
+
 ### L10 — pre-v5 history entries have no migration
 
 - **Compromise:** plan 14 chose a one-time miss over a migration path.

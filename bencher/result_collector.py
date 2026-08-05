@@ -20,7 +20,7 @@ import xarray as xr
 from diskcache import Cache
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
-from bencher.blob_store import collect_cache_dir, materialize_blob
+from bencher.blob_store import collect_cache_dir, materialize_blob, record_blob_cache_dir
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.history import (
     HISTORY_FORMAT,
@@ -304,6 +304,13 @@ class ResultCollector:
 
         bench_res = BenchResult(bench_cfg)
         bench_res.ds = xr.Dataset(data_vars=data_vars, coords=dims_cfg.coords)
+        # Record the blob cache dir here, where the dataset that will hold the
+        # blob cells is created, rather than only at the end of a sweep: the same
+        # collect_cache_dir() call decides where _materialize_dataset_value writes
+        # and what is recorded as the place it wrote, so the two cannot disagree,
+        # and every collected result carries the hint by construction instead of
+        # by having taken one particular branch through run_sweep.
+        record_blob_cache_dir(bench_res.ds, collect_cache_dir())
         bench_res.ds_dynamic = self.ds_dynamic
         bench_res.dataset_list = dataset_list
         bench_res.setup_object_index()
