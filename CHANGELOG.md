@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.119.0] - 2026-08-05
+
 ### Fixed
+- **A report with history no longer loses every pane when one result type has no
+  `over_time` layout.** `_to_panes_da` chose an `over_time > 1` layout by naming types
+  (rerun, video, image, dataset), so a pane type nobody named fell through to
+  `plot_callback` — a per-sample renderer — with the time dimension still attached, raising
+  `ValueError: can only convert an array of size 1 to a Python scalar`. `ResultString`,
+  `ResultPath`, `ResultContainer` and `ResultReference` all fell through that way. Because
+  `PaneResult.to_panes` renders every pane var in one loop and `to_auto` catches per plugin,
+  one un-dispatched string deleted every image, video, rerun viewer and dataset plot in the
+  report along with itself — and the run still exited 0, so the report was silently
+  incomplete. Dispatch is now on the `PANEL_TYPES` family, so a pane type without a bespoke
+  layout inherits the per-time-point one, including types added later. Numeric callbacks
+  (line, bar, heatmap) keep the whole dimension, as they build their own slider via hvplot
+  `groupby` / `hv.HoloMap`.
 - **A `ResultDataSet` history no longer loses every event but the newest when its cache
   dir moves.** A cell stored the blob's absolute path, resolved against the working
   directory at collect time, so a cache dir tarred on one machine and restored at another
