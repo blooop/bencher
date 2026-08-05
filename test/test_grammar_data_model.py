@@ -464,8 +464,12 @@ class TestUnloadableBlobPlaceholder(unittest.TestCase):
         ds["table"].loc[{"scale": SCALES[0]}] = blob
         pane = res.ds_to_container(ds.sel(scale=SCALES[0]), rv, container=None)
         self.assertIsInstance(pane, pn.pane.Markdown)
-        self.assertIn("could not be loaded", pane.object)
         self.assertIn("table", pane.object)
+        # The placeholder is the whole report the reader gets for this cell, so
+        # it has to carry what they would otherwise have to find in the log:
+        # which blob went missing, and how to point at the cache dir holding it.
+        self.assertIn(blob, pane.object)
+        self.assertIn("--cachedir", pane.object)
 
 
 class TestResultIsMissingTruthTable(unittest.TestCase):

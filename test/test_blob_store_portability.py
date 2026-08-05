@@ -12,13 +12,21 @@ So the cell stores the blob *name* and :func:`resolve_blob` resolves it against
 the cache dir in use now.  ``cache_management`` already reasoned this way for
 reachability GC (``blob_name`` matches on the basename precisely so a moved
 cache dir does not read as a directory full of garbage); these tests hold the
-render path to the same rule, and keep the two generations of cell loadable.
+render path to the same rule.
+
+Three locations can be "in use now", and the tests are organised by which one is
+doing the work: the cache dir the reader was *told* about (``cache_dir=`` /
+``--cachedir`` / ``BENCHER_CACHE_DIR``), the reader's own working directory, and
+the one recorded on the result at collect time.  Only the first can resolve a
+cache that moved *and* a reader that moved, so it is tried first and it is the
+one a caller can always reach for.
 """
 
 from __future__ import annotations
 
 import pickle
 import shutil
+import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -80,12 +88,20 @@ class TestRelocatedCacheDir:
         assert not Path(legacy_cell).exists(), "precondition: the recorded path is dead"
         pd.testing.assert_frame_equal(load_blob(legacy_cell, moved), PAYLOAD)
 
-    def test_legacy_absolute_path_still_loads_where_it_points(self, tmp_path):
-        """No cache dir at the active location, so the cell's own path is all there
-        is — a result rendered from a directory that has no ``cachedir`` of its own."""
+    def test_a_reference_is_never_read_out_of_its_own_directory(self, tmp_path):
+        """A path is accepted for its *name*; its directory is not a place to look.
+
+        The blob is sitting right there at the recorded path, and resolution still
+        refuses: a directory some past process used is not a cache dir this reader
+        was told about, and reading from it means silently serving a report out of
+        a location nobody chose.  ``cache_dir=`` is how a reader chooses.
+        """
         origin = tmp_path / "runner_a"
-        legacy_cell = str(origin / "blobs" / materialize_blob(PAYLOAD, origin))
-        pd.testing.assert_frame_equal(load_blob(legacy_cell, tmp_path / "no_such_cache"), PAYLOAD)
+        cell = str(origin / "blobs" / materialize_blob(PAYLOAD, origin))
+        assert Path(cell).is_file(), "precondition: the blob is where the cell says"
+        with pytest.raises(FileNotFoundError):
+            load_blob(cell, tmp_path / "no_such_cache")
+        pd.testing.assert_frame_equal(load_blob(cell, origin), PAYLOAD)
 
     def test_active_cache_dir_wins_over_a_stale_path_that_still_exists(self, tmp_path):
         """Both locations hold the blob, and the active one is authoritative.
@@ -132,8 +148,9 @@ class TestCollectTimeCacheDirHint:
             resolve_blob(name, active, fallback_cache_dirs=(recorded,)) == active / "blobs" / name
         )
 
-    def test_hint_is_tried_before_a_legacy_cells_own_path(self, tmp_path):
-        """Ordering across all three: active, then recorded, then the literal cell."""
+    def test_hint_beats_the_directory_a_path_cell_carries(self, tmp_path):
+        """Both dirs hold the blob; the recorded one is a candidate and the cell's
+        own is not, so the hint decides even though the cell names somewhere real."""
         literal = tmp_path / "cell_path"
         recorded = tmp_path / "recorded"
         name = materialize_blob(PAYLOAD, literal)
@@ -143,13 +160,15 @@ class TestCollectTimeCacheDirHint:
         assert resolved == recorded / "blobs" / name
 
     def test_missing_blob_lists_the_hint_and_never_repeats_a_location(self, tmp_path):
-        """A legacy cell pointing into the active cache dir is one location, not two."""
-        cell = str(tmp_path / "blobs" / "abcdef0123456789.parquet")
+        """The recorded dir is very often the active one; say so once, not twice."""
+        name = "abcdef0123456789.parquet"
         with pytest.raises(FileNotFoundError) as excinfo:
-            resolve_blob(cell, tmp_path, fallback_cache_dirs=(tmp_path / "recorded",))
+            resolve_blob(name, tmp_path, fallback_cache_dirs=(tmp_path, tmp_path / "recorded"))
         message = str(excinfo.value)
-        assert str(tmp_path / "recorded" / "blobs" / "abcdef0123456789.parquet") in message
-        assert message.count(cell) == 1, f"location listed more than once: {message}"
+        assert str(tmp_path / "recorded" / "blobs" / name) in message
+        assert message.count(str(tmp_path / "blobs" / name)) == 1, (
+            f"location listed more than once: {message}"
+        )
 
     def test_hints_read_back_what_was_recorded(self):
         dataset = xr.Dataset({"table": ("x", ["abcdef0123456789.parquet"])})
@@ -160,6 +179,37 @@ class TestCollectTimeCacheDirHint:
     def test_no_hint_for_a_dataset_collected_before_the_attribute_existed(self):
         assert blob_cache_dir_hints(xr.Dataset()) == ()
         assert blob_cache_dir_hints(None) == ()
+
+    def test_a_result_served_from_the_benchmark_cache_still_carries_the_hint(self):
+        """The stamp is applied by the collector, so it does not depend on which
+        branch of ``run_sweep`` ran.  A cache hit returns a *previous* run's
+        pickled result and never re-stamps — deliberately, since this process
+        wrote no blobs and its cwd is not where they went.
+        """
+        with pytest.MonkeyPatch.context() as patch:
+            workspace = Path(tempfile.mkdtemp())
+            patch.chdir(workspace)
+            worker = RelocatedOverTimeSweep()
+            worker.run_id = 0
+
+            def sweep(clear_cache: bool):
+                run_cfg = bn.BenchRunCfg()
+                run_cfg.repeats = 1
+                run_cfg.auto_plot = False
+                run_cfg.cache_results = True
+                run_cfg.clear_cache = clear_cache
+                return bn.Bench("test_blob_cache_hit", worker).plot_sweep(
+                    "cache_hit", input_vars=[], result_vars=["table"], run_cfg=run_cfg
+                )
+
+            computed = sweep(clear_cache=True)
+            from_cache = sweep(clear_cache=False)
+
+        expected = (str(workspace / "cachedir"),)
+        assert blob_cache_dir_hints(computed.ds) == expected
+        assert blob_cache_dir_hints(from_cache.ds) == expected, (
+            "a cache-hit result must carry the hint of the run that wrote the blobs"
+        )
 
     def test_hint_survives_a_slice_and_a_pickle_round_trip(self):
         """It has to reach render: results are sliced per pane and pickled by
@@ -227,11 +277,16 @@ class TestResolveFailures:
 
     def test_missing_blob_names_every_location_tried(self, tmp_path):
         cell = "/gone/cachedir/blobs/abcdef0123456789.parquet"
+        recorded = tmp_path / "recorded"
         with pytest.raises(FileNotFoundError) as excinfo:
-            resolve_blob(cell, tmp_path)
+            resolve_blob(cell, tmp_path, fallback_cache_dirs=(recorded,))
         message = str(excinfo.value)
         assert str(tmp_path / "blobs" / "abcdef0123456789.parquet") in message
-        assert cell in message
+        assert str(recorded / "blobs" / "abcdef0123456789.parquet") in message
+        # The dead directory the cell carries was never a candidate, so it must
+        # not appear as one — a "tried" list that names a place it did not try
+        # sends the reader looking in the wrong direction.
+        assert "/gone/cachedir" not in message
 
 
 def _tagged(scale: float, run_id: int) -> pd.DataFrame:
@@ -373,8 +428,97 @@ class TestRenderFromAnotherWorkingDirectory(unittest.TestCase):
         self.assertEqual(rendered, ["run=0 scale=1"])
 
 
+class TestBothAxesAtOnce(unittest.TestCase):
+    """The cache dir moved *and* the reader is somewhere else again.
+
+    Each half alone is inferable — the active cwd covers a moved cache, the
+    recorded dir covers a moved reader.  Composed, neither inference can be
+    right: the recorded dir is dead and the reader's cwd never held the cache.
+    This is the offline-cull-on-a-downloaded-tarball case the blob store's own
+    docstring names, and the only thing that can resolve it is the reader saying
+    where the cache dir is.
+    """
+
+    def _collect_and_save(self, workspace: Path, result_pkl: Path) -> None:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.chdir(workspace)
+            worker = RelocatedOverTimeSweep()
+            worker.run_id = 0
+            run_cfg = bn.BenchRunCfg()
+            run_cfg.repeats = 1
+            run_cfg.auto_plot = False
+            run_cfg.clear_cache = True
+            result = bn.Bench("test_blob_both_axes", worker).plot_sweep(
+                "both_axes", input_vars=[], result_vars=["table"], run_cfg=run_cfg
+            )
+            bn.save_result(result, result_pkl)
+
+    @staticmethod
+    def _rendered(result) -> list[str]:
+        return [
+            str(pane.object)
+            for pane in result.to(bn.DataSetResult).select(pn.pane.Markdown)
+            if str(pane.object).startswith("run=")
+        ]
+
+    def test_placeholder_without_a_cache_dir_and_the_payload_with_one(self):
+        workspace = Path(self.enterContext(_tmpdir()))
+        restored = Path(self.enterContext(_tmpdir()))
+        reader = Path(self.enterContext(_tmpdir()))
+        result_pkl = reader / "result.pkl"
+
+        self._collect_and_save(workspace, result_pkl)
+        moved = _relocate(workspace / "cachedir", restored / "cachedir")
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.chdir(reader)
+            patch.delenv("BENCHER_CACHE_DIR", raising=False)
+            self.assertFalse(Path("cachedir").exists(), "precondition: no cachedir at the reader")
+
+            # Nothing to infer from: both inferable locations are wrong.
+            unresolved = bn.load_result(result_pkl)
+            self.assertEqual(self._rendered(unresolved), [])
+            # ...and the placeholder has to say so in the report itself, naming
+            # the blob and the way out — it is read by people without the log.
+            placeholders = [
+                str(pane.object)
+                for pane in unresolved.to(bn.DataSetResult).select(pn.pane.Markdown)
+                if "not found in any known cache dir" in str(pane.object)
+            ]
+            self.assertEqual(len(placeholders), 1, placeholders)
+            self.assertIn(".parquet", placeholders[0])
+            self.assertIn("--cachedir", placeholders[0])
+
+            # ...and being told resolves it, by every route a reader has.
+            told = bn.load_result(result_pkl)
+            told.blob_cache_dir = moved
+            self.assertEqual(self._rendered(told), ["run=0 scale=1"])
+
+            patch.setenv("BENCHER_CACHE_DIR", str(moved))
+            self.assertEqual(self._rendered(bn.load_result(result_pkl)), ["run=0 scale=1"])
+
+    def test_render_report_cache_dir_reaches_the_cells(self):
+        """The public entry point, not just the attribute it sets: ``--cachedir``
+        goes through ``render_report`` and has to survive ``append_result``'s
+        ``to()`` hop onto the object that actually renders."""
+        workspace = Path(self.enterContext(_tmpdir()))
+        restored = Path(self.enterContext(_tmpdir()))
+        reader = Path(self.enterContext(_tmpdir()))
+        result_pkl = reader / "result.pkl"
+
+        self._collect_and_save(workspace, result_pkl)
+        moved = _relocate(workspace / "cachedir", restored / "cachedir")
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.chdir(reader)
+            patch.delenv("BENCHER_CACHE_DIR", raising=False)
+            html = bn.render_report(result_pkl, reader / "out", cache_dir=moved).read_text(
+                encoding="utf-8"
+            )
+        self.assertIn("run=0 scale=1", html)
+        self.assertNotIn("was not found in any known cache dir", html)
+
+
 def _tmpdir():
     """A TemporaryDirectory as a context manager, for ``enterContext``."""
-    import tempfile
-
     return tempfile.TemporaryDirectory()

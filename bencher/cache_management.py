@@ -44,7 +44,7 @@ import numpy as np
 import xarray as xr
 from diskcache import Cache
 
-from bencher.blob_store import blob_name
+from bencher.blob_store import DEFAULT_CACHE_DIR, blob_name
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ _MEDIA_EXTENSIONS = frozenset(
 # ---------------------------------------------------------------------------
 
 
-def ensure_cache_version(cachedir: str = "cachedir") -> None:
+def ensure_cache_version(cachedir: str = DEFAULT_CACHE_DIR) -> None:
     """Check the cache version file; clear everything on mismatch.
 
     Called automatically when a :class:`Bench` is instantiated.  If the
@@ -224,7 +224,7 @@ def _dir_stats(path: Path) -> tuple[int, int]:
     return count, total
 
 
-def cache_stats(cachedir: str = "cachedir") -> CacheStats:
+def cache_stats(cachedir: str = DEFAULT_CACHE_DIR) -> CacheStats:
     """Collect statistics for all managed caches and media directories."""
     root = Path(cachedir)
     managed: list[CacheDirStats] = []
@@ -262,7 +262,7 @@ def cache_stats(cachedir: str = "cachedir") -> CacheStats:
     return CacheStats(managed=managed, media=media, total_bytes=total, content=content)
 
 
-def print_cache_stats(cachedir: str = "cachedir") -> None:
+def print_cache_stats(cachedir: str = DEFAULT_CACHE_DIR) -> None:
     """Print a human-readable cache statistics summary."""
     print(cache_stats(cachedir).summary())
 
@@ -272,7 +272,7 @@ def print_cache_stats(cachedir: str = "cachedir") -> None:
 # ---------------------------------------------------------------------------
 
 
-def cleanup_job_media(job_key: str, cachedir: str = "cachedir") -> int:
+def cleanup_job_media(job_key: str, cachedir: str = DEFAULT_CACHE_DIR) -> int:
     """Delete the per-job-key media directories for *job_key*.
 
     Called automatically before a cache entry is overwritten so that
@@ -307,7 +307,7 @@ def cleanup_job_media(job_key: str, cachedir: str = "cachedir") -> int:
 # ---------------------------------------------------------------------------
 
 
-def clear_all(cachedir: str = "cachedir") -> None:
+def clear_all(cachedir: str = DEFAULT_CACHE_DIR) -> None:
     """Remove the entire cache directory tree."""
     p = Path(cachedir)
     if p.is_dir():
@@ -317,7 +317,7 @@ def clear_all(cachedir: str = "cachedir") -> None:
         logger.info("Nothing to remove: %s does not exist", p)
 
 
-def clear_media(cachedir: str = "cachedir") -> tuple[int, int]:
+def clear_media(cachedir: str = DEFAULT_CACHE_DIR) -> tuple[int, int]:
     """Delete all files in media and content-addressed store directories.
 
     Cells that referenced a deleted file (an image path, a blob name) render as
@@ -365,7 +365,9 @@ def _collect_sample_cache_keys(cachedir: str) -> set[str]:
         return set()
 
 
-def clean_orphaned_media(cachedir: str = "cachedir", dry_run: bool = True) -> tuple[list[str], int]:
+def clean_orphaned_media(
+    cachedir: str = DEFAULT_CACHE_DIR, dry_run: bool = True
+) -> tuple[list[str], int]:
     """Find and optionally delete per-job-key media dirs with no cache entry.
 
     Walks the media tree looking for job-key subdirectories.  If the key
@@ -601,7 +603,7 @@ def _extra_root_files(
 
 
 def blob_reachability(
-    cachedir: str = "cachedir",
+    cachedir: str = DEFAULT_CACHE_DIR,
     extra_roots: Iterable[str | Path] | None = None,
 ) -> BlobReachability:
     """Collect every blob filename still referenced from the cache.
@@ -700,7 +702,7 @@ def _report_incomplete(reachability: BlobReachability) -> None:
 
 
 def clean_orphaned_blobs(
-    cachedir: str = "cachedir",
+    cachedir: str = DEFAULT_CACHE_DIR,
     dry_run: bool = True,
     extra_roots: Iterable[str | Path] | None = None,
     min_age_seconds: float = 0.0,
@@ -783,7 +785,7 @@ def clean_orphaned_blobs(
 
 
 def print_orphaned_blobs(
-    cachedir: str = "cachedir",
+    cachedir: str = DEFAULT_CACHE_DIR,
     dry_run: bool = True,
     extra_roots: Iterable[str | Path] | None = None,
     min_age_seconds: float = 0.0,

@@ -211,11 +211,41 @@ Points where the two interact:
 - `save_result` is a *manual* persistence step, unrelated to the caches: it writes wherever
   you point it, not into `cachedir/`. Blobs written for `ResultDataSet` payloads do live in
   the shared `cachedir/blobs/`, which is why a result saved this way still renders in
-  another process — and why `bn.clean_orphaned_blobs()` needs `extra_roots=[...]` to know
-  about results you saved outside the cache.
+  another process — see [Finding blobs at render time](#finding-blobs-at-render-time) for
+  how it locates them — and why `bn.clean_orphaned_blobs()` needs `extra_roots=[...]` to
+  know about results you saved outside the cache.
 - A declared `container=` renderer travels with `BenchCfg` into the result cache *and*
   through the split, so it has to be picklable — a module-level function or callable
   object, not a lambda.
+
+### Finding blobs at render time
+
+A `ResultDataSet` cell stores the blob's **name** — its content hash — and nothing else. A
+name is a complete identity, so the same cell reads correctly out of a cache dir that has
+been tarred on one CI runner and restored at a different path on another. It is not an
+*address*, though, so rendering has to decide which cache dir to read. It tries, in order:
+
+1. **what you told it** — `render_report(..., cache_dir=...)`, the `--cachedir` flag, or
+   `BENCHER_CACHE_DIR`;
+2. **`./cachedir`** in the rendering process's working directory;
+3. **the cache dir recorded on the result** when it was collected.
+
+Steps 2 and 3 cover one moved thing each: 2 handles a cache dir that moved, 3 handles a
+reader that moved (`bencher result.pkl out/` run from anywhere). Neither can cover *both* —
+a cache dir restored to a new path and rendered from a third directory, which is what an
+offline cull working on a downloaded tarball looks like. That is what step 1 is for:
+
+```bash
+tar -xf cachedir.tar -C /data/restored
+bencher result.pkl out/ --cachedir /data/restored/cachedir
+```
+
+Without it, those cells render as a placeholder naming the blob it could not find. The
+directory a saved reference happens to carry is never used as a place to look — a location
+some earlier process used is not one this reader chose.
+
+`BENCHER_CACHE_DIR` is read-side only. Collection always writes to `./cachedir`, next to
+the diskcaches and media, so the env var cannot split one cache dir across two locations.
 
 ## See also
 

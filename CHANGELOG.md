@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.119.1] - 2026-08-05
+
+### Added
+- **`--cachedir` / `render_report(cache_dir=)` / `BENCHER_CACHE_DIR` — tell a render process
+  where the blobs are.** 1.119.0 made a `ResultDataSet` cell store the blob's content-hash
+  name and inferred the cache dir two ways: the reader's own `./cachedir` (which covers a
+  cache dir that moved) and the cache dir recorded on the result at collect time (which
+  covers a reader that moved). Each covers one moved thing. Neither covers *both* — a cache
+  dir restored to a new path and rendered from a third directory, which is exactly the
+  offline cull working on a downloaded tarball that `blob_store`'s own docstring names as
+  motivation. There was no way to say otherwise, so those cells rendered as placeholders
+  with the payload sitting readable on disk. Now the location the reader was told about is
+  tried first, and it is the only candidate that can resolve both failures at once. The env
+  var is read-side only: collection still writes to `./cachedir` next to the diskcaches and
+  media, so it cannot split one cache dir across two locations.
+
+### Changed
+- **A blob reference is used for its name, never for its directory.** Resolution used to
+  fall back to the literal path a pre-1.119.0 cell carried. That directory is wherever some
+  earlier process kept its cache dir — not a location this reader chose — so a read served
+  out of it is a report silently assembled from a directory nobody asked for. Candidates are
+  now cache dirs only: the one you named, then the reader's own, then the one recorded at
+  collect time. Path-shaped cells still resolve, by basename, against those; the case the
+  literal path used to cover is what `--cachedir` is for. Recorded as L11 in
+  `plans/27-cache-version-bump-ledger.md` — the deferral 1.119.0 should have logged there.
+- The collect-time cache dir is recorded by the collector when it builds the dataset, so the
+  same `collect_cache_dir()` call decides where blobs are written and what is recorded as the
+  place they went. It was previously stamped only on one branch of `run_sweep`, which held
+  because every cached result had passed through that branch — an invariant nothing enforced
+  and no test covered.
+- `cache_management` and `bench_report` take their `cachedir` default from
+  `blob_store.DEFAULT_CACHE_DIR` instead of restating the literal in eleven signatures.
+- An unresolvable blob now renders a placeholder naming the blob and `--cachedir`, rather
+  than pointing at a log the reader of an HTML report generally does not have.
+
+### Documentation
+- `docs/caching.md` gains "Finding blobs at render time": the resolution order, which moved
+  thing each candidate covers, and the tarball case that needs `--cachedir`. Its claim that a
+  saved result "still renders in another process" now says how.
+
 ## [1.119.0] - 2026-08-05
 
 ### Fixed

@@ -18,6 +18,7 @@ import panel as pn
 
 from bencher.bench_cfg import BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
+from bencher.blob_store import DEFAULT_CACHE_DIR
 from bencher.results.bench_result import BenchResult
 
 logger = logging.getLogger(__name__)
@@ -312,7 +313,7 @@ class BenchReport(BenchPlotServer):
 
     def save(
         self,
-        directory: str | Path = "cachedir",
+        directory: str | Path = DEFAULT_CACHE_DIR,
         filename: str | None = None,
         in_html_folder: bool = True,
         portable: bool = False,

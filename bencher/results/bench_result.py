@@ -193,6 +193,9 @@ class BenchResult(
         new_instance.bench_cfg = original.bench_cfg
         new_instance.plt_cnt_cfg = original.plt_cnt_cfg
         new_instance.regression_report = original.regression_report
+        # A render-time cache dir override has to reach whatever object actually
+        # renders the cells, and that is this one, not the original.
+        new_instance.blob_cache_dir = getattr(original, "blob_cache_dir", None)
         return new_instance
 
     def to(
@@ -221,6 +224,8 @@ class BenchResult(
         # must still render — the legacy read path degrades to a placeholder instead.
         result_instance.dataset_list = getattr(self, "dataset_list", [])
         result_instance.regression_report = self.regression_report
+        # Same as from_existing: the override follows the object that renders.
+        result_instance.blob_cache_dir = getattr(self, "blob_cache_dir", None)
         # Build kwargs for the plot call, only include reduce if explicitly set
         plot_kwargs = {
             "result_var": result_var,

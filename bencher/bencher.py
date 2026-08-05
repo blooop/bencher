@@ -897,11 +897,16 @@ class Bench(BenchPlotServer):
                         bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
                 timings.history_merge_ms = elapsed()
 
-            # Record where this run wrote its blobs, so a render process whose
-            # working directory is not this one can still resolve the name-only
-            # cells (see blob_store.resolve_blob). After the history merge, whose
-            # concat takes attrs from the older side, and before cache_results so
-            # a result served from the cache carries the hint too.
+            # Re-apply the hint the collector already stamped at dataset setup:
+            # the history merge concats, and concat takes attrs from the older
+            # side, so the merged dataset may be carrying a previous run's value.
+            # Before cache_results, so a result later served from the cache
+            # carries it too.
+            #
+            # The `calculate_results` guard around this block is load-bearing and
+            # must stay: stamping means "this process wrote these blobs, here".
+            # On a cache hit no blob was written, and re-stamping would overwrite
+            # a valid recorded dir with the reader's own cwd.
             record_blob_cache_dir(bench_res.ds, collect_cache_dir())
 
             # Regression detection runs after load_history_cache (which merges the current
