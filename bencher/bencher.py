@@ -24,6 +24,7 @@ from param import Parameter
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
+from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.history import OnHistoryReset
 from bencher.history import config_summary as history_config_summary
@@ -895,6 +896,13 @@ class Bench(BenchPlotServer):
                         bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
                         bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
                 timings.history_merge_ms = elapsed()
+
+            # Record where this run wrote its blobs, so a render process whose
+            # working directory is not this one can still resolve the name-only
+            # cells (see blob_store.resolve_blob). After the history merge, whose
+            # concat takes attrs from the older side, and before cache_results so
+            # a result served from the cache carries the hint too.
+            record_blob_cache_dir(bench_res.ds, collect_cache_dir())
 
             # Regression detection runs after load_history_cache (which merges the current
             # run into the dataset) but before cache_results. The dataset already contains

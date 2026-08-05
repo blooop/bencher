@@ -13,7 +13,6 @@ import warnings
 from contextlib import suppress
 from datetime import datetime
 from itertools import product
-from pathlib import Path
 from typing import Any, Self
 
 import numpy as np
@@ -21,7 +20,7 @@ import xarray as xr
 from diskcache import Cache
 
 from bencher.bench_cfg import BenchCfg, BenchRunCfg, DimsCfg
-from bencher.blob_store import materialize_blob
+from bencher.blob_store import collect_cache_dir, materialize_blob
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES
 from bencher.history import (
     HISTORY_FORMAT,
@@ -164,13 +163,16 @@ def _materialize_result_value(rv, value):
 
 
 def _materialize_dataset_value(result_value) -> str:
-    """Reduce a worker-returned ``ResultDataSet`` sample to a blob path (plan 22, D2).
+    """Reduce a worker-returned ``ResultDataSet`` sample to a blob name (plan 22, D2).
 
-    The payload is serialized under ``cachedir/blobs/`` and the returned path
-    string is what the dataset cell stores — self-describing in any process that
-    shares the cache filesystem, exactly like the image/video/rerun path cells.
-    The literal ``cachedir`` root is the same canonical location the rest of
-    collection uses (``gen_path``, ``cachedir/rrd``, the diskcaches above).
+    The payload is serialized under ``cachedir/blobs/`` and the returned blob
+    name is what the dataset cell stores — self-describing in any process that
+    can see *a* copy of the cache, not only one that mounts it at the same
+    absolute path, since the name is the payload's content hash. The literal
+    ``cachedir`` root is the same canonical location the rest of collection uses
+    (``gen_path``, ``cachedir/rrd``, the diskcaches above); render resolves the
+    name against whichever cache dir is active then, falling back to the one
+    recorded on the dataset here (``blob_store.resolve_blob``).
 
     A per-sample ``container=`` attached inside ``benchmark()`` has to travel
     with the payload to keep the declared-container precedence chain intact, so
@@ -180,7 +182,7 @@ def _materialize_dataset_value(result_value) -> str:
     sweep: the bare payload is stored instead and the per-sample container is
     dropped, with the class-level container still applying at render.
     """
-    cache_dir = Path("cachedir").absolute()
+    cache_dir = collect_cache_dir()
     payload = result_value
     if isinstance(payload, ResultDataSet):
         if getattr(payload, "container", None) is None:

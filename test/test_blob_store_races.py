@@ -43,7 +43,7 @@ import xarray as xr
 from diskcache import Cache
 
 from bencher import cache_management
-from bencher.blob_store import _HASH_CHARS, load_blob, materialize_blob
+from bencher.blob_store import _HASH_CHARS, blob_name, load_blob, materialize_blob
 from bencher.cache_management import blob_reachability, clean_orphaned_blobs
 
 # Enough concurrency to interleave on a normal CI box without making the suite slow.
@@ -86,7 +86,7 @@ class TestConcurrentMaterialize:
         assert len(set(paths)) == 1, "identical payloads must map to one path"
         blobs = sorted((tmp_path / "blobs").iterdir())
         assert len(blobs) == 1, f"expected exactly one blob, got {[b.name for b in blobs]}"
-        pd.testing.assert_frame_equal(load_blob(paths[0]), payload)
+        pd.testing.assert_frame_equal(load_blob(paths[0], tmp_path), payload)
 
     def test_no_temp_files_survive_a_concurrent_write_storm(self, tmp_path):
         """Every temp file must have been renamed away, not left as garbage the GC
@@ -112,7 +112,7 @@ class TestConcurrentMaterialize:
 
         assert len(set(results.values())) == _THREADS, "distinct payloads must not collide"
         for i, path in results.items():
-            pd.testing.assert_frame_equal(load_blob(path), payloads[i])
+            pd.testing.assert_frame_equal(load_blob(path, tmp_path), payloads[i])
 
     def test_blob_is_published_by_atomic_rename_not_a_partial_write(self, tmp_path):
         """Deterministic guard on the publish mechanism.
@@ -148,14 +148,14 @@ class TestConcurrentMaterialize:
             return real_replace(self, target)
 
         with mock.patch.object(Path, "replace", watching_replace):
-            path = Path(materialize_blob(payload, tmp_path))
+            path = _blob(tmp_path, materialize_blob(payload, tmp_path))
 
         assert observed.fired, "blob was published without going through an atomic rename"
         assert observed.final_existed_before_rename is False
         assert ".tmp-" in observed.tmp_name, "staged file is not a temp sibling"
         # The staged bytes were already complete before the name became visible.
         assert observed.tmp_bytes == path.read_bytes()
-        pd.testing.assert_frame_equal(load_blob(path), payload)
+        pd.testing.assert_frame_equal(load_blob(path, tmp_path), payload)
 
     def test_reader_racing_a_writer_never_sees_a_partial_blob(self, tmp_path):
         """Stress companion to the mechanism test above: under sustained read
@@ -165,7 +165,7 @@ class TestConcurrentMaterialize:
         guards against gross regressions while the test above pins the mechanism.
         """
         payload = frame(3.0, rows=512)
-        expected_path = Path(materialize_blob(payload, tmp_path))
+        expected_path = _blob(tmp_path, materialize_blob(payload, tmp_path))
         expected_bytes = expected_path.read_bytes()
         expected_path.unlink()  # re-materialize below while readers hammer it
 
@@ -220,7 +220,7 @@ class TestCrossProcessMaterialize:
         assert len(set(paths)) == 1
         blobs = [p for p in (tmp_path / "blobs").iterdir() if ".tmp-" not in p.name]
         assert len(blobs) == 1
-        pd.testing.assert_frame_equal(load_blob(paths[0]), frame(1.0, rows=128))
+        pd.testing.assert_frame_equal(load_blob(paths[0], tmp_path), frame(1.0, rows=128))
         assert [p.name for p in (tmp_path / "blobs").iterdir() if ".tmp-" in p.name] == []
 
 
@@ -291,21 +291,22 @@ class TestGCRacingAWriter:
         a freshly written one. The deletion loop stats each blob immediately
         before its unlink, so the touch is visible to the age check even though
         it lands after the reachability scan."""
-        old_path = materialize_blob(frame(7.0), tmp_path)
+        old_name = materialize_blob(frame(7.0), tmp_path)
+        old_path = _blob(tmp_path, old_name)
         os.utime(old_path, (1, 1))  # backdate far beyond the grace period below
 
         def concurrent_sweep_dedups_onto_it() -> None:
             again = materialize_blob(frame(7.0), tmp_path)  # same content -> same name
-            assert again == old_path, "precondition: this is the dedup path"
+            assert again == old_name, "precondition: this is the dedup path"
             write_reference(tmp_path, again)
 
         self._inject_after_scan(monkeypatch, concurrent_sweep_dedups_onto_it)
         orphans, nbytes = clean_orphaned_blobs(str(tmp_path), dry_run=False, min_age_seconds=3600)
 
         assert orphans == [] and nbytes == 0, "the dedup touch must protect the old blob"
-        assert Path(old_path).exists()
+        assert old_path.exists()
         # The reference the sweep recorded is intact, not dangling.
-        assert blob_reachability(str(tmp_path)).names == {Path(old_path).name}
+        assert blob_reachability(str(tmp_path)).names == {old_name}
 
     def test_a_blob_referenced_before_the_scan_is_never_at_risk(self, tmp_path):
         """The ordinary, safe case: reference recorded first, so GC sees it."""
@@ -315,7 +316,7 @@ class TestGCRacingAWriter:
         orphans, nbytes = clean_orphaned_blobs(str(tmp_path), dry_run=False)
 
         assert orphans == [] and nbytes == 0
-        assert Path(path).exists()
+        assert _blob(tmp_path, path).exists()
 
 
 class TestGCRacingGC:
@@ -353,7 +354,7 @@ class TestGCRacingGC:
     def test_blob_vanishing_between_listing_and_stat_is_skipped(self, tmp_path, monkeypatch):
         """The narrower window inside the loop: the file disappears after
         ``iterdir`` but before ``stat``. It must be skipped, not raise."""
-        doomed = Path(materialize_blob(frame(5.0), tmp_path))
+        doomed = _blob(tmp_path, materialize_blob(frame(5.0), tmp_path))
         real_stat = Path.stat
         removed = threading.Event()
 
@@ -383,7 +384,7 @@ class TestGCRacingAReader:
         clean_orphaned_blobs(str(tmp_path), dry_run=False)  # unreferenced -> collected
 
         with pytest.raises((FileNotFoundError, OSError)):
-            load_blob(path)
+            load_blob(path, tmp_path)
 
     def test_readers_and_a_collector_interleave_without_corruption(self, tmp_path):
         """Under sustained read pressure a collector must produce only two outcomes
@@ -398,7 +399,7 @@ class TestGCRacingAReader:
         def reader() -> None:
             while not stop.is_set():
                 try:
-                    got = load_blob(path)
+                    got = load_blob(path, tmp_path)
                 except (FileNotFoundError, OSError):
                     continue
                 try:
@@ -419,17 +420,21 @@ class TestGCRacingAReader:
                 t.join()
 
         assert wrong == [], f"reader observed corrupt payloads: {wrong[:1]}"
-        assert Path(path).exists(), "a referenced blob must survive every GC pass"
+        assert _blob(tmp_path, path).exists(), "a referenced blob must survive every GC pass"
+
+
+def _blob(cache_dir: Path, name: str) -> Path:
+    """The file a ``materialize_blob`` name refers to under *cache_dir*."""
+    return Path(cache_dir) / "blobs" / name
 
 
 def _blob_like(path: Path) -> bool:
     """True for a real blob filename, excluding temp and stray files.
 
-    Reuses the production pattern rather than restating it, so a change to what
+    Reuses the production predicate rather than restating it, so a change to what
     counts as a blob cannot silently desynchronise this helper from the collector.
     """
-    # pylint: disable=protected-access  # deliberate: one source of truth for the shape
-    return bool(cache_management._BLOB_NAME_RE.match(path.name))
+    return blob_name(path.name) is not None
 
 
 class TestContentAddressingUnderConcurrency:
@@ -463,7 +468,7 @@ class TestContentAddressingUnderConcurrency:
         no-rewrite witness, since the touch moves it by design.
         """
         payload = frame(1.5)
-        path = Path(materialize_blob(payload, tmp_path))
+        path = _blob(tmp_path, materialize_blob(payload, tmp_path))
         original_bytes = path.read_bytes()
         backdated = 1_000_000_000  # far in the past, so a refresh is unmistakable
         os.utime(path, (backdated, backdated))
@@ -477,7 +482,7 @@ class TestContentAddressingUnderConcurrency:
 
         with mock.patch.object(Path, "replace", counting_replace):
             for _ in range(5):
-                assert materialize_blob(payload, tmp_path) == str(path)
+                assert materialize_blob(payload, tmp_path) == path.name
 
         assert replace_calls == [], "a content hit must not rewrite the blob"
         assert path.read_bytes() == original_bytes
@@ -507,7 +512,7 @@ class TestPickleRoundTripUnderConcurrency:
 
         for i, path in results.items():
             assert path.endswith(".pkl"), "int64 must take the pickle fallback"
-            xr.testing.assert_identical(load_blob(path), payloads[i])
+            xr.testing.assert_identical(load_blob(path, tmp_path), payloads[i])
         # Sanity: pickle bytes are deterministic here, so all names are distinct.
         assert len(set(results.values())) == _THREADS
 

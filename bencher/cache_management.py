@@ -35,7 +35,6 @@ from __future__ import annotations
 import dataclasses
 import logging
 import pickle
-import re
 import shutil
 import time
 from collections.abc import Iterable
@@ -44,6 +43,8 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 from diskcache import Cache
+
+from bencher.blob_store import blob_name
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +320,7 @@ def clear_all(cachedir: str = "cachedir") -> None:
 def clear_media(cachedir: str = "cachedir") -> tuple[int, int]:
     """Delete all files in media and content-addressed store directories.
 
-    Cells that referenced a deleted file (an image path, a blob path) render as
+    Cells that referenced a deleted file (an image path, a blob name) render as
     a placeholder afterwards rather than raising — this reclaims space at the
     cost of the payloads, it does not corrupt a stored result.
 
@@ -436,25 +437,18 @@ def clean_orphaned_media(cachedir: str = "cachedir", dry_run: bool = True) -> tu
 # which is the payload *before* materialization: blobs are written by
 # ``ResultCollector._materialize_dataset_value`` at the moment the value is
 # placed in the result dataset, so a sample-cache value holds a DataFrame or a
-# ``ResultDataSet`` wrapper, never a blob path.  A payload still in the sample
-# cache also re-materializes to the *same* content-addressed path on the next
+# ``ResultDataSet`` wrapper, never a blob reference.  A payload still in the
+# sample cache also re-materializes to the *same* content-addressed name on the next
 # cache hit, so collecting its blob is recoverable rather than lossy — the one
 # place in this module where that is true (see the warning in
 # ``clean_orphaned_blobs``).
 #
 # ``benchmark_inputs`` stores whole pickled ``BenchResult`` objects and
 # ``history`` stores over_time records; both carry datasets whose cells are blob
-# path strings, so both are roots.
+# references — names now, absolute paths before that became the cell format — so
+# both are roots.  ``blob_name`` accepts either, which is why one predicate covers
+# a mixed-generation history.
 _BLOB_REFERENCE_CACHES = ("benchmark_inputs", "history")
-
-# Extensions ``blob_store._serialize`` can emit.  ``.da.nc`` ends with ``.nc``,
-# so the fast prefilter below does not need to list it separately.
-_BLOB_SUFFIXES = (".parquet", ".nc", ".bin", ".pkl")
-
-# A blob filename is a truncated sha256 in lowercase hex plus one of the format
-# extensions.  The digest length is not pinned: ``blob_store._HASH_CHARS`` may be
-# raised without invalidating existing blobs, and this must keep matching both.
-_BLOB_NAME_RE = re.compile(r"^[0-9a-f]+(?:\.parquet|\.da\.nc|\.nc|\.bin|\.pkl)$")
 
 # Recursion bound for the reference walk.  Every real root is shallow (a history
 # record is dict → Dataset; a cached result is BenchResult → Dataset), so this is
@@ -482,22 +476,6 @@ class BlobReachability:
         return not self.unreadable
 
 
-def _blob_name(value: str) -> str | None:
-    """The blob filename *value* names, or None when it is not a blob path.
-
-    Matching is on the **basename**, not the full path: a blob's name *is* its
-    content hash, so a name is a complete and location-independent identity.
-    That keeps references valid when a stored dataset carries an absolute path
-    from a cachedir that has since been moved, copied or renamed — the case
-    where resolving against the current ``blobs/`` directory would silently
-    declare every reference dead.
-    """
-    if not value.endswith(_BLOB_SUFFIXES):
-        return None
-    name = Path(value).name
-    return name if _BLOB_NAME_RE.match(name) else None
-
-
 def _collect_array_blob_names(values, names: set[str]) -> None:
     """Add every blob name appearing in a numpy array of dataset cells."""
     arr = np.asarray(values)
@@ -507,7 +485,7 @@ def _collect_array_blob_names(values, names: set[str]) -> None:
         return
     for val in arr.flat:
         if isinstance(val, str):
-            name = _blob_name(val)
+            name = blob_name(val)
             if name is not None:
                 names.add(name)
 
@@ -537,14 +515,14 @@ def _walk_blob_references(value, names: set[str], seen: set[int], depth: int = 0
     xarray objects, numpy arrays, and the instance dicts of bencher-owned
     objects (``BenchResult``, ``BenchCfg``, ...).  Objects from other packages
     are leaves — walking param/numpy internals would cost far more than it could
-    find, since a blob path only ever lives in a dataset cell.
+    find, since a blob reference only ever lives in a dataset cell.
     """
     if depth > _MAX_REF_WALK_DEPTH or isinstance(
         value, (bool, int, float, bytes, bytearray, type(None))
     ):
         return
     if isinstance(value, str):
-        name = _blob_name(value)
+        name = blob_name(value)
         if name is not None:
             names.add(name)
     elif isinstance(value, (xr.Dataset, xr.DataArray)):
@@ -686,7 +664,7 @@ def _unreferenced_blobs(
         # Anything not shaped like a blob is not ours to delete: notably the
         # ``.tmp-<uuid>`` files materialize_blob renames from, which may belong
         # to a worker writing right now.
-        if not _BLOB_NAME_RE.match(blob.name):
+        if blob_name(blob.name) is None:
             continue
         if blob.name in reachability.names:
             continue
