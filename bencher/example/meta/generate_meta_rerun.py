@@ -7,6 +7,8 @@ Generates rerun examples for:
 - composable_{right,down,sequence,overlay}: combine two complete recordings, each
   animated over a ``time_s`` timeline so the composition modes are distinguishable
 - summary: 2 input vars, every per-sample recording merged into ONE viewer
+- tables_baseline: the reference "before" report — scalar tables in panel plus one
+  rerun viewer per sample (the report shape ``rerun_summary`` replaces)
 """
 
 import bencher as bn
@@ -23,6 +25,7 @@ RERUN_EXAMPLES = [
     "composable_sequence",
     "composable_overlay",
     "summary",
+    "tables_baseline",
 ]
 
 # What each composition mode does to the two recordings, appended to the
@@ -57,6 +60,8 @@ class MetaRerun(MetaGeneratorBase):
             self._generate_composable(self.example.removeprefix("composable_"))
         elif self.example == "summary":
             self._generate_summary()
+        elif self.example == "tables_baseline":
+            self._generate_tables_baseline()
 
     def _generate_capture_window(self):
         """Capture a rerun viewer window as a Panel widget inside a sweep."""
@@ -234,6 +239,53 @@ bench.plot_sweep(
             imports=imports,
             class_code=class_code,
             body=body,
+        )
+
+    def _generate_tables_baseline(self):
+        """The reference report: scalar tables in panel plus one rerun viewer per sample.
+
+        This is the "before" artifact that the single-viewer destination
+        (``rerun_summary`` / ``rerun_grid``) is judged against — see
+        https://github.com/blooop/bencher/issues/1112 for the measured baseline
+        (iframe count, .rrd bytes on disk, report.save() wall time, peak RSS).
+        """
+        imports = (
+            "from functools import partial\n\n"
+            "import bencher as bn\n"
+            "from bencher.example.example_rerun_over_time import ControlSystemSweep"
+        )
+        body = """\
+bench = ControlSystemSweep().to_bench(run_cfg)
+bench.plot_sweep(
+    input_vars=["damping_ratio", "omega_n"],
+    result_vars=["out_overshoot", "out_settling_time", "out_rerun"],
+    description="The reference report the single-viewer destination is judged "
+    "against: scalar metrics rendered as tables in panel, plus one embedded rerun "
+    "web viewer PER SAMPLE.  ``table`` and ``tabulator`` are named-only plot types, "
+    "so they are requested explicitly via ``plot_list``; ``panes`` renders each "
+    "sample's ``ResultRerun`` recording as its own iframe.  At the default sampling "
+    "(5 damping ratios x 3 natural frequencies) that is 15 independent wasm viewers "
+    "on one page.",
+    post_description="This is the 'before' report that ``rerun_summary`` / "
+    "``rerun_grid`` replace with a single merged viewer — see "
+    "https://github.com/blooop/bencher/issues/1112 for the measured baseline "
+    "(iframe count, total .rrd bytes, save time, peak memory).",
+    plot_callbacks=[
+        partial(
+            bn.BenchResult.to_auto_plots,
+            plot_list=["table", "tabulator", "panes"],
+        )
+    ],
+)
+"""
+        self.generate_example(
+            title="Rerun Tables Baseline — tables in panel plus many rerun windows",
+            output_dir=OUTPUT_DIR,
+            filename="example_rerun_tables_baseline",
+            function_name="example_rerun_tables_baseline",
+            imports=imports,
+            body=body,
+            run_kwargs={"subsampling_divisions": 3},
         )
 
     def _generate_composable(self, compose: str):
