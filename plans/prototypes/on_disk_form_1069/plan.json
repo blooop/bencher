@@ -1,0 +1,46 @@
+{
+  "plan_schema_version": "1",
+  "grammar_version": "1",
+  "policy_version": null,
+  "dataset_dims": {
+    "radius": 3,
+    "repeat": 2
+  },
+  "views": [
+    {
+      "result_var": "disk",
+      "result_kind": "image",
+      "mark": "image",
+      "channels": {
+        "radius": "facet_col",
+        "repeat": "facet_row"
+      }
+    },
+    {
+      "result_var": "area",
+      "result_kind": "float",
+      "mark": "line",
+      "channels": {
+        "radius": "x",
+        "repeat": "spread"
+      }
+    },
+    {
+      "result_var": "points",
+      "result_kind": "dataset",
+      "mark": "scatter",
+      "channels": {
+        "radius": "facet_col",
+        "repeat": "overlay"
+      }
+    }
+  ],
+  "compose": {
+    "along": "facet_row",
+    "items": [
+      "view:disk",
+      "view:area",
+      "view:points"
+    ]
+  }
+}

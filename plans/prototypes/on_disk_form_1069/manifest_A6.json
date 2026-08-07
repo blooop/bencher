@@ -1,0 +1,105 @@
+{
+  "run_meta": {
+    "schema_version": "1",
+    "name": "disk_form_1069",
+    "bencher_version": "1.119.1",
+    "timestamp": "2026-08-07T15:19:49.043424+00:00",
+    "sweep_hash": "f526fe23dd02e465e691273186ef95ab9400d369",
+    "form": "store-referenced"
+  },
+  "input_vars": [
+    {
+      "name": "radius",
+      "type": "FloatSweep",
+      "kind": "input",
+      "units": "ul",
+      "bounds": [
+        0.2,
+        1.0
+      ],
+      "samples": 3,
+      "level": null
+    },
+    {
+      "name": "repeat",
+      "type": "repeat",
+      "kind": "input",
+      "units": null,
+      "bounds": null,
+      "samples": 2,
+      "level": null
+    }
+  ],
+  "result_vars": [
+    {
+      "name": "disk",
+      "type": "ResultImage",
+      "kind": "image",
+      "units": "path",
+      "bounds": null,
+      "samples": null,
+      "level": null
+    },
+    {
+      "name": "area",
+      "type": "ResultFloat",
+      "kind": "float",
+      "units": "m^2",
+      "bounds": null,
+      "samples": null,
+      "level": null
+    },
+    {
+      "name": "points",
+      "type": "ResultDataSet",
+      "kind": "dataset",
+      "units": "dataset",
+      "bounds": null,
+      "samples": null,
+      "level": null
+    }
+  ],
+  "plot_specs": [],
+  "plans": [
+    "plan.json"
+  ],
+  "artifacts": [],
+  "requires_blobs": [
+    {
+      "name": "3bb689ff30010cee.parquet",
+      "sha256": "3bb689ff30010ceeb28fcf00574a1293df6d1e14417dd5cd8c3b7fc3c9f54f63",
+      "bytes": 2140,
+      "source_kind": "dataset"
+    },
+    {
+      "name": "45987ab7f576351e.parquet",
+      "sha256": "45987ab7f576351e85262e63a41246f70848c9dd684c9e32fae2e9a4115cd4af",
+      "bytes": 2140,
+      "source_kind": "dataset"
+    },
+    {
+      "name": "514e32f23953a420.bin",
+      "sha256": "514e32f23953a420da50f1df5ef2ed71a31a898be2632118800ce235e198b1aa",
+      "bytes": 422,
+      "source_kind": "image"
+    },
+    {
+      "name": "a01463ec32a6319d.bin",
+      "sha256": "a01463ec32a6319d954c91d39df381a1d81ae219ff5532ace041fab66cf3451f",
+      "bytes": 172,
+      "source_kind": "image"
+    },
+    {
+      "name": "ca471bff3d0eebad.bin",
+      "sha256": "ca471bff3d0eebadbee732d5f1da658b5401aa190464f8943e03cb2ba2cfa93a",
+      "bytes": 328,
+      "source_kind": "image"
+    },
+    {
+      "name": "fb0ce1afcb4dbfe8.parquet",
+      "sha256": "fb0ce1afcb4dbfe8c9fe054e0917f5fe66bad5846cedd5f577398386eedfcf9c",
+      "bytes": 2140,
+      "source_kind": "dataset"
+    }
+  ]
+}
