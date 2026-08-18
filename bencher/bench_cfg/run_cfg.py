@@ -79,3 +79,61 @@ class BenchRunCfg(param.Parameterized):
 
     def deep(self) -> BenchRunCfg:
         return deepcopy(self)
+
+    @classmethod
+    def with_defaults(cls, run_cfg: BenchRunCfg | None = None, **defaults) -> BenchRunCfg:
+        """Merge *defaults* into *run_cfg*, creating a new instance when needed.
+
+        Defaults for grouped parameters are passed as plain dicts keyed by the
+        sub-config slot name; top-level parameters (``run_tag``, ``run_date``)
+        are passed directly::
+
+            run_cfg = bn.BenchRunCfg.with_defaults(
+                run_cfg,
+                execution=dict(repeats=5, subsampling_divisions=4),
+                cache=dict(results=True),
+            )
+
+        When *run_cfg* is ``None`` a fresh ``BenchRunCfg`` is created and the
+        defaults applied to it. When *run_cfg* is provided, a deep copy is made
+        and each default is applied only if the corresponding field is still at
+        its param-level default value (i.e. the caller did not explicitly set
+        it). The original *run_cfg* is never mutated. This lets benchmark
+        functions declare sensible defaults while still allowing callers to
+        override.
+
+        Raises:
+            ValueError: If any group name, top-level key, or key within a group
+                is not a recognised parameter, or a group's defaults are not a
+                dict.
+        """
+        params = cls.param.objects()
+        group_slots = {
+            name: p.class_ for name, p in params.items() if isinstance(p, param.ClassSelector)
+        }
+        unknown = set(defaults) - set(params)
+        if unknown:
+            raise ValueError(f"Unknown {cls.__name__} parameter(s): {', '.join(sorted(unknown))}")
+        for group, values in defaults.items():
+            if group in group_slots:
+                if not isinstance(values, dict):
+                    raise ValueError(
+                        f"Defaults for the '{group}' group must be a dict, got {values!r}"
+                    )
+                unknown_keys = set(values) - set(group_slots[group].param)
+                if unknown_keys:
+                    raise ValueError(
+                        f"Unknown {group_slots[group].__name__} parameter(s): "
+                        f"{', '.join(sorted(unknown_keys))}"
+                    )
+        result = cls() if run_cfg is None else deepcopy(run_cfg)
+        for key, value in defaults.items():
+            if key in group_slots:
+                sub = getattr(result, key)
+                sub_params = group_slots[key].param
+                for sub_key, sub_value in value.items():
+                    if getattr(sub, sub_key) == sub_params[sub_key].default:
+                        setattr(sub, sub_key, sub_value)
+            elif getattr(result, key) == params[key].default:
+                setattr(result, key, value)
+        return result

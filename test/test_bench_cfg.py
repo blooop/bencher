@@ -217,3 +217,71 @@ class TestFlatAccessIsGone:
     def test_sub_configs_exported_from_bencher(self):
         for cls in SUB_CFG_SLOTS.values():
             assert getattr(bn, cls.__name__) is cls
+
+
+# ── BenchRunCfg.with_defaults ───────────────────────────────────────────────
+
+
+class TestWithDefaults:
+    def test_none_run_cfg_creates_new_instance(self):
+        cfg = BenchRunCfg.with_defaults(
+            None, execution=dict(repeats=7), time=dict(over_time=True)
+        )
+        assert isinstance(cfg, BenchRunCfg)
+        assert cfg.execution.repeats == 7
+        assert cfg.time.over_time is True
+
+    def test_explicit_caller_value_not_overridden(self):
+        base = BenchRunCfg(execution=ExecutionCfg(repeats=3))
+        merged = BenchRunCfg.with_defaults(base, execution=dict(repeats=7))
+        assert merged.execution.repeats == 3
+
+    def test_default_value_is_overridden(self):
+        base = BenchRunCfg()  # repeats still at its param default of 1
+        merged = BenchRunCfg.with_defaults(base, execution=dict(repeats=7))
+        assert merged.execution.repeats == 7
+
+    def test_original_cfg_not_mutated(self):
+        base = BenchRunCfg()
+        BenchRunCfg.with_defaults(base, execution=dict(repeats=7))
+        assert base.execution.repeats == 1
+
+    def test_multiple_groups_merge_independently(self):
+        base = BenchRunCfg(cache=CacheCfg(results=True))
+        merged = BenchRunCfg.with_defaults(
+            base, cache=dict(results=False, samples=True), execution=dict(repeats=5)
+        )
+        assert merged.cache.results is True  # explicitly set by caller, kept
+        assert merged.cache.samples is True  # still default, merged
+        assert merged.execution.repeats == 5
+
+    def test_top_level_param_merges(self):
+        merged = BenchRunCfg.with_defaults(BenchRunCfg(), run_tag="tagged")
+        assert merged.run_tag == "tagged"
+
+    def test_unknown_group_raises_value_error(self):
+        with pytest.raises(ValueError, match="not_a_real_group"):
+            BenchRunCfg.with_defaults(None, not_a_real_group=dict(x=1))
+
+    def test_unknown_key_within_group_raises_value_error(self):
+        with pytest.raises(ValueError, match="not_a_real_param"):
+            BenchRunCfg.with_defaults(None, execution=dict(not_a_real_param=1))
+
+    def test_flat_key_raises_value_error(self):
+        with pytest.raises(ValueError, match="repeats"):
+            BenchRunCfg.with_defaults(None, repeats=5)
+
+
+# ── BenchRunCfg.deep ────────────────────────────────────────────────────────
+
+
+class TestDeep:
+    def test_deep_copies_sub_configs_independently(self):
+        cfg = BenchRunCfg(execution=ExecutionCfg(repeats=4))
+        copy = cfg.deep()
+        assert copy is not cfg
+        for slot in SUB_CFG_SLOTS:
+            assert getattr(copy, slot) is not getattr(cfg, slot)
+        assert copy.execution.repeats == 4
+        copy.execution.repeats = 9
+        assert cfg.execution.repeats == 4
