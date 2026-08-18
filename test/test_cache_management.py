@@ -773,11 +773,15 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
         os.chdir(self._old_cwd)
         shutil.rmtree(self._tmp, ignore_errors=True)
 
-    def _event(self, payload, result_var, event: int) -> str:
-        """Materialize *payload* and append it as one over_time event."""
-        blob = materialize_blob(payload, Path("cachedir").absolute())
+    def _event(self, payload, result_var, event: int) -> Path:
+        """Materialize *payload*, append it as one over_time event, return its file.
+
+        The cell stores the blob *name* (blob_store's cell format); the returned
+        path is what the on-disk assertions below need.
+        """
+        name = materialize_blob(payload, Path("cachedir").absolute())
         dataset = xr.Dataset(
-            {"table": (("repeat", "over_time"), np.array([[blob]], dtype=object))},
+            {"table": (("repeat", "over_time"), np.array([[name]], dtype=object))},
             coords={"repeat": [0], "over_time": [np.datetime64(f"2020-01-0{event + 1}")]},
         )
         self.collector.load_history_cache(
@@ -790,7 +794,7 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
             tag="t",
             config_summary={"inputs": [], "consts": [], "results": ["table"], "repeats": 1},
         )
-        return blob
+        return Path("cachedir") / "blobs" / name
 
     def test_aged_out_blob_is_reclaimed_and_live_events_survive(self):
         rv = _dataset_result_var("table", max_time_events=2)
@@ -801,7 +805,7 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
 
         orphans, freed = clean_orphaned_blobs("cachedir", dry_run=False)
 
-        self.assertEqual([Path(p).name for p in orphans], [Path(blobs[0]).name])
+        self.assertEqual([Path(p).name for p in orphans], [blobs[0].name])
         self.assertGreater(freed, 0)
         self.assertFalse(os.path.exists(blobs[0]))
         self.assertTrue(os.path.exists(blobs[1]))

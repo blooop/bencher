@@ -110,6 +110,18 @@ class BenchRunCfg(BenchPlotSrvCfg):
     It defines numerous parameters that control how benchmark runs are performed, cached,
     and displayed to the user.
 
+    Two groups of parameters have dedicated guides, because their interactions matter more
+    than any single flag:
+
+    * Caching (``cache_results``, ``cache_samples``, ``clear_cache``,
+      ``clear_sample_cache``, ``overwrite_sample_cache``, ``run_tag``,
+      ``only_plot``, ``cache_size``) — see ``docs/caching.md``, which also records
+      which of these have real readers (``only_hash_tag`` does not).
+    * Time tracking and regression detection (``over_time``, ``clear_history``,
+      ``max_time_events``, ``max_slider_points``, ``show_aggregated_time_tab``,
+      ``on_history_reset``, ``time_event``, and the ``regression_*`` family) — see
+      ``docs/over_time.md``.
+
     Quick-start examples::
 
         # Use defaults — each variable uses its own ``samples`` setting:
@@ -161,7 +173,8 @@ class BenchRunCfg(BenchPlotSrvCfg):
         cache_results (bool): Benchmark level cache for completed benchmark results
         clear_cache (bool): Clear the cache of saved input->output mappings
         cache_samples (bool): Enable per-sample caching
-        only_hash_tag (bool): Use only the tag hash for cache identification
+        only_hash_tag (bool): Dead flag; no reader. The sample cache key is
+                             unconditionally tag-only. See docs/caching.md.
         clear_sample_cache (bool): Clear the per-sample cache
         overwrite_sample_cache (bool): Recalculate and overwrite cached sample values
         only_plot (bool): Do not calculate benchmarks if no results are found in cache
@@ -222,7 +235,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     subsampling_divisions: int = param.Integer(
         default=0,
-        bounds=[0, 12],
+        bounds=(0, 12),
         doc="Controls sample count for every sweep variable at once. "
         "Subsampling Divisions 0 (default) uses each variable's own `samples` setting. "
         "Subsampling Divisions 1-12 override with geometrically increasing counts: "
@@ -287,7 +300,15 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     only_hash_tag: bool = param.Boolean(
         False,
-        doc="By default when checking if a sample has been calculated before it includes the hash of the greater benchmarking context.  This is safer because it means that data generated from one benchmark will not affect data from another benchmark.  However, if you are careful it can be more flexible to ignore which benchmark generated the data and only use the tag hash to check if that data has been calculated before. ie, you can create two benchmarks that sample a subset of the problem during exploration and give them the same tag, and then afterwards create a larger benchmark that covers the cases you already explored.  If this value is true, the combined benchmark will use any data from other benchmarks with the same tag.",
+        doc="DEAD FLAG -- nothing reads this, and setting it changes nothing. The "
+        "per-sample cache key is unconditionally hash_sha1((sorted function inputs, "
+        "tag)) (see WorkerJob.function_input_signature_pure), so tag-only matching is "
+        "always on and cannot be turned off. Benchmarks sharing a tag therefore share "
+        "cached samples; use distinct run_tag values to isolate them. This flag "
+        "previously documented an opt-in to that behaviour, implying a safer "
+        "context-hashing default that does not exist -- see docs/caching.md. Tracked "
+        "as W6 in plans/architecture/A4-caching-architecture.md and scheduled for "
+        "removal in A5 phase 0.",
     )
 
     only_plot: bool = param.Boolean(
@@ -405,7 +426,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     max_time_events: int | None = param.Integer(
         None,
-        bounds=[1, None],
+        bounds=(1, None),
         allow_None=True,
         doc="Maximum number of over_time events to retain. "
         "Oldest events are trimmed. Set to None for unlimited.",
@@ -413,7 +434,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     max_slider_points: int | None = param.Integer(
         10,
-        bounds=[2, None],
+        bounds=(2, None),
         allow_None=True,
         doc="Maximum number of time points shown in the over_time slider. "
         "Evenly subsampled (first and last always included). "
@@ -471,7 +492,7 @@ class BenchRunCfg(BenchPlotSrvCfg):
 
     regression_min_history: int = param.Integer(
         default=1,
-        bounds=[1, None],
+        bounds=(1, None),
         doc="Minimum number of historical over_time points a result variable "
         "needs before its regressions can *fail* the run. A variable with a "
         "younger baseline (freshly added, or restarted by a meaning_version "
@@ -779,28 +800,35 @@ class BenchCfg(BenchRunCfg):
               ``over_time`` axis.
     """
 
+    # These six declare *lists of variables*, and "no variables" is spelled `[]`, not
+    # `None`. They defaulted to None until plan 23 P12b. That default is what obliged every
+    # reader to carry an `or []`, and 26 iteration sites across eight modules did not, so
+    # `BenchCfg()` built outside `plot_sweep` raised `TypeError: 'NoneType' object is not
+    # iterable` from inside describe/plot code (the per-module breakdown is in plan 23 §10
+    # P12b item 1). param.List instantiates mutable defaults per instance -- verified, not
+    # assumed -- so `[]` is not shared state.
     input_vars = param.List(
-        default=None,
+        default=[],
         doc="A list of ParameterizedSweep variables to perform a parameter sweep over",
     )
     result_vars = param.List(
-        default=None,
+        default=[],
         doc="A list of ParameterizedSweep results collect and plot.",
     )
 
     const_vars = param.List(
-        default=None,
+        default=[],
         doc="Variables to keep constant but are different from the default value",
     )
 
-    result_hmaps = param.List(default=None, doc="a list of holomap results")
+    result_hmaps = param.List(default=[], doc="a list of holomap results")
 
     meta_vars = param.List(
-        default=None,
+        default=[],
         doc="Meta variables such as recording time and repeat id",
     )
     all_vars = param.List(
-        default=None,
+        default=[],
         doc="Stores a list of both the input_vars and meta_vars that are used to define a unique hash for the input",
     )
     iv_time = param.List(
@@ -943,6 +971,13 @@ class BenchCfg(BenchRunCfg):
                 hash_sha1(self.tag),
             )
         )
+        # The three `or []` folds here and below are unreachable since plan 23 P12b gave
+        # these fields `default=[]` -- param rejects None outright now. They are kept
+        # deliberately, because they are *why* that change could not move a stored digest:
+        # `[]` and `None` were already folded identically, so the pre- and post-change
+        # digests match (measured, not argued). Deleting them is a provable no-op and is
+        # logged as entry L7 of plans/27-cache-version-bump-ledger.md, to be swept with the
+        # next CACHE_VERSION bump rather than as a drive-by that removes the evidence.
         for v in self.input_vars or []:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 

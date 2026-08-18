@@ -108,10 +108,13 @@ class TestComposition(unittest.TestCase):
 
     def test_const_vars_merge_per_key(self) -> None:
         slow = LATENCY.with_(const_vars={"timeout_s": 30})
+        assert slow.const_vars is not None
         self.assertEqual(dict(slow.const_vars), {"offset": 0.1, "timeout_s": 30})
 
     def test_const_vars_override_wins_per_key(self) -> None:
-        self.assertEqual(dict(LATENCY.with_(const_vars={"offset": 0.9}).const_vars)["offset"], 0.9)
+        overridden = LATENCY.with_(const_vars={"offset": 0.9}).const_vars
+        assert overridden is not None
+        self.assertEqual(dict(overridden)["offset"], 0.9)
 
     def test_result_vars_are_replaced_not_appended(self) -> None:
         replaced = LATENCY.with_(result_vars=["out_cos"])
@@ -138,6 +141,7 @@ class TestComposition(unittest.TestCase):
         merged = LATENCY.merge(overlay)
         self.assertEqual(merged.tag, "slow")
         self.assertEqual(merged.title, "Request latency", "an unset field must not clear")
+        assert merged.const_vars is not None
         self.assertEqual(dict(merged.const_vars), {"offset": 0.1, "timeout_s": 30})
 
     def test_an_explicit_none_clears_a_field(self) -> None:

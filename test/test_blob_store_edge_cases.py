@@ -137,36 +137,38 @@ class TestSerializationBoundaries:
 
     def test_empty_dataframe_round_trips(self, tmp_path):
         payload = pd.DataFrame({"v": pd.Series([], dtype="float64")})
-        loaded = load_blob(materialize_blob(payload, tmp_path))
+        loaded = load_blob(materialize_blob(payload, tmp_path), tmp_path)
         pd.testing.assert_frame_equal(loaded, payload)
 
     def test_dataframe_with_integer_column_names_round_trips(self, tmp_path):
         payload = pd.DataFrame({0: [1.0, 2.0], 1: [3.0, 4.0]})
-        loaded = load_blob(materialize_blob(payload, tmp_path))
+        loaded = load_blob(materialize_blob(payload, tmp_path), tmp_path)
         pd.testing.assert_frame_equal(loaded, payload)
 
     def test_dataframe_with_duplicate_column_names_round_trips(self, tmp_path):
         """Parquet cannot represent duplicate names; the fallback must catch it
         rather than let the sweep die."""
         payload = pd.DataFrame([[1.0, 2.0]], columns=["v", "v"])
-        loaded = load_blob(materialize_blob(payload, tmp_path))
+        loaded = load_blob(materialize_blob(payload, tmp_path), tmp_path)
         pd.testing.assert_frame_equal(loaded, payload)
 
     def test_dataframe_with_nan_and_inf_round_trips(self, tmp_path):
         payload = pd.DataFrame({"v": [np.nan, np.inf, -np.inf, 0.0]})
-        loaded = load_blob(materialize_blob(payload, tmp_path))
+        loaded = load_blob(materialize_blob(payload, tmp_path), tmp_path)
         pd.testing.assert_frame_equal(loaded, payload)
 
     def test_dataframe_with_a_datetime_index_round_trips(self, tmp_path):
         payload = pd.DataFrame(
             {"v": [1.0, 2.0]}, index=pd.to_datetime(["2024-01-01", "2024-01-02"])
         )
-        loaded = load_blob(materialize_blob(payload, tmp_path))
+        loaded = load_blob(materialize_blob(payload, tmp_path), tmp_path)
         pd.testing.assert_frame_equal(loaded, payload)
 
     def test_dataset_with_a_zero_length_dimension_round_trips(self, tmp_path):
         payload = xr.Dataset({"v": ("x", np.array([], dtype="float64"))})
-        xr.testing.assert_identical(load_blob(materialize_blob(payload, tmp_path)), payload)
+        xr.testing.assert_identical(
+            load_blob(materialize_blob(payload, tmp_path), tmp_path), payload
+        )
 
     def test_dataset_mixing_safe_and_unsafe_dtypes_round_trips_exactly(self, tmp_path):
         """One unsafe variable must divert the *whole* payload to pickle: writing
@@ -179,7 +181,7 @@ class TestSerializationBoundaries:
         )
         path = materialize_blob(payload, tmp_path)
         assert path.endswith(".pkl")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         xr.testing.assert_identical(loaded, payload)
         assert loaded["unsafe"].dtype == np.dtype("int64"), "dtype was narrowed"
 
@@ -187,7 +189,7 @@ class TestSerializationBoundaries:
         payload = xr.Dataset({"v": ("x", np.arange(3, dtype="float64"))})
         payload.attrs["units"] = "metres"
         payload["v"].attrs["long_name"] = "value"
-        loaded = load_blob(materialize_blob(payload, tmp_path))
+        loaded = load_blob(materialize_blob(payload, tmp_path), tmp_path)
         assert loaded.attrs.get("units") == "metres"
         assert loaded["v"].attrs.get("long_name") == "value"
 
@@ -195,14 +197,14 @@ class TestSerializationBoundaries:
         """bool is on the netCDF3 whitelist, so it must survive as bool rather than
         come back as int8."""
         payload = xr.Dataset({"v": ("x", np.array([True, False, True]))})
-        loaded = load_blob(materialize_blob(payload, tmp_path))
+        loaded = load_blob(materialize_blob(payload, tmp_path), tmp_path)
         assert loaded["v"].dtype == np.dtype("bool")
         xr.testing.assert_identical(loaded, payload)
 
     def test_empty_bytes_round_trip(self, tmp_path):
         path = materialize_blob(b"", tmp_path)
         assert path.endswith(".bin")
-        assert load_blob(path) == b""
+        assert load_blob(path, tmp_path) == b""
 
     def test_nested_result_dataset_wrapper_round_trips(self, tmp_path):
         """A per-sample ``container=`` travels as a pickled wrapper, so the wrapper
@@ -211,7 +213,7 @@ class TestSerializationBoundaries:
         wrapper = ResultDataSet(inner, container=len)
         path = materialize_blob(wrapper, tmp_path)
         assert path.endswith(".pkl")
-        loaded = load_blob(path)
+        loaded = load_blob(path, tmp_path)
         assert isinstance(loaded, ResultDataSet)
         pd.testing.assert_frame_equal(loaded.obj, inner)
         assert loaded.container is len
@@ -239,7 +241,7 @@ class TestLoadBlobFailureModes:
         bad = blobs / f"abcdef0123456789{ext}"
         bad.write_bytes(b"")
         with pytest.raises(Exception):  # noqa: B017 - any failure is acceptable here
-            load_blob(bad)
+            load_blob(bad, tmp_path)
 
     @pytest.mark.parametrize("ext", [".parquet", ".nc", ".pkl"])
     def test_truncated_file_raises(self, tmp_path, ext):
@@ -250,7 +252,7 @@ class TestLoadBlobFailureModes:
         bad = tmp_path / "blobs" / f"abcdef0123456789{ext}"
         bad.write_bytes(data[: max(1, len(data) // 2)])
         with pytest.raises(Exception):  # noqa: B017
-            load_blob(bad)
+            load_blob(bad, tmp_path)
 
     def test_empty_bin_is_valid_and_not_an_error(self, tmp_path):
         """Raw bytes have no header, so an empty ``.bin`` is legitimately empty."""
@@ -258,19 +260,24 @@ class TestLoadBlobFailureModes:
         blobs.mkdir()
         blob = blobs / "abcdef0123456789.bin"
         blob.write_bytes(b"")
-        assert load_blob(blob) == b""
+        assert load_blob(blob, tmp_path) == b""
 
     def test_missing_file_raises_filenotfound(self, tmp_path):
+        # Explicit cache dir: with the default the first candidate is the cwd's
+        # own ``cachedir``, which would make this assertion depend on where the
+        # suite runs from.
         with pytest.raises((FileNotFoundError, OSError)):
-            load_blob(tmp_path / "blobs" / "abcdef0123456789.parquet")
+            load_blob(tmp_path / "blobs" / "abcdef0123456789.parquet", tmp_path)
 
     @pytest.mark.parametrize("name", ["x.txt", "x", "x.parquet.gz", "x.nc.old"])
-    def test_unknown_extension_raises_valueerror_not_something_vaguer(self, tmp_path, name):
+    def test_non_blob_name_raises_valueerror_not_something_vaguer(self, tmp_path, name):
+        # Rejected on the name, before any file is opened, so a stray file that
+        # happens to sit in blobs/ can never be loaded as a blob.
         blobs = tmp_path / "blobs"
         blobs.mkdir()
         (blobs / name).write_bytes(b"data")
-        with pytest.raises(ValueError, match="unknown blob extension"):
-            load_blob(blobs / name)
+        with pytest.raises(ValueError, match="is not a blob reference"):
+            load_blob(blobs / name, tmp_path)
 
 
 class TestGCLeavesNonBlobsAlone:

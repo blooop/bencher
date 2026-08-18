@@ -24,6 +24,7 @@ from param import Parameter
 from bencher.bench_cfg import BenchCfg, BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
+from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
 from bencher.cache_management import DEFAULT_CACHE_SIZE_BYTES, ensure_cache_version
 from bencher.history import OnHistoryReset
 from bencher.history import config_summary as history_config_summary
@@ -141,7 +142,11 @@ def _enforce_sample_error_policy(bench_res: BenchResult, policy: bool | float) -
     if not policy or not bench_res.n_failed:
         return
     n, frac = bench_res.n_failed, bench_res.failed_fraction
-    if policy is True:
+    # Branch on the *parsed* policy rather than re-testing `policy is True`: the two
+    # produce the same partition (the falsy policies already returned above, so True is
+    # the only remaining policy without a threshold), but only this spelling tells a
+    # reader -- or a type checker -- that `threshold` is a float below.
+    if threshold is None:
         raise SampleErrorPolicyError(
             f"{n} sample(s) failed and were caught; fail_on_sample_error=True"
         )
@@ -356,13 +361,15 @@ class Bench(BenchPlotServer):
         Returns:
             list[BenchResult]: A list of results from all the sweep runs
         """
-        if relationship_cb is None:
-            relationship_cb = combinations
+        # Bound to a fresh local rather than reassigning the parameter: rebinding a
+        # `Callable | None` to `combinations` leaves the union in place, so the call
+        # below reads as "call either an unknown callable or the combinations class".
+        group_cb: Callable = combinations if relationship_cb is None else relationship_cb
         if input_vars is None:
             input_vars = self.worker_class_instance.get_inputs_only()
         results = []
         for it in range(iterations):
-            for input_group in relationship_cb(input_vars, group_size):
+            for input_group in group_cb(input_vars, group_size):
                 title_gen = title + "Sweeping " + " vs ".join(params_to_str(input_group))
                 if iterations > 1:
                     title_gen += f" iteration:{it}"
@@ -588,7 +595,7 @@ class Bench(BenchPlotServer):
 
         if title is None:
             if len(input_vars_in) > 0:
-                title = "Sweeping " + " vs ".join([i.name for i in input_vars_in])
+                title = "Sweeping " + " vs ".join(params_to_str(input_vars_in))
             elif len(const_vars_in) > 0:
                 title = "Constant Value"
                 if len(const_vars_in) > 1:
@@ -889,6 +896,18 @@ class Bench(BenchPlotServer):
                         bench_cfg.iv_time[0].objects = list(bench_res.ds.coords["over_time"].values)
                         bench_cfg.iv_time[0].samples = len(bench_cfg.iv_time[0].objects)
                 timings.history_merge_ms = elapsed()
+
+            # Re-apply the hint the collector already stamped at dataset setup:
+            # the history merge concats, and concat takes attrs from the older
+            # side, so the merged dataset may be carrying a previous run's value.
+            # Before cache_results, so a result later served from the cache
+            # carries it too.
+            #
+            # The `calculate_results` guard around this block is load-bearing and
+            # must stay: stamping means "this process wrote these blobs, here".
+            # On a cache hit no blob was written, and re-stamping would overwrite
+            # a valid recorded dir with the reader's own cwd.
+            record_blob_cache_dir(bench_res.ds, collect_cache_dir())
 
             # Regression detection runs after load_history_cache (which merges the current
             # run into the dataset) but before cache_results. The dataset already contains
@@ -1329,6 +1348,38 @@ class Bench(BenchPlotServer):
         catch: tuple[type[Exception], ...] = (),
     ) -> OptimizeResult | None:
         """Run optuna optimization directly — no full grid sweep required.
+
+        **Objectives and direction.** The objectives are the result variables that declare
+        an optimisation direction (``OptDir.minimize`` / ``OptDir.maximize``); variables
+        left at ``OptDir.none`` are excluded. If no result variable declares a direction,
+        a warning is logged and *None* is returned rather than running a study with
+        nothing to optimise.
+
+        **Single vs multi-objective.** One directional result variable creates a
+        single-objective study, and :attr:`OptimizeResult.best_params` /
+        :attr:`OptimizeResult.best_value` are available. Two or more create a
+        multi-objective optuna study whose directions are those variables' ``OptDir``\\ s
+        in order; there is then no single best trial, so ``best_params``/``best_value``
+        raise ``RuntimeError`` and :attr:`OptimizeResult.best_trials` returns the
+        Pareto front instead. :meth:`OptimizeResult.summary` follows the same split,
+        reporting the best value/params for one objective and the Pareto-front size for
+        several.
+
+        **Aggregation.** *aggregate* marks input dimensions that Optuna should not
+        suggest. Those dimensions are looped over inside the objective function and their
+        results combined with *agg_fn*, so Optuna sees one aggregated number per trial and
+        never varies them. This finds the parameters that work best *across* the
+        aggregated dimension rather than the best (aggregated-value, parameter) pair — the
+        usual case being a nuisance dimension such as a random seed or a set of scenarios.
+        *repeats* > 1 aggregates the same way, over repeated evaluations of one
+        combination rather than over a dimension; the two compose, and each repeat gets
+        its own cache key. An unrecognised *agg_fn* raises ``ValueError`` rather than
+        silently falling back to the mean.
+
+        **Warm start.** With *warm_start* (the default), evaluations already in the sample
+        cache — including those from a preceding ``plot_sweep`` — are added to the study
+        as completed trials before the new ones run, and counted in
+        ``OptimizeResult.n_warm_start_trials``.
 
         Args:
             title: Study name. Auto-generated when *None*.

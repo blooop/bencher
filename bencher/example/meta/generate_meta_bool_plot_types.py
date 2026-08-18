@@ -4,6 +4,8 @@ Shows ResultBool output with each plot type that supports it.
 Each generated example is fully self-contained with an inline class definition.
 """
 
+from dataclasses import dataclass
+
 import bencher as bn
 from bencher.example.meta.meta_generator_base import MetaGeneratorBase
 
@@ -90,118 +92,137 @@ class PassRateFloat(bn.ParametrizedSweep):
 # Plot configuration table
 # ---------------------------------------------------------------------------
 
-BOOL_PLOT_CONFIGS = {
-    "bar": {
-        "float_dims": 0,
-        "repeats": 30,
-        "plot_call": "res.to_bar()",
-        "extra_imports": ["import random"],
-        "input_vars": '["backend"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "HealthCheckCat",
-        "class_code": _HEALTH_CHECK_CAT_CODE,
-    },
-    "line": {
-        "float_dims": 1,
-        "repeats": 1,
-        "plot_call": "res.to_line()",
-        "input_vars": '["load"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "HealthCheckFloat",
-        "class_code": _HEALTH_CHECK_FLOAT_CODE,
-        "extra_imports": ["import math"],
-    },
-    "curve": {
-        "float_dims": 1,
-        "repeats": 20,
-        "plot_call": "res.to_curve()",
-        "input_vars": '["load"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "HealthCheckFloatNoisy",
-        "class_code": _HEALTH_CHECK_FLOAT_NOISY_CODE,
-        "extra_imports": ["import math", "import random"],
-    },
-    "heatmap": {
-        "float_dims": 2,
-        "repeats": 10,
-        "plot_call": "res.to_heatmap()",
-        "input_vars": '["x", "y"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "HealthCheck2DNoisy",
-        "class_code": _HEALTH_CHECK_2D_NOISY_CODE,
-        "extra_imports": ["import math", "import random"],
-    },
-    "surface": {
-        "float_dims": 2,
-        "repeats": 10,
-        "plot_call": "res.to_surface()",
-        "input_vars": '["x", "y"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "HealthCheck2DNoisy",
-        "class_code": _HEALTH_CHECK_2D_NOISY_CODE,
-        "extra_imports": ["import math", "import random"],
-    },
-    "violin": {
-        "float_dims": 0,
-        "repeats": 50,
-        "plot_call": "res.to(ViolinResult)",
-        "extra_imports": [
+
+@dataclass(frozen=True)
+class BoolPlotConfig:
+    """One row of the ResultBool plot-type table.
+
+    A bare dict until plan 23 P12b: every field read came back as
+    ``int | str | list[str]``, so ``cfg["repeats"] > 1`` was not a legal comparison.
+    """
+
+    float_dims: int
+    repeats: int
+    plot_call: str
+    input_vars: str
+    result_vars: str
+    benchable_class: str
+    class_code: str
+    extra_imports: list[str] | None = None
+
+
+BOOL_PLOT_CONFIGS: dict[str, BoolPlotConfig] = {
+    "bar": BoolPlotConfig(
+        float_dims=0,
+        repeats=30,
+        plot_call="res.to_bar()",
+        extra_imports=["import random"],
+        input_vars='["backend"]',
+        result_vars='["healthy"]',
+        benchable_class="HealthCheckCat",
+        class_code=_HEALTH_CHECK_CAT_CODE,
+    ),
+    "line": BoolPlotConfig(
+        float_dims=1,
+        repeats=1,
+        plot_call="res.to_line()",
+        input_vars='["load"]',
+        result_vars='["healthy"]',
+        benchable_class="HealthCheckFloat",
+        class_code=_HEALTH_CHECK_FLOAT_CODE,
+        extra_imports=["import math"],
+    ),
+    "curve": BoolPlotConfig(
+        float_dims=1,
+        repeats=20,
+        plot_call="res.to_curve()",
+        input_vars='["load"]',
+        result_vars='["healthy"]',
+        benchable_class="HealthCheckFloatNoisy",
+        class_code=_HEALTH_CHECK_FLOAT_NOISY_CODE,
+        extra_imports=["import math", "import random"],
+    ),
+    "heatmap": BoolPlotConfig(
+        float_dims=2,
+        repeats=10,
+        plot_call="res.to_heatmap()",
+        input_vars='["x", "y"]',
+        result_vars='["healthy"]',
+        benchable_class="HealthCheck2DNoisy",
+        class_code=_HEALTH_CHECK_2D_NOISY_CODE,
+        extra_imports=["import math", "import random"],
+    ),
+    "surface": BoolPlotConfig(
+        float_dims=2,
+        repeats=10,
+        plot_call="res.to_surface()",
+        input_vars='["x", "y"]',
+        result_vars='["healthy"]',
+        benchable_class="HealthCheck2DNoisy",
+        class_code=_HEALTH_CHECK_2D_NOISY_CODE,
+        extra_imports=["import math", "import random"],
+    ),
+    "violin": BoolPlotConfig(
+        float_dims=0,
+        repeats=50,
+        plot_call="res.to(ViolinResult)",
+        extra_imports=[
             "import random",
             (
                 "from bencher.results.holoview_results.distribution_result"
                 ".violin_result import ViolinResult"
             ),
         ],
-        "input_vars": '["backend"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "ReliabilityCat",
-        "class_code": _RELIABILITY_CAT_CODE,
-    },
-    "box_whisker": {
-        "float_dims": 0,
-        "repeats": 50,
-        "plot_call": "res.to(BoxWhiskerResult)",
-        "extra_imports": [
+        input_vars='["backend"]',
+        result_vars='["healthy"]',
+        benchable_class="ReliabilityCat",
+        class_code=_RELIABILITY_CAT_CODE,
+    ),
+    "box_whisker": BoolPlotConfig(
+        float_dims=0,
+        repeats=50,
+        plot_call="res.to(BoxWhiskerResult)",
+        extra_imports=[
             "import random",
             (
                 "from bencher.results.holoview_results.distribution_result"
                 ".box_whisker_result import BoxWhiskerResult"
             ),
         ],
-        "input_vars": '["backend"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "ReliabilityCat",
-        "class_code": _RELIABILITY_CAT_CODE,
-    },
-    "scatter_jitter": {
-        "float_dims": 0,
-        "repeats": 50,
-        "plot_call": "res.to(ScatterJitterResult)",
-        "extra_imports": [
+        input_vars='["backend"]',
+        result_vars='["healthy"]',
+        benchable_class="ReliabilityCat",
+        class_code=_RELIABILITY_CAT_CODE,
+    ),
+    "scatter_jitter": BoolPlotConfig(
+        float_dims=0,
+        repeats=50,
+        plot_call="res.to(ScatterJitterResult)",
+        extra_imports=[
             "import random",
             (
                 "from bencher.results.holoview_results.distribution_result"
                 ".scatter_jitter_result import ScatterJitterResult"
             ),
         ],
-        "input_vars": '["backend"]',
-        "result_vars": '["healthy"]',
-        "benchable_class": "ReliabilityCat",
-        "class_code": _RELIABILITY_CAT_CODE,
-    },
-    "histogram": {
-        "float_dims": 1,
-        "repeats": 30,
-        "plot_call": "res.to(HistogramResult)",
-        "extra_imports": [
+        input_vars='["backend"]',
+        result_vars='["healthy"]',
+        benchable_class="ReliabilityCat",
+        class_code=_RELIABILITY_CAT_CODE,
+    ),
+    "histogram": BoolPlotConfig(
+        float_dims=1,
+        repeats=30,
+        plot_call="res.to(HistogramResult)",
+        extra_imports=[
             "import random",
             "from bencher.results.histogram_result import HistogramResult",
         ],
-        "input_vars": '["complexity"]',
-        "result_vars": '["passed"]',
-        "benchable_class": "PassRateFloat",
-        "class_code": _PASS_RATE_FLOAT_CODE,
-    },
+        input_vars='["complexity"]',
+        result_vars='["passed"]',
+        benchable_class="PassRateFloat",
+        class_code=_PASS_RATE_FLOAT_CODE,
+    ),
 }
 
 BOOL_PLOT_NAMES = list(BOOL_PLOT_CONFIGS.keys())
@@ -218,26 +239,26 @@ class MetaBoolPlotTypes(MetaGeneratorBase):
         filename = function_name
         title = f"Bool Plot: {self.plot_type.replace('_', ' ').title()}"
 
-        extra_imports = cfg.get("extra_imports")
+        extra_imports = cfg.extra_imports
 
-        sd = 2 if cfg["float_dims"] >= 2 else 3
+        sd = 2 if cfg.float_dims >= 2 else 3
         run_kwargs = {"subsampling_divisions": sd}
-        if cfg["repeats"] > 1:
-            run_kwargs["repeats"] = cfg["repeats"]
+        if cfg.repeats > 1:
+            run_kwargs["repeats"] = cfg.repeats
 
         self.generate_sweep_example(
             title=title,
             output_dir=OUTPUT_DIR,
             filename=filename,
             function_name=function_name,
-            benchable_class=cfg["benchable_class"],
+            benchable_class=cfg.benchable_class,
             benchable_module=None,
-            input_vars=cfg["input_vars"],
-            result_vars=cfg["result_vars"],
-            post_sweep_line=cfg["plot_call"],
+            input_vars=cfg.input_vars,
+            result_vars=cfg.result_vars,
+            post_sweep_line=cfg.plot_call,
             extra_imports=extra_imports,
             run_kwargs=run_kwargs,
-            class_code=cfg["class_code"],
+            class_code=cfg.class_code,
         )
 
 

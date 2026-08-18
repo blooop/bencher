@@ -139,6 +139,46 @@ from .variables.results import (
 from .variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES, hash_sha1
 from .variables.time import TimeSnapshot
 
+
+def _requires_rerun(name: str) -> type:
+    """Build a stand-in for a ``rerun``-only export that is not importable.
+
+    ``bencher.utils_rerun`` is the one module in the package that imports ``rerun`` at
+    module scope, so it is the one whose names could go missing. They used to be bound
+    only inside a ``try``/``except ModuleNotFoundError``: on an install without
+    ``rerun-sdk`` they simply did not exist, and ``bn.capture_rerun_rrd`` raised
+    ``AttributeError: module 'bencher' has no attribute ...``, naming neither the
+    optional dependency nor how to get it. It also made ``bencher``'s public surface
+    partial -- the state ``ty`` reports as ``possibly-missing-attribute``, which a reader
+    has no way to discharge. The names now always exist; using one without the extra
+    raises an ``ImportError`` that says what to install.
+
+    A class rather than a function, so ``isinstance`` against the placeholder stays
+    legal. Deliberately a *plain* class: an earlier revision gave it a metaclass whose
+    ``__getattr__`` raised ``ImportError`` so attribute access would be branded too, but
+    ``hasattr`` and ``getattr(x, n, default)`` only swallow ``AttributeError``, so that
+    turned every defensive feature probe into an uncatchable-by-idiom crash -- on exactly
+    the installs least able to diagnose it. All three names here are functions, called
+    rather than read, so there is nothing for such a hook to protect.
+    """
+    message = (
+        f"bencher.{name} requires the optional 'rerun-sdk' dependency, which is not "
+        "installed. Install it with `pip install rerun-sdk`."
+    )
+
+    def __init__(self, *_args, **_kwargs):
+        raise ImportError(message)
+
+    return type(
+        name,
+        (),
+        {
+            "__init__": __init__,
+            "__doc__": f"Placeholder for {name}; requires the optional 'rerun-sdk' package.",
+        },
+    )
+
+
 try:
     from .utils_rerun import (
         capture_rerun_rrd,
@@ -146,23 +186,9 @@ try:
         rerun_to_pane,
     )
 except ModuleNotFoundError:
-    pass
-
-try:
-    from .results.rerun_result import RerunResult
-except ModuleNotFoundError:
-    pass
-
-try:
-    from .results.composable_container.composable_container_rerun import (
-        ComposableContainerRerun,
-        RerunRecording,
-        RerunViewKind,
-    )
-    from .results.rerun_summary import RerunSummaryResult
-except ModuleNotFoundError:
-    pass
-
+    capture_rerun_rrd = _requires_rerun("capture_rerun_rrd")
+    capture_rerun_window = _requires_rerun("capture_rerun_window")
+    rerun_to_pane = _requires_rerun("rerun_to_pane")
 
 from .cache_management import (
     DEFAULT_CACHE_SIZE_BYTES,
@@ -192,9 +218,28 @@ from .regression import (
     method_cells,
 )
 from .results.bench_result import BenchResult
+
+# These three rerun names, plus RerunResult/RerunSummaryResult a few lines down -- five in
+# all -- are imported unconditionally, which is a statement of fact rather than optimism.
+# None of their three modules imports `rerun` at module scope; each defers it into the
+# method that needs it, so an `except ModuleNotFoundError` around them never fired in any
+# environment. Verified by importing `bencher` behind a `sys.meta_path` hook blocking
+# `rerun`: these resolve to the real objects while utils_rerun's three become
+# placeholders. `rerun_summary` could not have been optional anyway -- bench_result.py
+# imports it unconditionally and `BenchResult` inherits from it. The dead handlers were
+# worth deleting rather than keeping "just in case": a guard that cannot fire still has
+# to be read, and this one advertised a fallback that did not exist.
+# (Kept apart by import sorting; test_optional_extra_exports pins the premise.)
+from .results.composable_container.composable_container_rerun import (
+    ComposableContainerRerun,
+    RerunRecording,
+    RerunViewKind,
+)
 from .results.optimize_result import OptimizeResult
 from .results.pane_result import PaneResult
 from .results.render_failure import RenderFailedWarning
+from .results.rerun_result import RerunResult
+from .results.rerun_summary import RerunSummaryResult
 from .sample_order import SampleOrder
 from .variables.parametrised_sweep import ParametrizedSweep
 from .variables.singleton_parametrized_sweep import ParametrizedSweepSingleton

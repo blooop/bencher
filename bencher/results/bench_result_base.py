@@ -40,6 +40,7 @@ from bencher.utils import (
 from bencher.variables.inputs import with_subsampling_divisions
 from bencher.variables.parametrised_sweep import ParametrizedSweep
 from bencher.variables.results import (
+    PANEL_TYPES,
     OptDir,
     ResultBool,
     ResultDataSet,
@@ -150,6 +151,12 @@ class BenchResultBase:
         self.dataset_list = []
         self.regression_report = None
         self.perf_report = None
+        # Where *this reader* should look for blob payloads, when it has been
+        # told (``render_report(cache_dir=)`` / ``--cachedir``).  A render-time
+        # override, not a property of the result: it is deliberately not carried
+        # by pickling, because the next reader may sit somewhere else again.
+        # None means "work it out" -- see ``blob_store.active_cache_dir``.
+        self.blob_cache_dir = None
         self._to_dataset_cache: dict = {}
 
     def to_xarray(self) -> xr.Dataset:
@@ -597,12 +604,16 @@ class BenchResultBase:
         if "title" in kwargs:
             return kwargs["title"]
 
+        # xarray types dimension names as `Hashable`, not `str`, and both `DataArray.name`
+        # and `Parameter.name` are optional. `str()` is the identity on everything bencher
+        # actually produces here. Where it is not -- an unnamed DataArray -- this now
+        # renders "None" in a plot title instead of aborting the report build with
+        # `TypeError: sequence item 0: expected str instance, NoneType found`, which is
+        # the right trade for a display string.
         if isinstance(dataset, xr.DataArray):
-            tit = [dataset.name]
-            tit.extend(dataset.dims)
+            tit = [str(dataset.name), *(str(d) for d in dataset.dims)]
         else:
-            tit = [result_var.name]
-            tit.extend(list(dataset.sizes))
+            tit = [str(result_var.name), *(str(d) for d in dataset.sizes)]
 
         return " vs ".join(tit)
 
@@ -921,7 +932,9 @@ class BenchResultBase:
         pane_layout: PaneLayout = PaneLayout.grid,
         **kwargs,
     ) -> pn.panel:
-        dims = list(dataset.sizes)
+        # str(), because xarray types dim names as `Hashable`: these feed both
+        # `dataset.sel()` (which takes either) and the container `name=` strings below.
+        dims = [str(d) for d in dataset.sizes]
 
         # over_time is handled by hvplot's groupby widget, not pane recursion
         if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
@@ -988,16 +1001,24 @@ class BenchResultBase:
                     return self._pane_over_time_grid(dataset, result_var)
                 if isinstance(result_var, (ResultVideo, ResultImage)):
                     return self._pane_over_time_slider(dataset, result_var)
-                if isinstance(result_var, ResultDataSet):
-                    # Path-backed cells (plan 22) make historical payloads loadable
-                    # from any run, so every time point renders like the other blob
-                    # types.  Legacy index cells are only trusted at the final time
-                    # index — dataset_list belongs to the final run, so an in-range
-                    # historical index would silently render the *current* payload
-                    # under a historical label; those render a labelled placeholder.
-                    return self._pane_over_time_dataset(
+                if isinstance(result_var, PANEL_TYPES):
+                    # Every *other* pane type renders one labelled pane per time
+                    # point.  Catching the whole family rather than listing members
+                    # is the point: for these, the fall-through below is not a
+                    # different layout, it is a crash — it hands `plot_callback` a
+                    # dataset that still carries over_time, and a per-sample
+                    # renderer asking that for one value raises. A pane type
+                    # without a bespoke over_time layout must still get a correct
+                    # one, including one added after this line was written.
+                    # Per-type concerns (ResultDataSet's legacy index cells) belong
+                    # to the layout, not to this branch — see the method's docstring.
+                    return self._pane_over_time_samples(
                         dataset, result_var, plot_callback, **kwargs
                     )
+                # Numeric callbacks (line, bar, heatmap) are the ones that *must*
+                # keep the whole over_time dimension: they build the slider
+                # themselves via hvplot groupby / hv.HoloMap, and pre-selecting a
+                # time point here would flatten the series they exist to show.
             return plot_callback(dataset=dataset, result_var=result_var, **kwargs)
 
         return outer_container.render()
@@ -1133,19 +1154,28 @@ class BenchResultBase:
             return pn.pane.Markdown("*No rerun data available*")
         return pn.Row(*items)
 
-    def _pane_over_time_dataset(
+    def _pane_over_time_samples(
         self,
         dataset: xr.Dataset,
         result_var,
         plot_callback: Callable,
         **kwargs,
     ) -> pn.Row | None:
-        """Render ``ResultDataSet`` over_time as a grid of labelled per-time panes.
+        """Render a pane-typed result over_time as a row of labelled per-time panes.
 
-        Path-backed cells are meaningful in any process, so history points render
-        instead of being cut down to the latest event (the pre-plan-22
-        ``isel(over_time=-1)`` workaround).  A time point whose cell is missing
-        (either generation's sentinel) is skipped.  A legacy index cell is only
+        The general over_time layout for pane types, and the only one that reduces
+        the dimension before the per-sample renderer sees it: it selects one time
+        index at a time, so ``plot_callback`` is handed the single value its
+        contract is written for. ``ResultRerun`` and ``ResultVideo``/
+        ``ResultImage`` opt out into layouts of their own; every other pane type
+        arrives here, including any added later.
+
+        A time point whose value is missing is skipped, so a variable that a
+        historical run did not record leaves a gap rather than a broken pane.
+
+        For ``ResultDataSet``, path-backed cells are meaningful in any process, so
+        history points render instead of being cut down to the latest event (the
+        pre-plan-22 ``isel(over_time=-1)`` workaround). A legacy index cell is only
         trusted at the *final* time index: ``dataset_list`` holds the final run's
         payloads alone, so a pre-plan history with in-range indices at every time
         point would otherwise render the current payload under historical labels.
@@ -1237,12 +1267,18 @@ class BenchResultBase:
 
         Three cell shapes exist (plan 22, D3):
 
-        1. a ``str`` blob path (collected after plan 22) — loaded with
-           ``load_blob``; a payload materialized with a per-sample container is a
-           pickled ``ResultDataSet`` wrapper, so the full precedence chain
-           (renderer-supplied → sample's → class's → raw object) still applies;
-           a blob that cannot be loaded (deleted, corrupt) renders as a labelled
-           placeholder — never a crash;
+        1. a ``str`` blob reference (collected after plan 22) — a content-hash
+           name, or an absolute path from a cache dir collected before names
+           became the cell format; either resolves through ``load_blob``, which
+           looks in the active cache dir first — what this reader was told via
+           ``blob_cache_dir``, else its own — so a cache tarred on one machine and
+           restored at another path still renders, then in the cache dir this
+           result recorded at collect time so rendering from a different working
+           directory than the sweep ran in still finds them.  A payload materialized
+           with a per-sample container is a pickled ``ResultDataSet`` wrapper, so
+           the full precedence chain (renderer-supplied → sample's → class's →
+           raw object) still applies; a blob that cannot be loaded (deleted,
+           corrupt) renders as a labelled placeholder — never a crash;
         2. an ``int`` index (a result pickled or cached before plan 22) — looked
            up in ``dataset_list`` when this result still carries the list that
            produced it *and* the cell is trusted (see below), and rendered as a
@@ -1260,10 +1296,14 @@ class BenchResultBase:
         if result_is_missing(result_var, val):
             return None
         if isinstance(val, str):
-            from bencher.blob_store import load_blob
+            from bencher.blob_store import blob_cache_dir_hints, blob_name, load_blob
 
             try:
-                payload = load_blob(val)
+                payload = load_blob(
+                    val,
+                    getattr(self, "blob_cache_dir", None),
+                    fallback_cache_dirs=blob_cache_dir_hints(self.ds),
+                )
             except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 logger.warning(
                     "ResultDataSet '%s': failed to load blob %r (%s: %s)",
@@ -1272,9 +1312,13 @@ class BenchResultBase:
                     type(exc).__name__,
                     exc,
                 )
+                # Name the blob and the way out in the pane itself: a rendered
+                # report is routinely read by someone who does not have the log,
+                # and "could not be loaded" alone tells them nothing to do next.
                 return pn.pane.Markdown(
-                    f"*'{result_var.name}': stored blob could not be loaded "
-                    "and is no longer recoverable from this result*"
+                    f"*'{result_var.name}': blob `{blob_name(val) or val}` was not found "
+                    "in any known cache dir — point at the right one with "
+                    "`--cachedir` (see the log for every location tried)*"
                 )
             sample = payload if isinstance(payload, ResultDataSet) else None
             if sample is not None:
@@ -1288,7 +1332,7 @@ class BenchResultBase:
             idx = int(val)
         except (TypeError, ValueError):
             logger.warning(
-                "ResultDataSet '%s': unrecognised cell %r (neither a blob path nor a legacy index)",
+                "ResultDataSet '%s': unrecognised cell %r (neither a blob reference nor a legacy index)",
                 result_var.name,
                 val,
             )
@@ -1357,7 +1401,7 @@ class BenchResultBase:
         download widget.
         """
         if isinstance(result_var, (ResultDataSet, ResultReference)):
-            # These two store a per-sample lookup key (a blob path, or a legacy /
+            # These two store a per-sample lookup key (a blob reference, or a legacy /
             # object index into a side list), so a value that is still an array
             # fails several frames from the cause. Name the dimension the caller
             # did not reduce instead.
@@ -1421,15 +1465,20 @@ class BenchResultBase:
 
         see test_bench_result_base.py -> test_select_subsampling_divisions()
         """
+        # Hoisted out of the loop: listify() only returns None for a None input, so
+        # narrowing these once says what the old per-iteration
+        # `x is not None and ... listify(x)` pair said, without re-testing the same
+        # condition through a function whose None arm is unreachable by then.
+        allowed_dtypes = listify(include_types)
+        excluded_coords = listify(exclude_names)
         coords_no_repeat = {}
         for c, v in dataset.coords.items():
             if c != "repeat":
                 vals = v.to_numpy()
-                print(vals.dtype)
                 include = True
-                if include_types is not None and vals.dtype not in listify(include_types):
+                if allowed_dtypes is not None and vals.dtype not in allowed_dtypes:
                     include = False
-                if exclude_names is not None and c in listify(exclude_names):
+                if excluded_coords is not None and c in excluded_coords:
                     include = False
                 if include:
                     coords_no_repeat[c] = with_subsampling_divisions(

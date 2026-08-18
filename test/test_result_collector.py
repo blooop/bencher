@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import uuid
 from datetime import datetime
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
@@ -583,12 +584,12 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
                 pd.DataFrame({"v": [2.0]}),
                 pd.DataFrame({"v": [0.0]}),
             ]
-            paths = [materialize_blob(p, tmpdir) for p in payloads]
-            self.assertEqual(paths[0], paths[3], "content addressing should dedup these")
+            names = [materialize_blob(p, tmpdir) for p in payloads]
+            self.assertEqual(names[0], names[3], "content addressing should dedup these")
 
             slices = [
-                xr.Dataset({"table": (["x", "over_time"], np.array([[p]], dtype=object))})
-                for p in paths
+                xr.Dataset({"table": (["x", "over_time"], np.array([[n]], dtype=object))})
+                for n in names
             ]
             dataset = xr.concat(slices, "over_time")
 
@@ -600,15 +601,16 @@ class TestPerVariableMaxTimeEvents(unittest.TestCase):
                 dataset, unique_hash, clear_history=False, result_vars=[rv]
             )
 
-            # The cells age exactly like any other path-valued result...
+            # The cells age exactly like any other reference-valued result...
             cells = list(result["table"].values[0])
             self.assertEqual(cells[:2], ["NAN", "NAN"])
-            self.assertEqual(cells[2:], [paths[2], paths[3]])
+            self.assertEqual(cells[2:], [names[2], names[3]])
 
             # ...but every blob survives, including the one the aged cell shared with
             # the live event at index 3, and the one no live cell references at all.
-            for path in paths:
-                self.assertTrue(os.path.exists(path), f"aging deleted blob {path}")
+            for name in names:
+                blob = Path(tmpdir) / "blobs" / name
+                self.assertTrue(os.path.exists(blob), f"aging deleted blob {blob}")
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 

@@ -232,6 +232,13 @@ class HoloviewResult(PaneResult):
         if not isinstance(row, pn.Row) or len(row) < 2:
             return hvobj
         widget_box = row[1]
+        if not isinstance(widget_box, pn.layout.ListPanel):
+            # `Row.__getitem__` is `Viewable | list[Viewable]` -- an int index gives one
+            # child, a slice gives a list -- and only a layout child holds the widgets
+            # this walks. A leaf Viewable here would have raised `TypeError: not
+            # iterable` two lines down; say so by returning the object unchanged instead,
+            # which is what the docstring already promises when no widgets are produced.
+            return hvobj
         widget_box.align = ("start", "start")
 
         # Set the over_time slider to the last (most recent) time point.
@@ -482,8 +489,16 @@ class HoloviewResult(PaneResult):
                 if num_inputs > 1:
                     kdims[input_vars[1].name] = state["y"]
 
-                if hasattr(plot, "current_key"):
-                    for d, k in zip(plot.kdims, plot.current_key):
+                # Fetched rather than hasattr-probed, and the distinction is not
+                # cosmetic. `current_key` lives on `hv.DynamicMap` (`hv.HoloMap` has no
+                # such attribute at all) and is `None` until the map is first evaluated,
+                # so `hasattr` said True for a value that then fed `zip(kdims, None)` ->
+                # `TypeError: zip argument #2 must support iteration`. Binding it once
+                # covers both the absent and the not-yet-evaluated case, and gives the
+                # zip a value with a type instead of a second lookup on a union.
+                current_key = getattr(plot, "current_key", None)
+                if current_key is not None:
+                    for d, k in zip(plot.kdims, current_key):
                         kdims[d.name] = k
                 for rv, cont in zip(result_var_plots, cont_instances):
                     val = dataset[rv.name].sel(**kdims)

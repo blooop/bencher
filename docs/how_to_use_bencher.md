@@ -119,6 +119,32 @@ demo.
 
 ## Result Types
 
+### Choosing a result type
+
+Start from what your `benchmark()` method actually produces:
+
+| You return... | Use | Example in gallery |
+|---|---|---|
+| a single number | `ResultFloat` | [Result Var: 1D input](reference/meta/result_types/result_var/example_result_var_1d) |
+| success/failure | `ResultBool` | [Result Bool: 1D input](reference/meta/result_types/result_bool/example_result_bool_1d) |
+| a fixed-size vector | `ResultVec` | [Result Vec: 1D input](reference/meta/result_types/result_vec/example_result_vec_1d) |
+| text | `ResultString` | [Result String: 1D input](reference/meta/result_types/result_string/example_result_string_1d) |
+| an image file path | `ResultImage` | [Result Image: 1D input](reference/meta/result_types/result_image/example_result_image_1d) |
+| a video file path | `ResultVideo` | [Result Video: 1D input](reference/meta/result_types/result_video/example_result_video_1d) |
+| any other file path | `ResultPath` | [Result Path: 1D input](reference/meta/result_types/result_path/example_result_path_1d) |
+| a table or array payload | `ResultDataSet` | [Result DataSet: 1D input](reference/meta/result_types/result_dataset/example_result_dataset_1d) |
+| a Rerun recording | `ResultRerun` | [Rerun Integration gallery](reference/meta/rerun/index) |
+| embeddable panel content | `ResultContainer` / composable containers | [Composable Containers gallery](reference/meta/composable_containers/index) |
+| something unpicklable | `ResultReference` | (same-process escape hatch — see below) |
+
+The distinction that matters most in practice is the first two rows: a binary outcome
+belongs in `ResultBool`, never in `ResultFloat`. The next distinction is whether the payload
+has to survive a process boundary — `ResultDataSet` is pickled into the cache's blob store
+and so renders from any process, while `ResultReference` keeps a live object in memory and
+is stripped on the way to the cache.
+
+The full table, with what to assign in `benchmark()`:
+
 | Type | Use for | Set to |
 |---|---|---|
 | `bn.ResultFloat(units="s")` | Continuous scalar metrics (time, distance, score) | `self.elapsed = 0.42` |
@@ -268,8 +294,9 @@ them; `pixi run cache-blob-orphans` / `cache-blob-gc` from a checkout). Results 
 
 For images: use `bn.gen_image_path("name")` to generate unique paths.
 For videos: use `bn.VideoWriter()` to collect frames and `.write()` to save.
-See the [ResultImage gallery](reference/meta/result_types/result_image/index) and
-[ResultVideo gallery](reference/meta/result_types/result_video/index) for working examples.
+See the [ResultImage examples](reference/meta/result_types/result_image/example_result_image_1d)
+and [ResultVideo examples](reference/meta/result_types/result_video/example_result_video_1d)
+for working code.
 
 For Rerun recordings, assign the path returned by `bn.capture_rerun_rrd()` to a
 `bn.ResultRerun`. To combine complete recordings, assign a
@@ -403,7 +430,8 @@ the duplicate; the key then matches what a correct declaration would have produc
 | `dry_run` | False | Log the sweep grid summary without executing the benchmark |
 
 All other parameters have sensible defaults. See `BenchRunCfg`'s docstring for the
-full reference.
+full reference, [Caching](caching.md) for the cache flags in detail, and
+[Tracking results over time](over_time.md) for `over_time` and regression detection.
 
 ```python
 def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
@@ -545,3 +573,70 @@ zero-baseline percent change) are emitted as `null`.
 | Using the old `__call__` pattern with boilerplate | Override `benchmark()` instead |
 | Caching file-path results | Set `run_cfg.cache_results = False` |
 | Using `ResultFloat` for success/failure booleans | Use `ResultBool()` — bounds are [0, 1], plots render correctly |
+| A benchmark function that reads or mutates global state | Make it pure — see below |
+| Assuming an unrecorded result reads as `0` | It is `NaN` since v1.105 — pass `default=0` to opt out |
+| Running `python` / `pytest` / `ruff` directly when developing bencher | Prefix every command with `pixi run` |
+
+### Encode combinations as dimensions, not as one variable
+
+This is the single most common structural mistake, and it is worth repeating here because
+it is invisible once the data is collected. A `StringSweep(["no_cache_cpu", "no_cache_gpu",
+"cache_cpu", "cache_gpu"])` produces a bar chart of four unrelated labels. The same
+information as two variables — `use_cache = bn.BoolSweep()` and
+`backend = bn.StringSweep(["cpu", "gpu"])` — produces a 2D grid in which bencher can show
+you the effect of caching *independently* of the backend, and the interaction between them.
+The Cartesian product is the point of the tool; collapsing it into labels throws away every
+comparison you were trying to make. See
+[Core Concept: Dimensions Are Sweep Variables](#core-concept-dimensions-are-sweep-variables).
+
+### Keep the benchmark function pure
+
+Bencher assumes a stochastic pure function: given the same inputs it returns the same output
+plus random noise, and each call is uninfluenced by any other. Two mechanisms depend on that
+assumption:
+
+- **Repeats.** The distribution shown as mean ± std is only meaningful if the repeats are
+  independent samples of the same quantity. A counter that increments across calls, or a
+  warm cache inside your own code, turns "noise" into a trend that the plot presents as
+  spread.
+- **Caching.** A cache key is computed from the inputs. If the output also depends on a
+  global — a module-level accumulator, the contents of a directory a previous sample wrote
+  to, an env var flipped halfway through — then a cached value is a value computed under
+  conditions that no longer hold, and it will be silently reused. Nothing detects this.
+
+Where state genuinely is part of the measurement, make it an input variable so it is part
+of the key, or turn the caches off for that benchmark.
+
+### Missing results are NaN, not zero
+
+Since **v1.105.0**, the default value for `ResultFloat`, `ResultVec`, and `ResultBool` is
+`NaN` rather than `0`. An *unrecorded* sample — a run that aborts before measuring, or a
+result variable the worker never sets — is treated as missing and dropped by the NaN-aware
+regression and aggregation reductions, instead of masquerading as a real `0`/`False`
+measurement and dragging means toward zero. This matches the storage layer, which already
+initialises result arrays with `NaN`.
+
+For `ResultBool` this means **missing is not failure**: an unrecorded repeat is dropped from
+the success proportion rather than counted as `False`. A worker that wants a crash or abort
+to count as a failure must explicitly record `False` on its failure path.
+
+If downstream code expects `0`, opt out per variable:
+
+```python
+count = bn.ResultFloat(units="ul", default=0)
+```
+
+`CACHE_VERSION` was not bumped for this change, because a result variable's `default` is not
+part of `BenchCfg.hash_persistent()`. Existing benchmark and `over_time` history caches are
+preserved, and the new `NaN` default only applies to cache *misses*, so a benchmark with
+missing samples may transiently hold a mix of `0` (old cells) and `NaN` (new ones) until
+those cells are recomputed.
+
+### Use `pixi run` when developing bencher itself
+
+Every command in this repository goes through Pixi — `pixi run test`, `pixi run ci`,
+`pixi run python bencher/example/example_simple_float.py`. A bare `python`, `pytest`, or
+`ruff` picks up whatever happens to be on `PATH` rather than the pinned environment, which
+is how "works on my machine" bugs and spurious lint failures get in. This applies only to
+developing bencher; users who installed `holobench` from PyPI run their own benchmarks
+normally.

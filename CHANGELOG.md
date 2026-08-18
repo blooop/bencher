@@ -7,7 +7,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.119.1] - 2026-08-05
+
+### Added
+- **`--cachedir` / `render_report(cache_dir=)` / `BENCHER_CACHE_DIR` — tell a render process
+  where the blobs are.** 1.119.0 made a `ResultDataSet` cell store the blob's content-hash
+  name and inferred the cache dir two ways: the reader's own `./cachedir` (which covers a
+  cache dir that moved) and the cache dir recorded on the result at collect time (which
+  covers a reader that moved). Each covers one moved thing. Neither covers *both* — a cache
+  dir restored to a new path and rendered from a third directory, which is exactly the
+  offline cull working on a downloaded tarball that `blob_store`'s own docstring names as
+  motivation. There was no way to say otherwise, so those cells rendered as placeholders
+  with the payload sitting readable on disk. Now the location the reader was told about is
+  tried first, and it is the only candidate that can resolve both failures at once. The env
+  var is read-side only: collection still writes to `./cachedir` next to the diskcaches and
+  media, so it cannot split one cache dir across two locations.
+
+### Changed
+- **A blob reference is used for its name, never for its directory.** Resolution used to
+  fall back to the literal path a pre-1.119.0 cell carried. That directory is wherever some
+  earlier process kept its cache dir — not a location this reader chose — so a read served
+  out of it is a report silently assembled from a directory nobody asked for. Candidates are
+  now cache dirs only: the one you named, then the reader's own, then the one recorded at
+  collect time. Path-shaped cells still resolve, by basename, against those; the case the
+  literal path used to cover is what `--cachedir` is for. Recorded as L11 in
+  `plans/27-cache-version-bump-ledger.md` — the deferral 1.119.0 should have logged there.
+- The collect-time cache dir is recorded by the collector when it builds the dataset, so the
+  same `collect_cache_dir()` call decides where blobs are written and what is recorded as the
+  place they went. It was previously stamped only on one branch of `run_sweep`, which held
+  because every cached result had passed through that branch — an invariant nothing enforced
+  and no test covered.
+- `cache_management` and `bench_report` take their `cachedir` default from
+  `blob_store.DEFAULT_CACHE_DIR` instead of restating the literal in eleven signatures.
+- An unresolvable blob now renders a placeholder naming the blob and `--cachedir`, rather
+  than pointing at a log the reader of an HTML report generally does not have.
+
+### Documentation
+- `docs/caching.md` gains "Finding blobs at render time": the resolution order, which moved
+  thing each candidate covers, and the tarball case that needs `--cachedir`. Its claim that a
+  saved result "still renders in another process" now says how.
+
+## [1.119.0] - 2026-08-05
+
 ### Fixed
+- **A report with history no longer loses every pane when one result type has no
+  `over_time` layout.** `_to_panes_da` chose an `over_time > 1` layout by naming types
+  (rerun, video, image, dataset), so a pane type nobody named fell through to
+  `plot_callback` — a per-sample renderer — with the time dimension still attached, raising
+  `ValueError: can only convert an array of size 1 to a Python scalar`. `ResultString`,
+  `ResultPath`, `ResultContainer` and `ResultReference` all fell through that way. Because
+  `PaneResult.to_panes` renders every pane var in one loop and `to_auto` catches per plugin,
+  one un-dispatched string deleted every image, video, rerun viewer and dataset plot in the
+  report along with itself — and the run still exited 0, so the report was silently
+  incomplete. Dispatch is now on the `PANEL_TYPES` family, so a pane type without a bespoke
+  layout inherits the per-time-point one, including types added later. Numeric callbacks
+  (line, bar, heatmap) keep the whole dimension, as they build their own slider via hvplot
+  `groupby` / `hv.HoloMap`.
+- **A `ResultDataSet` history no longer loses every event but the newest when its cache
+  dir moves.** A cell stored the blob's absolute path, resolved against the working
+  directory at collect time, so a cache dir tarred on one machine and restored at another
+  path — a CI cache round-trip, a copy between checkouts, an offline cull working on a
+  downloaded tarball — left every historical cell pointing at a directory that no longer
+  existed. The blob itself was restored intact under the same content-addressed name, so
+  the payload was reachable and only the reference was not: a three-event history rendered
+  one plot and two "could not be loaded" placeholders. Cells now store the blob **name**,
+  and the new `blob_store.resolve_blob` resolves it against the *active* cache dir. This is
+  the rule `cache_management` already applied to reachability GC — `blob_name` matches on
+  the basename precisely so a moved cache dir does not read as garbage — extended to the
+  render path, and that predicate is now shared by both instead of defined twice.
+
+  A name is a complete *identity* but not a complete *address*, so the result also records
+  the cache dir it was collected under (`blob_store.BLOB_CACHE_DIR_ATTR`, one dataset
+  attribute, not a directory per cell) and `resolve_blob` tries it after the active one.
+  Otherwise dropping the directory would have traded the moved-cache failure for a moved-
+  *reader* one: a bare name resolves against the reading process's own `./cachedir`, so
+  `bencher <result.pkl> <out_dir>` — the documented collect/render split, which runs in a
+  fresh process from whatever directory the user invoked it in — would have rendered every
+  `ResultDataSet` cell as a placeholder while the cache dir sat untouched where the sweep
+  left it. Media cells (`gen_path` returns absolute paths) never had that failure mode.
+
+  No cache version bump: `resolve_blob` accepts either cell generation, and an absolute
+  path from a 1.118.0 cache is *repaired* by its content name when the recorded directory
+  is gone, so existing histories keep rendering and get the fix retroactively.
+
+### Changed
+- `blob_store` blob formats now come from one table (`_BLOB_FORMATS`): the extension list,
+  the blob-name pattern and `load_blob`'s dispatch are all derived from it instead of being
+  restated in four places, and `load_blob` parses the reference once — so the extension it
+  dispatches on is the one the name check already accepted, and the "unreachable" unknown-
+  extension raise that guarded the drift between those copies is gone.
+
+## [1.118.0] - 2026-08-04
+
+### Fixed
+- **`pixi run ty` no longer gives different answers before and after a docs build**
+  (plan 26 R10). ty type-checks `.ipynb`, `generate-docs` writes notebooks under
+  `docs/reference/<section>/`, and only `docs/reference/meta/` is gitignored, so the gate's
+  result depended on whether docs had been built. Notebooks are now excluded via
+  `[tool.ty.src].exclude`; the previous `.tyignore` file did nothing, as ty does not read
+  that filename. `docs/` itself is still checked (`docs/conf.py` passes) and no tracked
+  notebook exists, so this removes a false exemption rather than narrowing coverage.
+- **CI and local runs now type-check with the same ty** (plan 26 R10). CI runs `pixi update`
+  before `pixi run ci`, resolving to the constraint ceiling, while local runs use the
+  committed lock — so the two used different checkers, and a diagnostic from a newer ty
+  could only be seen where it could not be reproduced. ty is now pinned exactly to `0.0.66`
+  and locked there in all five environments, with the gate's probes re-run against it. An
+  exact pin rather than a range because ty is pre-1.0 and the gate's meaning depends on
+  per-rule defaults: `possibly-missing-attribute` ships off, so a range can resolve to a ty
+  where the rule does not exist and is silently unenforced.
+- **One plugin with a bad capability no longer takes down the plugins after it**
+  (plan 23 P12b). `PluginRegistry.explain()` caught the capability error into `exc` — the
+  same name the enclosing scope used for the exclude set — and `except ... as <name>`
+  unbinds `<name>` on the way out of the handler. The *next* plugin in the loop then died
+  on `plugin.name in exc` with `NameError: name 'exc' is not defined`, crashing the report
+  build mid-run out of the one branch documented as never crashing mid-run. The existing
+  test registered a single plugin, so there was no next iteration to fail.
+- **`BenchReport.publish()` on an unnamed report says what is missing.** It fell through
+  to `None += "_debug" if debug else ""` and raised `TypeError: unsupported operand
+  type(s) for +=: 'NoneType' and 'str'` — on both debug settings, since `None += ""`
+  raises too. It now raises a `ValueError` naming `branch_name` and `bench_name`.
+- **Extruding a shape through the repeat or over_time wrapper** in the Cartesian-product
+  animation raised `TypeError: 'NoneType' object is not iterable`: `TimelineShape` and
+  `StrobeShape` inherited a `_deep_copy_recolored` that walked a `children` list they do
+  not have. Both now recolour their wrapped shape.
 - **`BenchResult.result_samples()` returns an `int`** (plan 23 P12). It was annotated
   `-> int` while returning `self.ds.count()`, an `xr.Dataset` of per-variable counts. The
   type was the smaller problem: comparing a Dataset yields a Dataset, and `bool(Dataset)`
@@ -19,6 +141,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where a shared class-level `samples` was left mutated by an earlier test.
 
 ### Changed
+- **The type gate is now verified by running it, not by reading its configuration**
+  (plan 26 R10). A new probe seeds a Tier-A violation under `bencher/`, runs the repo's own
+  pixi task, and requires it to be reported. Reading `[[tool.ty.overrides]]` include
+  patterns cannot see three other ways to switch the gate off for the package: an
+  exclude-only override block, `[tool.ty.src].exclude`, or a `.gitignore`/`.ignore` entry
+  (the task runs `--respect-ignore-files`). The pattern-matching test is kept alongside —
+  it names the offending pattern, so it says what to edit.
 - **Return annotations across the plotting and sweep APIs now describe what the functions
   actually return** (plan 23 P12, enabling `ty`'s `invalid-return-type`). All 29
   diagnostics were genuine. The user-visible ones:
@@ -43,13 +172,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   `invalid-return-type` is the rule that verifies `_resolve_auto` returns a member of
   `ResolvedReduceType`, so enabling it discharges the caveat P1 left: `to_dataset`'s
-  `assert_never` is now a compile-time proof rather than a runtime assertion. The other
-  four Tier-B rules remain ignored, with their measured costs recorded in plan 23 §10.
+  `assert_never` is now a compile-time proof rather than a runtime assertion.
 
   The four widened unions above (`values()`, `param_hash`, and the two `as_str`/`as_dict`
   flag-switched returns) are honest, not resolved — an argument that switches a return
   type is still an illegal state made representable, and no checker will object to it.
-  Each is tabled in plan 23 §10 with its blocker so a later phase can take it.
+  Each is tabled in plan 23 §10 with its blocker so a later phase can take it; the two
+  blocked on cache invalidation are also entries in the plan 27 cache-bump ledger.
+- **The `ty` gate now enforces all five Tier-B rules** (plan 23 P12b took the remaining
+  four: `not-iterable`, `no-matching-overload`, `unsupported-operator`,
+  `possibly-missing-attribute`; 100 diagnostics). Three of the four are error-by-default,
+  so dropping their `"ignore"` lines enables them; `possibly-missing-attribute` is **off**
+  by default and is now spelled `= "error"` explicitly. `test_ty_gate.py` protects each
+  against being re-ignored, and additionally runs a seeded violation through the repo's
+  own rule table, because "absent from the ignore list" is not evidence a rule is on. The
+  two dominant causes were representation defects, not annotation noise, and both are
+  behaviour changes:
+  - **`BenchCfg`'s six variable-list fields default to `[]`, not `None`**
+    (`input_vars`, `result_vars`, `const_vars`, `result_hmaps`, `meta_vars`, `all_vars`).
+    "No variables" is spelled `[]`; there is no second spelling. 26 iteration sites across
+    eight modules already read these without the `or []` the None default required, so a
+    `BenchCfg` built outside `plot_sweep` raised `TypeError: 'NoneType' object is not
+    iterable` from inside describe/plot code. **`BenchCfg(input_vars=None)` is now rejected
+    by param** — pass `[]`. No persisted hash moves: verified by measurement, the default
+    config's digest is unchanged.
+  - **The three `rerun`-gated exports always exist on the `bencher` namespace.**
+    `capture_rerun_rrd`, `capture_rerun_window` and `rerun_to_pane` come from
+    `bencher.utils_rerun`, the one module in the package that imports `rerun` at module
+    scope. They were bound only inside `try`/`except ModuleNotFoundError`, so on an
+    install without `rerun-sdk` they were simply absent and `bn.capture_rerun_rrd` raised
+    `AttributeError: module 'bencher' has no attribute ...`, naming neither the dependency
+    nor how to get it. Each now resolves to a placeholder that raises `ImportError: ...
+    requires the optional 'rerun-sdk' dependency ... pip install rerun-sdk`. Installs
+    *with* the extra are unaffected.
+
+    `RerunResult`, `ComposableContainerRerun`, `RerunRecording`, `RerunViewKind` and
+    `RerunSummaryResult` are now imported **unconditionally**: their modules defer
+    `import rerun` into the methods that need it, so the `except ModuleNotFoundError`
+    around them never fired in any environment. (`RerunSummaryResult` could not have been
+    optional at all — `results/bench_result.py` imports it unconditionally and
+    `BenchResult` inherits from it.) Deleting those two dead handlers satisfies
+    `possibly-missing-attribute` strictly better than a placeholder would.
+  - `bencher.sweep()` gained `@overload`s: passing a `str` returns a `dict`, passing a
+    `SweepBase` returns a `SweepBase`. Runtime behaviour is unchanged; the correlation
+    the body always followed is now visible to callers.
+  - `bencher.utils.get_name()` raises `ValueError` on a `param.Parameter` that was never
+    named, instead of returning the `None` its `-> str` denied could happen. Plan 19's
+    declaration check already rejects those before a sweep runs.
+  - `ComposableContainerVideo.extend_clip()` rejects a clip with no duration by name
+    rather than dying on `None < float`.
+  - The Cartesian-product animation's `Shape` is now a sum type — `Cell` (leaf) and
+    `Group` (non-empty children) — instead of one class with `children: list | None`.
+    Rendering is byte-identical (the pixel-hash tests are unchanged); `Group([])`, which
+    used to construct and then die inside `max()` on an empty sequence, is rejected at
+    construction.
+- `select_subsampling_divisions()` no longer prints every coordinate's dtype to stdout —
+  a debug leftover on a library filter path.
+- **Every fix deferred because it would invalidate persisted caches is now listed in one
+  place** — `plans/27-cache-version-bump-ledger.md`. The standing policy (any change to a
+  cache key is cache-busting, so bump `CACHE_VERSION` and say so) is sound but per-change,
+  so the cheap answer to "this fix would move a key" has always been "annotate around it and
+  record why" — and those records had spread across four plans, two architecture docs and a
+  dozen changelog entries. The cost of a bump is the same whether one deferred fix rides
+  along or ten, so the ledger exists to make sure the next bump drains them together instead
+  of paying the invalidation cost twice. Ten entries so far, including the two widened
+  unions above (`param_hash`, `values()`), the dual-generation sentinel readers plan 22
+  requires, and A4's `code_hash` — which already designates a bump as its precondition.
+  Pointers now sit at the four places someone actually stands when bumping:
+  `CACHE_VERSION` itself, `test_hash_persistent.py`'s golden-hash procedure, A4 §3.2, and
+  plans-README rule 0. A companion section records what a bump must **not** sweep in (the
+  `title` and `agg_fn` exclusions, `_hash_exclude` renderers, the input-order/result-set
+  asymmetry), so permission to change keys is not mistaken for a reason to.
 - `HoloviewResult.result_var_to_container` is annotated `type[pn.viewable.Viewable]`
   rather than a bare `type`, so `setup_results_and_containers`' declared container type
   is actually checked instead of being satisfied by an inferred `Any`.

@@ -18,6 +18,7 @@ import panel as pn
 
 from bencher.bench_cfg import BenchRunCfg
 from bencher.bench_plot_server import BenchPlotServer
+from bencher.blob_store import DEFAULT_CACHE_DIR
 from bencher.results.bench_result import BenchResult
 
 logger = logging.getLogger(__name__)
@@ -312,7 +313,7 @@ class BenchReport(BenchPlotServer):
 
     def save(
         self,
-        directory: str | Path = "cachedir",
+        directory: str | Path = DEFAULT_CACHE_DIR,
         filename: str | None = None,
         in_html_folder: bool = True,
         portable: bool = False,
@@ -558,6 +559,15 @@ if (_embedded) {{
         """
 
         if branch_name is None:
+            if self.bench_name is None:
+                # Previously this fell through to `None += "_debug" if debug else ""`, so
+                # publishing an unnamed report died with `TypeError: unsupported operand
+                # type(s) for +=: 'NoneType' and 'str'` -- on *both* debug settings, since
+                # `None += ""` raises too. Name the missing input instead.
+                raise ValueError(
+                    "publish() has no branch name to push to: pass branch_name= explicitly, "
+                    "or construct BenchReport(bench_name=...) so the report has a name."
+                )
             branch_name = self.bench_name
         branch_name += "_debug" if debug else ""
 

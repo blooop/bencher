@@ -6,6 +6,10 @@ without additional context. **Read the whole plan before starting it.**
 
 ## Ground rules for every plan
 
+0. **Deferring a fix because it would invalidate persisted caches?** Record it in
+   [plan 27's ledger](27-cache-version-bump-ledger.md) in the same PR, not only in your
+   plan's findings section. And read that file in full before bumping `CACHE_VERSION` —
+   the bump is what unblocks every entry in it, and it is only paid for once.
 1. **Always use the pixi environment**: prefix every command with `pixi run`
    (e.g. `pixi run pytest`, `pixi run python ...`). Never run tools directly.
 2. **Run `pixi run ci` before committing.** It must pass (format, lint, type check, tests).
@@ -49,10 +53,11 @@ without additional context. **Read the whole plan before starting it.**
 | 20 | [Duplicate declared variables](20-duplicate-declared-variables.md) | Low–Med | Small | **Implemented** in #1011 (stack 2/5) |
 | 21 | [Per-sample fault tolerance in sweeps](21-sample-fault-tolerance.md) | Medium | Medium | **Implemented** in #1013; `catch` lives on `BenchRunCfg` only (amended per A5 R1) |
 | 22 | [Grammar phase 1: self-describing canonical dataset](22-grammar-phase-1-data-model.md) | Medium | Medium | First PR of the A6 stack; 15–21 have landed, ready to implement |
-| 23 | [Constructive data modeling & type enforcement](23-constructive-data-modeling.md) | Low–Med | Medium (12 phased PRs) | P1–P3 (ty gate + live bug fixes) anytime; P4 (result-type registry) before A6 phase 2; P5–P11 independent |
-| 24 | [`assert_never` boundary discipline](24-assert-never-boundary-discipline.md) | Low | Small (amends 23) | **Read before 23-P1/P2/P11** — mostly DoD additions to plan 23; one small independent phase (Q1) |
+| 23 | [Constructive data modeling & type enforcement](23-constructive-data-modeling.md) | Low–Med | Medium (12 phased PRs) | **P1–P12 done** (P12 shipped in two parts; Tier B fully enabled). Residue: the Tier-C endgame (§6.6) and 11 unstrict-listed files, tracked in plan 26 R9 |
+| 24 | [`assert_never` boundary discipline](24-assert-never-boundary-discipline.md) | Low | Small (amends 23) | **Read before 23-P1/P2/P11** — mostly DoD additions to plan 23; one small independent phase (Q1, now just the boundary probe) |
 | 25 | [Grammar phase 2: channel vocabulary, `Plan` type, shadow planner](25-grammar-phase-2-channel-plan.md) | Medium | Medium (4 phased PRs) | Second PR of the A6 stack; additive and shadow-only (zero visual change). Needs 23-P4 (landed); gates A6 phase 3 |
 | 26 | [Post-merge audit remediation](26-post-merge-audit-remediation.md) | Low–Med (R1 is Medium) | Medium (13 phased items) | **R1 first** (history adoption can destroy over_time trends); R13's #760/CVE item is time-sensitive; R3 while #1022 is fresh |
+| 27 | [`CACHE_VERSION` bump ledger](27-cache-version-bump-ledger.md) | — | — | **Standing, never "done".** Read in full before bumping `CACHE_VERSION`; add to it in the same PR whenever a fix is deferred for cache reasons |
 
 Plans 01–03 are quick wins (01 is done). Plan 02's headline owner decision — the
 Plotly-vs-plugin-system direction for PRs #830/#932 — was resolved plugin-first on
@@ -74,6 +79,7 @@ before executing any phase. **A3 is the keystone — read it first.**
 
 | Doc | Subject | Resolves |
 |-----|---------|----------|
+| [A0 — Shipped baseline](architecture/A0-shipped-baseline.md) | **Read before relying on any `Status:` line below.** Fact table of which A2–A6 claims landed code already satisfies, audited against `main` @ `639ca4b5` (v1.117.0): 71 load-bearing claims, 11 satisfied, 9 partial, 50 open. Records what #932/#983/#1007/#1021/#1022 actually shipped | Dispositions being made against stale baselines; A6's "no implementation yet", A2's P5 row, A4 W4's stale comment, A5's 2026-07-30 counts |
 | [A1 — Rendering backend unification](architecture/A1-rendering-backend-unification.md) | Plugin registry as the skeleton (Phases 0, 2, and 3 landed); backends swap under stable plot names; the Plotly port and fast-save path were dropped per owner decision — see the addendum | The #830-vs-#932 conflict (resolved plugin-first), the 17-class `BenchResult` MRO |
 | [A2 — Plot selection redesign](architecture/A2-plot-selection-redesign.md) | Centralized, explainable, *ranked* selection (S1 signature enrichment landed via PR #983; S2's `explain_selection()` shipped in v1.115.0); serializable plot specs instead of callables | Render-everything noise, scattered match logic, unpicklable `plot_callbacks` |
 | [A3 — BenchData contract](architecture/A3-benchdata-contract.md) | One frozen, pickle-free data type (netCDF + JSON manifest) used by rendering, the collect/render split, result cache, and history | Pickled god-object at four boundaries; load-time code execution |

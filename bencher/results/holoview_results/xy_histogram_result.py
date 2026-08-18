@@ -92,7 +92,10 @@ class XYHistogram(TabularSpec):
         """
         finite = values[np.isfinite(values)]
         if finite.size == 0:
-            edges = np.linspace(*(bin_range or (0.0, 1.0)), self.bins + 1)
+            # Unpacked rather than star-splatted: numpy's overloads cannot see that the
+            # splatted tuple has exactly two elements, and naming the ends reads better.
+            low, high = bin_range or (0.0, 1.0)
+            edges = np.linspace(low, high, self.bins + 1)
             return np.zeros(self.bins), edges
         return np.histogram(finite, bins=self.bins, range=bin_range, density=self.density)
 

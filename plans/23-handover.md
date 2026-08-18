@@ -4,6 +4,27 @@
 fold anything still open into plan 23 §10). Everything here is actionable without the
 conversation that produced it.
 
+> **Status (P12b, Tier B fully enabled).** Not deleted yet, because deleting it now would
+> drop content nothing else carries. What has changed since it was written:
+>
+> - **§5 item 5 is discharged.** P12 enabled `invalid-return-type`, which is the rule that
+>   verifies `_resolve_auto` returns a member of `ResolvedReduceType`; the caveat comment
+>   at the alias is gone. See §10 P12 item 1.
+> - **§4's `test_extra_panels.py` gap is closed**, as is plan 24 Q1's pin (plan 26 R10).
+>   Q1's boundary probe is the only ty item left in §4.
+> - **§4's `pn.pane = None` defaults, `to_panes_multi_panel` and `run.py`'s `ty: ignore`**
+>   are owned by plan 26 R9 §10. Do them there, not here.
+> - **§5 items 1–4 still have no owner** — the `map_plot_panes` reduction default, the
+>   `ReduceType.NONE` kdim-units loss, `plot_sweep`'s understated `input_vars` domain
+>   (which is why `identity.py` is still not strict-listed), and the `strenum` →
+>   `enum.StrEnum` value trap. **These four are the reason this file still exists.**
+> - **§6's traps all still apply**, in particular trap 1 (`--python`) and trap 3 (enumerate
+>   what satisfies neither arm when you change a discrimination predicate on a union).
+>   P12b added one: a synthetic probe that reports nothing is not evidence the rule does
+>   not fire — see §10 P12b item 10.
+> - **§2 remains the single most load-bearing thing here.** Read it before writing any
+>   `assert_never`.
+
 **State pinned to:** `main` @ `ee044f0e` plus PR #1026 (`plan/ty-enforcement-floor`,
 head `b9524867`). Per plans-README rule 7, re-confirm every `file:line` before relying on
 it; the symbol is the durable reference.
@@ -106,13 +127,13 @@ methods.
 
 Each is independent and none blocks P2.
 
-- **Plan 24 Q1** (small, self-contained): raise the `ty` ceiling to `<=0.0.65`
-  (`pyproject.toml:80`; env resolves 0.0.56, behaviour identical across 0.0.56/0.0.64/
-  0.0.65), and add plan 24 A5's third probe to `test/test_ty_gate.py` — a **complete**
-  match fed from an unannotated helper asserted *type-clean*. Comment it as pinning
-  current `ty` behaviour, not desired behaviour, so that a future `ty` release closing the
-  hole becomes a test failure that tells us rather than a silent improvement. **P1 did not
-  add this probe.**
+- **Plan 24 Q1's probe** (small, self-contained): add A5's third probe to
+  `test/test_ty_gate.py` — a **complete** match fed from an unannotated helper asserted
+  *type-clean*. Comment it as pinning current `ty` behaviour, not desired behaviour, so a
+  future `ty` release closing the hole becomes a test failure rather than a silent
+  improvement. The boundary is open on the pinned ty
+  (`test_untyped_ingress_into_complete_match_is_clean` passes), so the probe lands green
+  today. Q1's pin half is handled by plan 26 R10, which pins ty exactly.
 - **Plan 24 A4** was not applied to plan 23 §9: add the DoD line "every `assert_never` in
   the tree either has a subject `ty` can type, or is preceded by a normalizing parse that
   is covered by a test", plus a grep check that no `assert_never` subject is an attribute

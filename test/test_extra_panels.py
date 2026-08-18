@@ -1,6 +1,7 @@
 import unittest
 import warnings
 
+import holoviews as hv
 import panel as pn
 
 import bencher as bn
@@ -38,6 +39,47 @@ class TestExtraPanels(unittest.TestCase):
         marker = pn.pane.Markdown("### Static Panel")
         plots = res.to_auto_plots(extra_panels=[marker])
         self.assertIn(marker, list(plots))
+
+    def test_extra_panels_plain_string(self):
+        """A plain `str` is neither callable nor Viewable, so it must be appended as-is.
+
+        `to_auto_plots` splits on `callable(ep) and not isinstance(ep, Viewable)`; a str
+        takes the else branch and reaches `Column.append`, which coerces it to a pane.
+        """
+        res = self._make_result()
+        plots = res.to_auto_plots(extra_panels=["## A plain markdown string"])
+        objs = [str(getattr(p, "object", "")) for p in plots]
+        # Checked first and separately: a failure pane names the panel via `repr(ep)`,
+        # which for a str contains the string, so the assertion below would be satisfied
+        # by the very failure this test rules out.
+        self.assertFalse(
+            any("failed to render" in o for o in objs),
+            f"the plain string was routed into the failure path rather than appended: {objs}",
+        )
+        self.assertTrue(
+            any("A plain markdown string" in o for o in objs),
+            f"plain string was not coerced into a pane by Column.append: {objs}",
+        )
+
+    def test_extra_panels_holoviews_element(self):
+        """An `hv` element is also neither callable nor Viewable.
+
+        Pinned rather than assumed: holoviews Elements can carry a `__call__` aliasing
+        `.opts()`, and a callable element would be invoked with the BenchResult and yield
+        a failure pane instead of a plot.
+        """
+        res = self._make_result()
+        curve = hv.Curve([(0, 0), (1, 1)], label="ExtraPanelCurve")
+        plots = res.to_auto_plots(extra_panels=[curve])
+        objs = [str(getattr(p, "object", "")) for p in plots]
+        self.assertFalse(
+            any("failed to render" in o for o in objs),
+            f"the hv element was routed into the failure path rather than appended: {objs}",
+        )
+        self.assertTrue(
+            any(getattr(p, "object", None) is curve for p in plots),
+            "hv element was not wrapped into a pane holding the original object",
+        )
 
     def test_extra_panels_none_is_default(self):
         """No extra panels by default — output matches original to_auto_plots."""

@@ -38,7 +38,7 @@ bumps unless stated).
 | R7 | ResultSpec registry single-source hardening (#1030) | MED — desync by design | Small |
 | R8 | Container/renderer precedence contract (#989/#994) | MED — documented claim is false | Small |
 | R9 | Constructive-modeling stragglers (coordinate with P12) | MED-LOW | Medium |
-| R10 | ty gate hardening (#1026/#1033) | MED-LOW — gate bypass routes | Small |
+| R10 | ty gate hardening (#1026/#1033) — **LANDED 2026-08-04** | MED-LOW — gate bypass routes | Small |
 | R11 | Small verified bug batch | LOW each, cheap | Small |
 | R12 | Release v1.118.0 + doc/plan bookkeeping | Process | Small |
 | R13 | Open-PR dispositions (incl. #760 CVE path) | **#760 is time-sensitive** | Varies |
@@ -138,6 +138,10 @@ point the same way: toward deletion.
    but stores references in a shape the walker doesn't descend yields a silently **empty** live
    set → delete everything. Treat missing/mismatched `CACHE_VERSION` and unknown
    `record["format"]` as unreadable (abort), same as a corrupt record.
+   **Sequencing:** this must land *before or with* any `CACHE_VERSION` bump, never after — a
+   bump is exactly what produces the stale cachedir this gap mishandles, so bumping first
+   converts a latent bug into a reachable one that deletes live blobs. Recorded as L9 in
+   [plan 27's bump ledger](27-cache-version-bump-ledger.md).
 3. `_MAX_REF_WALK_DEPTH` exhaustion silently drops references (`cache_management.py:537`).
    Record into `unreadable` (abort) or log loudly.
 4. `extra_roots` directory mode globs only `*.pkl` (`cache_management.py:614`) while
@@ -318,11 +322,30 @@ this list, and fold the small fixes in where the files are already being touched
    raising a `TypeError` that names the six named constructors.
 2. **P8's DoD is unmet at the fifth match site:**
    `composable_container_video.py:158-161` still ends `match render_cfg.compose_method` with
-   `case _: raise RuntimeError`, and the file isn't strict-listed. `assert_never` arm +
-   strict-list.
-3. **Strict-list additions** so the new `assert_never`s stop being decorative: `plot_filter.py`,
-   `utils.py`, `plugins/bench_data.py`, `results/bench_result_base.py` (the statement-form AggFn
-   ladder is not caught by P12's global `invalid-return-type`).
+   `case _: raise RuntimeError`. Replace it with an `assert_never` arm. **Do the arm only — the
+   "+ strict-list" half of this item is unnecessary**, for the reason recorded under item 3: the
+   arm takes effect the moment it is written, with no override entry.
+3. ~~**Strict-list additions** so the new `assert_never`s stop being decorative: `plot_filter.py`,
+   `utils.py`, `plugins/bench_data.py`, `results/bench_result_base.py`.~~ **SUPERSEDED by plan 28**
+   (the Tier-C global ratchet), which covers all four files by rule rather than by file.
+
+   **The premise above was wrong, and is recorded here so it is not re-derived.** Those
+   `assert_never`s were never decorative. A non-exhaustive `assert_never` is caught by
+   `type-assertion-failure`, which is **not** one of the five Tier-C rules and is not ignored
+   anywhere (plan 23 §9 requires exactly that) — so it fires on every file under `bencher/`,
+   strict-listed or not. Verified by seeding an incomplete `match` at a non-listed path under
+   `bencher/` and running the repo's own unmodified pixi task argv from the repo root; it
+   reported `error[type-assertion-failure]`. Strict-listing changed nothing about it.
+
+   What the additions would actually have bought is interim Tier-C regression protection for
+   those files. Measured on `5da6f213` (ty 0.0.66): `plot_filter.py` and `plugins/bench_data.py`
+   are already at **0** Tier-C diagnostics, `utils.py` has 3 and `results/bench_result_base.py`
+   has 15 — and **315 of 387** files under `bencher/` are already clean, against 17 strict-listed.
+   Protecting two more of 315 encodes nothing but which files this item happened to name.
+
+   Decided in
+   [Does plan 26 R9 section 3's strict-list work still happen?](https://github.com/blooop/bencher/issues/1062),
+   a ticket on the [ty adoption map](https://github.com/blooop/bencher/issues/1056).
 4. `HistoryEvent` is not frozen (`bencher/history.py:99-100`) — `event.kind = "typo"` bypasses
    the `__post_init__` parse; freeze it.
 5. **`IntSweep.with_bounds` coercion bypasses both plan-17 guards** (verified):
@@ -355,20 +378,63 @@ this list, and fold the small fixes in where the files are already being touched
     CHANGELOG) so the plan's audit trail is complete before archiving; delete
     `plans/23-handover.md` when P12 lands (its own header requires it).
 
-## 11. R10 — ty gate hardening (from #1026/#1033)
+## 11. R10 — ty gate hardening (from #1026/#1033) — **LANDED 2026-08-04**
 
-1. **The override meta-test is porous.** `test/test_ty_gate.py:100-106` only flags
-   `[[tool.ty.overrides]]` blocks whose include pattern starts with `bencher/`. Uncovered bypass
-   routes: `include = ["**"]`, exclude-only blocks, `[tool.ty.src].exclude`, and a new `.ignore`
-   file (the task runs `--respect-ignore-files`). Replace TOML pattern-matching with an
-   effective-config probe: seed a Tier-A violation in a temp file under `bencher/`, run
-   `ty check` with the repo config, require nonzero exit. Closes all four routes at once.
-2. **The #1033 ceiling raise changed nothing that runs:** `pixi.lock` still resolves ty 0.0.56 in
-   every environment. Re-lock to 0.0.65 and raise the floor to the version the probes pin
-   (`ty>=0.0.13` is meaningless).
-3. The extra_panels regression class (the one that already slipped through CI once) still has no
-   pin for its static non-`Viewable` arm: `test/test_extra_panels.py` covers callables and
-   `pn.pane.Markdown` only — add plain-`str` and `hv` element cases (two lines each).
+All three items done. Each was verified by running the installed ty, not by reading config.
+
+1. **Effective-config probe** — `TestEffectiveGateConfig` in `test/test_ty_gate.py`. It runs
+   the repo's own pixi task argv (read from `[tool.pixi.tasks].ty`, `$CONDA_PREFIX` resolved to
+   `sys.prefix`) from the repo root against a seeded Tier-A violation under `bencher/` and
+   requires it to be reported.
+
+   This is the only assertion that covers the four ways to switch the gate off for the package:
+   a broad `[[tool.ty.overrides]]` include, an exclude-only override block,
+   `[tool.ty.src].exclude`, and a `.gitignore`/`.ignore` entry (the task runs
+   `--respect-ignore-files`). The last two suppress a seeded diagnostic completely.
+   `test_rule_not_ignored_for_the_package_via_overrides` is kept alongside it: it covers fewer
+   routes but names the offending pattern and rule, so it says what to edit, and needs no ty
+   binary.
+
+   Mutation-checked both ways — excluding `bencher/` fails the first-party assertion, dropping
+   the notebook exclusion fails the notebook one, and neither disturbs the file's other tests.
+
+2. **Notebooks are excluded via `[tool.ty.src].exclude`.** ty type-checks `.ipynb`,
+   `generate-docs` writes notebooks under `docs/reference/<section>/`, and only
+   `docs/reference/meta/` is gitignored — so without this the gate's answer changes after a docs
+   build. CI escapes that only by task ordering (`ty` before `generate-examples`), which nothing
+   enforces. `docs/` itself stays checked; `docs/conf.py` is the only tracked `.py` there and it
+   passes, and no tracked `.ipynb` exists, so the exclusion costs no coverage.
+
+   ty does not read `.tyignore` — the file this replaces had no effect. The guarding test asserts
+   the outcome rather than the spelling, so switching to a mechanism ty does read is free.
+
+   Adding a `[tool.ty.src].exclude` is itself one of the four bypass routes above, so it is only
+   safe because item 1's probe proves `bencher/` is still checked.
+
+3. **ty is pinned exactly to 0.0.66** and locked there in all five environments (default, docs,
+   py311, py312, py313), with the gate clean and all of `test_ty_gate.py` passing on it —
+   including the probes that pin ty's behaviour rather than ours: `possibly-missing-attribute` is
+   off by default (so the explicit `= "error"` is load-bearing) and the plan-24 untyped-ingress
+   hole is open.
+
+   An exact pin, not a range: ty is pre-1.0 and the gate's meaning depends on per-rule defaults,
+   so a range can resolve to a version where a rule does not exist and is silently unenforced.
+
+   Two mechanisms to know when bumping. `pixi lock` will not move an already-valid lock, so
+   changing the constraint alone does nothing — use `pixi update ty`. And CI runs bare
+   `pixi update` before `pixi run ci` (`.github/workflows/ci.yml`), resolving to the ceiling, so
+   a range makes CI and local runs use different checkers. That also means the committed lock is
+   advisory for CI generally, not just for ty — left to R12's bookkeeping.
+
+4. **`test/test_extra_panels.py` covers the static non-`Viewable` arms** of
+   `to_auto_plots(extra_panels=…)`: plain `str` and `hv` element. Both assert *no failure pane*
+   first and separately, because a failure pane names the panel via `repr(ep)`, which for a str
+   contains the string the content assertion looks for. Mutation-checked by dropping the
+   `callable()` guard: both new tests fail, the six pre-existing ones do not.
+
+**Still open:** plan 24 Q1's second half — A5's third probe, a complete `match` fed from an
+unannotated helper asserted type-clean. Neither 23-P1 nor R10 wrote it. The boundary it pins is
+open on 0.0.66, so it lands green today.
 
 ## 12. R11 — Small verified-bug batch (one PR)
 
@@ -433,7 +499,7 @@ Each verified live on `239a4c41`:
 | #253 (dimension grid, 2023) | **CLOSE** | Target files no longer exist; dead imports; ancient pins; plan 02 step 7 pre-authorized closure. |
 | #908 (auto-generate rerun examples) | **CLOSE**, redo ~40-line delta | Superseded by the literal-`class_code` convention #1007/#1017 settled; its own generated-file-as-input mechanism is worse; stale class snapshot (missing `omega_n`). Residual: convert the two remaining `generate_meta_rerun.py:110-153` importers to literal `class_code`, delete `example_rerun_over_time.py`/`example_rerun.py`, retarget `demo_rerun`. Keep `example_rerun2.py` (sole usage example of `rrd_to_pane`/`publish_and_view_rrd`). |
 | #799 (netCDF history_dir) | **CLOSE**, harvest into A4 C4 | Rewrites a `load_history_cache` that plans 09/14/15/16 have rewritten twice since; merging would delete reconciliation and corrupt reset detection. Harvest `_sanitize_for_netcdf`/`_clean_attrs`/`_force_numpy` (pandas-3 ArrowStringArray fix main still lacks) when A4 C4 happens. |
-| #760 (diskcache→minimalkv, CVE-2025-69872) | **REWORK — time-sensitive** | CVE still live (`diskcache<=5.6.3` pinned, upstream has no fix). But merging as-is is now *dangerous*: #1022's GC has three `diskcache.Cache` sites #760 never touches — if writes go to minimalkv while `_scan_cache_for_blob_names` (`cache_management.py:576`) scans diskcache, the live set is empty and **GC deletes every blob**. Path: fresh A4 Phase C1 PR on current main reusing #760's `store.py` design (+`__len__`/`iterkeys()`/`size_limit`, batched tag/volume writes), converting all call sites in one commit; `CACHE_VERSION` 5→6 makes migration free. Interim: plan 04 Task 1's README warning about untrusted cache dirs. Note `__getitem__` still `pickle.loads` — only A4 C4/A3 close the CVE *class*. |
+| #760 (diskcache→minimalkv, CVE-2025-69872) | **REWORK — time-sensitive** | CVE still live (`diskcache<=5.6.3` pinned, upstream has no fix). But merging as-is is now *dangerous*: #1022's GC has three `diskcache.Cache` sites #760 never touches — if writes go to minimalkv while `_scan_cache_for_blob_names` (`cache_management.py:576`) scans diskcache, the live set is empty and **GC deletes every blob**. Path: fresh A4 Phase C1 PR on current main reusing #760's `store.py` design (+`__len__`/`iterkeys()`/`size_limit`, batched tag/volume writes), converting all call sites in one commit; `CACHE_VERSION` 5→6 makes migration free. **If that bump happens here, drain [plan 27's ledger](27-cache-version-bump-ledger.md) in the same release** (this is its L9) and fix item 2 above first. Interim: plan 04 Task 1's README warning about untrusted cache dirs. Note `__getitem__` still `pickle.loads` — only A4 C4/A3 close the CVE *class*. |
 | #941 (bencher.ci module, draft) | **REWORK to plan 10 phase 3** | Its summary format is the second verdict artifact plan 10 §7 forbids; `_apply_threshold` re-implements detector decisions wrongly (adaptive/delta judged with percentage semantics, predates young-baseline). Salvage: the PR-comment renderer on `RegressionReport.to_markdown()` and an exit-code gate subcommand (plan 10 §3 Q6's "concrete need" — cite this PR there). |
 
 ## 15. Audit all-clears (do not re-investigate)
