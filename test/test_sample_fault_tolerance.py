@@ -63,7 +63,7 @@ class Counting(bn.ParametrizedSweep):
 def _run(fail_at=(), exc_type=RuntimeError, *, executor=Executors.SERIAL, **run_kwargs):
     Flaky.fail_at = tuple(fail_at)
     Flaky.exc_type = exc_type
-    cfg = bn.BenchRunCfg(executor=executor, **run_kwargs)
+    cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(executor=executor, **run_kwargs))
     cfg.visualization.auto_plot = False
     cfg.cache.results = False
     cfg.cache.samples = False
@@ -90,8 +90,8 @@ class TestDefaultIsFailFast(unittest.TestCase):
         self.assertEqual(res.failed_fraction, 0.0)
 
     def test_catch_defaults_to_empty(self) -> None:
-        self.assertEqual(bn.BenchRunCfg().catch, ())
-        self.assertIs(bn.BenchRunCfg().fail_on_sample_error, False)
+        self.assertEqual(bn.BenchRunCfg().execution.catch, ())
+        self.assertIs(bn.BenchRunCfg().execution.fail_on_sample_error, False)
 
 
 class TestCatch(unittest.TestCase):
@@ -252,7 +252,8 @@ class TestTheFractionIsOverExecutedSamples(unittest.TestCase):
         # that first sweep, or the second one would clear the cache it is meant to
         # be reading.
         cfg = bn.BenchRunCfg(
-            catch=(RuntimeError,), cache_samples=True, clear_sample_cache=True, **kwargs
+            execution=bn.ExecutionCfg(catch=(RuntimeError,), **kwargs),
+            cache=bn.CacheCfg(samples=True, clear_samples=True),
         )
         cfg.visualization.auto_plot = False
         cfg.cache.results = False
@@ -301,7 +302,11 @@ class TestTheCacheHitPathIsNotThisRunsErrors(unittest.TestCase):
     """
 
     def _bench(self, **kwargs):
-        cfg = bn.BenchRunCfg(catch=(RuntimeError,), cache_results=True, **kwargs)
+        clear_cache = kwargs.pop("clear_cache", False)
+        cfg = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(catch=(RuntimeError,), **kwargs),
+            cache=bn.CacheCfg(results=True, clear=clear_cache),
+        )
         cfg.visualization.auto_plot = False
         cfg.cache.samples = False
         return Flaky().to_bench(cfg)
@@ -366,7 +371,9 @@ class TestCatchIsValidatedEagerly(unittest.TestCase):
         for kwargs in ({"catch": "RuntimeError"}, {"fail_on_sample_error": 50}):
             with self.subTest(**kwargs):
                 Counting.calls = []
-                cfg = bn.BenchRunCfg(cache_samples=False, **kwargs)
+                cfg = bn.BenchRunCfg(
+                    cache=bn.CacheCfg(samples=False), execution=bn.ExecutionCfg(**kwargs)
+                )
                 cfg.visualization.auto_plot = False
                 cfg.cache.results = False
                 bench = Counting().to_bench(cfg)

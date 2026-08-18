@@ -66,7 +66,9 @@ class _Spy(BenchResultBase):
 
     # pylint: disable=super-init-not-called
     def __init__(self, over_time: bool = True) -> None:
-        self.bench_cfg = type("_Cfg", (), {"over_time": over_time})()
+        self.bench_cfg = type(
+            "_Cfg", (), {"time": type("_TimeCfg", (), {"over_time": over_time})()}
+        )()
         self.object_index = []
         self.seen: list[xr.Dataset] = []
 

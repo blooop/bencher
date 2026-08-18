@@ -574,13 +574,13 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
         list(OnHistoryReset). Only an identity/type check catches a second,
         drifting definition of the vocabulary.
         """
-        objects = list(BenchRunCfg.param.on_history_reset.objects)
+        objects = list(TimeCfg.param.on_history_reset.objects)
         self.assertEqual(objects, list(OnHistoryReset))
         for obj in objects:
             self.assertIsInstance(obj, OnHistoryReset)
 
     def test_run_cfg_default_is_an_enum_member(self):
-        self.assertIs(BenchRunCfg().on_history_reset, OnHistoryReset.WARN)
+        self.assertIs(BenchRunCfg().time.on_history_reset, OnHistoryReset.WARN)
 
     def test_plot_sweep_normalizes_a_string_policy_to_a_member(self):
         """plot_sweep assigns the member back, so downstream readers see the enum.
@@ -612,7 +612,7 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
         """
         bench = bn.Bench("policy-presample", _CountingSweep())
         run_cfg = BenchRunCfg(execution=ExecutionCfg(repeats=1), time=TimeCfg(over_time=True))
-        run_params = (run_cfg.param.on_history_reset, BenchCfg.param.on_history_reset)
+        run_params = (TimeCfg.param.on_history_reset,)
         for p in run_params:
             p.check_on_set = False
         self.addCleanup(lambda: [setattr(p, "check_on_set", True) for p in run_params])

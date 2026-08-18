@@ -1,4 +1,4 @@
-from bencher.bench_cfg import CacheCfg, DisplayCfg, VisualizationCfg
+from bencher.bench_cfg import CacheCfg, DisplayCfg, ExecutionCfg, TimeCfg, VisualizationCfg
 import logging
 import os
 import random

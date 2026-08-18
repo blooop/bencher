@@ -454,7 +454,7 @@ class ResultCollector:
         # tuple is already fail-fast, and result() keeps a single call site.
         # Normalized here as well as in plot_sweep, because store_results is also
         # reachable with a hand-built BenchRunCfg that never passed through it.
-        catch = normalize_catch(getattr(bench_run_cfg, "catch", ()))
+        catch = normalize_catch(bench_run_cfg.execution.catch)
         try:
             result = job_result.result()
         # Ordered *before* `except catch`, deliberately: a worker that returned

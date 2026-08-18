@@ -111,7 +111,7 @@ def _contract_messages(record) -> list[str]:
 
 
 def _run(worker, *, executor=Executors.SERIAL, **run_kwargs):
-    cfg = bn.BenchRunCfg(executor=executor, **run_kwargs)
+    cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(executor=executor, **run_kwargs))
     cfg.visualization.auto_plot = False
     cfg.cache.results = False
     cfg.cache.samples = False
@@ -467,7 +467,7 @@ class TestExecutorNormalization:
         bench = WrongLengthVec().to_bench(cfg)
         try:
             bench.plot_sweep(input_vars=["x"], plot_callbacks=False)
-            assert bench.last_run_cfg.executor is Executors.SERIAL
+            assert bench.last_run_cfg.execution.executor is Executors.SERIAL
             assert cfg.execution.executor == "SERIAL", "the caller's own config is not mutated"
         finally:
             bench.close()

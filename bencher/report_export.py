@@ -336,7 +336,7 @@ def compare_results(baseline: BenchResult, candidate: BenchResult, *, run_cfg=No
         )
 
     if run_cfg is None:
-        from bencher.bench_cfg import BenchRunCfg
+        from bencher.bench_cfg import BenchRunCfg, RegressionCfg
 
         run_cfg = BenchRunCfg(regression=RegressionCfg(method="percentage"))
 

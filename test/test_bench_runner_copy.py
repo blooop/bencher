@@ -27,10 +27,10 @@ MUTABLE_PARAM_TYPES = (param.List, param.Dict, param.ClassSelector, param.Tuple)
 # an isolation test in this file. Every copy point in BenchRunner (setup_run_cfg
 # and both copies in run()) uses deepcopy, which recursively copies container
 # values, and each field's class-level default is None so no container is ever
-# shared between instances via the param default.
+# shared between instances via the param default. Keyed by sub-config class.
 REVIEWED_MUTABLE_FIELDS = {
     # dict[str, float | dict[str, float]]; see test_regression_overrides_dict_is_isolated_by_copy
-    "regression_overrides",
+    bn.RegressionCfg: {"overrides"},
 }
 
 
@@ -88,8 +88,8 @@ class TestPerIterationIsolation(unittest.TestCase):
 
         self.assertEqual(len(received_cfgs), 2)
         self.assertIsNot(received_cfgs[0], received_cfgs[1])
-        self.assertEqual(received_cfgs[0].subsampling_divisions, 2)
-        self.assertEqual(received_cfgs[1].subsampling_divisions, 3)
+        self.assertEqual(received_cfgs[0].execution.subsampling_divisions, 2)
+        self.assertEqual(received_cfgs[1].execution.subsampling_divisions, 3)
 
     def test_subsampling_divisions_repeats_combinations(self):
         """Multi-subsampling_divisions, multi-repeat runs must produce the exact (subsampling_divisions, repeats) pairs."""
@@ -137,37 +137,67 @@ class TestSetupRunCfg(unittest.TestCase):
 class TestCopyStrategyGuards(unittest.TestCase):
     """Guard tests to catch future changes that would break copy assumptions."""
 
-    def test_benchruncfg_has_no_mutable_param_fields(self):
-        """Guard: BenchRunCfg must only have primitive/immutable param fields.
+    SUB_CFG_CLASSES = (
+        bn.ServerCfg,
+        bn.ExecutionCfg,
+        bn.CacheCfg,
+        bn.DisplayCfg,
+        bn.VisualizationCfg,
+        bn.TimeCfg,
+        bn.RegressionCfg,
+    )
 
-        If this test fails, a mutable param field was added to BenchRunCfg.
-        The BenchRunner.run() copy strategy assumes all fields are primitive.
-        Adding a mutable field (List, Dict, etc.) requires reviewing the copy
-        strategy in BenchRunner.run() and setup_run_cfg(), then recording the
-        review in REVIEWED_MUTABLE_FIELDS with an isolation test.
+    def test_benchruncfg_has_no_mutable_param_fields(self):
+        """Guard: config params must be primitive/immutable, or reviewed.
+
+        The sub-config ClassSelector slots are mutable by design; they are safe
+        because instantiate=True gives every BenchRunCfg a fresh copy (pinned in
+        test_bench_cfg) and every BenchRunner copy point deepcopies. Within each
+        sub-config, adding another mutable field (List, Dict, etc.) requires
+        reviewing the copy strategy in BenchRunner.run() and setup_run_cfg(),
+        then recording the review in REVIEWED_MUTABLE_FIELDS with an isolation
+        test.
         """
         for name, p in bn.BenchRunCfg.param.objects().items():
             if name == "name":
                 continue  # built-in param.Parameterized attribute
-            if name in REVIEWED_MUTABLE_FIELDS:
-                continue  # copy behaviour reviewed + isolation-tested (see above)
+            if isinstance(p, param.ClassSelector):
+                self.assertTrue(
+                    p.instantiate,
+                    f"BenchRunCfg.{name} must instantiate a fresh sub-config per instance",
+                )
+                continue
             self.assertNotIsInstance(
                 p,
                 MUTABLE_PARAM_TYPES,
                 f"BenchRunCfg.{name} is {type(p).__name__}, a mutable param type. "
                 f"Review the copy strategy in BenchRunner.run() before proceeding.",
             )
+        for cls in self.SUB_CFG_CLASSES:
+            reviewed = REVIEWED_MUTABLE_FIELDS.get(cls, set())
+            for name, p in cls.param.objects().items():
+                if name == "name" or name in reviewed:
+                    continue
+                self.assertNotIsInstance(
+                    p,
+                    MUTABLE_PARAM_TYPES,
+                    f"{cls.__name__}.{name} is {type(p).__name__}, a mutable param type. "
+                    f"Review the copy strategy in BenchRunner.run() before proceeding.",
+                )
 
     def test_reviewed_mutable_fields_have_immutable_defaults(self):
         """Guard: reviewed mutable fields must default to None.
 
         deepcopy protects instance values at every BenchRunner copy point, but
         a mutable class-level *default* would still be shared by every
-        BenchRunCfg that never assigns the field.
+        config that never assigns the field.
         """
-        params = bn.BenchRunCfg.param.objects()
-        for name in REVIEWED_MUTABLE_FIELDS:
-            self.assertIsNone(params[name].default, f"BenchRunCfg.{name} default must be None")
+        for cls, names in REVIEWED_MUTABLE_FIELDS.items():
+            for name in names:
+                self.assertIsNone(
+                    cls.param.objects()[name].default,
+                    f"{cls.__name__}.{name} default must be None",
+                )
 
     def test_regression_overrides_dict_is_isolated_by_copy(self):
         """The overrides dict — including nested specs — must not be shared
