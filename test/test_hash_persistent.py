@@ -808,7 +808,7 @@ class TestGoldenBenchCfgHash:
 
     def test_cache_version_participates_in_hash(self):
         """Bumping CACHE_VERSION must change the hash atomically."""
-        import bencher.bench_cfg as bench_cfg_mod
+        import bencher.bench_cfg.bench_cfg_class as bench_cfg_mod
 
         cfg = _build_golden_bench_cfg()
         original = cfg.hash_persistent(include_repeats=True)

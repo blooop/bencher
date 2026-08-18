@@ -73,11 +73,14 @@ DECLARATIONS = {
 
 RUN_CFGS = {
     "default": {},
-    "over_time": {"over_time": True},
-    "repeats_3": {"repeats": 3},
-    "subsampling_2": {"subsampling_divisions": 2},
-    "subsampling_4_over_time": {"subsampling_divisions": 4, "over_time": True, "repeats": 2},
-    "samples_per_var": {"samples_per_var": 4},
+    "over_time": {"time": dict(over_time=True)},
+    "repeats_3": {"execution": dict(repeats=3)},
+    "subsampling_2": {"execution": dict(subsampling_divisions=2)},
+    "subsampling_4_over_time": {
+        "execution": dict(subsampling_divisions=4, repeats=2),
+        "time": dict(over_time=True),
+    },
+    "samples_per_var": {"execution": dict(samples_per_var=4)},
     "run_tag": {"run_tag": "rt"},
 }
 
@@ -87,9 +90,9 @@ class TestEquivalence(unittest.TestCase):
 
     def _check(self, decl: dict, run_kwargs: dict) -> None:
         predicted = bn.sweep_identity(
-            worker=ExampleBenchCfg, run_cfg=bn.BenchRunCfg(**run_kwargs), **decl
+            worker=ExampleBenchCfg, run_cfg=bn.BenchRunCfg.with_defaults(None, **run_kwargs), **decl
         )
-        actual = _real_run(bn.BenchRunCfg(**run_kwargs), **decl)
+        actual = _real_run(bn.BenchRunCfg.with_defaults(None, **run_kwargs), **decl)
         self.assertEqual(predicted.cache_key, actual.cache_key, "cache_key")
         self.assertEqual(predicted.history_key, actual.history_key, "history_key")
         self.assertEqual(predicted.sample_key, actual.sample_key, "sample_key")
@@ -113,7 +116,10 @@ class TestEquivalence(unittest.TestCase):
 
     def test_auto_discovered_vars(self) -> None:
         """input_vars=None auto-discovers; the prediction must discover the same."""
-        self._check({"result_vars": ["out_sin"], "const_vars": {}}, {"subsampling_divisions": 2})
+        self._check(
+            {"result_vars": ["out_sin"], "const_vars": {}},
+            {"execution": dict(subsampling_divisions=2)},
+        )
 
 
 class TestKeySemantics(unittest.TestCase):
@@ -489,7 +495,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
     def check_cache_version(self) -> None:
         """A version bump is meant to invalidate every key at once."""
         base = self._ident()
-        with mock.patch("bencher.bench_cfg.CACHE_VERSION", 10_000):
+        with mock.patch("bencher.bench_cfg.bench_cfg_class.CACHE_VERSION", 10_000):
             bumped = self._ident()
         self._assert_keys_move(base, bumped)
         self.assertNotEqual(base.sample_key, bumped.sample_key)

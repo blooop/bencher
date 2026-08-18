@@ -71,7 +71,7 @@ class TestSignatureFields(unittest.TestCase):
     def test_samples_per_point_full(self):
         cfg = run_sweep(repeats=2).plt_cnt_cfg
         self.assertEqual(cfg.samples_per_point, 2)
-        self.assertEqual(cfg.execution.repeats, 2)
+        self.assertEqual(cfg.repeats, 2)
 
     def test_no_dataset_defaults(self):
         res = run_sweep()

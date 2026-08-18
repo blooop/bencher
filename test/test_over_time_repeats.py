@@ -42,13 +42,13 @@ class FloatBench(bn.ParametrizedSweep):
 def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, **cfg_kwargs):
     """Helper to run a benchmark over multiple time points.
 
-    Extra keyword arguments are forwarded as BenchRunCfg attribute overrides.
+    Extra keyword arguments are forwarded as TimeCfg attribute overrides.
     """
     run_cfg = bn.BenchRunCfg()
     run_cfg.time.over_time = True
     run_cfg.execution.repeats = repeats
     for k, v in cfg_kwargs.items():
-        setattr(run_cfg, k, v)
+        setattr(run_cfg.time, k, v)
     bench = benchable.to_bench(run_cfg)
     base_time = datetime(2000, 1, 1)
 
@@ -287,7 +287,7 @@ class TestShowAggregatedTimeTab:
         assert self._count_agg_tabs(plots) == 0
 
     def test_aggregated_tab_present_when_enabled(self):
-        """With show_aggregated_time_tab=True, aggregated tab should appear."""
+        """With show_aggregated_tab=True, aggregated tab should appear."""
         benchable = SimpleBench()
         res = _run_over_time(
             benchable,
@@ -295,7 +295,7 @@ class TestShowAggregatedTimeTab:
             ["latency"],
             repeats=1,
             snapshots=3,
-            show_aggregated_time_tab=True,
+            show_aggregated_tab=True,
         )
         plots = res.to_auto_plots()
         assert self._count_agg_tabs(plots) > 0
@@ -309,7 +309,7 @@ class TestShowAggregatedTimeTab:
             ["time"],
             repeats=3,
             snapshots=3,
-            show_aggregated_time_tab=False,
+            show_aggregated_tab=False,
         )
         plots = res.to_auto_plots()
         assert self._count_agg_tabs(plots) == 0

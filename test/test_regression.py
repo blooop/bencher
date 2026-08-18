@@ -1182,7 +1182,7 @@ class TestDetectRegressions:
         with caplog.at_level(_logging.WARNING):
             report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.results == []
-        assert any("regression_delta" in rec.message for rec in caplog.records)
+        assert any("regression.delta" in rec.message for rec in caplog.records)
 
     def test_method_absolute_opt_dir_none_skipped(self, caplog):
         import logging as _logging
@@ -1578,9 +1578,9 @@ class TestRegressionOverrides:
 
         selector_methods = set(bn.RegressionCfg.param.method.objects)
         assert set(_METHOD_THRESHOLD_ATTR) == selector_methods
-        cfg_params = bn.BenchRunCfg.param.objects()
+        cfg_params = bn.RegressionCfg.param.objects()
         for attr in _METHOD_THRESHOLD_ATTR.values():
-            assert attr in cfg_params, f"BenchRunCfg has no param '{attr}'"
+            assert attr in cfg_params, f"RegressionCfg has no param '{attr}'"
 
 
 class TestRegressionError:

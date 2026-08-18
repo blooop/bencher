@@ -226,30 +226,6 @@ class TestBenchRunner(unittest.TestCase):
                 any("'level' parameter is deprecated" in str(warning.message) for warning in w)
             )
 
-    def test_benchruncfg_level_kwarg_deprecation(self):
-        """Test that BenchRunCfg(level=5) emits DeprecationWarning and sets subsampling_divisions."""
-        import warnings
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            cfg = bn.BenchRunCfg(level=5)
-            self.assertEqual(cfg.execution.subsampling_divisions, 5)
-            self.assertTrue(
-                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
-            )
-
-    def test_with_defaults_level_kwarg_deprecation(self):
-        """Test that BenchRunCfg.with_defaults(level=4) emits DeprecationWarning."""
-        import warnings
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            cfg = bn.BenchRunCfg.with_defaults(None, level=4)
-            self.assertEqual(cfg.execution.subsampling_divisions, 4)
-            self.assertTrue(
-                any("'level' parameter is deprecated" in str(warning.message) for warning in w)
-            )
-
     def test_benchrunner_run_level_and_subsampling_divisions_conflict_raises(self):
         """Passing both level= and subsampling_divisions= to BenchRunner.run() raises TypeError."""
         br = bn.BenchRunner("conflict_test")

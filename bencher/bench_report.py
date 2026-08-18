@@ -501,7 +501,7 @@ if (_embedded) {{
             run_cfg = BenchRunCfg()
 
         bench_name = self.bench_name or ""
-        return BenchPlotServer().plot_server(bench_name, run_cfg, self.pane)
+        return BenchPlotServer().plot_server(bench_name, run_cfg.server, self.pane)
 
     def publish_gh_pages(
         self,
