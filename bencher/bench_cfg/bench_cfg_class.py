@@ -292,9 +292,7 @@ class BenchCfg(BenchRunCfg):
             result_hashes = ()
 
         const_hashes = tuple(
-            sorted(
-                {hash_sha1((v[0].hash_persistent(), hash_sha1(v[1]))) for v in self.const_vars}
-            )
+            sorted({hash_sha1((v[0].hash_persistent(), hash_sha1(v[1]))) for v in self.const_vars})
         )
 
         return hash_sha1((hash_val, result_hashes, const_hashes))

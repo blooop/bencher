@@ -257,7 +257,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
             case AlgoSetting.poor:
                 self.accuracy -= 20'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=10))
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 10})
 
 bench = GettingStartedBenchmark().to_bench(run_cfg)
 

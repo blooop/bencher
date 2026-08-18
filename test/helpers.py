@@ -29,7 +29,9 @@ def inner_element(overlay):
     return items[0]
 
 
-def run_cfg_with(repeats: int, over_time: bool = False, clear_history: bool = False) -> bn.BenchRunCfg:
+def run_cfg_with(
+    repeats: int, over_time: bool = False, clear_history: bool = False
+) -> bn.BenchRunCfg:
     """A BenchRunCfg with caching and auto-plot disabled for the given repeat count."""
     return bn.BenchRunCfg(
         execution=bn.ExecutionCfg(repeats=repeats),

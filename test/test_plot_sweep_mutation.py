@@ -12,8 +12,8 @@ import unittest
 from copy import deepcopy
 
 import bencher as bn
-from bencher.bench_cfg import ExecutionCfg, TimeCfg, VisualizationCfg
 from bencher import Bench, BenchRunCfg
+from bencher.bench_cfg import ExecutionCfg, TimeCfg, VisualizationCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 

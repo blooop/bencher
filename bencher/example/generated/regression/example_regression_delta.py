@@ -24,7 +24,7 @@ class LatencyBenchmark(bn.ParametrizedSweep):
 
 def example_regression_delta(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Regression detection — absolute delta guard."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 2})
     run_cfg.regression.enabled = True
     run_cfg.regression.method = "delta"
     run_cfg.regression.delta = 2.0  # ms — max acceptable change vs historical mean

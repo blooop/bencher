@@ -228,7 +228,9 @@ class ResultCollector:
     def get_benchmark_cache(self) -> Cache:
         """Return the persistent benchmark_inputs Cache, creating it on first access."""
         if self._benchmark_cache is None:
-            self._benchmark_cache = Cache("cachedir/benchmark_inputs", size_limit=self.cache_size_bytes)
+            self._benchmark_cache = Cache(
+                "cachedir/benchmark_inputs", size_limit=self.cache_size_bytes
+            )
         return self._benchmark_cache
 
     def get_history_cache(self) -> Cache:

@@ -1,4 +1,3 @@
-from bencher.bench_cfg import CacheCfg, DisplayCfg, ExecutionCfg, TimeCfg, VisualizationCfg
 import logging
 import os
 import random
@@ -14,6 +13,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from bencher import Bench, BenchCfg, BenchRunCfg
+from bencher.bench_cfg import CacheCfg, DisplayCfg, ExecutionCfg, TimeCfg, VisualizationCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 
 logger = logging.getLogger(__name__)
@@ -465,26 +465,26 @@ class TestBenchRunCfgWithDefaults(unittest.TestCase):
     """Tests for BenchRunCfg.with_defaults merging behavior."""
 
     def test_none_creates_fresh_instance(self):
-        cfg = BenchRunCfg.with_defaults(None, execution=dict(repeats=5, subsampling_divisions=4))
+        cfg = BenchRunCfg.with_defaults(None, execution={"repeats": 5, "subsampling_divisions": 4})
         self.assertEqual(cfg.execution.repeats, 5)
         self.assertEqual(cfg.execution.subsampling_divisions, 4)
 
     def test_defaults_applied_to_param_default_fields(self):
         cfg = BenchRunCfg()
-        cfg = BenchRunCfg.with_defaults(cfg, execution=dict(repeats=5, subsampling_divisions=4))
+        cfg = BenchRunCfg.with_defaults(cfg, execution={"repeats": 5, "subsampling_divisions": 4})
         self.assertEqual(cfg.execution.repeats, 5)
         self.assertEqual(cfg.execution.subsampling_divisions, 4)
 
     def test_caller_set_fields_not_overwritten(self):
         cfg = BenchRunCfg(execution=ExecutionCfg(repeats=10))
-        cfg = BenchRunCfg.with_defaults(cfg, execution=dict(repeats=5, subsampling_divisions=4))
+        cfg = BenchRunCfg.with_defaults(cfg, execution={"repeats": 5, "subsampling_divisions": 4})
         self.assertEqual(cfg.execution.repeats, 10)  # caller's value preserved
         self.assertEqual(cfg.execution.subsampling_divisions, 4)  # default still applied
 
     def test_multiple_defaults_in_one_call(self):
         cfg = BenchRunCfg(execution=ExecutionCfg(subsampling_divisions=2))
         cfg = BenchRunCfg.with_defaults(
-            cfg, execution=dict(repeats=3, subsampling_divisions=7, headless=True)
+            cfg, execution={"repeats": 3, "subsampling_divisions": 7, "headless": True}
         )
         self.assertEqual(cfg.execution.repeats, 3)  # was at default, so applied
         self.assertEqual(cfg.execution.subsampling_divisions, 2)  # caller set, so preserved
@@ -493,7 +493,7 @@ class TestBenchRunCfgWithDefaults(unittest.TestCase):
     def test_does_not_mutate_original(self):
         original = BenchRunCfg()
         original_repeats = original.execution.repeats
-        result = BenchRunCfg.with_defaults(original, execution=dict(repeats=99))
+        result = BenchRunCfg.with_defaults(original, execution={"repeats": 99})
         self.assertEqual(result.execution.repeats, 99)
         self.assertEqual(original.execution.repeats, original_repeats)  # unchanged
         self.assertIsNot(result, original)

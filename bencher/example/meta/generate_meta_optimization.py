@@ -108,7 +108,7 @@ class MetaOptimizationOverTime(MetaGeneratorBase):
         )
 
         body_lines = [
-            "run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=3))",
+            'run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 3})',
             "benchable = ServerOptimizer()",
             "bench = benchable.to_bench(run_cfg)",
             "_base_time = datetime(2000, 1, 1)",
@@ -168,7 +168,7 @@ class MetaOptimizationAggregated(MetaGeneratorBase):
             )
 
             body_lines = [
-                "run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=3))",
+                'run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 3})',
                 "benchable = AlgorithmBench()",
                 "bench = benchable.to_bench(run_cfg)",
                 "_base_time = datetime(2000, 1, 1)",

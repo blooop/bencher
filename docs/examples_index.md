@@ -21,7 +21,7 @@ Run any of them with `pixi run python bencher/example/<file>.py`.
 
 | File | What it shows |
 |---|---|
-| [`example_image.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_image.py) | Renders a polygon to a PNG per sample with PIL and returns the path as a `ResultImage`, alongside numeric `area`/`side_length` results. Progressively adds sweep dimensions and appends `to_panes()` for each, and disables `cache_results` because the results are file paths. |
+| [`example_image.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_image.py) | Renders a polygon to a PNG per sample with PIL and returns the path as a `ResultImage`, alongside numeric `area`/`side_length` results. Progressively adds sweep dimensions and appends `to_panes()` for each, and disables `cache.results` because the results are file paths. |
 | [`example_video.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_video.py) | Simulates a Turing reaction-diffusion pattern, accumulates frames through `bn.VideoWriter()`, and returns the written file as a `ResultVideo`. `example_video_tap` additionally builds a `to_video_grid()` view. |
 | [`example_rerun.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_rerun.py) | Samples a 1D float variable and captures a [Rerun](https://rerun.io/) recording per sweep point. |
 | [`example_rerun2.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_rerun2.py) | Two paths for an `.rrd` file: view it locally via `rrd_to_pane`, or publish it to a git branch for sharing. |
@@ -33,8 +33,8 @@ Run any of them with `pixi run python bencher/example/<file>.py`.
 
 | File | What it shows |
 |---|---|
-| [`example_sample_cache.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sample_cache.py) | `cache_samples` as crash insurance: the worker raises partway through, and a second run reloads the samples that did complete and finishes the rest. See [Caching](caching.md). |
-| [`example_sample_cache_context.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sample_cache_context.py) | Asserts exact worker/cache call counts across runs and tags, including `only_hash_tag`. The precise specification of when a sample is served from the cache. |
+| [`example_sample_cache.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sample_cache.py) | `cache.samples` as crash insurance: the worker raises partway through, and a second run reloads the samples that did complete and finishes the rest. See [Caching](caching.md). |
+| [`example_sample_cache_context.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_sample_cache_context.py) | Asserts exact worker/cache call counts across runs and tags, including `cache.only_hash_tag`. The precise specification of when a sample is served from the cache. |
 | [`example_collect_render.py`](https://github.com/blooop/bencher/blob/main/bencher/example/example_collect_render.py) | The collect/render split: `Bench.collect()` runs the sweep without constructing any plotting objects, `bn.save_result()` persists it, and `bn.render_report()` builds the HTML — safely from a separate process. |
 
 ## Configuration sources
@@ -104,7 +104,7 @@ These sit in the same directory but are imported rather than run:
 | [YAML Sweeps](reference/meta/yaml/index) | Sweeping over YAML-defined configurations |
 | [Cartesian Animation](reference/meta/cartesian_animation/index) | An animated build-up of the Cartesian product |
 | [Advanced Patterns](reference/meta/advanced/index) | Time events, cache patterns, shared axes, report saving |
-| [Regression Detection](reference/meta/regression/index) | One example per `regression_method` |
+| [Regression Detection](reference/meta/regression/index) | One example per `regression.method` |
 | [Performance](reference/meta/performance/index) | Bencher's own overhead |
 | [Publishing](reference/meta/publishing/index) | Publishing reports |
 | [Rerun Integration](reference/meta/rerun/index) | Rerun recordings as results |

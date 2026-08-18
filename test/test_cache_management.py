@@ -100,7 +100,7 @@ class _TempCacheMixin:
         # Real cachedirs always carry the version stamp ensure_cache_version()
         # writes; reachability treats a cache tree without a matching stamp as
         # unreadable (see TestBlobReachabilityVersionGuard).
-        Path(self.cachedir, "CACHE_VERSION").write_text(CACHE_VERSION)
+        Path(self.cachedir, "CACHE_VERSION").write_text(CACHE_VERSION, encoding="utf-8")
         return path
 
     def _make_job_media(self, folder, filename, job_key, content=b"x" * 100):
@@ -392,7 +392,7 @@ class TestBlobReachabilityVersionGuard(_TempCacheMixin, unittest.TestCase):
 
     def test_stale_version_stamp_aborts_the_scan(self):
         self._make_managed_cache("history", {"k": _record(_cells([f"/c/blobs/{BLOB_A}"]))})
-        Path(self.cachedir, "CACHE_VERSION").write_text("0")
+        Path(self.cachedir, "CACHE_VERSION").write_text("0", encoding="utf-8")
         reach = blob_reachability(self.cachedir)
         self.assertFalse(reach.complete)
         self.assertEqual(reach.names, frozenset())
@@ -407,7 +407,7 @@ class TestBlobReachabilityVersionGuard(_TempCacheMixin, unittest.TestCase):
 
     def test_gc_deletes_nothing_under_a_stale_stamp(self):
         self._make_managed_cache("history", {"k": _record(_cells([]))})
-        Path(self.cachedir, "CACHE_VERSION").write_text("0")
+        Path(self.cachedir, "CACHE_VERSION").write_text("0", encoding="utf-8")
         blob = Path(self.cachedir) / "blobs" / BLOB_A
         blob.parent.mkdir(parents=True, exist_ok=True)
         blob.write_bytes(b"payload")

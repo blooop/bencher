@@ -527,7 +527,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
             if self.sample_with_repeats > 1:
                 cfg_line = (
                     f"run_cfg = bn.BenchRunCfg.with_defaults"
-                    f"(run_cfg, execution=dict(repeats={self.sample_with_repeats}))\n"
+                    f'(run_cfg, execution={{"repeats": {self.sample_with_repeats}}})\n'
                 )
             else:
                 cfg_line = "if run_cfg is None:\n    run_cfg = bn.BenchRunCfg()\n"

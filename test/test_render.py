@@ -1,6 +1,5 @@
 """Tests for the collect/render split: Bench.collect, save/load, render_report, CLI."""
 
-from bencher.bench_cfg import ExecutionCfg
 import gc
 import pickle
 import tempfile
@@ -12,6 +11,7 @@ from unittest import mock
 import pytest
 
 from bencher import Bench, BenchRunCfg, load_result, render_report, save_result
+from bencher.bench_cfg import ExecutionCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.render import _prog
 from bencher.render import main as render_main

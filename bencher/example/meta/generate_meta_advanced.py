@@ -68,7 +68,7 @@ class NoisySensor(bn.ParametrizedSweep):
         if self.noise_scale > 0:
             self.reading += random.gauss(0, self.noise_scale)'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=5))
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 5})
 
 # run_tag partitions the cache so different experiment runs don't collide.
 run_cfg.run_tag = "sensor_v1"

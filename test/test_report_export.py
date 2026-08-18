@@ -1,6 +1,5 @@
 """Tests for machine-readable result export (bencher.report_export)."""
 
-from bencher.bench_cfg import ExecutionCfg
 import json
 import tempfile
 import unittest
@@ -18,6 +17,7 @@ from bencher import (
     result_to_json,
     series_for_var,
 )
+from bencher.bench_cfg import ExecutionCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.regression import RegressionReport, RegressionResult
 

@@ -116,6 +116,6 @@ class RegressionCfg(param.Parameterized):
         """This group exposes no command-line flags."""
 
     @classmethod
-    def apply_cli_args(cls, namespace: argparse.Namespace) -> RegressionCfg:
+    def apply_cli_args(cls, _namespace: argparse.Namespace) -> RegressionCfg:
         """This group exposes no command-line flags; returns the defaults."""
         return cls()

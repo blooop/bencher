@@ -73,14 +73,14 @@ DECLARATIONS = {
 
 RUN_CFGS = {
     "default": {},
-    "over_time": {"time": dict(over_time=True)},
-    "repeats_3": {"execution": dict(repeats=3)},
-    "subsampling_2": {"execution": dict(subsampling_divisions=2)},
+    "over_time": {"time": {"over_time": True}},
+    "repeats_3": {"execution": {"repeats": 3}},
+    "subsampling_2": {"execution": {"subsampling_divisions": 2}},
     "subsampling_4_over_time": {
-        "execution": dict(subsampling_divisions=4, repeats=2),
-        "time": dict(over_time=True),
+        "execution": {"subsampling_divisions": 4, "repeats": 2},
+        "time": {"over_time": True},
     },
-    "samples_per_var": {"execution": dict(samples_per_var=4)},
+    "samples_per_var": {"execution": {"samples_per_var": 4}},
     "run_tag": {"run_tag": "rt"},
 }
 
@@ -118,7 +118,7 @@ class TestEquivalence(unittest.TestCase):
         """input_vars=None auto-discovers; the prediction must discover the same."""
         self._check(
             {"result_vars": ["out_sin"], "const_vars": {}},
-            {"execution": dict(subsampling_divisions=2)},
+            {"execution": {"subsampling_divisions": 2}},
         )
 
 

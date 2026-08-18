@@ -63,7 +63,6 @@ class TestSubsamplingDivisionsToSamples(unittest.TestCase):
             ExecutionCfg.subsampling_divisions_to_samples(99)
 
 
-
 # ---------- with_level backward-compat ----------
 
 

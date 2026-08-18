@@ -42,7 +42,6 @@ def _stamp_cache_version(tmp_path):
     (tmp_path / "CACHE_VERSION").write_text(cache_management.CACHE_VERSION)
 
 
-
 def blob_basename(path: str) -> str:
     """Basename of *path*, which is the identity the reachability scan matches on."""
     return Path(path).name

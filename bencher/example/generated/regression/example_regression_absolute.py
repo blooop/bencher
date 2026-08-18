@@ -22,7 +22,7 @@ class SlaBenchmark(bn.ParametrizedSweep):
 
 def example_regression_absolute(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Regression detection — hard absolute ceiling."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 2})
     run_cfg.regression.enabled = True
     run_cfg.regression.method = "absolute"
     # SLA: response_time must stay below 25 ms no matter what history says.

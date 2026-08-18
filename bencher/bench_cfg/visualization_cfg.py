@@ -50,6 +50,6 @@ class VisualizationCfg(param.Parameterized):
         """This group exposes no command-line flags."""
 
     @classmethod
-    def apply_cli_args(cls, namespace: argparse.Namespace) -> VisualizationCfg:
+    def apply_cli_args(cls, _namespace: argparse.Namespace) -> VisualizationCfg:
         """This group exposes no command-line flags; returns the defaults."""
         return cls()

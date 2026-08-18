@@ -23,7 +23,7 @@ def example_sweep_0_float_0_cat_over_time_repeats(
     run_cfg: bn.BenchRunCfg | None = None,
 ) -> bn.Bench:
     """0 Float, 0 Categorical (over time repeats)."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=3))
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 3})
     benchable = BaselineCheck()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)

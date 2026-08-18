@@ -46,6 +46,7 @@ from bencher import cache_management
 from bencher.blob_store import _HASH_CHARS, blob_name, load_blob, materialize_blob
 from bencher.cache_management import blob_reachability, clean_orphaned_blobs
 
+
 @pytest.fixture(autouse=True)
 def _stamp_cache_version(tmp_path):
     """Reachability aborts on a missing/stale CACHE_VERSION stamp; real cachedirs

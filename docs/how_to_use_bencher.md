@@ -286,7 +286,7 @@ available and as a labelled placeholder where it is not. See the
 for a working sweep.
 
 Those payloads accumulate in `cachedir/blobs/`, one file per distinct payload, and aging an
-event out with `max_time_events` leaves its file behind. `bn.clean_orphaned_blobs()` reports
+event out with `time.max_events` leaves its file behind. `bn.clean_orphaned_blobs()` reports
 the blobs no stored result or history event references any more (`dry_run=False` reclaims
 them; `pixi run cache-blob-orphans` / `cache-blob-gc` from a checkout). Results written with
 `bn.save_result` live at paths bencher does not record, so pass them as
@@ -417,25 +417,41 @@ the duplicate; the key then matches what a correct declaration would have produc
 
 ## Run Configuration
 
-`BenchRunCfg` has many options, but you rarely need more than a few:
+`BenchRunCfg` groups its options into seven sub-configs, reached as attributes:
+`execution` (`ExecutionCfg`), `cache` (`CacheCfg`), `time` (`TimeCfg`), `regression`
+(`RegressionCfg`), `visualization` (`VisualizationCfg`), `display` (`DisplayCfg`), and
+`server` (`ServerCfg`). Only `run_tag` and `run_date` stay flat on `BenchRunCfg` itself.
+You rarely need more than a few options:
 
 | Parameter | Default | What it does |
 |---|---|---|
-| `subsampling_divisions` | 0 | Sampling density per dimension (see Subsampling Divisions System above) |
-| `repeats` | 1 | How many times to evaluate each combination |
-| `cache_samples` | False | Cache individual results across runs (resume interrupted sweeps) |
-| `cache_results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
-| `over_time` | False | Track results across multiple runs for time-series analysis |
-| `headless` | False | Skip opening a browser to display results |
-| `dry_run` | False | Log the sweep grid summary without executing the benchmark |
+| `execution.subsampling_divisions` | 0 | Sampling density per dimension (see Subsampling Divisions System above) |
+| `execution.repeats` | 1 | How many times to evaluate each combination |
+| `cache.samples` | False | Cache individual results across runs (resume interrupted sweeps) |
+| `cache.results` | False | Cache the entire sweep result (skip re-runs with same inputs) |
+| `time.over_time` | False | Track results across multiple runs for time-series analysis |
+| `execution.headless` | False | Skip opening a browser to display results |
+| `execution.dry_run` | False | Log the sweep grid summary without executing the benchmark |
 
-All other parameters have sensible defaults. See `BenchRunCfg`'s docstring for the
-full reference, [Caching](caching.md) for the cache flags in detail, and
-[Tracking results over time](over_time.md) for `over_time` and regression detection.
+All other parameters have sensible defaults. See the sub-config classes in
+`bencher/bench_cfg/` for the full reference, [Caching](caching.md) for the cache flags in
+detail, and [Tracking results over time](over_time.md) for `time.over_time` and regression
+detection.
+
+Set options either by constructing the sub-configs:
+
+```python
+run_cfg = bn.BenchRunCfg(
+    execution=bn.ExecutionCfg(repeats=3),
+    cache=bn.CacheCfg(results=True),
+)
+```
+
+or by mutating an existing config in place:
 
 ```python
 def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    run_cfg.cache_results = False   # disable for file-based / non-deterministic results
+    run_cfg.cache.results = False   # disable for file-based / non-deterministic results
     bench = bn.Bench("name", MyBenchmark(), run_cfg=run_cfg)
     ...
     return bench
@@ -443,6 +459,10 @@ def example_foo(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
 if __name__ == "__main__":
     bn.run(example_foo, subsampling_divisions=4)    # subsampling_divisions controls sweep detail depth
 ```
+
+`BenchRunCfg.with_defaults` returns a new config with defaults filled in per group
+(applied only where the caller did not explicitly set a value):
+`run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=5))`.
 
 ## The benchmark() Method
 
@@ -469,7 +489,7 @@ Just set result variables directly on `self`. No boilerplate required.
 
 When producing files:
 1. Write to a **unique path** per combination (use parameter values in the path)
-2. Set `run_cfg.cache_results = False`
+2. Set `run_cfg.cache.results = False`
 3. Use `bn.ResultImage()` / `bn.ResultVideo()` and set to the path string
 
 ```python
@@ -546,7 +566,7 @@ bn.comparison_to_json(baseline_res, candidate_res, "comparison.json")
 `compare_results` runs the same regression detector used by the over-time path (a percentage
 comparison by default), so each metric's `verdict` is one of `improved` / `regressed` /
 `unchanged` using identical direction/threshold semantics. Pass `run_cfg=` to choose a
-different `regression_method`.
+different `regression.method`.
 
 The same artifacts are available from the CLI on a saved result (see the collect/render split):
 
@@ -571,7 +591,7 @@ zero-baseline percent change) are emitted as `null`.
 | Many small plot_sweep calls for different combos | One plot_sweep with all input_vars |
 | Building panel/HTML layouts manually | Use bencher's report system |
 | Using the old `__call__` pattern with boilerplate | Override `benchmark()` instead |
-| Caching file-path results | Set `run_cfg.cache_results = False` |
+| Caching file-path results | Set `run_cfg.cache.results = False` |
 | Using `ResultFloat` for success/failure booleans | Use `ResultBool()` — bounds are [0, 1], plots render correctly |
 | A benchmark function that reads or mutates global state | Make it pure — see below |
 | Assuming an unrecorded result reads as `0` | It is `NaN` since v1.105 — pass `default=0` to opt out |

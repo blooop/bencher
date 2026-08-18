@@ -25,7 +25,7 @@ class ServerBenchmark(bn.ParametrizedSweep):
 
 def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Regression detection — default method over time."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 2})
     run_cfg.regression.enabled = True
     run_cfg.regression.fail = False
 

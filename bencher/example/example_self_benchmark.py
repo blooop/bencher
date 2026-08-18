@@ -71,7 +71,7 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
 
 def example_self_benchmark(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Benchmark bencher's own overhead across problem sizes."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=5))
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 5})
     bench = BencherSelfBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["num_samples"],
@@ -100,7 +100,7 @@ def example_self_benchmark_over_time(
     run_cfg: bn.BenchRunCfg | None = None,
 ) -> bn.Bench:
     """Track bencher's overhead over time, accumulating results across commits."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=5))
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 5})
     run_cfg.time.over_time = True
     run_cfg.visualization.auto_plot = False
 

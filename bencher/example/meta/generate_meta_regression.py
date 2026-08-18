@@ -289,7 +289,7 @@ class ServerBenchmark(bn.ParametrizedSweep):
         self.response_time = base_rt * leak
         self.throughput = 1000.0 / self.response_time'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 2})
 run_cfg.regression.enabled = True
 run_cfg.regression.fail = False
 
@@ -346,7 +346,7 @@ class LatencyBenchmark(bn.ParametrizedSweep):
         # baselines, but the absolute delta exceeds the guard.
         self.response_time = base_rt + self._time_offset'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 2})
 run_cfg.regression.enabled = True
 run_cfg.regression.method = "delta"
 run_cfg.regression.delta = 2.0  # ms — max acceptable change vs historical mean
@@ -403,7 +403,7 @@ class SlaBenchmark(bn.ParametrizedSweep):
         base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
         self.response_time = base_rt * (1.0 + self._time_offset)'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 2})
 run_cfg.regression.enabled = True
 run_cfg.regression.method = "absolute"
 # SLA: response_time must stay below 25 ms no matter what history says.
