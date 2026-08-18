@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.120.0"
+version = "1.121.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -90,7 +90,7 @@ docs = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.32.0,<=0.35.0", "rerun-notebook>=0.32.0,<=0.35.0"]
+rerun = ["rerun-sdk>=0.36.0,<=0.36.0", "rerun-notebook>=0.36.0,<=0.36.0"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]

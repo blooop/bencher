@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.121.0] - 2026-08-18
+
+### Changed
+- **The rerun extra names one supported version instead of a range: `rerun-sdk` and
+  `rerun-notebook` are both pinned to exactly 0.36.0, floor and ceiling.** The old
+  `>=0.32.0,<=0.35.0` window claimed to support four minor releases of an API that is still
+  alpha and reshapes archetypes and blueprint types between them, so the claim was never
+  really tested — only whichever version the lockfile happened to resolve was. Raising the
+  floor with the ceiling drops 0.32-0.35 support, which is why this is a minor and not a
+  patch. Bencher writes `.rrd` files with the installed SDK and then asks a CDN for an
+  `@rerun-io/web-viewer` build to read them back, and the two have to be the same release;
+  supporting one version at a time is what makes that pairing something the project can
+  state rather than hope for. No 0.36 call-site changes were needed — the recording stream,
+  timeline, blueprint, and archetype surfaces bencher uses are signature-compatible, and the
+  `.rrd` format still round-trips.
+- **The viewer version bencher falls back to can no longer name a release it does not
+  support.** The CDN version normally follows the installed `rerun-sdk` automatically, but
+  when that distribution has no metadata to read there is a hardcoded fallback, and it still
+  said `"0.32.0"` — below the new floor, so it would have fetched a viewer that cannot read
+  the files bencher writes. It moves to `"0.36.0"`. A stale constant like that is invisible
+  until someone opens the report, so the pin, the resolved environment, and the fallback are
+  now asserted to agree, each derived from the declared extra rather than repeating the
+  version, leaving one place to edit on the next bump.
+
 ## [1.120.0] - 2026-08-18
 
 ### Changed
