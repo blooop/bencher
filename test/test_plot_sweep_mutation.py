@@ -12,6 +12,7 @@ import unittest
 from copy import deepcopy
 
 import bencher as bn
+from bencher.bench_cfg import ExecutionCfg, TimeCfg, VisualizationCfg
 from bencher import Bench, BenchRunCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 
@@ -22,7 +23,11 @@ class TestSelfVarsMutationSafety(unittest.TestCase):
     def setUp(self):
         random.seed(42)
         self.bench = Bench("test_mutation_safety", ExampleBenchCfg())
-        self.run_cfg = BenchRunCfg(repeats=1, over_time=False, auto_plot=False)
+        self.run_cfg = BenchRunCfg(
+            execution=ExecutionCfg(repeats=1),
+            visualization=VisualizationCfg(auto_plot=False),
+            time=TimeCfg(over_time=False),
+        )
 
     def test_plot_sweep_does_not_mutate_self_input_vars(self):
         self.bench.input_vars = [ExampleBenchCfg.param.theta]
@@ -76,7 +81,11 @@ class TestCallerVarsMutationSafety(unittest.TestCase):
     def setUp(self):
         random.seed(42)
         self.bench = Bench("test_caller_mutation", ExampleBenchCfg())
-        self.run_cfg = BenchRunCfg(repeats=1, over_time=False, auto_plot=False)
+        self.run_cfg = BenchRunCfg(
+            execution=ExecutionCfg(repeats=1),
+            visualization=VisualizationCfg(auto_plot=False),
+            time=TimeCfg(over_time=False),
+        )
 
     def test_plot_sweep_does_not_mutate_caller_input_vars(self):
         caller_input_vars = [ExampleBenchCfg.param.theta]
@@ -133,7 +142,11 @@ class TestPlotSweepResultConsistency(unittest.TestCase):
     def setUp(self):
         random.seed(42)
         self.bench = Bench("test_consistency", ExampleBenchCfg())
-        self.run_cfg = BenchRunCfg(repeats=1, over_time=False, auto_plot=False)
+        self.run_cfg = BenchRunCfg(
+            execution=ExecutionCfg(repeats=1),
+            visualization=VisualizationCfg(auto_plot=False),
+            time=TimeCfg(over_time=False),
+        )
 
     def test_plot_sweep_results_identical_across_calls(self):
         """Two calls with the same inputs should produce identical datasets."""
@@ -194,7 +207,11 @@ class TestBoundsAPI(unittest.TestCase):
     def setUp(self):
         random.seed(42)
         self.bench = Bench("test_bounds", ExampleBenchCfg())
-        self.run_cfg = BenchRunCfg(repeats=1, over_time=False, auto_plot=False)
+        self.run_cfg = BenchRunCfg(
+            execution=ExecutionCfg(repeats=1),
+            visualization=VisualizationCfg(auto_plot=False),
+            time=TimeCfg(over_time=False),
+        )
 
     def test_callable_bounds_with_samples(self):
         """Cfg.param.theta(bounds=(lo, hi), samples=N) works in list form."""

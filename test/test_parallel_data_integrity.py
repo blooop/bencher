@@ -152,11 +152,11 @@ def _run_sweep(config_cls, input_vars, executor, run_cfg_overrides=None):
     worker = config_cls()
     bench = bn.Bench(f"integrity_{executor}", worker)
     run_cfg = bn.BenchRunCfg()
-    run_cfg.executor = executor
-    run_cfg.overwrite_sample_cache = True
-    run_cfg.cache_samples = False
-    run_cfg.print_bench_inputs = False
-    run_cfg.print_bench_results = False
+    run_cfg.execution.executor = executor
+    run_cfg.cache.overwrite_samples = True
+    run_cfg.cache.samples = False
+    run_cfg.display.print_bench_inputs = False
+    run_cfg.display.print_bench_results = False
     if run_cfg_overrides:
         for k, v in run_cfg_overrides.items():
             setattr(run_cfg, k, v)
@@ -277,11 +277,11 @@ class TestSerialVsParallelEquivalence:
             worker = MixedDimConfig()
             bench = bn.Bench(f"const_{executor}", worker)
             run_cfg = bn.BenchRunCfg()
-            run_cfg.executor = executor
-            run_cfg.overwrite_sample_cache = True
-            run_cfg.cache_samples = False
-            run_cfg.print_bench_inputs = False
-            run_cfg.print_bench_results = False
+            run_cfg.execution.executor = executor
+            run_cfg.cache.overwrite_samples = True
+            run_cfg.cache.samples = False
+            run_cfg.display.print_bench_inputs = False
+            run_cfg.display.print_bench_results = False
             results[executor] = bench.plot_sweep(
                 "const_sweep",
                 input_vars=[MixedDimConfig.param.x],
@@ -579,11 +579,11 @@ class TestBenchRunnerParallelIntegrity:
     @staticmethod
     def _make_run_cfg(executor: Executors) -> bn.BenchRunCfg:
         run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = executor
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.cache_samples = False
-        run_cfg.print_bench_inputs = False
-        run_cfg.print_bench_results = False
+        run_cfg.execution.executor = executor
+        run_cfg.cache.overwrite_samples = True
+        run_cfg.cache.samples = False
+        run_cfg.display.print_bench_inputs = False
+        run_cfg.display.print_bench_results = False
         return run_cfg
 
     def test_simple_float_serial_vs_multiprocessing(self):

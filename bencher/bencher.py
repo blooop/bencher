@@ -608,7 +608,9 @@ class Bench(BenchPlotServer):
 
         if run_cfg.execution.samples_per_var is not None:
             if len(input_vars_in) > 0:
-                input_vars_in = [i.with_samples(run_cfg.execution.samples_per_var) for i in input_vars_in]
+                input_vars_in = [
+                    i.with_samples(run_cfg.execution.samples_per_var) for i in input_vars_in
+                ]
                 logger.info(
                     "samples_per_var=%d applied to %d input variable(s)",
                     run_cfg.execution.samples_per_var,
@@ -619,7 +621,9 @@ class Bench(BenchPlotServer):
             logger.debug("Input vars prior to subsampling_divisions adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
-                    inputs.append(i.with_subsampling_divisions(run_cfg.execution.subsampling_divisions))
+                    inputs.append(
+                        i.with_subsampling_divisions(run_cfg.execution.subsampling_divisions)
+                    )
                 input_vars_in = inputs
                 logger.info(
                     "subsampling_divisions=%d → %d samples per variable",
@@ -931,7 +935,9 @@ class Bench(BenchPlotServer):
                     ):
                         raise RegressionError(bench_res.regression_report.summary())
 
-            self.report_results(bench_res, run_cfg.display.print_xarray, run_cfg.display.print_pandas)
+            self.report_results(
+                bench_res, run_cfg.display.print_xarray, run_cfg.display.print_pandas
+            )
             self.cache_results(bench_res, bench_cfg_hash)
 
         logger.info(self.sample_cache.stats())

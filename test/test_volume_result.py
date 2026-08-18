@@ -34,7 +34,11 @@ class VolBenchNan(VolBench):
 
 
 def _run_cfg() -> bn.BenchRunCfg:
-    return bn.BenchRunCfg(cache_results=False, cache_samples=False, auto_plot=False, repeats=1)
+    return bn.BenchRunCfg(
+        execution=bn.ExecutionCfg(repeats=1),
+        cache=bn.CacheCfg(results=False, samples=False),
+        visualization=bn.VisualizationCfg(auto_plot=False),
+    )
 
 
 def _sweep(bench_class, input_vars):
@@ -119,12 +123,12 @@ class TestVolumeRejection:
         assert res.to_volume(override=False) is None
 
     def test_over_time_returns_none(self, vol_result):
-        prev = vol_result.bench_cfg.over_time
-        vol_result.bench_cfg.over_time = True
+        prev = vol_result.bench_cfg.time.over_time
+        vol_result.bench_cfg.time.over_time = True
         try:
             assert vol_result.to_volume(override=True) is None
         finally:
-            vol_result.bench_cfg.over_time = prev
+            vol_result.bench_cfg.time.over_time = prev
 
 
 class TestVolumeNanRobustness:

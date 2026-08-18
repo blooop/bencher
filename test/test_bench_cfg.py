@@ -226,9 +226,7 @@ class TestFlatAccessIsGone:
 
 class TestWithDefaults:
     def test_none_run_cfg_creates_new_instance(self):
-        cfg = BenchRunCfg.with_defaults(
-            None, execution=dict(repeats=7), time=dict(over_time=True)
-        )
+        cfg = BenchRunCfg.with_defaults(None, execution=dict(repeats=7), time=dict(over_time=True))
         assert isinstance(cfg, BenchRunCfg)
         assert cfg.execution.repeats == 7
         assert cfg.time.over_time is True
@@ -391,12 +389,8 @@ class TestBenchCfgHashPersistent:
         ) == make_bench_cfg().hash_persistent(include_repeats=True)
 
     def test_different_repeats_different_hash(self):
-        h1 = make_bench_cfg(execution=ExecutionCfg(repeats=1)).hash_persistent(
-            include_repeats=True
-        )
-        h2 = make_bench_cfg(execution=ExecutionCfg(repeats=2)).hash_persistent(
-            include_repeats=True
-        )
+        h1 = make_bench_cfg(execution=ExecutionCfg(repeats=1)).hash_persistent(include_repeats=True)
+        h2 = make_bench_cfg(execution=ExecutionCfg(repeats=2)).hash_persistent(include_repeats=True)
         assert h1 != h2
 
     def test_repeats_ignored_when_include_repeats_false(self):

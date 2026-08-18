@@ -1,3 +1,4 @@
+from bencher.bench_cfg import CacheCfg, DisplayCfg, VisualizationCfg
 import logging
 import os
 import random
@@ -24,7 +25,7 @@ def get_hash_isolated_process() -> bytes:
         [
             "python3",
             "-c",
-            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bn;cfg1 = bn.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],result_vars=[ExampleBenchCfg.param.out_sin],const_vars=[ExampleBenchCfg.param.noisy],repeats=5,over_time=False);print(cfg1.hash_persistent())'",
+            "'from bencher.example.benchmark_data import ExampleBenchCfg;import bencher as bn;cfg1 = bn.BenchCfg(input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution], result_vars=[ExampleBenchCfg.param.out_sin], const_vars=[ExampleBenchCfg.param.noisy], execution=bn.ExecutionCfg(repeats=5), time=bn.TimeCfg(over_time=False));print(cfg1.hash_persistent())'",
         ],
         stdout=subprocess.PIPE,
         check=False,
@@ -113,10 +114,9 @@ class TestBencher(unittest.TestCase):
             input_vars=deepcopy(input_vars),
             result_vars=deepcopy(result_vars),
             const_vars=deepcopy(const_vars),
-            repeats=repeats,
-            over_time=over_time,
-            clear_history=True,  # should not affect hash
-            auto_plot=False,
+            execution=ExecutionCfg(repeats=repeats),
+            visualization=VisualizationCfg(auto_plot=False),
+            time=TimeCfg(over_time=over_time, clear_history=True),
         )
 
         cfg2 = BenchCfg(
@@ -124,10 +124,9 @@ class TestBencher(unittest.TestCase):
             input_vars=deepcopy(input_vars),
             result_vars=deepcopy(result_vars),
             const_vars=deepcopy(const_vars),
-            repeats=repeats,
-            over_time=over_time,
-            clear_history=False,  # should not affect hash
-            auto_plot=False,
+            execution=ExecutionCfg(repeats=repeats),
+            visualization=VisualizationCfg(auto_plot=False),
+            time=TimeCfg(over_time=over_time, clear_history=False),
         )
 
         self.assertEqual(
@@ -156,10 +155,9 @@ class TestBencher(unittest.TestCase):
                 input_vars=input_vars,
                 result_vars=result_vars,
                 run_cfg=BenchRunCfg(
-                    repeats=2,
-                    over_time=True,
-                    clear_history=i == 0,
-                    print_pandas=False,
+                    execution=ExecutionCfg(repeats=2),
+                    display=DisplayCfg(print_pandas=False),
+                    time=TimeCfg(over_time=True, clear_history=i == 0),
                 ),
                 time_src=datetime(1970, 1, i + 1),  # repeatable time
             )
@@ -184,9 +182,9 @@ class TestBencher(unittest.TestCase):
             input_vars=input_vars,
             result_vars=result_vars,
             run_cfg=BenchRunCfg(
-                repeats=repeats,
-                print_pandas=False,
-                over_time=False,
+                execution=ExecutionCfg(repeats=repeats),
+                display=DisplayCfg(print_pandas=False),
+                time=TimeCfg(over_time=False),
             ),
         )
 
@@ -208,9 +206,9 @@ class TestBencher(unittest.TestCase):
             input_vars=input_vars,
             result_vars=result_vars,
             run_cfg=BenchRunCfg(
-                repeats=repeats,
-                print_pandas=False,
-                use_optuna=True,
+                execution=ExecutionCfg(repeats=repeats),
+                display=DisplayCfg(print_pandas=False),
+                visualization=VisualizationCfg(use_optuna=True),
             ),
         )
 
@@ -235,11 +233,10 @@ class TestBencher(unittest.TestCase):
                     input_vars=input_vars,
                     result_vars=result_vars,
                     run_cfg=BenchRunCfg(
-                        repeats=2,
-                        over_time=True,
-                        clear_history=i == 0,
-                        print_pandas=False,
-                        auto_plot=False,
+                        execution=ExecutionCfg(repeats=2),
+                        display=DisplayCfg(print_pandas=False),
+                        visualization=VisualizationCfg(auto_plot=False),
+                        time=TimeCfg(over_time=True, clear_history=i == 0),
                     ),
                     time_src=datetime(
                         1970, 1, i + 1
@@ -252,13 +249,12 @@ class TestBencher(unittest.TestCase):
                 input_vars=input_vars,
                 result_vars=result_vars,
                 run_cfg=BenchRunCfg(
-                    repeats=repeats,
-                    over_time=False,
-                    auto_plot=False,
+                    execution=ExecutionCfg(repeats=repeats),
+                    visualization=VisualizationCfg(auto_plot=False),
+                    time=TimeCfg(over_time=False),
                 ),
             )
 
-        bench_cfg.raise_duplicate_exception = False
         with Cache("unique_names") as name_cache:
             bench_repr = bench_cfg.__repr__()
             plots = bench_cfg.to_auto_plots()
@@ -290,7 +286,9 @@ class TestBencher(unittest.TestCase):
             input_vars=iv,
             result_vars=rv,
             run_cfg=BenchRunCfg(
-                over_time=over_time, clear_cache=True, clear_history=True, auto_plot=False
+                cache=CacheCfg(clear=True),
+                visualization=VisualizationCfg(auto_plot=False),
+                time=TimeCfg(over_time=over_time, clear_history=True),
             ),
         )
 
@@ -304,7 +302,11 @@ class TestBencher(unittest.TestCase):
             title=title,
             input_vars=iv,
             result_vars=rv,
-            run_cfg=BenchRunCfg(over_time=over_time, cache_results=False, auto_plot=False),
+            run_cfg=BenchRunCfg(
+                cache=CacheCfg(results=False),
+                visualization=VisualizationCfg(auto_plot=False),
+                time=TimeCfg(over_time=over_time),
+            ),
         )
         self.assertEqual(
             bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
@@ -316,7 +318,11 @@ class TestBencher(unittest.TestCase):
             title=title,
             input_vars=iv,
             result_vars=rv,
-            run_cfg=BenchRunCfg(over_time=over_time, cache_results=True, auto_plot=False),
+            run_cfg=BenchRunCfg(
+                cache=CacheCfg(results=True),
+                visualization=VisualizationCfg(auto_plot=False),
+                time=TimeCfg(over_time=over_time),
+            ),
         )
         self.assertEqual(
             bench2.sample_cache.worker_wrapper_call_count, ExampleBenchCfg.param.theta.samples
@@ -345,7 +351,11 @@ class TestBencher(unittest.TestCase):
             const_vars=[
                 (ExampleBenchCfg.param.noisy, noisy),
             ],
-            run_cfg=BenchRunCfg(clear_cache=True, clear_history=True, auto_plot=False),
+            run_cfg=BenchRunCfg(
+                cache=CacheCfg(clear=True),
+                visualization=VisualizationCfg(auto_plot=False),
+                time=TimeCfg(clear_history=True),
+            ),
         )
         self.assertEqual(
             bench.sample_cache.worker_wrapper_call_count,
@@ -363,7 +373,9 @@ class TestBencher(unittest.TestCase):
             const_vars=[
                 (ExampleBenchCfg.param.noisy, noisy),
             ],
-            run_cfg=BenchRunCfg(cache_results=True, auto_plot=False),
+            run_cfg=BenchRunCfg(
+                cache=CacheCfg(results=True), visualization=VisualizationCfg(auto_plot=False)
+            ),
         )
         # the result should be cached so the call count should be the same as before
         self.assertEqual(
@@ -384,14 +396,14 @@ class TestBencher(unittest.TestCase):
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
             const_vars=[(ExampleBenchCfg.param.noisy, True)],
-            auto_plot=False,
+            visualization=VisualizationCfg(auto_plot=False),
         )
         cfg_b = BenchCfg(
             title="test_chain",
             input_vars=[ExampleBenchCfg.param.theta, ExampleBenchCfg.param.noise_distribution],
             result_vars=[ExampleBenchCfg.param.out_sin],
             const_vars=[(ExampleBenchCfg.param.noisy, True)],
-            auto_plot=False,
+            visualization=VisualizationCfg(auto_plot=False),
         )
         self.assertNotEqual(
             cfg_a.hash_persistent(include_repeats=True),
@@ -434,7 +446,10 @@ class TestBencher(unittest.TestCase):
             title="test_cache_size",
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=BenchRunCfg(cache_size=cache_size_mb, auto_plot=False),
+            run_cfg=BenchRunCfg(
+                cache=CacheCfg(size_mb=cache_size_mb),
+                visualization=VisualizationCfg(auto_plot=False),
+            ),
         )
 
         self.assertEqual(bench.cache_size, expected_bytes)
@@ -450,35 +465,37 @@ class TestBenchRunCfgWithDefaults(unittest.TestCase):
     """Tests for BenchRunCfg.with_defaults merging behavior."""
 
     def test_none_creates_fresh_instance(self):
-        cfg = BenchRunCfg.with_defaults(None, repeats=5, subsampling_divisions=4)
-        self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(cfg.subsampling_divisions, 4)
+        cfg = BenchRunCfg.with_defaults(None, execution=dict(repeats=5, subsampling_divisions=4))
+        self.assertEqual(cfg.execution.repeats, 5)
+        self.assertEqual(cfg.execution.subsampling_divisions, 4)
 
     def test_defaults_applied_to_param_default_fields(self):
         cfg = BenchRunCfg()
-        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, subsampling_divisions=4)
-        self.assertEqual(cfg.repeats, 5)
-        self.assertEqual(cfg.subsampling_divisions, 4)
+        cfg = BenchRunCfg.with_defaults(cfg, execution=dict(repeats=5, subsampling_divisions=4))
+        self.assertEqual(cfg.execution.repeats, 5)
+        self.assertEqual(cfg.execution.subsampling_divisions, 4)
 
     def test_caller_set_fields_not_overwritten(self):
-        cfg = BenchRunCfg(repeats=10)
-        cfg = BenchRunCfg.with_defaults(cfg, repeats=5, subsampling_divisions=4)
-        self.assertEqual(cfg.repeats, 10)  # caller's value preserved
-        self.assertEqual(cfg.subsampling_divisions, 4)  # default still applied
+        cfg = BenchRunCfg(execution=ExecutionCfg(repeats=10))
+        cfg = BenchRunCfg.with_defaults(cfg, execution=dict(repeats=5, subsampling_divisions=4))
+        self.assertEqual(cfg.execution.repeats, 10)  # caller's value preserved
+        self.assertEqual(cfg.execution.subsampling_divisions, 4)  # default still applied
 
     def test_multiple_defaults_in_one_call(self):
-        cfg = BenchRunCfg(subsampling_divisions=2)
-        cfg = BenchRunCfg.with_defaults(cfg, repeats=3, subsampling_divisions=7, headless=True)
-        self.assertEqual(cfg.repeats, 3)  # was at default, so applied
-        self.assertEqual(cfg.subsampling_divisions, 2)  # caller set, so preserved
-        self.assertTrue(cfg.headless)  # was at default, so applied
+        cfg = BenchRunCfg(execution=ExecutionCfg(subsampling_divisions=2))
+        cfg = BenchRunCfg.with_defaults(
+            cfg, execution=dict(repeats=3, subsampling_divisions=7, headless=True)
+        )
+        self.assertEqual(cfg.execution.repeats, 3)  # was at default, so applied
+        self.assertEqual(cfg.execution.subsampling_divisions, 2)  # caller set, so preserved
+        self.assertTrue(cfg.execution.headless)  # was at default, so applied
 
     def test_does_not_mutate_original(self):
         original = BenchRunCfg()
-        original_repeats = original.repeats
-        result = BenchRunCfg.with_defaults(original, repeats=99)
-        self.assertEqual(result.repeats, 99)
-        self.assertEqual(original.repeats, original_repeats)  # unchanged
+        original_repeats = original.execution.repeats
+        result = BenchRunCfg.with_defaults(original, execution=dict(repeats=99))
+        self.assertEqual(result.execution.repeats, 99)
+        self.assertEqual(original.execution.repeats, original_repeats)  # unchanged
         self.assertIsNot(result, original)
 
     def test_unknown_key_raises(self):

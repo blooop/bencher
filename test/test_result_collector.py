@@ -14,7 +14,7 @@ import xarray as xr
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from bencher.bench_cfg import BenchCfg
+from bencher.bench_cfg import BenchCfg, ExecutionCfg, TimeCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.result_collector import ResultCollector, set_xarray_multidim
 
@@ -44,7 +44,7 @@ class TestResultCollector(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=2,
+            execution=ExecutionCfg(repeats=2),
         )
 
         bench_res, _, dims_name, total_jobs = self.collector.setup_dataset(
@@ -68,7 +68,7 @@ class TestResultCollector(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
 
         bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
@@ -84,8 +84,8 @@ class TestResultCollector(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=5,
-            over_time=False,
+            execution=ExecutionCfg(repeats=5),
+            time=TimeCfg(over_time=False),
         )
 
         extra_vars = self.collector.define_extra_vars(bench_cfg, 5, datetime(2024, 1, 1))
@@ -102,8 +102,8 @@ class TestResultCollector(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=1,
-            over_time=True,
+            execution=ExecutionCfg(repeats=1),
+            time=TimeCfg(over_time=True),
         )
 
         extra_vars = self.collector.define_extra_vars(bench_cfg, 1, datetime(2024, 1, 1))
@@ -119,8 +119,8 @@ class TestResultCollector(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=1,
-            over_time=True,
+            execution=ExecutionCfg(repeats=1),
+            time=TimeCfg(over_time=True),
         )
 
         extra_vars = self.collector.define_extra_vars(bench_cfg, 1, "event_123")
@@ -137,7 +137,7 @@ class TestResultCollector(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
 
         bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
@@ -159,8 +159,8 @@ class TestResultCollector(unittest.TestCase):
             const_vars=[],
             bench_name="test",
             title="test",
-            repeats=repeats,
-            over_time=over_time,
+            execution=ExecutionCfg(repeats=repeats),
+            time=TimeCfg(over_time=over_time),
         )
 
         extra_vars = self.collector.define_extra_vars(bench_cfg, repeats, datetime(2024, 1, 1))
@@ -225,7 +225,7 @@ class TestCacheReuse(unittest.TestCase):
             const_vars=[],
             bench_name="test_reuse",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
         bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
 
@@ -251,7 +251,7 @@ class TestCacheReuse(unittest.TestCase):
             const_vars=[],
             bench_name="test_sequential",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
 
         all_hashes = []
@@ -291,7 +291,7 @@ class TestCacheOperations(unittest.TestCase):
             const_vars=[],
             bench_name="test_cache_append",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
 
         bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
@@ -316,7 +316,7 @@ class TestCacheOperations(unittest.TestCase):
             const_vars=[],
             bench_name="test_cache_object_index",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
 
         bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
@@ -360,7 +360,7 @@ class TestCacheOperations(unittest.TestCase):
             const_vars=[],
             bench_name="test_metadata",
             title="test",
-            repeats=1,
+            execution=ExecutionCfg(repeats=1),
         )
 
         bench_res, _, _, _ = self.collector.setup_dataset(bench_cfg, datetime(2024, 1, 1))
@@ -857,7 +857,7 @@ class TestLazyCartesianProduct(unittest.TestCase):
             const_vars=[],
             bench_name="test_lazy",
             title="test_lazy",
-            repeats=repeats,
+            execution=ExecutionCfg(repeats=repeats),
         )
 
     def test_setup_dataset_returns_lazy_iterator(self):

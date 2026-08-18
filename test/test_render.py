@@ -1,5 +1,6 @@
 """Tests for the collect/render split: Bench.collect, save/load, render_report, CLI."""
 
+from bencher.bench_cfg import ExecutionCfg
 import gc
 import tempfile
 import unittest
@@ -33,7 +34,7 @@ class TestCollect(unittest.TestCase):
         res = bench.collect(
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=BenchRunCfg(repeats=1),
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=1)),
             title="collect_no_tabs",
         )
         self.assertIsNotNone(res)
@@ -54,7 +55,7 @@ class TestCollect(unittest.TestCase):
         b_collect.collect(
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=BenchRunCfg(repeats=1),
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=1)),
             title="collect_objs",
         )
         collect_delta = _count_plot_objects() - base
@@ -65,7 +66,7 @@ class TestCollect(unittest.TestCase):
         b_render.plot_sweep(
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=BenchRunCfg(repeats=1),
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=1)),
             title="render_objs",
         )
         render_delta = _count_plot_objects() - base2
@@ -81,7 +82,7 @@ class TestCollect(unittest.TestCase):
         res = bench.plot_sweep(
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=BenchRunCfg(repeats=1),
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=1)),
             title="auto_plot_false",
             auto_plot=False,
         )
@@ -93,18 +94,18 @@ class TestCollect(unittest.TestCase):
         bench.plot_sweep(
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=BenchRunCfg(repeats=1),
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=1)),
             title="auto_plot_true",
         )
         self.assertGreater(len(bench.report.pane), 0)
 
     def test_run_cfg_auto_plot_false_is_honored(self):
-        """auto_plot=None (default) must defer to run_cfg.auto_plot, so a caller
+        """auto_plot=None (default) must defer to run_cfg.visualization.auto_plot, so a caller
         can disable plotting once on the run_cfg and have nested plot_sweep
         calls honour it (without passing auto_plot to each one)."""
         bench = _make_bench()
-        run_cfg = BenchRunCfg(repeats=1)
-        run_cfg.auto_plot = False
+        run_cfg = BenchRunCfg(execution=ExecutionCfg(repeats=1))
+        run_cfg.visualization.auto_plot = False
         bench.plot_sweep(
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
@@ -141,8 +142,12 @@ class TestCollectParity(unittest.TestCase):
         import xarray as xr
 
         bench_plot, bench_collect = _make_bench(), _make_bench()
-        res_plot = bench_plot.plot_sweep(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
-        res_collect = bench_collect.collect(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
+        res_plot = bench_plot.plot_sweep(
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=2)), **self.PARITY_KWARGS
+        )
+        res_collect = bench_collect.collect(
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=2)), **self.PARITY_KWARGS
+        )
 
         # plot_sweep built a report tab; collect built none. The *data* is equal.
         self.assertGreater(len(bench_plot.report.pane), 0)
@@ -151,8 +156,12 @@ class TestCollectParity(unittest.TestCase):
         self.assertEqual(set(res_collect.ds.data_vars), set(res_plot.ds.data_vars))
 
     def test_collect_regression_report_matches_plot_sweep(self):
-        res_plot = _make_bench().plot_sweep(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
-        res_collect = _make_bench().collect(run_cfg=BenchRunCfg(repeats=2), **self.PARITY_KWARGS)
+        res_plot = _make_bench().plot_sweep(
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=2)), **self.PARITY_KWARGS
+        )
+        res_collect = _make_bench().collect(
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=2)), **self.PARITY_KWARGS
+        )
         # Regression detection runs during collection too; without over_time both
         # paths leave it at the default (None).
         self.assertEqual(
@@ -166,7 +175,7 @@ class TestSaveLoadRender(unittest.TestCase):
         return bench.collect(
             input_vars=[ExampleBenchCfg.param.theta],
             result_vars=[ExampleBenchCfg.param.out_sin],
-            run_cfg=BenchRunCfg(repeats=1),
+            run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=1)),
             title="roundtrip",
         )
 

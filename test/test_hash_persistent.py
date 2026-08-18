@@ -227,8 +227,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "test_bench"
             cfg.title = "Test Title"
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [ResultImage(doc="img")]
@@ -246,8 +246,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "multi_bench"
             cfg.title = "Multi"
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [
@@ -272,8 +272,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "obj_bench"
             cfg.title = "Object-carrying result types"
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [
@@ -305,8 +305,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "stable_bench"
             cfg.title = title
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [ResultFloat(units="m/s", doc="speed")]
@@ -363,8 +363,8 @@ _BATCH_HASH_SCRIPT = textwrap.dedent("""\
     cfg = BenchCfg()
     cfg.bench_name = "test_bench"
     cfg.title = "Test"
-    cfg.over_time = False
-    cfg.repeats = 1
+    cfg.time.over_time = False
+    cfg.execution.repeats = 1
     cfg.tag = ""
     cfg.input_vars = []
     cfg.result_vars = [ResultFloat(units="m/s", doc="speed"), ResultImage(doc="img")]
@@ -756,8 +756,8 @@ def _build_golden_bench_cfg():
     cfg = BenchCfg()
     cfg.bench_name = "golden_bench"
     cfg.title = "should not affect hash"
-    cfg.over_time = False
-    cfg.repeats = 3
+    cfg.time.over_time = False
+    cfg.execution.repeats = 3
     cfg.tag = "golden_tag"
     cfg.input_vars = [
         FloatSweep(bounds=(0.0, 1.0), samples=5, units="m/s"),

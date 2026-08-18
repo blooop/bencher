@@ -34,14 +34,14 @@ class FloatCatWithTimeBench(bn.ParametrizedSweep):
 def _run_string_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3):
     """Run a benchmark over multiple time points using string time_src (TimeEvent)."""
     run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = True
-    run_cfg.repeats = repeats
+    run_cfg.time.over_time = True
+    run_cfg.execution.repeats = repeats
     bench = benchable.to_bench(run_cfg)
 
     for i in range(snapshots):
         benchable.offset = i * 0.5
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "time_event_curve_test",
             input_vars=input_vars,

@@ -9,15 +9,21 @@ class TestBenchMeta(unittest.TestCase):
         bench = bn.Bench("bench", BenchableObject())
 
         res1 = bench.plot_sweep(
-            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bn.BenchRunCfg(repeats=1)
+            "repeats",
+            input_vars=[BenchableObject.param.float1],
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
         )
 
         res1_eq = bench.plot_sweep(
-            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bn.BenchRunCfg(repeats=1)
+            "repeats",
+            input_vars=[BenchableObject.param.float1],
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
         )
 
         res2 = bench.plot_sweep(
-            "repeats", input_vars=[BenchableObject.param.float1], run_cfg=bn.BenchRunCfg(repeats=2)
+            "repeats",
+            input_vars=[BenchableObject.param.float1],
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=2)),
         )
 
         self.assertTrue(

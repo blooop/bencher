@@ -112,9 +112,9 @@ def _contract_messages(record) -> list[str]:
 
 def _run(worker, *, executor=Executors.SERIAL, **run_kwargs):
     cfg = bn.BenchRunCfg(executor=executor, **run_kwargs)
-    cfg.auto_plot = False
-    cfg.cache_results = False
-    cfg.cache_samples = False
+    cfg.visualization.auto_plot = False
+    cfg.cache.results = False
+    cfg.cache.samples = False
     bench = worker.to_bench(cfg)
     try:
         return bench.plot_sweep(input_vars=["x"], plot_callbacks=False)
@@ -445,13 +445,15 @@ class TestExecutorNormalization:
 
     @staticmethod
     def _cfg() -> bn.BenchRunCfg:
-        cfg = bn.BenchRunCfg(executor="SERIAL")
+        cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(executor="SERIAL"))
         # The premise of C13: param.Selector accepts the bare string, because
         # Executors is a StrEnum and `"SERIAL" in list(Executors)` is therefore True.
-        assert cfg.executor is not Executors.SERIAL, "precondition: param stored a raw str"
-        cfg.auto_plot = False
-        cfg.cache_results = False
-        cfg.cache_samples = False
+        assert cfg.execution.executor is not Executors.SERIAL, (
+            "precondition: param stored a raw str"
+        )
+        cfg.visualization.auto_plot = False
+        cfg.cache.results = False
+        cfg.cache.samples = False
         return cfg
 
     def test_the_config_the_sweep_actually_runs_on_holds_a_member(self) -> None:
@@ -466,7 +468,7 @@ class TestExecutorNormalization:
         try:
             bench.plot_sweep(input_vars=["x"], plot_callbacks=False)
             assert bench.last_run_cfg.executor is Executors.SERIAL
-            assert cfg.executor == "SERIAL", "the caller's own config is not mutated"
+            assert cfg.execution.executor == "SERIAL", "the caller's own config is not mutated"
         finally:
             bench.close()
 
@@ -476,6 +478,6 @@ class TestExecutorNormalization:
         bench = bn.Bench("c13_direct", WrongLengthVec())
         try:
             bench.plot_sweep(input_vars=["x"], run_cfg=cfg, plot_callbacks=False)
-            assert cfg.executor is Executors.SERIAL
+            assert cfg.execution.executor is Executors.SERIAL
         finally:
             bench.close()

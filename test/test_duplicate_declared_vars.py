@@ -17,9 +17,9 @@ from bencher.example.benchmark_data import ExampleBenchCfg
 
 def _bench() -> bn.Bench:
     cfg = bn.BenchRunCfg()
-    cfg.auto_plot = False
-    cfg.cache_results = False
-    cfg.cache_samples = False
+    cfg.visualization.auto_plot = False
+    cfg.cache.results = False
+    cfg.cache.samples = False
     return ExampleBenchCfg().to_bench(cfg)
 
 
@@ -136,9 +136,9 @@ class TestDuplicateInputVars(unittest.TestCase):
                 return {"y": 1.0}
 
         cfg = bn.BenchRunCfg()
-        cfg.auto_plot = False
-        cfg.cache_results = False
-        cfg.cache_samples = False
+        cfg.visualization.auto_plot = False
+        cfg.cache.results = False
+        cfg.cache.samples = False
         bench = Probe().to_bench(cfg)
         try:
             with self.assertRaises(ValueError):

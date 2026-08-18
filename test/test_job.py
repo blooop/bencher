@@ -98,8 +98,8 @@ class TestJob(unittest.TestCase):
     @given(st.sampled_from([bn.Executors.SERIAL, bn.Executors.MULTIPROCESSING]))
     def test_bench_runner_parallel(self, executor):
         run_cfg = bn.BenchRunCfg()
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.executor = executor
+        run_cfg.cache.overwrite_samples = True
+        run_cfg.execution.executor = executor
         bench_run = bn.BenchRunner("test_bench_runner", run_cfg=run_cfg)
 
         bench_run.add_bench(CachedParamExample())

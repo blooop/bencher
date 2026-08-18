@@ -16,7 +16,7 @@ class TestBenchPlotServer(unittest.TestCase):
             title="test_bench_server",
             input_vars=[sbc.param.var1],
             result_vars=[sbc.param.result],
-            run_cfg=bn.BenchRunCfg(auto_plot=False),
+            run_cfg=bn.BenchRunCfg(visualization=bn.VisualizationCfg(auto_plot=False)),
         )
         bench.report.save()
 

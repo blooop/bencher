@@ -45,7 +45,10 @@ def run_sweep(sweep_cls, input_vars, repeats=1) -> BenchResult:
         "sweep",
         input_vars=input_vars,
         result_vars=[sweep_cls.param.value],
-        run_cfg=bn.BenchRunCfg(repeats=repeats, auto_plot=False),
+        run_cfg=bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=repeats),
+            visualization=bn.VisualizationCfg(auto_plot=False),
+        ),
     )
 
 

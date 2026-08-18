@@ -18,7 +18,10 @@ class TestExtraPanels(unittest.TestCase):
             "extra_panels_test",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=1, auto_plot=False),
+            run_cfg=bn.BenchRunCfg(
+                execution=bn.ExecutionCfg(repeats=1),
+                visualization=bn.VisualizationCfg(auto_plot=False),
+            ),
             plot_callbacks=False,
         )
 

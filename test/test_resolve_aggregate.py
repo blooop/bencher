@@ -125,7 +125,9 @@ class TestResolveAggregateIntegration(unittest.TestCase):
         from bencher.example.meta.example_meta import BenchableObject
 
         bench = BenchableObject().to_bench()
-        run_cfg = bn.BenchRunCfg(repeats=1, auto_plot=False)
+        run_cfg = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), visualization=bn.VisualizationCfg(auto_plot=False)
+        )
 
         cls.res_explicit = bench.plot_sweep(
             "agg_explicit",
@@ -163,7 +165,10 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             "agg_int",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=1, auto_plot=False),
+            run_cfg=bn.BenchRunCfg(
+                execution=bn.ExecutionCfg(repeats=1),
+                visualization=bn.VisualizationCfg(auto_plot=False),
+            ),
             plot_callbacks=False,
             aggregate=1,
         )
@@ -181,7 +186,11 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             "agg_disabled",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=2, auto_plot=False, show_aggregate_plots=False),
+            run_cfg=bn.BenchRunCfg(
+                execution=bn.ExecutionCfg(repeats=2),
+                visualization=bn.VisualizationCfg(auto_plot=False),
+                time=bn.TimeCfg(show_aggregate_plots=False),
+            ),
             aggregate=True,
         )
         # agg_over_dims is still set on the config
@@ -208,7 +217,10 @@ class TestResolveAggregateIntegration(unittest.TestCase):
             "agg_enabled",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=2, auto_plot=False),
+            run_cfg=bn.BenchRunCfg(
+                execution=bn.ExecutionCfg(repeats=2),
+                visualization=bn.VisualizationCfg(auto_plot=False),
+            ),
             aggregate=True,
         )
         plots = res.to_auto_plots()

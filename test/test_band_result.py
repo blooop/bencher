@@ -96,14 +96,17 @@ def fixture_res_cat():
 def fixture_res_time():
     benchable = BandTimeBench()
     run_cfg = bn.BenchRunCfg(
-        over_time=True, repeats=2, cache_results=False, cache_samples=False, auto_plot=False
+        execution=bn.ExecutionCfg(repeats=2),
+        cache=bn.CacheCfg(results=False, samples=False),
+        visualization=bn.VisualizationCfg(auto_plot=False),
+        time=bn.TimeCfg(over_time=True),
     )
     bench = benchable.to_bench(run_cfg)
     res = None
     for i in range(3):
         benchable.offset = i * 1.0
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "band_time",
             input_vars=["size"],

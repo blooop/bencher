@@ -1561,9 +1561,7 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     if "over_time" not in dataset.dims:
         return report
 
-    overrides, min_history_overrides = _normalize_overrides(
-        run_cfg.regression.overrides
-    )
+    overrides, min_history_overrides = _normalize_overrides(run_cfg.regression.overrides)
     default_min_history = run_cfg.regression.min_history or 1
     method = run_cfg.regression.method
 

@@ -94,15 +94,15 @@ def run_sweep_over_time(worker: bn.ParametrizedSweep, name: str) -> bn.BenchResu
     dataset carries the earlier events on its over_time dimension.
     """
     run_cfg = run_cfg_with(1)
-    run_cfg.over_time = True
-    run_cfg.auto_plot = False
+    run_cfg.time.over_time = True
+    run_cfg.visualization.auto_plot = False
     bench = bn.Bench(name, worker)
     base_time = datetime(2000, 1, 1)
     res = None
     for i in range(OVER_TIME_RUNS):
         worker.run_id = i
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             name,
             input_vars=["spread"],

@@ -138,7 +138,9 @@ def run_sweep(worker: bn.ParametrizedSweep, name: str) -> bn.BenchResult:
         "grammar_sweep",
         input_vars=["scale"],
         result_vars=["table"],
-        run_cfg=bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False),
+        run_cfg=bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), cache=bn.CacheCfg(results=False, samples=False)
+        ),
         auto_plot=False,
     )
 
@@ -149,16 +151,16 @@ OVER_TIME_RUNS = 2
 def run_sweep_over_time(worker: bn.ParametrizedSweep, name: str) -> bn.BenchResult:
     """Run one sweep repeatedly against a single history, as a nightly rig does."""
     run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = True
-    run_cfg.repeats = 1
-    run_cfg.auto_plot = False
+    run_cfg.time.over_time = True
+    run_cfg.execution.repeats = 1
+    run_cfg.visualization.auto_plot = False
     bench = bn.Bench(name, worker)
     base_time = datetime(2000, 1, 1)
     res = None
     for i in range(OVER_TIME_RUNS):
         worker.run_id = i
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "grammar_over_time_sweep",
             input_vars=["scale"],

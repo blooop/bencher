@@ -59,7 +59,9 @@ class TestRunCfgMutationSafety(unittest.TestCase):
         br = bn.BenchRunner("test_explicit")
         br.add(_simple_benchmark)
 
-        explicit_cfg = bn.BenchRunCfg(subsampling_divisions=5, repeats=3, run_tag="explicit")
+        explicit_cfg = bn.BenchRunCfg(
+            run_tag="explicit", execution=bn.ExecutionCfg(subsampling_divisions=5, repeats=3)
+        )
         snapshot = {k: getattr(explicit_cfg, k) for k in explicit_cfg.param if k != "name"}
 
         br.run(run_cfg=explicit_cfg, subsampling_divisions=2, repeats=1)
@@ -94,7 +96,7 @@ class TestPerIterationIsolation(unittest.TestCase):
         combos = []
 
         def tracking_benchmark(run_cfg, report):
-            combos.append((run_cfg.subsampling_divisions, run_cfg.repeats))
+            combos.append((run_cfg.execution.subsampling_divisions, run_cfg.execution.repeats))
             bench = bn.Bench("track", SimpleBenchClassFloat(), run_cfg=run_cfg, report=report)
             return bench.plot_sweep("track")
 
@@ -112,7 +114,9 @@ class TestSetupRunCfg(unittest.TestCase):
 
     def test_setup_run_cfg_does_not_mutate_input(self):
         """setup_run_cfg must not mutate the input run_cfg."""
-        original = bn.BenchRunCfg(subsampling_divisions=5, run_tag="orig")
+        original = bn.BenchRunCfg(
+            run_tag="orig", execution=bn.ExecutionCfg(subsampling_divisions=5)
+        )
         snapshot = {k: getattr(original, k) for k in original.param if k != "name"}
 
         BenchRunner.setup_run_cfg(original, subsampling_divisions=2, cache_samples=False)
@@ -169,20 +173,20 @@ class TestCopyStrategyGuards(unittest.TestCase):
         """The overrides dict — including nested specs — must not be shared
         between an input cfg and its copies."""
         original = bn.BenchRunCfg(
-            regression_overrides={"success": 1.0, "latency": {"percentage": 20.0}}
+            regression=bn.RegressionCfg(overrides={"success": 1.0, "latency": {"percentage": 20.0}})
         )
 
         copied = BenchRunner.setup_run_cfg(original, subsampling_divisions=2)
-        self.assertIsNot(copied.regression_overrides, original.regression_overrides)
+        self.assertIsNot(copied.regression.overrides, original.regression.overrides)
         self.assertIsNot(
-            copied.regression_overrides["latency"], original.regression_overrides["latency"]
+            copied.regression.overrides["latency"], original.regression.overrides["latency"]
         )
 
-        copied.regression_overrides["success"] = 0.0
-        copied.regression_overrides["latency"]["percentage"] = 99.0
-        copied.regression_overrides["extra"] = 2.0
+        copied.regression.overrides["success"] = 0.0
+        copied.regression.overrides["latency"]["percentage"] = 99.0
+        copied.regression.overrides["extra"] = 2.0
         self.assertEqual(
-            original.regression_overrides, {"success": 1.0, "latency": {"percentage": 20.0}}
+            original.regression.overrides, {"success": 1.0, "latency": {"percentage": 20.0}}
         )
 
 

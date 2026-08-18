@@ -92,15 +92,15 @@ class SweptScalarSweep(bn.ParametrizedSweep):
 def _run_over_time(worker, result_vars, runs=_RUNS, input_vars=()):
     """Sample *worker* once per run against one history, as a CI report does."""
     run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = True
-    run_cfg.repeats = 1
-    run_cfg.auto_plot = False
+    run_cfg.time.over_time = True
+    run_cfg.execution.repeats = 1
+    run_cfg.visualization.auto_plot = False
     bench = worker.to_bench(run_cfg)
     result = None
     for run in range(runs):
         worker.run_id = run
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = run == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = run == 0
         result = bench.plot_sweep(
             "over_time_panes",
             input_vars=list(input_vars),

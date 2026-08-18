@@ -128,7 +128,7 @@ class BoolBenchNone(bn.ParametrizedSweep):
 
 def _run_sweep(bench_cls, input_vars, result_vars=None, repeats=1, **kwargs):
     """Run a minimal benchmark sweep and return the BenchResult."""
-    run_cfg = bn.BenchRunCfg(repeats=repeats)
+    run_cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=repeats))
     bench = bench_cls().to_bench(run_cfg)
     return bench.plot_sweep(
         input_vars=input_vars,

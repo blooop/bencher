@@ -33,7 +33,7 @@ class TrivialSweep(bn.ParametrizedSweep):
 def test_bench_result_has_timings():
     """After plot_sweep(), the BenchResult should have populated timings."""
     run_cfg = bn.BenchRunCfg()
-    run_cfg.auto_plot = False
+    run_cfg.visualization.auto_plot = False
     bench = TrivialSweep().to_bench(run_cfg)
     bench.plot_sweep()
 

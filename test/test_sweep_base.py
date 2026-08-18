@@ -180,19 +180,20 @@ class TestSweepBase(unittest.TestCase):
         bench = bn.Bench("test_level_limits", asv)
         run_cfg = bn.BenchRunCfg()
 
-        run_cfg.subsampling_divisions = 4
+        run_cfg.execution.subsampling_divisions = 4
         res = bench.plot_sweep("asv", input_vars=[AllSweepVars.param.var_float], run_cfg=run_cfg)
         self.assertEqual(res.result_samples(), 5)
 
         res = bench.plot_sweep("asv", input_vars=[AllSweepVars.param.var_int_big], run_cfg=run_cfg)
         self.assertEqual(res.result_samples(), 5)
 
-        run_cfg.subsampling_divisions = 4
+        run_cfg.execution.subsampling_divisions = 4
         res = bench.plot_sweep(
             "asv",
             input_vars=[
                 AllSweepVars.param.var_float.with_subsampling_divisions(
-                    subsampling_divisions=run_cfg.subsampling_divisions, max_subsampling_divisions=3
+                    subsampling_divisions=run_cfg.execution.subsampling_divisions,
+                    max_subsampling_divisions=3,
                 )
             ],
             run_cfg=run_cfg,
@@ -203,7 +204,8 @@ class TestSweepBase(unittest.TestCase):
             "asv",
             input_vars=[
                 AllSweepVars.param.var_int_big.with_subsampling_divisions(
-                    subsampling_divisions=run_cfg.subsampling_divisions, max_subsampling_divisions=3
+                    subsampling_divisions=run_cfg.execution.subsampling_divisions,
+                    max_subsampling_divisions=3,
                 )
             ],
             run_cfg=run_cfg,

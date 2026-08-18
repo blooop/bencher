@@ -44,7 +44,7 @@ class TestGitTimeEvent(unittest.TestCase):
         from bencher.example.benchmark_data import ExampleBenchCfg
 
         bench = bn.Bench("test_git", ExampleBenchCfg())
-        run_cfg = bn.BenchRunCfg(over_time=True)
+        run_cfg = bn.BenchRunCfg(time=bn.TimeCfg(over_time=True))
         res = bench.plot_sweep(
             input_vars=[ExampleBenchCfg.param.theta],
             run_cfg=run_cfg,

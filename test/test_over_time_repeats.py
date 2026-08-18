@@ -45,8 +45,8 @@ def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, *
     Extra keyword arguments are forwarded as BenchRunCfg attribute overrides.
     """
     run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = True
-    run_cfg.repeats = repeats
+    run_cfg.time.over_time = True
+    run_cfg.execution.repeats = repeats
     for k, v in cfg_kwargs.items():
         setattr(run_cfg, k, v)
     bench = benchable.to_bench(run_cfg)
@@ -54,8 +54,8 @@ def _run_over_time(benchable, input_vars, result_vars, repeats=1, snapshots=3, *
 
     for i in range(snapshots):
         benchable.offset = i * 0.5
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time_test",
             input_vars=input_vars,

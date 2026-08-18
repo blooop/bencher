@@ -81,7 +81,7 @@ class TestRun(unittest.TestCase):
     def test_run_with_explicit_run_cfg(self):
         """bn.run() respects an explicit BenchRunCfg."""
         cfg = bn.BenchRunCfg()
-        cfg.repeats = 2
+        cfg.execution.repeats = 2
         results = bn.run(example_simple_float, run_cfg=cfg, show=False)
         self.assertIsInstance(results, list)
         self.assertGreater(len(results), 0)

@@ -65,7 +65,10 @@ def run_sweep(sweep_cls=Linear, repeats: int = 1) -> BenchResult:
         "sweep",
         input_vars=[v for v in ("x", "kind") if hasattr(sweep_cls, v)],
         result_vars=["value"],
-        run_cfg=bn.BenchRunCfg(repeats=repeats, cache_results=False, cache_samples=False),
+        run_cfg=bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=repeats),
+            cache=bn.CacheCfg(results=False, samples=False),
+        ),
         auto_plot=False,
     )
 

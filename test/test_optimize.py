@@ -85,7 +85,7 @@ class FlakySphere(bn.ParametrizedSweep):
 def _run_cfg():
     """Minimal run config (single repeat, default caching off)."""
     cfg = bn.BenchRunCfg()
-    cfg.repeats = 1
+    cfg.execution.repeats = 1
     return cfg
 
 

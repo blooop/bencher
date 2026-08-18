@@ -322,9 +322,9 @@ class TestPlotSweepSurface(unittest.TestCase):
         from bencher.example.benchmark_data import ExampleBenchCfg
 
         cfg = bn.BenchRunCfg()
-        cfg.auto_plot = False
-        cfg.cache_results = False
-        cfg.cache_samples = False
+        cfg.visualization.auto_plot = False
+        cfg.cache.results = False
+        cfg.cache.samples = False
         bench = ExampleBenchCfg().to_bench(cfg)
         try:
             res = bench.plot_sweep(
@@ -344,9 +344,9 @@ class TestPlotSweepSurface(unittest.TestCase):
         keys = []
         for series_id in (None, "latency"):
             cfg = bn.BenchRunCfg()
-            cfg.auto_plot = False
-            cfg.cache_results = False
-            cfg.cache_samples = False
+            cfg.visualization.auto_plot = False
+            cfg.cache.results = False
+            cfg.cache.samples = False
             bench = ExampleBenchCfg().to_bench(cfg)
             try:
                 res = bench.plot_sweep(

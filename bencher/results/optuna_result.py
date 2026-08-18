@@ -264,7 +264,9 @@ class OptunaResult(BenchResultBase):
                 logger.exception("Optuna without-repeats study creation failed")
                 tab_names = ["Analysis (without-repeats study failed)"]
 
-        plot_w = self.bench_cfg.visualization.plot_width or self.bench_cfg.visualization.plot_size or 600
+        plot_w = (
+            self.bench_cfg.visualization.plot_width or self.bench_cfg.visualization.plot_size or 600
+        )
         target_names = self.bench_cfg.optuna_targets()
         study_panes = []
         for study, tab_name in zip(self.studies, tab_names):

@@ -32,13 +32,12 @@ class TestSampleOrder(unittest.TestCase):
         ]
         result_vars = [bn.ExampleBenchCfg.param.out_sin]
         run_cfg = bn.BenchRunCfg(
-            repeats=1,
-            over_time=False,
-            auto_plot=False,
-            cache_results=False,
-            cache_samples=False,
-            executor=bn.Executors.SERIAL,
-            subsampling_divisions=2,  # keep dataset small and consistent without mutating class defaults
+            execution=bn.ExecutionCfg(
+                repeats=1, executor=bn.Executors.SERIAL, subsampling_divisions=2
+            ),
+            cache=bn.CacheCfg(results=False, samples=False),
+            visualization=bn.VisualizationCfg(auto_plot=False),
+            time=bn.TimeCfg(over_time=False),
         )
 
         res_in = bench1.plot_sweep(
@@ -78,12 +77,10 @@ class TestSampleOrder(unittest.TestCase):
                 input_vars=[OrderExample.param.a, OrderExample.param.b],
                 result_vars=[OrderExample.param.call_index],
                 run_cfg=bn.BenchRunCfg(
-                    repeats=1,
-                    over_time=False,
-                    auto_plot=False,
-                    cache_results=False,
-                    cache_samples=False,
-                    executor=bn.Executors.SERIAL,
+                    execution=bn.ExecutionCfg(repeats=1, executor=bn.Executors.SERIAL),
+                    cache=bn.CacheCfg(results=False, samples=False),
+                    visualization=bn.VisualizationCfg(auto_plot=False),
+                    time=bn.TimeCfg(over_time=False),
                 ),
                 sample_order=sample_order,
             )
