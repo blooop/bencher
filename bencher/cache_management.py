@@ -629,6 +629,23 @@ def blob_reachability(
     unreadable: list[str] = []
     root = Path(cachedir)
 
+    # A record written under another CACHE_VERSION may unpickle fine while
+    # storing its references in a shape _walk_blob_references does not descend,
+    # yielding a silently *empty* live set — and an empty live set is the one
+    # input that makes GC delete everything. So a cache tree without a matching
+    # version stamp is unreadable, not empty (plan 26 item 2 / plan 27 L9).
+    if any((root / cache_name).is_dir() for cache_name in _BLOB_REFERENCE_CACHES):
+        version_file = root / "CACHE_VERSION"
+        stored = version_file.read_text().strip() if version_file.exists() else None
+        if stored != CACHE_VERSION:
+            unreadable.append(
+                f"{version_file}: stored CACHE_VERSION {stored!r} does not match the "
+                f"library's {CACHE_VERSION!r}; records may reference blobs in a shape "
+                "this walker does not descend, so no blob can be proven unreferenced. "
+                "Run a sweep (ensure_cache_version refreshes the stamp) before GC."
+            )
+            return BlobReachability(names=frozenset(), unreadable=tuple(unreadable))
+
     for cache_name in _BLOB_REFERENCE_CACHES:
         cache_path = root / cache_name
         if cache_path.is_dir():

@@ -97,6 +97,10 @@ class _TempCacheMixin:
             for k, v in items.items():
                 c[k] = v
         c.close()
+        # Real cachedirs always carry the version stamp ensure_cache_version()
+        # writes; reachability treats a cache tree without a matching stamp as
+        # unreadable (see TestBlobReachabilityVersionGuard).
+        Path(self.cachedir, "CACHE_VERSION").write_text(CACHE_VERSION)
         return path
 
     def _make_job_media(self, folder, filename, job_key, content=b"x" * 100):
@@ -148,8 +152,8 @@ class TestCacheVersion(_TempCacheMixin, unittest.TestCase):
 
     def test_clears_on_version_mismatch(self):
         vf = Path(self.cachedir) / "CACHE_VERSION"
-        vf.write_text("old_version")
         self._make_managed_cache("sample_cache", {"k": "v"})
+        vf.write_text("old_version")
         ensure_cache_version(self.cachedir)
         # Old cache should be gone, version updated
         self.assertEqual(vf.read_text().strip(), CACHE_VERSION)
@@ -157,6 +161,7 @@ class TestCacheVersion(_TempCacheMixin, unittest.TestCase):
 
     def test_clears_when_no_version_file(self):
         self._make_managed_cache("sample_cache", {"k": "v"})
+        (Path(self.cachedir) / "CACHE_VERSION").unlink()
         ensure_cache_version(self.cachedir)
         vf = Path(self.cachedir) / "CACHE_VERSION"
         self.assertEqual(vf.read_text().strip(), CACHE_VERSION)
@@ -373,6 +378,42 @@ def _bench_result(dataset: xr.Dataset) -> bn.BenchResult:
     result = bn.BenchResult(bn.BenchCfg())
     result.ds = dataset
     return result
+
+
+class TestBlobReachabilityVersionGuard(_TempCacheMixin, unittest.TestCase):
+    """A cachedir whose stamp does not match the library is unreadable, not empty.
+
+    A record written under another CACHE_VERSION may unpickle fine while storing
+    its blob references in a shape the walker does not descend — yielding a
+    silently empty live set and a GC that deletes every blob. Plan 26 item 2 /
+    plan 27 L9: missing or mismatched stamps must abort the scan, and this must
+    hold before any CACHE_VERSION bump ships.
+    """
+
+    def test_stale_version_stamp_aborts_the_scan(self):
+        self._make_managed_cache("history", {"k": _record(_cells([f"/c/blobs/{BLOB_A}"]))})
+        Path(self.cachedir, "CACHE_VERSION").write_text("0")
+        reach = blob_reachability(self.cachedir)
+        self.assertFalse(reach.complete)
+        self.assertEqual(reach.names, frozenset())
+        self.assertTrue(any("CACHE_VERSION" in line for line in reach.unreadable))
+
+    def test_missing_version_stamp_with_caches_present_aborts_the_scan(self):
+        self._make_managed_cache("history", {"k": _record(_cells([f"/c/blobs/{BLOB_A}"]))})
+        Path(self.cachedir, "CACHE_VERSION").unlink()
+        reach = blob_reachability(self.cachedir)
+        self.assertFalse(reach.complete)
+        self.assertTrue(any("CACHE_VERSION" in line for line in reach.unreadable))
+
+    def test_gc_deletes_nothing_under_a_stale_stamp(self):
+        self._make_managed_cache("history", {"k": _record(_cells([]))})
+        Path(self.cachedir, "CACHE_VERSION").write_text("0")
+        blob = Path(self.cachedir) / "blobs" / BLOB_A
+        blob.parent.mkdir(parents=True, exist_ok=True)
+        blob.write_bytes(b"payload")
+        orphans, freed = clean_orphaned_blobs(self.cachedir, dry_run=False)
+        self.assertEqual((orphans, freed), ([], 0))
+        self.assertTrue(blob.exists(), "GC must not delete under a version mismatch")
 
 
 class TestBlobReachability(_TempCacheMixin, unittest.TestCase):
@@ -766,6 +807,9 @@ class TestBlobGCReclaimsAgedOutHistory(unittest.TestCase):
         self._old_cwd = os.getcwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)
+        # This test drives ResultCollector directly, bypassing Bench.__init__'s
+        # ensure_cache_version() — stamp the cachedir so reachability trusts it.
+        ensure_cache_version("cachedir")
         self.collector = ResultCollector()
 
     def tearDown(self):

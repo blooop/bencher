@@ -46,6 +46,13 @@ from bencher import cache_management
 from bencher.blob_store import _HASH_CHARS, blob_name, load_blob, materialize_blob
 from bencher.cache_management import blob_reachability, clean_orphaned_blobs
 
+@pytest.fixture(autouse=True)
+def _stamp_cache_version(tmp_path):
+    """Reachability aborts on a missing/stale CACHE_VERSION stamp; real cachedirs
+    get theirs from ensure_cache_version, so stamp the test dirs up front."""
+    (tmp_path / "CACHE_VERSION").write_text(cache_management.CACHE_VERSION)
+
+
 # Enough concurrency to interleave on a normal CI box without making the suite slow.
 _THREADS = 16
 _PROCESSES = 4

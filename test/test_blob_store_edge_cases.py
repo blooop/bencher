@@ -35,6 +35,14 @@ from bencher.cache_management import blob_reachability, clean_orphaned_blobs
 from bencher.variables.results import ResultDataSet, result_is_missing
 
 
+@pytest.fixture(autouse=True)
+def _stamp_cache_version(tmp_path):
+    """Reachability aborts on a missing/stale CACHE_VERSION stamp; real cachedirs
+    get theirs from ensure_cache_version, so stamp the test dirs up front."""
+    (tmp_path / "CACHE_VERSION").write_text(cache_management.CACHE_VERSION)
+
+
+
 def blob_basename(path: str) -> str:
     """Basename of *path*, which is the identity the reachability scan matches on."""
     return Path(path).name
