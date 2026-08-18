@@ -22,6 +22,7 @@ from bencher.scorecard.discover import (
 from bencher.scorecard.model import (
     build_cell,
     cell_verdict,
+    column_units,
     fmt_change,
     fmt_value,
     metric_columns,
@@ -36,6 +37,7 @@ __all__ = [
     "ScorecardConfig",
     "build_cell",
     "cell_verdict",
+    "column_units",
     "discover_report_links",
     "discover_summaries",
     "fmt_change",

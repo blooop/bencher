@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.120.0] - 2026-08-18
+
+### Changed
+- **Scorecard: a cell holds its numbers, and a column is sized to fit them.** The cell labelled
+  four numbers — latest, Δ, `μ`, `σ` — each with its own unit, inside a column the table gave
+  `width / n_columns` with a single 640px floor on the whole table. At the 19-40 metrics a real
+  project accumulates that is ~30px of column for ~150px of text, and nothing stopped the
+  overflow: the labels were `white-space: nowrap` and `td.cell` had no `overflow`, so they printed
+  over the neighbouring column's numbers. The same rule inverts on a one-metric section,
+  stretching a single sparkline across the viewport. Now the value and its Δ are one centered line
+  under the sparkline and `μ`/`σ` the next, both wrapping rather than overflowing; a column's unit
+  is written once in its header when every benchmark in it agrees (`column_units`, plus
+  `build_cell(units_in_header=)`), which is the width that buys; a metric name wraps on its
+  underscores instead of truncating to `repe…`; and each table carries its column count, giving
+  data columns a min and a max width — past the floor the table scrolls rather than crushing.
+  `td.cell` is `overflow: hidden` as the hard stop, and the baseline and run count move to the
+  tooltip.
+
+### Added
+- **`ScorecardConfig.secondary_metrics` / `secondary_label`** — metric names describing the *run*
+  rather than what it measured (harness lifecycle, artifact capture). Every benchmark reports
+  them, so in the main table they take columns from a section's own subject and, ordered by how
+  many benches share them, land in the middle of it; they now render in a collapsed group beneath
+  it. A section reporting nothing else keeps them as its subject.
+
 ## [1.119.1] - 2026-08-05
 
 ### Added
