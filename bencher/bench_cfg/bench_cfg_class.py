@@ -272,14 +272,7 @@ class BenchCfg(BenchRunCfg):
                 hash_sha1(self.tag),
             )
         )
-        # The three `or []` folds here and below are unreachable since plan 23 P12b gave
-        # these fields `default=[]` -- param rejects None outright now. They are kept
-        # deliberately, because they are *why* that change could not move a stored digest:
-        # `[]` and `None` were already folded identically, so the pre- and post-change
-        # digests match (measured, not argued). Deleting them is a provable no-op and is
-        # logged as entry L7 of plans/27-cache-version-bump-ledger.md, to be swept with the
-        # next CACHE_VERSION bump rather than as a drive-by that removes the evidence.
-        for v in self.input_vars or []:
+        for v in self.input_vars:
             hash_val = hash_sha1((hash_val, v.hash_persistent()))
 
         # Folded as sets -- sorted *unique* digests -- so that a variable appearing twice
@@ -294,16 +287,13 @@ class BenchCfg(BenchRunCfg):
         # duplicate hash exactly as before, since sorted(set(xs)) == sorted(xs) when xs is
         # already unique.
         if include_result_vars:
-            result_hashes = tuple(sorted({v.hash_persistent() for v in self.result_vars or []}))
+            result_hashes = tuple(sorted({v.hash_persistent() for v in self.result_vars}))
         else:
             result_hashes = ()
 
         const_hashes = tuple(
             sorted(
-                {
-                    hash_sha1((v[0].hash_persistent(), hash_sha1(v[1])))
-                    for v in self.const_vars or []
-                }
+                {hash_sha1((v[0].hash_persistent(), hash_sha1(v[1]))) for v in self.const_vars}
             )
         )
 

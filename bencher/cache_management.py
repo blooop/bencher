@@ -58,7 +58,12 @@ logger = logging.getLogger(__name__)
 # v5: hash composition changed (variable names in per-var identity, unordered
 # result/const var sets) and the history cache switched to schema-evolving
 # records (see bencher/history.py).
-CACHE_VERSION = "5"
+# v6: the bench_cfg split (BENCH_CFG_SPLIT_PLAN.md). Hash *values* were
+# preserved by construction, but the caches store whole pickled BenchResult
+# objects embedding a BenchCfg, and pickles of the old flat param layout do
+# not load into the nested class shape — so stale entries must be discarded
+# rather than failing at unpickle time.
+CACHE_VERSION = "6"
 # Before bumping this: read plans/27-cache-version-bump-ledger.md in full and land what it
 # lists. A bump invalidates every on-disk benchmark-level and over_time entry, and that cost
 # is the same whether one deferred fix rides along or ten -- the ledger exists so the ones

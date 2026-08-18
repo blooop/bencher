@@ -2,11 +2,14 @@
 
 from bencher.bench_cfg import ExecutionCfg
 import gc
+import pickle
 import tempfile
 import unittest
 from pathlib import Path
 from typing import ClassVar
 from unittest import mock
+
+import pytest
 
 from bencher import Bench, BenchRunCfg, load_result, render_report, save_result
 from bencher.example.benchmark_data import ExampleBenchCfg
@@ -358,3 +361,27 @@ class TestSaveLoadRender(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _raise_old_layout_error():
+    raise AttributeError("'BenchRunCfg' object has no attribute 'repeats'")
+
+
+class _OldLayoutPayload:
+    """Stands in for a pickle written before the bench_cfg split."""
+
+    def __reduce__(self):
+        return (_raise_old_layout_error, ())
+
+
+class TestLoadResultVersionBreakDiagnosis:
+    def test_unpickle_failure_names_the_version_break(self, tmp_path):
+        path = tmp_path / "old.pkl"
+        with path.open("wb") as fh:
+            pickle.dump(_OldLayoutPayload(), fh)
+        with pytest.raises(RuntimeError, match="bench_cfg split"):
+            load_result(path)
+
+    def test_missing_file_still_raises_file_not_found(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            load_result(tmp_path / "absent.pkl")
