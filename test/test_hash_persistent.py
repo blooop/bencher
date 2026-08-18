@@ -850,3 +850,52 @@ class TestGoldenBenchCfgHash:
             "ResultFloat.direction is interpretive metadata and must not "
             "contribute to the cache key."
         )
+
+
+# ---------------------------------------------------------------------------
+# BenchCfg hash semantic invariants
+#
+# These are the documented key rules of hash_persistent (mirrored by
+# bencher/identity.py): title never contributes; result_vars contribute as an
+# unordered set; include_result_vars=False (the over_time history key) is
+# insensitive to the result-var set entirely. They are pinned here so a future
+# refactor cannot silently re-key every on-disk cache and history entry.
+# ---------------------------------------------------------------------------
+
+
+class TestBenchCfgHashInvariants:
+    @staticmethod
+    def _cfg(**overrides):
+        params = {
+            "bench_name": "invariant_bench",
+            "title": "A Title",
+            "result_vars": [ResultFloat(units="m/s", doc="speed"), ResultImage(doc="img")],
+        }
+        params.update(overrides)
+        return BenchCfg(**params)
+
+    def test_title_is_excluded(self):
+        h1 = self._cfg(title="A Title").hash_persistent(include_repeats=True)
+        h2 = self._cfg(title="A Completely Different Title").hash_persistent(include_repeats=True)
+        assert h1 == h2
+
+    def test_result_var_reorder_is_invariant(self):
+        speed = ResultFloat(units="m/s", doc="speed")
+        img = ResultImage(doc="img")
+        h1 = self._cfg(result_vars=[speed, img]).hash_persistent(include_repeats=True)
+        h2 = self._cfg(result_vars=[img, speed]).hash_persistent(include_repeats=True)
+        assert h1 == h2
+
+    def test_history_key_ignores_result_var_changes(self):
+        h1 = self._cfg(result_vars=[ResultFloat(units="m/s", doc="speed")]).hash_persistent(
+            include_repeats=True, include_result_vars=False
+        )
+        h2 = self._cfg(result_vars=[ResultImage(doc="img")]).hash_persistent(
+            include_repeats=True, include_result_vars=False
+        )
+        assert h1 == h2
+
+    def test_series_id_is_excluded(self):
+        h1 = self._cfg(series_id=None).hash_persistent(include_repeats=True)
+        h2 = self._cfg(series_id="my_series").hash_persistent(include_repeats=True)
+        assert h1 == h2

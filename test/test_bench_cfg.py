@@ -7,6 +7,7 @@ are not duplicated here.
 """
 
 import argparse
+import math
 from datetime import datetime
 
 import pytest
@@ -353,3 +354,80 @@ class TestFromCmdLine:
         assert cfg.cache.results is True
         assert cfg.server.port == 8080
         assert cfg.time.event == "pr123"
+
+
+# ── BenchCfg.hash_persistent ────────────────────────────────────────────────
+
+
+class SweepCfg(bn.ParametrizedSweep):
+    """Small sweep used to populate BenchCfg input/result/const vars."""
+
+    theta = bn.FloatSweep(default=0, bounds=[0, math.pi], samples=4)
+    offset = bn.FloatSweep(default=0, bounds=[0, 1], samples=3)
+    out_sin = bn.ResultFloat(units="v")
+
+
+def make_bench_cfg(**overrides) -> BenchCfg:
+    """Build a fully-populated BenchCfg for describe/hash tests."""
+    params = {
+        "input_vars": [SweepCfg.param.theta],
+        "result_vars": [SweepCfg.param.out_sin],
+        "const_vars": [(SweepCfg.param.offset, 0.5)],
+        "meta_vars": [],
+        "all_vars": [SweepCfg.param.theta],
+        "bench_name": "bench_cfg_test",
+        "title": "My Title",
+        "description": "A longer description of the benchmark",
+        "post_description": "Comments on the output",
+    }
+    params.update(overrides)
+    return BenchCfg(**params)
+
+
+class TestBenchCfgHashPersistent:
+    def test_same_config_same_hash(self):
+        assert make_bench_cfg().hash_persistent(
+            include_repeats=True
+        ) == make_bench_cfg().hash_persistent(include_repeats=True)
+
+    def test_different_repeats_different_hash(self):
+        h1 = make_bench_cfg(execution=ExecutionCfg(repeats=1)).hash_persistent(
+            include_repeats=True
+        )
+        h2 = make_bench_cfg(execution=ExecutionCfg(repeats=2)).hash_persistent(
+            include_repeats=True
+        )
+        assert h1 != h2
+
+    def test_repeats_ignored_when_include_repeats_false(self):
+        h1 = make_bench_cfg(execution=ExecutionCfg(repeats=1)).hash_persistent(
+            include_repeats=False
+        )
+        h2 = make_bench_cfg(execution=ExecutionCfg(repeats=2)).hash_persistent(
+            include_repeats=False
+        )
+        assert h1 == h2
+
+    def test_over_time_changes_hash(self):
+        h1 = make_bench_cfg(time=TimeCfg(over_time=False)).hash_persistent(include_repeats=True)
+        h2 = make_bench_cfg(time=TimeCfg(over_time=True)).hash_persistent(include_repeats=True)
+        assert h1 != h2
+
+    def test_different_tag_different_hash(self):
+        h1 = make_bench_cfg(tag="a").hash_persistent(include_repeats=True)
+        h2 = make_bench_cfg(tag="b").hash_persistent(include_repeats=True)
+        assert h1 != h2
+
+    def test_different_bench_name_different_hash(self):
+        h1 = make_bench_cfg(bench_name="bench_a").hash_persistent(include_repeats=True)
+        h2 = make_bench_cfg(bench_name="bench_b").hash_persistent(include_repeats=True)
+        assert h1 != h2
+
+    def test_const_var_value_changes_hash(self):
+        h1 = make_bench_cfg(
+            const_vars=[(SweepCfg.param.offset, 0.5)],
+        ).hash_persistent(include_repeats=True)
+        h2 = make_bench_cfg(
+            const_vars=[(SweepCfg.param.offset, 0.9)],
+        ).hash_persistent(include_repeats=True)
+        assert h1 != h2
