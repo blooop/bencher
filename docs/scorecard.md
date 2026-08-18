@@ -8,8 +8,16 @@ HTML page. Every scalar metric shows, at a glance:
   no regression gate yet); and
 - a **noise sparkline** — the per-time-event mean with a ±std band and a node per
   run, plus a right-margin distribution column (one alpha-blended dot per run) and
-  the μ mean, so both the trend and the spread of a jittering metric are visible
-  without opening each benchmark's full report.
+  the μ/σ of the series, so both the trend and the spread of a jittering metric
+  are visible without opening each benchmark's full report.
+
+A cell holds two lines under its sparkline — the latest value with its Δ, then the
+μ and σ of the series — and it has room for them because the column's unit is
+written once in the header rather than on every number, and because columns are
+sized from the column count: past the point where they would stop being legible
+the table scrolls horizontally instead of crushing them, and a one-metric table
+does not stretch a single sparkline across the screen. The baseline and run count
+are on the cell tooltip, which keeps units on μ/σ since it is read on its own.
 
 It reads the machine-readable `*.summary.json` written by
 {func}`bencher.result_to_json` (with `include_series=True`) for every benchmark
@@ -34,6 +42,11 @@ in the page header (the choice is remembered across visits):
   row per metric. Read down a column to compare a benchmark's metrics against
   each other. Because every column is the same fixed width, the sparklines stack
   with their time axes aligned.
+
+Every benchmark reports the same handful of harness metrics — did the process
+start, did it shut down cleanly, was the artifact captured — and left in the main
+table they crowd out the columns a section is actually about. List them in
+`secondary_metrics` and they render in a collapsed group beneath it instead.
 
 ## Producing the input
 
@@ -63,6 +76,7 @@ config = ScorecardConfig(
     registry={"latency_bench": ("Performance", "Latency", "Request latency sweep.")},
     aliases={"wall_time": "duration"},        # equivalent metrics share one column
     percent_metrics=frozenset({"completion"}),  # 0..1 fractions shown as percentages
+    secondary_metrics=frozenset({"orphan_count"}),  # about the run, not the result
     layout=ReportLayout(root="benchmarks"),   # <reports_dir>/benchmarks/<tag>/*.summary.json
 )
 generate_scorecard("reports", config, chrome=Chrome(title="My Health Page"))
@@ -73,6 +87,8 @@ generate_scorecard("reports", config, chrome=Chrome(title="My Health Page"))
 | `registry` | `tag -> (category, name, description)` for known benchmarks; unknown tags auto-name into `other_category` |
 | `aliases` | `raw -> canonical` metric names so equivalent metrics from different benchmarks share a column |
 | `percent_metrics` | metric names whose `0..1` value renders as a percentage |
+| `secondary_metrics` | metric names describing the *run* rather than what it measured; they render in a collapsed group under each section instead of taking columns from its subject |
+| `secondary_label` | heading for that collapsed group (default `Harness health`) |
 | `layout` | on-disk {class}`~bencher.scorecard.ReportLayout` (root subdir + link pattern) |
 
 ## Live example

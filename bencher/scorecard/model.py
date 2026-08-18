@@ -58,6 +58,34 @@ def metric_columns(records: list[dict]) -> list[str]:
     return sorted(counts, key=lambda v: (-counts[v], first_seen[v]))
 
 
+def _unit_label(units: str | None) -> str:
+    """Displayable unit, or ``""`` for the unitless sentinels a value drops."""
+    return units if units and units not in ("", "ratio") else ""
+
+
+def column_units(
+    records: list[dict], columns: list[str], config: ScorecardConfig
+) -> dict[str, str]:
+    """Header unit per column, or ``""`` when it has to stay on the values.
+
+    Hoisting requires every benchmark in the column to declare the same non-empty
+    unit, so it can never relabel a neighbour's value: a column mixing ``m`` with
+    ``mm`` keeps its units in the cells. A percent metric is always ``%``.
+    """
+    units: dict[str, str] = {}
+    for var in columns:
+        if var in config.percent_metrics:
+            units[var] = "%"
+            continue
+        declared = {
+            _unit_label(rec["metrics"][var].get("units"))
+            for rec in records
+            if var in rec["metrics"]
+        }
+        units[var] = next(iter(declared)) if len(declared) == 1 else ""
+    return units
+
+
 def cell_verdict(reg: dict | None) -> str:
     """4-way display verdict for a cell.
 
@@ -86,16 +114,28 @@ def cell_verdict(reg: dict | None) -> str:
     return "passed" if core == "unchanged" else core
 
 
-def fmt_value(value: float | None, units: str | None, *, as_percent: bool = False) -> str:
-    """Compact human label for a scalar value (``—`` when missing)."""
+def fmt_value(
+    value: float | None,
+    units: str | None,
+    *,
+    as_percent: bool = False,
+    with_units: bool = True,
+) -> str:
+    """Compact human label for a scalar value (``—`` when missing).
+
+    ``with_units=False`` drops the suffix, ``%`` included, for a caller that
+    shows the unit once per column instead of on every value.
+    """
     if value is None or not math.isfinite(value):
         return "—"
     if as_percent:
         # 0..1 fraction rendered as a percentage ("95%" rather than "0.95").
-        return f"{value * 100:.4g}%"
+        text = f"{value * 100:.4g}"
+        return f"{text}%" if with_units else text
     text = f"{value:.4g}"
-    if units and units not in ("", "ratio"):
-        text = f"{text} {units}"
+    label = _unit_label(units)
+    if label and with_units:
+        text = f"{text} {label}"
     return text
 
 
@@ -106,13 +146,32 @@ def fmt_change(change_percent: float | None) -> str:
     return f"{change_percent:+.1f}%"
 
 
-def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
-    """Build one table cell for (benchmark, metric), or None when absent."""
+def build_cell(
+    rec: dict, var: str, config: ScorecardConfig, *, units_in_header: bool = False
+) -> dict | None:
+    """Build one table cell for (benchmark, metric), or None when absent.
+
+    ``latest_str``/``change_str`` and ``mean_str``/``std_str`` are the two display
+    lines; the baseline and run count go to the tooltip, which keeps units on μ/σ
+    whatever the cell does. ``units_in_header`` drops the unit suffix from the
+    display strings for a caller showing it once per column
+    (:func:`column_units`) — the width that buys is what lets μ and σ stay on the
+    cell rather than behind a hover.
+    """
     metric = rec["metrics"].get(var)
     if metric is None:
         return None
     units = metric.get("units")
     as_percent = var in config.percent_metrics
+
+    def display(value: float | None) -> str:
+        """As the cell shows it: no unit when the header already carries it."""
+        return fmt_value(value, units, as_percent=as_percent, with_units=not units_in_header)
+
+    def labelled(value: float | None) -> str:
+        """As the tooltip shows it: read on its own, so always with its unit."""
+        return fmt_value(value, units, as_percent=as_percent)
+
     series = metric.get("series") or []
     means = [pt.get("mean") for pt in series]
     stds = [pt.get("std") for pt in series]
@@ -129,7 +188,7 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
     if reg is not None:
         # Gated: use bencher's threshold-aware verdict + reported baseline/delta.
         change_str = fmt_change(reg.get("change_percent"))
-        baseline_str = fmt_value(reg.get("baseline_value"), units, as_percent=as_percent)
+        baseline_str = labelled(reg.get("baseline_value"))
     else:
         # No regression gate (or <2 over-time events yet): still surface the
         # trend. Show a neutral latest-vs-previous delta from the series itself;
@@ -137,21 +196,26 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
         change_str = ""
         baseline_str = ""
         if prev:
-            baseline_str = fmt_value(prev, units, as_percent=as_percent)
+            baseline_str = labelled(prev)
             change_str = fmt_change((latest - prev) / abs(prev) * 100.0)
 
-    mean_str = fmt_value(mean_val, units, as_percent=as_percent)
-    std_str = fmt_value(std_val, units, as_percent=as_percent)
-    tooltip_parts = []
+    # Summing hostile JSON floats can overflow, so a mean is only a mean while it
+    # is finite; both strings are empty together, like every other absent one here.
+    has_distribution = mean_val is not None and math.isfinite(mean_val)
+    mean_str = display(mean_val) if has_distribution else ""
+    std_str = display(std_val) if has_distribution else ""
+    tooltip_parts = [var]
     if metric.get("source_variable"):
         tooltip_parts.append(f"variable: {metric['source_variable']}")
-    if mean_val is not None and math.isfinite(mean_val):
-        tooltip_parts.append(f"μ {mean_str} · σ {std_str}")
+    if has_distribution:
+        tooltip_parts.append(f"μ {labelled(mean_val)} · σ {labelled(std_val)}")
     if baseline_str:
-        tooltip_parts.append(f"baseline {baseline_str} · {len(finite)} runs")
+        tooltip_parts.append(f"baseline {baseline_str}")
+    if finite:
+        tooltip_parts.append(f"{len(finite)} run{'s' if len(finite) != 1 else ''}")
     return {
         "verdict": verdict,
-        "latest_str": fmt_value(latest, units, as_percent=as_percent),
+        "latest_str": display(latest),
         "mean_str": mean_str,
         "std_str": std_str,
         "change_str": change_str,

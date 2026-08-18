@@ -46,6 +46,11 @@ class ScorecardConfig:
             different benchmarks share one column.
         percent_metrics: metric names whose value is a ``0..1`` fraction to be
             rendered as a percentage rather than a bare number.
+        secondary_metrics: metric names describing the *run* rather than what it
+            measured (harness lifecycle, artifact capture). Every benchmark
+            reports them, so in the main table they crowd out the columns a
+            section is about; they render in a collapsed group beneath it.
+        secondary_label: heading for that group.
         layout: on-disk report layout (see :class:`ReportLayout`).
         other_category: fallback category for unregistered tags.
     """
@@ -53,6 +58,8 @@ class ScorecardConfig:
     registry: Mapping[str, tuple[str, str, str]] = field(default_factory=dict)
     aliases: Mapping[str, str] = field(default_factory=dict)
     percent_metrics: frozenset[str] = frozenset()
+    secondary_metrics: frozenset[str] = frozenset()
+    secondary_label: str = "Harness health"
     layout: ReportLayout = field(default_factory=ReportLayout)
     other_category: str = DEFAULT_OTHER_CATEGORY
 

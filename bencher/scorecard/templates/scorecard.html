@@ -47,24 +47,33 @@
     font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
     color: #6b7280; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 2px solid #e5e7eb;
   }
-  .table-wrap { overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
-  /* Fixed layout + width:100% spreads the data columns evenly across the full
-     viewport width; min-width keeps them readable (and lets .table-wrap scroll)
-     when a category has many columns on a narrow screen. Fixed columns also give
-     every sparkline in a benchmark column the same width, so their time axes line
-     up when comparing a benchmark's metrics in the transposed view. */
-  table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 640px; font-size: 0.8rem; }
+  /* Data columns are sized from --cols, the column count each .table-wrap
+     carries: past the floor the wrap scrolls rather than crushing 40 columns into
+     the viewport, and the ceiling stops a one-metric table stretching one
+     sparkline across the screen. Fixed layout also keeps every sparkline in a
+     column the same width, so their time axes line up when transposed. */
+  :root { --rowhead-w: 200px; --col-min: 112px; --col-max: 220px; }
+  .table-wrap {
+    overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    max-width: calc(var(--rowhead-w) + var(--cols) * var(--col-max));
+  }
+  table {
+    border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 0.8rem;
+    min-width: calc(var(--rowhead-w) + var(--cols) * var(--col-min));
+  }
   th, td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; }
   /* Header/label styling is keyed to position in the grid (top row = .colhead,
      left column = .rowhead, .corner is both) rather than to what the axis holds,
-     so the same cells read correctly in either orientation. */
+     so the same cells read correctly in either orientation. A name wraps and is
+     never truncated: at these widths an ellipsis eats the part that tells two
+     metrics apart (breaks land on the underscores — see the metric_label macro). */
   .colhead {
     position: sticky; top: 0; background: #f9fafb; color: #374151; font-weight: 600;
-    font-size: 0.72rem; vertical-align: bottom; z-index: 1; overflow: hidden; text-overflow: ellipsis;
+    font-size: 0.72rem; vertical-align: bottom; z-index: 1; overflow-wrap: anywhere;
   }
   .rowhead, .corner {
     position: sticky; left: 0; background: #fff; text-align: left;
-    border-right: 1px solid #e5e7eb; width: 200px;
+    border-right: 1px solid #e5e7eb; width: var(--rowhead-w);
   }
   .rowhead { z-index: 2; }
   .corner { top: 0; z-index: 3; background: #f9fafb; color: #374151; font-weight: 600; }
@@ -75,7 +84,9 @@
   .rowhead a, .colhead a { color: #1f2937; text-decoration: none; font-weight: 600; }
   .rowhead a:hover, .colhead a:hover { color: #6366f1; text-decoration: underline; }
   .when { display: block; font-size: 0.7rem; color: #9ca3af; font-weight: 400; }
-  td.cell { vertical-align: middle; }
+  /* overflow:hidden is the hard stop: whatever a cell holds, it can never bleed
+     into its neighbour and overlap that column's numbers. */
+  td.cell { vertical-align: middle; overflow: hidden; }
   /* Only one orientation is shown at a time; the header switch flips the body
      class. Default (no class) shows metrics-as-columns, matching the prior page. */
   .table-wrap.orient-metric { display: none; }
@@ -85,17 +96,21 @@
   .spark svg { display: block; width: 100%; height: 30px; }
   .cval { font-weight: 600; color: #1f2937; }
   .cdelta { font-size: 0.72rem; color: #6b7280; }
-  /* Latest value + Δ centered under the sparkline body (the "scatter"); μ/σ
-     centered under the distribution column they summarise. The .cdist basis
-     matches the sparkline's right-margin column (col_w 16 of viewBox 120). */
-  .cfoot { display: flex; align-items: center; gap: 6px; }
-  .cstat { flex: 1 1 auto; min-width: 0; text-align: center; }
-  .cdist { flex: 0 0 auto; text-align: center; }
+  /* Two centered lines under the sparkline: the latest value with its Δ, then the
+     distribution it came from. Both wrap rather than overflow, so a long number
+     stacks instead of spilling into the next column — which is what the unit in
+     the header and the column floor below buy. The baseline and run count stay on
+     the tooltip; four numbers per cell is where a column runs out. */
+  .cfoot, .cdist {
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+    gap: 0 5px; line-height: 1.3;
+  }
   .cmean, .csigma {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.72rem; color: #6b7280; white-space: nowrap;
+    font-size: 0.7rem; color: #6b7280;
   }
   .cempty { color: #d1d5db; }
+  .unit { color: #9ca3af; font-weight: 400; }
   td.v-regressed { background: #fee2e2; }
   td.v-regressed .cdelta { color: #b91c1c; font-weight: 600; }
   td.v-improved { background: #dcfce7; }
@@ -104,6 +119,12 @@
   td.v-trend { background: #fff; }
   td.v-trend .cdelta { color: #475569; }
   td.v-none { background: #fafafa; }
+  .secondary { margin-top: 8px; }
+  .secondary > summary {
+    cursor: pointer; font-size: 0.75rem; color: #6b7280; padding: 3px 2px; width: fit-content;
+  }
+  .secondary > summary:hover { color: #374151; }
+  .secondary[open] > summary { margin-bottom: 6px; }
   .reports-links .links-group { margin-bottom: 14px; }
   .links-subtitle { font-size: 0.78rem; font-weight: 600; color: #6b7280; margin-bottom: 6px; }
   .links-grid {
@@ -167,49 +188,52 @@
     <span><span class="swatch sw-passed"></span> passed</span>
     <span><span class="swatch sw-improved"></span> improved</span>
     <span><span class="swatch sw-none"></span> trend only (no regression check yet)</span>
-    <span>sparkline = mean-over-time line + ±std band with a node per run; right-edge dots = per-run distribution; μ = mean</span>
+    <span>sparkline = mean-over-time line + ±std band with a node per run; right-edge dots = per-run distribution; μ/σ over the series, in the column's units; hover a cell for its baseline and run count</span>
   </div>
   {% macro data_cell(cell) %}
     {% if cell %}
     <td class="cell v-{{ cell.verdict }}"{% if cell.tooltip %} title="{{ cell.tooltip }}"{% endif %}>
       <div class="spark">{{ cell.svg|safe }}</div>
       <div class="cfoot">
-        <div class="cstat">
-          <div class="cval">{{ cell.latest_str }}</div>
-          {% if cell.change_str %}<div class="cdelta">{{ cell.change_str }}</div>{% endif %}
-        </div>
-        {% if cell.mean_str and cell.mean_str != "—" %}
-        <div class="cdist" title="mean ± std of {{ cell.n_events }} runs">
-          <div class="cmean">μ {{ cell.mean_str }}</div>
-          {% if cell.std_str and cell.std_str != "—" %}<div class="csigma">σ {{ cell.std_str }}</div>{% endif %}
-        </div>
-        {% endif %}
+        <span class="cval">{{ cell.latest_str }}</span>
+        {% if cell.change_str %}<span class="cdelta">{{ cell.change_str }}</span>{% endif %}
       </div>
+      {% if cell.mean_str %}
+      <div class="cdist">
+        <span class="cmean">μ {{ cell.mean_str }}</span>
+        <span class="csigma">σ {{ cell.std_str }}</span>
+      </div>
+      {% endif %}
     </td>
     {% else %}
     <td class="cell v-none"><span class="cempty">—</span></td>
     {% endif %}
   {% endmacro %}
+  {# Break a snake_case name on its underscores so a narrow column wraps where it
+     reads. Each part is escaped on its own; the separator is template text. #}
+  {% macro metric_label(metric) %}
+    {%- for part in metric.name.split("_") -%}{{ part }}{%- if not loop.last -%}_<wbr>{%- endif -%}{%- endfor -%}
+    {%- if metric.units %} <span class="unit">({{ metric.units }})</span>{% endif -%}
+  {% endmacro %}
   {% macro bench_label(bench) %}
     <a href="{{ bench.link }}">{{ bench.name }}</a>
     {% if bench.time_event %}<span class="when">{{ bench.time_event }}</span>{% endif %}
   {% endmacro %}
-  {% for section in sections %}
-  <section class="category">
-    <h2 class="category-title">{{ section.category }}</h2>
+  {# Both orientations of one column group; --cols is its count in each. #}
+  {% macro group_tables(group) %}
     {# One column per metric: read down a column to compare that metric across benchmarks. #}
-    <div class="table-wrap orient-benchmark">
+    <div class="table-wrap orient-benchmark" style="--cols: {{ group.metrics|length }}">
       <table data-orient="benchmark">
         <thead>
           <tr>
             <th class="corner">Benchmark</th>
-            {% for metric in section.metrics %}
-            <th class="colhead metric-head" title="{{ metric }}">{{ metric }}</th>
+            {% for metric in group.metrics %}
+            <th class="colhead metric-head" title="{{ metric.name }}">{{ metric_label(metric) }}</th>
             {% endfor %}
           </tr>
         </thead>
         <tbody>
-          {% for bench in section.benchmarks %}
+          {% for bench in group.benchmarks %}
           <tr>
             <td class="rowhead bench-head">{{ bench_label(bench) }}</td>
             {% for cell in bench.cells %}{{ data_cell(cell) }}{% endfor %}
@@ -220,27 +244,38 @@
     </div>
     {# One column per benchmark: read down a column to compare a benchmark's
        metrics against each other on a shared (aligned) time axis. #}
-    <div class="table-wrap orient-metric">
+    <div class="table-wrap orient-metric" style="--cols: {{ group.benchmarks|length }}">
       <table data-orient="metric">
         <thead>
           <tr>
             <th class="corner">Metric</th>
-            {% for bench in section.benchmarks %}
+            {% for bench in group.benchmarks %}
             <th class="colhead bench-head">{{ bench_label(bench) }}</th>
             {% endfor %}
           </tr>
         </thead>
         <tbody>
-          {% for metric in section.metrics %}
+          {% for metric in group.metrics %}
           {% set metric_i = loop.index0 %}
           <tr>
-            <td class="rowhead metric-head" title="{{ metric }}">{{ metric }}</td>
-            {% for bench in section.benchmarks %}{{ data_cell(bench.cells[metric_i]) }}{% endfor %}
+            <td class="rowhead metric-head" title="{{ metric.name }}">{{ metric_label(metric) }}</td>
+            {% for bench in group.benchmarks %}{{ data_cell(bench.cells[metric_i]) }}{% endfor %}
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+  {% endmacro %}
+  {% for section in sections %}
+  <section class="category">
+    <h2 class="category-title">{{ section.category }}</h2>
+    {{ group_tables(section.main) }}
+    {% if section.secondary %}
+    <details class="secondary">
+      <summary>{{ secondary_label }} — {{ section.secondary.metrics|length }} metric{{ "s" if section.secondary.metrics|length != 1 }}</summary>
+      {{ group_tables(section.secondary) }}
+    </details>
+    {% endif %}
   </section>
   {% else %}
   <div class="no-results">No benchmark summaries found.</div>
