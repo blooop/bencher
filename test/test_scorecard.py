@@ -593,6 +593,18 @@ class TestBuildCell:
         )
         assert build_cell(rec, "completion", CONFIG, units_in_header=True)["latest_str"] == "90"
 
+    def test_first_run_tooltip_still_reports_the_run_count(self, mock_reports: Path):
+        # The run count is a property of the series, not of the baseline: a cell
+        # with one event has no baseline and still has runs behind its μ.
+        rec = next(
+            r
+            for r in discover_summaries(mock_reports, CONFIG)
+            if r["tag"] == "test_bench_throughput"
+        )
+        tooltip = build_cell(rec, "queue_depth", CONFIG)["tooltip"]
+        assert "baseline" not in tooltip
+        assert tooltip.endswith("1 run")
+
     def test_tooltip_names_the_column(self, mock_reports: Path):
         # μ/σ live only on the tooltip now, so it has to say which metric it is:
         # in a wide table the column header may be scrolled out of view.

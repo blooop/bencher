@@ -47,20 +47,19 @@
     font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
     color: #6b7280; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 2px solid #e5e7eb;
   }
-  /* Data columns are sized from the column count, which each .table-wrap carries
-     as --cols: the floor keeps a cell legible (past it the wrap scrolls
-     horizontally rather than crushing 40 columns into the viewport) and the
-     ceiling stops a one-metric table stretching one sparkline across the screen.
-     Fixed layout also gives every sparkline in a column the same width, so their
-     time axes line up in the transposed view. */
+  /* Data columns are sized from --cols, the column count each .table-wrap
+     carries: past the floor the wrap scrolls rather than crushing 40 columns into
+     the viewport, and the ceiling stops a one-metric table stretching one
+     sparkline across the screen. Fixed layout also keeps every sparkline in a
+     column the same width, so their time axes line up when transposed. */
   :root { --rowhead-w: 200px; --col-min: 96px; --col-max: 220px; }
   .table-wrap {
     overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
-    max-width: calc(var(--rowhead-w) + var(--cols, 4) * var(--col-max));
+    max-width: calc(var(--rowhead-w) + var(--cols) * var(--col-max));
   }
   table {
     border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 0.8rem;
-    min-width: calc(var(--rowhead-w) + var(--cols, 4) * var(--col-min));
+    min-width: calc(var(--rowhead-w) + var(--cols) * var(--col-min));
   }
   th, td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; }
   /* Header/label styling is keyed to position in the grid (top row = .colhead,
@@ -97,10 +96,9 @@
   .spark svg { display: block; width: 100%; height: 30px; }
   .cval { font-weight: 600; color: #1f2937; }
   .cdelta { font-size: 0.72rem; color: #6b7280; }
-  /* One line under the sparkline: the latest value and its Δ. It wraps rather
-     than overflowing, so a long value stacks its Δ instead of spilling out of
-     the column. μ, σ, the baseline and the run count are on the cell tooltip —
-     labelling them in every cell is what turned this page into a wall of text. */
+  /* The latest value and its Δ, wrapping rather than overflowing so a long value
+     stacks its Δ instead of spilling out of the column. μ/σ/baseline/run count
+     are on the cell tooltip: labelling four numbers per cell does not fit. */
   .cfoot {
     display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
     gap: 0 5px; line-height: 1.3;
@@ -199,20 +197,17 @@
     <td class="cell v-none"><span class="cempty">—</span></td>
     {% endif %}
   {% endmacro %}
-  {# Break a snake_case name on its underscores so a narrow column wraps it
-     where it reads, rather than mid-word. Each part is escaped on its own; the
-     separator is template text. #}
+  {# Break a snake_case name on its underscores so a narrow column wraps where it
+     reads. Each part is escaped on its own; the separator is template text. #}
   {% macro metric_label(metric) %}
     {%- for part in metric.name.split("_") -%}{{ part }}{%- if not loop.last -%}_<wbr>{%- endif -%}{%- endfor -%}
     {%- if metric.units %} <span class="unit">({{ metric.units }})</span>{% endif -%}
   {% endmacro %}
-  {% macro metric_title(metric) %}{{ metric.name }}{% if metric.units %} ({{ metric.units }}){% endif %}{% endmacro %}
   {% macro bench_label(bench) %}
     <a href="{{ bench.link }}">{{ bench.name }}</a>
     {% if bench.time_event %}<span class="when">{{ bench.time_event }}</span>{% endif %}
   {% endmacro %}
-  {# Both orientations of one group of columns. --cols is the group's column
-     count in that orientation, which sizes the data columns. #}
+  {# Both orientations of one column group; --cols is its count in each. #}
   {% macro group_tables(group) %}
     {# One column per metric: read down a column to compare that metric across benchmarks. #}
     <div class="table-wrap orient-benchmark" style="--cols: {{ group.metrics|length }}">
@@ -221,7 +216,7 @@
           <tr>
             <th class="corner">Benchmark</th>
             {% for metric in group.metrics %}
-            <th class="colhead metric-head" title="{{ metric_title(metric) }}">{{ metric_label(metric) }}</th>
+            <th class="colhead metric-head" title="{{ metric.name }}">{{ metric_label(metric) }}</th>
             {% endfor %}
           </tr>
         </thead>
@@ -251,7 +246,7 @@
           {% for metric in group.metrics %}
           {% set metric_i = loop.index0 %}
           <tr>
-            <td class="rowhead metric-head" title="{{ metric_title(metric) }}">{{ metric_label(metric) }}</td>
+            <td class="rowhead metric-head" title="{{ metric.name }}">{{ metric_label(metric) }}</td>
             {% for bench in group.benchmarks %}{{ data_cell(bench.cells[metric_i]) }}{% endfor %}
           </tr>
           {% endfor %}

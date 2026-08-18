@@ -49,15 +49,12 @@ def _sanitize_url(url: str) -> str:
 
 
 def _group(records: list[dict], columns: list[str], config: ScorecardConfig) -> dict:
-    """One table group: its column labels plus a cell per (benchmark, column).
+    """One table group: both label axes, plus a cell per (benchmark, column).
 
-    Carries the two label axes (``metrics`` and ``benchmarks``), with every
-    benchmark's ``cells`` in column order. That single list feeds both
-    orientations: the template reads a benchmark's ``cells`` straight across for
-    one column per metric (compare a metric across benchmarks), or indexes
-    ``bench.cells[metric_i]`` down a metric row for one column per benchmark
-    (stack a benchmark's metrics on a shared time axis). The view is toggled
-    client-side, so both orientations render from this one model.
+    Every benchmark's ``cells`` are in column order, and that one list feeds both
+    orientations — read across for one column per metric, or indexed down a
+    metric row for one column per benchmark — since the view is toggled
+    client-side from a single render.
     """
     units = column_units(records, columns, config)
     return {
@@ -104,20 +101,17 @@ def generate_scorecard(
 
     records = discover_summaries(reports_dir, config)
 
-    # Group by category; each category gets its own union of metrics so only the
-    # metrics present in that category are shown. Categories render in the
-    # registry's display order (records are already sorted that way). Within a
-    # category the columns split into the section's own subject and the
-    # config's secondary (harness) metrics, each rendered as its own group.
+    # One section per category, in the registry's display order (records are
+    # already sorted that way), holding only the metrics that category reports.
+    # Its columns split into the section's own subject and the config's secondary
+    # (harness) metrics, each rendered as its own group.
     sections: list[dict] = []
     for category in dict.fromkeys(r["category"] for r in records):
         cat_records = [r for r in records if r["category"] == category]
         columns = metric_columns(cat_records)
         primary = [var for var in columns if var not in config.secondary_metrics]
         secondary = [var for var in columns if var in config.secondary_metrics]
-        # A section reporting nothing but secondary metrics has them as its
-        # subject, so they stay in the main table rather than collapsing to
-        # nothing.
+        # A section reporting nothing else has them as its subject.
         if not primary:
             primary, secondary = secondary, []
         sections.append(

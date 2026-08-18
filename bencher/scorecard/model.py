@@ -68,11 +68,9 @@ def column_units(
 ) -> dict[str, str]:
     """Header unit per column, or ``""`` when it has to stay on the values.
 
-    A unit is hoisted to the header only when every benchmark reporting that
-    column declares the same non-empty one, so hoisting can never relabel a
-    neighbour's value: a column mixing ``m`` with ``mm`` (or one bench leaving
-    it unitless) keeps its units in the cells. A percent metric is always
-    ``%`` — the fraction renders as a percentage whatever units it recorded.
+    Hoisting requires every benchmark in the column to declare the same non-empty
+    unit, so it can never relabel a neighbour's value: a column mixing ``m`` with
+    ``mm`` keeps its units in the cells. A percent metric is always ``%``.
     """
     units: dict[str, str] = {}
     for var in columns:
@@ -125,9 +123,8 @@ def fmt_value(
 ) -> str:
     """Compact human label for a scalar value (``—`` when missing).
 
-    ``with_units=False`` drops the unit suffix (including the ``%`` of a
-    percentage) for a caller that shows the unit once in the column header
-    instead of on every value.
+    ``with_units=False`` drops the suffix, ``%`` included, for a caller that
+    shows the unit once per column instead of on every value.
     """
     if value is None or not math.isfinite(value):
         return "—"
@@ -154,11 +151,11 @@ def build_cell(
 ) -> dict | None:
     """Build one table cell for (benchmark, metric), or None when absent.
 
-    A cell shows one number — the latest value — plus its Δ; μ, σ, the baseline
-    and the run count go to the tooltip, because a column is only as wide as the
-    table divided by its columns and four labelled numbers do not fit in one.
-    Set ``units_in_header`` when the caller shows the column's unit once in the
-    header (see :func:`column_units`), so the value drops its own suffix.
+    The latest value and its Δ are for display; μ, σ, the baseline and the run
+    count go to the tooltip, because a column is the table's width divided by its
+    columns and four labelled numbers do not fit in one. ``units_in_header`` drops
+    the value's unit suffix for a caller showing it once per column
+    (:func:`column_units`).
     """
     metric = rec["metrics"].get(var)
     if metric is None:
@@ -200,7 +197,9 @@ def build_cell(
     if mean_val is not None and math.isfinite(mean_val):
         tooltip_parts.append(f"μ {mean_str} · σ {std_str}")
     if baseline_str:
-        tooltip_parts.append(f"baseline {baseline_str} · {len(finite)} runs")
+        tooltip_parts.append(f"baseline {baseline_str}")
+    if finite:
+        tooltip_parts.append(f"{len(finite)} run{'s' if len(finite) != 1 else ''}")
     return {
         "verdict": verdict,
         "latest_str": fmt_value(
