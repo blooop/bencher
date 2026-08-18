@@ -25,9 +25,9 @@ class ServerBenchmark(bn.ParametrizedSweep):
 
 def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Regression detection — default method over time."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
-    run_cfg.regression_detection = True
-    run_cfg.regression_fail = False
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+    run_cfg.regression.enabled = True
+    run_cfg.regression.fail = False
 
     benchable = ServerBenchmark()
     bench = benchable.to_bench(run_cfg)
@@ -38,9 +38,9 @@ def example_regression_percentage(run_cfg: bn.BenchRunCfg | None = None) -> bn.B
     base_time = datetime(2024, 1, 1)
     for i, offset in enumerate(releases):
         benchable._time_offset = offset
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = i == len(releases) - 1
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
+        run_cfg.visualization.auto_plot = i == len(releases) - 1
         bench.plot_sweep(
             "regression_detection",
             input_vars=["connections", "payload_kb"],

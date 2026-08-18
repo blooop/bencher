@@ -38,8 +38,8 @@ def example_sweep_3_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
     _base_time = datetime(2000, 1, 1)
     for i, offset in enumerate([0.0, 0.5, 1.0]):
         benchable._time_offset = offset
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time",
             input_vars=["key_size", "payload_size", "iterations"],

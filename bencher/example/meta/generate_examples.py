@@ -460,12 +460,12 @@ def run_example_and_save(
 
     run_kwargs = _extract_run_kwargs(py_file)
     run_cfg = bn.BenchRunCfg()
-    run_cfg.subsampling_divisions = run_kwargs.get("subsampling_divisions", 4)
-    run_cfg.repeats = run_kwargs.get("repeats", 1)
+    run_cfg.execution.subsampling_divisions = run_kwargs.get("subsampling_divisions", 4)
+    run_cfg.execution.repeats = run_kwargs.get("repeats", 1)
     if "use_optuna" in run_kwargs:
-        run_cfg.use_optuna = run_kwargs["use_optuna"]
+        run_cfg.visualization.use_optuna = run_kwargs["use_optuna"]
     if run_kwargs.get("over_time"):
-        run_cfg.over_time = True
+        run_cfg.time.over_time = True
     optimise = run_kwargs.get("optimise", 0)
     print(f"Running {py_file}...")
     t_exec_start = time.perf_counter()

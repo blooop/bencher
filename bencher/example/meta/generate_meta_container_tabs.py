@@ -38,7 +38,7 @@ class MetaContainerTabLayout(MetaGeneratorBase):
             input_vars='["sides", "color"]',
             result_vars='["polygon"]',
             run_cfg_lines=[
-                f"run_cfg.pane_layout = bn.PaneLayout.{layout}",
+                f"run_cfg.visualization.pane_layout = bn.PaneLayout.{layout}",
             ],
             run_kwargs={"subsampling_divisions": 2},
         )

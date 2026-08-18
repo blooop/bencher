@@ -8,7 +8,7 @@ def example_container_tab_tabs(run_cfg: bn.BenchRunCfg | None = None) -> bn.Benc
     """Container Layout: PaneLayout.tabs."""
     if run_cfg is None:
         run_cfg = bn.BenchRunCfg()
-    run_cfg.pane_layout = bn.PaneLayout.tabs
+    run_cfg.visualization.pane_layout = bn.PaneLayout.tabs
     bench = BenchPolygons().to_bench(run_cfg)
     bench.plot_sweep(input_vars=["sides", "color"], result_vars=["polygon"])
 

@@ -66,7 +66,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
 
 def example_workflow_getting_started(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Getting Started — progressive bencher tutorial."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=10)
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=10))
 
     bench = GettingStartedBenchmark().to_bench(run_cfg)
 
@@ -101,7 +101,7 @@ def example_workflow_getting_started(run_cfg: bn.BenchRunCfg | None = None) -> b
 
     # -- Step 3: 2D sweep with optimisation ------------------------------
     # Combine both inputs to see how they interact.
-    run_cfg.use_optuna = True
+    run_cfg.visualization.use_optuna = True
     bench.plot_sweep(
         input_vars=["intensity", "algo_setting"],
         result_vars=["accuracy"],

@@ -527,7 +527,7 @@ class BenchMetaGen(bn.ParametrizedSweep):
             if self.sample_with_repeats > 1:
                 cfg_line = (
                     f"run_cfg = bn.BenchRunCfg.with_defaults"
-                    f"(run_cfg, repeats={self.sample_with_repeats})\n"
+                    f"(run_cfg, execution=dict(repeats={self.sample_with_repeats}))\n"
                 )
             else:
                 cfg_line = "if run_cfg is None:\n    run_cfg = bn.BenchRunCfg()\n"
@@ -539,8 +539,8 @@ class BenchMetaGen(bn.ParametrizedSweep):
                 f"_base_time = datetime(2000, 1, 1)\n"
                 f"for i, offset in enumerate([0.0, 0.5, 1.0]):\n"
                 f"    benchable._time_offset = offset\n"
-                f"    run_cfg.clear_cache = True\n"
-                f"    run_cfg.clear_history = i == 0\n"
+                f"    run_cfg.cache.clear = True\n"
+                f"    run_cfg.time.clear_history = i == 0\n"
                 f"    res = bench.plot_sweep(\n"
                 f'        "over_time",\n'
                 f"        input_vars={input_var_names!r},\n"

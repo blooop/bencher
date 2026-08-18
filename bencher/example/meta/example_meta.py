@@ -99,10 +99,10 @@ class BenchMeta(bn.ParametrizedSweep):
 
     def benchmark(self):
         run_cfg = bn.BenchRunCfg()
-        run_cfg.subsampling_divisions = self.subsampling_divisions
-        run_cfg.repeats = self.sample_with_repeats
-        run_cfg.over_time = self.sample_over_time
-        run_cfg.plot_size = 500
+        run_cfg.execution.subsampling_divisions = self.subsampling_divisions
+        run_cfg.execution.repeats = self.sample_with_repeats
+        run_cfg.time.over_time = self.sample_over_time
+        run_cfg.visualization.plot_size = 500
 
         benchable = BenchableObject()
         noise = 0.15 if self.sample_with_repeats > 1 else 0.0
@@ -131,8 +131,8 @@ class BenchMeta(bn.ParametrizedSweep):
             base_time = datetime(2000, 1, 1)
             for i, offset in enumerate(time_offsets):
                 benchable._time_offset = offset  # pylint: disable=protected-access
-                run_cfg.clear_cache = True
-                run_cfg.clear_history = i == 0
+                run_cfg.cache.clear = True
+                run_cfg.time.clear_history = i == 0
                 res = bench.plot_sweep(
                     "over_time",
                     input_vars=input_vars,

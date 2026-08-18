@@ -103,7 +103,7 @@
 
 # if __name__ == "__main__":
 #     ex_run_cfg = bn.BenchRunCfg()
-#     ex_run_cfg.repeats = 50
-#     ex_run_cfg.over_time = True
-#     # ex_run_cfg.clear_history = True
+#     ex_run_cfg.execution.repeats = 50
+#     ex_run_cfg.time.over_time = True
+#     # ex_run_cfg.time.clear_history = True
 #     example_floats2D_scatter(ex_run_cfg).report.show()

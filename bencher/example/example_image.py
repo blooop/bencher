@@ -52,7 +52,7 @@ class BenchPolygons(bn.ParametrizedSweep):
 
 
 def example_image(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, cache_results=False)
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, cache=dict(results=False))
     bench = BenchPolygons().to_bench(run_cfg)
 
     bench.add_plot_callback(bn.BenchResult.to_sweep_summary)

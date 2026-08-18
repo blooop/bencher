@@ -21,7 +21,7 @@ def example_collect_render(
     run_cfg: bn.BenchRunCfg | None = None, report: bn.BenchReport | None = None
 ) -> bn.Bench:
     """Collect without plotting, persist, then render the report from disk."""
-    run_cfg = run_cfg or bn.BenchRunCfg(repeats=2)
+    run_cfg = run_cfg or bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=2))
     bench = ExampleBenchCfg().to_bench(run_cfg, report)
 
     # Collection phase — no holoviews/bokeh objects are constructed here.

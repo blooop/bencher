@@ -262,8 +262,8 @@ class MetaImageVideoRich(MetaGeneratorBase):
             "_base_time = datetime(2000, 1, 1)\n"
             "for i, radius in enumerate([0.3, 0.6, 0.9]):\n"
             "    benchable.radius = radius\n"
-            "    run_cfg.clear_cache = True\n"
-            "    run_cfg.clear_history = i == 0\n"
+            "    run_cfg.cache.clear = True\n"
+            "    run_cfg.time.clear_history = i == 0\n"
             "    bench.plot_sweep(\n"
             '        "Image Over Time",\n'
             '        input_vars=["sides"],\n'

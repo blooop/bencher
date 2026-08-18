@@ -289,9 +289,9 @@ class ServerBenchmark(bn.ParametrizedSweep):
         self.response_time = base_rt * leak
         self.throughput = 1000.0 / self.response_time'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
-run_cfg.regression_detection = True
-run_cfg.regression_fail = False
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+run_cfg.regression.enabled = True
+run_cfg.regression.fail = False
 
 benchable = ServerBenchmark()
 bench = benchable.to_bench(run_cfg)
@@ -302,9 +302,9 @@ releases = [0.0, 0.1, 0.0, 0.5, 1.5, 3.0, 5.0]
 base_time = datetime(2024, 1, 1)
 for i, offset in enumerate(releases):
     benchable._time_offset = offset
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = i == len(releases) - 1
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
+    run_cfg.visualization.auto_plot = i == len(releases) - 1
     bench.plot_sweep(
         "regression_detection",
         input_vars=["connections", "payload_kb"],
@@ -346,11 +346,11 @@ class LatencyBenchmark(bn.ParametrizedSweep):
         # baselines, but the absolute delta exceeds the guard.
         self.response_time = base_rt + self._time_offset'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
-run_cfg.regression_detection = True
-run_cfg.regression_method = "delta"
-run_cfg.regression_delta = 2.0  # ms — max acceptable change vs historical mean
-run_cfg.regression_fail = False
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+run_cfg.regression.enabled = True
+run_cfg.regression.method = "delta"
+run_cfg.regression.delta = 2.0  # ms — max acceptable change vs historical mean
+run_cfg.regression.fail = False
 
 benchable = LatencyBenchmark()
 bench = benchable.to_bench(run_cfg)
@@ -361,9 +361,9 @@ releases = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0]
 base_time = datetime(2024, 1, 1)
 for i, offset in enumerate(releases):
     benchable._time_offset = offset
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = i == len(releases) - 1
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
+    run_cfg.visualization.auto_plot = i == len(releases) - 1
     bench.plot_sweep(
         "regression_delta",
         input_vars=["connections", "payload_kb"],
@@ -403,12 +403,12 @@ class SlaBenchmark(bn.ParametrizedSweep):
         base_rt = 5.0 + 0.15 * self.connections + 0.08 * self.payload_kb
         self.response_time = base_rt * (1.0 + self._time_offset)'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
-run_cfg.regression_detection = True
-run_cfg.regression_method = "absolute"
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=2))
+run_cfg.regression.enabled = True
+run_cfg.regression.method = "absolute"
 # SLA: response_time must stay below 25 ms no matter what history says.
-run_cfg.regression_absolute = 25.0
-run_cfg.regression_fail = False
+run_cfg.regression.absolute = 25.0
+run_cfg.regression.fail = False
 
 benchable = SlaBenchmark()
 bench = benchable.to_bench(run_cfg)
@@ -419,9 +419,9 @@ releases = [0.0, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5]
 base_time = datetime(2024, 1, 1)
 for i, offset in enumerate(releases):
     benchable._time_offset = offset
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = i == len(releases) - 1
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
+    run_cfg.visualization.auto_plot = i == len(releases) - 1
     bench.plot_sweep(
         "regression_absolute",
         input_vars=["connections", "payload_kb"],

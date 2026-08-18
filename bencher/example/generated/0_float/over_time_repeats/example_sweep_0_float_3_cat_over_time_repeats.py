@@ -29,14 +29,14 @@ def example_sweep_0_float_3_cat_over_time_repeats(
     run_cfg: bn.BenchRunCfg | None = None,
 ) -> bn.Bench:
     """0 Float, 3 Categorical (over time repeats)."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=3))
     benchable = DeploymentConfig()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)
     for i, offset in enumerate([0.0, 0.5, 1.0]):
         benchable._time_offset = offset
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time",
             input_vars=["protocol", "region", "log_level"],

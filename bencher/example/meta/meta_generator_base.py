@@ -98,7 +98,7 @@ if __name__ == "__main__":
             description: Optional description kwarg for plot_sweep().
             post_description: Optional post_description kwarg for plot_sweep().
             post_sweep_line: Optional line after plot_sweep (e.g. 'res.to_bar()').
-            run_cfg_lines: Optional list of lines like 'run_cfg.use_optuna = True'.
+            run_cfg_lines: Optional list of lines like 'run_cfg.visualization.use_optuna = True'.
             extra_imports: Optional list of additional import lines.
             run_kwargs: Dict of kwargs for bn.run() (e.g. {"subsampling_divisions": 4, "repeats": 10}).
             module_docstring: Optional override for the module-level docstring.

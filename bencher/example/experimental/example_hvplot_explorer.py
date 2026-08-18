@@ -28,9 +28,9 @@ if __name__ == "__main__":
         """,
         post_description="Here you can see the output plot of sin theta between 0 and pi.  In the tabs at the top you can also view 3 tabular representations of the data",
         run_cfg=bn.BenchRunCfg(
-            auto_plot=True,
-            cache_results=False,
-            repeats=2,
+            visualization=bn.VisualizationCfg(auto_plot=True),
+            cache=bn.CacheCfg(results=False),
+            execution=bn.ExecutionCfg(repeats=2),
         ),
     )
 
