@@ -58,6 +58,36 @@ def metric_columns(records: list[dict]) -> list[str]:
     return sorted(counts, key=lambda v: (-counts[v], first_seen[v]))
 
 
+def _unit_label(units: str | None) -> str:
+    """Displayable unit, or ``""`` for the unitless sentinels a value drops."""
+    return units if units and units not in ("", "ratio") else ""
+
+
+def column_units(
+    records: list[dict], columns: list[str], config: ScorecardConfig
+) -> dict[str, str]:
+    """Header unit per column, or ``""`` when it has to stay on the values.
+
+    A unit is hoisted to the header only when every benchmark reporting that
+    column declares the same non-empty one, so hoisting can never relabel a
+    neighbour's value: a column mixing ``m`` with ``mm`` (or one bench leaving
+    it unitless) keeps its units in the cells. A percent metric is always
+    ``%`` — the fraction renders as a percentage whatever units it recorded.
+    """
+    units: dict[str, str] = {}
+    for var in columns:
+        if var in config.percent_metrics:
+            units[var] = "%"
+            continue
+        declared = {
+            _unit_label(rec["metrics"][var].get("units"))
+            for rec in records
+            if var in rec["metrics"]
+        }
+        units[var] = next(iter(declared)) if len(declared) == 1 else ""
+    return units
+
+
 def cell_verdict(reg: dict | None) -> str:
     """4-way display verdict for a cell.
 
@@ -86,16 +116,29 @@ def cell_verdict(reg: dict | None) -> str:
     return "passed" if core == "unchanged" else core
 
 
-def fmt_value(value: float | None, units: str | None, *, as_percent: bool = False) -> str:
-    """Compact human label for a scalar value (``—`` when missing)."""
+def fmt_value(
+    value: float | None,
+    units: str | None,
+    *,
+    as_percent: bool = False,
+    with_units: bool = True,
+) -> str:
+    """Compact human label for a scalar value (``—`` when missing).
+
+    ``with_units=False`` drops the unit suffix (including the ``%`` of a
+    percentage) for a caller that shows the unit once in the column header
+    instead of on every value.
+    """
     if value is None or not math.isfinite(value):
         return "—"
     if as_percent:
         # 0..1 fraction rendered as a percentage ("95%" rather than "0.95").
-        return f"{value * 100:.4g}%"
+        text = f"{value * 100:.4g}"
+        return f"{text}%" if with_units else text
     text = f"{value:.4g}"
-    if units and units not in ("", "ratio"):
-        text = f"{text} {units}"
+    label = _unit_label(units)
+    if label and with_units:
+        text = f"{text} {label}"
     return text
 
 
@@ -106,8 +149,17 @@ def fmt_change(change_percent: float | None) -> str:
     return f"{change_percent:+.1f}%"
 
 
-def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
-    """Build one table cell for (benchmark, metric), or None when absent."""
+def build_cell(
+    rec: dict, var: str, config: ScorecardConfig, *, units_in_header: bool = False
+) -> dict | None:
+    """Build one table cell for (benchmark, metric), or None when absent.
+
+    A cell shows one number — the latest value — plus its Δ; μ, σ, the baseline
+    and the run count go to the tooltip, because a column is only as wide as the
+    table divided by its columns and four labelled numbers do not fit in one.
+    Set ``units_in_header`` when the caller shows the column's unit once in the
+    header (see :func:`column_units`), so the value drops its own suffix.
+    """
     metric = rec["metrics"].get(var)
     if metric is None:
         return None
@@ -142,7 +194,7 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
 
     mean_str = fmt_value(mean_val, units, as_percent=as_percent)
     std_str = fmt_value(std_val, units, as_percent=as_percent)
-    tooltip_parts = []
+    tooltip_parts = [var]
     if metric.get("source_variable"):
         tooltip_parts.append(f"variable: {metric['source_variable']}")
     if mean_val is not None and math.isfinite(mean_val):
@@ -151,7 +203,9 @@ def build_cell(rec: dict, var: str, config: ScorecardConfig) -> dict | None:
         tooltip_parts.append(f"baseline {baseline_str} · {len(finite)} runs")
     return {
         "verdict": verdict,
-        "latest_str": fmt_value(latest, units, as_percent=as_percent),
+        "latest_str": fmt_value(
+            latest, units, as_percent=as_percent, with_units=not units_in_header
+        ),
         "mean_str": mean_str,
         "std_str": std_str,
         "change_str": change_str,

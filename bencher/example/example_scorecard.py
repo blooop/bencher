@@ -259,9 +259,21 @@ _FLEET_METRICS = [
 ]
 
 
+# Metrics about the *run* rather than what it measured: every bench reports them,
+# so they are declared secondary and render in a collapsed group under each
+# section instead of taking columns from its subject.
+_HARNESS_METRICS = [
+    ("runner_startup", "minimize", "s", 3.1, 3.0, 0.1),
+    ("runner_shutdown", "minimize", "s", 1.2, 1.2, 0.05),
+    ("artifact_captured", "maximize", "ratio", 1.0, 1.0, 0.0),
+    ("orphan_count", "minimize", "count", 0.0, 0.0, 0.0),
+]
+
+
 def _fleet_benches(rng: random.Random) -> list[dict]:
     """A wide category: several services each reporting the same ~10 metrics, so
-    the scorecard renders a many-column table (and exercises horizontal scroll).
+    the scorecard renders a many-column table (and exercises horizontal scroll),
+    plus the shared harness metrics that render as the collapsed secondary group.
     """
     benches: list[dict] = []
     for tag, name in (
@@ -270,7 +282,7 @@ def _fleet_benches(rng: random.Random) -> list[dict]:
         ("bench_gateway", "Gateway"),
     ):
         metrics, regs = [], []
-        for var, direction, units, start, end, noise in _FLEET_METRICS:
+        for var, direction, units, start, end, noise in _FLEET_METRICS + _HARNESS_METRICS:
             scale = 1.0 + rng.uniform(-0.06, 0.06)  # per-service variation
             m, s = _traj(rng, start * scale, end * scale, noise)
             metrics.append(_metric(var, direction, units, m, s))
@@ -324,6 +336,7 @@ def _config(benches: list[dict]) -> ScorecardConfig:
         registry=registry,
         aliases={"wall_time": "duration"},
         percent_metrics=frozenset({"completion", "error_rate", "cache_hit", "success_rate"}),
+        secondary_metrics=frozenset(var for var, *_ in _HARNESS_METRICS),
         layout=ReportLayout(root="benchmarks"),
     )
 

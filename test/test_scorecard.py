@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from bencher.scorecard import (
     ScorecardConfig,
     build_cell,
     cell_verdict,
+    column_units,
     discover_report_links,
     discover_summaries,
     generate_scorecard,
@@ -443,6 +445,34 @@ class TestMetricColumns:
         assert cols.index("runtime") < cols.index("iterations")
 
 
+class TestColumnUnits:
+    """A unit reaches the header only when the whole column agrees on it."""
+
+    def _records(self, *units: str) -> list[dict]:
+        return [
+            {"metrics": {"duration": _metric("duration", "minimize", u, [])}, "regressions": {}}
+            for u in units
+        ]
+
+    def test_agreed_unit_is_hoisted(self):
+        assert column_units(self._records("s", "s"), ["duration"], CONFIG) == {"duration": "s"}
+
+    def test_mixed_units_stay_on_the_values(self):
+        # Hoisting "m" would relabel the millimetre bench's numbers.
+        assert column_units(self._records("m", "mm"), ["duration"], CONFIG) == {"duration": ""}
+
+    def test_one_unitless_bench_blocks_hoisting(self):
+        assert column_units(self._records("s", ""), ["duration"], CONFIG) == {"duration": ""}
+
+    def test_ratio_and_empty_are_the_same_absence(self):
+        assert column_units(self._records("ratio", ""), ["duration"], CONFIG) == {"duration": ""}
+
+    def test_percent_metric_is_always_percent(self, mock_reports: Path):
+        # Recorded as "ratio", rendered as a percentage, so the header says %.
+        records = discover_summaries(mock_reports, CONFIG)
+        assert column_units(records, ["completion"], CONFIG) == {"completion": "%"}
+
+
 class TestUnifyMetricNames:
     def test_aliases_rename_and_record_source(self):
         metrics = {"wall_time": _metric("wall_time", "minimize", "s", [])}
@@ -546,6 +576,30 @@ class TestBuildCell:
             r for r in discover_summaries(mock_reports, CONFIG) if r["tag"] == "test_bench_startup"
         )
         assert build_cell(rec, "completion", CONFIG)["latest_str"] == "90%"
+
+    def test_units_in_header_drops_the_value_suffix(self, mock_reports: Path):
+        # The column shows "(s)" once in its header, so the value must not repeat
+        # it — but the tooltip, which is read on its own, keeps it.
+        rec = next(
+            r for r in discover_summaries(mock_reports, CONFIG) if r["tag"] == "test_bench_latency"
+        )
+        cell = build_cell(rec, "runtime", CONFIG, units_in_header=True)
+        assert cell["latest_str"] == "4"
+        assert "μ 4.5 s" in cell["tooltip"]
+
+    def test_units_in_header_drops_the_percent_sign(self, mock_reports: Path):
+        rec = next(
+            r for r in discover_summaries(mock_reports, CONFIG) if r["tag"] == "test_bench_startup"
+        )
+        assert build_cell(rec, "completion", CONFIG, units_in_header=True)["latest_str"] == "90"
+
+    def test_tooltip_names_the_column(self, mock_reports: Path):
+        # μ/σ live only on the tooltip now, so it has to say which metric it is:
+        # in a wide table the column header may be scrolled out of view.
+        rec = next(
+            r for r in discover_summaries(mock_reports, CONFIG) if r["tag"] == "test_bench_latency"
+        )
+        assert build_cell(rec, "runtime", CONFIG)["tooltip"].startswith("runtime · ")
 
     def test_non_percent_ratio_stays_bare(self, mock_reports: Path):
         rec = next(
@@ -671,6 +725,90 @@ class TestGenerateScorecard:
         # Default layout root is "" so the "benchmarks/" tree is not discovered.
         assert out.exists()
         assert "No benchmark summaries found." in out.read_text()
+
+
+class TestCellFitsItsColumn:
+    """A cell holds one number, and a column is sized so it fits."""
+
+    def test_units_are_shown_once_in_the_header(self, mock_reports: Path):
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        assert '<span class="unit">(s)</span>' in html
+        # ... and not on every value, three times per cell.
+        assert '<span class="cval">4 s</span>' not in html
+        assert '<span class="cval">4</span>' in html
+
+    def test_distribution_labels_are_tooltip_only(self, mock_reports: Path):
+        # μ/σ per cell is what made this page a wall of text; the sparkline shows
+        # the spread and the tooltip carries the numbers.
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        # From the first table on: the legend explains μ/σ once, which is the point.
+        tables = html[html.index('<section class="category">') : html.index("</main>")]
+        visible = re.sub(r'title="[^"]*"', "", tables)
+        assert "μ" not in visible
+        assert "σ" not in visible
+        assert "μ" in tables  # still there, on the tooltips
+
+    def test_column_count_sizes_each_table(self, mock_reports: Path):
+        # --cols drives the per-column min/max width, so a 40-column table
+        # scrolls instead of crushing and a 1-column table does not stretch.
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        # Performance: 5 metric columns across 2 benchmarks.
+        assert 'class="table-wrap orient-benchmark" style="--cols: 5"' in html
+        assert 'class="table-wrap orient-metric" style="--cols: 2"' in html
+
+    def test_long_metric_name_breaks_on_underscores(self, mock_reports: Path):
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        assert "queue_<wbr>depth" in html
+
+
+class TestSecondaryMetrics:
+    """Metrics about the run itself render in a collapsed group, not as columns."""
+
+    SECONDARY = ScorecardConfig(
+        registry=CONFIG.registry,
+        aliases=CONFIG.aliases,
+        percent_metrics=CONFIG.percent_metrics,
+        secondary_metrics=frozenset({"iterations", "queue_depth"}),
+        secondary_label="Run health",
+        layout=CONFIG.layout,
+    )
+
+    def test_secondary_columns_leave_the_main_table(self, mock_reports: Path):
+        generate_scorecard(mock_reports, self.SECONDARY)
+        html = (mock_reports / "index.html").read_text()
+        main, _sep, secondary = html.partition('<details class="secondary">')
+        performance = main[main.index(">Performance<") :]
+        assert "queue_<wbr>depth" not in performance
+        assert "queue_<wbr>depth" in secondary
+
+    def test_group_is_labelled_and_collapsed(self, mock_reports: Path):
+        generate_scorecard(mock_reports, self.SECONDARY)
+        html = (mock_reports / "index.html").read_text()
+        assert "<summary>Run health — 2 metrics</summary>" in html
+        # No `open`: the columns are one click away, not in the way.
+        assert '<details class="secondary" open>' not in html
+
+    def test_section_of_only_secondary_metrics_keeps_them(self, mock_reports: Path):
+        # "Other" reports nothing but `widgets`; demoting every column would
+        # leave an empty table, so a lone secondary set stays the subject.
+        config = ScorecardConfig(
+            registry=CONFIG.registry,
+            secondary_metrics=frozenset({"widgets"}),
+            layout=CONFIG.layout,
+        )
+        generate_scorecard(mock_reports, config)
+        html = (mock_reports / "index.html").read_text()
+        other = html[html.index(">Other<") :]
+        assert "widgets" in other.partition('<details class="secondary">')[0]
+
+    def test_no_group_when_nothing_is_demoted(self, mock_reports: Path):
+        generate_scorecard(mock_reports, CONFIG)
+        html = (mock_reports / "index.html").read_text()
+        assert '<details class="secondary">' not in html
 
 
 class TestOrientationToggle:

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Scorecard: a cell holds one number, and a column is sized so it fits.** The cell
+  labelled four numbers — latest, Δ, `μ`, `σ` — each with its own unit, inside a column
+  the table gave `width / n_columns` and never let scroll below 640px total. At the 19-40
+  metrics a real project accumulates that is ~30px per column for ~150px of text, so the
+  `white-space: nowrap` labels ran straight over the neighbouring column and the page read
+  as overlapping noise (and, with one metric, the same rule stretched a single sparkline
+  across the whole screen). Now: the cell shows the latest value and its Δ on one wrapping
+  line, with `μ`/`σ`/baseline/run-count on its tooltip; the column's unit is written once
+  in its header when every benchmark in it agrees (`column_units`, and
+  `build_cell(units_in_header=)` to drop the suffix); a metric name wraps on its
+  underscores instead of being ellipsis-truncated to `repe…`; and each table carries its
+  column count, so data columns have a min and a max width — past the floor the table
+  scrolls horizontally rather than crushing, and a one-column table stops stretching.
+  `td.cell` is `overflow: hidden`, so no cell can bleed into another again.
+
+### Added
+- **`ScorecardConfig.secondary_metrics` / `secondary_label`** — metric names that describe
+  the *run* rather than what it measured (harness lifecycle, artifact capture). Every
+  benchmark reports them, so in the main table they take columns from a section's own
+  subject and split its metrics down the middle; they now render in a collapsed group
+  beneath it. A section reporting nothing else keeps them as its subject.
+
 ## [1.119.1] - 2026-08-05
 
 ### Added

@@ -20,7 +20,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from bencher.scorecard.config import Chrome, ScorecardConfig
 from bencher.scorecard.discover import discover_report_links, discover_summaries
-from bencher.scorecard.model import build_cell, metric_columns
+from bencher.scorecard.model import build_cell, column_units, metric_columns
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 # A well-formed http(s) URL: scheme, then at least one non-whitespace char to the
@@ -46,6 +46,36 @@ def _sanitize_url(url: str) -> str:
     if not _SAFE_URL_RE.match(url):
         return ""
     return url
+
+
+def _group(records: list[dict], columns: list[str], config: ScorecardConfig) -> dict:
+    """One table group: its column labels plus a cell per (benchmark, column).
+
+    Carries the two label axes (``metrics`` and ``benchmarks``), with every
+    benchmark's ``cells`` in column order. That single list feeds both
+    orientations: the template reads a benchmark's ``cells`` straight across for
+    one column per metric (compare a metric across benchmarks), or indexes
+    ``bench.cells[metric_i]`` down a metric row for one column per benchmark
+    (stack a benchmark's metrics on a shared time axis). The view is toggled
+    client-side, so both orientations render from this one model.
+    """
+    units = column_units(records, columns, config)
+    return {
+        "metrics": [{"name": var, "units": units[var]} for var in columns],
+        "benchmarks": [
+            {
+                "name": rec["name"],
+                "tag": rec["tag"],
+                "link": rec["link"],
+                "time_event": rec["time_event"],
+                "cells": [
+                    build_cell(rec, var, config, units_in_header=bool(units[var]))
+                    for var in columns
+                ],
+            }
+            for rec in records
+        ],
+    }
 
 
 def generate_scorecard(
@@ -76,30 +106,27 @@ def generate_scorecard(
 
     # Group by category; each category gets its own union of metrics so only the
     # metrics present in that category are shown. Categories render in the
-    # registry's display order (records are already sorted that way).
-    #
-    # Each section carries the two label axes (``metrics`` and ``benchmarks``),
-    # and every benchmark carries its ``cells`` in metric order. That single list
-    # feeds both orientations: the template reads a benchmark's ``cells`` straight
-    # across for one column per metric (compare a metric across benchmarks), or
-    # indexes ``bench.cells[metric_i]`` down a metric row for one column per
-    # benchmark (stack a benchmark's metrics on a shared time axis). The view is
-    # toggled client-side, so both orientations are rendered from this one model.
+    # registry's display order (records are already sorted that way). Within a
+    # category the columns split into the section's own subject and the
+    # config's secondary (harness) metrics, each rendered as its own group.
     sections: list[dict] = []
     for category in dict.fromkeys(r["category"] for r in records):
         cat_records = [r for r in records if r["category"] == category]
-        metrics = metric_columns(cat_records)
-        benchmarks = [
+        columns = metric_columns(cat_records)
+        primary = [var for var in columns if var not in config.secondary_metrics]
+        secondary = [var for var in columns if var in config.secondary_metrics]
+        # A section reporting nothing but secondary metrics has them as its
+        # subject, so they stay in the main table rather than collapsing to
+        # nothing.
+        if not primary:
+            primary, secondary = secondary, []
+        sections.append(
             {
-                "name": rec["name"],
-                "tag": rec["tag"],
-                "link": rec["link"],
-                "time_event": rec["time_event"],
-                "cells": [build_cell(rec, var, config) for var in metrics],
+                "category": category,
+                "main": _group(cat_records, primary, config),
+                "secondary": _group(cat_records, secondary, config) if secondary else None,
             }
-            for rec in cat_records
-        ]
-        sections.append({"category": category, "metrics": metrics, "benchmarks": benchmarks})
+        )
 
     link_sections = discover_report_links(reports_dir, config, {r["tag"] for r in records})
 
@@ -107,6 +134,7 @@ def generate_scorecard(
     template = env.get_template("scorecard.html")
     html = template.render(
         sections=sections,
+        secondary_label=config.secondary_label,
         link_sections=link_sections,
         bench_count=len(records),
         title=chrome.title,
