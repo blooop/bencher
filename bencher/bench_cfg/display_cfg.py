@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 import param
 
 
@@ -40,3 +42,12 @@ class DisplayCfg(param.Parameterized):
         False,
         doc="Serve an xarray summary on the results webpage. If you have a large dataset consider setting this to false if the page loading is slow",
     )
+
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """This group exposes no command-line flags."""
+
+    @classmethod
+    def apply_cli_args(cls, namespace: argparse.Namespace) -> DisplayCfg:
+        """This group exposes no command-line flags; returns the defaults."""
+        return cls()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 import param
 
 
@@ -51,3 +53,17 @@ class CacheCfg(param.Parameterized):
         bounds=(1, None),
         doc="Maximum size of the disk cache in megabytes (MB). If None, uses the default (100 GB).",
     )
+
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """Register this group's command-line flags on *parser*."""
+        parser.add_argument(
+            "--use-cache",
+            action="store_true",
+            help=cls.param.results.doc,
+        )
+
+    @classmethod
+    def apply_cli_args(cls, namespace: argparse.Namespace) -> CacheCfg:
+        """Build a :class:`CacheCfg` from values parsed by :meth:`add_cli_args`."""
+        return cls(results=namespace.use_cache)

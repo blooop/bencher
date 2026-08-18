@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 import param
 
 from bencher.results.composable_container.composable_container_base import PaneLayout
@@ -42,3 +44,12 @@ class VisualizationCfg(param.Parameterized):
         doc="Visualization backend. 'panel' uses the default holoviews/panel plotting pipeline. "
         "'rerun' renders N-dimensional benchmark data in the rerun viewer.",
     )
+
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """This group exposes no command-line flags."""
+
+    @classmethod
+    def apply_cli_args(cls, namespace: argparse.Namespace) -> VisualizationCfg:
+        """This group exposes no command-line flags; returns the defaults."""
+        return cls()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 import param
 
 from bencher.job import Executors
@@ -114,6 +116,35 @@ class ExecutionCfg(param.Parameterized):
     only_plot: bool = param.Boolean(
         False, doc="Do not attempt to calculate benchmarks if no results are found in the cache"
     )
+
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """Register this group's command-line flags on *parser*."""
+        parser.add_argument(
+            "--repeats",
+            type=int,
+            default=cls.param.repeats.default,
+            help=cls.param.repeats.doc,
+        )
+        parser.add_argument(
+            "--nightly",
+            action="store_true",
+            help="Turn on nightly benchmarking",
+        )
+        parser.add_argument(
+            "--only-plot",
+            action="store_true",
+            help=cls.param.only_plot.doc,
+        )
+
+    @classmethod
+    def apply_cli_args(cls, namespace: argparse.Namespace) -> ExecutionCfg:
+        """Build an :class:`ExecutionCfg` from values parsed by :meth:`add_cli_args`."""
+        return cls(
+            repeats=namespace.repeats,
+            nightly=namespace.nightly,
+            only_plot=namespace.only_plot,
+        )
 
     @staticmethod
     def subsampling_divisions_to_samples(

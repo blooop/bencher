@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 import param
 
 
@@ -108,3 +110,12 @@ class RegressionCfg(param.Parameterized):
         doc="If True, raise RegressionError when a regression is detected. "
         "Useful for failing CI pipelines on benchmark regressions.",
     )
+
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """This group exposes no command-line flags."""
+
+    @classmethod
+    def apply_cli_args(cls, namespace: argparse.Namespace) -> RegressionCfg:
+        """This group exposes no command-line flags; returns the defaults."""
+        return cls()

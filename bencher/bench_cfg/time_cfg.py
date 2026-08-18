@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 import param
 
 from bencher.history import OnHistoryReset
@@ -69,3 +71,18 @@ class TimeCfg(param.Parameterized):
         None,
         doc="A string representation of a sequence over time, i.e. datetime, pull request number, or run number",
     )
+
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """Register this group's command-line flags on *parser*."""
+        parser.add_argument(
+            "--time_event",
+            type=str,
+            default=cls.param.event.default,
+            help=cls.param.event.doc,
+        )
+
+    @classmethod
+    def apply_cli_args(cls, namespace: argparse.Namespace) -> TimeCfg:
+        """Build a :class:`TimeCfg` from values parsed by :meth:`add_cli_args`."""
+        return cls(event=namespace.time_event)

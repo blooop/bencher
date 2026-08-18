@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from enum import auto
 
 import param
@@ -75,3 +76,18 @@ class ServerCfg(param.Parameterized):
             "after publish=True (requires publish=True). False/ShowMode.NONE displays nothing."
         ),
     )
+
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """Register this group's command-line flags on *parser*."""
+        parser.add_argument(
+            "--port",
+            type=int,
+            default=cls.param.port.default,
+            help=cls.param.port.doc,
+        )
+
+    @classmethod
+    def apply_cli_args(cls, namespace: argparse.Namespace) -> ServerCfg:
+        """Build a :class:`ServerCfg` from values parsed by :meth:`add_cli_args`."""
+        return cls(port=namespace.port)

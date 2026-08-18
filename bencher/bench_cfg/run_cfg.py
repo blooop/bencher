@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from copy import deepcopy
 from datetime import datetime
 from typing import Any
@@ -79,6 +80,45 @@ class BenchRunCfg(param.Parameterized):
 
     def deep(self) -> BenchRunCfg:
         return deepcopy(self)
+
+    @staticmethod
+    def from_cmd_line(argv: list[str] | None = None) -> BenchRunCfg:
+        """Create a BenchRunCfg by parsing command line arguments.
+
+        Each sub-config registers its own flags via ``add_cli_args`` and
+        consumes the parsed values back into an instance via
+        ``apply_cli_args``, so flag ownership stays colocated with the
+        parameters and the flat argparse namespace maps explicitly onto the
+        nested slots.
+
+        Args:
+            argv: Argument list to parse. Defaults to ``sys.argv[1:]``.
+
+        Returns:
+            BenchRunCfg: Configuration object with settings from command line arguments
+        """
+        sub_cfgs = (
+            ServerCfg,
+            ExecutionCfg,
+            CacheCfg,
+            DisplayCfg,
+            VisualizationCfg,
+            TimeCfg,
+            RegressionCfg,
+        )
+        parser = argparse.ArgumentParser(description="benchmark")
+        for sub_cfg in sub_cfgs:
+            sub_cfg.add_cli_args(parser)
+        args = parser.parse_args(argv)
+        return BenchRunCfg(
+            server=ServerCfg.apply_cli_args(args),
+            execution=ExecutionCfg.apply_cli_args(args),
+            cache=CacheCfg.apply_cli_args(args),
+            display=DisplayCfg.apply_cli_args(args),
+            visualization=VisualizationCfg.apply_cli_args(args),
+            time=TimeCfg.apply_cli_args(args),
+            regression=RegressionCfg.apply_cli_args(args),
+        )
 
     @classmethod
     def with_defaults(cls, run_cfg: BenchRunCfg | None = None, **defaults) -> BenchRunCfg:

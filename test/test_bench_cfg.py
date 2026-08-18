@@ -6,6 +6,7 @@ test/test_hash_persistent.py and normalize_show in test/test_run.py, so they
 are not duplicated here.
 """
 
+import argparse
 from datetime import datetime
 
 import pytest
@@ -285,3 +286,70 @@ class TestDeep:
         assert copy.execution.repeats == 4
         copy.execution.repeats = 9
         assert cfg.execution.repeats == 4
+
+
+# ── command-line parsing ────────────────────────────────────────────────────
+
+
+class TestCliArgs:
+    def test_each_sub_config_owns_cli_hooks(self):
+        for cls in SUB_CFG_SLOTS.values():
+            assert callable(cls.add_cli_args)
+            assert callable(cls.apply_cli_args)
+
+    def test_execution_flags_round_trip(self):
+        parser = argparse.ArgumentParser()
+        ExecutionCfg.add_cli_args(parser)
+        args = parser.parse_args(["--repeats", "3", "--nightly", "--only-plot"])
+        cfg = ExecutionCfg.apply_cli_args(args)
+        assert cfg.repeats == 3
+        assert cfg.nightly is True
+        assert cfg.only_plot is True
+
+    def test_cache_flag_maps_use_cache_to_results(self):
+        parser = argparse.ArgumentParser()
+        CacheCfg.add_cli_args(parser)
+        cfg = CacheCfg.apply_cli_args(parser.parse_args(["--use-cache"]))
+        assert cfg.results is True
+
+    def test_time_flag_maps_time_event_to_event(self):
+        parser = argparse.ArgumentParser()
+        TimeCfg.add_cli_args(parser)
+        cfg = TimeCfg.apply_cli_args(parser.parse_args(["--time_event", "pr123"]))
+        assert cfg.event == "pr123"
+
+    def test_server_port_flag(self):
+        parser = argparse.ArgumentParser()
+        ServerCfg.add_cli_args(parser)
+        cfg = ServerCfg.apply_cli_args(parser.parse_args(["--port", "8080"]))
+        assert cfg.port == 8080
+
+
+class TestFromCmdLine:
+    def test_defaults_from_empty_argv(self):
+        cfg = BenchRunCfg.from_cmd_line(argv=[])
+        assert cfg.execution.repeats == 1
+        assert cfg.cache.results is False
+        assert cfg.server.port is None
+        assert cfg.time.event is None
+
+    def test_flags_land_on_nested_slots(self):
+        cfg = BenchRunCfg.from_cmd_line(
+            argv=[
+                "--repeats",
+                "5",
+                "--use-cache",
+                "--port",
+                "8080",
+                "--time_event",
+                "pr123",
+                "--nightly",
+                "--only-plot",
+            ]
+        )
+        assert cfg.execution.repeats == 5
+        assert cfg.execution.nightly is True
+        assert cfg.execution.only_plot is True
+        assert cfg.cache.results is True
+        assert cfg.server.port == 8080
+        assert cfg.time.event == "pr123"
