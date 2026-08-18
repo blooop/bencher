@@ -173,11 +173,11 @@ class BenchRunner:
         if subsampling_divisions is UNSET:
             subsampling_divisions = 2
         run_cfg_out = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
-        run_cfg_out.cache_samples = cache_samples
-        run_cfg_out.only_hash_tag = cache_samples
-        run_cfg_out.subsampling_divisions = subsampling_divisions
+        run_cfg_out.cache.samples = cache_samples
+        run_cfg_out.cache.only_hash_tag = cache_samples
+        run_cfg_out.execution.subsampling_divisions = subsampling_divisions
         if over_time is not None:
-            run_cfg_out.over_time = over_time
+            run_cfg_out.time.over_time = over_time
         return run_cfg_out
 
     @staticmethod
@@ -420,12 +420,12 @@ class BenchRunner:
             else:
                 cache_samples = False
 
-        run_cfg.cache_samples = cache_samples
-        run_cfg.only_hash_tag = cache_samples
+        run_cfg.cache.samples = cache_samples
+        run_cfg.cache.only_hash_tag = cache_samples
         if over_time is not None:
-            run_cfg.over_time = over_time
+            run_cfg.time.over_time = over_time
         if backend is not None:
-            run_cfg.backend = backend
+            run_cfg.visualization.backend = backend
 
         for r in range(min_repeats, final_max_repeats + 1):
             for lvl in range(min_subsampling_divisions, final_max_subsampling_divisions + 1):
@@ -434,8 +434,8 @@ class BenchRunner:
                     report_level = BenchReport(f"{run_cfg.run_tag}_{self.name}")
                 for bch_fn in self.bench_fns:
                     run_lvl = deepcopy(run_cfg)
-                    run_lvl.subsampling_divisions = lvl
-                    run_lvl.repeats = r
+                    run_lvl.execution.subsampling_divisions = lvl
+                    run_lvl.execution.repeats = r
                     logger.info(
                         f"Running {bch_fn} at subsampling_divisions: {lvl} with repeats:{r}"
                     )

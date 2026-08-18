@@ -1362,10 +1362,10 @@ def _attach_plot_metadata(
 # specs. Methods in _HISTORY_FREE_METHODS run from the very first recording;
 # all others skip until over_time history exists.
 _METHOD_THRESHOLD_ATTR = {
-    "percentage": "regression_percentage",
-    "adaptive": "regression_mad",
-    "delta": "regression_delta",
-    "absolute": "regression_absolute",
+    "percentage": "percentage",
+    "adaptive": "mad",
+    "delta": "delta",
+    "absolute": "absolute",
 }
 _HISTORY_FREE_METHODS = frozenset({"absolute"})
 
@@ -1385,7 +1385,7 @@ def _valid_threshold(value) -> float | None:
 
 
 def _normalize_overrides(overrides) -> tuple[dict, dict]:
-    """Validate ``run_cfg.regression_overrides`` into ``{var: {method: threshold}}``.
+    """Validate ``run_cfg.regression.overrides`` into ``{var: {method: threshold}}``.
 
     A bare number is shorthand for ``{"absolute": value}``. Malformed entries
     are dropped with a warning, never raised: an unknown method key or a bad
@@ -1531,11 +1531,11 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     """Run regression detection on a dataset with over_time dimension.
 
     For each numeric result variable, dispatches to the detector chosen by
-    ``run_cfg.regression_method`` (``percentage``, ``adaptive``, ``delta``, or
+    ``run_cfg.regression.method`` (``percentage``, ``adaptive``, ``delta``, or
     ``absolute``). ``absolute`` runs even with a single over_time point since
     it needs no baseline; every other method requires history.
 
-    Variables named in ``run_cfg.regression_overrides`` are instead checked by
+    Variables named in ``run_cfg.regression.overrides`` are instead checked by
     exactly the methods in their spec (``{method: threshold}``, or a bare
     number as shorthand for an absolute limit), so thresholds — and methods —
     can differ per variable, including multiple independent checks on one
@@ -1562,12 +1562,12 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
         return report
 
     overrides, min_history_overrides = _normalize_overrides(
-        getattr(run_cfg, "regression_overrides", None)
+        run_cfg.regression.overrides
     )
-    default_min_history = getattr(run_cfg, "regression_min_history", 1) or 1
-    method = run_cfg.regression_method
+    default_min_history = run_cfg.regression.min_history or 1
+    method = run_cfg.regression.method
 
-    regression_percentage = getattr(run_cfg, "regression_percentage", None)
+    regression_percentage = run_cfg.regression.percentage
     if regression_percentage is None:
         regression_percentage = _METHOD_DEFAULTS["percentage"]
 
@@ -1581,12 +1581,12 @@ def detect_regressions(dataset: xr.Dataset, bench_cfg, run_cfg) -> RegressionRep
     # wide detection with a warning — but never the overrides, which carry
     # their own thresholds.
     threshold_attr = _METHOD_THRESHOLD_ATTR[method]
-    primary_threshold = getattr(run_cfg, threshold_attr, None)
+    primary_threshold = getattr(run_cfg.regression, threshold_attr, None)
     if primary_threshold is None:
         primary_threshold = _METHOD_DEFAULTS.get(method)
     if primary_threshold is None:
         logger.warning(
-            f"regression_method='{method}' requires {threshold_attr} to be set; skipping detection"
+            f"regression.method='{method}' requires regression.{threshold_attr} to be set; skipping detection"
         )
         primary_checks = {}
     else:

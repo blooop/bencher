@@ -289,7 +289,7 @@ class SweepExecutor:
                 param_var = param_var.with_samples(variable["samples"])
             if variable.get("max_subsampling_divisions") and run_cfg is not None:
                 param_var = param_var.with_subsampling_divisions(
-                    run_cfg.subsampling_divisions, variable["max_subsampling_divisions"]
+                    run_cfg.execution.subsampling_divisions, variable["max_subsampling_divisions"]
                 )
             variable = param_var
         if not isinstance(variable, param.Parameter):
@@ -342,12 +342,12 @@ class SweepExecutor:
             FutureCache: A configured cache for storing benchmark results
         """
         self.sample_cache = FutureCache(
-            overwrite=run_cfg.overwrite_sample_cache,
-            executor=run_cfg.executor,
+            overwrite=run_cfg.cache.overwrite_samples,
+            executor=run_cfg.execution.executor,
             cache_name="sample_cache",
             tag_index=True,
             size_limit=self.cache_size,
-            cache_samples=run_cfg.cache_samples,
+            cache_samples=run_cfg.cache.samples,
         )
         return self.sample_cache
 

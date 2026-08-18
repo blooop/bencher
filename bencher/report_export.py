@@ -47,7 +47,7 @@ def _provenance(bench_res: BenchResult) -> dict:
     """Best-effort provenance for a result (time-event label if recorded)."""
     cfg = bench_res.bench_cfg
     prov: dict = {}
-    time_event = getattr(cfg, "time_event", None)
+    time_event = cfg.time.event
     if time_event:
         prov["time_event"] = time_event
     return prov
@@ -160,7 +160,7 @@ def result_to_dict(bench_res: BenchResult, *, include_series: bool = False) -> d
         "input_vars": [
             {"name": iv.name, "units": getattr(iv, "units", None)} for iv in cfg.input_vars
         ],
-        "over_time": bool(getattr(cfg, "over_time", False)),
+        "over_time": bool(cfg.time.over_time),
         "metrics": metrics,
         "regressions": regressions,
     }
@@ -338,7 +338,7 @@ def compare_results(baseline: BenchResult, candidate: BenchResult, *, run_cfg=No
     if run_cfg is None:
         from bencher.bench_cfg import BenchRunCfg
 
-        run_cfg = BenchRunCfg(regression_method="percentage")
+        run_cfg = BenchRunCfg(regression=RegressionCfg(method="percentage"))
 
     base_ds = _snapshot_ds(baseline)
     cand_ds = _snapshot_ds(candidate)

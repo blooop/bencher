@@ -275,7 +275,7 @@ class ResultCollector:
         """
         if time_src is None:
             time_src = datetime.now()
-        bench_cfg.meta_vars = self.define_extra_vars(bench_cfg, bench_cfg.repeats, time_src)
+        bench_cfg.meta_vars = self.define_extra_vars(bench_cfg, bench_cfg.execution.repeats, time_src)
 
         bench_cfg.all_vars = bench_cfg.input_vars + bench_cfg.meta_vars
 
@@ -346,7 +346,7 @@ class ResultCollector:
         bench_cfg.iv_repeat.name = "repeat"
         extra_vars: list[IntSweep | TimeBase] = [bench_cfg.iv_repeat]
 
-        if bench_cfg.over_time:
+        if bench_cfg.time.over_time:
             if isinstance(time_src, str):
                 iv_over_time = TimeEvent(time_src)
             else:
@@ -487,7 +487,7 @@ class ResultCollector:
             )
             return
         logger.info(f"{job_result.job.job_id}:")
-        if bench_res.bench_cfg.print_bench_inputs:
+        if bench_res.bench_cfg.display.print_bench_inputs:
             for k, v in worker_job.function_input.items():
                 logger.info(f"\t {k}:{v}")
 
@@ -533,7 +533,7 @@ class ResultCollector:
                     f"self.{rv.name}."
                 ) from None
             result_value = _materialize_result_value(rv, result_value)
-            if bench_run_cfg.print_bench_results:
+            if bench_run_cfg.display.print_bench_results:
                 logger.info(f"{rv.name}: {result_value}")
 
             if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):

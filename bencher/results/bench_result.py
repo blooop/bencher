@@ -109,7 +109,7 @@ class BenchResult(
         # DataSetResult.__init__(self.bench_cfg)
         self.timings = None  # Populated by Bench.run_sweep() with SweepTimings
         # Samples that failed without aborting the sweep: raised and tolerated
-        # because of run_cfg.catch, or dropped for breaking the worker contract
+        # because of run_cfg.execution.catch, or dropped for breaking the worker contract
         # (None return / wrong-shape ResultVec — recorded unconditionally).
         self.failed_samples: list = []
         # Samples this run actually executed, set by calculate_benchmark_results.
@@ -514,12 +514,12 @@ class BenchResult(
                     plot_cols.append(report_render_failure(f"Extra panel '{name}'", exc))
 
         # --- Dimension aggregation (orthogonal to over_time) ---
-        if self.bench_cfg.agg_over_dims and self.bench_cfg.show_aggregate_plots:
+        if self.bench_cfg.agg_over_dims and self.bench_cfg.time.show_aggregate_plots:
             dims = ", ".join(self.bench_cfg.agg_over_dims)
             all_input_names = {iv.name for iv in self.bench_cfg.input_vars}
             agg_set = set(self.bench_cfg.agg_over_dims)
             fully_aggregated = all_input_names <= agg_set
-            if fully_aggregated and not self.bench_cfg.over_time:
+            if fully_aggregated and not self.bench_cfg.time.over_time:
                 # All input dims collapsed, no over_time: scalar summary table.
                 plot_cols.append(
                     pn.pane.Markdown(f"### Aggregated View\nAggregated over: **{dims}**")
@@ -545,7 +545,7 @@ class BenchResult(
 
         # --- Over-time band plot (orthogonal to dimension aggregation) ---
         if (
-            self.bench_cfg.over_time
+            self.bench_cfg.time.over_time
             and "over_time" in self.ds.dims
             and self.ds.sizes["over_time"] > 1
             and self.bench_cfg.input_vars
@@ -558,7 +558,7 @@ class BenchResult(
             )
             plot_cols.append(self.to(BandResult, aggregate=input_names))
 
-        kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
+        kwargs.setdefault("pane_layout", self.bench_cfg.visualization.pane_layout)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
