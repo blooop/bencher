@@ -34,7 +34,16 @@ from bencher.results.holoview_results.xy_histogram_result import (
 from bencher.results.holoview_results.xy_scatter_result import XYScatterResult, xy_scatter
 from bencher.results.volume_result import VolumeResult
 
-from .bench_cfg import ShowMode
+from .bench_cfg import (
+    CacheCfg,
+    DisplayCfg,
+    ExecutionCfg,
+    RegressionCfg,
+    ServerCfg,
+    ShowMode,
+    TimeCfg,
+    VisualizationCfg,
+)
 from .bench_plot_server import BenchPlotServer
 from .bench_runner import BenchRunner
 from .bencher import Bench, BenchCfg, BenchRunCfg, SampleErrorPolicyError
