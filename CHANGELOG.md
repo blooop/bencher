@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.120.0] - 2026-08-18
+
 ### Changed
 - **Scorecard: a cell holds its numbers, and a column is sized to fit them.** The cell labelled
   four numbers — latest, Δ, `μ`, `σ` — each with its own unit, inside a column the table gave
