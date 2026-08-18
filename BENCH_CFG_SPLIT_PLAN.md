@@ -18,9 +18,13 @@ warnings** when the flat names disappear — signal the break loudly instead:
 a major version bump and release notes carrying the full rename table.
 
 Parameter inventories and call-site counts below were regenerated against
-`main` on 2026-07-23. **Regenerate them again immediately before executing** —
-this file goes stale every time a parameter is added or renamed (it already
-went stale once when `level` became `subsampling_divisions`).
+`main` on 2026-08-18. **Regenerate them again immediately before executing** —
+this file goes stale every time a parameter is added or renamed. It has
+already gone stale twice: once when `level` became `subsampling_divisions`,
+and once when ~230 commits landed between 2026-07-23 and 2026-08-18 (adding
+`catch`/`fail_on_sample_error` to the execution group, the `series_id`/
+`bencher/identity.py` identity subsystem, and the collect/render split's
+pickle-based save files — all folded in below).
 
 ---
 
@@ -78,7 +82,11 @@ run metadata; splitting them further would just add friction for no gain).
 
 ### `ExecutionCfg` -- how the function is run
 `repeats`, `subsampling_divisions`, `samples_per_var`, `executor`, `nightly`,
-`headless`, `dry_run`, `only_plot`
+`headless`, `dry_run`, `only_plot`, `catch`, `fail_on_sample_error`
+- `catch` and `fail_on_sample_error` are the sample fault-tolerance pair added
+  after the original inventory. They keep their names: `catch` is documented as
+  "spelled exactly as on `Bench.optimize(catch=...)`", and both are error-mode
+  gates on how the sweep executes, so they belong here, unrenamed.
 - `subsampling_divisions_to_samples()` moves here from `BenchRunCfg`.
 - `only_plot` moves in from the cache group -- it's an execution-mode gate,
   not a cache-layer setting.
@@ -145,6 +153,11 @@ Methods: `__init__`, `from_cmd_line`, `with_defaults`, `deep`.
 
 ### `BenchCfg` (unchanged semantics, just moves file)
 All sweep metadata, result metadata, hashing, LaTeX, and description methods.
+This now includes the parameters added since the original inventory --
+`series_id` (names the over_time trend; **deliberately excluded** from
+`hash_persistent`, see below), `agg_over_dims`, and `agg_fn` -- which stay on
+`BenchCfg` exactly as they are. They are sweep/result metadata, not run
+configuration, so the split does not touch them.
 
 ---
 
@@ -243,12 +256,18 @@ Two corrections to earlier thinking here:
    (v5) hash encodes documented invariants: `title` is excluded so renames
    don't invalidate caches; `input_vars` are folded in order (they define
    dimension layout); `result_vars`/`const_vars` contribute as unordered sets;
+   `series_id` is **deliberately excluded** (its own docstring explains why:
+   folding it in would re-key every existing cache and history on upgrade);
    and `include_result_vars=False` produces the over_time history key that
    per-column history reconciliation depends on (see `bencher/history.py`).
    **Do not "simplify" the hash as part of this PR** -- preserve these
    invariants exactly. The only change is accessor paths
    (`self.over_time` -> `self.time.over_time`,
    `self.repeats` -> `self.execution.repeats`).
+   Note that `bencher/identity.py` documents itself as mirroring
+   `hash_persistent`'s key rules ("anything that changes the keys changes them
+   here too") -- its field-inventory comments and `identity_of()` must be
+   updated in lockstep with the split.
 2. **The split doesn't change hash values -- but the cache still can't
    survive it.** `hash_persistent` consumes *values*, not attribute names, so
    the refactor preserves every hash by construction. The reason to bump
@@ -259,10 +278,33 @@ Two corrections to earlier thinking here:
    discarded cleanly on first run rather than failing at unpickle time.
    This wipes users' over_time history baselines -- say so in the release
    notes.
+3. **The cache is no longer the only pickle surface.** The collect/render
+   split (`bencher/render.py`, added after the original inventory) pickles
+   whole `BenchResult` objects -- embedding a `BenchCfg` -- to user-chosen
+   files via `save_result()`/`load_result()`, with **no version guard**.
+   Files saved before the break will fail to unpickle after it, and unlike
+   the cache there is no `CACHE_VERSION` mechanism to discard them cleanly:
+   `load_result()` will raise. Say so explicitly in the release notes
+   (re-run `collect` to regenerate saved bench data). Consider having
+   `load_result()` catch the unpickle failure and re-raise with a message
+   naming the version break, so users get a diagnosis instead of a raw
+   `AttributeError` from pickle.
 
 Extend `test/test_hash_persistent.py` with invariant tests (title exclusion,
 result-var reorder invariance, `include_result_vars=False` stability) so the
 semantics survive future refactors too.
+
+### `sweep_identity` / `identity.py` (new since the original inventory)
+`bn.sweep_identity()` is a public API that takes `repeats=` and `over_time=`
+as flat convenience kwargs and writes them onto a `BenchRunCfg` (along with
+forcing `dry_run=True` and `auto_plot=False` internally). Decision: **keep
+the flat kwargs** -- they are function arguments, not attribute paths, and
+`sweep_identity(repeats=5)` reads better than
+`sweep_identity(execution=dict(repeats=5))` for a two-knob convenience
+signature. Only the internals change
+(`cfg.repeats = repeats` -> `cfg.execution.repeats = repeats`, etc.).
+`SweepIdentity`'s display strings (`repeats: ...`, `over_time: ...`) stay
+as-is -- they name hash inputs, not attributes.
 
 ### `describe_benchmark`
 Same: update field accesses to go through the sub-config groups. Output
@@ -272,25 +314,27 @@ string stays identical.
 
 ## Call-site migration
 
-Regenerated from `rg` against main (2026-07-23), matching moved/renamed
+Regenerated from `rg` against main (2026-08-18), matching moved/renamed
 attribute names regardless of receiver (`run_cfg.`, `bench_cfg.`, `self.`,
 ...). Counts exclude names too generic to grep (`repeats`, `executor`,
-`port`, `show`, `nightly`, `headless`, `dry_run`), so true totals are higher.
-**~115 files** reference the flat attributes -- not the ~20 an earlier draft
-claimed. The pattern is still purely mechanical:
+`port`, `show`, `nightly`, `headless`, `dry_run`, `catch`, `backend`), so
+true totals are higher. **~132 files** reference the flat attributes.
+The pattern is still purely mechanical:
 
 | Where                                   | Scale                                          |
 |-----------------------------------------|------------------------------------------------|
-| `bencher/bencher.py`                    | ~40 refs (largest single site)                 |
-| `bencher/results/**`                    | ~40 refs across ~10 files (`bench_result_base.py` 14, `holoview_result.py` 9, `bench_result.py` 4, ...) |
-| `bencher/bench_runner.py`               | ~8 refs                                        |
+| `bencher/bencher.py`                    | ~46 refs (largest single site)                 |
+| `bencher/results/**`                    | ~33 refs across ~9 files                       |
+| `bencher/bench_runner.py`               | ~12 refs                                       |
 | `bencher/result_collector.py`           | ~6 refs                                        |
 | `bencher/sweep_executor.py`             | ~5 refs                                        |
-| `bencher/regression.py`, `variables/results.py`, `plotting/plt_cnt_cfg.py`, `bench_report.py`, `bench_plot_server.py` | ~15 refs combined |
-| `bencher/example/meta/**` (generators)  | ~70 refs across ~15 files                      |
-| `bencher/example/generated/**`          | ~90 refs across ~45 files -- **do not hand-edit**; fix the `example/meta/generate_*.py` generators and regenerate |
-| `bencher/example/*.py` (hand-written)   | ~15 refs across ~8 files                       |
-| `test/**`                               | ~230 refs across ~25 files (`test_regression.py` 43, `test_bench_cfg.py` 41, `test_bench_runner.py` 27, ...) |
+| `bencher/identity.py`                   | ~5 refs -- **must move in lockstep with the hash**, see `hash_persistent` and `sweep_identity` sections |
+| `bencher/history.py`                    | ~1 ref                                         |
+| `bencher/regression.py`, `variables/results.py`, `plotting/plt_cnt_cfg.py`, `bench_report.py`, `bench_plot_server.py` | ~16 refs combined |
+| `bencher/example/meta/**` (generators)  | ~66 refs across ~14 files                      |
+| `bencher/example/generated/**`          | ~106 refs across ~45 files -- **do not hand-edit**; fix the `example/meta/generate_*.py` generators and regenerate |
+| `bencher/example/*.py` (hand-written)   | ~14 refs across ~5 files                       |
+| `test/**`                               | ~346 refs across ~43 files (`test_bench_cfg.py` 46, `test_regression.py` 43, `test_bench_runner.py` 33, `test_sample_fault_tolerance.py` 20, ...) |
 | `scripts/benchmark_save.py`             | ~5 refs                                        |
 | `docs/how_to_use_bencher.md`            | documentation examples                         |
 | `CHANGELOG.md`                          | add a BREAKING entry                           |
@@ -312,7 +356,8 @@ Recommended sequence inside the PR:
    entries, `test/test_bencher.py` usage).
 5. Migrate `bencher/**` call sites (library code first -- `bencher.py`,
    `results/**`, `bench_runner.py`, `sweep_executor.py`, `regression.py`,
-   `result_collector.py`, then the small single-ref files).
+   `result_collector.py`, `identity.py`, `history.py`, then the small
+   single-ref files).
 6. Migrate the `bencher/example/meta/generate_*.py` generators, regenerate
    `bencher/example/generated/**`, then migrate the hand-written examples.
 7. Migrate `test/**` and `scripts/**`.
@@ -328,7 +373,10 @@ Recommended sequence inside the PR:
     - `from_cmd_line` flag registration and nested application,
     - `hash_persistent` determinism and invariants (title exclusion,
       result-var reorder invariance) -- no cross-version stability required.
-12. Run `pixi run ci`; iterate until green.
+12. Run `pixi run ci` **and** `pixi run test-split`; iterate until both are
+    green. The split-render job (`BENCHER_FORCE_SPLIT_RENDER=1`) reroutes
+    every report build through the pickle save/load path, so it exercises
+    exactly the serialization surface this refactor reshapes.
 
 ---
 
@@ -369,7 +417,9 @@ Recommended sequence inside the PR:
 
 ## Acceptance criteria
 
-- `pixi run ci` passes with no backward-compat shims in the source tree.
+- `pixi run ci` **and** `pixi run test-split` pass with no backward-compat
+  shims in the source tree (`test-split` covers the pickle save → load →
+  render pipeline the new class shape must round-trip through).
 - Receiver-agnostic grep for retired names returns nothing outside
   `CHANGELOG.md` and this plan:
 
@@ -384,8 +434,12 @@ Recommended sequence inside the PR:
   mechanical migration + CI instead.)
 - `CACHE_VERSION` is bumped so stale caches from prior versions are discarded.
 - `CHANGELOG.md` has a **Breaking changes** entry with the full rename table,
-  a note that the cache format is reset, and a warning that over_time history
-  baselines are wiped.
+  a note that the cache format is reset, a warning that over_time history
+  baselines are wiped, and a warning that bench-data files saved with
+  `save_result()` (the collect/render split) will no longer load and must be
+  regenerated by re-running collect.
+- `bencher/identity.py`'s hash-mirror documentation still matches
+  `hash_persistent` after the accessor-path migration.
 - The package version bump signals the break (major bump recommended --
   `holobench` is on PyPI and users get no runtime deprecation warnings).
 - Public API exports the seven sub-config classes from `bencher/__init__.py`.
