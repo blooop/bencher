@@ -28,12 +28,12 @@ class TestResultCollector(unittest.TestCase):
     def test_init_default_cache_size(self):
         """Test default cache size is set."""
         collector = ResultCollector()
-        self.assertEqual(collector.cache_size, int(100e9))
+        self.assertEqual(collector.cache_size_bytes, int(100e9))
 
     def test_init_custom_cache_size(self):
         """Test custom cache size is set."""
         collector = ResultCollector(cache_size=int(50e9))
-        self.assertEqual(collector.cache_size, int(50e9))
+        self.assertEqual(collector.cache_size_bytes, int(50e9))
 
     def test_setup_dataset_creates_bench_result(self):
         """Test xarray dataset has correct structure."""

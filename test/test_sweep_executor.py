@@ -21,12 +21,12 @@ class TestSweepExecutor(unittest.TestCase):
     def test_init_default_cache_size(self):
         """Test default cache size is set."""
         executor = SweepExecutor()
-        self.assertEqual(executor.cache_size, int(100e9))
+        self.assertEqual(executor.cache_size_bytes, int(100e9))
 
     def test_init_custom_cache_size(self):
         """Test custom cache size is set."""
         executor = SweepExecutor(cache_size=int(50e9))
-        self.assertEqual(executor.cache_size, int(50e9))
+        self.assertEqual(executor.cache_size_bytes, int(50e9))
 
     def test_convert_vars_to_params_from_string(self):
         """Test converting string variable names to params."""

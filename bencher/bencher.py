@@ -198,10 +198,10 @@ class Bench(BenchPlotServer):
         ensure_cache_version()
 
         # Initialize helper classes
-        self.cache_size = DEFAULT_CACHE_SIZE_BYTES
+        self.cache_size_bytes = DEFAULT_CACHE_SIZE_BYTES
         self._worker_mgr = WorkerManager()
-        self._executor = SweepExecutor(cache_size=self.cache_size)
-        self._collector = ResultCollector(cache_size=self.cache_size)
+        self._executor = SweepExecutor(cache_size=self.cache_size_bytes)
+        self._collector = ResultCollector(cache_size=self.cache_size_bytes)
 
         # The worker manager owns this state; these mirror it for backward
         # compatibility and are refreshed by _expose_worker_attrs().
@@ -806,9 +806,9 @@ class Bench(BenchPlotServer):
 
         if run_cfg.cache.size_mb is not None:
             cache_size_bytes = run_cfg.cache.size_mb * 1_000_000
-            self.cache_size = cache_size_bytes
-            self._executor.cache_size = cache_size_bytes
-            self._collector.cache_size = cache_size_bytes
+            self.cache_size_bytes = cache_size_bytes
+            self._executor.cache_size_bytes = cache_size_bytes
+            self._collector.cache_size_bytes = cache_size_bytes
             self._collector.close_caches()
             # Invalidate existing sample cache so it gets recreated with the new size
             if self.sample_cache is not None:

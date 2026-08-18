@@ -234,7 +234,7 @@ class SweepExecutor:
         Args:
             cache_size (int): Maximum cache size in bytes. Defaults to 100 GB.
         """
-        self.cache_size = cache_size
+        self.cache_size_bytes = cache_size
         self.sample_cache: FutureCache | None = None
 
     def convert_vars_to_params(
@@ -346,7 +346,7 @@ class SweepExecutor:
             executor=run_cfg.execution.executor,
             cache_name="sample_cache",
             tag_index=True,
-            size_limit=self.cache_size,
+            size_limit=self.cache_size_bytes,
             cache_samples=run_cfg.cache.samples,
         )
         return self.sample_cache

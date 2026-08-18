@@ -220,7 +220,7 @@ class ResultCollector:
         Args:
             cache_size (int): Maximum cache size in bytes. Defaults to 100 GB.
         """
-        self.cache_size = cache_size
+        self.cache_size_bytes = cache_size
         self.ds_dynamic: dict = {}
         self._benchmark_cache: Cache | None = None
         self._history_cache: Cache | None = None
@@ -228,13 +228,13 @@ class ResultCollector:
     def get_benchmark_cache(self) -> Cache:
         """Return the persistent benchmark_inputs Cache, creating it on first access."""
         if self._benchmark_cache is None:
-            self._benchmark_cache = Cache("cachedir/benchmark_inputs", size_limit=self.cache_size)
+            self._benchmark_cache = Cache("cachedir/benchmark_inputs", size_limit=self.cache_size_bytes)
         return self._benchmark_cache
 
     def get_history_cache(self) -> Cache:
         """Return the persistent history Cache, creating it on first access."""
         if self._history_cache is None:
-            self._history_cache = Cache("cachedir/history", size_limit=self.cache_size)
+            self._history_cache = Cache("cachedir/history", size_limit=self.cache_size_bytes)
         return self._history_cache
 
     def close_caches(self) -> None:

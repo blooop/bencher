@@ -452,9 +452,9 @@ class TestBencher(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(bench.cache_size, expected_bytes)
-        self.assertEqual(bench._executor.cache_size, expected_bytes)  # pylint: disable=protected-access
-        self.assertEqual(bench._collector.cache_size, expected_bytes)  # pylint: disable=protected-access
+        self.assertEqual(bench.cache_size_bytes, expected_bytes)
+        self.assertEqual(bench._executor.cache_size_bytes, expected_bytes)  # pylint: disable=protected-access
+        self.assertEqual(bench._collector.cache_size_bytes, expected_bytes)  # pylint: disable=protected-access
         self.assertEqual(
             bench._executor.sample_cache.size_limit,  # pylint: disable=protected-access
             expected_bytes,
