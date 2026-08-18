@@ -46,7 +46,7 @@ class UnrecordedNanBench(bn.ParametrizedSweep):
 
 
 def _run_sweep(bench_cls):
-    run_cfg = bn.BenchRunCfg(repeats=1)
+    run_cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1))
     bench = bench_cls().to_bench(run_cfg)
     return bench.plot_sweep(
         input_vars=["cat"],
@@ -175,7 +175,7 @@ class TestNanDefaultSerialization(unittest.TestCase):
 
     @staticmethod
     def _collect_nan():
-        bench = UnrecordedNanBench().to_bench(bn.BenchRunCfg(repeats=1))
+        bench = UnrecordedNanBench().to_bench(bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)))
         return bench.collect(
             input_vars=["cat"],
             result_vars=["out"],

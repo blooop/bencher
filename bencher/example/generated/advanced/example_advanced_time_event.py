@@ -35,9 +35,9 @@ def example_advanced_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
     events = ["PR-100-baseline", "PR-105-optimize-db", "PR-112-add-cache"]
     for i, event_name in enumerate(events):
         benchable._event_idx = i
-        run_cfg.time_event = event_name
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.time.event = event_name
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         bench.plot_sweep(
             title="PR Benchmark",
             input_vars=["workload"],

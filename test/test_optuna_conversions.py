@@ -216,7 +216,7 @@ class TestCfgFromOptunaTrial(unittest.TestCase):
             "test_optuna",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
         # Verify the study can be created from bench results
@@ -232,7 +232,7 @@ class TestParamImportance(unittest.TestCase):
             "test_importance",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
         study = res.bench_result_to_study(include_meta=True)
@@ -246,7 +246,7 @@ class TestParamImportance(unittest.TestCase):
             "test_importance_w",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
         study = res.bench_result_to_study(include_meta=True)
@@ -262,7 +262,7 @@ class TestSummariseTrial(unittest.TestCase):
             "test",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
 
@@ -282,7 +282,7 @@ class TestOptunaGridSearch(unittest.TestCase):
             "test_grid",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
         study = optuna_grid_search(res.bench_cfg)
@@ -296,7 +296,7 @@ class TestOptunaGridSearch(unittest.TestCase):
             "test_grid_vars",
             input_vars=["float_var"],
             result_vars=["result"],
-            run_cfg=bn.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=2)),
             plot_callbacks=False,
         )
         trial_vars = list(res.bench_cfg.all_vars)

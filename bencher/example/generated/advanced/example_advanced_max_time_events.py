@@ -33,7 +33,7 @@ def example_advanced_max_time_events(run_cfg: bn.BenchRunCfg | None = None) -> b
     # Keep only the 3 most recent time slices in the cache.
     # Without this, every call to plot_sweep appends a new slice and the
     # cache grows without bound.
-    run_cfg.max_time_events = 3
+    run_cfg.time.max_events = 3
 
     benchable = LatencyMonitor()
     bench = benchable.to_bench(run_cfg)
@@ -43,8 +43,8 @@ def example_advanced_max_time_events(run_cfg: bn.BenchRunCfg | None = None) -> b
     base_time = datetime(2024, 6, 1)
     for i in range(5):
         benchable._drift = i * 3.0  # simulate gradual degradation
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         bench.plot_sweep(
             title="Service Latency",
             input_vars=["endpoint"],

@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-18
+
+### Breaking changes
+
+- **`bench_cfg.py` is split into a package of seven composable sub-configs, and the flat
+  parameter names are gone** (`BENCH_CFG_SPLIT_PLAN.md`, executed via #1120; re-enables the
+  intent of #688 without the delegation magic #704 reverted). `BenchRunCfg` now composes
+  `ServerCfg`, `ExecutionCfg`, `CacheCfg`, `DisplayCfg`, `VisualizationCfg`, `TimeCfg` and
+  `RegressionCfg` through `param.ClassSelector` slots; there is exactly one canonical way to
+  reach every parameter — the grouped attribute path. No flat aliases, no `__getattr__`
+  delegation, no property shims:
+
+  ```python
+  run_cfg = bn.BenchRunCfg(
+      execution=bn.ExecutionCfg(subsampling_divisions=4, repeats=3),
+      cache=bn.CacheCfg(results=True, samples=True),
+      time=bn.TimeCfg(over_time=True),
+  )
+  run_cfg.cache.results = True   # not run_cfg.cache_results
+  ```
+
+  Full rename table (old flat name → new grouped path). Names not listed keep their spelling
+  inside their group (e.g. `repeats` → `execution.repeats`):
+
+  | Old | New |
+  |---|---|
+  | `port`, `allow_ws_origin`, `show` | `server.port`, `server.allow_ws_origin`, `server.show` |
+  | `repeats`, `subsampling_divisions`, `samples_per_var`, `executor`, `nightly`, `headless`, `dry_run`, `catch`, `fail_on_sample_error` | `execution.<same>` |
+  | `only_plot` | `execution.only_plot` (moved out of the cache group) |
+  | `cache_results` | `cache.results` |
+  | `cache_samples` | `cache.samples` |
+  | `clear_cache` | `cache.clear` |
+  | `clear_sample_cache` | `cache.clear_samples` |
+  | `overwrite_sample_cache` | `cache.overwrite_samples` |
+  | `only_hash_tag` | `cache.only_hash_tag` |
+  | `cache_size` | `cache.size_mb` |
+  | `print_bench_inputs`, `print_bench_results`, `summarise_constant_inputs`, `print_pandas`, `print_xarray`, `serve_pandas`, `serve_pandas_flat`, `serve_xarray` | `display.<same>` |
+  | `auto_plot`, `use_holoview`, `use_optuna`, `plot_size`, `plot_width`, `plot_height`, `pane_layout`, `backend` | `visualization.<same>` |
+  | `over_time`, `clear_history`, `on_history_reset`, `max_slider_points`, `show_aggregate_plots` | `time.<same>` |
+  | `max_time_events` | `time.max_events` |
+  | `show_aggregated_time_tab` | `time.show_aggregated_tab` |
+  | `time_event` | `time.event` |
+  | `regression_detection` | `regression.enabled` |
+  | `regression_method`, `regression_min_history`, `regression_mad`, `regression_percentage`, `regression_delta`, `regression_absolute`, `regression_overrides`, `regression_fail` | `regression.<name minus the regression_ prefix>` |
+
+  `run_tag` and `run_date` stay top-level on `BenchRunCfg`. `BenchCfg`'s sweep metadata
+  (`input_vars`, `result_vars`, `tag`, `series_id`, `agg_over_dims`, `agg_fn`, ...) is
+  unchanged. Function-level flat kwargs (`bn.run(repeats=...)`, `Bench.optimize(catch=...)`,
+  `bn.sweep_identity(repeats=...)`, `BenchRunner.run(...)`) keep their spellings — they are
+  function arguments, not attribute paths.
+
+- **`BenchPlotSrvCfg` is replaced by `ServerCfg`**, and `BenchPlotServer.plot_server` takes a
+  `ServerCfg` (pass `run_cfg.server`). `ShowMode`/`normalize_show` moved with it and are still
+  exported from `bencher`.
+- **`BenchRunCfg.with_defaults` takes per-group dicts**:
+  `bn.BenchRunCfg.with_defaults(run_cfg, execution=dict(repeats=5), cache=dict(results=True))`.
+  Unknown group names and unknown keys within a group raise `ValueError`.
+- **`from_cmd_line` is redesigned and now tested**: each sub-config owns
+  `add_cli_args(parser)`/`apply_cli_args(namespace)`; `--use-cache` now really lands on
+  `cache.results` (the old flat mapping was broken), and `from_cmd_line(argv=...)` is
+  injectable.
+- **`subsampling_divisions_to_samples` moved** from `BenchRunCfg` to `ExecutionCfg`.
+- **Deleted without replacement**: the deprecated `level` kwarg alias on
+  `BenchRunCfg.__init__`/`with_defaults`, the deprecated `BenchRunCfg.level_to_samples`
+  wrapper, and the dead `raise_duplicate_exception` parameter (declared on both config
+  classes, read by nothing).
+- **`CACHE_VERSION` is bumped to 6 — every persisted cache is discarded, and over_time
+  history baselines are wiped.** Hash *values* were preserved by construction (the hash
+  consumes values, not attribute names), but both caches store whole pickled `BenchResult`
+  objects embedding a `BenchCfg`, and pickles of the flat layout cannot load into the nested
+  class shape. This also retires the mixed `0`/`NaN` result-cell generations recorded in
+  plan 27's ledger (L5) and sweeps its L7; the remaining ledger decisions are recorded in
+  `plans/27-cache-version-bump-ledger.md` §3.
+- **Bench-data files saved with `save_result()` (the collect/render split) will no longer
+  load** — there is no version stamp in those files to discard them cleanly, so
+  `load_result()` now raises a `RuntimeError` naming this break instead of a raw pickle
+  error. Re-run `collect` to regenerate saved bench data.
+
+### Added
+
+- `CacheCfg`, `ExecutionCfg`, `DisplayCfg`, `VisualizationCfg`, `TimeCfg`, `RegressionCfg`
+  and `ServerCfg` are exported from `bencher`.
+- **Blob GC refuses to run against a cachedir whose `CACHE_VERSION` stamp is missing or
+  stale** (plan 26 item 2 / plan 27 L9's precondition). A record written under another
+  version may unpickle fine while holding references in a shape the reachability walker
+  does not descend, yielding an empty live set — the one input that makes GC delete every
+  blob. The scan now aborts (nothing reported, nothing deleted) and names the stamp.
+
 ## [1.120.0] - 2026-08-18
 
 ### Changed

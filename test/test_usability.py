@@ -4,7 +4,7 @@ import math
 import unittest
 
 import bencher as bn
-from bencher.bench_cfg import BenchRunCfg
+from bencher.bench_cfg import BenchRunCfg, ExecutionCfg
 from bencher.variables.sweep_base import SUBSAMPLING_DIVISIONS_SAMPLES
 
 
@@ -52,21 +52,15 @@ class TestSubsamplingDivisionsSamples(unittest.TestCase):
 
 class TestSubsamplingDivisionsToSamples(unittest.TestCase):
     def test_known_values(self):
-        self.assertEqual(BenchRunCfg.subsampling_divisions_to_samples(1), 1)
-        self.assertEqual(BenchRunCfg.subsampling_divisions_to_samples(5), 9)
-        self.assertEqual(BenchRunCfg.subsampling_divisions_to_samples(12), 1025)
+        self.assertEqual(ExecutionCfg.subsampling_divisions_to_samples(1), 1)
+        self.assertEqual(ExecutionCfg.subsampling_divisions_to_samples(5), 9)
+        self.assertEqual(ExecutionCfg.subsampling_divisions_to_samples(12), 1025)
 
     def test_invalid_subsampling_divisions_raises(self):
         with self.assertRaises(ValueError):
-            BenchRunCfg.subsampling_divisions_to_samples(0)
+            ExecutionCfg.subsampling_divisions_to_samples(0)
         with self.assertRaises(ValueError):
-            BenchRunCfg.subsampling_divisions_to_samples(99)
-
-    def test_level_to_samples_backward_compat(self):
-        """level_to_samples is a backward-compat alias for subsampling_divisions_to_samples."""
-        self.assertEqual(
-            BenchRunCfg.level_to_samples(5), BenchRunCfg.subsampling_divisions_to_samples(5)
-        )
+            ExecutionCfg.subsampling_divisions_to_samples(99)
 
 
 # ---------- with_level backward-compat ----------
@@ -90,18 +84,22 @@ class TestWithLevelBackwardCompat(unittest.TestCase):
 class TestSamplesPerVar(unittest.TestCase):
     def test_default_is_none(self):
         cfg = BenchRunCfg()
-        self.assertIsNone(cfg.samples_per_var)
+        self.assertIsNone(cfg.execution.samples_per_var)
 
     def test_samples_per_var_overrides_subsampling_divisions(self):
         """When samples_per_var is set, the bench should use that count regardless of subsampling_divisions."""
-        bench = BenchFloat().to_bench(bn.BenchRunCfg(headless=True, samples_per_var=7))
+        bench = BenchFloat().to_bench(
+            bn.BenchRunCfg(execution=bn.ExecutionCfg(headless=True, samples_per_var=7))
+        )
         result = bench.plot_sweep()
         # The sweep should have used 7 samples for theta
         ds = result.ds
         self.assertEqual(len(ds.coords["theta"]), 7)
 
     def test_subsampling_divisions_still_works(self):
-        bench = BenchFloat().to_bench(bn.BenchRunCfg(headless=True, subsampling_divisions=3))
+        bench = BenchFloat().to_bench(
+            bn.BenchRunCfg(execution=bn.ExecutionCfg(headless=True, subsampling_divisions=3))
+        )
         result = bench.plot_sweep()
         ds = result.ds
         # subsampling_divisions 3 → 3 samples

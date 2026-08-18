@@ -29,10 +29,15 @@ def inner_element(overlay):
     return items[0]
 
 
-def run_cfg_with(repeats: int, **kwargs) -> bn.BenchRunCfg:
+def run_cfg_with(
+    repeats: int, over_time: bool = False, clear_history: bool = False
+) -> bn.BenchRunCfg:
     """A BenchRunCfg with caching and auto-plot disabled for the given repeat count."""
     return bn.BenchRunCfg(
-        repeats=repeats, cache_results=False, cache_samples=False, auto_plot=False, **kwargs
+        execution=bn.ExecutionCfg(repeats=repeats),
+        cache=bn.CacheCfg(results=False, samples=False),
+        visualization=bn.VisualizationCfg(auto_plot=False),
+        time=bn.TimeCfg(over_time=over_time, clear_history=clear_history),
     )
 
 

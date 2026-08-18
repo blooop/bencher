@@ -132,16 +132,16 @@ def run_sweep_over_time(
     dataset carries the earlier events on its over_time dimension.
     """
     run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = True
-    run_cfg.repeats = 1
-    run_cfg.auto_plot = False
+    run_cfg.time.over_time = True
+    run_cfg.execution.repeats = 1
+    run_cfg.visualization.auto_plot = False
     bench = bn.Bench(name, worker)
     base_time = datetime(2000, 1, 1)
     res = None
     for i in range(runs):
         worker.run_id = i
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time_dataset_sweep",
             input_vars=["scale"],
@@ -159,7 +159,9 @@ def run_sweep(worker: bn.ParametrizedSweep | None = None, name: str = "test_data
         "dataset_sweep",
         input_vars=["scale"],
         result_vars=["table"],
-        run_cfg=bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False),
+        run_cfg=bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), cache=bn.CacheCfg(results=False, samples=False)
+        ),
         auto_plot=False,
     )
 
@@ -239,7 +241,10 @@ class TestOnlyDataSetResultsAreClaimed(unittest.TestCase):
             "string_sweep",
             input_vars=["scale"],
             result_vars=["label"],
-            run_cfg=bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False),
+            run_cfg=bn.BenchRunCfg(
+                execution=bn.ExecutionCfg(repeats=1),
+                cache=bn.CacheCfg(results=False, samples=False),
+            ),
             auto_plot=False,
         )
 

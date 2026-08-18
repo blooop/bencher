@@ -27,7 +27,7 @@ def git_time_event(repo_path: str | None = None) -> str:
     which is typically 7 characters but may be longer in large repositories
     to avoid ambiguity.
 
-    Intended to be used with ``BenchRunCfg(over_time=True, time_event=...)``
+    Intended to be used with ``BenchRunCfg(time=TimeCfg(over_time=True, event=...))``
     so the over-time slider shows *when* and *which commit* produced the data.
 
     Wall-clock time is used instead of commit time so that multiple benchmark

@@ -19,7 +19,9 @@ def example_container_tabs(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
         title="Tabs Layout",
         input_vars=["sides", "color"],
         result_vars=["polygon"],
-        run_cfg=bn.BenchRunCfg.with_defaults(run_cfg, pane_layout=bn.PaneLayout.tabs),
+        run_cfg=bn.BenchRunCfg.with_defaults(
+            run_cfg, visualization={"pane_layout": bn.PaneLayout.tabs}
+        ),
     )
 
     return bench

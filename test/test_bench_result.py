@@ -39,7 +39,9 @@ def run_sweep(sweep_cls=Linear) -> BenchResult:
         "sweep",
         input_vars=["x"],
         result_vars=["value"],
-        run_cfg=bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False),
+        run_cfg=bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), cache=bn.CacheCfg(results=False, samples=False)
+        ),
         auto_plot=False,
     )
 

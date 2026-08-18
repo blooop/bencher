@@ -21,7 +21,7 @@ import param
 import xarray as xr
 from param import Parameter
 
-from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.bench_cfg import BenchCfg, BenchRunCfg, ExecutionCfg
 from bencher.bench_plot_server import BenchPlotServer
 from bencher.bench_report import BenchReport
 from bencher.blob_store import collect_cache_dir, record_blob_cache_dir
@@ -198,10 +198,10 @@ class Bench(BenchPlotServer):
         ensure_cache_version()
 
         # Initialize helper classes
-        self.cache_size = DEFAULT_CACHE_SIZE_BYTES
+        self.cache_size_bytes = DEFAULT_CACHE_SIZE_BYTES
         self._worker_mgr = WorkerManager()
-        self._executor = SweepExecutor(cache_size=self.cache_size)
-        self._collector = ResultCollector(cache_size=self.cache_size)
+        self._executor = SweepExecutor(cache_size=self.cache_size_bytes)
+        self._collector = ResultCollector(cache_size=self.cache_size_bytes)
 
         # The worker manager owns this state; these mirror it for backward
         # compatibility and are refreshed by _expose_worker_attrs().
@@ -445,7 +445,7 @@ class Bench(BenchPlotServer):
             sample_order (SampleOrder, optional): Controls the traversal order of sampling only.
                 Defaults to SampleOrder.INORDER. Plotting and dataset dimension order are unchanged.
             auto_plot (bool, optional): Whether to build the holoviews/panel report
-                immediately after the sweep. ``None`` (default) respects ``run_cfg.auto_plot``
+                immediately after the sweep. ``None`` (default) respects ``run_cfg.visualization.auto_plot``
                 (itself ``True`` by default), so behaviour is unchanged unless a caller opts
                 out. ``False`` collects samples and computes regression detection WITHOUT
                 constructing any plotting objects — the returned BenchResult is fully populated
@@ -453,7 +453,7 @@ class Bench(BenchPlotServer):
                 via :func:`bencher.render_report`. Useful when the collecting process holds
                 foreign C-extension state (e.g. ROS/rclpy) that makes in-process holoviews/bokeh
                 garbage collection unsafe. See also :meth:`Bench.collect`. Because ``None``
-                defers to ``run_cfg``, setting ``run_cfg.auto_plot = False`` once disables
+                defers to ``run_cfg``, setting ``run_cfg.visualization.auto_plot = False`` once disables
                 plotting for every ``plot_sweep`` call that uses that config — including calls
                 nested inside benchmark functions you don't control.
 
@@ -518,13 +518,13 @@ class Bench(BenchPlotServer):
         # exists to avoid paying. Both knobs live on run_cfg only -- run
         # configuration already reaches plot_sweep as an object, and a second
         # kwarg spelling would give each knob two homes to reconcile.
-        run_cfg.catch = normalize_catch(run_cfg.catch)
-        validate_sample_error_policy(run_cfg.fail_on_sample_error)
+        run_cfg.execution.catch = normalize_catch(run_cfg.execution.catch)
+        validate_sample_error_policy(run_cfg.execution.fail_on_sample_error)
         # Same reasoning for `executor` (C13): `param.Selector` accepts the bare
         # string "SERIAL" because Executors is a StrEnum, and the field is then
         # compared with both `==` and `is` further down. Assigning the member back
         # makes the field's type true for every reader.
-        run_cfg.executor = normalize_executor(run_cfg.executor)
+        run_cfg.execution.executor = normalize_executor(run_cfg.execution.executor)
         # Same reasoning again for `on_history_reset` (plan 23 P7): the policy is
         # only consumed by load_history_cache, which runs *after*
         # calculate_benchmark_results and before cache_results -- so parsing it
@@ -532,19 +532,19 @@ class Bench(BenchPlotServer):
         # collected and (with cache_samples off by default) thrown away. Parsing
         # here moves that config error ahead of all sampling. Assigning the member
         # back also makes the field's type true for every downstream reader.
-        run_cfg.on_history_reset = OnHistoryReset(run_cfg.on_history_reset)
+        run_cfg.time.on_history_reset = OnHistoryReset(run_cfg.time.on_history_reset)
 
-        if run_cfg.only_plot:
-            run_cfg.cache_results = True
+        if run_cfg.execution.only_plot:
+            run_cfg.cache.results = True
 
         # auto_plot lives on BenchRunCfg (BenchCfg inherits it), so run_cfg
         # values override the BenchCfg constructor via param.update in
         # run_sweep. Apply an explicit plot_sweep(auto_plot=...) here so it
-        # survives that merge. auto_plot=None defers to run_cfg.auto_plot
-        # (default True) — this is what lets a caller set run_cfg.auto_plot
+        # survives that merge. auto_plot=None defers to run_cfg.visualization.auto_plot
+        # (default True) — this is what lets a caller set run_cfg.visualization.auto_plot
         # once and have nested plot_sweep calls honour it.
         if auto_plot is not None:
-            run_cfg.auto_plot = auto_plot
+            run_cfg.visualization.auto_plot = auto_plot
 
         self.last_run_cfg = run_cfg
 
@@ -606,25 +606,31 @@ class Bench(BenchPlotServer):
                     [getattr(i, "name", str(i)) for i in result_vars_in]
                 )
 
-        if run_cfg.samples_per_var is not None:
+        if run_cfg.execution.samples_per_var is not None:
             if len(input_vars_in) > 0:
-                input_vars_in = [i.with_samples(run_cfg.samples_per_var) for i in input_vars_in]
+                input_vars_in = [
+                    i.with_samples(run_cfg.execution.samples_per_var) for i in input_vars_in
+                ]
                 logger.info(
                     "samples_per_var=%d applied to %d input variable(s)",
-                    run_cfg.samples_per_var,
+                    run_cfg.execution.samples_per_var,
                     len(input_vars_in),
                 )
-        elif run_cfg.subsampling_divisions > 0:
+        elif run_cfg.execution.subsampling_divisions > 0:
             inputs = []
             logger.debug("Input vars prior to subsampling_divisions adjustment: %s", input_vars_in)
             if len(input_vars_in) > 0:
                 for i in input_vars_in:
-                    inputs.append(i.with_subsampling_divisions(run_cfg.subsampling_divisions))
+                    inputs.append(
+                        i.with_subsampling_divisions(run_cfg.execution.subsampling_divisions)
+                    )
                 input_vars_in = inputs
                 logger.info(
                     "subsampling_divisions=%d → %d samples per variable",
-                    run_cfg.subsampling_divisions,
-                    BenchRunCfg.subsampling_divisions_to_samples(run_cfg.subsampling_divisions),
+                    run_cfg.execution.subsampling_divisions,
+                    ExecutionCfg.subsampling_divisions_to_samples(
+                        run_cfg.execution.subsampling_divisions
+                    ),
                 )
 
         # if any of the inputs have been include as constants, remove those variables from the list of constants
@@ -647,7 +653,7 @@ class Bench(BenchPlotServer):
             post_description = ""
 
         if plot_callbacks is None:
-            if run_cfg.backend == "rerun":
+            if run_cfg.visualization.backend == "rerun":
                 from bencher.results.rerun_result import RerunResult
 
                 plot_callbacks = [RerunResult.to_rerun_plots]
@@ -679,7 +685,7 @@ class Bench(BenchPlotServer):
             # auto_plot is applied via run_cfg (above) so it survives the
             # run_cfg -> bench_cfg param merge in run_sweep.
         )
-        if run_cfg.dry_run:
+        if run_cfg.execution.dry_run:
             total = 1
             summary_parts = []
             for iv in input_vars_in:
@@ -690,13 +696,13 @@ class Bench(BenchPlotServer):
                     summary_parts.append(f"  {iv.name}: {n} values [{vals[0]} .. {vals[-1]}]")
                 else:
                     summary_parts.append(f"  {iv.name}: 0 values")
-            evals = total * run_cfg.repeats
+            evals = total * run_cfg.execution.repeats
             logger.info(
                 "Dry run for '%s':\n%s\n  Total: %d combinations x %d repeats = %d evaluations",
                 title,
                 "\n".join(summary_parts) if summary_parts else "  (no input vars)",
                 total,
-                run_cfg.repeats,
+                run_cfg.execution.repeats,
                 evals,
             )
             return BenchResult(bench_cfg)
@@ -761,6 +767,10 @@ class Bench(BenchPlotServer):
                 constant_keys.append(key)
                 continue
 
+            # Sub-config slots carry live Parameterized objects; copy them so
+            # the merged bench_cfg never aliases (and mutates) run_cfg's groups.
+            if isinstance(value, param.Parameterized):
+                value = deepcopy(value)
             valid_params[key] = value
 
         return valid_params, missing_keys, constant_keys
@@ -794,11 +804,11 @@ class Bench(BenchPlotServer):
         """
         timings = SweepTimings()
 
-        if run_cfg.cache_size is not None:
-            cache_size_bytes = run_cfg.cache_size * 1_000_000
-            self.cache_size = cache_size_bytes
-            self._executor.cache_size = cache_size_bytes
-            self._collector.cache_size = cache_size_bytes
+        if run_cfg.cache.size_mb is not None:
+            cache_size_bytes = run_cfg.cache.size_mb * 1_000_000
+            self.cache_size_bytes = cache_size_bytes
+            self._executor.cache_size_bytes = cache_size_bytes
+            self._collector.cache_size_bytes = cache_size_bytes
             self._collector.close_caches()
             # Invalidate existing sample cache so it gets recreated with the new size
             if self.sample_cache is not None:
@@ -841,17 +851,17 @@ class Bench(BenchPlotServer):
         with phase_timer() as elapsed:
             if self.sample_cache is None:
                 self.sample_cache = self.init_sample_cache(run_cfg)
-            if bench_cfg.clear_sample_cache:
+            if bench_cfg.cache.clear_samples:
                 self.clear_tag_from_sample_cache(bench_cfg.tag, run_cfg)
         timings.sample_cache_init_ms = elapsed()
 
         calculate_results = True
         with phase_timer() as elapsed:
             c = self._collector.get_benchmark_cache()
-            if run_cfg.clear_cache:
+            if run_cfg.cache.clear:
                 c.delete(bench_cfg_hash)
                 logger.info("cleared cache")
-            elif run_cfg.cache_results:
+            elif run_cfg.cache.results:
                 logger.info(
                     f"checking for previously calculated results with key: {bench_cfg_hash}"
                 )
@@ -862,14 +872,14 @@ class Bench(BenchPlotServer):
                     calculate_results = False
                 else:
                     logger.info("did not detect results in cache")
-                    if run_cfg.only_plot:
+                    if run_cfg.execution.only_plot:
                         raise FileNotFoundError("Was not able to load the results to plot!")
         timings.cache_check_ms = elapsed()
 
-        if run_cfg.time_event is not None:
-            time_src = run_cfg.time_event
+        if run_cfg.time.event is not None:
+            time_src = run_cfg.time.event
         elif isinstance(time_src, str):
-            bench_cfg.time_event = time_src
+            bench_cfg.time.event = time_src
 
         if calculate_results:
             bench_res = self.calculate_benchmark_results(
@@ -877,15 +887,15 @@ class Bench(BenchPlotServer):
             )
 
             # use the hash of the inputs to look up historical values in the cache
-            if run_cfg.over_time:
+            if run_cfg.time.over_time:
                 with phase_timer() as elapsed:
                     bench_res.ds = self.load_history_cache(
                         bench_res.ds,
                         bench_cfg_history_hash,
-                        run_cfg.clear_history,
-                        run_cfg.max_time_events,
+                        run_cfg.time.clear_history,
+                        run_cfg.time.max_events,
                         bench_cfg.result_vars,
-                        on_history_reset=run_cfg.on_history_reset,
+                        on_history_reset=run_cfg.time.on_history_reset,
                         bench_name=bench_cfg.bench_name,
                         series_id=bench_cfg.series,
                         tag=bench_cfg.tag,
@@ -913,19 +923,21 @@ class Bench(BenchPlotServer):
             # run into the dataset) but before cache_results. The dataset already contains
             # the current run as the last over_time entry, so detect_regressions splits at
             # isel(over_time=-1) for current vs all prior entries for historical.
-            if run_cfg.over_time and run_cfg.regression_detection:
+            if run_cfg.time.over_time and run_cfg.regression.enabled:
                 bench_res.regression_report = detect_regressions(bench_res.ds, bench_cfg, run_cfg)
                 if bench_res.regression_report.has_regressions:
                     logger.warning(bench_res.regression_report.summary())
                     # young_baseline regressions (fewer than regression_min_history
                     # points since the column's birth) warn but never fail the run.
                     if (
-                        run_cfg.regression_fail
+                        run_cfg.regression.fail
                         and bench_res.regression_report.has_blocking_regressions
                     ):
                         raise RegressionError(bench_res.regression_report.summary())
 
-            self.report_results(bench_res, run_cfg.print_xarray, run_cfg.print_pandas)
+            self.report_results(
+                bench_res, run_cfg.display.print_xarray, run_cfg.display.print_pandas
+            )
             self.cache_results(bench_res, bench_cfg_hash)
 
         logger.info(self.sample_cache.stats())
@@ -935,7 +947,7 @@ class Bench(BenchPlotServer):
             bench_res.post_setup()
         timings.post_setup_ms = elapsed()
 
-        if bench_cfg.auto_plot:
+        if bench_cfg.visualization.auto_plot:
             with phase_timer() as elapsed:
                 if os.environ.get("BENCHER_FORCE_SPLIT_RENDER"):
                     self._append_result_via_split(bench_res)
@@ -955,7 +967,7 @@ class Bench(BenchPlotServer):
         # this run hit; a caller who wants "does this artifact have holes" reads
         # bench_res.n_failed, which is a different question.
         if calculate_results:
-            _enforce_sample_error_policy(bench_res, run_cfg.fail_on_sample_error)
+            _enforce_sample_error_policy(bench_res, run_cfg.execution.fail_on_sample_error)
         return bench_res
 
     def _append_result_via_split(self, bench_res: BenchResult) -> None:
@@ -1160,7 +1172,7 @@ class Bench(BenchPlotServer):
         rv_arrays = self._collector.precompute_result_arrays(bench_res)
 
         with phase_timer() as elapsed:
-            catch = normalize_catch(bench_run_cfg.catch)
+            catch = normalize_catch(bench_run_cfg.execution.catch)
             # The denominator for failed_fraction is samples this run *executed*,
             # which is not len(jobs): a cache hit never reached the worker, so
             # counting it as an attempt makes the same fail_on_sample_error
@@ -1198,9 +1210,9 @@ class Bench(BenchPlotServer):
                 # For serial execution, store results immediately so that
                 # completed results are cached to disk before later jobs
                 # may crash.
-                if bench_run_cfg.executor == Executors.SERIAL:
+                if bench_run_cfg.execution.executor == Executors.SERIAL:
                     self.store_results(result, bench_res, job, bench_run_cfg, rv_arrays)
-            if bench_run_cfg.executor != Executors.SERIAL:
+            if bench_run_cfg.execution.executor != Executors.SERIAL:
                 # Separate cache hits (immediate) from pending futures so we
                 # can use as_completed() to overlap result storage with
                 # remaining computation.
@@ -1458,7 +1470,7 @@ class Bench(BenchPlotServer):
             with suppress(Exception):
                 self.sample_cache.close()
         run_cfg_for_cache = deepcopy(run_cfg)
-        run_cfg_for_cache.overwrite_sample_cache = False
+        run_cfg_for_cache.cache.overwrite_samples = False
         self.sample_cache = self.init_sample_cache(run_cfg_for_cache)
 
         # --- determine optimisation directions --------------------------

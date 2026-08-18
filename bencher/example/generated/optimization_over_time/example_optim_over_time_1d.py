@@ -28,14 +28,14 @@ class ServerOptimizer(bn.ParametrizedSweep):
 
 def example_optim_over_time_1d(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Optimise Over Time: 1D input."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=3)
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 3})
     benchable = ServerOptimizer()
     bench = benchable.to_bench(run_cfg)
     _base_time = datetime(2000, 1, 1)
     for i in range(4):
         benchable._drift = float(i)
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         bench.plot_sweep(
             "over_time",
             input_vars=["cpu_cores"],

@@ -189,8 +189,8 @@ class BenchResultBase:
         Returns:
             BenchCfg: updated config with wrapped labels
         """
-        if bench_cfg.over_time and "over_time" in self.ds.coords:
-            if bench_cfg.time_event is not None:
+        if bench_cfg.time.over_time and "over_time" in self.ds.coords:
+            if bench_cfg.time.event is not None:
                 self.ds.coords["over_time"] = [
                     "\n".join(wrap(str(t), 30)) for t in self.ds.coords["over_time"].values
                 ]
@@ -292,7 +292,7 @@ class BenchResultBase:
         if reduce is None:
             return ReduceType.NONE
         if reduce is ReduceType.AUTO:
-            return ReduceType.REDUCE if self.bench_cfg.repeats > 1 else ReduceType.SQUEEZE
+            return ReduceType.REDUCE if self.bench_cfg.execution.repeats > 1 else ReduceType.SQUEEZE
         return reduce
 
     def _to_dataset_cache_key(
@@ -416,7 +416,7 @@ class BenchResultBase:
                 ds_out = ds_reduce_mean
             case ReduceType.SQUEEZE:
                 if (
-                    self.bench_cfg.over_time
+                    self.bench_cfg.time.over_time
                     and "repeat" in ds_out.dims
                     and ds_out.sizes["repeat"] == 1
                 ):
@@ -881,7 +881,7 @@ class BenchResultBase:
         # Exclude over_time from the dimension count used for layout decisions
         pane_dims = dims
         if (
-            self.bench_cfg.over_time
+            self.bench_cfg.time.over_time
             and "over_time" in list(hv_dataset.data.sizes)
             and hv_dataset.data.sizes["over_time"] > 1
         ):
@@ -937,7 +937,7 @@ class BenchResultBase:
         dims = [str(d) for d in dataset.sizes]
 
         # over_time is handled by hvplot's groupby widget, not pane recursion
-        if self.bench_cfg.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
+        if self.bench_cfg.time.over_time and "over_time" in dims and dataset.sizes["over_time"] > 1:
             pane_dims = [d for d in dims if d != "over_time"]
         else:
             pane_dims = dims
@@ -993,7 +993,7 @@ class BenchResultBase:
             # (images, videos) we need to build a Panel slider manually because
             # they are not HoloViews objects and cannot use hv.HoloMap.
             if (
-                self.bench_cfg.over_time
+                self.bench_cfg.time.over_time
                 and "over_time" in list(dataset.sizes)
                 and dataset.sizes["over_time"] > 1
             ):
@@ -1520,16 +1520,16 @@ class BenchResultBase:
 
     def set_plot_size(self, **kwargs) -> dict:
         if "width" not in kwargs:
-            if self.bench_cfg.plot_size is not None:
-                kwargs["width"] = self.bench_cfg.plot_size
+            if self.bench_cfg.visualization.plot_size is not None:
+                kwargs["width"] = self.bench_cfg.visualization.plot_size
             # specific width overrides general size
-            if self.bench_cfg.plot_width is not None:
-                kwargs["width"] = self.bench_cfg.plot_width
+            if self.bench_cfg.visualization.plot_width is not None:
+                kwargs["width"] = self.bench_cfg.visualization.plot_width
 
         if "height" not in kwargs:
-            if self.bench_cfg.plot_size is not None:
-                kwargs["height"] = self.bench_cfg.plot_size
+            if self.bench_cfg.visualization.plot_size is not None:
+                kwargs["height"] = self.bench_cfg.visualization.plot_size
             # specific height overrides general size
-            if self.bench_cfg.plot_height is not None:
-                kwargs["height"] = self.bench_cfg.plot_height
+            if self.bench_cfg.visualization.plot_height is not None:
+                kwargs["height"] = self.bench_cfg.visualization.plot_height
         return kwargs

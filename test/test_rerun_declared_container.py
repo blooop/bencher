@@ -45,14 +45,18 @@ class RerunSweep(bn.ParametrizedSweep):
 
 def run_over_time(worker: bn.ParametrizedSweep, name: str, snapshots: int):
     """Run the sweep once per time point, so over_time carries real history."""
-    run_cfg = bn.BenchRunCfg(over_time=True, repeats=1, auto_plot=False)
+    run_cfg = bn.BenchRunCfg(
+        execution=bn.ExecutionCfg(repeats=1),
+        visualization=bn.VisualizationCfg(auto_plot=False),
+        time=bn.TimeCfg(over_time=True),
+    )
     bench = worker.to_bench(run_cfg)
     base_time = datetime(2000, 1, 1)
     res = None
     for i in range(snapshots):
         worker.offset = i
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             name,
             input_vars=["sides"],

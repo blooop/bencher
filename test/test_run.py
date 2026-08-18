@@ -46,42 +46,42 @@ class TestRun(unittest.TestCase):
         """bn.run() propagates subsampling_divisions to the benchmark result for callables."""
         results = bn.run(example_simple_float, subsampling_divisions=3, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.subsampling_divisions, 3)
+        self.assertEqual(results[0].last_run_cfg.execution.subsampling_divisions, 3)
 
     def test_run_callable_repeats_propagates(self):
         """bn.run() propagates repeats to the benchmark result for callables."""
         results = bn.run(example_simple_float, subsampling_divisions=2, repeats=3, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.repeats, 3)
+        self.assertEqual(results[0].last_run_cfg.execution.repeats, 3)
 
     def test_run_sweep_class_subsampling_divisions_propagates(self):
         """bn.run() propagates subsampling_divisions to the benchmark result for ParametrizedSweep classes."""
         results = bn.run(SimpleFloat, subsampling_divisions=3, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.subsampling_divisions, 3)
+        self.assertEqual(results[0].last_run_cfg.execution.subsampling_divisions, 3)
 
     def test_run_sweep_class_repeats_propagates(self):
         """bn.run() propagates repeats to the benchmark result for ParametrizedSweep classes."""
         results = bn.run(SimpleFloat, subsampling_divisions=2, repeats=2, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.repeats, 2)
+        self.assertEqual(results[0].last_run_cfg.execution.repeats, 2)
 
     def test_run_sweep_instance_subsampling_divisions_propagates(self):
         """bn.run() propagates subsampling_divisions to the benchmark result for ParametrizedSweep instances."""
         results = bn.run(SimpleFloat(), subsampling_divisions=3, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.subsampling_divisions, 3)
+        self.assertEqual(results[0].last_run_cfg.execution.subsampling_divisions, 3)
 
     def test_run_sweep_instance_repeats_propagates(self):
         """bn.run() propagates repeats for ParametrizedSweep instances."""
         results = bn.run(SimpleFloat(), subsampling_divisions=2, repeats=2, show=False)
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].last_run_cfg.repeats, 2)
+        self.assertEqual(results[0].last_run_cfg.execution.repeats, 2)
 
     def test_run_with_explicit_run_cfg(self):
         """bn.run() respects an explicit BenchRunCfg."""
         cfg = bn.BenchRunCfg()
-        cfg.repeats = 2
+        cfg.execution.repeats = 2
         results = bn.run(example_simple_float, run_cfg=cfg, show=False)
         self.assertIsInstance(results, list)
         self.assertGreater(len(results), 0)

@@ -6,7 +6,7 @@ from bencher.example.optuna.example_optuna import optuna_rastrigin
 
 if __name__ == "__main__":
     run_cfg = bn.BenchRunCfg()
-    run_cfg.overwrite_sample_cache = True
+    run_cfg.cache.overwrite_samples = True
     bench_runner = bn.BenchRunner("bencher_examples", run_cfg=run_cfg)
 
     bench_runner.add(example_simple_float)

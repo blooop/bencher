@@ -69,7 +69,7 @@ bench.plot_sweep(
         body = """\
 if run_cfg is None:
     run_cfg = bn.BenchRunCfg()
-run_cfg.auto_plot = False
+run_cfg.visualization.auto_plot = False
 time_src = bn.git_time_event()
 bench = BencherSelfBenchmark().to_bench(run_cfg)
 bench.plot_sweep(

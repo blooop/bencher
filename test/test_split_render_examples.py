@@ -56,14 +56,14 @@ def _run_example(example_path: Path) -> bn.Bench:
     assert fns, f"No example_* function found in {example_path}"
 
     run_cfg = bn.BenchRunCfg()
-    run_cfg.subsampling_divisions = 2
-    run_cfg.repeats = 2
+    run_cfg.execution.subsampling_divisions = 2
+    run_cfg.execution.repeats = 2
     # Disable plotting on the run_cfg so the example's internal plot_sweep call
     # (auto_plot=None) defers to it and takes the collect path — no holoviews/panel
     # objects are built, so the result we pickle is the same clean artifact the real
     # collect/render split produces. Running the example with auto_plot=True instead
     # would cache plot accessors on the dataset that the split path never creates.
-    run_cfg.auto_plot = False
+    run_cfg.visualization.auto_plot = False
     result = fns[0](run_cfg)
     assert result is not None, f"{example_path} returned None"
     assert isinstance(result, bn.Bench), f"{example_path} did not return a Bench"

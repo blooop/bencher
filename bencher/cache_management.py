@@ -58,7 +58,12 @@ logger = logging.getLogger(__name__)
 # v5: hash composition changed (variable names in per-var identity, unordered
 # result/const var sets) and the history cache switched to schema-evolving
 # records (see bencher/history.py).
-CACHE_VERSION = "5"
+# v6: the bench_cfg split (BENCH_CFG_SPLIT_PLAN.md). Hash *values* were
+# preserved by construction, but the caches store whole pickled BenchResult
+# objects embedding a BenchCfg, and pickles of the old flat param layout do
+# not load into the nested class shape — so stale entries must be discarded
+# rather than failing at unpickle time.
+CACHE_VERSION = "6"
 # Before bumping this: read plans/27-cache-version-bump-ledger.md in full and land what it
 # lists. A bump invalidates every on-disk benchmark-level and over_time entry, and that cost
 # is the same whether one deferred fix rides along or ten -- the ledger exists so the ones
@@ -628,6 +633,23 @@ def blob_reachability(
     names: set[str] = set()
     unreadable: list[str] = []
     root = Path(cachedir)
+
+    # A record written under another CACHE_VERSION may unpickle fine while
+    # storing its references in a shape _walk_blob_references does not descend,
+    # yielding a silently *empty* live set — and an empty live set is the one
+    # input that makes GC delete everything. So a cache tree without a matching
+    # version stamp is unreadable, not empty (plan 26 item 2 / plan 27 L9).
+    if any((root / cache_name).is_dir() for cache_name in _BLOB_REFERENCE_CACHES):
+        version_file = root / "CACHE_VERSION"
+        stored = version_file.read_text().strip() if version_file.exists() else None
+        if stored != CACHE_VERSION:
+            unreadable.append(
+                f"{version_file}: stored CACHE_VERSION {stored!r} does not match the "
+                f"library's {CACHE_VERSION!r}; records may reference blobs in a shape "
+                "this walker does not descend, so no blob can be proven unreferenced. "
+                "Run a sweep (ensure_cache_version refreshes the stamp) before GC."
+            )
+            return BlobReachability(names=frozenset(), unreadable=tuple(unreadable))
 
     for cache_name in _BLOB_REFERENCE_CACHES:
         cache_path = root / cache_name

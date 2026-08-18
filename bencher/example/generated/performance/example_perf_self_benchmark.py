@@ -39,10 +39,10 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
         x_sweep.name = "x"
 
         inner_cfg = bn.BenchRunCfg()
-        inner_cfg.repeats = 1
-        inner_cfg.cache_samples = self.use_cache
-        inner_cfg.cache_results = False
-        inner_cfg.auto_plot = False
+        inner_cfg.execution.repeats = 1
+        inner_cfg.cache.samples = self.use_cache
+        inner_cfg.cache.results = False
+        inner_cfg.visualization.auto_plot = False
 
         bench = bn.Bench("inner_bench", workload, run_cfg=inner_cfg)
         bench.plot_sweep(input_vars=[x_sweep], result_vars=["result"])

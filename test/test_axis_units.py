@@ -65,7 +65,9 @@ with warnings.catch_warnings():
 
 def _run_sweep(bench_class, name, input_vars, result_vars, repeats):
     run_cfg = bn.BenchRunCfg(
-        repeats=repeats, cache_results=False, cache_samples=False, auto_plot=False
+        execution=bn.ExecutionCfg(repeats=repeats),
+        cache=bn.CacheCfg(results=False, samples=False),
+        visualization=bn.VisualizationCfg(auto_plot=False),
     )
     bench = bn.Bench(name, bench_class(), run_cfg=run_cfg)
     return bench.plot_sweep(

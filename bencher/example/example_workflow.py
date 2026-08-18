@@ -78,7 +78,7 @@ def example_floats2D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = 
     print(f"recovered p1: {recovered_p1}, distance: {np.linalg.norm(recovered_p1 - p1[:2])}")
     recovered_p2 = res.get_optimal_vec(VolumeSweep.param.p2_dis, res.bench_cfg.input_vars)
     print(f"recovered p2: {recovered_p2} distance: {np.linalg.norm(recovered_p2 - p2[:2])}")
-    run_cfg.use_optuna = True
+    run_cfg.visualization.use_optuna = True
     for rv in res.bench_cfg.result_vars:
         bench.plot_sweep(
             input_vars=["surf_x", "surf_y"],
@@ -114,7 +114,7 @@ def example_floats3D_workflow(run_cfg: bn.BenchRunCfg, bench: bn.Bench | None = 
     print(f"recovered p1: {recovered_p1}, distance: {np.linalg.norm(recovered_p1 - p1)}")
     recovered_p2 = res.get_optimal_vec(VolumeSweep.param.p2_dis, res.bench_cfg.input_vars)
     print(f"recovered p2: {recovered_p2} distance: {np.linalg.norm(recovered_p2 - p2)}")
-    run_cfg.use_optuna = True
+    run_cfg.visualization.use_optuna = True
     for rv in res.bench_cfg.result_vars:
         bench.plot_sweep(
             input_vars=["surf_x", "surf_y"],

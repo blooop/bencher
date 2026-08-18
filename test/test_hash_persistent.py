@@ -227,8 +227,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "test_bench"
             cfg.title = "Test Title"
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [ResultImage(doc="img")]
@@ -246,8 +246,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "multi_bench"
             cfg.title = "Multi"
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [
@@ -272,8 +272,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "obj_bench"
             cfg.title = "Object-carrying result types"
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [
@@ -305,8 +305,8 @@ class TestBenchCfgHashStability:
             cfg = BenchCfg()
             cfg.bench_name = "stable_bench"
             cfg.title = title
-            cfg.over_time = False
-            cfg.repeats = 1
+            cfg.time.over_time = False
+            cfg.execution.repeats = 1
             cfg.tag = ""
             cfg.input_vars = []
             cfg.result_vars = [ResultFloat(units="m/s", doc="speed")]
@@ -363,8 +363,8 @@ _BATCH_HASH_SCRIPT = textwrap.dedent("""\
     cfg = BenchCfg()
     cfg.bench_name = "test_bench"
     cfg.title = "Test"
-    cfg.over_time = False
-    cfg.repeats = 1
+    cfg.time.over_time = False
+    cfg.execution.repeats = 1
     cfg.tag = ""
     cfg.input_vars = []
     cfg.result_vars = [ResultFloat(units="m/s", doc="speed"), ResultImage(doc="img")]
@@ -744,10 +744,10 @@ class TestSweepSlotCoverage:
 # on-disk benchmark-level and over_time entry in the field.
 # ---------------------------------------------------------------------------
 
-GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "6a2b022e6f72ac6c536a118c88065a30b788eca1"
-GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "5aa01b2f3c3ad8e1022c4c8cf027397a3204ba47"
+GOLDEN_BENCH_CFG_HASH_INCLUDING_REPEATS = "2173ac8be451cd8eb21ea6d77f3c7c0ef6943f5d"
+GOLDEN_BENCH_CFG_HASH_EXCLUDING_REPEATS = "3ddc4b1d7819417643d0efbd68b89faa0981e13e"
 # The over_time history key: include_result_vars=False.
-GOLDEN_BENCH_CFG_HASH_HISTORY = "ec8e1d72fb6137e20156499c505547933e534ac0"
+GOLDEN_BENCH_CFG_HASH_HISTORY = "455af3ba39a65ed01d348aea58e1793bbe380395"
 
 
 def _build_golden_bench_cfg():
@@ -756,8 +756,8 @@ def _build_golden_bench_cfg():
     cfg = BenchCfg()
     cfg.bench_name = "golden_bench"
     cfg.title = "should not affect hash"
-    cfg.over_time = False
-    cfg.repeats = 3
+    cfg.time.over_time = False
+    cfg.execution.repeats = 3
     cfg.tag = "golden_tag"
     cfg.input_vars = [
         FloatSweep(bounds=(0.0, 1.0), samples=5, units="m/s"),
@@ -808,7 +808,7 @@ class TestGoldenBenchCfgHash:
 
     def test_cache_version_participates_in_hash(self):
         """Bumping CACHE_VERSION must change the hash atomically."""
-        import bencher.bench_cfg as bench_cfg_mod
+        import bencher.bench_cfg.bench_cfg_class as bench_cfg_mod
 
         cfg = _build_golden_bench_cfg()
         original = cfg.hash_persistent(include_repeats=True)
@@ -850,3 +850,52 @@ class TestGoldenBenchCfgHash:
             "ResultFloat.direction is interpretive metadata and must not "
             "contribute to the cache key."
         )
+
+
+# ---------------------------------------------------------------------------
+# BenchCfg hash semantic invariants
+#
+# These are the documented key rules of hash_persistent (mirrored by
+# bencher/identity.py): title never contributes; result_vars contribute as an
+# unordered set; include_result_vars=False (the over_time history key) is
+# insensitive to the result-var set entirely. They are pinned here so a future
+# refactor cannot silently re-key every on-disk cache and history entry.
+# ---------------------------------------------------------------------------
+
+
+class TestBenchCfgHashInvariants:
+    @staticmethod
+    def _cfg(**overrides):
+        params = {
+            "bench_name": "invariant_bench",
+            "title": "A Title",
+            "result_vars": [ResultFloat(units="m/s", doc="speed"), ResultImage(doc="img")],
+        }
+        params.update(overrides)
+        return BenchCfg(**params)
+
+    def test_title_is_excluded(self):
+        h1 = self._cfg(title="A Title").hash_persistent(include_repeats=True)
+        h2 = self._cfg(title="A Completely Different Title").hash_persistent(include_repeats=True)
+        assert h1 == h2
+
+    def test_result_var_reorder_is_invariant(self):
+        speed = ResultFloat(units="m/s", doc="speed")
+        img = ResultImage(doc="img")
+        h1 = self._cfg(result_vars=[speed, img]).hash_persistent(include_repeats=True)
+        h2 = self._cfg(result_vars=[img, speed]).hash_persistent(include_repeats=True)
+        assert h1 == h2
+
+    def test_history_key_ignores_result_var_changes(self):
+        h1 = self._cfg(result_vars=[ResultFloat(units="m/s", doc="speed")]).hash_persistent(
+            include_repeats=True, include_result_vars=False
+        )
+        h2 = self._cfg(result_vars=[ResultImage(doc="img")]).hash_persistent(
+            include_repeats=True, include_result_vars=False
+        )
+        assert h1 == h2
+
+    def test_series_id_is_excluded(self):
+        h1 = self._cfg(series_id=None).hash_persistent(include_repeats=True)
+        h2 = self._cfg(series_id="my_series").hash_persistent(include_repeats=True)
+        assert h1 == h2

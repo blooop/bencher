@@ -63,7 +63,9 @@ def _sweep_result():
         "vis",
         input_vars=[Sweep.param.x],
         result_vars=[Sweep.param.y],
-        run_cfg=bn.BenchRunCfg(repeats=1, cache_samples=False),
+        run_cfg=bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), cache=bn.CacheCfg(samples=False)
+        ),
         plot_callbacks=False,
     )
 
@@ -170,14 +172,14 @@ class TestRegressionOverlayFailureIsVisible(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.regression_detection = True
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.regression.enabled = True
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
         bench = bn.Bench("render_failure_overlay", _OverTimeSweep(), run_cfg=run_cfg)
         for i in range(2):
-            run_cfg.clear_history = i == 0
-            run_cfg.clear_cache = True
+            run_cfg.time.clear_history = i == 0
+            run_cfg.cache.clear = True
             bench.plot_sweep(
                 input_vars=["endpoint"],
                 result_vars=["latency"],

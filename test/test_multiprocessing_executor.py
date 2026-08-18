@@ -603,11 +603,11 @@ class TestBenchMultiprocessingEndToEnd:
     def _run_bench(self, worker_instance, input_vars):
         bench = bn.Bench("mp_test", worker_instance)
         run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = Executors.MULTIPROCESSING
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.cache_samples = False
-        run_cfg.print_bench_inputs = False
-        run_cfg.print_bench_results = False
+        run_cfg.execution.executor = Executors.MULTIPROCESSING
+        run_cfg.cache.overwrite_samples = True
+        run_cfg.cache.samples = False
+        run_cfg.display.print_bench_inputs = False
+        run_cfg.display.print_bench_results = False
         res = bench.plot_sweep(
             "mp_sweep",
             input_vars=input_vars,
@@ -691,12 +691,12 @@ class TestBenchMultiprocessingEndToEnd:
         worker = StringOnlyConfig()
         bench = bn.Bench("mp_repeat_test", worker)
         run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = Executors.MULTIPROCESSING
-        run_cfg.repeats = 3
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.cache_samples = False
-        run_cfg.print_bench_inputs = False
-        run_cfg.print_bench_results = False
+        run_cfg.execution.executor = Executors.MULTIPROCESSING
+        run_cfg.execution.repeats = 3
+        run_cfg.cache.overwrite_samples = True
+        run_cfg.cache.samples = False
+        run_cfg.display.print_bench_inputs = False
+        run_cfg.display.print_bench_results = False
         res = bench.plot_sweep(
             "mp_repeat_sweep",
             input_vars=[StringOnlyConfig.param.algorithm.with_subsampling_divisions(2)],
@@ -711,11 +711,11 @@ class TestBenchMultiprocessingEndToEnd:
         worker = MixedSelectorConfig()
         bench = bn.Bench("mp_const_test", worker)
         run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = Executors.MULTIPROCESSING
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.cache_samples = False
-        run_cfg.print_bench_inputs = False
-        run_cfg.print_bench_results = False
+        run_cfg.execution.executor = Executors.MULTIPROCESSING
+        run_cfg.cache.overwrite_samples = True
+        run_cfg.cache.samples = False
+        run_cfg.display.print_bench_inputs = False
+        run_cfg.display.print_bench_results = False
         res = bench.plot_sweep(
             "mp_const_sweep",
             input_vars=[MixedSelectorConfig.param.weight.with_subsampling_divisions(3)],
@@ -740,22 +740,22 @@ class TestBenchRunnerMultiprocessing:
 
     def test_bench_runner_string_sweep(self):
         run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = Executors.MULTIPROCESSING
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.cache_samples = False
-        run_cfg.print_bench_inputs = False
-        run_cfg.print_bench_results = False
+        run_cfg.execution.executor = Executors.MULTIPROCESSING
+        run_cfg.cache.overwrite_samples = True
+        run_cfg.cache.samples = False
+        run_cfg.display.print_bench_inputs = False
+        run_cfg.display.print_bench_results = False
         bench_run = bn.BenchRunner("mp_runner_test", run_cfg=run_cfg)
         bench_run.add_bench(StringOnlyConfig())
         bench_run.run(subsampling_divisions=2)
 
     def test_bench_runner_multi_type(self):
         run_cfg = bn.BenchRunCfg()
-        run_cfg.executor = Executors.MULTIPROCESSING
-        run_cfg.overwrite_sample_cache = True
-        run_cfg.cache_samples = False
-        run_cfg.print_bench_inputs = False
-        run_cfg.print_bench_results = False
+        run_cfg.execution.executor = Executors.MULTIPROCESSING
+        run_cfg.cache.overwrite_samples = True
+        run_cfg.cache.samples = False
+        run_cfg.display.print_bench_inputs = False
+        run_cfg.display.print_bench_results = False
         bench_run = bn.BenchRunner("mp_runner_multi_test", run_cfg=run_cfg)
         bench_run.add_bench(MultiTypeConfig())
         bench_run.run(subsampling_divisions=2)

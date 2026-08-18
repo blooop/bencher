@@ -41,9 +41,9 @@ LATENCY = bn.SweepSpec(
 
 def _bench(worker=ExampleBenchCfg):
     cfg = bn.BenchRunCfg()
-    cfg.auto_plot = False
-    cfg.cache_results = False
-    cfg.cache_samples = False
+    cfg.visualization.auto_plot = False
+    cfg.cache.results = False
+    cfg.cache.samples = False
     return worker().to_bench(cfg)
 
 

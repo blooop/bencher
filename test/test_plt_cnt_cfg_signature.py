@@ -11,7 +11,7 @@ import numpy as np
 import xarray as xr
 
 import bencher as bn
-from bencher.bench_cfg import BenchCfg
+from bencher.bench_cfg import BenchCfg, TimeCfg
 from bencher.plotting.plt_cnt_cfg import PltCntCfg, _samples_per_point, result_kind
 from bencher.variables.time import TimeEvent, TimeSnapshot
 from test.helpers import run_cfg_with
@@ -93,7 +93,7 @@ class TestSignatureFields(unittest.TestCase):
             bench_cfg = BenchCfg(
                 input_vars=[time_var],
                 result_vars=[CatFloat.param.value],
-                over_time=False,
+                time=TimeCfg(over_time=False),
             )
             cfg = PltCntCfg.generate_plt_cnt_cfg(bench_cfg)
             self.assertTrue(cfg.has_time)

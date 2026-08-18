@@ -1,6 +1,6 @@
 # Tracking Results Over Time
 
-Set `over_time=True` and each run of a benchmark appends a snapshot to a stored history
+Set `time.over_time=True` and each run of a benchmark appends a snapshot to a stored history
 instead of replacing it. The report then gains a time slider you can scrub through, so you
 see not just what the sweep measured but how that measurement has moved.
 
@@ -15,7 +15,8 @@ The history is keyed *without* result variables, deliberately. Adding or removin
 reconciles per column — new columns are NaN-backfilled and birth-stamped, removed columns
 go dormant and resume if the variable comes back with the same identity — rather than
 orphaning the entire trend. What *does* re-key the history is a change to the benchmark's
-identity: bench name, input variables, const variables, tag, `over_time`, or `repeats`.
+identity: bench name, input variables, const variables, tag, `time.over_time`, or
+`execution.repeats`.
 
 ## When to use it
 
@@ -27,7 +28,7 @@ identity: bench name, input variables, const variables, tag, `over_time`, or `re
   importance analysis ranks `repeat` and `over_time` alongside your actual inputs, which
   tells you whether run-to-run noise or genuine temporal change is the larger effect.
 
-If you only want a single report of a single sweep, leave `over_time` off — it costs a
+If you only want a single report of a single sweep, leave `time.over_time` off — it costs a
 history load, a merge, and a slider.
 
 ## Recording snapshots
@@ -52,8 +53,8 @@ def example_sweep_1_float_0_cat_over_time(run_cfg: bn.BenchRunCfg | None = None)
     _base_time = datetime(2000, 1, 1)
     for i, offset in enumerate([0.0, 0.5, 1.0]):
         benchable._time_offset = offset
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         res = bench.plot_sweep(
             "over_time",
             input_vars=["array_size"],
@@ -70,28 +71,31 @@ Three details carry the whole pattern:
 - `time_src` labels the snapshot. A `datetime` works, and so does a string —
   `bn.git_time_event()` produces one from the repository so snapshots are labelled by
   commit.
-- `clear_history=True` on the **first** iteration only, so the loop starts from a known
+- `time.clear_history=True` on the **first** iteration only, so the loop starts from a known
   empty history instead of appending to whatever a previous run left behind.
-- `clear_cache=True` forces re-evaluation. Without it the benchmark-level result cache
+- `cache.clear=True` forces re-evaluation. Without it the benchmark-level result cache
   would hand back the previous snapshot's numbers and every time point would be identical.
   See [Caching](caching.md).
 
-Instead of `time_src`, you can set `run_cfg.time_event` — "a string representation of a
+Instead of `time_src`, you can set `run_cfg.time.event` — "a string representation of a
 sequence over time, i.e. datetime, pull request number, or run number". When it is set it
 takes precedence over the `time_src` argument.
 
 ### Controlling history size and the slider
 
+These live on `BenchRunCfg`'s `time` sub-config (a `TimeCfg`), reached as
+`run_cfg.time.<name>`:
+
 | Parameter | Default | What it does |
 |---|---|---|
-| `over_time` | `False` | "If true each time the function is called it will plot a timeseries of historical and the latest result." |
-| `clear_history` | `False` | "Clear historical results" |
-| `max_time_events` | `None` | "Maximum number of over_time events to retain. Oldest events are trimmed. Set to None for unlimited." |
-| `max_slider_points` | `10` | "Maximum number of time points shown in the over_time slider. Evenly subsampled (first and last always included). The aggregated tab still uses all data. Defaults to 10 to cap embed cost. Set to None for no subsampling." |
-| `show_aggregated_time_tab` | `False` | "When over_time is active, show an 'All Time Points (aggregated)' tab alongside the per-time-point slider. Defaults to False for performance. Set True to enable the aggregation view." |
-| `on_history_reset` | `warn` | Policy for history-affecting schema changes detected at history-load time. `warn` logs a WARNING and continues; `error` raises `HistoryResetError` so a CI run can never silently lose a baseline; `ignore` logs at DEBUG only. Retained data is never deleted by any policy. |
+| `time.over_time` | `False` | "If true each time the function is called it will plot a timeseries of historical and the latest result." |
+| `time.clear_history` | `False` | "Clear historical results" |
+| `time.max_events` | `None` | "Maximum number of over_time events to retain. Oldest events are trimmed. Set to None for unlimited." |
+| `time.max_slider_points` | `10` | "Maximum number of time points shown in the over_time slider. Evenly subsampled (first and last always included). The aggregated tab still uses all data. Defaults to 10 to cap embed cost. Set to None for no subsampling." |
+| `time.show_aggregated_tab` | `False` | "When over_time is active, show an 'All Time Points (aggregated)' tab alongside the per-time-point slider. Defaults to False for performance. Set True to enable the aggregation view." |
+| `time.on_history_reset` | `warn` | Policy for history-affecting schema changes detected at history-load time. `warn` logs a WARNING and continues; `error` raises `HistoryResetError` so a CI run can never silently lose a baseline; `ignore` logs at DEBUG only. Retained data is never deleted by any policy. |
 
-`max_slider_points` matters more than it looks: the slider states are pre-computed and
+`time.max_slider_points` matters more than it looks: the slider states are pre-computed and
 baked into the saved HTML, so an unbounded history makes the report large. The default of
 10 caps that cost, and the aggregated tab still sees every point.
 
@@ -101,25 +105,26 @@ file is deleted with it.
 
 ## Feeding regression detection
 
-Over-time history is what regression detection consumes: with `over_time=True` and
-`regression_detection=True`, bencher compares the latest run against the loaded history
+Over-time history is what regression detection consumes: with `time.over_time=True` and
+`regression.enabled=True`, bencher compares the latest run against the loaded history
 after the merge and before writing the result cache. If regressions are found they are
 logged as a warning and attached to the result as `regression_report`.
 
-The method is chosen with `regression_method`:
+The method is chosen with `regression.method` (the other knobs below also live on the
+`regression` sub-config, a `RegressionCfg`):
 
-| Method | Threshold parameter | Behaviour (from the `regression_method` docstring) |
+| Method | Threshold parameter | Behaviour (from the `regression.method` docstring) |
 |---|---|---|
-| `percentage` | `regression_percentage` (10.0) | "mean comparison vs historical mean" |
-| `adaptive` (default) | `regression_mad` (3.5) + `regression_percentage` | "robust MAD-based step + drift test for noisy metrics" |
-| `delta` | `regression_delta` | "absolute-unit change vs historical mean" |
-| `absolute` | `regression_absolute` | "hard directional threshold, no history required" |
+| `percentage` | `regression.percentage` (10.0) | "mean comparison vs historical mean" |
+| `adaptive` (default) | `regression.mad` (3.5) + `regression.percentage` | "robust MAD-based step + drift test for noisy metrics" |
+| `delta` | `regression.delta` | "absolute-unit change vs historical mean" |
+| `absolute` | `regression.absolute` | "hard directional threshold, no history required" |
 
 Direction comes from the result variable's `OptDir`, so a `minimize` metric regresses when
-it grows and a `maximize` metric regresses when it shrinks. `regression_min_history` keeps
+it grows and a `maximize` metric regresses when it shrinks. `regression.min_history` keeps
 a young baseline from failing a run: a variable with fewer historical points than the
 threshold still reports regressions, but they are marked `young_baseline` and never trigger
-a failure. `regression_overrides` sets per-variable methods and thresholds — including a
+a failure. `regression.overrides` sets per-variable methods and thresholds — including a
 bare number as shorthand for a hard `absolute` limit, and an empty dict to opt a variable
 out entirely.
 
@@ -206,11 +211,11 @@ not be strictly necessary, but they make the rendering more consistent across pl
 ### Embedded slider cost
 
 Because every slider state is pre-computed at save time, report size grows with the number
-of time points. `max_slider_points` (default 10) is the knob that bounds it; raise it
+of time points. `time.max_slider_points` (default 10) is the knob that bounds it; raise it
 deliberately and check the resulting HTML size.
 
 ## See also
 
 - [Feature Guide](intro.md) — the over-time feature in the context of the rest of bencher
-- [Caching](caching.md) — the history cache and why `clear_cache` matters in a snapshot loop
+- [Caching](caching.md) — the history cache and why `cache.clear` matters in a snapshot loop
 - [Getting Started](how_to_use_bencher.md) — run configuration reference

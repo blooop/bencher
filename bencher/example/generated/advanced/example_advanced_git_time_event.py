@@ -35,7 +35,7 @@ def example_advanced_git_time_event(run_cfg: bn.BenchRunCfg | None = None) -> bn
     """Git Time Event — date + commit hash slider labels."""
     if run_cfg is None:
         run_cfg = bn.BenchRunCfg()
-    run_cfg.regression_detection = True
+    run_cfg.regression.enabled = True
 
     bench = ServerLatency().to_bench(run_cfg)
 

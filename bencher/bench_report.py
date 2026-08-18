@@ -202,7 +202,7 @@ class BenchReport(BenchPlotServer):
     @staticmethod
     def _time_event_label(bench_res: BenchResult) -> str | None:
         """Extract a human-readable label for the latest time event from a result."""
-        if not bench_res.bench_cfg.over_time or "over_time" not in bench_res.ds.coords:
+        if not bench_res.bench_cfg.time.over_time or "over_time" not in bench_res.ds.coords:
             return None
         time_vals = bench_res.ds.coords["over_time"].values
         if len(time_vals) == 0:
@@ -501,7 +501,7 @@ if (_embedded) {{
             run_cfg = BenchRunCfg()
 
         bench_name = self.bench_name or ""
-        return BenchPlotServer().plot_server(bench_name, run_cfg, self.pane)
+        return BenchPlotServer().plot_server(bench_name, run_cfg.server, self.pane)
 
     def publish_gh_pages(
         self,

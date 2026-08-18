@@ -187,8 +187,8 @@ def sweep_identity(
         bench_name: Overrides the name, which is otherwise the worker's class name
             -- matching :func:`bencher.factories.create_bench`. ``bench_name`` is
             hashed, so this is the field a rename moves.
-        repeats: Convenience override of ``run_cfg.repeats``.
-        over_time: Convenience override of ``run_cfg.over_time``.
+        repeats: Convenience override of ``run_cfg.execution.repeats``.
+        over_time: Convenience override of ``run_cfg.time.over_time``.
 
     Returns:
         SweepIdentity: The three keys plus the resolved declaration summary.
@@ -211,13 +211,13 @@ def sweep_identity(
 
     cfg = BenchRunCfg() if run_cfg is None else deepcopy(run_cfg)
     if repeats is not None:
-        cfg.repeats = repeats
+        cfg.execution.repeats = repeats
     if over_time is not None:
-        cfg.over_time = over_time
+        cfg.time.over_time = over_time
     # Stop plot_sweep before it executes a single sample or opens a cache; none of
     # these three fields is hashed, so forcing them cannot change the answer.
-    cfg.dry_run = True
-    cfg.auto_plot = False
+    cfg.execution.dry_run = True
+    cfg.visualization.auto_plot = False
 
     bench = Bench(bench_name, None)
     _attach_worker(bench, worker)
@@ -250,7 +250,7 @@ def identity_of(bench_cfg: BenchCfg, run_cfg: BenchRunCfg | None = None) -> Swee
     *bench_cfg* is never mutated: the merge runs against a copy. Asking a config
     what its keys are is a query, and :class:`BenchCfg` subclasses
     :class:`BenchRunCfg`, so merging in place would write every run-side field
-    (``repeats``, ``cache_results``, ``dry_run``, ...) onto a config the caller
+    (``execution.repeats``, ``cache.results``, ``execution.dry_run``, ...) onto a config the caller
     still holds and may run again.
     """
     from bencher.bencher import Bench
@@ -267,8 +267,8 @@ def identity_of(bench_cfg: BenchCfg, run_cfg: BenchRunCfg | None = None) -> Swee
         sample_key=bench_cfg.hash_persistent(False),
         bench_name=str(bench_cfg.bench_name),
         tag=str(bench_cfg.tag),
-        repeats=int(bench_cfg.repeats),
-        over_time=bool(bench_cfg.over_time),
+        repeats=int(bench_cfg.execution.repeats),
+        over_time=bool(bench_cfg.time.over_time),
         summary=config_summary(bench_cfg),
     )
 

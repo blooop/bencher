@@ -138,7 +138,7 @@ class SurfaceResult(HoloviewResult):
                 )
             ]
 
-            if self.bench_cfg.repeats > 1:
+            if self.bench_cfg.execution.repeats > 1:
                 std_dev = dataset[f"{result_var.name}_std"]
 
                 for bound, sign in [("upper", 1), ("lower", -1)]:

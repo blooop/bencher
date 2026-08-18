@@ -194,10 +194,10 @@ class TestCollectTimeCacheDirHint:
 
             def sweep(clear_cache: bool):
                 run_cfg = bn.BenchRunCfg()
-                run_cfg.repeats = 1
-                run_cfg.auto_plot = False
-                run_cfg.cache_results = True
-                run_cfg.clear_cache = clear_cache
+                run_cfg.execution.repeats = 1
+                run_cfg.visualization.auto_plot = False
+                run_cfg.cache.results = True
+                run_cfg.cache.clear = clear_cache
                 return bn.Bench("test_blob_cache_hit", worker).plot_sweep(
                     "cache_hit", input_vars=[], result_vars=["table"], run_cfg=run_cfg
                 )
@@ -327,13 +327,13 @@ class TestOverTimeHistorySurvivesRelocation(unittest.TestCase):
             worker = RelocatedOverTimeSweep()
             bench = bn.Bench("test_blob_portability_over_time", worker)
             run_cfg = bn.BenchRunCfg()
-            run_cfg.over_time = True
-            run_cfg.repeats = 1
-            run_cfg.auto_plot = False
+            run_cfg.time.over_time = True
+            run_cfg.execution.repeats = 1
+            run_cfg.visualization.auto_plot = False
             for i in range(self.RUNS):
                 worker.run_id = i
-                run_cfg.clear_cache = True
-                run_cfg.clear_history = i == 0
+                run_cfg.cache.clear = True
+                run_cfg.time.clear_history = i == 0
                 bench.plot_sweep(
                     "relocated_over_time",
                     input_vars=[],
@@ -352,11 +352,11 @@ class TestOverTimeHistorySurvivesRelocation(unittest.TestCase):
             worker = RelocatedOverTimeSweep()
             worker.run_id = self.RUNS
             run_cfg = bn.BenchRunCfg()
-            run_cfg.over_time = True
-            run_cfg.repeats = 1
-            run_cfg.auto_plot = False
-            run_cfg.clear_cache = True
-            run_cfg.clear_history = False
+            run_cfg.time.over_time = True
+            run_cfg.execution.repeats = 1
+            run_cfg.visualization.auto_plot = False
+            run_cfg.cache.clear = True
+            run_cfg.time.clear_history = False
             result = bn.Bench("test_blob_portability_over_time", worker).plot_sweep(
                 "relocated_over_time",
                 input_vars=[],
@@ -402,9 +402,9 @@ class TestRenderFromAnotherWorkingDirectory(unittest.TestCase):
             worker = RelocatedOverTimeSweep()
             worker.run_id = 0
             run_cfg = bn.BenchRunCfg()
-            run_cfg.repeats = 1
-            run_cfg.auto_plot = False
-            run_cfg.clear_cache = True
+            run_cfg.execution.repeats = 1
+            run_cfg.visualization.auto_plot = False
+            run_cfg.cache.clear = True
             result = bn.Bench("test_blob_foreign_cwd", worker).plot_sweep(
                 "foreign_cwd", input_vars=[], result_vars=["table"], run_cfg=run_cfg
             )
@@ -445,9 +445,9 @@ class TestBothAxesAtOnce(unittest.TestCase):
             worker = RelocatedOverTimeSweep()
             worker.run_id = 0
             run_cfg = bn.BenchRunCfg()
-            run_cfg.repeats = 1
-            run_cfg.auto_plot = False
-            run_cfg.clear_cache = True
+            run_cfg.execution.repeats = 1
+            run_cfg.visualization.auto_plot = False
+            run_cfg.cache.clear = True
             result = bn.Bench("test_blob_both_axes", worker).plot_sweep(
                 "both_axes", input_vars=[], result_vars=["table"], run_cfg=run_cfg
             )

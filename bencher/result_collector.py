@@ -220,7 +220,7 @@ class ResultCollector:
         Args:
             cache_size (int): Maximum cache size in bytes. Defaults to 100 GB.
         """
-        self.cache_size = cache_size
+        self.cache_size_bytes = cache_size
         self.ds_dynamic: dict = {}
         self._benchmark_cache: Cache | None = None
         self._history_cache: Cache | None = None
@@ -228,13 +228,15 @@ class ResultCollector:
     def get_benchmark_cache(self) -> Cache:
         """Return the persistent benchmark_inputs Cache, creating it on first access."""
         if self._benchmark_cache is None:
-            self._benchmark_cache = Cache("cachedir/benchmark_inputs", size_limit=self.cache_size)
+            self._benchmark_cache = Cache(
+                "cachedir/benchmark_inputs", size_limit=self.cache_size_bytes
+            )
         return self._benchmark_cache
 
     def get_history_cache(self) -> Cache:
         """Return the persistent history Cache, creating it on first access."""
         if self._history_cache is None:
-            self._history_cache = Cache("cachedir/history", size_limit=self.cache_size)
+            self._history_cache = Cache("cachedir/history", size_limit=self.cache_size_bytes)
         return self._history_cache
 
     def close_caches(self) -> None:
@@ -275,7 +277,9 @@ class ResultCollector:
         """
         if time_src is None:
             time_src = datetime.now()
-        bench_cfg.meta_vars = self.define_extra_vars(bench_cfg, bench_cfg.repeats, time_src)
+        bench_cfg.meta_vars = self.define_extra_vars(
+            bench_cfg, bench_cfg.execution.repeats, time_src
+        )
 
         bench_cfg.all_vars = bench_cfg.input_vars + bench_cfg.meta_vars
 
@@ -346,7 +350,7 @@ class ResultCollector:
         bench_cfg.iv_repeat.name = "repeat"
         extra_vars: list[IntSweep | TimeBase] = [bench_cfg.iv_repeat]
 
-        if bench_cfg.over_time:
+        if bench_cfg.time.over_time:
             if isinstance(time_src, str):
                 iv_over_time = TimeEvent(time_src)
             else:
@@ -452,7 +456,7 @@ class ResultCollector:
         # tuple is already fail-fast, and result() keeps a single call site.
         # Normalized here as well as in plot_sweep, because store_results is also
         # reachable with a hand-built BenchRunCfg that never passed through it.
-        catch = normalize_catch(getattr(bench_run_cfg, "catch", ()))
+        catch = normalize_catch(bench_run_cfg.execution.catch)
         try:
             result = job_result.result()
         # Ordered *before* `except catch`, deliberately: a worker that returned
@@ -487,7 +491,7 @@ class ResultCollector:
             )
             return
         logger.info(f"{job_result.job.job_id}:")
-        if bench_res.bench_cfg.print_bench_inputs:
+        if bench_res.bench_cfg.display.print_bench_inputs:
             for k, v in worker_job.function_input.items():
                 logger.info(f"\t {k}:{v}")
 
@@ -533,7 +537,7 @@ class ResultCollector:
                     f"self.{rv.name}."
                 ) from None
             result_value = _materialize_result_value(rv, result_value)
-            if bench_run_cfg.print_bench_results:
+            if bench_run_cfg.display.print_bench_results:
                 logger.info(f"{rv.name}: {result_value}")
 
             if isinstance(rv, XARRAY_MULTIDIM_RESULT_TYPES):

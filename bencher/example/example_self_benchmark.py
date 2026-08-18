@@ -50,10 +50,10 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
         x_sweep.name = "x"
 
         inner_cfg = bn.BenchRunCfg()
-        inner_cfg.repeats = 1
-        inner_cfg.cache_samples = self.use_cache
-        inner_cfg.cache_results = False
-        inner_cfg.auto_plot = False
+        inner_cfg.execution.repeats = 1
+        inner_cfg.cache.samples = self.use_cache
+        inner_cfg.cache.results = False
+        inner_cfg.visualization.auto_plot = False
 
         bench = bn.Bench("inner_bench", workload, run_cfg=inner_cfg)
         bench.plot_sweep(input_vars=[x_sweep], result_vars=["result"])
@@ -71,7 +71,7 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
 
 def example_self_benchmark(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Benchmark bencher's own overhead across problem sizes."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5)
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 5})
     bench = BencherSelfBenchmark().to_bench(run_cfg)
     bench.plot_sweep(
         input_vars=["num_samples"],
@@ -100,9 +100,9 @@ def example_self_benchmark_over_time(
     run_cfg: bn.BenchRunCfg | None = None,
 ) -> bn.Bench:
     """Track bencher's overhead over time, accumulating results across commits."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5)
-    run_cfg.over_time = True
-    run_cfg.auto_plot = False
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 5})
+    run_cfg.time.over_time = True
+    run_cfg.visualization.auto_plot = False
 
     time_src = bn.git_time_event()
 

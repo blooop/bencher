@@ -27,16 +27,16 @@ def _run_and_save(show_agg: bool) -> float:
     """Run an over_time benchmark and return report.save() wall-clock time in seconds."""
     benchable = MultiResultBench()
     run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = True
-    run_cfg.repeats = 2
-    run_cfg.show_aggregated_time_tab = show_agg
+    run_cfg.time.over_time = True
+    run_cfg.execution.repeats = 2
+    run_cfg.time.show_aggregated_tab = show_agg
     bench = benchable.to_bench(run_cfg)
     base = datetime(2000, 1, 1)
 
     for i in range(2):
         benchable.offset = i * 0.1
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         bench.plot_sweep(
             "save_perf_test",
             input_vars=["x"],

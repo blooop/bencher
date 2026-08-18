@@ -22,12 +22,12 @@ class SlaBenchmark(bn.ParametrizedSweep):
 
 def example_regression_absolute(run_cfg: bn.BenchRunCfg | None = None) -> bn.Bench:
     """Regression detection — hard absolute ceiling."""
-    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=2)
-    run_cfg.regression_detection = True
-    run_cfg.regression_method = "absolute"
+    run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 2})
+    run_cfg.regression.enabled = True
+    run_cfg.regression.method = "absolute"
     # SLA: response_time must stay below 25 ms no matter what history says.
-    run_cfg.regression_absolute = 25.0
-    run_cfg.regression_fail = False
+    run_cfg.regression.absolute = 25.0
+    run_cfg.regression.fail = False
 
     benchable = SlaBenchmark()
     bench = benchable.to_bench(run_cfg)
@@ -38,9 +38,9 @@ def example_regression_absolute(run_cfg: bn.BenchRunCfg | None = None) -> bn.Ben
     base_time = datetime(2024, 1, 1)
     for i, offset in enumerate(releases):
         benchable._time_offset = offset
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
-        run_cfg.auto_plot = i == len(releases) - 1
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
+        run_cfg.visualization.auto_plot = i == len(releases) - 1
         bench.plot_sweep(
             "regression_absolute",
             input_vars=["connections", "payload_kb"],

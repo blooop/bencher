@@ -154,7 +154,9 @@ class NanSphere(bn.ParametrizedSweep):
 
 
 def _run_cfg() -> bn.BenchRunCfg:
-    return bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False)
+    return bn.BenchRunCfg(
+        execution=bn.ExecutionCfg(repeats=1), cache=bn.CacheCfg(results=False, samples=False)
+    )
 
 
 class TestSweepStructure:

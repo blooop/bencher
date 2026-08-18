@@ -16,9 +16,9 @@ class TestBenchExamples(unittest.TestCase):
     def create_run_cfg(self) -> bn.BenchRunCfg:
         cfg = bn.BenchRunCfg()
         if not self.generate_all:
-            cfg.repeats = 2
-            cfg.subsampling_divisions = 2
-        cfg.clear_cache = True
+            cfg.execution.repeats = 2
+            cfg.execution.subsampling_divisions = 2
+        cfg.cache.clear = True
         return cfg
 
     def examples_asserts(self, example_result, save=False) -> None:

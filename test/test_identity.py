@@ -25,9 +25,9 @@ from bencher.example.benchmark_data import ExampleBenchCfg
 def _real_run(run_cfg: bn.BenchRunCfg | None = None, **kwargs) -> bn.SweepIdentity:
     """Actually run the sweep and report the identity it was stored under."""
     cfg = run_cfg if run_cfg is not None else bn.BenchRunCfg()
-    cfg.auto_plot = False
-    cfg.cache_results = False
-    cfg.cache_samples = False
+    cfg.visualization.auto_plot = False
+    cfg.cache.results = False
+    cfg.cache.samples = False
     bench = ExampleBenchCfg().to_bench(cfg)
     try:
         return bench.plot_sweep(plot_callbacks=False, **kwargs).identity
@@ -73,11 +73,14 @@ DECLARATIONS = {
 
 RUN_CFGS = {
     "default": {},
-    "over_time": {"over_time": True},
-    "repeats_3": {"repeats": 3},
-    "subsampling_2": {"subsampling_divisions": 2},
-    "subsampling_4_over_time": {"subsampling_divisions": 4, "over_time": True, "repeats": 2},
-    "samples_per_var": {"samples_per_var": 4},
+    "over_time": {"time": {"over_time": True}},
+    "repeats_3": {"execution": {"repeats": 3}},
+    "subsampling_2": {"execution": {"subsampling_divisions": 2}},
+    "subsampling_4_over_time": {
+        "execution": {"subsampling_divisions": 4, "repeats": 2},
+        "time": {"over_time": True},
+    },
+    "samples_per_var": {"execution": {"samples_per_var": 4}},
     "run_tag": {"run_tag": "rt"},
 }
 
@@ -87,9 +90,9 @@ class TestEquivalence(unittest.TestCase):
 
     def _check(self, decl: dict, run_kwargs: dict) -> None:
         predicted = bn.sweep_identity(
-            worker=ExampleBenchCfg, run_cfg=bn.BenchRunCfg(**run_kwargs), **decl
+            worker=ExampleBenchCfg, run_cfg=bn.BenchRunCfg.with_defaults(None, **run_kwargs), **decl
         )
-        actual = _real_run(bn.BenchRunCfg(**run_kwargs), **decl)
+        actual = _real_run(bn.BenchRunCfg.with_defaults(None, **run_kwargs), **decl)
         self.assertEqual(predicted.cache_key, actual.cache_key, "cache_key")
         self.assertEqual(predicted.history_key, actual.history_key, "history_key")
         self.assertEqual(predicted.sample_key, actual.sample_key, "sample_key")
@@ -113,7 +116,10 @@ class TestEquivalence(unittest.TestCase):
 
     def test_auto_discovered_vars(self) -> None:
         """input_vars=None auto-discovers; the prediction must discover the same."""
-        self._check({"result_vars": ["out_sin"], "const_vars": {}}, {"subsampling_divisions": 2})
+        self._check(
+            {"result_vars": ["out_sin"], "const_vars": {}},
+            {"execution": {"subsampling_divisions": 2}},
+        )
 
 
 class TestKeySemantics(unittest.TestCase):
@@ -157,7 +163,7 @@ class TestKeySemantics(unittest.TestCase):
             n: self._ident(
                 input_vars=["theta"],
                 result_vars=["out_sin"],
-                run_cfg=bn.BenchRunCfg(subsampling_divisions=n),
+                run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(subsampling_divisions=n)),
             ).history_key
             for n in (0, 2, 4)
         }
@@ -174,7 +180,9 @@ class TestKeySemantics(unittest.TestCase):
 
     def test_explicit_repeats_and_over_time_win_over_the_run_cfg(self) -> None:
         """The keyword overrides are documented as overrides, so pin the precedence."""
-        run_cfg = bn.BenchRunCfg(repeats=1, over_time=False)
+        run_cfg = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), time=bn.TimeCfg(over_time=False)
+        )
         overridden = self._ident(
             input_vars=["theta"],
             result_vars=["out_sin"],
@@ -192,12 +200,16 @@ class TestKeySemantics(unittest.TestCase):
             self._ident(
                 input_vars=["theta"],
                 result_vars=["out_sin"],
-                run_cfg=bn.BenchRunCfg(repeats=3, over_time=True),
+                run_cfg=bn.BenchRunCfg(
+                    execution=bn.ExecutionCfg(repeats=3), time=bn.TimeCfg(over_time=True)
+                ),
             ).history_key,
         )
 
     def test_the_run_cfg_passed_in_is_not_mutated_by_the_overrides(self) -> None:
-        run_cfg = bn.BenchRunCfg(repeats=1, over_time=False)
+        run_cfg = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), time=bn.TimeCfg(over_time=False)
+        )
         self._ident(
             input_vars=["theta"],
             result_vars=["out_sin"],
@@ -205,9 +217,9 @@ class TestKeySemantics(unittest.TestCase):
             repeats=9,
             over_time=True,
         )
-        self.assertEqual(run_cfg.repeats, 1)
-        self.assertFalse(run_cfg.over_time)
-        self.assertFalse(run_cfg.dry_run)
+        self.assertEqual(run_cfg.execution.repeats, 1)
+        self.assertFalse(run_cfg.time.over_time)
+        self.assertFalse(run_cfg.execution.dry_run)
 
     def test_input_var_order_matters_but_result_var_order_does_not(self) -> None:
         ab = self._ident(input_vars=["theta", "offset"], result_vars=["out_sin", "out_cos"])
@@ -314,10 +326,10 @@ class TestExplain(unittest.TestCase):
 
 class TestConfigAccessors(unittest.TestCase):
     def test_bench_cfg_identity_matches_the_result_identity(self) -> None:
-        cfg = bn.BenchRunCfg(subsampling_divisions=2, repeats=2)
-        cfg.auto_plot = False
-        cfg.cache_results = False
-        cfg.cache_samples = False
+        cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(subsampling_divisions=2, repeats=2))
+        cfg.visualization.auto_plot = False
+        cfg.cache.results = False
+        cfg.cache.samples = False
         bench = ExampleBenchCfg().to_bench(cfg)
         try:
             res = bench.plot_sweep(
@@ -333,8 +345,8 @@ class TestConfigAccessors(unittest.TestCase):
         run-side field (repeats, cache_results, dry_run, ...) of a config the caller
         still holds -- turning a query into a silent reconfiguration of the next run."""
         cfg = bn.BenchRunCfg()
-        cfg.auto_plot = False
-        cfg.dry_run = True
+        cfg.visualization.auto_plot = False
+        cfg.execution.dry_run = True
         bench = ExampleBenchCfg().to_bench(cfg)
         try:
             res = bench.plot_sweep(
@@ -343,7 +355,11 @@ class TestConfigAccessors(unittest.TestCase):
             merged = [k for k in bn.BenchRunCfg.param if k in res.bench_cfg.param]
             before = {k: getattr(res.bench_cfg, k) for k in merged}
             ident = res.bench_cfg.identity(
-                bn.BenchRunCfg(repeats=7, over_time=True, cache_results=True)
+                bn.BenchRunCfg(
+                    execution=bn.ExecutionCfg(repeats=7),
+                    cache=bn.CacheCfg(results=True),
+                    time=bn.TimeCfg(over_time=True),
+                )
             )
             self.assertEqual(ident.repeats, 7)
             self.assertTrue(ident.over_time)
@@ -353,7 +369,7 @@ class TestConfigAccessors(unittest.TestCase):
 
     def test_identity_of_an_unrun_config_needs_the_run_cfg(self) -> None:
         """repeats/over_time reach BenchCfg only through run_sweep's merge."""
-        run_cfg = bn.BenchRunCfg(repeats=5)
+        run_cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=5))
         ident = bn.sweep_identity(
             worker=ExampleBenchCfg,
             input_vars=["theta"],
@@ -434,8 +450,8 @@ def _dry_identity(run_cfg: bn.BenchRunCfg | None = None, **plot_sweep_kwargs) ->
     ``BenchCfg`` and so are the ones worth proving *inert*.
     """
     cfg = bn.BenchRunCfg() if run_cfg is None else run_cfg.deep()
-    cfg.dry_run = True
-    cfg.auto_plot = False
+    cfg.execution.dry_run = True
+    cfg.visualization.auto_plot = False
     bench = ExampleBenchCfg().to_bench(cfg)
     try:
         return bn.identity_of(bench.plot_sweep(run_cfg=cfg, **plot_sweep_kwargs).bench_cfg, cfg)
@@ -479,7 +495,7 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
     def check_cache_version(self) -> None:
         """A version bump is meant to invalidate every key at once."""
         base = self._ident()
-        with mock.patch("bencher.bench_cfg.CACHE_VERSION", 10_000):
+        with mock.patch("bencher.bench_cfg.bench_cfg_class.CACHE_VERSION", 10_000):
             bumped = self._ident()
         self._assert_keys_move(base, bumped)
         self.assertNotEqual(base.sample_key, bumped.sample_key)
@@ -584,7 +600,12 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
         decl = {"input_vars": ["theta"], "result_vars": ["out_sin"]}
         self._assert_no_key_moves(
             _dry_identity(**decl),
-            _dry_identity(bn.BenchRunCfg(catch=(ValueError,), fail_on_sample_error=True), **decl),
+            _dry_identity(
+                bn.BenchRunCfg(
+                    execution=bn.ExecutionCfg(catch=(ValueError,), fail_on_sample_error=True)
+                ),
+                **decl,
+            ),
         )
 
     def check_plotting(self) -> None:
@@ -596,7 +617,11 @@ class TestDocumentedFieldsMatchTheHashingRule(unittest.TestCase):
         )
         self._assert_no_key_moves(
             _dry_identity(**decl, plot_callbacks=False),
-            _dry_identity(bn.BenchRunCfg(auto_plot=True), **decl, plot_callbacks=False),
+            _dry_identity(
+                bn.BenchRunCfg(visualization=bn.VisualizationCfg(auto_plot=True)),
+                **decl,
+                plot_callbacks=False,
+            ),
         )
 
     def _checks(self) -> dict:

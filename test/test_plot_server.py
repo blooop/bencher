@@ -16,13 +16,13 @@ class TestBenchPlotServer(unittest.TestCase):
             title="test_bench_server",
             input_vars=[sbc.param.var1],
             result_vars=[sbc.param.result],
-            run_cfg=bn.BenchRunCfg(auto_plot=False),
+            run_cfg=bn.BenchRunCfg(visualization=bn.VisualizationCfg(auto_plot=False)),
         )
         bench.report.save()
 
         bps = bn.BenchPlotServer()
 
-        server_cfg = bn.BenchRunCfg()
+        server_cfg = bn.ServerCfg()
         server_cfg.show = False
 
         server = bps.plot_server(bench.bench_name, server_cfg)
@@ -49,7 +49,7 @@ class TestBenchPlotServer(unittest.TestCase):
 
     def test_plot_server_port(self):
         bps = bn.BenchPlotServer()
-        server_cfg = bn.BenchRunCfg()
+        server_cfg = bn.ServerCfg()
         server_cfg.port = 34343
         server_cfg.show = False
         srv = bps.plot_server("test_bench_server", server_cfg)

@@ -94,7 +94,7 @@ class RerunResult(BenchResultBase):
 
         # Detect over_time dimension
         time_dim = None
-        if self.bench_cfg.over_time and "over_time" in dataset.dims:
+        if self.bench_cfg.time.over_time and "over_time" in dataset.dims:
             time_dim = "over_time"
 
         # Determine which result variables to log

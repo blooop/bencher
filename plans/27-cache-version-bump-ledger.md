@@ -37,8 +37,8 @@ Two things follow, and both are obligations on future work rather than suggestio
 
 | Fact | Where |
 |---|---|
-| `CACHE_VERSION = "5"` | `bencher/cache_management.py:60` |
-| Folded into the key, so a bump invalidates atomically | `BenchCfg.hash_persistent`, `bencher/bench_cfg.py` (the `CACHE_VERSION` element of `hash_val`) |
+| `CACHE_VERSION = "6"` | `bencher/cache_management.py` |
+| Folded into the key, so a bump invalidates atomically | `BenchCfg.hash_persistent`, `bencher/bench_cfg/bench_cfg_class.py` (the `CACHE_VERSION` element of `hash_val`) |
 | Enforced by test | `test/test_hash_persistent.py::TestGoldenBenchCfgHash::test_cache_version_participates_in_hash` |
 | Version file written/compared per cachedir | `cache_management.py` `ensure_cache_version`; mismatch wipes the tree |
 | Golden digests pinning the composition | `GOLDEN_BENCH_CFG_HASH_*`, `test/test_hash_persistent.py:741-744` |
@@ -50,6 +50,26 @@ document the break in the changelog. §5 below adds only the ledger-specific ste
 ## 3. The ledger
 
 Ordered by how much each one costs to keep, not by size.
+
+**v6 bump decisions (the bench_cfg split, issue #1120).** The v6 bump exists because
+the split changed the *pickled class layout* of `BenchCfg`/`BenchRunCfg`, not any key
+composition — hash values were preserved by construction. Per-entry outcome, per §5.1:
+
+- **Landed with v6:** L7 (the `or []` folds are deleted); L9's hard precondition —
+  the GC now aborts on a missing/stale `cachedir/CACHE_VERSION` stamp (plan 26
+  item 2), pinned by `test_cache_management.py::TestBlobReachabilityVersionGuard`.
+- **Resolved by v6 with nothing to code:** L5 (the mixed `0`/`NaN` cells are wiped;
+  noted in the changelog entry). L10 stands confirmed.
+- **Unblocked by v6, sweep as follow-up cleanup (no further bump needed):** L3, L4,
+  L6 — the data generations their dual read paths serve are wiped by this bump, so
+  the legacy arms become dead code deletable in ordinary PRs from now on.
+- **Explicitly carried forward:** L1, L2 (both *move keys*, so they need their own
+  bump), L8 (`code_hash`, a feature with its own design in A4 C2), and L9's storage
+  migration (its own rework per plan 26 R13). Reason: v6 rides a tree-wide
+  mechanical API break (~150 files); folding key-composition or storage-backend
+  changes into the same diff would couple unrelated risk and make the mechanical
+  review impossible. The carry is a conscious second-bump cost; whoever lands L1,
+  L2 or L8 should drain the remainder of this list in that bump.
 
 ### L1 — `param_hash`/`hash_persistent` return `int | str`
 

@@ -63,10 +63,10 @@ class Counting(bn.ParametrizedSweep):
 def _run(fail_at=(), exc_type=RuntimeError, *, executor=Executors.SERIAL, **run_kwargs):
     Flaky.fail_at = tuple(fail_at)
     Flaky.exc_type = exc_type
-    cfg = bn.BenchRunCfg(executor=executor, **run_kwargs)
-    cfg.auto_plot = False
-    cfg.cache_results = False
-    cfg.cache_samples = False
+    cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(executor=executor, **run_kwargs))
+    cfg.visualization.auto_plot = False
+    cfg.cache.results = False
+    cfg.cache.samples = False
     bench = Flaky().to_bench(cfg)
     try:
         return bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
@@ -90,8 +90,8 @@ class TestDefaultIsFailFast(unittest.TestCase):
         self.assertEqual(res.failed_fraction, 0.0)
 
     def test_catch_defaults_to_empty(self) -> None:
-        self.assertEqual(bn.BenchRunCfg().catch, ())
-        self.assertIs(bn.BenchRunCfg().fail_on_sample_error, False)
+        self.assertEqual(bn.BenchRunCfg().execution.catch, ())
+        self.assertIs(bn.BenchRunCfg().execution.fail_on_sample_error, False)
 
 
 class TestCatch(unittest.TestCase):
@@ -179,7 +179,7 @@ class TestBothExecutorPaths(unittest.TestCase):
             function_input: ClassVar[dict] = {"x": 1}
             index_tuple = (0, 0)
 
-        cfg = bn.BenchRunCfg(catch=catch)
+        cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(catch=catch))
         collector.store_results(job_future, res, Worker(), cfg, None)
         return res
 
@@ -214,15 +214,18 @@ class TestNoCacheOnFailure(unittest.TestCase):
         # asserts nothing; the second must *not* clear, or it clears the cache it
         # is meant to be reading. A sample cache left warm by an earlier run of
         # this file made this pass or fail depending on run order.
-        cfg = bn.BenchRunCfg(catch=(RuntimeError,), cache_samples=True, clear_sample_cache=True)
-        cfg.auto_plot = False
-        cfg.cache_results = False
+        cfg = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(catch=(RuntimeError,)),
+            cache=bn.CacheCfg(samples=True, clear_samples=True),
+        )
+        cfg.visualization.auto_plot = False
+        cfg.cache.results = False
         bench = Counting().to_bench(cfg)
         try:
             bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
             first = list(Counting.calls)
             self.assertEqual(sorted(first), [0, 1], "the first sweep was not a cold miss")
-            bench.run_cfg.clear_sample_cache = False
+            bench.run_cfg.cache.clear_samples = False
             bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)
         finally:
             bench.close()
@@ -249,14 +252,15 @@ class TestTheFractionIsOverExecutedSamples(unittest.TestCase):
         # that first sweep, or the second one would clear the cache it is meant to
         # be reading.
         cfg = bn.BenchRunCfg(
-            catch=(RuntimeError,), cache_samples=True, clear_sample_cache=True, **kwargs
+            execution=bn.ExecutionCfg(catch=(RuntimeError,), **kwargs),
+            cache=bn.CacheCfg(samples=True, clear_samples=True),
         )
-        cfg.auto_plot = False
-        cfg.cache_results = False
+        cfg.visualization.auto_plot = False
+        cfg.cache.results = False
         return Flaky().to_bench(cfg)
 
     def _second_sweep_reads_the_cache(self, bench) -> None:
-        bench.run_cfg.clear_sample_cache = False
+        bench.run_cfg.cache.clear_samples = False
 
     def test_a_warm_cache_does_not_dilute_the_fraction(self) -> None:
         bench = self._bench()
@@ -298,9 +302,13 @@ class TestTheCacheHitPathIsNotThisRunsErrors(unittest.TestCase):
     """
 
     def _bench(self, **kwargs):
-        cfg = bn.BenchRunCfg(catch=(RuntimeError,), cache_results=True, **kwargs)
-        cfg.auto_plot = False
-        cfg.cache_samples = False
+        clear_cache = kwargs.pop("clear_cache", False)
+        cfg = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(catch=(RuntimeError,), **kwargs),
+            cache=bn.CacheCfg(results=True, clear=clear_cache),
+        )
+        cfg.visualization.auto_plot = False
+        cfg.cache.samples = False
         return Flaky().to_bench(cfg)
 
     def test_a_pure_cache_hit_does_not_raise_on_the_previous_runs_failures(self) -> None:
@@ -363,9 +371,11 @@ class TestCatchIsValidatedEagerly(unittest.TestCase):
         for kwargs in ({"catch": "RuntimeError"}, {"fail_on_sample_error": 50}):
             with self.subTest(**kwargs):
                 Counting.calls = []
-                cfg = bn.BenchRunCfg(cache_samples=False, **kwargs)
-                cfg.auto_plot = False
-                cfg.cache_results = False
+                cfg = bn.BenchRunCfg(
+                    cache=bn.CacheCfg(samples=False), execution=bn.ExecutionCfg(**kwargs)
+                )
+                cfg.visualization.auto_plot = False
+                cfg.cache.results = False
                 bench = Counting().to_bench(cfg)
                 try:
                     with self.assertRaises((TypeError, ValueError)):
@@ -473,10 +483,12 @@ class TestFailOnSampleError(unittest.TestCase):
     def test_the_result_is_still_registered_before_the_raise(self) -> None:
         """Losing the artifact would defeat the point of catching."""
         Flaky.fail_at = (2,)
-        cfg = bn.BenchRunCfg(catch=(RuntimeError,), fail_on_sample_error=True)
-        cfg.auto_plot = False
-        cfg.cache_results = False
-        cfg.cache_samples = False
+        cfg = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(catch=(RuntimeError,), fail_on_sample_error=True)
+        )
+        cfg.visualization.auto_plot = False
+        cfg.cache.results = False
+        cfg.cache.samples = False
         bench = Flaky().to_bench(cfg)
         try:
             with self.assertRaises(bn.SampleErrorPolicyError):
@@ -524,10 +536,10 @@ class TestIdentityIsUnaffected(unittest.TestCase):
         """It is a run-time policy, not part of what identifies the measurement."""
         keys = []
         for catch in ((), (RuntimeError,)):
-            cfg = bn.BenchRunCfg(catch=catch)
-            cfg.auto_plot = False
-            cfg.cache_results = False
-            cfg.cache_samples = False
+            cfg = bn.BenchRunCfg(execution=bn.ExecutionCfg(catch=catch))
+            cfg.visualization.auto_plot = False
+            cfg.cache.results = False
+            cfg.cache.samples = False
             bench = Flaky().to_bench(cfg)
             try:
                 res = bench.plot_sweep(input_vars=["x"], result_vars=["y"], plot_callbacks=False)

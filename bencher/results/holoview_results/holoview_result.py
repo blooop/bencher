@@ -164,7 +164,7 @@ class HoloviewResult(PaneResult):
         Returns True when over_time is active and the dataset has >1 time points.
         """
         return (
-            self.bench_cfg.over_time
+            self.bench_cfg.time.over_time
             and "over_time" in dataset.dims
             and dataset.sizes["over_time"] > 1
         )
@@ -358,17 +358,17 @@ class HoloviewResult(PaneResult):
         ``_std``-aware (e.g. delegating to ``_build_curve_overlay``) will
         automatically render spread bands on the aggregated tab.
 
-        When ``bench_cfg.max_slider_points`` is set, only that many
+        When ``bench_cfg.time.max_slider_points`` is set, only that many
         evenly-spaced time points are rendered for the slider (first and
         last always included).  The aggregated tab still uses all data.
 
-        When ``bench_cfg.show_aggregated_time_tab`` is ``False``, the
+        When ``bench_cfg.time.show_aggregated_tab`` is ``False``, the
         aggregation is skipped entirely for faster rendering.
         """
         times = dataset.coords["over_time"].values
         n_time = len(times)
 
-        slider_indices = self.subsample_indices(n_time, self.bench_cfg.max_slider_points)
+        slider_indices = self.subsample_indices(n_time, self.bench_cfg.time.max_slider_points)
 
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
@@ -393,7 +393,7 @@ class HoloviewResult(PaneResult):
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        if n_time > 1 and self.bench_cfg.show_aggregated_time_tab:
+        if n_time > 1 and self.bench_cfg.time.show_aggregated_tab:
             ds_agg = self._mean_over_time(dataset, result_var_name)
             agg_plot = make_plot_fn(ds_agg)
             return pn.Tabs(
@@ -411,13 +411,13 @@ class HoloviewResult(PaneResult):
         full array for the aggregated tab).  Callers should flatten via
         ``.to_dataframe().reset_index()`` or equivalent.
 
-        Respects ``bench_cfg.max_slider_points`` and
-        ``bench_cfg.show_aggregated_time_tab``.
+        Respects ``bench_cfg.time.max_slider_points`` and
+        ``bench_cfg.time.show_aggregated_tab``.
         """
         times = da.coords["over_time"].values
         n_time = len(times)
 
-        slider_indices = self.subsample_indices(n_time, self.bench_cfg.max_slider_points)
+        slider_indices = self.subsample_indices(n_time, self.bench_cfg.time.max_slider_points)
 
         kdims = self._over_time_kdims()
         holomap = hv.HoloMap(kdims=kdims)
@@ -429,7 +429,7 @@ class HoloviewResult(PaneResult):
 
         slider_pane = self._holomap_with_slider_bottom(holomap)
 
-        if n_time > 1 and self.bench_cfg.show_aggregated_time_tab:
+        if n_time > 1 and self.bench_cfg.time.show_aggregated_tab:
             agg_plot = make_plot_fn(da)
             return pn.Tabs(
                 ("Per Time Point", slider_pane),

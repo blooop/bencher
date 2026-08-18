@@ -465,7 +465,7 @@ def normalize_executor(executor: Executors | str) -> Executors:
 
     C13 (plan 23 P2). ``Executors`` is a ``StrEnum``, so ``"SERIAL" ==
     Executors.SERIAL`` is True and ``param.Selector(objects=list(Executors))``
-    (``BenchRunCfg.executor``) therefore *accepts* the bare string and stores a
+    (``ExecutionCfg.executor``) therefore *accepts* the bare string and stores a
     ``str`` in a field that is compared three different ways: ``==``/``!=`` in
     ``Bench._sample_and_store`` and ``is not`` in ``FutureCache.submit``. An identity
     check against a raw string is False, so those sites disagree the moment one is

@@ -28,7 +28,7 @@ bn.run(SimpleFloat, subsampling_divisions=3, repeats=10)
 Or with the manual API:
 
 ```python
-bench.plot_sweep(run_cfg=bn.BenchRunCfg(repeats=10))
+bench.plot_sweep(run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=10)))
 ```
 
 With repeats, plots automatically show mean +/- standard deviation. See the
@@ -43,7 +43,7 @@ Bencher assumes your function is a stochastic pure function — given the same i
 See [Tracking Results Over Time](over_time.md) for the full guide — history keying,
 snapshot recording, regression detection, and known limitations. The summary:
 
-Enable `over_time` to record time-series snapshots that can be scrubbed via a slider:
+Enable `time.over_time` to record time-series snapshots that can be scrubbed via a slider:
 
 ```python
 bn.run(MyBench, subsampling_divisions=3, repeats=3, over_time=True)
@@ -52,7 +52,10 @@ bn.run(MyBench, subsampling_divisions=3, repeats=3, over_time=True)
 For multi-snapshot tracking (e.g. CI pipelines), call `plot_sweep()` in a loop with different `time_src` values:
 
 ```python
-run_cfg = bn.BenchRunCfg(over_time=True, repeats=3)
+run_cfg = bn.BenchRunCfg(
+    time=bn.TimeCfg(over_time=True),
+    execution=bn.ExecutionCfg(repeats=3),
+)
 benchable = MyBench()
 bench = benchable.to_bench(run_cfg)
 
@@ -71,7 +74,7 @@ Each run adds a time slider to the plots. When combined with repeats, the Optuna
 
 ### Parameter Importance Analysis
 
-When `use_optuna=True`, Bencher integrates with [Optuna](https://optuna.org/) for parameter importance analysis:
+When `visualization.use_optuna=True`, Bencher integrates with [Optuna](https://optuna.org/) for parameter importance analysis:
 
 ```python
 bn.run(MyBench, subsampling_divisions=3, repeats=3, optimise=30)
@@ -80,7 +83,10 @@ bn.run(MyBench, subsampling_divisions=3, repeats=3, optimise=30)
 Or with the manual API:
 
 ```python
-run_cfg = bn.BenchRunCfg(use_optuna=True, repeats=3)
+run_cfg = bn.BenchRunCfg(
+    visualization=bn.VisualizationCfg(use_optuna=True),
+    execution=bn.ExecutionCfg(repeats=3),
+)
 res = bench.plot_sweep(run_cfg=run_cfg)
 bench.report.append(res.to_optuna_plots())
 ```

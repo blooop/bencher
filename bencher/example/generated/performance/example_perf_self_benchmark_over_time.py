@@ -39,10 +39,10 @@ class BencherSelfBenchmark(bn.ParametrizedSweep):
         x_sweep.name = "x"
 
         inner_cfg = bn.BenchRunCfg()
-        inner_cfg.repeats = 1
-        inner_cfg.cache_samples = self.use_cache
-        inner_cfg.cache_results = False
-        inner_cfg.auto_plot = False
+        inner_cfg.execution.repeats = 1
+        inner_cfg.cache.samples = self.use_cache
+        inner_cfg.cache.results = False
+        inner_cfg.visualization.auto_plot = False
 
         bench = bn.Bench("inner_bench", workload, run_cfg=inner_cfg)
         bench.plot_sweep(input_vars=[x_sweep], result_vars=["result"])
@@ -62,7 +62,7 @@ def example_perf_self_benchmark_over_time(run_cfg: bn.BenchRunCfg | None = None)
     """Bencher self-introspection: overhead tracked over time."""
     if run_cfg is None:
         run_cfg = bn.BenchRunCfg()
-    run_cfg.auto_plot = False
+    run_cfg.visualization.auto_plot = False
     time_src = bn.git_time_event()
     bench = BencherSelfBenchmark().to_bench(run_cfg)
     bench.plot_sweep(

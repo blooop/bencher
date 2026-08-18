@@ -257,7 +257,7 @@ class GettingStartedBenchmark(bn.ParametrizedSweep):
             case AlgoSetting.poor:
                 self.accuracy -= 20'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=10)
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 10})
 
 bench = GettingStartedBenchmark().to_bench(run_cfg)
 
@@ -292,7 +292,7 @@ bench.plot_sweep(
 
 # -- Step 3: 2D sweep with optimisation ------------------------------
 # Combine both inputs to see how they interact.
-run_cfg.use_optuna = True
+run_cfg.visualization.use_optuna = True
 bench.plot_sweep(
     input_vars=["intensity", "algo_setting"],
     result_vars=["accuracy"],

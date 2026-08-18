@@ -85,7 +85,7 @@ class HistoryEventKind(StrEnum):
 
 
 class OnHistoryReset(StrEnum):
-    """Policy for surfacing lossy history events (``BenchRunCfg.on_history_reset``)."""
+    """Policy for surfacing lossy history events (``TimeCfg.on_history_reset``)."""
 
     WARN = "warn"
     ERROR = "error"
@@ -210,7 +210,7 @@ def config_summary(bench_cfg: Any) -> dict:
         "results": sorted(
             (*row(v), str(getattr(v, "meaning_version", None))) for v in bench_cfg.result_vars or []
         ),
-        "repeats": int(bench_cfg.repeats),
+        "repeats": int(bench_cfg.execution.repeats),
     }
 
 

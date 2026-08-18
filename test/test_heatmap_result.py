@@ -9,12 +9,12 @@ from bencher.example.meta.example_meta import BenchableObject
 class TestHeatmapResult(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        bench_2d = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
+        bench_2d = BenchableObject().to_bench(bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)))
         cls.res_2d = bench_2d.plot_sweep(
             "test_hm",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
 
@@ -23,7 +23,7 @@ class TestHeatmapResult(unittest.TestCase):
             "test_hm_1d",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
 
@@ -74,12 +74,12 @@ class TestHeatmapResult(unittest.TestCase):
         """
         import holoviews as hv
 
-        bench_cat = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
+        bench_cat = BenchableObject().to_bench(bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)))
         res_cat = bench_cat.plot_sweep(
             "test_hm_cat_only",
             input_vars=[BenchableObject.param.wave, BenchableObject.param.variant],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
         result = res_cat.to_heatmap(override=False)

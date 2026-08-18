@@ -17,6 +17,7 @@ from bencher import (
     result_to_json,
     series_for_var,
 )
+from bencher.bench_cfg import ExecutionCfg
 from bencher.example.benchmark_data import ExampleBenchCfg
 from bencher.regression import RegressionReport, RegressionResult
 
@@ -33,7 +34,7 @@ def _collect(offset: float = 0.0, result_vars=None):
         input_vars=[ExampleBenchCfg.param.theta],
         result_vars=result_vars,
         const_vars=[(ExampleBenchCfg.param.offset, offset)],
-        run_cfg=BenchRunCfg(repeats=1),
+        run_cfg=BenchRunCfg(execution=ExecutionCfg(repeats=1)),
         title=f"export_offset_{offset}",
     )
 
@@ -293,10 +294,10 @@ class TestSeriesForVar(unittest.TestCase):
 class TestResultToDictSeries(unittest.TestCase):
     def _collect_over_time(self):
         run_cfg = BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.repeats = 2
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.execution.repeats = 2
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
         bench = Bench("test_series_e2e", ExampleBenchCfg(), run_cfg=run_cfg)
         kwargs = {
             "input_vars": [ExampleBenchCfg.param.theta],

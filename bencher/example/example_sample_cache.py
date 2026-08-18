@@ -7,7 +7,7 @@ import bencher as bn
 
 
 class UnreliableClass(bn.ParametrizedSweep):
-    """This class helps demonstrate benchmarking a function that sometimes crashes during sampling.  By using BenchRunCfg.cache_samples you can store the results of every call to the benchmark function so data is not lost in the event of a crash.  However, because cache invalidation is hard (https://martinfowler.com/bliki/TwoHardThings.html) you need to be mindful of how you could get bad results due to incorrect cache data.  For example if you change your benchmark function and use the sample cache you will not get correct values; you will need to use BenchRunCfg.clear_sample_cache to purge any out of date results."""
+    """This class helps demonstrate benchmarking a function that sometimes crashes during sampling.  By using CacheCfg.samples you can store the results of every call to the benchmark function so data is not lost in the event of a crash.  However, because cache invalidation is hard (https://martinfowler.com/bliki/TwoHardThings.html) you need to be mindful of how you could get bad results due to incorrect cache data.  For example if you change your benchmark function and use the sample cache you will not get correct values; you will need to use CacheCfg.clear_samples to purge any out of date results."""
 
     input_val = bn.IntSweep(
         default=0,
@@ -62,12 +62,12 @@ def example_sample_cache(
 
 if __name__ == "__main__":
     ex_run_cfg = bn.BenchRunCfg()
-    ex_run_cfg.repeats = 1
-    ex_run_cfg.executor = bn.Executors.SCOOP
+    ex_run_cfg.execution.repeats = 1
+    ex_run_cfg.execution.executor = bn.Executors.SCOOP
 
     # this will store the result of of every call to crashy_fn
-    ex_run_cfg.cache_samples = True
-    ex_run_cfg.clear_sample_cache = True
+    ex_run_cfg.cache.samples = True
+    ex_run_cfg.cache.clear_samples = True
 
     try:
         # this will crash after iteration 2 because we are checking the crash_threshold >1.  We don't want to lose those (potentially expensive to calculate) datapoints so they are stored in the sample_cache
@@ -78,10 +78,10 @@ if __name__ == "__main__":
     print(
         "Running the same benchmark but without checking the limit.  The benchmarking should load the previously calculated values and continue to finish calculating the values that were missed due to the crash"
     )
-    ex_run_cfg.clear_sample_cache = False
+    ex_run_cfg.cache.clear_samples = False
     example_sample_cache(ex_run_cfg, trigger_crash=False)
 
-    ex_run_cfg.repeats = 2
+    ex_run_cfg.execution.repeats = 2
 
     example_sample_cache(ex_run_cfg, trigger_crash=False).report.show()
 

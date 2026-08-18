@@ -54,8 +54,8 @@ def example_result_image_over_time(run_cfg: bn.BenchRunCfg | None = None) -> bn.
     _base_time = datetime(2000, 1, 1)
     for i, radius in enumerate([0.3, 0.6, 0.9]):
         benchable.radius = radius
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         bench.plot_sweep(
             "Image Over Time",
             input_vars=["sides"],

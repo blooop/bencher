@@ -267,10 +267,15 @@ class TestBenchReport(unittest.TestCase):
         self.assertIsInstance(report.bench_results, tuple)
 
 
+class _FakeTimeCfg:
+    def __init__(self):
+        self.over_time = False
+
+
 class _FakeBenchCfg:
     def __init__(self, title: str):
         self.title = title
-        self.over_time = False
+        self.time = _FakeTimeCfg()
 
 
 class _FakeBenchResult:

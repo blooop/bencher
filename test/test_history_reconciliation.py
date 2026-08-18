@@ -17,7 +17,7 @@ import numpy as np
 import xarray as xr
 
 import bencher as bn
-from bencher.bench_cfg import BenchCfg, BenchRunCfg
+from bencher.bench_cfg import BenchCfg, BenchRunCfg, ExecutionCfg, RegressionCfg, TimeCfg
 from bencher.history import (
     BIRTH_ATTR,
     HistoryEvent,
@@ -64,10 +64,10 @@ def _bench_cfg(result_vars, const_vars=(), input_vars=()):
     return BenchCfg(
         bench_name="demo",
         tag="demo",
-        over_time=True,
         input_vars=list(input_vars),
         result_vars=list(result_vars),
         const_vars=list(const_vars),
+        time=TimeCfg(over_time=True),
     )
 
 
@@ -574,13 +574,13 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
         list(OnHistoryReset). Only an identity/type check catches a second,
         drifting definition of the vocabulary.
         """
-        objects = list(BenchRunCfg.param.on_history_reset.objects)
+        objects = list(TimeCfg.param.on_history_reset.objects)
         self.assertEqual(objects, list(OnHistoryReset))
         for obj in objects:
             self.assertIsInstance(obj, OnHistoryReset)
 
     def test_run_cfg_default_is_an_enum_member(self):
-        self.assertIs(BenchRunCfg().on_history_reset, OnHistoryReset.WARN)
+        self.assertIs(BenchRunCfg().time.on_history_reset, OnHistoryReset.WARN)
 
     def test_plot_sweep_normalizes_a_string_policy_to_a_member(self):
         """plot_sweep assigns the member back, so downstream readers see the enum.
@@ -591,9 +591,12 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
         ``load_history_cache``.
         """
         bench = bn.Bench("policy-normalize", _CountingSweep())
-        run_cfg = BenchRunCfg(over_time=True, repeats=1, on_history_reset="ignore")
+        run_cfg = BenchRunCfg(
+            execution=ExecutionCfg(repeats=1),
+            time=TimeCfg(over_time=True, on_history_reset="ignore"),
+        )
         bench.plot_sweep(input_vars=[_CountingSweep.param.x], run_cfg=run_cfg)
-        self.assertIs(run_cfg.on_history_reset, OnHistoryReset.IGNORE)
+        self.assertIs(run_cfg.time.on_history_reset, OnHistoryReset.IGNORE)
         self.assertTrue(_CountingSweep.calls, "the sweep should have run")
 
     def test_bad_policy_raises_before_any_sample_is_collected(self):
@@ -608,12 +611,12 @@ class TestPolicyVocabularySingleSource(unittest.TestCase):
         classes to prove the latter alone is early enough.
         """
         bench = bn.Bench("policy-presample", _CountingSweep())
-        run_cfg = BenchRunCfg(over_time=True, repeats=1)
-        run_params = (run_cfg.param.on_history_reset, BenchCfg.param.on_history_reset)
+        run_cfg = BenchRunCfg(execution=ExecutionCfg(repeats=1), time=TimeCfg(over_time=True))
+        run_params = (TimeCfg.param.on_history_reset,)
         for p in run_params:
             p.check_on_set = False
         self.addCleanup(lambda: [setattr(p, "check_on_set", True) for p in run_params])
-        run_cfg.on_history_reset = "silently-ignore"
+        run_cfg.time.on_history_reset = "silently-ignore"
         with self.assertRaises(ValueError):
             bench.plot_sweep(input_vars=[_CountingSweep.param.x], run_cfg=run_cfg)
         self.assertEqual(
@@ -637,12 +640,14 @@ class TestYoungBaselineGating(unittest.TestCase):
         rv = _result_float("m")
         bench_cfg = _bench_cfg([rv])
         run_cfg = BenchRunCfg(
-            over_time=True,
-            regression_detection=True,
-            regression_method="percentage",
-            regression_percentage=10.0,
-            regression_min_history=min_history,
-            regression_overrides=overrides,
+            time=TimeCfg(over_time=True),
+            regression=RegressionCfg(
+                enabled=True,
+                method="percentage",
+                percentage=10.0,
+                min_history=min_history,
+                overrides=overrides,
+            ),
         )
         return detect_regressions(self._dataset(values, birth_idx), bench_cfg, run_cfg)
 

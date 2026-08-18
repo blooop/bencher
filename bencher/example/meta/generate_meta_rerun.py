@@ -114,9 +114,9 @@ bench.plot_sweep(
         body = """\
 if run_cfg is None:
     run_cfg = bn.BenchRunCfg()
-run_cfg.regression_detection = True
-run_cfg.regression_method = "percentage"
-run_cfg.regression_fail = False
+run_cfg.regression.enabled = True
+run_cfg.regression.method = "percentage"
+run_cfg.regression.fail = False
 
 benchable = ControlSystemSweep()
 bench = benchable.to_bench(run_cfg)
@@ -126,8 +126,8 @@ base_time = datetime(2024, 1, 1)
 degradations = [0.0, 0.0, 0.4]
 for i, deg in enumerate(degradations):
     benchable._degradation = deg
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
     bench.plot_sweep(
         "controller_monitoring",
         input_vars=[],

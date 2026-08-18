@@ -68,15 +68,15 @@ class NoisySensor(bn.ParametrizedSweep):
         if self.noise_scale > 0:
             self.reading += random.gauss(0, self.noise_scale)'''
         body = """\
-run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, repeats=5)
+run_cfg = bn.BenchRunCfg.with_defaults(run_cfg, execution={"repeats": 5})
 
 # run_tag partitions the cache so different experiment runs don't collide.
 run_cfg.run_tag = "sensor_v1"
 
 # cache_samples=True stores each individual call, useful for long-running
 # benchmarks that might be interrupted.
-run_cfg.cache_samples = True
-run_cfg.clear_sample_cache = True
+run_cfg.cache.samples = True
+run_cfg.cache.clear_samples = True
 
 bench = NoisySensor().to_bench(run_cfg)
 bench.plot_sweep(
@@ -136,9 +136,9 @@ bench = benchable.to_bench(run_cfg)
 events = ["PR-100-baseline", "PR-105-optimize-db", "PR-112-add-cache"]
 for i, event_name in enumerate(events):
     benchable._event_idx = i
-    run_cfg.time_event = event_name
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
+    run_cfg.time.event = event_name
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
     bench.plot_sweep(
         title="PR Benchmark",
         input_vars=["workload"],
@@ -192,7 +192,7 @@ class ServerLatency(bn.ParametrizedSweep):
         body = """\
 if run_cfg is None:
     run_cfg = bn.BenchRunCfg()
-run_cfg.regression_detection = True
+run_cfg.regression.enabled = True
 
 bench = ServerLatency().to_bench(run_cfg)
 
@@ -249,7 +249,7 @@ if run_cfg is None:
 # Keep only the 3 most recent time slices in the cache.
 # Without this, every call to plot_sweep appends a new slice and the
 # cache grows without bound.
-run_cfg.max_time_events = 3
+run_cfg.time.max_events = 3
 
 benchable = LatencyMonitor()
 bench = benchable.to_bench(run_cfg)
@@ -259,8 +259,8 @@ bench = benchable.to_bench(run_cfg)
 base_time = datetime(2024, 6, 1)
 for i in range(5):
     benchable._drift = i * 3.0  # simulate gradual degradation
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
     bench.plot_sweep(
         title="Service Latency",
         input_vars=["endpoint"],
@@ -365,9 +365,9 @@ base_time = datetime(2024, 1, 1)
 time_offsets = [0.0, 1.0, 2.0, 3.0, 4.0]
 for i, offset in enumerate(time_offsets):
     benchable._time_offset = offset
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = i == len(time_offsets) - 1
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
+    run_cfg.visualization.auto_plot = i == len(time_offsets) - 1
     bench.plot_sweep(
         "thermal_plate",
         input_vars=["x", "y"],

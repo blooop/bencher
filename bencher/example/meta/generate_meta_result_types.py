@@ -243,9 +243,9 @@ base_time = datetime(2024, 1, 1)
 n_snapshots = 3
 for i in range(n_snapshots):
     benchable._drift = float(i)
-    run_cfg.clear_cache = True
-    run_cfg.clear_history = i == 0
-    run_cfg.auto_plot = i == n_snapshots - 1
+    run_cfg.cache.clear = True
+    run_cfg.time.clear_history = i == 0
+    run_cfg.visualization.auto_plot = i == n_snapshots - 1
     bench.plot_sweep(
         "dataset_over_time",
         input_vars=["duration"],

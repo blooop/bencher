@@ -111,10 +111,10 @@ class PltCntCfg(param.Parameterized):
         plt_cnt_cfg.float_cnt = len(plt_cnt_cfg.float_vars)
         plt_cnt_cfg.cat_cnt = len(plt_cnt_cfg.cat_vars)
         plt_cnt_cfg.panel_cnt = len(plt_cnt_cfg.panel_vars)
-        plt_cnt_cfg.repeats = bench_cfg.repeats
+        plt_cnt_cfg.repeats = bench_cfg.execution.repeats
         plt_cnt_cfg.inputs_cnt = len(bench_cfg.input_vars)
 
-        plt_cnt_cfg.has_time = bool(bench_cfg.over_time) or any(
+        plt_cnt_cfg.has_time = bool(bench_cfg.time.over_time) or any(
             isinstance(iv, TIME_TYPES) for iv in bench_cfg.input_vars
         )
         plt_cnt_cfg.result_kinds = {rv.name: result_kind(rv) for rv in bench_cfg.result_vars}

@@ -825,7 +825,7 @@ def _make_cfg(
         def __init__(self, result_vars):
             self.result_vars = result_vars
 
-    class FakeRunCfg:
+    class FakeRegression:
         def __init__(
             self,
             method,
@@ -836,13 +836,17 @@ def _make_cfg(
             regression_overrides,
             regression_min_history,
         ):
-            self.regression_method = method
-            self.regression_mad = regression_mad
-            self.regression_percentage = regression_percentage
-            self.regression_delta = regression_delta
-            self.regression_absolute = regression_absolute
-            self.regression_overrides = regression_overrides
-            self.regression_min_history = regression_min_history
+            self.method = method
+            self.mad = regression_mad
+            self.percentage = regression_percentage
+            self.delta = regression_delta
+            self.absolute = regression_absolute
+            self.overrides = regression_overrides
+            self.min_history = regression_min_history
+
+    class FakeRunCfg:
+        def __init__(self, *args):
+            self.regression = FakeRegression(*args)
 
     return (
         FakeBenchCfg(result_vars),
@@ -1178,7 +1182,7 @@ class TestDetectRegressions:
         with caplog.at_level(_logging.WARNING):
             report = detect_regressions(ds, bench_cfg, run_cfg)
         assert report.results == []
-        assert any("regression_delta" in rec.message for rec in caplog.records)
+        assert any("regression.delta" in rec.message for rec in caplog.records)
 
     def test_method_absolute_opt_dir_none_skipped(self, caplog):
         import logging as _logging
@@ -1263,7 +1267,7 @@ class TestHistoryPointsSinceBirth:
 
 
 class TestRegressionOverrides:
-    """Per-variable regression specs (run_cfg.regression_overrides).
+    """Per-variable regression specs (run_cfg.regression.overrides).
 
     A listed variable is checked by exactly the methods in its spec instead of
     the benchmark-wide method — so thresholds and methods can differ per
@@ -1572,11 +1576,11 @@ class TestRegressionOverrides:
         regression_method Selector and the threshold params on BenchRunCfg."""
         from bencher.regression import _METHOD_THRESHOLD_ATTR
 
-        selector_methods = set(bn.BenchRunCfg.param.regression_method.objects)
+        selector_methods = set(bn.RegressionCfg.param.method.objects)
         assert set(_METHOD_THRESHOLD_ATTR) == selector_methods
-        cfg_params = bn.BenchRunCfg.param.objects()
+        cfg_params = bn.RegressionCfg.param.objects()
         for attr in _METHOD_THRESHOLD_ATTR.values():
-            assert attr in cfg_params, f"BenchRunCfg has no param '{attr}'"
+            assert attr in cfg_params, f"RegressionCfg has no param '{attr}'"
 
 
 class TestRegressionError:
@@ -1617,13 +1621,13 @@ class TestEndToEnd:
     def test_plot_sweep_with_regression_detection(self):
         """Full end-to-end test: run plot_sweep with over_time and regression_detection."""
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.repeats = 2
-        run_cfg.regression_detection = True
-        run_cfg.regression_method = "percentage"
-        run_cfg.regression_fail = False
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.execution.repeats = 2
+        run_cfg.regression.enabled = True
+        run_cfg.regression.method = "percentage"
+        run_cfg.regression.fail = False
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
 
         bench = bn.Bench("test_regression_e2e", _SimpleBench(), run_cfg=run_cfg)
         # Run twice to get 2 time points with same values — no regression
@@ -1638,14 +1642,14 @@ class TestEndToEnd:
         """A regression_overrides breach is reported on the very first run — no
         history, where every history-based method is silent."""
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.repeats = 2
-        run_cfg.regression_detection = True
-        run_cfg.regression_method = "percentage"
-        run_cfg.regression_overrides = {"success": 1.0}
-        run_cfg.regression_fail = False
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.execution.repeats = 2
+        run_cfg.regression.enabled = True
+        run_cfg.regression.method = "percentage"
+        run_cfg.regression.overrides = {"success": 1.0}
+        run_cfg.regression.fail = False
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
 
         bench = bn.Bench("test_regression_guard_e2e", _FlatSuccessBench(), run_cfg=run_cfg)
         res = bench.plot_sweep(plot_callbacks=False)
@@ -1664,11 +1668,11 @@ class TestEndToEnd:
     def test_detection_disabled_leaves_report_none(self):
         """When regression_detection=False, regression_report should stay None."""
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.repeats = 1
-        run_cfg.regression_detection = False
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.execution.repeats = 1
+        run_cfg.regression.enabled = False
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
 
         bench = bn.Bench("test_regression_disabled", _SimpleBench(), run_cfg=run_cfg)
         bench.plot_sweep(plot_callbacks=False)
@@ -1682,13 +1686,13 @@ class TestEndToEnd:
         _degrade_state["counter"] = 0
 
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.repeats = 1
-        run_cfg.regression_detection = True
-        run_cfg.regression_method = "percentage"
-        run_cfg.regression_fail = True
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.execution.repeats = 1
+        run_cfg.regression.enabled = True
+        run_cfg.regression.method = "percentage"
+        run_cfg.regression.fail = True
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
 
         bench = bn.Bench("test_regression_fail", _DegradingBench(), run_cfg=run_cfg)
         bench.plot_sweep(plot_callbacks=False)
@@ -1704,13 +1708,13 @@ class TestEndToEnd:
 
         _degrade_state["counter"] = 0
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.repeats = 1
-        run_cfg.regression_detection = True
-        run_cfg.regression_method = "percentage"
-        run_cfg.regression_fail = False
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.execution.repeats = 1
+        run_cfg.regression.enabled = True
+        run_cfg.regression.method = "percentage"
+        run_cfg.regression.fail = False
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
 
         bench = bn.Bench("test_regression_panel", _DegradingBench(), run_cfg=run_cfg)
         bench.plot_sweep(plot_callbacks=False)
@@ -1731,13 +1735,13 @@ class TestEndToEnd:
         import panel as pn
 
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.repeats = 2
-        run_cfg.regression_detection = True
-        run_cfg.regression_method = "percentage"
-        run_cfg.regression_fail = False
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.execution.repeats = 2
+        run_cfg.regression.enabled = True
+        run_cfg.regression.method = "percentage"
+        run_cfg.regression.fail = False
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
 
         bench = bn.Bench("test_regression_no_panel", _SimpleBench(), run_cfg=run_cfg)
         bench.plot_sweep(plot_callbacks=False)
@@ -1887,14 +1891,14 @@ class TestOverTimeStringCoords:
 
     def _build_bench(self, time_srcs):
         run_cfg = bn.BenchRunCfg()
-        run_cfg.over_time = True
-        run_cfg.regression_detection = True
-        run_cfg.auto_plot = False
-        run_cfg.headless = True
+        run_cfg.time.over_time = True
+        run_cfg.regression.enabled = True
+        run_cfg.visualization.auto_plot = False
+        run_cfg.execution.headless = True
         bench = bn.Bench("string_time", _StringTimeBench(), run_cfg=run_cfg)
         for i, ts in enumerate(time_srcs):
-            run_cfg.clear_history = i == 0
-            run_cfg.clear_cache = True
+            run_cfg.time.clear_history = i == 0
+            run_cfg.cache.clear = True
             bench.plot_sweep(
                 input_vars=["endpoint"],
                 result_vars=["latency"],

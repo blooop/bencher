@@ -46,7 +46,10 @@ class FloatInputWorker(bn.ParametrizedSweep):
 
 
 def _repeats_run_cfg() -> bn.BenchRunCfg:
-    return bn.BenchRunCfg(repeats=N_REPEATS, cache_results=False, cache_samples=False)
+    return bn.BenchRunCfg(
+        execution=bn.ExecutionCfg(repeats=N_REPEATS),
+        cache=bn.CacheCfg(results=False, samples=False),
+    )
 
 
 def _collect_histograms(panel_obj) -> list[hv.Histogram]:
@@ -76,7 +79,9 @@ class TestHistogramResult(unittest.TestCase):
         )
         cls.raw_ds = cls.res.to_dataset(reduce=bn.ReduceType.NONE)
 
-        rc_float = bn.BenchRunCfg(repeats=1, cache_results=False, cache_samples=False)
+        rc_float = bn.BenchRunCfg(
+            execution=bn.ExecutionCfg(repeats=1), cache=bn.CacheCfg(results=False, samples=False)
+        )
         bench_float = FloatInputWorker().to_bench(rc_float)
         cls.res_float = bench_float.plot_sweep(
             "test_hist_float_input",

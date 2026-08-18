@@ -17,39 +17,39 @@ from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 class TestHoloviewResult(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        bench1 = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
+        bench1 = BenchableObject().to_bench(bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)))
         cls.res_1d = bench1.plot_sweep(
             "test_hv",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
 
-        bench2 = BenchableObject().to_bench(bn.BenchRunCfg(repeats=2))
+        bench2 = BenchableObject().to_bench(bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=2)))
         cls.res_1d_r2 = bench2.plot_sweep(
             "test_hv_r2",
             input_vars=[BenchableObject.param.float1],
             result_vars=[BenchableObject.param.distance, BenchableObject.param.sample_noise],
-            run_cfg=bn.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=2)),
             plot_callbacks=False,
         )
 
-        bench3 = BenchableObject().to_bench(bn.BenchRunCfg(repeats=1))
+        bench3 = BenchableObject().to_bench(bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)))
         cls.res_2d = bench3.plot_sweep(
             "test_hv_2d",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=1),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=1)),
             plot_callbacks=False,
         )
 
-        bench4 = BenchableObject().to_bench(bn.BenchRunCfg(repeats=2))
+        bench4 = BenchableObject().to_bench(bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=2)))
         cls.res_2d_r2 = bench4.plot_sweep(
             "test_hv_2d_r2",
             input_vars=[BenchableObject.param.float1, BenchableObject.param.float2],
             result_vars=[BenchableObject.param.distance],
-            run_cfg=bn.BenchRunCfg(repeats=2),
+            run_cfg=bn.BenchRunCfg(execution=bn.ExecutionCfg(repeats=2)),
             plot_callbacks=False,
         )
 

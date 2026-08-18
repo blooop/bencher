@@ -190,17 +190,17 @@ def build_fixture(fixture_type: str, variant: FixtureVariant) -> bn.Bench:
     # FIXTURE_DEFS values are heterogeneous, so ty widens fdef["cls"] beyond `type`.
     benchable = fdef["cls"]()  # ty: ignore[call-non-callable]
     run_cfg = bn.BenchRunCfg()
-    run_cfg.over_time = fdef["over_time"]
-    run_cfg.repeats = fdef["repeats"]
-    run_cfg.max_slider_points = variant.max_slider_points
-    run_cfg.show_aggregated_time_tab = variant.show_agg_tab
+    run_cfg.time.over_time = fdef["over_time"]
+    run_cfg.execution.repeats = fdef["repeats"]
+    run_cfg.time.max_slider_points = variant.max_slider_points
+    run_cfg.time.show_aggregated_tab = variant.show_agg_tab
     bench = benchable.to_bench(run_cfg)
     base = datetime(2000, 1, 1)
 
     for i in range(fdef["time_events"]):
         benchable.offset = i * 0.1
-        run_cfg.clear_cache = True
-        run_cfg.clear_history = i == 0
+        run_cfg.cache.clear = True
+        run_cfg.time.clear_history = i == 0
         bench.plot_sweep(
             f"bench_save_perf_{fixture_type}",
             input_vars=fdef["input_vars"],
