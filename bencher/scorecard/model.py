@@ -151,17 +151,27 @@ def build_cell(
 ) -> dict | None:
     """Build one table cell for (benchmark, metric), or None when absent.
 
-    The latest value and its Δ are for display; μ, σ, the baseline and the run
-    count go to the tooltip, because a column is the table's width divided by its
-    columns and four labelled numbers do not fit in one. ``units_in_header`` drops
-    the value's unit suffix for a caller showing it once per column
-    (:func:`column_units`).
+    ``latest_str``/``change_str`` and ``mean_str``/``std_str`` are the two display
+    lines; the baseline and run count go to the tooltip, which keeps units on μ/σ
+    whatever the cell does. ``units_in_header`` drops the unit suffix from the
+    display strings for a caller showing it once per column
+    (:func:`column_units`) — the width that buys is what lets μ and σ stay on the
+    cell rather than behind a hover.
     """
     metric = rec["metrics"].get(var)
     if metric is None:
         return None
     units = metric.get("units")
     as_percent = var in config.percent_metrics
+
+    def display(value: float | None) -> str:
+        """As the cell shows it: no unit when the header already carries it."""
+        return fmt_value(value, units, as_percent=as_percent, with_units=not units_in_header)
+
+    def labelled(value: float | None) -> str:
+        """As the tooltip shows it: read on its own, so always with its unit."""
+        return fmt_value(value, units, as_percent=as_percent)
+
     series = metric.get("series") or []
     means = [pt.get("mean") for pt in series]
     stds = [pt.get("std") for pt in series]
@@ -178,7 +188,7 @@ def build_cell(
     if reg is not None:
         # Gated: use bencher's threshold-aware verdict + reported baseline/delta.
         change_str = fmt_change(reg.get("change_percent"))
-        baseline_str = fmt_value(reg.get("baseline_value"), units, as_percent=as_percent)
+        baseline_str = labelled(reg.get("baseline_value"))
     else:
         # No regression gate (or <2 over-time events yet): still surface the
         # trend. Show a neutral latest-vs-previous delta from the series itself;
@@ -186,25 +196,26 @@ def build_cell(
         change_str = ""
         baseline_str = ""
         if prev:
-            baseline_str = fmt_value(prev, units, as_percent=as_percent)
+            baseline_str = labelled(prev)
             change_str = fmt_change((latest - prev) / abs(prev) * 100.0)
 
-    mean_str = fmt_value(mean_val, units, as_percent=as_percent)
-    std_str = fmt_value(std_val, units, as_percent=as_percent)
+    # Summing hostile JSON floats can overflow, so a mean is only a mean while it
+    # is finite; both strings are empty together, like every other absent one here.
+    has_distribution = mean_val is not None and math.isfinite(mean_val)
+    mean_str = display(mean_val) if has_distribution else ""
+    std_str = display(std_val) if has_distribution else ""
     tooltip_parts = [var]
     if metric.get("source_variable"):
         tooltip_parts.append(f"variable: {metric['source_variable']}")
-    if mean_val is not None and math.isfinite(mean_val):
-        tooltip_parts.append(f"μ {mean_str} · σ {std_str}")
+    if has_distribution:
+        tooltip_parts.append(f"μ {labelled(mean_val)} · σ {labelled(std_val)}")
     if baseline_str:
         tooltip_parts.append(f"baseline {baseline_str}")
     if finite:
         tooltip_parts.append(f"{len(finite)} run{'s' if len(finite) != 1 else ''}")
     return {
         "verdict": verdict,
-        "latest_str": fmt_value(
-            latest, units, as_percent=as_percent, with_units=not units_in_header
-        ),
+        "latest_str": display(latest),
         "mean_str": mean_str,
         "std_str": std_str,
         "change_str": change_str,

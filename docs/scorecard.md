@@ -7,16 +7,17 @@ HTML page. Every scalar metric shows, at a glance:
   (`regressed` / `improved` / `passed`, or an uncolored `trend` when a metric has
   no regression gate yet); and
 - a **noise sparkline** — the per-time-event mean with a ±std band and a node per
-  run, plus a right-margin distribution column (one alpha-blended dot per run), so
-  both the trend and the spread of a jittering metric are visible without opening
-  each benchmark's full report.
+  run, plus a right-margin distribution column (one alpha-blended dot per run) and
+  the μ/σ of the series, so both the trend and the spread of a jittering metric
+  are visible without opening each benchmark's full report.
 
-A cell shows one number, because a column is only as wide as the table divided by
-its columns: μ, σ, the baseline and the run count are on its tooltip, and the
-column's unit is written once in the header rather than on every value. Columns
-are sized from the column count — past the point where they would stop being
-legible the table scrolls horizontally instead of crushing them, and a
-one-metric table does not stretch a single sparkline across the screen.
+A cell holds two lines under its sparkline — the latest value with its Δ, then the
+μ and σ of the series — and it has room for them because the column's unit is
+written once in the header rather than on every number, and because columns are
+sized from the column count: past the point where they would stop being legible
+the table scrolls horizontally instead of crushing them, and a one-metric table
+does not stretch a single sparkline across the screen. The baseline and run count
+are on the cell tooltip, which keeps units on μ/σ since it is read on its own.
 
 It reads the machine-readable `*.summary.json` written by
 {func}`bencher.result_to_json` (with `include_series=True`) for every benchmark

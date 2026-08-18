@@ -52,7 +52,7 @@
      the viewport, and the ceiling stops a one-metric table stretching one
      sparkline across the screen. Fixed layout also keeps every sparkline in a
      column the same width, so their time axes line up when transposed. */
-  :root { --rowhead-w: 200px; --col-min: 96px; --col-max: 220px; }
+  :root { --rowhead-w: 200px; --col-min: 112px; --col-max: 220px; }
   .table-wrap {
     overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
     max-width: calc(var(--rowhead-w) + var(--cols) * var(--col-max));
@@ -96,12 +96,18 @@
   .spark svg { display: block; width: 100%; height: 30px; }
   .cval { font-weight: 600; color: #1f2937; }
   .cdelta { font-size: 0.72rem; color: #6b7280; }
-  /* The latest value and its Δ, wrapping rather than overflowing so a long value
-     stacks its Δ instead of spilling out of the column. μ/σ/baseline/run count
-     are on the cell tooltip: labelling four numbers per cell does not fit. */
-  .cfoot {
+  /* Two centered lines under the sparkline: the latest value with its Δ, then the
+     distribution it came from. Both wrap rather than overflow, so a long number
+     stacks instead of spilling into the next column — which is what the unit in
+     the header and the column floor below buy. The baseline and run count stay on
+     the tooltip; four numbers per cell is where a column runs out. */
+  .cfoot, .cdist {
     display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
     gap: 0 5px; line-height: 1.3;
+  }
+  .cmean, .csigma {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.7rem; color: #6b7280;
   }
   .cempty { color: #d1d5db; }
   .unit { color: #9ca3af; font-weight: 400; }
@@ -182,7 +188,7 @@
     <span><span class="swatch sw-passed"></span> passed</span>
     <span><span class="swatch sw-improved"></span> improved</span>
     <span><span class="swatch sw-none"></span> trend only (no regression check yet)</span>
-    <span>sparkline = mean-over-time line + ±std band with a node per run; right-edge dots = per-run distribution; hover a cell for μ/σ, baseline and run count</span>
+    <span>sparkline = mean-over-time line + ±std band with a node per run; right-edge dots = per-run distribution; μ/σ over the series, in the column's units; hover a cell for its baseline and run count</span>
   </div>
   {% macro data_cell(cell) %}
     {% if cell %}
@@ -192,6 +198,12 @@
         <span class="cval">{{ cell.latest_str }}</span>
         {% if cell.change_str %}<span class="cdelta">{{ cell.change_str }}</span>{% endif %}
       </div>
+      {% if cell.mean_str %}
+      <div class="cdist">
+        <span class="cmean">μ {{ cell.mean_str }}</span>
+        <span class="csigma">σ {{ cell.std_str }}</span>
+      </div>
+      {% endif %}
     </td>
     {% else %}
     <td class="cell v-none"><span class="cempty">—</span></td>

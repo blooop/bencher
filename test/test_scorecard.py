@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -577,15 +576,17 @@ class TestBuildCell:
         )
         assert build_cell(rec, "completion", CONFIG)["latest_str"] == "90%"
 
-    def test_units_in_header_drops_the_value_suffix(self, mock_reports: Path):
-        # The column shows "(s)" once in its header, so the value must not repeat
-        # it — but the tooltip, which is read on its own, keeps it.
+    def test_units_in_header_drops_the_display_suffixes(self, mock_reports: Path):
+        # The column shows "(s)" once in its header, so neither the value nor the
+        # distribution repeats it — but the tooltip, read on its own, keeps it.
         rec = next(
             r for r in discover_summaries(mock_reports, CONFIG) if r["tag"] == "test_bench_latency"
         )
         cell = build_cell(rec, "runtime", CONFIG, units_in_header=True)
         assert cell["latest_str"] == "4"
-        assert "μ 4.5 s" in cell["tooltip"]
+        assert cell["mean_str"] == "4.5"
+        assert cell["std_str"] == "0.5"
+        assert "μ 4.5 s · σ 0.5 s" in cell["tooltip"]
 
     def test_units_in_header_drops_the_percent_sign(self, mock_reports: Path):
         rec = next(
@@ -743,24 +744,35 @@ class TestCellFitsItsColumn:
     """A cell holds one number, and a column is sized so it fits."""
 
     def test_units_are_shown_once_in_the_header(self, mock_reports: Path):
+        # Not on the value, the mean and the std of every cell: that repetition is
+        # the width that μ and σ need to stay on the cell at all.
         generate_scorecard(mock_reports, CONFIG)
         html = (mock_reports / "index.html").read_text()
         assert '<span class="unit">(s)</span>' in html
-        # ... and not on every value, three times per cell.
         assert '<span class="cval">4 s</span>' not in html
         assert '<span class="cval">4</span>' in html
+        assert '<span class="cmean">μ 4.5 s</span>' not in html
 
-    def test_distribution_labels_are_tooltip_only(self, mock_reports: Path):
-        # μ/σ per cell is what made this page a wall of text; the sparkline shows
-        # the spread and the tooltip carries the numbers.
+    def test_distribution_reads_without_hovering(self, mock_reports: Path):
+        # μ/σ are what a reader scans the page for, so they are on the cell — one
+        # line under the value, in the unit the header already names.
         generate_scorecard(mock_reports, CONFIG)
         html = (mock_reports / "index.html").read_text()
-        # From the first table on: the legend explains μ/σ once, which is the point.
-        tables = html[html.index('<section class="category">') : html.index("</main>")]
-        visible = re.sub(r'title="[^"]*"', "", tables)
-        assert "μ" not in visible
-        assert "σ" not in visible
-        assert "μ" in tables  # still there, on the tooltips
+        assert '<span class="cmean">μ 4.5</span>' in html
+        assert '<span class="csigma">σ 0.5</span>' in html
+        # The tooltip keeps the units, because it is read on its own.
+        assert "μ 4.5 s · σ 0.5 s" in html
+
+    def test_a_cell_without_a_series_has_no_distribution_line(self):
+        # An optimal_value with no series has a latest value and nothing to spread.
+        rec = {
+            "metrics": {"latency": _metric("latency", "minimize", "s", [], optimal_value=3.0)},
+            "regressions": {},
+        }
+        cell = build_cell(rec, "latency", CONFIG)
+        assert cell["latest_str"] == "3 s"
+        assert cell["mean_str"] == ""
+        assert cell["std_str"] == ""
 
     def test_column_count_sizes_each_table(self, mock_reports: Path):
         # --cols drives the per-column min/max width, so a 40-column table

@@ -8,19 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **Scorecard: a cell holds one number, and a column is sized so it fits.** The cell labelled
+- **Scorecard: a cell holds its numbers, and a column is sized to fit them.** The cell labelled
   four numbers — latest, Δ, `μ`, `σ` — each with its own unit, inside a column the table gave
   `width / n_columns` with a single 640px floor on the whole table. At the 19-40 metrics a real
   project accumulates that is ~30px of column for ~150px of text, and nothing stopped the
   overflow: the labels were `white-space: nowrap` and `td.cell` had no `overflow`, so they printed
   over the neighbouring column's numbers. The same rule inverts on a one-metric section,
-  stretching a single sparkline across the viewport. Now the cell shows the latest value and its Δ
-  on one wrapping line with `μ`/`σ`/baseline/run-count on its tooltip; a column's unit is written
-  once in its header when every benchmark in it agrees (`column_units`, plus
-  `build_cell(units_in_header=)` to drop the suffix); a metric name wraps on its underscores
-  instead of truncating to `repe…`; and each table carries its column count, giving data columns a
-  min and a max width — past the floor the table scrolls rather than crushing. `td.cell` is
-  `overflow: hidden` as the hard stop.
+  stretching a single sparkline across the viewport. Now the value and its Δ are one centered line
+  under the sparkline and `μ`/`σ` the next, both wrapping rather than overflowing; a column's unit
+  is written once in its header when every benchmark in it agrees (`column_units`, plus
+  `build_cell(units_in_header=)`), which is the width that buys; a metric name wraps on its
+  underscores instead of truncating to `repe…`; and each table carries its column count, giving
+  data columns a min and a max width — past the floor the table scrolls rather than crushing.
+  `td.cell` is `overflow: hidden` as the hard stop, and the baseline and run count move to the
+  tooltip.
 
 ### Added
 - **`ScorecardConfig.secondary_metrics` / `secondary_label`** — metric names describing the *run*
