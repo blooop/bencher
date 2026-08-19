@@ -46,7 +46,9 @@ in the page header (the choice is remembered across visits):
 Every benchmark reports the same handful of harness metrics — did the process
 start, did it shut down cleanly, was the artifact captured — and left in the main
 table they crowd out the columns a section is actually about. List them in
-`secondary_metrics` and they render in a collapsed group beneath it instead.
+`secondary_metrics` and they render in their own group beneath it instead — open, so
+nothing is hidden; the grouping is what stops them interleaving with the columns
+the section is about.
 
 ## Producing the input
 
@@ -87,7 +89,7 @@ generate_scorecard("reports", config, chrome=Chrome(title="My Health Page"))
 | `registry` | `tag -> (category, name, description)` for known benchmarks; unknown tags auto-name into `other_category` |
 | `aliases` | `raw -> canonical` metric names so equivalent metrics from different benchmarks share a column |
 | `percent_metrics` | metric names whose `0..1` value renders as a percentage |
-| `secondary_metrics` | metric names describing the *run* rather than what it measured; they render in a collapsed group under each section instead of taking columns from its subject |
+| `secondary_metrics` | metric names describing the *run* rather than what it measured; they render in their own group under each section instead of taking columns from its subject |
 | `secondary_label` | heading for that collapsed group (default `Harness health`) |
 | `layout` | on-disk {class}`~bencher.scorecard.ReportLayout` (root subdir + link pattern) |
 
