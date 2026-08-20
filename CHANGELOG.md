@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.121.1] - 2026-08-20
+
 ### Fixed
 - **The scorecard's secondary-metric group renders open.** It was a collapsed `<details>`, which
   reads as hiding data: the harness metrics are real debug and regression signal, and a reader
