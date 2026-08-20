@@ -119,6 +119,10 @@
   td.v-trend { background: #fff; }
   td.v-trend .cdelta { color: #475569; }
   td.v-none { background: #fafafa; }
+  /* Open by default: the group exists to stop these columns interleaving with the
+     section's own subject, not to hide them — a reader scanning for a regression
+     should not have to know they are behind a click. The disclosure stays so a
+     reader who wants the shorter page can collapse it. */
   .secondary { margin-top: 8px; }
   .secondary > summary {
     cursor: pointer; font-size: 0.75rem; color: #6b7280; padding: 3px 2px; width: fit-content;
@@ -271,7 +275,7 @@
     <h2 class="category-title">{{ section.category }}</h2>
     {{ group_tables(section.main) }}
     {% if section.secondary %}
-    <details class="secondary">
+    <details class="secondary" open>
       <summary>{{ secondary_label }} — {{ section.secondary.metrics|length }} metric{{ "s" if section.secondary.metrics|length != 1 }}</summary>
       {{ group_tables(section.secondary) }}
     </details>

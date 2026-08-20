@@ -804,17 +804,17 @@ class TestSecondaryMetrics:
     def test_secondary_columns_leave_the_main_table(self, mock_reports: Path):
         generate_scorecard(mock_reports, self.SECONDARY)
         html = (mock_reports / "index.html").read_text()
-        main, _sep, secondary = html.partition('<details class="secondary">')
+        main, _sep, secondary = html.partition('<details class="secondary" open>')
         performance = main[main.index(">Performance<") :]
         assert "queue_<wbr>depth" not in performance
         assert "queue_<wbr>depth" in secondary
 
-    def test_group_is_labelled_and_collapsed(self, mock_reports: Path):
+    def test_group_is_labelled_and_open(self, mock_reports: Path):
         generate_scorecard(mock_reports, self.SECONDARY)
         html = (mock_reports / "index.html").read_text()
         assert "<summary>Run health — 2 metrics</summary>" in html
-        # No `open`: the columns are one click away, not in the way.
-        assert '<details class="secondary" open>' not in html
+        # Grouped, not hidden: demoting a metric must not cost a reader the signal.
+        assert '<details class="secondary" open>' in html
 
     def test_section_of_only_secondary_metrics_keeps_them(self, mock_reports: Path):
         # "Other" reports nothing but `widgets`; demoting every column would
@@ -827,12 +827,12 @@ class TestSecondaryMetrics:
         generate_scorecard(mock_reports, config)
         html = (mock_reports / "index.html").read_text()
         other = html[html.index(">Other<") :]
-        assert "widgets" in other.partition('<details class="secondary">')[0]
+        assert "widgets" in other.partition('<details class="secondary" open>')[0]
 
     def test_no_group_when_nothing_is_demoted(self, mock_reports: Path):
         generate_scorecard(mock_reports, CONFIG)
         html = (mock_reports / "index.html").read_text()
-        assert '<details class="secondary">' not in html
+        assert '<details class="secondary"' not in html
 
 
 class TestOrientationToggle:

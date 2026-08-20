@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.121.1] - 2026-08-20
+
+### Fixed
+- **The scorecard's secondary-metric group renders open.** It was a collapsed `<details>`, which
+  reads as hiding data: the harness metrics are real debug and regression signal, and a reader
+  scanning a page for a regression should not have to know they are behind a click. The grouping
+  earns its keep on its own — it stops those columns interleaving with the ones a section is
+  actually about — so the group stays and only the collapsing goes. The disclosure control remains,
+  so a reader who wants the shorter page can still fold it away.
+
 ## [1.121.0] - 2026-08-18
 
 ### Changed
