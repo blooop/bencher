@@ -95,7 +95,7 @@
         "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
     ],
 
-    "postCreateCommand": "sudo chown vscode .pixi && pixi install && pixi run prek-install",
+    "postCreateCommand": ".devcontainer/post-create.sh",
 
     // Last in the file on purpose, and it is the one line here that is load
     // bearing for every repo cut from this template.
