@@ -14,9 +14,3 @@ RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc \
     && echo 'export PATH="$HOME/.pixi/bin:$PATH"' >> /home/vscode/.profile \
     && echo '# Workaround: pixi trampoline fails for bash scripts, so add env bin directly' >> /home/vscode/.profile \
     && echo '[ -d "$HOME/.pixi/envs/claude-shim/bin" ] && export PATH="$HOME/.pixi/envs/claude-shim/bin:$PATH"' >> /home/vscode/.profile
-
-# Create .ssh directory with proper permissions for SSH config mounts
-RUN mkdir -p /home/vscode/.ssh && chmod 700 /home/vscode/.ssh
-
-# Create .config/gh directory for GitHub CLI config mounts
-RUN mkdir -p /home/vscode/.config/gh

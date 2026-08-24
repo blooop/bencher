@@ -1,5 +1,4 @@
 {
-    "name": "bencher",
     // Uses the template's prebuilt image by default for fast startup.
     // To build locally: pixi run dev-use-local
     // To use this repo's own prebuilt image: pixi run dev-use-prebuilt
@@ -8,12 +7,39 @@
     //     "context": ".."
     // },
     "image": "ghcr.io/blooop/python_template/devcontainer:latest",
-    "features": {
-        "./claude-code": {},
-        // "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-        // "ghcr.io/devcontainers/features/common-utils:2": {}
-    },
+
+    // There is deliberately no "features" block. The claude-code feature is
+    // already baked into the image above: .devcontainer/ci/devcontainer.json,
+    // which is the config CI builds that image from, declares
+    // "../claude-code". Declaring it again here made the devcontainer spec
+    // build a derived image on the first launch of every branch, reinstalling
+    // something the pulled image already carried -- so the "prebuilt image for
+    // fast startup" above still paid for a build. With this block gone the
+    // launch is a pull and nothing else.
+    //
+    // Adding a feature back here is allowed and costs that derived build again.
+    // If that ever becomes the normal case, the fix is devlaunch's design --
+    // a "build:" block plus customizations.devpod.prebuildRepository, which
+    // caches the fully assembled image, features included. That needs CI to
+    // publish with `devpod build` rather than the devcontainers/ci action;
+    // devpod's prebuild hash is computed from the Dockerfile and build context,
+    // so it does not apply to an "image:" config like this one at all.
+
     "initializeCommand": ".devcontainer/claude-code/init-host.sh",
+
+    // There is deliberately no "runArgs": ["--network=host"].
+    //
+    // A container per branch is the reason these repos are launched with `dl`,
+    // and host networking takes it away: the container joins the host's network
+    // namespace, so every port a test or dev server binds is a host port and
+    // two branches of this repo collide on the first one they share. The
+    // default bridge network keeps them apart at no cost -- nothing in this
+    // template reaches for the host's network.
+    //
+    // Two sibling repos keep the flag on purpose and should not be "fixed" to
+    // match this file: homeassistant-config (mDNS/discovery needs the host LAN)
+    // and colcon-runner (ROS 2 DDS multicast discovery).
+
     "customizations": {
         "vscode": {
             "settings": {},
@@ -28,21 +54,58 @@
             ]
         }
     },
-    "runArgs": [
-        "--network=host"
-    ],
+
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
         "XDG_CONFIG_HOME": "/home/vscode/.config",
         "XDG_CACHE_HOME": "/home/vscode/.cache",
-        "XDG_DATA_HOME": "/home/vscode/.local/share",
-        "SSH_AUTH_SOCK": "/home/vscode/.ssh/agent.sock"
+        "XDG_DATA_HOME": "/home/vscode/.local/share"
     },
+
+    // Two mounts, and the two that are gone were removed for reasons rather
+    // than tidiness -- both follow the precedent already reasoned out in
+    // blooop/wayfinder's devcontainer.json.
+    //
+    // ~/.config/gh is gone because it never worked: `gh` keeps its token in the
+    // system keyring, so the mounted hosts.yml carries no oauth_token and
+    // `gh auth status` inside the container reports the token as invalid.
+    // GitHub auth arrives as GH_TOKEN instead, which `dl` forwards into every
+    // workspace it starts (from GH_TOKEN, GITHUB_TOKEN or `gh auth token`,
+    // whichever answers first). Opened by something other than `dl` -- a plain
+    // `devpod up`, or VS Code's Reopen in Container -- this container has no
+    // `gh` login; export GH_TOKEN yourself for those.
+    //
+    // ~/.ssh is gone because mounting the directory put entries on the
+    // developer's real config that nothing outside the container could honour:
+    // devpod running in here writes `Host <id>.devpod` blocks whose
+    // ProxyCommand names a binary that exists only inside this container, and
+    // those outlived the container they pointed at. It also handed over the
+    // private key, which was never load-bearing -- devpod forwards git
+    // credentials and can forward an ssh agent, which lends the use of a key
+    // without copying it. SSH_AUTH_SOCK is gone from containerEnv with it,
+    // rather than being left as a path nothing fills.
     "mounts": [
         "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
-        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind",
-        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
         "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
     ],
-    "postCreateCommand": "sudo chown vscode .pixi && pixi install && pixi run prek-install"
+
+    "postCreateCommand": "sudo chown vscode .pixi && pixi install && pixi run prek-install",
+
+    // Last in the file on purpose, and it is the one line here that is load
+    // bearing for every repo cut from this template.
+    //
+    // "name" is the only per-repo value in this file, so it is the only line a
+    // child repo edits -- and while it sat on the line above the image/build
+    // block, which is the block this template changes most, every
+    // `pixi run update-from-template-repo` conflicted on this file. git cannot
+    // split adjacent hunks, so the child's one-line name edit collided with the
+    // template's block edit every time. Measured against blooop/dbw: reverting
+    // only the name made the same merge clean.
+    //
+    // At the end of the file the two edits are separate hunks and merge without
+    // conflict -- the child keeps its name, and template changes to the image,
+    // the mounts and postCreateCommand all land on their own. Moving it costs
+    // one restructuring conflict per child, once; leaving it here costs a
+    // conflict on this file forever.
+    "name": "bencher"
 }

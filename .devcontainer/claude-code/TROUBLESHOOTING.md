@@ -2,36 +2,41 @@
 
 ## Quick Reference
 
-### Files That Must Exist on Host
+### Files on the Host
+
+`init-host.sh` creates `~/.claude` as the `initializeCommand`. Everything inside it is optional, and only `.credentials.json` is load-bearing for an authenticated `claude`.
 
 ```bash
-~/.claude/
-├── .credentials.json    # OAuth tokens (must be writable)
-├── .claude.json         # Account info, setup state (must be writable)
-├── CLAUDE.md           # Global instructions (read-only)
-├── settings.json       # Settings (read-only)
-├── agents/             # Custom agents (read-only)
-├── commands/           # Custom commands (read-only)
-└── hooks/              # Event hooks (read-only)
+~/.claude/               # one bind mount, read-write, shared with every container
+├── .credentials.json    # OAuth tokens
+├── .claude.json         # Account info, setup state
+├── CLAUDE.md            # Global instructions
+├── settings.json        # Settings
+├── agents/              # Custom agents
+├── commands/            # Custom commands
+└── hooks/               # Event hooks
 ```
+
+Every one of these is writable from inside the container, and a write lands on the host. See "Security Considerations" below for what follows from that.
 
 ### Critical Configuration in devcontainer.json
 
 ```json
 {
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {},
-    "./claude-code": {}
-  },
-  "runArgs": ["--network=host"],
+  "image": "ghcr.io/blooop/python_template/devcontainer:latest",
   "containerEnv": {
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
     "XDG_CONFIG_HOME": "/home/vscode/.config",
     "XDG_CACHE_HOME": "/home/vscode/.cache",
     "XDG_DATA_HOME": "/home/vscode/.local/share"
-  }
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
+  ]
 }
 ```
+
+The `../claude-code` feature is declared in `.devcontainer/ci/devcontainer.json`, the config CI builds the image from, so there is no `features` block here -- and no `runArgs` either.
 
 ## Common Issues and Solutions
 
@@ -47,17 +52,19 @@ Claude tracks setup completion per-workspace in `.claude.json`:
 ```json
 {
   "projects": {
-    "/workspaces/pythontemplate": {
+    "/workspaces/<workspace>": {
       "projectOnboardingSeenCount": 0  // ← This!
     }
   }
 }
 ```
 
+`<workspace>` is the devpod workspace name -- `devpod list` shows it, and `dl --ls` shows it for workspaces devlaunch created.
+
 **Solution:**
 ```bash
 # On HOST machine, set a high count to skip wizard
-jq '.projects["/workspaces/pythontemplate"].projectOnboardingSeenCount = 999' \
+jq '.projects["/workspaces/<workspace>"].projectOnboardingSeenCount = 999' \
   ~/.claude/.claude.json > ~/.claude/.claude.json.tmp
 mv ~/.claude/.claude.json.tmp ~/.claude/.claude.json
 
@@ -65,16 +72,15 @@ mv ~/.claude/.claude.json.tmp ~/.claude/.claude.json
 jq '. + {themeMode: "dark"}' ~/.claude/.claude.json > ~/.claude/.claude.json.tmp
 mv ~/.claude/.claude.json.tmp ~/.claude/.claude.json
 
-# Rebuild container
-devpod up . --recreate
+# Then restart `claude` in the container -- the mount is live, so no rebuild is needed
 ```
 
 **Why 999?** The field is `projectOnboardingSeenCount` - it increments each time you see the wizard. Setting it high tells Claude "this workspace has been onboarded many times, skip the wizard."
 
 **Verification:**
 ```bash
-# In container
-devpod ssh pythontemplate
+# From the host, shell into the container
+devpod ssh <workspace>
 claude  # Should go straight to interactive mode without wizard
 ```
 
@@ -89,6 +95,9 @@ claude  # Should go straight to interactive mode without wizard
 OAuth callback server runs inside container on a random port (e.g., `localhost:35673`). Your browser tries to connect to that port on the HOST, but the container's port isn't accessible.
 
 **Solution:**
+Authenticate on the host, where the browser can reach the callback port, and let the container read the resulting credentials through the `~/.claude` bind mount. No OAuth flow then runs in the container at all.
+
+**Alternative, if you want the login to happen inside the container:**
 Add `--network=host` to devcontainer.json:
 
 ```json
@@ -99,11 +108,8 @@ Add `--network=host` to devcontainer.json:
 
 This makes the container share the host's network namespace, so ports inside the container are accessible from the host browser.
 
-**Trade-off:**
-Using `--network=host` gives the container full network access and may prevent VS Code extensions from installing (known issue: [#9212](https://github.com/microsoft/vscode-remote-release/issues/9212)).
-
-**Workaround if you can't use --network=host:**
-Authenticate on your host machine first, then credentials are shared via mounts.
+**What that costs:**
+VS Code extensions stop installing (known issue: [#9212](https://github.com/microsoft/vscode-remote-release/issues/9212)), the container gets full access to the host's network, and every port the container binds becomes a host port -- so two branch containers of the same repo collide on the first port they share.
 
 ### Issue 3: `claude --print` Works But Interactive `claude` Asks for Login
 
@@ -128,20 +134,21 @@ Two different issues:
 - Have to authenticate again
 
 **Root Cause:**
-`.credentials.json` or `.claude.json` is not mounted, or is mounted read-only.
+`~/.claude` is not mounted, so `claude` wrote its credentials into the container's own filesystem and they went away with the container.
 
 **Solution:**
 
-1. **Verify mounts in container:**
+1. **Verify the mount in the container:**
    ```bash
-   devpod ssh pythontemplate
+   # From the host, shell into the container (`devpod list` shows `<workspace>`,
+   # `dl --ls` for workspaces devlaunch created)
+   devpod ssh <workspace>
    mount | grep claude
    ```
 
-   Should show:
+   Should show one bind of the directory, read-write:
    ```
-   /dev/... on /home/vscode/.claude/.credentials.json type ext4 (rw,...)
-   /dev/... on /home/vscode/.claude/.claude.json type ext4 (rw,...)
+   /dev/... on /home/vscode/.claude type ext4 (rw,...)
    ```
 
 2. **Check files exist on host:**
@@ -149,26 +156,20 @@ Two different issues:
    ls -la ~/.claude/.credentials.json ~/.claude/.claude.json
    ```
 
-3. **Verify files are writable (not ro):**
-   The mounts MUST be read-write for auth to persist.
+3. **Check the mount is read-write:**
+   A refresh has to persist, so `rw` in the line above is load-bearing. The feature declares no `ro` flag, so a read-only mount means something outside it added one.
 
-### Issue 5: "Read-only file system" Error
+### Issue 5: A Container Changed the Host's Claude Configuration
 
 **Symptoms:**
-- Error when trying to write to `~/.claude/CLAUDE.md` or similar
-- Operations fail with "Read-only file system"
+- `~/.claude/CLAUDE.md`, `settings.json` or a file under `hooks/` differs from what you left on the host
+- A hook or setting you did not write takes effect when you start `claude` on the host
 
-**Expected Behavior:**
-This is intentional! Security files are mounted read-only:
-- `CLAUDE.md`, `settings.json`, `agents/`, `commands/`, `hooks/` → Read-only
-
-**Why?**
-Prevents prompt injection attacks that could modify your Claude configuration.
+**Root Cause:**
+Not a malfunction. `~/.claude` is one read-write bind of the whole directory, so the host and every container share it and anything in a container can write any of it. `hooks/` and `settings.json` are executed by Claude Code wherever it runs, so what a container leaves there runs on the host next time.
 
 **Solution:**
-Edit these files on your HOST machine, then restart/rebuild the container.
-
-Only `.credentials.json` and `.claude.json` are read-write (needed for auth and state).
+Restore the files from wherever your configuration lives -- keeping `~/.claude` under version control is what makes a change like this visible and reversible. Then look at what put it there: a `postCreateCommand`, a hook, or an agent session in the container all reach that far.
 
 ### Issue 6: File Permission Errors (600 vs 664)
 
@@ -203,7 +204,7 @@ cat ~/.claude/.claude.json | jq '.oauthAccount.emailAddress'
 ```bash
 # In container
 mount | grep claude
-# Should show all mounted files/directories
+# Should show one bind of /home/vscode/.claude, rw
 
 ls -la ~/.claude/
 # Should show files from your host
@@ -235,7 +236,7 @@ echo "what is 2+2" | claude --print
 
 ```bash
 # On HOST
-cat ~/.claude/.claude.json | jq '.projects["/workspaces/pythontemplate"]'
+cat ~/.claude/.claude.json | jq '.projects["/workspaces/<workspace>"]'
 ```
 
 Look for:
@@ -247,16 +248,15 @@ Look for:
 ```bash
 # On HOST
 docker inspect <container-id> | jq '.[0].HostConfig.NetworkMode'
-# Should show: "host"
+# "host" only if you opted into --network=host; otherwise the default bridge network
 ```
 
 ## Complete Setup Checklist
 
 When setting up a new workspace:
 
-- [ ] Node.js feature added to devcontainer.json
-- [ ] `./claude-code` feature added
-- [ ] `runArgs: ["--network=host"]` added
+- [ ] `../claude-code` feature declared in `.devcontainer/ci/devcontainer.json`, so the published image carries it
+- [ ] `claude` authenticated on the host, so no OAuth flow runs in the container
 - [ ] Environment variables added (CLAUDE_CONFIG_DIR, XDG_*)
 - [ ] Files exist on host: `.credentials.json`, `.claude.json`
 - [ ] File permissions: `chmod 600` on sensitive files
@@ -290,7 +290,7 @@ Contains account info, feature flags, and per-workspace state. Key fields:
   "userID": "...",
   "themeMode": "dark",
   "projects": {
-    "/workspaces/pythontemplate": {
+    "/workspaces/<workspace>": {
       "projectOnboardingSeenCount": 999,
       "hasTrustDialogAccepted": false,
       ...
@@ -332,20 +332,16 @@ watch -n 1 'stat ~/.claude/.claude.json | grep Modify'
 
 ## Security Considerations
 
-### What's Protected (Read-Only)
-- `CLAUDE.md` - Prevents prompt injection
-- `settings.json` - Prevents config tampering
-- `agents/`, `commands/`, `hooks/` - Prevents malicious modifications
+### What the Mount Actually Is
+One read-write bind of the whole `~/.claude` directory. No `ro` flag, no per-file mounts. `.credentials.json`, `.claude.json`, `CLAUDE.md`, `settings.json`, `agents/`, `commands/` and `hooks/` are all writable from inside the container, and a write lands on the host's copy.
 
-### What's Writable (Necessary Risk)
-- `.credentials.json` - OAuth tokens (necessary for auth)
-- `.claude.json` - Setup state (necessary to skip wizard)
+### The Consequence
+`hooks/` and `settings.json` are executed by Claude Code wherever it runs, so content a container writes there runs on the **host** the next time Claude Code starts there -- a `postCreateCommand` from a repository nobody read is enough. The container also holds the live Claude credentials from the mount and, under `dl`, a `GH_TOKEN` carrying repo and workflow scopes. It is not a confidentiality or integrity boundary.
 
-### Mitigation
-- Only use in trusted repositories
-- Files have `600` permissions (user-only access)
-- Container user isolation
-- Regular review of `.claude.json` changes
+### Why It Is Accepted
+Sharing one config directory is what makes credentials work across the host and every branch container: the access token is short-lived, so a read-only or copied arrangement drifts into a re-auth, and a container that cannot write `.claude.json` re-onboards on every launch. The isolation buys reproducible dependencies and non-colliding concurrent work, not safety against hostile code. `blooop/wayfinder`'s `.devcontainer/devcontainer.json` writes out the same threat model above its `mounts` block.
+
+Keeping `~/.claude` under version control is the one practical measure here: it makes a change from a container visible instead of silent.
 
 ## Known Limitations
 
