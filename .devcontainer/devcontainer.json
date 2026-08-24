@@ -62,30 +62,36 @@
         "XDG_DATA_HOME": "/home/vscode/.local/share"
     },
 
-    // Two mounts, and the two that are gone were removed for reasons rather
-    // than tidiness -- both follow the precedent already reasoned out in
-    // blooop/wayfinder's devcontainer.json.
+    // Three mounts. The pixi volume keeps the environment out of the bind-
+    // mounted workspace; the other two share host credentials.
     //
-    // ~/.config/gh is gone because it never worked: `gh` keeps its token in the
-    // system keyring, so the mounted hosts.yml carries no oauth_token and
-    // `gh auth status` inside the container reports the token as invalid.
-    // GitHub auth arrives as GH_TOKEN instead, which `dl` forwards into every
-    // workspace it starts (from GH_TOKEN, GITHUB_TOKEN or `gh auth token`,
-    // whichever answers first). Opened by something other than `dl` -- a plain
-    // `devpod up`, or VS Code's Reopen in Container -- this container has no
-    // `gh` login; export GH_TOKEN yourself for those.
+    // ~/.config/gh is here because it works. `gh` uses a system keyring when
+    // one is available and falls back to hosts.yml when it is not, and on this
+    // host it falls back: hosts.yml carries a real oauth_token, and inside a
+    // container built from this config -- with GH_TOKEN and GITHUB_TOKEN unset
+    // -- `gh auth status` reports "Logged in to github.com account blooop
+    // (/home/vscode/.config/gh/hosts.yml)". This mount is the only thing that
+    // gives `gh` a login in a container opened WITHOUT `dl`: a plain
+    // `devpod up`, or VS Code's Reopen in Container. Under `dl` it is
+    // redundant but harmless -- `dl` forwards GH_TOKEN from the host (from
+    // GH_TOKEN, GITHUB_TOKEN or `gh auth token`, whichever answers first), and
+    // devpod applies workspace env after the devcontainer's own, so where both
+    // are present the forwarded token is the one `gh` uses.
     //
-    // ~/.ssh is gone because mounting the directory put entries on the
-    // developer's real config that nothing outside the container could honour:
-    // devpod running in here writes `Host <id>.devpod` blocks whose
-    // ProxyCommand names a binary that exists only inside this container, and
-    // those outlived the container they pointed at. It also handed over the
-    // private key, which was never load-bearing -- devpod forwards git
-    // credentials and can forward an ssh agent, which lends the use of a key
-    // without copying it. SSH_AUTH_SOCK is gone from containerEnv with it,
-    // rather than being left as a path nothing fills.
+    // ~/.ssh is deliberately not mounted, for reasons that have nothing to do
+    // with the above. devpod forwards an ssh agent of its own, at a socket path
+    // it chooses -- verified in a live container: `ssh-add -l` lists the host's
+    // key and `git ls-remote` against a git@github.com: origin succeeds with an
+    // empty ~/.ssh -- so the private key does not need to be in here at all.
+    // Mounting the directory also wrote `Host <id>.devpod` blocks onto the
+    // developer's real ssh config, naming a ProxyCommand binary that exists
+    // only inside the container, and those outlived the container. SSH_AUTH_SOCK
+    // is gone from containerEnv for the same reason: hardcoding
+    // /home/vscode/.ssh/agent.sock overrode the socket devpod actually
+    // forwards with a path nothing fills.
     "mounts": [
         "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
         "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
     ],
 
