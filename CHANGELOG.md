@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.122.0] - 2026-08-25
+
 ### Changed
 - **The rerun extra floats across a minor's patches instead of naming one release: `rerun-sdk`
   and `rerun-notebook` are `>=0.36.0,<0.37`.** Pinning a single version made every rerun patch
