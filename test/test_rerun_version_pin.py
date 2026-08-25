@@ -1,11 +1,14 @@
 """The declared rerun support window, the installed SDK, and the viewer must agree.
 
 Bencher embeds the rerun web viewer by asking a CDN for a viewer whose version
-matches the ``rerun-sdk`` that recorded the ``.rrd`` file.  That only works if
-three things stay in lockstep: the version declared by the ``rerun`` extra, the
-version actually installed, and the version bencher falls back to when
-``rerun-sdk`` is absent.  These tests pin that agreement so a version bump
-cannot land half-done.
+matches the ``rerun-sdk`` that recorded the ``.rrd`` file.  That version is read off
+the installed distribution, so the pairing is exact for free — what the ``rerun``
+extra has to state is which *minor* bencher was tested against, since that is where
+this still-alpha API reshapes archetypes and blueprint types.  Patches inside a minor
+are fixes to a format bencher already round-trips, so the window floats across them
+and only the minor is pinned.  These tests hold the window to exactly one minor, keep
+both rerun distributions on the same one, and keep the no-metadata viewer fallback
+inside it, so a version bump cannot land half-done.
 """
 
 import tomllib
@@ -17,6 +20,7 @@ from unittest import mock
 
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 
 from bencher.utils_rrd import _get_rerun_version
 
@@ -34,33 +38,46 @@ def declared_rerun_specifiers() -> dict[str, SpecifierSet]:
     return {req.name: req.specifier for req in requirements}
 
 
-def declared_pin(specifier: SpecifierSet) -> set[str]:
-    """The distinct versions a specifier names, ignoring exclusions."""
-    return {clause.version for clause in specifier if clause.operator != "!="}
+def declared_floor(specifier: SpecifierSet) -> Version:
+    """The lowest version a specifier admits, as its ``>=`` clause names it."""
+    floors = [Version(clause.version) for clause in specifier if clause.operator == ">="]
+    if len(floors) != 1:
+        raise AssertionError(f"expected exactly one >= clause, got {specifier}")
+    return floors[0]
 
 
 class TestDeclaredRerunPin(unittest.TestCase):
-    """The ``rerun`` extra names exactly one supported rerun version."""
+    """The ``rerun`` extra names exactly one supported rerun minor."""
 
     def setUp(self):
         self.specifiers = declared_rerun_specifiers()
         self.assertEqual(sorted(self.specifiers), sorted(RERUN_PACKAGES))
 
-    def test_each_rerun_package_is_pinned_to_a_single_version(self):
-        """The rerun API is alpha-stage, so bencher supports one version at a time."""
+    def test_each_window_admits_every_patch_of_one_minor(self):
+        """A patch fixes a format bencher round-trips; a minor reshapes the API."""
         for name in RERUN_PACKAGES:
             with self.subTest(package=name):
                 specifier = self.specifiers[name]
-                self.assertEqual(
-                    len(declared_pin(specifier)),
-                    1,
-                    f"{name} should pin exactly one version, got {specifier}",
-                )
+                floor = declared_floor(specifier)
+                series = f"{floor.major}.{floor.minor}"
+                for patch in (0, 99):
+                    self.assertTrue(
+                        specifier.contains(f"{series}.{patch}"),
+                        f"{name} {specifier} does not admit all of {series}.x",
+                    )
+                for outside in (
+                    f"{floor.major}.{floor.minor + 1}.0",
+                    f"{floor.major}.{floor.minor - 1}.99",
+                ):
+                    self.assertFalse(
+                        specifier.contains(outside),
+                        f"{name} {specifier} reaches outside {series}.x to {outside}",
+                    )
 
-    def test_both_rerun_packages_are_pinned_to_the_same_version(self):
+    def test_both_rerun_packages_declare_the_same_window(self):
         """``rerun-notebook`` ships the viewer assets for its matching ``rerun-sdk``."""
-        pinned = {frozenset(declared_pin(self.specifiers[name])) for name in RERUN_PACKAGES}
-        self.assertEqual(len(pinned), 1, f"rerun packages disagree on version: {pinned}")
+        windows = {str(self.specifiers[name]) for name in RERUN_PACKAGES}
+        self.assertEqual(len(windows), 1, f"rerun packages disagree on window: {windows}")
 
     def test_installed_rerun_packages_satisfy_the_declared_pin(self):
         for name in RERUN_PACKAGES:

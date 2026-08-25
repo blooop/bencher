@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.122.0] - 2026-08-25
+
+### Changed
+- **The rerun extra floats across a minor's patches instead of naming one release: `rerun-sdk`
+  and `rerun-notebook` are `>=0.36.0,<0.37`.** Pinning a single version made every rerun patch
+  release a bencher release too, and it bought nothing the exact pin was there for: the CDN
+  viewer version is read off the installed `rerun-sdk`, so that pairing is exact whatever the
+  patch is, and a patch release fixes a format bencher already round-trips rather than reshaping
+  the archetype and blueprint surfaces bencher calls — which is the thing a minor of this
+  alpha-stage API does, and the thing the window still pins. `test_rerun_version_pin` moves with
+  it: it now holds the window to exactly one minor and both distributions to the same one,
+  instead of asserting a single version. The environment resolves 0.36.3, and the no-metadata
+  viewer fallback names the window's floor so it stays correct for every patch in it.
+
 ## [1.121.1] - 2026-08-20
 
 ### Fixed

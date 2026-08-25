@@ -1,6 +1,6 @@
 [project]
 name = "holobench"
-version = "1.121.1"
+version = "1.122.0"
 
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A package for benchmarking the performance of arbitrary functions"
@@ -90,7 +90,8 @@ docs = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-rerun = ["rerun-sdk>=0.36.0,<=0.36.0", "rerun-notebook>=0.36.0,<=0.36.0"]
+#one minor at a time, any patch within it: the CDN viewer follows the installed sdk exactly
+rerun = ["rerun-sdk>=0.36.0,<0.37", "rerun-notebook>=0.36.0,<0.37"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
