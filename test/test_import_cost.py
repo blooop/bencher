@@ -6,7 +6,7 @@ costs another ~0.2s and pulls all of ``IPython`` behind it (via
 ``moviepy.video.io.display_in_notebook``). None of it is needed to define a sweep or
 run a benchmark -- only to render a plot or write a video -- and every one of those
 modules used to be imported at module scope, so *every* ``import bencher`` paid for
-them. That is 3.0s down to 0.98s.
+them. That is ~3.2s down to ~1.1s, measured back to back on one machine.
 
 These are the imports that can silently undo it. ``hvplot.pandas`` and
 ``hvplot.xarray`` are especially easy to reintroduce: they exist purely to attach the

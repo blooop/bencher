@@ -10,11 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.123.0] - 2026-09-03
 
 ### Changed
-- **`import bencher` no longer pays for hvplot, colorcet, moviepy or IPython: 3.0s down to
-  0.98s.** Nine modules under `bencher/results/` carried a top-level `import hvplot.pandas` /
+- **`import bencher` no longer pays for hvplot, colorcet, moviepy or IPython: ~3.2s down to
+  ~1.1s.** Nine modules under `bencher/results/` carried a top-level `import hvplot.pandas` /
   `import hvplot.xarray`. Those two modules exist only to attach the `.hvplot` accessor to
   pandas and xarray objects, but reaching either imports `colorcet` — a 27,450-line module
-  that builds ~200 matplotlib colormaps in its body — which was 2.3s of the 3.0s on its own.
+  that builds ~200 matplotlib colormaps in its body — which was 2.3s of that on its own.
   Three of the nine never touched the accessor, which is what the
   `duplicate-code,unused-import` waivers on all nine were quietly recording. The eleven
   expressions that do use it now reach it through `hvplot_of(obj)` (new
