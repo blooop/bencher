@@ -33,6 +33,25 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  # The rerun extra supports more than one rerun minor; the default environment
+  # resolves the newest of them. This job runs the rerun tests against the floor
+  # of that window, so the older minor is supported in fact and not just on paper
+  # (bencher calls rerun.experimental, which is where an alpha API moves).
+  ci-rerun-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          cache: true
+          frozen: true
+          environments: rerun-floor
+      - name: Rerun tests on the oldest supported rerun
+        run: |
+          pixi update
+          pixi run -e rerun-floor test-rerun
+
   # Re-run the suite with the collect/render split forced on, so every report
   # build goes through save_result -> load_result -> render. Catches any divergence
   # between in-process and split rendering (unpicklable result types, render paths

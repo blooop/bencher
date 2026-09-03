@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.124.0] - 2026-09-03
+
+### Changed
+- **The rerun extra supports two minors, 0.36 and 0.37: `rerun-sdk` and `rerun-notebook` are
+  `>=0.36.0,<0.38`.** One minor at a time made every rerun minor a forced migration for
+  everything downstream on the same day — a caller that cannot move yet and a caller that
+  already has cannot both use one bencher. 0.37 is a rename plus a deprecation alias for the
+  part bencher touches (`datatypes` -> `encodings`, which bencher never spelled), and its
+  `rerun.experimental` surface — `RrdReader.recordings/stream`, `Chunk.to_record_batch/
+  with_entity_path` — is identical to 0.36's, so the two really are interchangeable here.
+- **Each supported minor is resolved by an environment, so the wider claim is tested rather
+  than asserted.** The default environment takes the newest release in the window (0.37.0) and
+  the new `rerun-floor` environment pins the floor minor (0.36.3); `pixi run test-rerun`
+  (`pytest -k rerun`, so a new rerun test joins for free) runs the rerun suite in both, the
+  second as its own CI job. `test_rerun_version_pin` enforces the pairing: the window must span
+  contiguous minors, every minor below the top needs a feature pinning it *and* an environment
+  including it, and no feature may pin outside the window — so widening to a third minor fails
+  until a job exists for it.
+- The no-metadata viewer fallback stays at the window's floor and says why it cannot do better:
+  with no `rerun-sdk` to read, nothing knows which release wrote the file, and no viewer reads
+  both minors. A caller that knows should pass `version`.
+
 ## [1.123.0] - 2026-09-03
 
 ### Changed
