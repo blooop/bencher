@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.123.0] - 2026-09-03
+
 ### Changed
 - **The rerun extra supports two minors, 0.36 and 0.37: `rerun-sdk` and `rerun-notebook` are
   `>=0.36.0,<0.38`.** One minor at a time made every rerun minor a forced migration for
