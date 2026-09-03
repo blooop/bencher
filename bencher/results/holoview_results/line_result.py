@@ -10,7 +10,7 @@ from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
-from bencher.results.hvplot_accessor import ensure_hvplot
+from bencher.results.hvplot_accessor import hvplot_of
 from bencher.utils import label_with_units
 from bencher.variables.results import SCALAR_RESULT_TYPES
 
@@ -106,7 +106,6 @@ class LineResult(HoloviewResult):
         Returns:
             hvplot.element.Curve | pn.Column: A line plot visualization.
         """
-        ensure_hvplot()
         da_plot = dataset[result_var.name]
 
         # 0D + over_time: time-series line with time on the x-axis.
@@ -128,7 +127,7 @@ class LineResult(HoloviewResult):
                 return None
             title = self.title_from_ds(da_plot, result_var, **kwargs)
             kwargs.setdefault("ylabel", label_with_units(result_var))
-            plot = da_plot.hvplot.line(
+            plot = hvplot_of(da_plot).line(
                 x="over_time",
                 y=da_plot.name,
                 title=title,
@@ -160,13 +159,13 @@ class LineResult(HoloviewResult):
                 if std_var in ds_t.data_vars:
                     return self._build_curve_overlay(ds_t, result_var, **kwargs)
                 da_t = ds_t[result_var.name]
-                plot_t = da_t.hvplot.line(x=x, by=by, title=title, **kwargs)
+                plot_t = hvplot_of(da_t).line(x=x, by=by, title=title, **kwargs)
                 return self._apply_opts(plot_t, xrotation=30)
 
             return self._build_time_holomap(dataset, result_var.name, make_line)
 
         time_widget_args = self.time_widget(title)
-        plot = da_plot.hvplot.line(
+        plot = hvplot_of(da_plot).line(
             x=x, by=by, widget_location="bottom", **time_widget_args, **kwargs
         )
         return self._apply_opts(plot, xrotation=30)
@@ -192,7 +191,6 @@ class LineResult(HoloviewResult):
         Returns:
             pn.Row: A panel row containing the interactive line plot and tap info.
         """
-        ensure_hvplot()
         da_plot = dataset[result_var.name]
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None
@@ -202,7 +200,9 @@ class LineResult(HoloviewResult):
         # Show units on both axes: x from the float input var, y from the result var
         kwargs.setdefault("xlabel", label_with_units(self.plt_cnt_cfg.float_vars[0]))
         kwargs.setdefault("ylabel", label_with_units(result_var))
-        plot = da_plot.hvplot.line(x=x, by=by, title=title, **kwargs).opts(
-            tools=["hover"], xrotation=30
+        plot = (
+            hvplot_of(da_plot)
+            .line(x=x, by=by, title=title, **kwargs)
+            .opts(tools=["hover"], xrotation=30)
         )
         return self._build_tap_plot(plot, dataset, result_var_plots, container)

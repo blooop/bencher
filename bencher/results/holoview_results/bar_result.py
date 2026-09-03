@@ -7,7 +7,7 @@ from param import Parameter
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
-from bencher.results.hvplot_accessor import ensure_hvplot
+from bencher.results.hvplot_accessor import hvplot_of
 from bencher.variables.results import ResultBool, ResultFloat
 
 
@@ -94,7 +94,6 @@ class BarResult(HoloviewResult):
         Returns:
             hvplot.element.Bars | hv.HoloMap: A bar chart visualization of the benchmark data.
         """
-        ensure_hvplot()
         da = dataset[result_var.name]
         use_holomap = self._use_holomap_for_time(dataset)
 
@@ -131,12 +130,12 @@ class BarResult(HoloviewResult):
 
             def make_bar(ds_t):
                 da_t = ds_t[da.name]
-                plot_t = da_t.hvplot.bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
+                plot_t = hvplot_of(da_t).bar(x=x_dim, y=da.name, by=by, title=title, **kwargs)
                 return self._apply_opts(plot_t, **opts_kwargs)
 
             return self._build_time_holomap(dataset, da.name, make_bar)
 
-        plot = da.hvplot.bar(
+        plot = hvplot_of(da).bar(
             x=x_dim, y=da.name, by=by, title=title, widget_location="bottom", **kwargs
         )
         return self._apply_opts(plot, **opts_kwargs)

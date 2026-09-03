@@ -7,7 +7,7 @@ from param import Parameter
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
-from bencher.results.hvplot_accessor import ensure_hvplot
+from bencher.results.hvplot_accessor import hvplot_of
 from bencher.utils import label_with_units
 from bencher.variables.results import ResultVar
 
@@ -62,7 +62,6 @@ class ScatterResult(HoloviewResult):
         Returns:
             pn.panel | None: A scatter plot visualization.
         """
-        ensure_hvplot()
         by = None
         if self.plt_cnt_cfg.cat_cnt > 1:
             by = [v.name for v in self.bench_cfg.input_vars[1:]]
@@ -70,7 +69,7 @@ class ScatterResult(HoloviewResult):
         kwargs.setdefault("ylabel", label_with_units(result_var))
         if self.bench_cfg.input_vars:
             kwargs.setdefault("xlabel", label_with_units(self.bench_cfg.input_vars[0]))
-        plot = dataset.hvplot.scatter(
+        plot = hvplot_of(dataset).scatter(
             by=by,
             subplots=False,
             widget_location="bottom",

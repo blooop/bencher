@@ -11,7 +11,7 @@ from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
-from bencher.results.hvplot_accessor import ensure_hvplot
+from bencher.results.hvplot_accessor import hvplot_of
 from bencher.variables.results import ResultFloat
 
 
@@ -108,7 +108,6 @@ class HeatmapResult(HoloviewResult):
             hv.HeatMap | hv.HoloMap | None: A heatmap visualization, or None if
                 the dataset has fewer than 2 dimensions.
         """
-        ensure_hvplot()
         if len(dataset.dims) < 2:
             return None
 
@@ -128,7 +127,7 @@ class HeatmapResult(HoloviewResult):
 
             return self._build_time_holomap(dataset, C, make_heatmap)
 
-        plot = dataset.hvplot.heatmap(
+        plot = hvplot_of(dataset).heatmap(
             x=x, y=y, C=C, cmap="plasma", title=title, widget_location="bottom", **kwargs
         )
         return self._apply_opts(plot, xrotation=30)
