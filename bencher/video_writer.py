@@ -23,9 +23,9 @@ class VideoWriter:
         self.images.append(img)
 
     def write(self) -> str:
-        import moviepy.video.io.ImageSequenceClip  # pylint: disable=import-outside-toplevel
-
         if len(self.images) > 0:
+            import moviepy.video.io.ImageSequenceClip  # pylint: disable=import-outside-toplevel
+
             clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(
                 self.images, fps=30, with_mask=False, load_images=True
             )
