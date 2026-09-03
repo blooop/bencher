@@ -373,6 +373,12 @@ include = [
     # The other eleven it touched did not, and their counts are recorded in plan 23
     # section 10 so the R9 follow-up can pick them up rather than re-measure.
     "bencher/plugins/registry.py",
+    # The grammar package lands strict from birth (plan 25 D1's ratchet rule, via the
+    # #1108 rulings): every module joins in the PR that creates it.
+    "bencher/grammar/__init__.py",
+    "bencher/grammar/channels.py",
+    "bencher/grammar/compose.py",
+    "bencher/grammar/capability.py",
     "bencher/results/manim_cartesian/cartesian_product_scene.py",
     "bencher/example/meta/generate_meta_plot_types.py",
     "bencher/example/meta/generate_meta_bool_plot_types.py",
