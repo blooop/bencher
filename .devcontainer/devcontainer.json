@@ -81,8 +81,13 @@
     // ~/.ssh is deliberately not mounted, for reasons that have nothing to do
     // with the above. devpod forwards an ssh agent of its own, at a socket path
     // it chooses -- verified in a live container: `ssh-add -l` lists the host's
-    // key and `git ls-remote` against a git@github.com: origin succeeds with an
-    // empty ~/.ssh -- so the private key does not need to be in here at all.
+    // key, so the private key does not need to be in here at all. What the
+    // agent cannot supply is known_hosts: on a genuinely fresh container the
+    // first ssh to github.com dies with `Host key verification failed`, which
+    // an interactive user can click through and a script cannot. That is what
+    // the ssh-keyscan in postCreateCommand below is for -- auth comes from the
+    // forwarded agent, host identity from keyscan, and neither needs the
+    // host's ~/.ssh in the container.
     // Mounting the directory also wrote `Host <id>.devpod` blocks onto the
     // developer's real ssh config, naming a ProxyCommand binary that exists
     // only inside the container, and those outlived the container. SSH_AUTH_SOCK
