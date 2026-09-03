@@ -16,10 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pandas and xarray objects, but reaching either imports `colorcet` — a 27,450-line module
   that builds ~200 matplotlib colormaps in its body — which was 2.3s of the 3.0s on its own.
   Three of the nine never touched the accessor, which is what the
-  `duplicate-code,unused-import` waivers on all nine were quietly recording. The seven methods
-  that do use it now call `ensure_hvplot()` first (new `bencher.results.hvplot_accessor`);
-  hvplot's patch functions already guard against re-patching, so a repeat call is a
-  `sys.modules` hit. `moviepy` moved into the methods that encode video, which drops `IPython`
+  `duplicate-code,unused-import` waivers on all nine were quietly recording. The eleven
+  expressions that do use it now reach it through `hvplot_of(obj)` (new
+  `bencher.results.hvplot_accessor`), which returns the accessor and imports hvplot as it
+  goes; hvplot's patch functions already guard against re-patching, so a repeat call is a
+  `sys.modules` hit. Returning the accessor rather than offering a "register it first" call
+  is deliberate: it ties the import to the expression that needs it, so a plot path cannot
+  use hvplot without importing it, cannot import it without using it, and no new plot type
+  can forget to. `moviepy` moved into the methods that encode video, which drops `IPython`
   with it — moviepy pulls all of IPython in through `moviepy.video.io.display_in_notebook`.
   What remains is panel, bokeh, holoviews and pandas, which is the reporting stack itself. A
   cold page cache made the old cost far worse than the warm number suggests: ~12.8s on a fresh
@@ -43,7 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path.** It asserts in a subprocess, since the test session imports hvplot as soon as any
   other test draws a plot. One plausible-looking `import hvplot.pandas` added to a plotting
   module to make an accessor call work silently puts the 2.3s back, so the failure message
-  names `ensure_hvplot()` as the fix.
+  names `hvplot_of()` as the fix. It also asserts that no module reaches `.hvplot` directly,
+  and that two paths which draw nothing — `to_heatmap_ds` on a sub-2-dimensional dataset, and
+  `VideoWriter.write()` with no frames — load neither library.
 
 ## [1.122.0] - 2026-08-25
 
