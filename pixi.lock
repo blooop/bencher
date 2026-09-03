@@ -1410,15 +1410,15 @@ packages:
 - pypi: ./
   name: holobench
   requires_dist:
-  - holoviews>=1.15,<=1.23.1
+  - holoviews>=1.15,<=1.23.2
   - numpy>=1.0,<=2.5.1
   - param>=2.0,<=2.4.1
   - hvplot>=0.12.0,<=0.12.2
-  - panel>=1.9.0,<=1.9.3
+  - panel>=1.9.0,<=1.9.4
   - diskcache>=5.6,<=5.6.3
   - optuna>=3.2,<=4.9.0
   - xarray>=2023.7,<=2026.7.0
-  - plotly>=5.15,<=6.9.0
+  - plotly>=5.15,<=7.0.0
   - pandas>=2.0,<=3.0.5
   - strenum>=0.4.0,<=0.4.15
   - scikit-learn>=1.2,<=1.9.0
@@ -1430,15 +1430,15 @@ packages:
   - ipykernel ; extra == 'test'
   - pip ; extra == 'test'
   - jupyter-bokeh ; extra == 'test'
-  - pylint>=3.2.5,<=4.0.6 ; extra == 'test'
+  - pylint>=3.2.5,<=4.0.7 ; extra == 'test'
   - pytest-cov>=4.1,<=7.1.0 ; extra == 'test'
   - pytest>=7.4,<=9.1.1 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.163.0 ; extra == 'test'
-  - ruff>=0.5.0,<=0.16.0 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.165.10 ; extra == 'test'
+  - ruff>=0.5.0,<=0.16.5 ; extra == 'test'
   - sphinxcontrib-mermaid>=1.0,<3.0 ; extra == 'test'
-  - coverage>=7.5.4,<=7.15.2 ; extra == 'test'
-  - prek>=0.2.28,<0.5.0 ; extra == 'test'
-  - ty<=0.0.66,>=0.0.66 ; extra == 'test'
+  - coverage>=7.5.4,<=7.16.0 ; extra == 'test'
+  - prek>=0.2.28,<0.6.0 ; extra == 'test'
+  - ty>=0.0.66,<=0.0.75 ; extra == 'test'
   - sphinx>=7.0,<=9.1.0 ; extra == 'docs'
   - myst-parser ; extra == 'docs'
   - sphinxcontrib-napoleon ; extra == 'docs'
