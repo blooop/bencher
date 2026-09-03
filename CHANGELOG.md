@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.123.0] - 2026-09-03
+## [1.124.0] - 2026-09-03
 
 ### Changed
 - **The rerun extra supports two minors, 0.36 and 0.37: `rerun-sdk` and `rerun-notebook` are
@@ -28,6 +28,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The no-metadata viewer fallback stays at the window's floor and says why it cannot do better:
   with no `rerun-sdk` to read, nothing knows which release wrote the file, and no viewer reads
   both minors. A caller that knows should pass `version`.
+
+## [1.123.0] - 2026-09-03
+
+### Changed
+- **`import bencher` no longer pays for hvplot, colorcet, moviepy or IPython: ~3.2s down to
+  ~1.1s.** Nine modules under `bencher/results/` carried a top-level `import hvplot.pandas` /
+  `import hvplot.xarray`. Those two modules exist only to attach the `.hvplot` accessor to
+  pandas and xarray objects, but reaching either imports `colorcet` — a 27,450-line module
+  that builds ~200 matplotlib colormaps in its body — which was 2.3s of that on its own.
+  Three of the nine never touched the accessor, which is what the
+  `duplicate-code,unused-import` waivers on all nine were quietly recording. The eleven
+  expressions that do use it now reach it through `hvplot_of(obj)` (new
+  `bencher.results.hvplot_accessor`), which returns the accessor and imports hvplot as it
+  goes; hvplot's patch functions already guard against re-patching, so a repeat call is a
+  `sys.modules` hit. Returning the accessor rather than offering a "register it first" call
+  is deliberate: it ties the import to the expression that needs it, so a plot path cannot
+  use hvplot without importing it, cannot import it without using it, and no new plot type
+  can forget to. `moviepy` moved into the methods that encode video, which drops `IPython`
+  with it — moviepy pulls all of IPython in through `moviepy.video.io.display_in_notebook`.
+  What remains is panel, bokeh, holoviews and pandas, which is the reporting stack itself. A
+  cold page cache made the old cost far worse than the warm number suggests: ~12.8s on a fresh
+  container, which is where this was first noticed downstream.
+- **`import bencher` no longer registers the `.hvplot` accessor as a global side effect.**
+  Worth knowing about downstream, because it used to arrive free on every pandas and xarray
+  object in the process: a caller that did `import bencher` and then `df.hvplot.line(...)` on
+  its *own* DataFrame worked by accident. That now raises `AttributeError` until something
+  builds a bencher plot. Such a caller should `import hvplot.pandas` itself, which is the
+  dependency it had all along — and the reason this is a minor rather than a patch.
+
+### Fixed
+- **`VideoWriter.write_video_raw`'s annotation named a module where a class was meant.** It
+  read `moviepy.video.VideoClip`, the module; it is now `VideoClip`, imported under
+  `TYPE_CHECKING`. `video_writer.py` also gained `from __future__ import annotations`, without
+  which that annotation is evaluated at class-definition time and pins moviepy to the import
+  path no matter where the import statement sits.
+
+### Added
+- **`test_import_cost.py` holds hvplot, colorcet, moviepy and IPython off the `import bencher`
+  path.** It asserts in a subprocess, since the test session imports hvplot as soon as any
+  other test draws a plot. One plausible-looking `import hvplot.pandas` added to a plotting
+  module to make an accessor call work silently puts the 2.3s back, so the failure message
+  names `hvplot_of()` as the fix. It also asserts that no module reaches `.hvplot` directly,
+  and that two paths which draw nothing — `to_heatmap_ds` on a sub-2-dimensional dataset, and
+  `VideoWriter.write()` with no frames — load neither library.
 
 ## [1.122.0] - 2026-08-25
 

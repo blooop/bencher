@@ -1,10 +1,13 @@
-from pathlib import Path
+from __future__ import annotations
 
-import moviepy.video.io.ImageSequenceClip
-import moviepy.video.io.VideoFileClip
-import moviepy.video.VideoClip
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import numpy as np
 from PIL import Image, ImageDraw
+
+if TYPE_CHECKING:
+    from moviepy import VideoClip
 
 from .utils import gen_image_path, gen_video_path
 
@@ -21,6 +24,8 @@ class VideoWriter:
 
     def write(self) -> str:
         if len(self.images) > 0:
+            import moviepy.video.io.ImageSequenceClip  # pylint: disable=import-outside-toplevel
+
             clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(
                 self.images, fps=30, with_mask=False, load_images=True
             )
@@ -50,6 +55,8 @@ class VideoWriter:
 
     @staticmethod
     def convert_to_compatible_format(video_path: str) -> str:
+        import moviepy.video.io.VideoFileClip  # pylint: disable=import-outside-toplevel
+
         new_path = Path(video_path)
         new_path = new_path.with_name(f"{new_path.stem}_fixed{new_path.suffix}").as_posix()
         vw = VideoWriter()
@@ -58,7 +65,7 @@ class VideoWriter:
             vw.write_video_raw(vid)
         return new_path
 
-    def write_video_raw(self, video_clip: moviepy.video.VideoClip, fps: int = 30) -> str:
+    def write_video_raw(self, video_clip: VideoClip, fps: int = 30) -> str:
         video_clip.write_videofile(
             self.filename,
             codec="libx264",
@@ -85,6 +92,8 @@ class VideoWriter:
         Returns:
             str: Path to the saved PNG image
         """
+        import moviepy.video.io.VideoFileClip  # pylint: disable=import-outside-toplevel
+
         if output_path is None:
             output_path = (
                 Path(video_path).with_stem(f"{Path(video_path).stem}_frame").with_suffix(".png")

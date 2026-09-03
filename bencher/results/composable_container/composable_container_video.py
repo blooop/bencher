@@ -3,17 +3,12 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
-from moviepy import (
-    CompositeVideoClip,
-    ImageClip,
-    VideoClip,
-    VideoFileClip,
-    clips_array,
-    concatenate_videoclips,
-    vfx,
-)
+
+if TYPE_CHECKING:
+    from moviepy import CompositeVideoClip, ImageClip, VideoClip
 
 from bencher.results.composable_container.composable_container_base import (
     ComposableContainerBase,
@@ -67,6 +62,8 @@ class ComposableContainerVideo(ComposableContainerBase):
         Raises:
             RuntimeWarning: if file format is not recognised
         """
+        # pylint: disable=import-outside-toplevel
+        from moviepy import ImageClip, VideoClip, VideoFileClip
 
         # print(f"append obj: {type(obj)}, {obj}")
         if obj is not None:
@@ -119,6 +116,9 @@ class ComposableContainerVideo(ComposableContainerBase):
         Returns:
             CompositeVideoClip: A composite video clip containing the images/videos added via append()
         """
+        # pylint: disable=import-outside-toplevel
+        from moviepy import CompositeVideoClip, ImageClip, clips_array, concatenate_videoclips, vfx
+
         if render_cfg is None:
             render_cfg = RenderCfg(**kwargs)
 
@@ -198,6 +198,9 @@ class ComposableContainerVideo(ComposableContainerBase):
         return deepcopy(self)
 
     def extend_clip(self, clip: VideoClip, desired_duration: float):
+        # pylint: disable=import-outside-toplevel
+        from moviepy import ImageClip, concatenate_videoclips
+
         if clip.duration is None:
             # render() gives every clip a duration before it gets here, so this states
             # a precondition rather than reporting a reachable failure on that path.
