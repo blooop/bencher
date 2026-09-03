@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import pandas as pd
 import panel as pn
 import xarray as xr

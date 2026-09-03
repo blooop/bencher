@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
-import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
 import xarray as xr
 from param import Parameter
@@ -9,6 +7,7 @@ from param import Parameter
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.hvplot_accessor import ensure_hvplot
 from bencher.utils import label_with_units
 from bencher.variables.results import ResultVar
 
@@ -63,6 +62,7 @@ class ScatterResult(HoloviewResult):
         Returns:
             pn.panel | None: A scatter plot visualization.
         """
+        ensure_hvplot()
         by = None
         if self.plt_cnt_cfg.cat_cnt > 1:
             by = [v.name for v in self.bench_cfg.input_vars[1:]]

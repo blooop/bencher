@@ -3,7 +3,6 @@ from __future__ import annotations
 from functools import partial
 
 import holoviews as hv
-import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
 import xarray as xr
 from param import Parameter
@@ -12,6 +11,7 @@ from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
+from bencher.results.hvplot_accessor import ensure_hvplot
 from bencher.variables.results import ResultFloat
 
 
@@ -108,6 +108,7 @@ class HeatmapResult(HoloviewResult):
             hv.HeatMap | hv.HoloMap | None: A heatmap visualization, or None if
                 the dataset has fewer than 2 dimensions.
         """
+        ensure_hvplot()
         if len(dataset.dims) < 2:
             return None
 

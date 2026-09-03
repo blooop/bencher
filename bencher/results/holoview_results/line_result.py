@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from functools import partial
 
-import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
 import xarray as xr
 from param import Parameter
@@ -11,6 +10,7 @@ from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
 from bencher.results.holoview_results.holoview_result import use_tap as _USE_TAP
+from bencher.results.hvplot_accessor import ensure_hvplot
 from bencher.utils import label_with_units
 from bencher.variables.results import SCALAR_RESULT_TYPES
 
@@ -106,6 +106,7 @@ class LineResult(HoloviewResult):
         Returns:
             hvplot.element.Curve | pn.Column: A line plot visualization.
         """
+        ensure_hvplot()
         da_plot = dataset[result_var.name]
 
         # 0D + over_time: time-series line with time on the x-axis.
@@ -191,6 +192,7 @@ class LineResult(HoloviewResult):
         Returns:
             pn.Row: A panel row containing the interactive line plot and tap info.
         """
+        ensure_hvplot()
         da_plot = dataset[result_var.name]
         x = self.plt_cnt_cfg.float_vars[0].name
         by = None

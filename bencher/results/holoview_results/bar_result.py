@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
 import xarray as xr
 from param import Parameter
@@ -8,6 +7,7 @@ from param import Parameter
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.hvplot_accessor import ensure_hvplot
 from bencher.variables.results import ResultBool, ResultFloat
 
 
@@ -94,6 +94,7 @@ class BarResult(HoloviewResult):
         Returns:
             hvplot.element.Bars | hv.HoloMap: A bar chart visualization of the benchmark data.
         """
+        ensure_hvplot()
         da = dataset[result_var.name]
         use_holomap = self._use_holomap_for_time(dataset)
 

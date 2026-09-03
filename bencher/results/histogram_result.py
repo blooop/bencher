@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
-import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
 import xarray as xr
 from param import Parameter
@@ -9,6 +7,7 @@ from param import Parameter
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import ReduceType
 from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.hvplot_accessor import ensure_hvplot
 from bencher.variables.results import ResultFloat
 
 
@@ -52,6 +51,7 @@ class HistogramResult(HoloviewResult):
 
     def _make_histogram(self, dataset: xr.Dataset, result_var: Parameter, **kwargs):
         """Render a single histogram from a dataset (no over_time handling)."""
+        ensure_hvplot()
         units = getattr(result_var, "units", "") or ""
         xlabel = f"{result_var.name} [{units}]" if units else result_var.name
         plot = dataset.hvplot(

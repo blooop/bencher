@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import hvplot.pandas  # pylint: disable=duplicate-code,unused-import
-import hvplot.xarray  # noqa: F401  # pylint: disable=duplicate-code,unused-import
 import panel as pn
 
+from bencher.results.hvplot_accessor import ensure_hvplot
 from bencher.results.pane_result import PaneResult
 
 
@@ -15,6 +14,7 @@ class ExplorerResult(PaneResult):
         Returns:
             pn.pane.Pane: A dynamic pane for exploring a dataset
         """
+        ensure_hvplot()
 
         if len(self.bench_cfg.input_vars) > 0:
             return self.to_xarray().hvplot.explorer()
