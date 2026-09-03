@@ -1,96 +1,96 @@
 # Claude Code CLI - Local Dev Container Feature
 
-A local Dev Container Feature that installs the Claude Code CLI and configures it with read-only mounts to your host machine's Claude configuration.
+A local Dev Container Feature that installs the Claude Code CLI and bind-mounts your host machine's Claude configuration directory into the container.
 
 ## What This Feature Does
 
 This feature combines two capabilities:
 
-1. **CLI Installation**: Installs the `@anthropic-ai/claude-code` npm package globally
-2. **Configuration Mounting**: Mounts your host machine's Claude configuration files into the container as read-only binds
+1. **CLI Installation**: `install.sh` runs `pixi global install --channel https://prefix.dev/blooop claude-shim`, and downloads pixi to `/usr/local/bin/pixi` first if the base image does not already carry it
+2. **Configuration Mounting**: Bind-mounts your host machine's `~/.claude` directory into the container, read-write
 
 ## What Gets Installed
 
-- **Claude Code CLI**: The `claude` command becomes available in your container
+- **Claude Code CLI**: The `claude` command becomes available in your container. It comes from the `claude-shim` package on the `blooop` prefix.dev channel, so that channel is a dependency of this feature. `install.sh` checks only that the pixi trampoline exists -- the binary it points at is downloaded on the first `claude` run.
 - **VS Code Extension**: Automatically installs the `anthropic.claude-code` extension
-- **Configuration Directories**: Creates `.claude/` structure in the container
+- **Configuration Directories**: `install.sh` creates the `.claude/` tree, though it does so while the image is built -- at runtime the host's bind mount covers it
 
 ## What Gets Mounted
 
-The following files and directories from your **host machine** are mounted into the container:
+One mount, and it is the whole directory:
 
-### Read-Only Mounts (Security-Protected)
-- `~/.claude/CLAUDE.md` → Global project instructions
-- `~/.claude/settings.json` → Claude CLI settings
-- `~/.claude/agents/` → Custom agent configurations
-- `~/.claude/commands/` → Command definitions
-- `~/.claude/hooks/` → Event-driven shell hooks
+```
+source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind
+```
 
-These are **read-only** (`ro` flag) to prevent:
-- Prompt injection attacks that could modify your Claude configuration
-- Accidental modification of shared configuration from within containers
-- Security issues related to hook manipulation
+There is no `ro` flag and no per-file mount. The host and every container of every branch share one `~/.claude`, read-write, so anything running in a container can modify any of it -- `CLAUDE.md`, `settings.json`, `agents/`, `commands/` and `hooks/` included.
 
-### Read-Write Mounts (Authentication & State)
-- `~/.claude/.credentials.json` → OAuth access/refresh tokens
-- `~/.claude/.claude.json` → Account info, user ID, workspace setup tracking
+### What That Means
 
-These files **must be writable** to enable:
-- OAuth authentication flow and token refresh
-- Workspace setup state tracking (`projectOnboardingSeenCount`)
-- Session continuity across container rebuilds
+`hooks/` and `settings.json` are executed by Claude Code wherever it runs. Content a container writes there therefore runs on the **host**, the next time Claude Code starts on the host, and a `postCreateCommand` from a repository you have not read is enough to put it there.
 
-### Why These Must Be Writable
+It is not a confidentiality boundary either: code running in the container holds the live Claude credentials the mount carries, and under `dl` a `GH_TOKEN` with repo and workflow scopes.
 
-**`.credentials.json`**: OAuth tokens need to be refreshed periodically. Claude writes updated tokens to this file.
+### Why It Is Still One Read-Write Directory
 
-**`.claude.json`**: Claude tracks per-workspace setup state here. The `projectOnboardingSeenCount` field must be writable so Claude doesn't show the setup wizard on every launch.
+Sharing the directory is what makes credentials work across the host and every branch container. `.credentials.json` has to be writable because the access token is short-lived and a refresh has to persist -- a read-only or copied arrangement drifts into a re-auth. `.claude.json` has to be writable because Claude tracks per-workspace onboarding and trust state there, so a container that cannot write it re-onboards on every launch.
 
-⚠️ **Security Note**: These files contain sensitive data and are mounted read-write by necessity. They are only accessible by the container user and stored with `600` permissions. Only use this feature with trusted repositories.
+Splitting the rest of the directory into separate read-only binds is possible and is not what this feature does today. What the container buys as it stands is reproducible dependencies and non-colliding concurrent work, not safety against hostile code. `blooop/wayfinder`'s `.devcontainer/devcontainer.json` states the same threat model in the comment above its `mounts` block.
 
 ## Usage
 
 ### Setup
 
-Add this feature to your `devcontainer.json`:
+The feature is declared where the image is built, in `.devcontainer/ci/devcontainer.json`:
 
 ```json
 {
-  "features": {
-    "./claude-code": {}
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "."
   },
-  "runArgs": ["--network=host"]
+  "features": {
+    "../claude-code": {}
+  }
 }
 ```
 
-**Note**: Node.js is automatically installed via the `installsAfter` dependency mechanism - you don't need to explicitly add it to your features.
+CI publishes that image, and the `devcontainer.json` every branch launches from pulls it and declares neither `features` nor `runArgs`:
 
-### Why `--network=host` is Required
+```json
+{
+  "image": "ghcr.io/blooop/python_template/devcontainer:latest",
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
+  ]
+}
+```
 
-The `runArgs: ["--network=host"]` is **critical for OAuth authentication** to work in containers.
+Declaring the feature a second time there makes the devcontainer spec build a derived image on the first launch of every branch, reinstalling what the pulled image already carries.
 
-**How OAuth works:**
-1. You run `claude` → starts OAuth flow
-2. Opens browser → you click "Authorize"
-3. Browser redirects to `http://localhost:<random-port>/callback`
-4. OAuth server running in container receives the callback
+### Authentication Uses Host Credentials, Not Host Networking
 
-**The problem without host networking:**
-- OAuth server runs on port X **inside container**
-- Browser callback goes to port X on **host's localhost**
-- ❌ Container's port is not accessible from host → **callback fails**
+No OAuth flow runs inside the container. You authenticate `claude` once on the host, and the `~/.claude` bind mount plus `CLAUDE_CONFIG_DIR=/home/vscode/.claude` point the container at those same credentials, refresh tokens included. Every container of every branch reads them, and nothing has to reach the host's network to do it.
 
-**The solution:**
-- With `--network=host`, container shares host's network namespace
-- OAuth server on port X in container = port X on host
-- ✅ Browser callback reaches the container → **authentication succeeds**
+### Why You Might Opt Into `--network=host`
 
-**Security note:** Host networking gives the container full network access. Only use in trusted environments.
+The one thing the bind mount does not give you is the interactive OAuth login *from inside* the container, which needs host networking to complete:
 
-**Alternative (if host networking is not acceptable):**
-- Authenticate Claude on your host machine first
-- Credentials in `~/.claude/.credentials.json` are automatically shared with container
-- No OAuth flow needed in container
+1. You run `claude` → it starts a callback server on a random port in the container
+2. Your browser opens the authorize page, you click "Authorize", and it redirects to `http://localhost:<that-port>/callback`
+3. On the default bridge network that port belongs to the container, not the host, so the browser cannot reach it and the CLI sits at "Paste code here"
+
+With `--network=host` the container shares the host's network namespace, port X in the container *is* port X on the host, and the callback lands.
+
+Two costs come with it, and they are why this template does not set it:
+
+- **VS Code extensions stop installing**: [vscode-remote-release#9212](https://github.com/microsoft/vscode-remote-release/issues/9212), covered again under Troubleshooting below.
+- **Every port the container binds becomes a host port.** A container per branch is the reason these repos are launched with `dl`, and two branch containers on the host's network namespace collide on the first port they share.
+
+Host networking also gives the container full access to the host's network, so only use it in environments you trust.
 
 ### Build the Container
 
@@ -107,7 +107,7 @@ With VS Code:
 
 ### Host Machine
 
-You should have these files/directories on your host machine (they will be created if they don't exist):
+`init-host.sh` runs on the host as the `initializeCommand` and creates `~/.claude` if it is missing. Nothing creates the contents below; they are optional, and the container starts without them:
 
 ```bash
 ~/.claude/
@@ -118,7 +118,7 @@ You should have these files/directories on your host machine (they will be creat
 └── hooks/              # Optional: event hooks
 ```
 
-**Note**: If these don't exist on your host, the container will still build successfully, but you may see mount warnings. You can create them with:
+**Note**: The mount is the `~/.claude` directory itself, so a missing subdirectory or file costs nothing at launch. To create them anyway:
 
 ```bash
 mkdir -p ~/.claude/{agents,commands,hooks}
@@ -128,7 +128,7 @@ touch ~/.claude/settings.json
 
 ### Container
 
-- **Node.js 18+** and **npm** are automatically installed via the `installsAfter` dependency mechanism
+- **pixi**, which the `Dockerfile` installs to `/usr/local/bin/pixi`; `install.sh` downloads it there itself if it is missing
 - No manual configuration required
 
 ## Assumptions
@@ -161,12 +161,14 @@ touch ~/.claude/settings.json
 
 ### Testing Install Script
 
-You can test the install script standalone:
+You can test the install script standalone, from inside the container:
 
 ```bash
 cd .devcontainer/claude-code
 sudo ./install.sh
 ```
+
+It resolves its target from `_REMOTE_USER` and `_REMOTE_USER_HOME` and falls back to `vscode`, so on a host with no `/home/vscode` it exits with an error rather than doing anything.
 
 ### Debugging
 
@@ -180,22 +182,26 @@ Check mounted files:
 ls -la ~/.claude/
 ```
 
-Verify mounts are read-only:
+Verify the config directory is mounted, writable, and pointed at:
 ```bash
-echo "test" >> ~/.claude/CLAUDE.md  # Should fail with "Read-only file system"
+env | grep CLAUDE_CONFIG_DIR          # /home/vscode/.claude
+mount | grep /home/vscode/.claude     # one bind, rw
+touch ~/.claude/.mount-check && rm ~/.claude/.mount-check && echo writable
 ```
+
+The write test uses a throwaway file on purpose. Do not test the mount by appending to `CLAUDE.md`, `settings.json` or anything under `hooks/`: the mount is read-write, so the write lands on the host's real configuration and is loaded into every later Claude Code session.
 
 ## Authentication
 
 ### How It Works
 
 1. **Already Authenticated on Host**: If you have Claude Code set up on your host machine, credentials are automatically shared with the container
-2. **First-Time Setup**: Run `claude` in the container and follow the OAuth flow:
-   - The CLI will provide an OAuth URL
-   - Open the URL in your browser (on your host machine)
+2. **First-Time Setup**: Run `claude` on the **host** and follow the OAuth flow there:
+   - The CLI provides an OAuth URL
+   - Open the URL in your browser
    - Click "Authorize"
-   - The callback should complete automatically, or you may need to paste the code
-   - Credentials are saved to `~/.claude/.credentials.json` on your host
+   - The callback completes, because the CLI and the browser are both on the host
+   - Credentials are saved to `~/.claude/.credentials.json`, and the mount carries them into every container
 
 ### OAuth Callback Behavior
 
@@ -208,7 +214,7 @@ The OAuth flow opens a local callback server. In containers, this can behave dif
 
 **"Paste code here" prompt hangs forever:**
 - Check that `~/.claude/.credentials.json` exists on your host with proper permissions (`600`)
-- Try authenticating on your host machine first, then rebuild the container
+- Try authenticating on your host machine first, then restart `claude` in the container -- the mount is live, so no rebuild is needed
 - If the callback fails, look for the authorization code in the URL after clicking "Authorize"
 
 **Credentials not persisting:**
@@ -222,32 +228,26 @@ This happens because Claude tracks setup completion **per-workspace**, not globa
 **Quick fix:**
 ```bash
 # On your HOST machine:
-# Set the onboarding flag for your workspace
-jq '.projects["/workspaces/pythontemplate"].projectOnboardingSeenCount = 1' ~/.claude/.claude.json > ~/.claude/.claude.json.tmp
+# Set the onboarding flag for your workspace (`devpod list` shows its name)
+jq '.projects["/workspaces/<workspace>"].projectOnboardingSeenCount = 1' ~/.claude/.claude.json > ~/.claude/.claude.json.tmp
 mv ~/.claude/.claude.json.tmp ~/.claude/.claude.json
 
 # Also ensure themeMode is set (if needed)
 jq '. + {themeMode: "dark"}' ~/.claude/.claude.json > ~/.claude/.claude.json.tmp
 mv ~/.claude/.claude.json.tmp ~/.claude/.claude.json
 
-# Rebuild container
-devpod up . --recreate
+# Then restart `claude` in the container -- the mount is live, so no rebuild is needed
 ```
 
-**Root cause:** Claude tracks setup wizard completion per-workspace in `.claude.json` under `.projects["/workspaces/pythontemplate"].projectOnboardingSeenCount`. When this is `0`, the setup wizard runs. Set it to `1` to mark setup as complete.
+**Root cause:** Claude tracks setup wizard completion per-workspace in `.claude.json` under `.projects["/workspaces/<workspace>"].projectOnboardingSeenCount`. When this is `0`, the setup wizard runs. Set it to `1` to mark setup as complete.
 
-**For future workspaces:** Replace `/workspaces/pythontemplate` with your actual container workspace path.
+**Finding `<workspace>`:** it is the devpod workspace name, and the container mounts the repo at `/workspaces/<workspace>`. `devpod list` shows the name, and `dl --ls` shows it for workspaces devlaunch created.
 
 ## Modifying Configuration
 
-Configuration files (except credentials) are read-only. You **cannot** modify Claude settings from within the container.
+The container writes to the same `~/.claude` as the host, so an edit made in either place is an edit to the one shared configuration.
 
-To change configuration:
-
-1. Edit files on your **host machine**: `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, etc.
-2. Restart or rebuild the container to see changes
-
-This is by design for security (prevents prompt injection attacks).
+Editing from the **host** is still the better habit: `~/.claude/settings.json`, `~/.claude/CLAUDE.md` and the rest are yours across every branch container, and a change made on the host is one you meant to make. The mount is live, so restarting `claude` picks up a change -- no rebuild needed.
 
 ## What Would Change Before Publishing to GHCR
 
@@ -309,7 +309,7 @@ Users would then reference it as:
 }
 ```
 
-Instead of `"./claude-code": {}`
+Instead of `"../claude-code": {}`
 
 ## Optional: Future Composition
 
@@ -377,23 +377,15 @@ Then use both:
 
 **Problem**: Browser clicks "Authorize" but container never receives the callback.
 
-**Solution**: Add `--network=host` to your `devcontainer.json`:
-
-```json
-{
-  "runArgs": ["--network=host"]
-}
-```
-
-See "Why `--network=host` is Required" section above for details.
+**Solution**: Run `claude` on the host instead and let the container read the credentials it writes to `~/.claude`. If you need the login to happen inside the container, add `--network=host` and accept its costs -- see "Why You Might Opt Into `--network=host`" above.
 
 ### Interactive `claude` asks for authentication but `claude --print` works
 
 **Problem**: You're authenticated (credentials mounted) but interactive mode prompts for login.
 
-**Root cause**: Without `--network=host`, OAuth callbacks can't reach the container.
+**Root cause**: Interactive mode tried to start an OAuth flow, which means it found no usable credentials under `CLAUDE_CONFIG_DIR`.
 
-**Solution**: Add `"runArgs": ["--network=host"]` to devcontainer.json.
+**Solution**: Authenticate on the host so `~/.claude/.credentials.json` holds a live token, and check that `~/.claude` is actually mounted and `CLAUDE_CONFIG_DIR` points at it.
 
 ### VS Code extensions don't install with `--network=host`
 
@@ -404,9 +396,9 @@ See "Why `--network=host` is Required" section above for details.
 2. **Authenticate on host**, mount credentials, remove runArgs (no OAuth needed in container)
 3. **Manually install extensions** after container starts
 
-### Mount warnings about missing files
+### `~/.claude` missing on the host
 
-**Solution**: Create the directories on your host:
+**Solution**: The `initializeCommand` (`init-host.sh`) creates it before the container starts. To lay out the rest yourself:
 
 ```bash
 mkdir -p ~/.claude/{agents,commands,hooks}
@@ -415,33 +407,27 @@ touch ~/.claude/CLAUDE.md ~/.claude/settings.json
 
 ## Security Notes
 
-This implementation makes conscious security trade-offs to enable OAuth authentication and persistent setup state:
+The whole `~/.claude` directory is bind-mounted read-write as one mount, so nothing in it is held back from the container.
 
-### What's Protected (Read-Only Mounts)
-- **CLAUDE.md**: Prevents prompt injection attacks that could modify your global instructions
-- **settings.json**: Prevents config tampering
-- **agents/**, **commands/**, **hooks/**: Prevents malicious code execution through modified hooks
+### What Code in the Container Can Read and Write
+- **`.credentials.json`**: the live OAuth access and refresh tokens
+- **`.claude.json`**: account info, user ID, per-workspace onboarding and trust state
+- **`CLAUDE.md`**, **`settings.json`**, **`agents/`**, **`commands/`**, **`hooks/`**: the host's copies, in place
 
-### What's Writable (Necessary Trade-off)
-- **`.credentials.json`**: OAuth tokens must be writable for token refresh to work
-- **`.claude.json`**: Workspace state must be writable to persist `projectOnboardingSeenCount` and other setup tracking
+`install.sh` runs when the image is built, so the two `600` credential files it creates live in the image and the bind mount covers them at runtime. Permissions on the host's real files are whatever the host set -- see Issue 6 in TROUBLESHOOTING.md. Nothing here restricts code running inside the container, which runs as the user those files belong to.
 
-### Security Mitigations
-- Files have `600` permissions (user-only access)
-- Only use this feature in **trusted repositories**
-- Container user isolation provides some protection
-- Writable files are limited to authentication/state only
-- All configuration and code execution files remain read-only
+### The Consequence Worth Naming
+`hooks/` and `settings.json` are executed by Claude Code wherever it runs. Code in the container that writes there gets its content executed on the **host**, the next time Claude Code starts there -- a `postCreateCommand` from a repository you have not read reaches that far. The container also carries the live Claude credentials and, under `dl`, a `GH_TOKEN` with repo and workflow scopes, so it is not a confidentiality boundary either.
 
-### Known Risks
-- A malicious process in the container could exfiltrate OAuth tokens from `.credentials.json`
-- A malicious process could modify workspace state in `.claude.json`
-- **Recommendation**: Only use in repositories you trust, as you would with any dev container configuration
+### Why It Is Accepted
+One shared config directory is what makes auth work across the host and every branch container without a re-auth, and it is why a container never re-onboards. That is the trade; the isolation buys reproducible dependencies and non-colliding concurrent work, not protection from hostile code. `blooop/wayfinder`'s `.devcontainer/devcontainer.json` writes out the same threat model above its `mounts` block. Treat a repository you launch this way as code you are running with your own credentials, because that is what it is.
+
+Whether the non-credential paths should become read-only binds is an open question, not a settled one.
 
 See related security discussions:
 - [anthropics/claude-code#4478](https://github.com/anthropics/claude-code/issues/4478)
 - [anthropics/claude-code#2350](https://github.com/anthropics/claude-code/issues/2350)
-- Original read-only approach: [PR #25](https://github.com/anthropics/devcontainer-features/pull/25)
+- Per-file read-only approach this feature does not implement: [PR #25](https://github.com/anthropics/devcontainer-features/pull/25)
 
 ## Reference
 

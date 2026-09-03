@@ -2,7 +2,7 @@
     "name": "python_template-build",
     "build": {
         "dockerfile": "../Dockerfile",
-        "context": "../.."
+        "context": "."
     },
     "features": {
         "../claude-code": {},
