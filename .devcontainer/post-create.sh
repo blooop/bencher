@@ -40,11 +40,17 @@ pixi install
 
 # 4. Optional tasks. A descendant that does not define one simply skips it --
 # hardcoding `pixi run prek-install` here fails container creation outright with
-# exit 127 on every repo that lacks the task, which is most of them.
+# exit 127 on every repo that lacks the task, which is most of them. This list is
+# the one place a child repo adds its own; it stays an array so adding a second
+# entry is a one-word edit.
+optional_tasks=(prek-install)
+
 # `pixi task list` prints to stderr, not stdout -- redirecting it to /dev/null
-# silently yields an empty list and skips tasks the repo really does define.
-tasks=$(pixi task list --summary 2>&1 | tr ' ,' '\n\n' || true)
-for task in prek-install; do
+# silently yields an empty list and skips tasks the repo really does define. The
+# summary is `<env> (by design): a, b, c` per line, so split on both separators
+# to get one task per line (tr pads the shorter set2 out to match set1).
+tasks=$(pixi task list --summary 2>&1 | tr ' ,' '\n' || true)
+for task in "${optional_tasks[@]}"; do
     if grep -qx "$task" <<<"$tasks"; then
         echo "post-create: running '$task'"
         pixi run "$task"
