@@ -54,6 +54,14 @@ python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
 
+# The floor of the window the `rerun` extra declares. The default environment
+# resolves the newest release in that window, so without this feature the older
+# minor would be supported on paper only — and bencher's rerun surface includes
+# `rerun.experimental` (RrdReader, Chunk), which is where an alpha API moves.
+[tool.pixi.feature.rerun-floor.pypi-dependencies]
+rerun-sdk = ">=0.36.0,<0.37"
+rerun-notebook = ">=0.36.0,<0.37"
+
 [tool.pixi.pypi-dependencies]
 holobench = { path = ".", editable = true }
 
@@ -90,8 +98,9 @@ docs = [
 ]
 
 #adds support for embedding rerun windows (alpha)
-#one minor at a time, any patch within it: the CDN viewer follows the installed sdk exactly
-rerun = ["rerun-sdk>=0.36.0,<0.37", "rerun-notebook>=0.36.0,<0.37"]
+#every minor named here is resolved by an environment and tested: the floor by
+#`rerun-floor`, the ceiling by the default env. Widen this only with a job to match.
+rerun = ["rerun-sdk>=0.36.0,<0.38", "rerun-notebook>=0.36.0,<0.38"]
 
 #unused for the moment but may turn on later
 # scoop = ["scoop>=0.7.0,<=0.7.2.0"]
@@ -110,6 +119,7 @@ docs = { features = ["test", "rerun", "docs"], solve-group = "default" }
 py311 = ["py311", "test", "rerun"]
 py312 = ["py312", "test", "rerun"]
 py313 = ["py313", "test", "rerun"]
+rerun-floor = ["py313", "test", "rerun-floor"]
 
 [tool.pixi.tasks]
 #AI AGENT TASKS
@@ -154,6 +164,8 @@ lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
+# Every rerun-touching test, by name, so a new one joins the floor job for free.
+test-rerun = "pytest -k rerun"
 # Re-run the whole suite with the collect/render split forced on: every auto_plot
 # report build is routed through save_result -> load_result -> render so any
 # pickle / render-from-loaded divergence surfaces in the existing assertions.

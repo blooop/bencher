@@ -34,11 +34,12 @@ _VERSION_RE = re.compile(r"^[0-9A-Za-z._-]+$")
 
 
 def _get_rerun_version() -> str:
-    """Get the installed rerun package version, or the supported minor's baseline.
+    """Get the installed rerun package version, or the oldest supported release.
 
-    The fallback names the floor of the window the ``rerun`` extra declares, not the
-    newest patch in it: within a minor the viewer reads what any patch writes, so the
-    floor is the one version that stays correct for the whole window.
+    The fallback only fires with no ``rerun-sdk`` distribution to read, which means
+    nothing here knows which release wrote the file — the window the ``rerun`` extra
+    declares spans more than one minor, and no viewer reads all of them. It names that
+    window's floor; a caller that knows the release should pass ``version`` instead.
     """
     try:
         return get_package_version("rerun-sdk")
