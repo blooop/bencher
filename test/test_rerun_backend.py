@@ -137,6 +137,13 @@ class TestRerunBackendRecordings:
         pane = res.to_rerun(result_var="volume")
         assert isinstance(pane, pn.pane.HTML), type(pane)
 
+    def test_unknown_result_var_name_is_refused_by_name(self):
+        """An unresolvable name has to stop here; it cannot be classified by type."""
+        res = _sweep()
+        with pytest.raises(ValueError, match="nope") as excinfo:
+            res.to_rerun(result_var="nope")
+        assert "recording" in str(excinfo.value), excinfo.value
+
     def test_recording_only_sweep_skips_the_empty_mapped_viewer(self):
         """With nothing to map there is no empty recording to embed, so one pane."""
         res = _sweep(RecordingOnlySweep, result_vars=("recording",))

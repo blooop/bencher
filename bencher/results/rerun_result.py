@@ -128,13 +128,23 @@ class RerunResult(BenchResultBase):
         unresolved. The partition in :meth:`to_rerun` classifies by type, and a string
         is not a ``ResultRerun`` however it is spelled, so an unresolved name sent the
         recording back through the scalar renderers -- #1134 again, by another door.
+
+        Raises:
+            ValueError: the name matches no result var of this sweep. Handing it back
+                unresolved would put a ``str`` in a list of ``Parameter`` and leave the
+                same misclassification one layer down.
         """
+        declared = list(self.bench_cfg.result_vars)
         if result_var is None:
-            return list(self.bench_cfg.result_vars)
+            return declared
         name = result_var if isinstance(result_var, str) else result_var.name
-        # A var the sweep never declared is passed through as it came: to_dataset
-        # raises on it, which beats rendering an empty viewer and calling it a result.
-        return [rv for rv in self.bench_cfg.result_vars if rv.name == name] or [result_var]
+        resolved = [rv for rv in declared if rv.name == name]
+        if not resolved:
+            raise ValueError(
+                f"{name!r} is not a result var of this sweep; declared: "
+                f"{[rv.name for rv in declared]}"
+            )
+        return resolved
 
     def _to_rerun_recordings(self, result_vars: list) -> list[pn.panel]:  # pragma: no cover
         """One merged viewer per ``ResultRerun``, or none if it recorded nothing.
