@@ -109,6 +109,25 @@ class TestRerunBackendRecordings:
         report = res.to_rerun_plots()
         assert _composed_path(report[1][1]).endswith(".rrd")
 
+    def test_recording_named_by_string_is_still_merged(self, caplog):
+        """``to_dataset`` takes a result var by name, so ``to_rerun`` has to resolve one.
+
+        An unresolved name is a string, which no ``isinstance(rv, ResultRerun)`` can
+        classify, so the recording went back through the bar-chart renderer.
+        """
+        res = _sweep()
+        with caplog.at_level("WARNING", logger=LOGGER):
+            pane = res.to_rerun(result_var="recording")
+        assert isinstance(pane, pn.pane.Markdown), type(pane)
+        assert _composed_path(pane).endswith(".rrd")
+        assert "could not convert string to float" not in caplog.text, caplog.text
+
+    def test_scalar_named_by_string_still_maps(self):
+        """Resolving names must not divert a scalar away from the mapped viewer."""
+        res = _sweep()
+        pane = res.to_rerun(result_var="volume")
+        assert isinstance(pane, pn.pane.HTML), type(pane)
+
     def test_recording_only_sweep_skips_the_empty_mapped_viewer(self):
         """With nothing to map there is no empty recording to embed, so one pane."""
         res = _sweep(RecordingOnlySweep, result_vars=("recording",))

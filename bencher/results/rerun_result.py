@@ -57,7 +57,7 @@ class RerunResult(BenchResultBase):
 
     def to_rerun(
         self,
-        result_var: Parameter | None = None,
+        result_var: Parameter | str | None = None,
         width: int = 950,
         height: int = 712,
     ) -> pn.panel:  # pragma: no cover
@@ -77,7 +77,8 @@ class RerunResult(BenchResultBase):
         ``bch.run_flask_in_thread()`` first).
 
         Args:
-            result_var: Optional specific result variable to display. If None, all are shown.
+            result_var: Optional specific result variable, by object or by name, to
+                display. If None, all are shown.
             width: Width of the viewer holding the mapped (non-``ResultRerun``) data.
             height: Height of the viewer holding the mapped (non-``ResultRerun``) data.
 
@@ -91,7 +92,7 @@ class RerunResult(BenchResultBase):
                 "**rerun** is not installed. Install it with `pip install rerun-sdk`."
             )
 
-        rv_list = [result_var] if result_var is not None else list(self.bench_cfg.result_vars)
+        rv_list = self._to_rerun_result_vars(result_var)
         # A ResultRerun holds one .rrd path per sample. Sending that path through the
         # scalar renderers dropped every recording from the report with a
         # "could not convert string to float" warning (#1134), so the two families are
@@ -110,6 +111,24 @@ class RerunResult(BenchResultBase):
         if len(panes) == 1:
             return panes[0]
         return pn.Column(*panes)
+
+    def _to_rerun_result_vars(
+        self, result_var: Parameter | str | None
+    ) -> list[Parameter]:  # pragma: no cover
+        """The result vars to render, resolving one named by string to its Parameter.
+
+        ``to_dataset`` accepts a result var either way and the ``hasattr(rv, "name")``
+        fallbacks in this module exist for the string form, so a name does reach here
+        unresolved. The partition in :meth:`to_rerun` classifies by type, and a string
+        is not a ``ResultRerun`` however it is spelled, so an unresolved name sent the
+        recording back through the scalar renderers -- #1134 again, by another door.
+        """
+        if result_var is None:
+            return list(self.bench_cfg.result_vars)
+        name = result_var if isinstance(result_var, str) else result_var.name
+        # A var the sweep never declared is passed through as it came: to_dataset
+        # raises on it, which beats rendering an empty viewer and calling it a result.
+        return [rv for rv in self.bench_cfg.result_vars if rv.name == name] or [result_var]
 
     def _to_rerun_recordings(self, result_vars: list) -> list[pn.panel]:  # pragma: no cover
         """One merged viewer per ``ResultRerun``, or none if it recorded nothing.
