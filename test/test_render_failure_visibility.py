@@ -29,6 +29,18 @@ def _raise_overlay_failure(*_args, **_kwargs):
     raise RuntimeError("synthetic overlay failure")
 
 
+def _pane_texts(panel) -> list[str]:
+    """Every pane's rendered text, at any nesting depth.
+
+    Report sections group their panes into rows/tabs, so a failure pane is not
+    necessarily a direct child of the top-level Column.
+    """
+    texts = [str(getattr(panel, "object", ""))]
+    for child in getattr(panel, "objects", []) or []:
+        texts.extend(_pane_texts(child))
+    return texts
+
+
 def _already_handled_exception() -> ValueError:
     """An exception whose ``except`` block has been left, so ``sys.exc_info()`` is clear."""
     try:
@@ -201,7 +213,7 @@ class TestRegressionOverlayFailureIsVisible(unittest.TestCase):
         self.assertTrue(msgs, "expected a RenderFailedWarning for the failing overlay")
         self.assertIn("synthetic overlay failure", " ".join(msgs))
         self.assertIsNotNone(panel, "one bad overlay must not abort the report")
-        objs = [str(getattr(p, "object", "")) for p in panel]
+        objs = _pane_texts(panel)
         self.assertTrue(
             any("Regression overlay" in o and "failed to render" in o for o in objs),
             "expected a visible failure pane naming the failing overlay",

@@ -1588,6 +1588,16 @@ class TestRegressionError:
 # ── End-to-end with Bench ─────────────────────────────────────────────────
 
 
+def _find_tabs(panel):
+    """Every pn.Tabs at or below *panel*."""
+    import panel as pn
+
+    found = [panel] if isinstance(panel, pn.Tabs) else []
+    for child in getattr(panel, "objects", []) or []:
+        found.extend(_find_tabs(child))
+    return found
+
+
 class _SimpleBench(bn.ParametrizedSweep):
     out_val = bn.ResultFloat(units="s", direction=bn.OptDir.minimize)
 
@@ -1604,6 +1614,17 @@ class _DegradingBench(bn.ParametrizedSweep):
     def benchmark(self):
         _degrade_state["counter"] += 1
         self.out_val = float(_degrade_state["counter"]) * 100.0
+
+
+class _TwoMetricBench(bn.ParametrizedSweep):
+    """Two metrics, so the report has more than one overlay to lay out."""
+
+    latency = bn.ResultFloat(units="s", direction=bn.OptDir.minimize)
+    throughput = bn.ResultFloat(units="hz", direction=bn.OptDir.maximize)
+
+    def benchmark(self):
+        self.latency = 1.0
+        self.throughput = 2.0
 
 
 class _FlatSuccessBench(bn.ParametrizedSweep):
@@ -1722,12 +1743,18 @@ class TestEndToEnd:
         md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
         report_panes = [p for p in md_panes if p.name == "Regression Report"]
         assert len(report_panes) == 1, "expected exactly one Regression Report panel"
-        # The rendered markdown should be the same string to_markdown() produces.
-        assert report_panes[0].object == res.regression_report.to_markdown()
-        assert "regression(s) detected" in report_panes[0].object
+        text = report_panes[0].object
+        # The section heads the table, so the pane wraps rather than equals it.
+        assert text.startswith("### Regression\n")
+        assert res.regression_report.to_markdown() in text
+        assert "regression(s) detected" in text
 
-    def test_auto_plots_omits_report_when_no_regression(self):
-        """No regression → no markdown panel injected."""
+    def test_auto_plots_reports_a_clean_run_next_to_its_overlays(self):
+        """No regression, but history to plot → the section explains the overlays.
+
+        The overlays render either way; without the summary above them a reader
+        has to infer from the marker colour that everything passed.
+        """
         import panel as pn
 
         run_cfg = bn.BenchRunCfg()
@@ -1748,7 +1775,93 @@ class TestEndToEnd:
         panel = res.to_auto_plots()
         md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
         report_panes = [p for p in md_panes if p.name == "Regression Report"]
-        assert report_panes == []
+        assert len(report_panes) == 1
+        assert "No regressions detected" in report_panes[0].object
+
+    def test_auto_plots_omits_report_when_there_is_nothing_to_show(self):
+        """A first run has a report but neither a regression nor any history:
+        no table, no overlays, and so no section heading either."""
+        import panel as pn
+
+        run_cfg = bn.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 2
+        run_cfg.regression_detection = True
+        run_cfg.regression_method = "percentage"
+        run_cfg.regression_fail = False
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+        run_cfg.clear_history = True
+
+        bench = bn.Bench("test_regression_first_run", _SimpleBench(), run_cfg=run_cfg)
+        res = bench.plot_sweep(plot_callbacks=False)
+
+        assert res.regression_report is not None and not res.regression_report.has_regressions
+        panel = res.to_auto_plots()
+        md_panes = [p for p in panel if isinstance(p, pn.pane.Markdown)]
+        assert [p for p in md_panes if p.name == "Regression Report"] == []
+
+    @staticmethod
+    def _two_metric_result(name: str, pane_layout=None):
+        run_cfg = bn.BenchRunCfg()
+        run_cfg.over_time = True
+        run_cfg.repeats = 2
+        run_cfg.regression_detection = True
+        run_cfg.regression_method = "percentage"
+        run_cfg.regression_fail = False
+        run_cfg.auto_plot = False
+        run_cfg.headless = True
+        if pane_layout is not None:
+            run_cfg.pane_layout = pane_layout
+
+        bench = bn.Bench(name, _TwoMetricBench(), run_cfg=run_cfg)
+        run_cfg.clear_history = True
+        bench.plot_sweep(plot_callbacks=False, run_cfg=run_cfg)
+        bench.sample_cache = None
+        run_cfg.clear_history = False
+        return bench.plot_sweep(plot_callbacks=False, run_cfg=run_cfg)
+
+    def test_overlays_share_one_row_instead_of_stacking(self):
+        """Both overlays belong to a single section pane, side by side.
+
+        They used to be appended straight into the report Column, so each
+        metric's plot took a full-width row of its own and nothing marked
+        where the regression block started or ended.
+        """
+        import panel as pn
+
+        res = self._two_metric_result("test_regression_layout_grid")
+        panel = res.to_auto_plots()
+
+        rows = [p for p in panel if isinstance(p, pn.Row) and p.name == "Regression"]
+        assert len(rows) == 1, "expected one regression row"
+        assert len([p for p in rows[0] if isinstance(p, pn.pane.HoloViews)]) == 2
+        # ...and none of them loose in the report column.
+        assert [p for p in panel if isinstance(p, pn.pane.HoloViews)] == []
+
+    def test_overlays_follow_the_sweep_pane_layout(self):
+        """Under PaneLayout.tabs the overlays become one tab per variable."""
+        res = self._two_metric_result("test_regression_layout_tabs", pane_layout=bn.PaneLayout.tabs)
+        panel = res.to_auto_plots()
+
+        tabs = [t for p in panel for t in _find_tabs(p)]
+        named = [t for t in tabs if [o.name for o in t] == ["latency", "throughput"]]
+        assert len(named) == 1, "expected a tab per regressed variable"
+
+    def test_overlays_take_the_sweep_plot_size(self):
+        """The overlays size like every other plot in the report, not at their
+        own hardcoded default."""
+        import panel as pn
+
+        res = self._two_metric_result("test_regression_layout_size")
+        res.bench_cfg.plot_width = 321
+        res.bench_cfg.plot_height = 234
+        panel = res.to_auto_plots()
+
+        rows = [p for p in panel if isinstance(p, pn.Row) and p.name == "Regression"]
+        opts = rows[0][0].object.opts.get("plot").kwargs
+        assert opts["width"] == 321
+        assert opts["height"] == 234
 
 
 # ── Renderers ───────────────────────────────────────────────────────────────

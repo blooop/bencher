@@ -177,8 +177,26 @@ class TestBandResult:
             assert [d.name for d in el.kdims] == ["over_time"]
         assert plot_opts(overlay)["title"] == "throughput vs over_time (aggregated over size)"
 
-    def test_band_suppressed_when_regression_overlay_exists(self, res_1d):
+    def test_band_suppressed_when_regression_overlay_exists(self, res_time):
         """to_band_ds returns None when the regression overlay already shows the history."""
+        ds = res_time.to_dataset(reduce=ReduceType.NONE)
+        rv = res_time.bench_cfg.result_vars[0]
+        original = res_time.regression_report
+        res_time.regression_report = SimpleNamespace(
+            results=[SimpleNamespace(variable="throughput", historical=[1.0, 2.0])]
+        )
+        try:
+            assert res_time.to_band_ds(ds, rv) is None
+        finally:
+            res_time.regression_report = original
+
+    def test_band_kept_when_no_overlay_will_be_drawn(self, res_1d):
+        """A report without over_time history draws no overlay, so the band must stay.
+
+        Suppression exists to avoid showing the same history twice; a sweep with
+        a single time point gets no overlay, and hiding its band would lose the
+        plot for nothing.
+        """
         ds = res_1d.to_dataset(reduce=ReduceType.NONE)
         rv = res_1d.bench_cfg.result_vars[0]
         original = res_1d.regression_report
@@ -186,7 +204,7 @@ class TestBandResult:
             results=[SimpleNamespace(variable="throughput", historical=[1.0, 2.0])]
         )
         try:
-            assert res_1d.to_band_ds(ds, rv) is None
+            assert res_1d.to_band_ds(ds, rv) is not None
         finally:
             res_1d.regression_report = original
 
