@@ -108,6 +108,12 @@ class RerunResult(BenchResultBase):
                 self._to_rerun_mapped(mapped, result_var=result_var, width=width, height=height)
             )
         panes.extend(self._to_rerun_recordings(recorded))
+        if not panes:
+            # Every result var was a recording and none of them merged, so the mapped
+            # viewer was skipped and there is nothing left to embed. Say which vars
+            # came up empty; an empty Column renders as a hole in the report.
+            names = ", ".join(f"`{rv.name}`" for rv in recorded)
+            return pn.pane.Markdown(f"No rerun recordings to show for {names}.")
         if len(panes) == 1:
             return panes[0]
         return pn.Column(*panes)
@@ -144,8 +150,12 @@ class RerunResult(BenchResultBase):
         for rv in result_vars:
             pane = RerunSummaryResult.to_rerun_grid_ds(self, dataset, rv)
             if pane is None:
+                # Both meanings of the None above, because it does not distinguish
+                # them: never sampled, or sampled and the .rrd no longer on disk.
                 logger.warning(
-                    "No rerun recordings to merge for result var %r; nothing to show", rv.name
+                    "No rerun recordings to merge for result var %r: nothing was "
+                    "recorded, or the .rrd files have left the cache",
+                    rv.name,
                 )
                 continue
             panes.append(pane)

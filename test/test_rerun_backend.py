@@ -66,6 +66,15 @@ def _composed_path(pane: pn.pane.Markdown) -> str:
     return pane.object.removeprefix("composed: ")
 
 
+def _blank(res, name: str) -> None:
+    """Blank every cell of *name*, as if the sweep had never recorded it.
+
+    ``to_dataset`` caches per instance and ``deep=False`` hands back that cached
+    object, so this is what the renderer under test goes on to read.
+    """
+    res.to_dataset(ReduceType.SQUEEZE, deep=False)[name][:] = "NAN"
+
+
 def _leaf_entity_paths(path: str) -> set[str]:
     reader = RrdReader(str(path))
     return {
@@ -137,13 +146,26 @@ class TestRerunBackendRecordings:
 
 
 class TestNothingRecorded:
+    def test_recording_only_sweep_with_nothing_recorded_says_so(self, caplog):
+        """The report must not get a hole where the only result var recorded nothing.
+
+        The mapped viewer is skipped when there is nothing to map, so with the
+        recordings gone too there is no pane left to return.
+        """
+        res = _sweep(RecordingOnlySweep, result_vars=("recording",))
+        _blank(res, "recording")
+        with caplog.at_level("WARNING", logger=LOGGER):
+            pane = res.to_rerun()
+        assert isinstance(pane, pn.pane.Markdown), type(pane)
+        assert "recording" in pane.object, pane.object
+        assert len(pn.Column(pane)) == 1
+        assert "No rerun recordings to merge" in caplog.text
+
     def test_unrecorded_result_var_warns_instead_of_showing_nothing(self, caplog):
         """A ResultRerun that recorded nothing says so, rather than silently vanishing."""
         res = _sweep()
         rv = next(rv for rv in res.bench_cfg.result_vars if rv.name == "recording")
-        # to_dataset caches per instance and deep=False hands back that cached
-        # object, so blanking it here is what _to_rerun_recordings will read.
-        res.to_dataset(ReduceType.SQUEEZE, deep=False)["recording"][:] = "NAN"
+        _blank(res, "recording")
         with caplog.at_level("WARNING", logger=LOGGER):
             panes = res._to_rerun_recordings([rv])
         assert panes == []
