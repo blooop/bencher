@@ -139,9 +139,9 @@ class RerunResult(BenchResultBase):
     def _to_rerun_recordings(self, result_vars: list) -> list[pn.panel]:  # pragma: no cover
         """One merged viewer per ``ResultRerun``, or none if it recorded nothing.
 
-        Delegates to :meth:`RerunSummaryResult.to_rerun_grid_ds` unbound rather than
-        through ``self`` so the dependency on that mixin is visible here, and so a
-        declared ``container=`` on the result var keeps winning over the viewer.
+        ``to_rerun_grid_ds`` is called unbound because ``RerunResult`` does not inherit
+        ``RerunSummaryResult``: both are mixed into ``BenchResult``, which is what
+        supplies the ``_compose_ds`` the call reaches for through ``self``.
         """
         if not result_vars:
             return []
