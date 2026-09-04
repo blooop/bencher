@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.124.1] - 2026-09-04
+
+### Fixed
+- **`backend="rerun"` renders `ResultRerun` recordings instead of dropping them.** `to_rerun`
+  dispatched every result var through the scalar renderers — line graph, bar chart, tensor —
+  none of which has a `ResultRerun` case, so a recording's `.rrd` *path string* reached the
+  bar-chart renderer and died on `float(path)`. The run exited 0 and the report showed the
+  scalar charts with none of the recordings; one `WARNING` per sample was the only signal.
+  Result vars now split by family: everything scalar is mapped onto the entity tree exactly as
+  before, and each `ResultRerun` has its per-sample recordings merged by
+  `RerunSummaryResult.to_rerun_grid_ds` into a viewer of its own — the composition `rerun_grid`
+  already performed, reused rather than reimplemented. A declared `container=` still wins over
+  the viewer, and the pane keeps the result var's own `width`/`height`. Two viewers rather than
+  one merged recording: composition re-roots entity paths and regenerates the blueprint from
+  inferred archetypes, which would discard the grid-per-categorical-dimension layout
+  `_build_blueprint` exists to produce.
+- A result var asked for **by name** hit the same bug. `to_dataset` accepts a result var either
+  way, so `to_rerun(result_var="rec")` arrived as a `str`, which no `isinstance` check can
+  classify. Names now resolve to their declared `Parameter` before anything partitions them,
+  and a name matching no result var raises there instead of surfacing as an xarray `KeyError`
+  two frames later.
+- A recordings-only sweep that recorded nothing no longer returns an empty `pn.Column`, which
+  rendered as a hole in the report: the mapped viewer is skipped when there is nothing to map,
+  and nothing replaced it. It now names the vars that came up empty, and the warning stopped
+  claiming a cause it cannot know — a recording goes missing both when a sample was never taken
+  and when its `.rrd` has left `cachedir`, and only the second is the reader's to act on.
+
+### Added
+- `example_rerun_backend` in the Rerun Integration gallery: a sweep whose scalar and whose
+  recording come from the same sample, which is the combination that used to drop. The rerun
+  backend is now documented in `docs/how_to_use_bencher.md`, including the two hooks for
+  choosing a merged viewer by hand — `rerun_summary` and `rerun_grid` are named-only plot types
+  and `BenchRunCfg` has no plot-selection knob, so `plot_callbacks=` is the only route to them,
+  and the callback has to be defined at module scope because the list is pickled into the
+  result cache.
+
 ## [1.124.0] - 2026-09-03
 
 ### Changed
