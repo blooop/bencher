@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import logging
 from pathlib import Path
 
@@ -9,8 +10,10 @@ import xarray as xr
 from param import Number, Parameter
 
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
+from bencher.results.rerun_summary import RerunSummaryResult
 from bencher.variables.results import (
     ResultImage,
+    ResultRerun,
     ResultString,
     ResultVideo,
     result_is_missing,
@@ -46,6 +49,10 @@ class RerunResult(BenchResultBase):
     A rerun blueprint is built to control the viewer layout, with typed views
     (TimeSeriesView, TensorView, BarChartView) arranged in Grid/Vertical containers.
     The ``log_time`` timeline is disabled so only ``log_tick`` is shown.
+
+    A ``ResultRerun`` skips all three phases: its samples are already recordings, so
+    :class:`~bencher.results.rerun_summary.RerunSummaryResult` merges them into a
+    viewer of their own instead. See :meth:`to_rerun`.
     """
 
     def to_rerun(
@@ -56,25 +63,91 @@ class RerunResult(BenchResultBase):
     ) -> pn.panel:  # pragma: no cover
         """Convert N-dimensional benchmark results to a rerun viewer.
 
-        Saves the recording to an .rrd file and returns a Panel pane with
-        the rerun web viewer embedded as an iframe. Requires the Flask file
-        server to be running (call ``bch.run_flask_in_thread()`` first).
+        Result variables are rendered in two ways, because ``ResultRerun`` samples
+        are *already* rerun recordings and there is nothing to map onto a scalar
+        archetype:
+
+        - Everything else is mapped onto the entity tree by :func:`_log_to_rerun`
+          and written to one ``.rrd``, embedded as a single viewer.
+        - Each ``ResultRerun`` has its per-sample ``.rrd`` files merged into one
+          recording by :meth:`RerunSummaryResult.to_rerun_grid_ds`, embedded as its
+          own viewer sized by that result var's ``width``/``height``.
+
+        Requires the Flask file server to be running (call
+        ``bch.run_flask_in_thread()`` first).
 
         Args:
             result_var: Optional specific result variable to display. If None, all are shown.
-            width: Width of the rerun viewer widget.
-            height: Height of the rerun viewer widget.
+            width: Width of the viewer holding the mapped (non-``ResultRerun``) data.
+            height: Height of the viewer holding the mapped (non-``ResultRerun``) data.
 
         Returns:
-            A panel pane containing the rerun viewer.
+            A panel pane containing the rerun viewer, or a Column of them when a
+            ``ResultRerun`` is swept alongside other result variables.
         """
-        try:
-            import rerun as rr
-            import rerun.blueprint as rrb
-        except ModuleNotFoundError:
+        # Checked once here rather than in each helper below, both of which need the SDK.
+        if importlib.util.find_spec("rerun") is None:
             return pn.pane.Markdown(
                 "**rerun** is not installed. Install it with `pip install rerun-sdk`."
             )
+
+        rv_list = [result_var] if result_var is not None else list(self.bench_cfg.result_vars)
+        # A ResultRerun holds one .rrd path per sample. Sending that path through the
+        # scalar renderers dropped every recording from the report with a
+        # "could not convert string to float" warning (#1134), so the two families are
+        # split here and rendered by the machinery that fits each.
+        recorded = [rv for rv in rv_list if isinstance(rv, ResultRerun)]
+        mapped = [rv for rv in rv_list if not isinstance(rv, ResultRerun)]
+
+        panes = []
+        # Nothing to map means an empty recording, so it is skipped — unless there are
+        # no result vars at all, where the empty viewer is still the honest answer.
+        if mapped or not recorded:
+            panes.append(
+                self._to_rerun_mapped(mapped, result_var=result_var, width=width, height=height)
+            )
+        panes.extend(self._to_rerun_recordings(recorded))
+        if len(panes) == 1:
+            return panes[0]
+        return pn.Column(*panes)
+
+    def _to_rerun_recordings(self, result_vars: list) -> list[pn.panel]:  # pragma: no cover
+        """One merged viewer per ``ResultRerun``, or none if it recorded nothing.
+
+        Delegates to :meth:`RerunSummaryResult.to_rerun_grid_ds` unbound rather than
+        through ``self`` so the dependency on that mixin is visible here, and so a
+        declared ``container=`` on the result var keeps winning over the viewer.
+        """
+        if not result_vars:
+            return []
+        dataset = self.to_dataset(ReduceType.SQUEEZE, deep=False)
+        panes = []
+        for rv in result_vars:
+            pane = RerunSummaryResult.to_rerun_grid_ds(self, dataset, rv)
+            if pane is None:
+                logger.warning(
+                    "No rerun recordings to merge for result var %r; nothing to show", rv.name
+                )
+                continue
+            panes.append(pane)
+        return panes
+
+    def _to_rerun_mapped(
+        self,
+        result_vars: list,
+        result_var: Parameter | None,
+        width: int,
+        height: int,
+    ) -> pn.panel:  # pragma: no cover
+        """Map *result_vars* onto the rerun entity tree and embed them as one viewer.
+
+        ``result_var`` narrows the dataset exactly as :meth:`to_rerun`'s argument of
+        the same name does; ``result_vars`` is what actually gets logged, which is a
+        different list whenever a ``ResultRerun`` was filtered out of it.
+        """
+        import rerun as rr
+        import rerun.blueprint as rrb
+
         from bencher.utils import gen_rerun_data_path
         from bencher.utils_rrd import rrd_file_to_pane
 
@@ -97,12 +170,6 @@ class RerunResult(BenchResultBase):
         if self.bench_cfg.over_time and "over_time" in dataset.dims:
             time_dim = "over_time"
 
-        # Determine which result variables to log
-        if result_var is not None:
-            rv_list = [result_var]
-        else:
-            rv_list = list(self.bench_cfg.result_vars)
-
         # Filter dims to only those present in the reduced dataset
         float_dims = [d for d in float_dims if d in dataset.dims]
         cat_dims = [d for d in cat_dims if d in dataset.dims]
@@ -119,7 +186,7 @@ class RerunResult(BenchResultBase):
             recording=recording,
             dataset=dataset,
             entity_path="",
-            result_vars=rv_list,
+            result_vars=result_vars,
             float_dims=float_dims,
             cat_dims=cat_dims,
             time_dim=time_dim,
@@ -128,7 +195,7 @@ class RerunResult(BenchResultBase):
         # Build and send blueprint for controlled layout
         blueprint = _build_blueprint(
             rrb=rrb,
-            result_vars=rv_list,
+            result_vars=result_vars,
             float_dims=float_dims,
             cat_dims=cat_dims,
             time_dim=time_dim,

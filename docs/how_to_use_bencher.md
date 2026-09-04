@@ -341,6 +341,21 @@ plot types — like `video_summary`, they are opt-in because merging every recor
 expensive. This is the `ResultRerun` counterpart to `video_summary` for
 `ResultImage`/`ResultVideo`.
 
+Setting `backend="rerun"` on `BenchRunCfg` renders the whole report in the rerun
+viewer rather than in holoviews. Scalars, booleans and strings are mapped onto
+rerun's entity tree — bar charts, line graphs and tensors, laid out by a generated
+Blueprint — and every `ResultRerun` alongside them gets its recordings merged the way
+`rerun_grid` merges them, in its own viewer sized by the result var's `width`/`height`.
+A `ResultRerun` that recorded nothing logs a warning naming it instead of leaving a
+gap in the report.
+
+Two things to know if you pick the merged viewer by hand instead:
+
+* `rerun_summary` and `rerun_grid` are named-only plot types and `BenchRunCfg` has no
+  plot-selection knob, so `plot_callbacks=` is the only route to them.
+* Define the callback at module scope. The callback list is pickled into the result
+  cache, so a closure fails with `AttributeError: Can't pickle local object`.
+
 ## Running a Sweep
 
 ```python
