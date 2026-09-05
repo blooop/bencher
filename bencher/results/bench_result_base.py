@@ -159,6 +159,25 @@ class BenchResultBase:
         self.blob_cache_dir = None
         self._to_dataset_cache: dict = {}
 
+    def regression_overlay_vars(self) -> set[str]:
+        """Names of the result variables the report draws a regression overlay for.
+
+        Two places have to agree on this: the report section that renders the
+        overlays, and :class:`BandResult`, which drops its own over-time band
+        for any variable an overlay already covers (both show the same
+        history). Deriving both from one predicate keeps a band from vanishing
+        under an overlay that never gets drawn.
+        """
+        if self.regression_report is None:
+            return set()
+        if "over_time" not in self.ds.dims or self.ds.sizes["over_time"] <= 1:
+            return set()
+        return {
+            r.variable
+            for r in self.regression_report.results
+            if r.historical is not None and len(r.historical) > 0
+        }
+
     def to_xarray(self) -> xr.Dataset:
         return self.ds
 

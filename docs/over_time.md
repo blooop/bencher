@@ -106,6 +106,12 @@ Over-time history is what regression detection consumes: with `over_time=True` a
 after the merge and before writing the result cache. If regressions are found they are
 logged as a warning and attached to the result as `regression_report`.
 
+In the HTML report the verdicts get their own section, above the aggregate and auto
+plots: a heading, the summary table, then one history-vs-current overlay per metric,
+laid out with the sweep's `pane_layout` — beside each other under `grid`, a tab each
+under `tabs`. A metric that gets an overlay drops its over-time percentile band, since
+the two draw the same history.
+
 The method is chosen with `regression_method`:
 
 | Method | Threshold parameter | Behaviour (from the `regression_method` docstring) |

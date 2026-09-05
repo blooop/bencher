@@ -99,9 +99,14 @@ class RegressionResult:
         self,
         historical: np.ndarray | None = None,
         current: np.ndarray | float | None = None,
+        **kwargs,
     ):
-        """Build a :class:`holoviews.Overlay` of this result (see :func:`build_regression_overlay`)."""
-        return build_regression_overlay(self, historical=historical, current=current)
+        """Build a :class:`holoviews.Overlay` of this result (see :func:`build_regression_overlay`).
+
+        Sizing keywords (``width``, ``height``, ``fig_inches``) pass straight
+        through, so a report can size the overlay like any other plot in it.
+        """
+        return build_regression_overlay(self, historical=historical, current=current, **kwargs)
 
     def to_dict(self) -> dict:
         """Return a JSON-serializable summary of this result.

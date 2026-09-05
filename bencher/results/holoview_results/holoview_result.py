@@ -44,6 +44,12 @@ use_tap = True
 
 _AGG_TITLE = "All Time Points (aggregated)"
 
+# Shared default figure size, in pixels, for every plot in a report. Applied through
+# hv.opts.defaults below, and read directly by anything that sizes its own figure and so
+# never sees those defaults (the regression overlay sets width/height explicitly), so the
+# report's plots line up in one column.
+DEFAULT_PLOT_SIZE = 550
+
 
 class HoloviewResult(PaneResult):
     # Element types that carry the shared default figure size. Centralized here (rather
@@ -63,12 +69,14 @@ class HoloviewResult(PaneResult):
     )
 
     @staticmethod
-    def set_default_opts(width: int = 600, height: int = 600) -> dict:
+    def set_default_opts(width: int = DEFAULT_PLOT_SIZE, height: int = DEFAULT_PLOT_SIZE) -> dict:
         """Set default options for HoloViews visualizations.
 
         Args:
-            width (int, optional): Default width for visualizations. Defaults to 600.
-            height (int, optional): Default height for visualizations. Defaults to 600.
+            width (int, optional): Default width for visualizations. Defaults to
+                ``DEFAULT_PLOT_SIZE``.
+            height (int, optional): Default height for visualizations. Defaults to
+                ``DEFAULT_PLOT_SIZE``.
 
         Returns:
             dict: Dictionary containing width, height, and tools settings.

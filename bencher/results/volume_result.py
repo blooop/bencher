@@ -10,6 +10,7 @@ from param import Parameter
 
 from bencher.plotting.plot_filter import VarRange
 from bencher.results.bench_result_base import BenchResultBase, ReduceType
+from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE
 from bencher.variables.results import ResultFloat
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,11 @@ class VolumeResult(BenchResultBase):
         )
 
     def to_volume_ds(
-        self, dataset: xr.Dataset, result_var: Parameter, width=600, height=600
+        self,
+        dataset: xr.Dataset,
+        result_var: Parameter,
+        width=DEFAULT_PLOT_SIZE,
+        height=DEFAULT_PLOT_SIZE,
     ) -> pn.pane.Plotly | None:
         """Given a benchCfg generate a 3D surface plot
         Returns:

@@ -14,6 +14,7 @@ import panel as pn
 
 import bencher as bn
 from bencher.plugins import get_registry
+from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE
 from bencher.results.holoview_results.xy_hexbin_result import XYHexbinResult, xy_hexbin
 from bencher.results.holoview_results.xy_histogram_result import XYHistogramResult, xy_histogram
 from test.helpers import run_cfg_with
@@ -297,7 +298,7 @@ class TestXYHexbinFactory(unittest.TestCase):
 
     def test_hextiles_carries_the_shared_default_size(self):
         """HexTiles was not in DEFAULT_SIZED_ELEMENTS, so it fell back to a smaller figure."""
-        self.assertEqual(plot_opts(xy_hexbin()(self.df))["width"], 600)
+        self.assertEqual(plot_opts(xy_hexbin()(self.df))["width"], DEFAULT_PLOT_SIZE)
 
 
 class TestChartTypes(unittest.TestCase):

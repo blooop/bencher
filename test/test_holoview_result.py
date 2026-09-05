@@ -8,7 +8,7 @@ import panel as pn
 import bencher as bn
 from bencher.example.meta.example_meta import BenchableObject
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE, HoloviewResult
 from bencher.variables.results import ResultFloat, ResultImage, ResultVideo
 
 # pylint: disable=protected-access
@@ -63,8 +63,8 @@ class TestHoloviewResult(unittest.TestCase):
         self.assertIn("width", result)
         self.assertIn("height", result)
         self.assertIn("tools", result)
-        self.assertEqual(result["width"], 600)
-        self.assertEqual(result["height"], 600)
+        self.assertEqual(result["width"], DEFAULT_PLOT_SIZE)
+        self.assertEqual(result["height"], DEFAULT_PLOT_SIZE)
 
     def test_set_default_opts_custom(self):
         result = HoloviewResult.set_default_opts(width=800, height=400)
@@ -83,8 +83,8 @@ class TestHoloviewResult(unittest.TestCase):
         for element in HoloviewResult.DEFAULT_SIZED_ELEMENTS:
             registered = hv.Store.options(backend="bokeh")[element.name]
             opts = registered.groups["plot"].options
-            self.assertEqual(opts.get("width"), 600, element.name)
-            self.assertEqual(opts.get("height"), 600, element.name)
+            self.assertEqual(opts.get("width"), DEFAULT_PLOT_SIZE, element.name)
+            self.assertEqual(opts.get("height"), DEFAULT_PLOT_SIZE, element.name)
 
     def test_to_hv_type_curve(self):
         chart = self.res_1d.to_hv_type(hv.Curve)

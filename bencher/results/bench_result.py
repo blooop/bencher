@@ -8,6 +8,13 @@ import panel as pn
 from param import Parameter
 
 from bencher.results.bench_result_base import EmptyContainer, ReduceType
+from bencher.results.composable_container.composable_container_base import (
+    ComposeType,
+    PaneLayout,
+)
+from bencher.results.composable_container.composable_container_panel import (
+    ComposableContainerPanel,
+)
 from bencher.results.render_failure import report_render_failure
 
 try:
@@ -38,7 +45,10 @@ from bencher.results.holoview_results.distribution_result.scatter_jitter_result 
 )
 from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import (
+    DEFAULT_PLOT_SIZE,
+    HoloviewResult,
+)
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
@@ -59,6 +69,7 @@ if TYPE_CHECKING:
     # Runtime import would be circular: identity imports bench_cfg, which this
     # module's own import chain pulls in.
     from bencher.identity import SweepIdentity
+    from bencher.regression import RegressionResult
 
 logger = logging.getLogger(__name__)
 
@@ -475,27 +486,7 @@ class BenchResult(
             )
 
         # --- Regression report (auto-inserted when regression detection is enabled) ---
-        # Summary table surfaces whenever a regression fires (including the
-        # absolute-method case which has no history and therefore no overlay).
-        has_multiple_times = "over_time" in self.ds.dims and self.ds.sizes["over_time"] > 1
-        if self.regression_report is not None and self.regression_report.has_regressions:
-            plot_cols.append(
-                pn.pane.Markdown(
-                    self.regression_report.to_markdown(),
-                    name="Regression Report",
-                    width=800,
-                )
-            )
-        if self.regression_report is not None and has_multiple_times:
-            for r in self.regression_report.results:
-                if r.historical is None or len(r.historical) == 0:
-                    continue
-                try:
-                    plot_cols.append(pn.pane.HoloViews(r.render_overlay()))
-                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-                    plot_cols.append(
-                        report_render_failure(f"Regression overlay for '{r.variable}'", exc)
-                    )
+        plot_cols.extend(self._regression_section())
 
         # --- Extra panels (user-injected) ---
         if extra_panels:
@@ -551,17 +542,99 @@ class BenchResult(
             and self.bench_cfg.input_vars
         ):
             input_names = [iv.name for iv in self.bench_cfg.input_vars]
-            plot_cols.append(
-                pn.pane.Markdown(
-                    "### Over Time\nPercentile bands across all input dimensions over time"
+            # Every band can be suppressed (a regression overlay above already
+            # shows that variable's history), and appending the heading first
+            # left it stranded over nothing. Build the bands, then decide.
+            bands = self.to(BandResult, aggregate=input_names)
+            if bands is not None:
+                plot_cols.append(
+                    pn.pane.Markdown(
+                        "### Over Time\nPercentile bands across all input dimensions over time"
+                    )
                 )
-            )
-            plot_cols.append(self.to(BandResult, aggregate=input_names))
+                plot_cols.append(bands)
 
         kwargs.setdefault("pane_layout", self.bench_cfg.pane_layout)
         plot_cols.append(self.to_auto(**kwargs))
         plot_cols.append(self.bench_cfg.to_post_description())
         return plot_cols
+
+    def _regression_section(self) -> list[pn.viewable.Viewable]:
+        """Build the regression block as one report section, not loose panes.
+
+        The overlays used to be appended straight into the report Column, one
+        per variable, so a two-metric sweep produced two full-width plots
+        stacked above everything else with nothing tying them together. Every
+        other auto-generated section (``Aggregated View``, ``Over Time``) is a
+        markdown heading followed by panes laid out with the sweep's
+        ``pane_layout``, so this one is too: heading and summary table in one
+        pane, then the per-variable overlays beside each other.
+
+        Returns:
+            list[pn.viewable.Viewable]: Panels to append, empty when regression
+                detection produced nothing worth showing.
+        """
+        report = self.regression_report
+        if report is None:
+            return []
+
+        # An overlay needs history to plot against: the absolute method has
+        # none, and a first run has a report but only one over_time point.
+        overlay_vars = self.regression_overlay_vars()
+        plottable = [r for r in report.results if r.variable in overlay_vars]
+        if not report.has_regressions and not plottable:
+            return []
+
+        regressed = len(report.regressed_variables)
+        total = len(report.results)
+        subtitle = (
+            f"{regressed} of {total} metric(s) regressed against their history"
+            if regressed
+            else f"All {total} metric(s) within threshold"
+        )
+        panels: list[pn.viewable.Viewable] = [
+            pn.pane.Markdown(
+                f"### Regression\n{subtitle}\n\n{report.to_markdown()}",
+                name="Regression Report",
+                width=800,
+            )
+        ]
+        if plottable:
+            panels.append(self._regression_overlay_panes(plottable))
+        return panels
+
+    def _regression_overlay_panes(self, results: list[RegressionResult]) -> pn.viewable.Viewable:
+        """Lay out the per-variable regression overlays like any other plot row.
+
+        Sized from the sweep's plot_size/plot_width/plot_height so the overlays
+        match the charts below them, and composed with the sweep's
+        ``pane_layout`` — a row of plots under ``grid``, a tab per variable
+        under ``tabs``/``tabs_and_grid`` — mirroring ``_to_panes_da``.
+
+        An unconfigured sweep still has to line up: the overlay sets its own
+        width and height, so it never picks up the ``hv.opts.defaults`` the
+        charts below it use, and its own 700px default left it hanging over
+        their right edge. Width falls back to ``DEFAULT_PLOT_SIZE``, the same
+        number those defaults carry. Height does not — an overlay is a time
+        series and its shorter default shape suits it — unless the sweep asked
+        for a specific one.
+        """
+        size = self.set_plot_size()
+        overlay_kwargs = {k: size[k] for k in ("width", "height") if size.get(k) is not None}
+        overlay_kwargs.setdefault("width", DEFAULT_PLOT_SIZE)
+
+        use_tabs = self.bench_cfg.pane_layout in (PaneLayout.tabs, PaneLayout.tabs_and_grid)
+        container = ComposableContainerPanel(
+            name="Regression",
+            compose_method=ComposeType.sequence if use_tabs else ComposeType.right,
+        )
+        for r in results:
+            try:
+                pane = pn.pane.HoloViews(r.render_overlay(**overlay_kwargs), name=r.variable)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                pane = report_render_failure(f"Regression overlay for '{r.variable}'", exc)
+            container.append((r.variable, pane) if use_tabs else pane)
+        return container.render()
 
     def _scalar_aggregate_summary(self) -> pn.pane.Markdown:
         """Render a Markdown table for a fully-aggregated (scalar) result."""
