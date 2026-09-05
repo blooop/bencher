@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.125.0] - 2026-09-05
+
+### Changed
+- **The default plot size is 550px square, down from 600px**, and the number lives in one
+  place — `holoview_result.DEFAULT_PLOT_SIZE` — instead of being repeated by each plotter
+  that sizes its own figure. A sweep that sets `plot_size`/`plot_width`/`plot_height` is
+  unaffected; every report that did not is 50px narrower per plot.
+
+### Fixed
+- **Regression results are laid out as a report section instead of loose panes.** The
+  overlays were appended straight into the report `Column`, one per variable, so a
+  two-metric sweep opened with two full-width plots stacked above everything else and
+  nothing marking where the block began or ended. It is now built like `Aggregated View`
+  and `Over Time`: a `### Regression` heading and the summary table in one pane — with a
+  line saying how many metrics regressed — then the per-variable overlays composed with
+  the sweep's `pane_layout`, side by side under `grid` and a tab each under `tabs`, and
+  sized from `plot_size`/`plot_width`/`plot_height` so they match the charts below them.
+  `RegressionResult.render_overlay` passes `width`/`height`/`fig_inches` through to make
+  that sizing possible.
+- **The regression overlay lines up with the charts below it on a sweep that sets no plot
+  size.** It draws its own `width`/`height`, so `hv.opts.defaults` — where every other
+  plot picks up its size — never reaches it, and its own 700px default left it hanging
+  over the right edge of the column. It now falls back to `DEFAULT_PLOT_SIZE`. Height
+  keeps the overlay's shorter default: it is a time series, not a square. `SurfaceResult`
+  and `VolumeResult` size their own plotly figures for the same reason and read the same
+  constant.
+- The **"Over Time" heading no longer strands itself over nothing.** It was appended
+  before the bands were built, so a sweep where every band was suppressed — a regression
+  overlay already draws that variable's history — got a heading with no plot under it.
+  The bands are built first and the heading only goes in if there is something to head.
+- **A band could vanish under an overlay that was never drawn.** `BandResult` and
+  `to_auto_plots` each carried their own copy of the "does this variable get an overlay"
+  test and the two disagreed: for a single-snapshot sweep `BandResult` dropped the band
+  while `to_auto_plots` drew no overlay, leaving the variable with neither. Both now read
+  `BenchResultBase.regression_overlay_vars()`, which is the one place that predicate lives.
+
 ## [1.124.1] - 2026-09-04
 
 ### Fixed

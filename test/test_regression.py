@@ -1863,6 +1863,25 @@ class TestEndToEnd:
         assert opts["width"] == 321
         assert opts["height"] == 234
 
+    def test_overlays_default_to_the_shared_plot_width(self):
+        """An unconfigured sweep still lines the overlays up with the charts below.
+
+        The overlay sets its own width, so hv.opts.defaults never reaches it, and
+        its 700px default hung it over the right edge of every 550px chart in the
+        report.
+        """
+        import panel as pn
+
+        from bencher.results.holoview_results.holoview_result import DEFAULT_PLOT_SIZE
+
+        res = self._two_metric_result("test_regression_layout_default_size")
+        assert res.bench_cfg.plot_size is None and res.bench_cfg.plot_width is None
+        panel = res.to_auto_plots()
+
+        rows = [p for p in panel if isinstance(p, pn.Row) and p.name == "Regression"]
+        opts = rows[0][0].object.opts.get("plot").kwargs
+        assert opts["width"] == DEFAULT_PLOT_SIZE
+
 
 # ── Renderers ───────────────────────────────────────────────────────────────
 

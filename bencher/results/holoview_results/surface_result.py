@@ -7,7 +7,10 @@ from param import Parameter
 
 from bencher.plotting.plot_filter import PlotFilter, VarRange
 from bencher.results.bench_result_base import ReduceType
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import (
+    DEFAULT_PLOT_SIZE,
+    HoloviewResult,
+)
 from bencher.variables.results import ResultFloat
 
 
@@ -93,8 +96,8 @@ class SurfaceResult(HoloviewResult):
         result_var: Parameter,
         override: bool = True,
         alpha: float = 0.3,
-        width: int = 600,
-        height: int = 600,
+        width: int = DEFAULT_PLOT_SIZE,
+        height: int = DEFAULT_PLOT_SIZE,
     ) -> pn.panel | None:
         """Creates a 3D surface plot from the provided dataset.
 
@@ -107,8 +110,10 @@ class SurfaceResult(HoloviewResult):
             result_var (Parameter): The result variable to plot.
             override (bool, optional): Whether to override filter restrictions. Defaults to True.
             alpha (float, optional): The transparency for std-dev surfaces. Defaults to 0.3.
-            width (int, optional): Plot width in pixels. Defaults to 600.
-            height (int, optional): Plot height in pixels. Defaults to 600.
+            width (int, optional): Plot width in pixels. Defaults to the shared
+                ``DEFAULT_PLOT_SIZE`` every plot in a report is drawn at.
+            height (int, optional): Plot height in pixels. Defaults to
+                ``DEFAULT_PLOT_SIZE``.
 
         Returns:
             pn.panel | None: A panel containing the surface plot if data matches criteria,

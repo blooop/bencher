@@ -45,7 +45,10 @@ from bencher.results.holoview_results.distribution_result.scatter_jitter_result 
 )
 from bencher.results.holoview_results.distribution_result.violin_result import ViolinResult
 from bencher.results.holoview_results.heatmap_result import HeatmapResult
-from bencher.results.holoview_results.holoview_result import HoloviewResult
+from bencher.results.holoview_results.holoview_result import (
+    DEFAULT_PLOT_SIZE,
+    HoloviewResult,
+)
 from bencher.results.holoview_results.line_result import LineResult
 from bencher.results.holoview_results.scatter_result import ScatterResult
 from bencher.results.holoview_results.surface_result import SurfaceResult
@@ -607,9 +610,18 @@ class BenchResult(
         match the charts below them, and composed with the sweep's
         ``pane_layout`` — a row of plots under ``grid``, a tab per variable
         under ``tabs``/``tabs_and_grid`` — mirroring ``_to_panes_da``.
+
+        An unconfigured sweep still has to line up: the overlay sets its own
+        width and height, so it never picks up the ``hv.opts.defaults`` the
+        charts below it use, and its own 700px default left it hanging over
+        their right edge. Width falls back to ``DEFAULT_PLOT_SIZE``, the same
+        number those defaults carry. Height does not — an overlay is a time
+        series and its shorter default shape suits it — unless the sweep asked
+        for a specific one.
         """
         size = self.set_plot_size()
         overlay_kwargs = {k: size[k] for k in ("width", "height") if size.get(k) is not None}
+        overlay_kwargs.setdefault("width", DEFAULT_PLOT_SIZE)
 
         use_tabs = self.bench_cfg.pane_layout in (PaneLayout.tabs, PaneLayout.tabs_and_grid)
         container = ComposableContainerPanel(
