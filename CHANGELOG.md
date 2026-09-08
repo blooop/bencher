@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Report servers running in DevPod now select a stable port from its automatically
+  forwarded range using `DEVPOD_WORKSPACE_ID`, while non-DevPod runs retain random
+  IANA dynamic ports. Parallel reports still probe subsequent ports.
+
 ## [1.125.0] - 2026-09-05
 
 ### Changed
