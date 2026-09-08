@@ -205,6 +205,16 @@ class PathContainerSweep(RecordingAndMetricSweep):
     out_rerun = bn.ResultRerun(width=200, height=150, container=full_path)
 
 
+class WideBranchSweep(PathContainerSweep):
+    """Five values on the branch axis, three on the timeline.
+
+    Thinning to two divisions has to visibly shorten the first and leave the
+    second alone, which two-valued ``scale`` cannot show either way.
+    """
+
+    scale = bn.FloatSweep(default=1.0, bounds=[1.0, 5.0], samples=5)
+
+
 def _composed(res, **kwargs) -> str:
     """The .rrd ``to_rerun_timeline`` composed, going through the public renderer."""
     pane = res.to_rerun_timeline(**kwargs)
@@ -599,33 +609,48 @@ class TestSubsampling:
     the rerun one turned a flag that shrinks a report into one that does nothing,
     and a 2-D sweep swapping backends went from a readable grid to a viewer whose
     views were too narrow to read.
+
+    What this one tiles is *branches*, so that is what it thins. A tick is a slider
+    position rather than a panel: thinning the timeline costs resolution and buys
+    no room, and the flag exists to buy room.
     """
 
-    def _res(self, input_vars):
-        bench = PathContainerSweep().to_bench()
+    def _res(self, input_vars, cls=PathContainerSweep):
+        bench = cls().to_bench()
         return bench.plot_sweep(input_vars=input_vars, result_vars=["out_rerun"])
 
-    def test_every_sample_is_a_tick_when_nothing_is_thinned(self):
-        indices = _indices(_composed(self._res(["theta"])))
-        pose = next(entity for entity in indices if entity.endswith("/pose"))
-        assert sorted(indices[pose]["theta"]) == [1, 2, 3]
+    @staticmethod
+    def _branches(path: str) -> set[str]:
+        return {entity.lstrip("/").split("/")[0] for entity in _indices(path)}
 
-    def test_thinning_drops_ticks_from_the_timeline(self):
-        """theta's three samples become the two the panel backend would have tiled,
-        and they are the ends of the range rather than the first two."""
-        indices = _indices(_composed(self._res(["theta"]), subsampling_divisions=2))
+    @staticmethod
+    def _ticks(path: str, dim: str) -> list[int]:
+        indices = _indices(path)
         pose = next(entity for entity in indices if entity.endswith("/pose"))
-        assert sorted(indices[pose]["theta"]) == [1, 3]
+        return sorted(set(indices[pose][dim]))
+
+    def test_every_sample_is_a_tick_when_nothing_is_thinned(self):
+        assert self._ticks(_composed(self._res(["theta"])), "theta") == [1, 2, 3]
+
+    def test_thinning_leaves_the_timeline_at_full_resolution(self):
+        """theta keeps all three ticks: it is the slider, not one of the panels."""
+        res = self._res(["theta", "scale"], cls=WideBranchSweep)
+        path = _composed(res, timeline_dim="theta", subsampling_divisions=2)
+        assert self._ticks(path, "theta") == [1, 2, 3]
 
     def test_thinning_drops_branch_views(self):
-        """The tiling dimension is thinned too, which is where the width is won."""
-        res = self._res(["theta", "scale"])
-        full = {entity.split("/")[0] for entity in _indices(_composed(res))}
-        thinned = {
-            entity.split("/")[0] for entity in _indices(_composed(res, subsampling_divisions=2))
-        }
-        assert len(thinned) <= len(full), (thinned, full)
-        assert all(branch in full for branch in thinned), (thinned, full)
+        """The branches are the panels, and they are what runs out of width."""
+        res = self._res(["theta", "scale"], cls=WideBranchSweep)
+        full = self._branches(_composed(res, timeline_dim="theta"))
+        thinned = self._branches(_composed(res, timeline_dim="theta", subsampling_divisions=2))
+        assert len(full) == 5, full
+        assert len(thinned) == 2, thinned
+        assert thinned < full
+
+    def test_a_one_dimensional_sweep_is_untouched_by_thinning(self):
+        """With no branch to thin there is nothing the flag can do but harm."""
+        res = self._res(["theta"])
+        assert _indices(_composed(res, subsampling_divisions=2)) == _indices(_composed(res))
 
 
 class TestLayout:

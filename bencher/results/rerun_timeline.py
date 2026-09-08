@@ -66,6 +66,7 @@ from bencher.results.composable_container.composable_container_rerun import (
 )
 from bencher.results.rerun_summary import leaf_recording_path
 from bencher.utils import callable_name
+from bencher.variables.inputs import with_subsampling_divisions
 from bencher.variables.results import (
     PANEL_TYPES,
     ResultImage,
@@ -517,10 +518,11 @@ class RerunTimelineResult(BenchResultBase):
                 :func:`default_timeline_dim`.
             index (TimelineIndex | str, optional): How coordinates are encoded as
                 index values. Defaults to ``TimelineIndex.tick``.
-            subsampling_divisions (int, optional): Thin every swept dimension to this
-                resolution first, exactly as the panel ``panes`` implementation does
-                with the same argument -- the two backends have to answer one flag the
-                same way. Here it buys fewer branch views as much as fewer ticks.
+            subsampling_divisions (int, optional): Thin the *branch* dimensions to
+                this resolution, leaving the timeline at full sample resolution.
+                The panel ``panes`` implementation thins what it tiles, and what
+                this one tiles is branches -- a tick is a slider position, not a
+                panel, so thinning it costs resolution and buys no room.
                 Defaults to None (every sample).
             width (int, optional): Viewer width. Defaults to the widest ``width``
                 declared by a rendered result var, else 950.
@@ -554,11 +556,13 @@ class RerunTimelineResult(BenchResultBase):
         if not result_vars:
             return None
 
-        dataset = self.to_dataset(
-            ReduceType.SQUEEZE, subsampling_divisions=subsampling_divisions, deep=False
-        )
+        dataset = self.to_dataset(ReduceType.SQUEEZE, deep=False)
         merged = self.to_rerun_timeline_path(
-            dataset, result_vars, timeline_dim=timeline_dim, index=index
+            dataset,
+            result_vars,
+            timeline_dim=timeline_dim,
+            index=index,
+            subsampling_divisions=subsampling_divisions,
         )
         if merged is None:
             logger.debug("no samples to place on a rerun timeline")
@@ -587,6 +591,7 @@ class RerunTimelineResult(BenchResultBase):
         result_vars: list[Parameter],
         timeline_dim: str | None = None,
         index: TimelineIndex | str = TimelineIndex.tick,
+        subsampling_divisions: int | None = None,
     ) -> str | None:
         """Compose *result_vars* into one ``.rrd`` on a timeline and return its path.
 
@@ -612,9 +617,21 @@ class RerunTimelineResult(BenchResultBase):
                 f"available: {dims}"
             )
 
+        branch_dims = [dim for dim in dims if dim != timeline_dim]
+        if subsampling_divisions is not None and branch_dims:
+            # Only the branches. Each one is a panel on screen and they are what
+            # runs out of width; the timeline is a slider, where a dropped sample
+            # is resolution lost for nothing gained.
+            dataset = dataset.sel(
+                {
+                    dim: with_subsampling_divisions(
+                        dataset.coords[dim].to_numpy(), subsampling_divisions
+                    )
+                    for dim in branch_dims
+                }
+            )
         coords = np.asarray(dataset.coords[timeline_dim].values)
         encoding = encode_index(coords, index, timeline_dim)
-        branch_dims = [dim for dim in dims if dim != timeline_dim]
 
         import rerun as rr
         import rerun.blueprint as rrb
